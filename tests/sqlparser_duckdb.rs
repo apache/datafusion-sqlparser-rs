@@ -741,7 +741,7 @@ fn test_duckdb_union_datatype() {
             without_rowid: Default::default(),
             like: Default::default(),
             clone: Default::default(),
-            comment_after_column_def: Default::default(),
+            comment: Default::default(),
             on_commit: Default::default(),
             on_cluster: Default::default(),
             primary_key: Default::default(),

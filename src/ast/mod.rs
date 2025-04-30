@@ -7566,10 +7566,7 @@ pub enum SqlOption {
     /// Any option that consists of a key value pair where the value is an expression. e.g.
     ///
     ///   WITH(DISTRIBUTION = ROUND_ROBIN)
-    KeyValue {
-        key: Ident,
-        value: Expr,
-    },
+    KeyValue { key: Ident, value: Expr },
     /// One or more table partitions and represents which partition the boundary values belong to,
     /// e.g.
     ///
@@ -7581,15 +7578,17 @@ pub enum SqlOption {
         range_direction: Option<PartitionRangeDirection>,
         for_values: Vec<Expr>,
     },
-
+    /// Comment parameter (supports `=` and no `=` syntax)
     Comment(CommentDef),
-
+    /// MySQL TableSpace option
+    /// <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
     TableSpace(TablespaceOption),
-
-    // Advanced parameter formations
-    // UNION  = (tbl_name[,tbl_name]...)
-    // ENGINE = ReplicatedMergeTree('/table_name','{replica}', ver)
-    // ENGINE = SummingMergeTree([columns])
+    /// An option representing a key value pair, where the value is a parenthesized list and with an optional name
+    /// e.g.
+    ///
+    ///   UNION  = (tbl_name\[,tbl_name\]...) <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
+    ///   ENGINE = ReplicatedMergeTree('/table_name','{replica}', ver) <https://clickhouse.com/docs/engines/table-engines/mergetree-family/replication>
+    ///   ENGINE = SummingMergeTree(\[columns\]) <https://clickhouse.com/docs/engines/table-engines/mergetree-family/summingmergetree>
     NamedParenthesizedList(NamedParenthesizedList),
 }
 
@@ -7627,7 +7626,7 @@ impl fmt::Display for SqlOption {
                 match tablespace_option.storage {
                     Some(StorageType::Disk) => write!(f, " STORAGE DISK"),
                     Some(StorageType::Memory) => write!(f, " STORAGE MEMORY"),
-                    _ => Ok(()),
+                    None => Ok(()),
                 }
             }
             SqlOption::Comment(comment) => match comment {
@@ -7640,11 +7639,11 @@ impl fmt::Display for SqlOption {
             },
             SqlOption::NamedParenthesizedList(value) => {
                 write!(f, "{} = ", value.key)?;
-                if let Some(key) = &value.value {
+                if let Some(key) = &value.name {
                     write!(f, "{}", key)?;
                 }
-                if !value.parameters.is_empty() {
-                    write!(f, "({})", display_comma_separated(&value.parameters))?
+                if !value.values.is_empty() {
+                    write!(f, "({})", display_comma_separated(&value.values))?
                 }
                 Ok(())
             }
@@ -7663,6 +7662,8 @@ pub enum StorageType {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// MySql TableSpace option
+/// <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
 pub struct TablespaceOption {
     pub name: String,
     pub storage: Option<StorageType>,
@@ -8936,10 +8937,17 @@ impl Display for CreateViewParams {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Key/Value, where the value is a (optionally named) list of identifiers
+///
+/// ```sql
+/// UNION = (tbl_name[,tbl_name]...)
+/// ENGINE = ReplicatedMergeTree('/table_name','{replica}', ver)
+/// ENGINE = SummingMergeTree([columns])
+/// ```
 pub struct NamedParenthesizedList {
     pub key: Ident,
-    pub value: Option<Ident>,
-    pub parameters: Vec<Ident>,
+    pub name: Option<Ident>,
+    pub values: Vec<Ident>,
 }
 
 /// Snowflake `WITH ROW ACCESS POLICY policy_name ON (identifier, ...)`

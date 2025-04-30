@@ -751,8 +751,8 @@ fn parse_create_table_with_primary_key() {
             assert!(plain_options.contains(&SqlOption::NamedParenthesizedList(
                 NamedParenthesizedList {
                     key: Ident::new("ENGINE"),
-                    value: Some(Ident::new("SharedMergeTree")),
-                    parameters: vec![
+                    name: Some(Ident::new("SharedMergeTree")),
+                    values: vec![
                         Ident::with_quote('\'', "/clickhouse/tables/{uuid}/{shard}"),
                         Ident::with_quote('\'', "{replica}"),
                     ]

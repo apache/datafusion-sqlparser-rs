@@ -25,9 +25,9 @@ use matches::assert_matches;
 use sqlparser::ast::MysqlInsertPriority::{Delayed, HighPriority, LowPriority};
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MySqlDialect};
-use sqlparser::parser::{Parser, ParserError, ParserOptions};
+use sqlparser::parser::{ParserError, ParserOptions};
+use sqlparser::tokenizer::Span;
 use sqlparser::tokenizer::Token;
-use sqlparser::tokenizer::{Location, Span};
 use test_utils::*;
 
 #[macro_use]
@@ -891,7 +891,7 @@ fn parse_create_table_auto_increment_offset() {
 
             assert!(plain_options.contains(&SqlOption::KeyValue {
                 key: Ident::new("AUTO_INCREMENT"),
-                value: Expr::Value(Value::Number("123".to_owned(), false).into())
+                value: Expr::Value(test_utils::number("123").with_empty_span())
             }));
         }
         _ => unreachable!(),
@@ -921,14 +921,14 @@ fn parse_create_table_multiple_options_order_independent() {
                 assert!(plain_options.contains(&SqlOption::NamedParenthesizedList(
                     NamedParenthesizedList {
                         key: Ident::new("ENGINE"),
-                        value: Some(Ident::new("InnoDB")),
-                        parameters: vec![]
+                        name: Some(Ident::new("InnoDB")),
+                        values: vec![]
                     }
                 )));
 
                 assert!(plain_options.contains(&SqlOption::KeyValue {
                     key: Ident::new("KEY_BLOCK_SIZE"),
-                    value: Expr::Value(Value::Number("8".to_owned(), false).into())
+                    value: Expr::Value(test_utils::number("8").with_empty_span())
                 }));
 
                 assert!(plain_options
@@ -949,8 +949,6 @@ fn parse_create_table_with_all_table_options() {
     let sql =
         "CREATE TABLE foo (bar INT NOT NULL AUTO_INCREMENT) ENGINE = InnoDB AUTO_INCREMENT = 123 DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci INSERT_METHOD = FIRST KEY_BLOCK_SIZE = 8 ROW_FORMAT = DYNAMIC DATA DIRECTORY = '/var/lib/mysql/data' INDEX DIRECTORY = '/var/lib/mysql/index' PACK_KEYS = 1 STATS_AUTO_RECALC = 1 STATS_PERSISTENT = 0 STATS_SAMPLE_PAGES = 128 DELAY_KEY_WRITE = 1 COMPRESSION = 'ZLIB' ENCRYPTION = 'Y' MAX_ROWS = 10000 MIN_ROWS = 10 AUTOEXTEND_SIZE = 64 AVG_ROW_LENGTH = 128 CHECKSUM = 1 CONNECTION = 'mysql://localhost' ENGINE_ATTRIBUTE = 'primary' PASSWORD = 'secure_password' SECONDARY_ENGINE_ATTRIBUTE = 'secondary_attr' START TRANSACTION TABLESPACE my_tablespace STORAGE DISK UNION = (table1, table2, table3)";
 
-    let x = mysql().verified_stmt(sql);
-    println!("{x:?}");
     match mysql().verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
             name,
@@ -967,8 +965,8 @@ fn parse_create_table_with_all_table_options() {
             assert!(plain_options.contains(&SqlOption::NamedParenthesizedList(
                 NamedParenthesizedList {
                     key: Ident::new("ENGINE"),
-                    value: Some(Ident::new("InnoDB")),
-                    parameters: vec![]
+                    name: Some(Ident::new("InnoDB")),
+                    values: vec![]
                 }
             )));
 
@@ -982,11 +980,11 @@ fn parse_create_table_with_all_table_options() {
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
                 key: Ident::new("AUTO_INCREMENT"),
-                value: Expr::value(Value::Number("123".to_owned(), false))
+                value: Expr::value(test_utils::number("123"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
                 key: Ident::new("KEY_BLOCK_SIZE"),
-                value: Expr::value(Value::Number("8".to_owned(), false))
+                value: Expr::value(test_utils::number("8"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
                 key: Ident::new("ROW_FORMAT"),
@@ -994,23 +992,23 @@ fn parse_create_table_with_all_table_options() {
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
                 key: Ident::new("PACK_KEYS"),
-                value: Expr::value(Value::Number("1".to_owned(), false))
+                value: Expr::value(test_utils::number("1"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
                 key: Ident::new("STATS_AUTO_RECALC"),
-                value: Expr::value(Value::Number("1".to_owned(), false))
+                value: Expr::value(test_utils::number("1"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
                 key: Ident::new("STATS_PERSISTENT"),
-                value: Expr::value(Value::Number("0".to_owned(), false))
+                value: Expr::value(test_utils::number("0"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
                 key: Ident::new("STATS_SAMPLE_PAGES"),
-                value: Expr::value(Value::Number("128".to_owned(), false))
+                value: Expr::value(test_utils::number("128"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
                 key: Ident::new("STATS_SAMPLE_PAGES"),
-                value: Expr::value(Value::Number("128".to_owned(), false))
+                value: Expr::value(test_utils::number("128"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
                 key: Ident::new("INSERT_METHOD"),
@@ -1026,23 +1024,23 @@ fn parse_create_table_with_all_table_options() {
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
                 key: Ident::new("MAX_ROWS"),
-                value: Expr::value(Value::Number("10000".to_owned(), false))
+                value: Expr::value(test_utils::number("10000"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
                 key: Ident::new("MIN_ROWS"),
-                value: Expr::value(Value::Number("10".to_owned(), false))
+                value: Expr::value(test_utils::number("10"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
                 key: Ident::new("AUTOEXTEND_SIZE"),
-                value: Expr::value(Value::Number("64".to_owned(), false))
+                value: Expr::value(test_utils::number("64"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
                 key: Ident::new("AVG_ROW_LENGTH"),
-                value: Expr::value(Value::Number("128".to_owned(), false))
+                value: Expr::value(test_utils::number("128"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
                 key: Ident::new("CHECKSUM"),
-                value: Expr::value(Value::Number("1".to_owned(), false))
+                value: Expr::value(test_utils::number("1"))
             }));
             assert!(plain_options.contains(&SqlOption::KeyValue {
                 key: Ident::new("CONNECTION"),
@@ -1073,8 +1071,8 @@ fn parse_create_table_with_all_table_options() {
             assert!(plain_options.contains(&SqlOption::NamedParenthesizedList(
                 NamedParenthesizedList {
                     key: Ident::new("UNION"),
-                    value: None,
-                    parameters: vec![
+                    name: None,
+                    values: vec![
                         Ident::new("table1".to_string()),
                         Ident::new("table2".to_string()),
                         Ident::new("table3".to_string())
@@ -1160,8 +1158,8 @@ fn parse_create_table_engine_default_charset() {
             assert!(plain_options.contains(&SqlOption::NamedParenthesizedList(
                 NamedParenthesizedList {
                     key: Ident::new("ENGINE"),
-                    value: Some(Ident::new("InnoDB")),
-                    parameters: vec![]
+                    name: Some(Ident::new("InnoDB")),
+                    values: vec![]
                 }
             )));
         }

@@ -154,9 +154,9 @@ pub struct CreateTable {
     pub like: Option<ObjectName>,
     pub clone: Option<ObjectName>,
     // For Hive dialect, the table comment is after the column definitions without `=`,
-    // so we need to add an extra variant to allow to identify this case when displaying.
+    // so the `comment` field is optional and different than the comment field in the general options list.
     // [Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable)
-    pub comment_after_column_def: Option<CommentDef>,
+    pub comment: Option<CommentDef>,
     pub on_commit: Option<OnCommit>,
     /// ClickHouse "ON CLUSTER" clause:
     /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>
@@ -277,7 +277,7 @@ impl Display for CreateTable {
 
         // Hive table comment should be after column definitions, please refer to:
         // [Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable)
-        if let Some(comment) = &self.comment_after_column_def {
+        if let Some(comment) = &self.comment {
             write!(f, " COMMENT '{comment}'")?;
         }
 

@@ -5520,7 +5520,7 @@ fn parse_trigger_related_functions() {
             without_rowid: false,
             like: None,
             clone: None,
-            comment_after_column_def: None,
+            comment: None,
             on_commit: None,
             on_cluster: None,
             primary_key: None,

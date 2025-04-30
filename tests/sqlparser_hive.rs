@@ -130,10 +130,7 @@ fn create_table_with_comment() {
         " INTO 4 BUCKETS"
     );
     match hive().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable {
-            comment_after_column_def: comment,
-            ..
-        }) => {
+        Statement::CreateTable(CreateTable { comment, .. }) => {
             assert_eq!(
                 comment,
                 Some(CommentDef::WithoutEq("table comment".to_string()))

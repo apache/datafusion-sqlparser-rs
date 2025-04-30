@@ -7222,11 +7222,13 @@ impl<'a> Parser<'a> {
 
     fn parse_plain_option(&mut self) -> Result<Option<SqlOption>, ParserError> {
         // Single parameter option
+        // <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
         if self.parse_keywords(&[Keyword::START, Keyword::TRANSACTION]) {
             return Ok(Some(SqlOption::Ident(Ident::new("START TRANSACTION"))));
         }
 
         // Custom option
+        // <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
         if self.parse_keywords(&[Keyword::COMMENT]) {
             let has_eq = self.consume_token(&Token::Eq);
             let value = self.next_token();
@@ -7245,6 +7247,8 @@ impl<'a> Parser<'a> {
             return comment;
         }
 
+        // <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
+        // <https://clickhouse.com/docs/sql-reference/statements/create/table>
         if self.parse_keywords(&[Keyword::ENGINE]) {
             let _ = self.consume_token(&Token::Eq);
             let value = self.next_token();
@@ -7260,8 +7264,8 @@ impl<'a> Parser<'a> {
                     Ok(Some(SqlOption::NamedParenthesizedList(
                         NamedParenthesizedList {
                             key: Ident::new("ENGINE"),
-                            value: Some(Ident::new(w.value)),
-                            parameters,
+                            name: Some(Ident::new(w.value)),
+                            values: parameters,
                         },
                     )))
                 }
@@ -7273,12 +7277,12 @@ impl<'a> Parser<'a> {
             return engine;
         }
 
+        // <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
         if self.parse_keywords(&[Keyword::TABLESPACE]) {
             let _ = self.consume_token(&Token::Eq);
             let value = self.next_token();
 
             let tablespace = match value.token {
-                // TABLESPACE tablespace_name [STORAGE DISK] | [TABLESPACE tablespace_name] STORAGE MEMORY
                 Token::Word(Word { value: name, .. }) | Token::SingleQuotedString(name) => {
                     let storage = match self.parse_keyword(Keyword::STORAGE) {
                         true => {
@@ -7310,12 +7314,12 @@ impl<'a> Parser<'a> {
             return tablespace;
         }
 
+        // <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
         if self.parse_keyword(Keyword::UNION) {
             let _ = self.consume_token(&Token::Eq);
             let value = self.next_token();
 
             match value.token {
-                // UNION [=] (tbl_name[,tbl_name]...)
                 Token::LParen => {
                     let tables: Vec<Ident> =
                         self.parse_comma_separated0(Parser::parse_identifier, Token::RParen)?;
@@ -7324,8 +7328,8 @@ impl<'a> Parser<'a> {
                     return Ok(Some(SqlOption::NamedParenthesizedList(
                         NamedParenthesizedList {
                             key: Ident::new("UNION"),
-                            value: None,
-                            parameters: tables,
+                            name: None,
+                            values: tables,
                         },
                     )));
                 }
@@ -7337,85 +7341,58 @@ impl<'a> Parser<'a> {
 
         // Key/Value parameter option
         let key = if self.parse_keywords(&[Keyword::DEFAULT, Keyword::CHARSET]) {
-            // [DEFAULT] CHARACTER SET [=] charset_name
             Ident::new("DEFAULT CHARSET")
         } else if self.parse_keyword(Keyword::CHARSET) {
-            // [DEFAULT] CHARACTER SET [=] charset_name
             Ident::new("CHARSET")
         } else if self.parse_keywords(&[Keyword::DEFAULT, Keyword::CHARACTER, Keyword::SET]) {
-            // [DEFAULT] CHARACTER SET [=] charset_name
             Ident::new("DEFAULT CHARACTER SET")
         } else if self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET]) {
-            // [DEFAULT] CHARACTER SET [=] charset_name
             Ident::new("CHARACTER SET")
         } else if self.parse_keywords(&[Keyword::DEFAULT, Keyword::COLLATE]) {
-            // [DEFAULT] COLLATE [=] collation_name
             Ident::new("DEFAULT COLLATE")
         } else if self.parse_keyword(Keyword::COLLATE) {
-            // [DEFAULT] COLLATE [=] collation_name
             Ident::new("COLLATE")
         } else if self.parse_keywords(&[Keyword::DATA, Keyword::DIRECTORY]) {
-            // {DATA | INDEX} DIRECTORY [=] 'absolute path to directory'
             Ident::new("DATA DIRECTORY")
         } else if self.parse_keywords(&[Keyword::INDEX, Keyword::DIRECTORY]) {
-            // {DATA | INDEX} DIRECTORY [=] 'absolute path to directory'
             Ident::new("INDEX DIRECTORY")
         } else if self.parse_keyword(Keyword::KEY_BLOCK_SIZE) {
-            // KEY_BLOCK_SIZE [=] value
             Ident::new("KEY_BLOCK_SIZE")
         } else if self.parse_keyword(Keyword::ROW_FORMAT) {
-            // ROW_FORMAT [=] {DEFAULT | DYNAMIC | FIXED | COMPRESSED | REDUNDANT | COMPACT}
             Ident::new("ROW_FORMAT")
         } else if self.parse_keyword(Keyword::PACK_KEYS) {
-            // PACK_KEYS [=] {0 | 1 | DEFAULT}
             Ident::new("PACK_KEYS")
         } else if self.parse_keyword(Keyword::STATS_AUTO_RECALC) {
-            // STATS_AUTO_RECALC [=] {DEFAULT | 0 | 1}
             Ident::new("STATS_AUTO_RECALC")
         } else if self.parse_keyword(Keyword::STATS_PERSISTENT) {
-            //STATS_PERSISTENT [=] {DEFAULT | 0 | 1}
             Ident::new("STATS_PERSISTENT")
         } else if self.parse_keyword(Keyword::STATS_SAMPLE_PAGES) {
-            // STATS_SAMPLE_PAGES [=] value
             Ident::new("STATS_SAMPLE_PAGES")
         } else if self.parse_keyword(Keyword::DELAY_KEY_WRITE) {
-            // DELAY_KEY_WRITE [=] {0 | 1}
             Ident::new("DELAY_KEY_WRITE")
         } else if self.parse_keyword(Keyword::COMPRESSION) {
-            // COMPRESSION [=] {'ZLIB' | 'LZ4' | 'NONE'}
             Ident::new("COMPRESSION")
         } else if self.parse_keyword(Keyword::ENCRYPTION) {
-            // ENCRYPTION [=] {'Y' | 'N'}
             Ident::new("ENCRYPTION")
         } else if self.parse_keyword(Keyword::MAX_ROWS) {
-            // MAX_ROWS [=] value
             Ident::new("MAX_ROWS")
         } else if self.parse_keyword(Keyword::MIN_ROWS) {
-            // MIN_ROWS [=] value
             Ident::new("MIN_ROWS")
         } else if self.parse_keyword(Keyword::AUTOEXTEND_SIZE) {
-            // AUTOEXTEND_SIZE [=] value
             Ident::new("AUTOEXTEND_SIZE")
         } else if self.parse_keyword(Keyword::AVG_ROW_LENGTH) {
-            // AVG_ROW_LENGTH [=] value
             Ident::new("AVG_ROW_LENGTH")
         } else if self.parse_keyword(Keyword::CHECKSUM) {
-            // CHECKSUM [=] {0 | 1}
             Ident::new("CHECKSUM")
         } else if self.parse_keyword(Keyword::CONNECTION) {
-            // CONNECTION [=] 'connect_string'
             Ident::new("CONNECTION")
         } else if self.parse_keyword(Keyword::ENGINE_ATTRIBUTE) {
-            // ENGINE_ATTRIBUTE [=] 'string'
             Ident::new("ENGINE_ATTRIBUTE")
         } else if self.parse_keyword(Keyword::PASSWORD) {
-            // PASSWORD [=] 'string'
             Ident::new("PASSWORD")
         } else if self.parse_keyword(Keyword::SECONDARY_ENGINE_ATTRIBUTE) {
-            // SECONDARY_ENGINE_ATTRIBUTE [=] 'string'
             Ident::new("SECONDARY_ENGINE_ATTRIBUTE")
         } else if self.parse_keyword(Keyword::INSERT_METHOD) {
-            // INSERT_METHOD [=] { NO | FIRST | LAST }
             Ident::new("INSERT_METHOD")
         } else if self.parse_keyword(Keyword::AUTO_INCREMENT) {
             Ident::new("AUTO_INCREMENT")

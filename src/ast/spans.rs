@@ -573,7 +573,7 @@ impl Spanned for CreateTable {
             without_rowid: _, // bool
             like,
             clone,
-            comment_after_column_def: _, // todo, no span
+            comment: _, // todo, no span
             on_commit: _,
             on_cluster: _,                      // todo, clickhouse specific
             primary_key: _,                     // todo, clickhouse specific
@@ -1001,8 +1001,8 @@ impl Spanned for SqlOption {
             SqlOption::Comment(_) => Span::empty(),
             SqlOption::NamedParenthesizedList(NamedParenthesizedList {
                 key: name,
-                value,
-                parameters: values,
+                name: value,
+                values,
             }) => union_spans(core::iter::once(name.span).chain(values.iter().map(|i| i.span)))
                 .union_opt(&value.as_ref().map(|i| i.span)),
         }

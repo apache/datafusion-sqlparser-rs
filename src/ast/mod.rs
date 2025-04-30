@@ -3979,13 +3979,7 @@ pub enum Statement {
     ///     { NOT NULL | NULL | CHECK (expression) }
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createdomain.html)
-    CreateDomain {
-        name: ObjectName,
-        data_type: DataType,
-        collation: Option<Ident>,
-        default: Option<Expr>,
-        constraints: Vec<TableConstraint>,
-    },
+    CreateDomain(CreateDomain),
     /// ```sql
     /// CREATE TYPE <name>
     /// ```
@@ -4532,25 +4526,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::CreateFunction(create_function) => create_function.fmt(f),
-            Statement::CreateDomain {
-                name,
-                data_type,
-                collation,
-                default,
-                constraints,
-            } => {
-                write!(f, "CREATE DOMAIN {name} AS {data_type}")?;
-                if let Some(collation) = collation {
-                    write!(f, " COLLATE {collation}")?;
-                }
-                if let Some(default) = default {
-                    write!(f, " DEFAULT {default}")?;
-                }
-                if !constraints.is_empty() {
-                    write!(f, " {}", display_separated(constraints, " "))?;
-                }
-                Ok(())
-            }
+            Statement::CreateDomain(create_domain) => create_domain.fmt(f),
             Statement::CreateTrigger {
                 or_replace,
                 is_constraint,

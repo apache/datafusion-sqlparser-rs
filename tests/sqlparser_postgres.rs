@@ -5083,7 +5083,7 @@ fn test_escaped_string_literal() {
 #[test]
 fn parse_create_domain() {
     let sql1 = "CREATE DOMAIN my_domain AS INTEGER CHECK (VALUE > 0)";
-    let expected = Statement::CreateDomain {
+    let expected = Statement::CreateDomain(CreateDomain {
         name: ObjectName::from(vec![Ident::new("my_domain")]),
         data_type: DataType::Integer(None),
         collation: None,
@@ -5096,7 +5096,7 @@ fn parse_create_domain() {
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
         }],
-    };
+    });
 
     assert_eq!(pg().verified_stmt(sql1), expected);
 }
@@ -5104,7 +5104,7 @@ fn parse_create_domain() {
 #[test]
 fn parse_create_domain_with_collation() {
     let sql2 = "CREATE DOMAIN my_domain AS INTEGER COLLATE \"en_US\" CHECK (VALUE > 0)";
-    let expected = Statement::CreateDomain {
+    let expected = Statement::CreateDomain(CreateDomain {
         name: ObjectName::from(vec![Ident::new("my_domain")]),
         data_type: DataType::Integer(None),
         collation: Some(Ident::with_quote('"', "en_US")),
@@ -5117,7 +5117,7 @@ fn parse_create_domain_with_collation() {
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
         }],
-    };
+    });
 
     assert_eq!(pg().verified_stmt(sql2), expected);
 }
@@ -5125,7 +5125,7 @@ fn parse_create_domain_with_collation() {
 #[test]
 fn parse_create_domain_with_default() {
     let sql3 = "CREATE DOMAIN my_domain AS INTEGER DEFAULT 1 CHECK (VALUE > 0)";
-    let expected = Statement::CreateDomain {
+    let expected = Statement::CreateDomain(CreateDomain {
         name: ObjectName::from(vec![Ident::new("my_domain")]),
         data_type: DataType::Integer(None),
         collation: None,
@@ -5138,7 +5138,7 @@ fn parse_create_domain_with_default() {
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
         }],
-    };
+    });
 
     assert_eq!(pg().verified_stmt(sql3), expected);
 }
@@ -5146,7 +5146,7 @@ fn parse_create_domain_with_default() {
 #[test]
 fn parse_create_domain_with_default_and_collation() {
     let sql4 = "CREATE DOMAIN my_domain AS INTEGER COLLATE \"en_US\" DEFAULT 1 CHECK (VALUE > 0)";
-    let expected = Statement::CreateDomain {
+    let expected = Statement::CreateDomain(CreateDomain {
         name: ObjectName::from(vec![Ident::new("my_domain")]),
         data_type: DataType::Integer(None),
         collation: Some(Ident::with_quote('"', "en_US")),
@@ -5159,7 +5159,7 @@ fn parse_create_domain_with_default_and_collation() {
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
         }],
-    };
+    });
 
     assert_eq!(pg().verified_stmt(sql4), expected);
 }
@@ -5167,7 +5167,7 @@ fn parse_create_domain_with_default_and_collation() {
 #[test]
 fn parse_create_domain_with_named_constraint() {
     let sql5 = "CREATE DOMAIN my_domain AS INTEGER CONSTRAINT my_constraint CHECK (VALUE > 0)";
-    let expected = Statement::CreateDomain {
+    let expected = Statement::CreateDomain(CreateDomain {
         name: ObjectName::from(vec![Ident::new("my_domain")]),
         data_type: DataType::Integer(None),
         collation: None,
@@ -5180,7 +5180,7 @@ fn parse_create_domain_with_named_constraint() {
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
         }],
-    };
+    });
 
     assert_eq!(pg().verified_stmt(sql5), expected);
 }

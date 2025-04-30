@@ -5928,13 +5928,13 @@ impl<'a> Parser<'a> {
             constraints.push(constraint);
         }
 
-        Ok(Statement::CreateDomain {
+        Ok(Statement::CreateDomain(CreateDomain {
             name,
             data_type,
             collation,
             default,
             constraints,
-        })
+        }))
     }
 
     /// ```sql

@@ -15505,14 +15505,28 @@ impl<'a> Parser<'a> {
         let name = self.parse_object_name(false)?;
         let params = self.parse_optional_procedure_parameters()?;
         self.expect_keyword_is(Keyword::AS)?;
-        self.expect_keyword_is(Keyword::BEGIN)?;
-        let statements = self.parse_statements()?;
-        self.expect_keyword_is(Keyword::END)?;
+
+        let begin_token: AttachedToken = self
+            .expect_keyword(Keyword::BEGIN)
+            .map(AttachedToken)
+            .unwrap_or_else(|_| AttachedToken::empty());
+        let statements = self.parse_statement_list(&[Keyword::END])?;
+        let end_token = match &begin_token.0.token {
+            Token::Word(w) if w.keyword == Keyword::BEGIN => {
+                AttachedToken(self.expect_keyword(Keyword::END)?)
+            }
+            _ => AttachedToken::empty(),
+        };
+
         Ok(Statement::CreateProcedure {
             name,
             or_alter,
             params,
-            body: statements,
+            body: BeginEndStatements {
+                begin_token,
+                statements,
+                end_token,
+            },
         })
     }
 

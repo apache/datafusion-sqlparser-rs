@@ -3826,7 +3826,7 @@ pub enum Statement {
         or_alter: bool,
         name: ObjectName,
         params: Option<Vec<ProcedureParam>>,
-        body: Vec<Statement>,
+        body: BeginEndStatements,
     },
     /// ```sql
     /// CREATE MACRO
@@ -4705,11 +4705,8 @@ impl fmt::Display for Statement {
                         write!(f, " ({})", display_comma_separated(p))?;
                     }
                 }
-                write!(
-                    f,
-                    " AS BEGIN {body} END",
-                    body = display_separated(body, "; ")
-                )
+
+                write!(f, " AS {body}")
             }
             Statement::CreateMacro {
                 or_replace,

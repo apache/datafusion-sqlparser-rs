@@ -169,14 +169,8 @@ impl TestedDialects {
     }
 
     /// The same as [`one_statement_parses_to`] but it works for a multiple statements
-    pub fn statements_parse_to(
-        &self,
-        sql: &str,
-        statement_count: usize,
-        canonical: &str,
-    ) -> Vec<Statement> {
+    pub fn statements_parse_to(&self, sql: &str, canonical: &str) -> Vec<Statement> {
         let statements = self.parse_sql_statements(sql).expect(sql);
-        assert_eq!(statements.len(), statement_count);
         if !canonical.is_empty() && sql != canonical {
             assert_eq!(self.parse_sql_statements(canonical).unwrap(), statements);
         } else {

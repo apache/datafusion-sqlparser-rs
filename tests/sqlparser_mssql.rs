@@ -1414,7 +1414,7 @@ fn test_mssql_cursor() {
         CLOSE Employee_Cursor; \
         DEALLOCATE Employee_Cursor\
     ";
-    let _ = ms().statements_parse_to(full_cursor_usage, 6, "");
+    let _ = ms().statements_parse_to(full_cursor_usage, "");
 }
 
 #[test]

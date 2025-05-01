@@ -6192,6 +6192,9 @@ pub enum Action {
     },
     Delete,
     EvolveSchema,
+    Exec {
+        obj_type: Option<ActionExecuteObjectType>,
+    },
     Execute {
         obj_type: Option<ActionExecuteObjectType>,
     },
@@ -6258,6 +6261,12 @@ impl fmt::Display for Action {
             Action::DatabaseRole { role } => write!(f, "DATABASE ROLE {role}")?,
             Action::Delete => f.write_str("DELETE")?,
             Action::EvolveSchema => f.write_str("EVOLVE SCHEMA")?,
+            Action::Exec { obj_type } => {
+                f.write_str("EXEC")?;
+                if let Some(obj_type) = obj_type {
+                    write!(f, " {obj_type}")?
+                }
+            }
             Action::Execute { obj_type } => {
                 f.write_str("EXECUTE")?;
                 if let Some(obj_type) = obj_type {

@@ -1287,9 +1287,16 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume the dot
 
                     match chars.peek() {
-                        Some('_') => {
-                            // Handle "._" case as a period (special token) followed by identifier
+                        // Handle "._" case as a period followed by identifier
+                        // if the last token was a word
+                        Some('_') if matches!(prev_token, Some(Token::Word(_))) => {
                             Ok(Some(Token::Period))
+                        }
+                        Some('_') => {
+                            self.tokenizer_error(
+                                chars.location(),
+                                "Unexpected an underscore here".to_string(),
+                            )
                         }
                         Some(ch)
                             //  Hive and mysql dialects allow numeric prefixes for identifers
@@ -2504,6 +2511,16 @@ mod tests {
         ];
 
         compare(expected, tokens);
+
+        let sql = String::from("SELECT ._123");
+        if let Ok(tokens) = Tokenizer::new(&dialect, &sql).tokenize() {
+            panic!("Tokenizer should have failed on {sql}, but it succeeded with {tokens:?}");
+        }
+
+        let sql = String::from("SELECT ._abc");
+        if let Ok(tokens) = Tokenizer::new(&dialect, &sql).tokenize() {
+            panic!("Tokenizer should have failed on {sql}, but it succeeded with {tokens:?}");
+        }
     }
 
     #[test]

@@ -13608,6 +13608,9 @@ impl<'a> Parser<'a> {
             Ok(Action::Create { obj_type })
         } else if self.parse_keyword(Keyword::DELETE) {
             Ok(Action::Delete)
+        } else if self.parse_keyword(Keyword::EXEC) {
+            let obj_type = self.maybe_parse_action_execute_obj_type();
+            Ok(Action::Exec { obj_type })
         } else if self.parse_keyword(Keyword::EXECUTE) {
             let obj_type = self.maybe_parse_action_execute_obj_type();
             Ok(Action::Execute { obj_type })

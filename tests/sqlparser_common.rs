@@ -9331,6 +9331,7 @@ fn parse_grant() {
     verified_stmt("GRANT USAGE ON WAREHOUSE wh1 TO ROLE role1");
     verified_stmt("GRANT OWNERSHIP ON INTEGRATION int1 TO ROLE role1");
     verified_stmt("GRANT SELECT ON VIEW view1 TO ROLE role1");
+    verified_stmt("GRANT EXEC ON my_sp TO runner");
 
     all_dialects_where(|d| d.identifier_quote_style("none") == Some('['))
         .verified_stmt("GRANT SELECT ON [my_table] TO [public]");
@@ -9358,6 +9359,7 @@ fn parse_deny() {
 
     verified_stmt("DENY SELECT, INSERT, UPDATE, DELETE ON db1.sc1 TO role1, role2");
     verified_stmt("DENY ALL ON db1.sc1 TO role1");
+    verified_stmt("DENY EXEC ON my_sp TO runner");
 
     all_dialects_where(|d| d.identifier_quote_style("none") == Some('['))
         .verified_stmt("DENY SELECT ON [my_table] TO [public]");

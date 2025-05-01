@@ -3906,6 +3906,10 @@ pub enum Statement {
         granted_by: Option<Ident>,
     },
     /// ```sql
+    /// DENY privileges ON object TO grantees
+    /// ```
+    Deny(DenyStatement),
+    /// ```sql
     /// REVOKE privileges ON objects FROM grantees
     /// ```
     Revoke {
@@ -5595,6 +5599,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::Deny(s) => write!(f, "{s}"),
             Statement::Revoke {
                 privileges,
                 objects,
@@ -6864,6 +6869,37 @@ impl fmt::Display for GrantObjects {
                 write!(f, "EXTERNAL VOLUME {}", display_comma_separated(objects))
             }
         }
+    }
+}
+
+/// A `DENY` statement
+///
+/// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/statements/deny-transact-sql)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DenyStatement {
+    pub privileges: Privileges,
+    pub objects: GrantObjects,
+    pub grantees: Vec<Grantee>,
+    pub granted_by: Option<Ident>,
+    pub cascade: Option<CascadeOption>,
+}
+
+impl fmt::Display for DenyStatement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "DENY {}", self.privileges)?;
+        write!(f, " ON {}", self.objects)?;
+        if !self.grantees.is_empty() {
+            write!(f, " TO {}", display_comma_separated(&self.grantees))?;
+        }
+        if let Some(cascade) = &self.cascade {
+            write!(f, " {cascade}")?;
+        }
+        if let Some(granted_by) = &self.granted_by {
+            write!(f, " AS {granted_by}")?;
+        }
+        Ok(())
     }
 }
 

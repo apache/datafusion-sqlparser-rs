@@ -9334,6 +9334,30 @@ fn parse_grant() {
 }
 
 #[test]
+fn parse_deny() {
+    let sql = "DENY INSERT, DELETE ON users TO analyst CASCADE AS admin";
+    match verified_stmt(sql) {
+        Statement::Deny(deny) => {
+            assert_eq!(
+                Privileges::Actions(vec![Action::Insert { columns: None }, Action::Delete]),
+                deny.privileges
+            );
+            assert_eq!(
+                &GrantObjects::Tables(vec![ObjectName::from(vec![Ident::new("users")])]),
+                &deny.objects
+            );
+            assert_eq_vec(&["analyst"], &deny.grantees);
+            assert_eq!(Some(CascadeOption::Cascade), deny.cascade);
+            assert_eq!(Some(Ident::from("admin")), deny.granted_by);
+        }
+        _ => unreachable!(),
+    }
+
+    verified_stmt("DENY SELECT, INSERT, UPDATE, DELETE ON db1.sc1 TO role1, role2");
+    verified_stmt("DENY ALL ON db1.sc1 TO role1");
+}
+
+#[test]
 fn test_revoke() {
     let sql = "REVOKE ALL PRIVILEGES ON users, auth FROM analyst";
     match verified_stmt(sql) {

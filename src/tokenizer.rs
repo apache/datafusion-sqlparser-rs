@@ -1295,7 +1295,7 @@ impl<'a> Tokenizer<'a> {
                         Some('_') => {
                             self.tokenizer_error(
                                 chars.location(),
-                                "Unexpected an underscore here".to_string(),
+                                "Unexpected underscore here".to_string(),
                             )
                         }
                         Some(ch)

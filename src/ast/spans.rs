@@ -486,6 +486,7 @@ impl Spanned for Statement {
             Statement::CreateStage { .. } => Span::empty(),
             Statement::Assert { .. } => Span::empty(),
             Statement::Grant { .. } => Span::empty(),
+            Statement::Deny { .. } => Span::empty(),
             Statement::Revoke { .. } => Span::empty(),
             Statement::Deallocate { .. } => Span::empty(),
             Statement::Execute { .. } => Span::empty(),

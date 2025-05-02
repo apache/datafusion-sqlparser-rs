@@ -3802,7 +3802,7 @@ pub enum Statement {
         /// Execute logic block
         exec_body: Option<TriggerExecBody>,
         /// For SQL dialects with statement(s) for a body
-        statements: Option<BeginEndStatements>,
+        statements: Option<ConditionalStatements>,
         /// The characteristic of the trigger, which include whether the trigger is `DEFERRABLE`, `INITIALLY DEFERRED`, or `INITIALLY IMMEDIATE`,
         characteristics: Option<ConstraintCharacteristics>,
     },

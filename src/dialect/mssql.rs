@@ -246,16 +246,14 @@ impl MsSqlDialect {
             let statements = parser.parse_statement_list(&[Keyword::END])?;
             let end_token = parser.expect_keyword(Keyword::END)?;
 
-            BeginEndStatements {
+            ConditionalStatements::BeginEnd(BeginEndStatements {
                 begin_token: AttachedToken(begin_token),
                 statements,
                 end_token: AttachedToken(end_token),
-            }
+            })
         } else {
-            BeginEndStatements {
-                begin_token: AttachedToken::empty(),
+            ConditionalStatements::Sequence {
                 statements: parser.parse_statements()?,
-                end_token: AttachedToken::empty(),
             }
         };
 

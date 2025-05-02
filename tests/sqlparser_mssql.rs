@@ -2234,8 +2234,7 @@ fn parse_create_trigger() {
             include_each: false,
             condition: None,
             exec_body: None,
-            statements: Some(BeginEndStatements {
-                begin_token: AttachedToken::empty(),
+            statements: Some(ConditionalStatements::Sequence {
                 statements: vec![Statement::RaisError {
                     message: Box::new(Expr::Value(
                         (Value::SingleQuotedString("Notify Customer Relations".to_string()))
@@ -2250,7 +2249,6 @@ fn parse_create_trigger() {
                     arguments: vec![],
                     options: vec![],
                 }],
-                end_token: AttachedToken::empty(),
             }),
             characteristics: None,
         }

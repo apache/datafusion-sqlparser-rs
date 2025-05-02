@@ -518,6 +518,20 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Return true if the dialect supports pipe operator.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT *
+    /// FROM table
+    /// |> limit 1
+    /// ```
+    ///
+    /// See <https://cloud.google.com/bigquery/docs/pipe-syntax-guide#basic_syntax>
+    fn supports_pipe_operator(&self) -> bool {
+        false
+    }
+
     /// Does the dialect support MySQL-style `'user'@'host'` grantee syntax?
     fn supports_user_host_grantee(&self) -> bool {
         false

@@ -136,6 +136,10 @@ impl Dialect for BigQueryDialect {
     fn is_column_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
         !RESERVED_FOR_COLUMN_ALIAS.contains(kw)
     }
+
+    fn supports_pipe_operator(&self) -> bool {
+        true
+    }
 }
 
 impl BigQueryDialect {

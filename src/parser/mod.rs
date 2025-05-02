@@ -1149,6 +1149,25 @@ impl<'a> Parser<'a> {
         self.parse_subexpr(self.dialect.prec_unknown())
     }
 
+    pub fn parse_expr_with_alias_and_order_by(
+        &mut self,
+    ) -> Result<ExprWithAliasAndOrderBy, ParserError> {
+        let expr = self.parse_expr()?;
+
+        fn validator(explicit: bool, kw: &Keyword, _parser: &mut Parser) -> bool {
+            explicit || !&[Keyword::ASC, Keyword::DESC, Keyword::GROUP].contains(kw)
+        }
+        let alias = self.parse_optional_alias_inner(None, validator)?;
+        let order_by = OrderByOptions {
+            asc: self.parse_asc_desc(),
+            nulls_first: None,
+        };
+        Ok(ExprWithAliasAndOrderBy {
+            expr: ExprWithAlias { expr, alias },
+            order_by,
+        })
+    }
+
     /// Parse tokens until the precedence changes.
     pub fn parse_subexpr(&mut self, precedence: u8) -> Result<Expr, ParserError> {
         let _guard = self.recursion_counter.try_decrease()?;
@@ -10571,6 +10590,7 @@ impl<'a> Parser<'a> {
                 for_clause: None,
                 settings: None,
                 format_clause: None,
+                pipe_operators: vec![],
             }
             .into())
         } else if self.parse_keyword(Keyword::UPDATE) {
@@ -10584,6 +10604,7 @@ impl<'a> Parser<'a> {
                 for_clause: None,
                 settings: None,
                 format_clause: None,
+                pipe_operators: vec![],
             }
             .into())
         } else if self.parse_keyword(Keyword::DELETE) {
@@ -10597,6 +10618,7 @@ impl<'a> Parser<'a> {
                 for_clause: None,
                 settings: None,
                 format_clause: None,
+                pipe_operators: vec![],
             }
             .into())
         } else {
@@ -10637,6 +10659,12 @@ impl<'a> Parser<'a> {
                 None
             };
 
+            let pipe_operators = if self.dialect.supports_pipe_operator() {
+                self.parse_pipe_operators()?
+            } else {
+                Vec::new()
+            };
+
             Ok(Query {
                 with,
                 body,
@@ -10647,9 +10675,96 @@ impl<'a> Parser<'a> {
                 for_clause,
                 settings,
                 format_clause,
+                pipe_operators,
             }
             .into())
         }
+    }
+
+    fn parse_pipe_operators(&mut self) -> Result<Vec<PipeOperator>, ParserError> {
+        let mut pipe_operators = Vec::new();
+
+        while self.consume_token(&Token::VerticalBarRightAngleBracket) {
+            let kw = self.expect_one_of_keywords(&[
+                Keyword::SELECT,
+                Keyword::EXTEND,
+                Keyword::SET,
+                Keyword::DROP,
+                Keyword::AS,
+                Keyword::WHERE,
+                Keyword::LIMIT,
+                Keyword::AGGREGATE,
+                Keyword::ORDER,
+            ])?;
+            match kw {
+                Keyword::SELECT => {
+                    let exprs = self.parse_comma_separated(Parser::parse_select_item)?;
+                    pipe_operators.push(PipeOperator::Select { exprs })
+                }
+                Keyword::EXTEND => {
+                    let exprs = self.parse_comma_separated(Parser::parse_select_item)?;
+                    pipe_operators.push(PipeOperator::Extend { exprs })
+                }
+                Keyword::SET => {
+                    let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
+                    pipe_operators.push(PipeOperator::Set { assignments })
+                }
+                Keyword::DROP => {
+                    let columns = self.parse_identifiers()?;
+                    pipe_operators.push(PipeOperator::Drop { columns })
+                }
+                Keyword::AS => {
+                    let alias = self.parse_identifier()?;
+                    pipe_operators.push(PipeOperator::As { alias })
+                }
+                Keyword::WHERE => {
+                    let expr = self.parse_expr()?;
+                    pipe_operators.push(PipeOperator::Where { expr })
+                }
+                Keyword::LIMIT => {
+                    let expr = self.parse_expr()?;
+                    let offset = if self.parse_keyword(Keyword::OFFSET) {
+                        Some(self.parse_expr()?)
+                    } else {
+                        None
+                    };
+                    pipe_operators.push(PipeOperator::Limit { expr, offset })
+                }
+                Keyword::AGGREGATE => {
+                    let full_table_exprs = if self.peek_keyword(Keyword::GROUP) {
+                        vec![]
+                    } else {
+                        self.parse_comma_separated(|parser| {
+                            parser.parse_expr_with_alias_and_order_by()
+                        })?
+                    };
+
+                    let group_by_expr = if self.parse_keywords(&[Keyword::GROUP, Keyword::BY]) {
+                        self.parse_comma_separated(|parser| {
+                            parser.parse_expr_with_alias_and_order_by()
+                        })?
+                    } else {
+                        vec![]
+                    };
+
+                    pipe_operators.push(PipeOperator::Aggregate {
+                        full_table_exprs,
+                        group_by_expr,
+                    })
+                }
+                Keyword::ORDER => {
+                    self.expect_one_of_keywords(&[Keyword::BY])?;
+                    let exprs = self.parse_comma_separated(Parser::parse_order_by_expr)?;
+                    pipe_operators.push(PipeOperator::OrderBy { exprs })
+                }
+                unhandled => {
+                    return Err(ParserError::ParserError(format!(
+                    "`expect_one_of_keywords` further up allowed unhandled keyword: {unhandled:?}"
+                )))
+                }
+            }
+        }
+        Ok(pipe_operators)
     }
 
     fn parse_settings(&mut self) -> Result<Option<Vec<Setting>>, ParserError> {
@@ -12122,6 +12237,7 @@ impl<'a> Parser<'a> {
                     for_clause: None,
                     settings: None,
                     format_clause: None,
+                    pipe_operators: vec![],
                 }),
                 alias,
             })

@@ -13418,14 +13418,18 @@ impl<'a> Parser<'a> {
                 GranteesType::Share
             } else if self.parse_keyword(Keyword::GROUP) {
                 GranteesType::Group
-            } else if self.parse_keyword(Keyword::PUBLIC) {
-                GranteesType::Public
             } else if self.parse_keywords(&[Keyword::DATABASE, Keyword::ROLE]) {
                 GranteesType::DatabaseRole
             } else if self.parse_keywords(&[Keyword::APPLICATION, Keyword::ROLE]) {
                 GranteesType::ApplicationRole
             } else if self.parse_keyword(Keyword::APPLICATION) {
                 GranteesType::Application
+            } else if self.peek_keyword(Keyword::PUBLIC) {
+                if dialect_of!(self is MsSqlDialect) {
+                    grantee_type
+                } else {
+                    GranteesType::Public
+                }
             } else {
                 grantee_type // keep from previous iteraton, if not specified
             };

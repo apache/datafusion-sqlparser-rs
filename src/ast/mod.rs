@@ -3826,7 +3826,7 @@ pub enum Statement {
         or_alter: bool,
         name: ObjectName,
         params: Option<Vec<ProcedureParam>>,
-        body: BeginEndStatements,
+        body: ConditionalStatements,
     },
     /// ```sql
     /// CREATE MACRO

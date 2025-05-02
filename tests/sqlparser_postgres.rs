@@ -4242,6 +4242,66 @@ fn parse_drop_function() {
 }
 
 #[test]
+fn parse_drop_domain() {
+    let sql = "DROP DOMAIN IF EXISTS jpeg_domain";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::DropDomain(DropDomain {
+            if_exists: true,
+            name: ObjectName::from(vec![Ident {
+                value: "jpeg_domain".to_string(),
+                quote_style: None,
+                span: Span::empty(),
+            }]),
+            drop_behavior: None
+        })
+    );
+
+    let sql = "DROP DOMAIN jpeg_domain";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::DropDomain(DropDomain {
+            if_exists: false,
+            name: ObjectName::from(vec![Ident {
+                value: "jpeg_domain".to_string(),
+                quote_style: None,
+                span: Span::empty(),
+            }]),
+            drop_behavior: None
+        })
+    );
+
+    let sql = "DROP DOMAIN IF EXISTS jpeg_domain CASCADE";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::DropDomain(DropDomain {
+            if_exists: true,
+            name: ObjectName::from(vec![Ident {
+                value: "jpeg_domain".to_string(),
+                quote_style: None,
+                span: Span::empty(),
+            }]),
+            drop_behavior: Some(DropBehavior::Cascade)
+        })
+    );
+
+    let sql = "DROP DOMAIN IF EXISTS jpeg_domain RESTRICT";
+
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::DropDomain(DropDomain {
+            if_exists: true,
+            name: ObjectName::from(vec![Ident {
+                value: "jpeg_domain".to_string(),
+                quote_style: None,
+                span: Span::empty(),
+            }]),
+            drop_behavior: Some(DropBehavior::Restrict)
+        })
+    );
+}
+
+#[test]
 fn parse_drop_procedure() {
     let sql = "DROP PROCEDURE IF EXISTS test_proc";
     assert_eq!(

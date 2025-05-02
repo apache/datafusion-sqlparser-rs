@@ -3321,6 +3321,14 @@ pub enum Statement {
         drop_behavior: Option<DropBehavior>,
     },
     /// ```sql
+    /// DROP DOMAIN
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-dropdomain.html)
+    ///
+    /// DROP DOMAIN [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
+    ///
+    DropDomain(DropDomain),
+    /// ```sql
     /// DROP PROCEDURE
     /// ```
     DropProcedure {
@@ -5094,6 +5102,21 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::DropDomain(DropDomain {
+                if_exists,
+                name,
+                drop_behavior,
+            }) => {
+                write!(
+                    f,
+                    "DROP DOMAIN{} {name}",
+                    if *if_exists { " IF EXISTS" } else { "" },
+                )?;
+                if let Some(op) = drop_behavior {
+                    write!(f, " {op}")?;
+                }
+                Ok(())
+            }
             Statement::DropProcedure {
                 if_exists,
                 proc_desc,
@@ -6827,6 +6850,19 @@ impl fmt::Display for CloseCursor {
             CloseCursor::Specific { name } => write!(f, "{name}"),
         }
     }
+}
+
+/// A Drop Domain statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DropDomain {
+    /// Whether to drop the domain if it exists
+    pub if_exists: bool,
+    /// The name of the domain to drop
+    pub name: ObjectName,
+    /// The behavior to apply when dropping the domain
+    pub drop_behavior: Option<DropBehavior>,
 }
 
 /// A function call

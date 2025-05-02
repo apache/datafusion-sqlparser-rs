@@ -26,10 +26,12 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use super::super::dml::CreateTable;
 use crate::ast::{
-    ClusteredBy, ColumnDef, CommentDef, Expr, FileFormat, HiveDistributionStyle, HiveFormat, Ident,
-    ObjectName, OnCommit, OneOrManyWithParens, Query, RowAccessPolicy, SqlOption, Statement,
-    StorageSerializationPolicy, TableConstraint, TableEngine, Tag, WrappedCollection,
+    ClusteredBy, ColumnDef, CommentDef, CreateTableOptions, Expr, FileFormat,
+    HiveDistributionStyle, HiveFormat, Ident, ObjectName, OnCommit, OneOrManyWithParens, Query,
+    RowAccessPolicy, Statement, StorageSerializationPolicy, TableConstraint, Tag,
+    WrappedCollection,
 };
+
 use crate::parser::ParserError;
 
 /// Builder for create table statement variant ([1]).
@@ -76,19 +78,13 @@ pub struct CreateTableBuilder {
     pub constraints: Vec<TableConstraint>,
     pub hive_distribution: HiveDistributionStyle,
     pub hive_formats: Option<HiveFormat>,
-    pub table_properties: Vec<SqlOption>,
-    pub with_options: Vec<SqlOption>,
     pub file_format: Option<FileFormat>,
     pub location: Option<String>,
     pub query: Option<Box<Query>>,
     pub without_rowid: bool,
     pub like: Option<ObjectName>,
     pub clone: Option<ObjectName>,
-    pub engine: Option<TableEngine>,
     pub comment: Option<CommentDef>,
-    pub auto_increment_offset: Option<u32>,
-    pub default_charset: Option<String>,
-    pub collation: Option<String>,
     pub on_commit: Option<OnCommit>,
     pub on_cluster: Option<Ident>,
     pub primary_key: Option<Box<Expr>>,
@@ -96,7 +92,6 @@ pub struct CreateTableBuilder {
     pub partition_by: Option<Box<Expr>>,
     pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
     pub clustered_by: Option<ClusteredBy>,
-    pub options: Option<Vec<SqlOption>>,
     pub inherits: Option<Vec<ObjectName>>,
     pub strict: bool,
     pub copy_grants: bool,
@@ -113,6 +108,7 @@ pub struct CreateTableBuilder {
     pub catalog: Option<String>,
     pub catalog_sync: Option<String>,
     pub storage_serialization_policy: Option<StorageSerializationPolicy>,
+    pub table_options: CreateTableOptions,
 }
 
 impl CreateTableBuilder {
@@ -131,19 +127,13 @@ impl CreateTableBuilder {
             constraints: vec![],
             hive_distribution: HiveDistributionStyle::NONE,
             hive_formats: None,
-            table_properties: vec![],
-            with_options: vec![],
             file_format: None,
             location: None,
             query: None,
             without_rowid: false,
             like: None,
             clone: None,
-            engine: None,
             comment: None,
-            auto_increment_offset: None,
-            default_charset: None,
-            collation: None,
             on_commit: None,
             on_cluster: None,
             primary_key: None,
@@ -151,7 +141,6 @@ impl CreateTableBuilder {
             partition_by: None,
             cluster_by: None,
             clustered_by: None,
-            options: None,
             inherits: None,
             strict: false,
             copy_grants: false,
@@ -168,6 +157,7 @@ impl CreateTableBuilder {
             catalog: None,
             catalog_sync: None,
             storage_serialization_policy: None,
+            table_options: CreateTableOptions::None,
         }
     }
     pub fn or_replace(mut self, or_replace: bool) -> Self {
@@ -230,15 +220,6 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn table_properties(mut self, table_properties: Vec<SqlOption>) -> Self {
-        self.table_properties = table_properties;
-        self
-    }
-
-    pub fn with_options(mut self, with_options: Vec<SqlOption>) -> Self {
-        self.with_options = with_options;
-        self
-    }
     pub fn file_format(mut self, file_format: Option<FileFormat>) -> Self {
         self.file_format = file_format;
         self
@@ -268,28 +249,8 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn engine(mut self, engine: Option<TableEngine>) -> Self {
-        self.engine = engine;
-        self
-    }
-
-    pub fn comment(mut self, comment: Option<CommentDef>) -> Self {
+    pub fn comment_after_column_def(mut self, comment: Option<CommentDef>) -> Self {
         self.comment = comment;
-        self
-    }
-
-    pub fn auto_increment_offset(mut self, offset: Option<u32>) -> Self {
-        self.auto_increment_offset = offset;
-        self
-    }
-
-    pub fn default_charset(mut self, default_charset: Option<String>) -> Self {
-        self.default_charset = default_charset;
-        self
-    }
-
-    pub fn collation(mut self, collation: Option<String>) -> Self {
-        self.collation = collation;
         self
     }
 
@@ -325,11 +286,6 @@ impl CreateTableBuilder {
 
     pub fn clustered_by(mut self, clustered_by: Option<ClusteredBy>) -> Self {
         self.clustered_by = clustered_by;
-        self
-    }
-
-    pub fn options(mut self, options: Option<Vec<SqlOption>>) -> Self {
-        self.options = options;
         self
     }
 
@@ -422,6 +378,11 @@ impl CreateTableBuilder {
         self
     }
 
+    pub fn table_options(mut self, table_options: CreateTableOptions) -> Self {
+        self.table_options = table_options;
+        self
+    }
+
     pub fn build(self) -> Statement {
         Statement::CreateTable(CreateTable {
             or_replace: self.or_replace,
@@ -437,19 +398,13 @@ impl CreateTableBuilder {
             constraints: self.constraints,
             hive_distribution: self.hive_distribution,
             hive_formats: self.hive_formats,
-            table_properties: self.table_properties,
-            with_options: self.with_options,
             file_format: self.file_format,
             location: self.location,
             query: self.query,
             without_rowid: self.without_rowid,
             like: self.like,
             clone: self.clone,
-            engine: self.engine,
             comment: self.comment,
-            auto_increment_offset: self.auto_increment_offset,
-            default_charset: self.default_charset,
-            collation: self.collation,
             on_commit: self.on_commit,
             on_cluster: self.on_cluster,
             primary_key: self.primary_key,
@@ -457,7 +412,6 @@ impl CreateTableBuilder {
             partition_by: self.partition_by,
             cluster_by: self.cluster_by,
             clustered_by: self.clustered_by,
-            options: self.options,
             inherits: self.inherits,
             strict: self.strict,
             copy_grants: self.copy_grants,
@@ -474,6 +428,7 @@ impl CreateTableBuilder {
             catalog: self.catalog,
             catalog_sync: self.catalog_sync,
             storage_serialization_policy: self.storage_serialization_policy,
+            table_options: self.table_options,
         })
     }
 }
@@ -499,19 +454,13 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 constraints,
                 hive_distribution,
                 hive_formats,
-                table_properties,
-                with_options,
                 file_format,
                 location,
                 query,
                 without_rowid,
                 like,
                 clone,
-                engine,
                 comment,
-                auto_increment_offset,
-                default_charset,
-                collation,
                 on_commit,
                 on_cluster,
                 primary_key,
@@ -519,7 +468,6 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 partition_by,
                 cluster_by,
                 clustered_by,
-                options,
                 inherits,
                 strict,
                 copy_grants,
@@ -536,6 +484,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 catalog,
                 catalog_sync,
                 storage_serialization_policy,
+                table_options,
             }) => Ok(Self {
                 or_replace,
                 temporary,
@@ -548,19 +497,13 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 constraints,
                 hive_distribution,
                 hive_formats,
-                table_properties,
-                with_options,
                 file_format,
                 location,
                 query,
                 without_rowid,
                 like,
                 clone,
-                engine,
                 comment,
-                auto_increment_offset,
-                default_charset,
-                collation,
                 on_commit,
                 on_cluster,
                 primary_key,
@@ -568,7 +511,6 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 partition_by,
                 cluster_by,
                 clustered_by,
-                options,
                 inherits,
                 strict,
                 iceberg,
@@ -587,6 +529,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 catalog,
                 catalog_sync,
                 storage_serialization_policy,
+                table_options,
             }),
             _ => Err(ParserError::ParserError(format!(
                 "Expected create table statement, but received: {stmt}"
@@ -600,8 +543,8 @@ impl TryFrom<Statement> for CreateTableBuilder {
 pub(crate) struct CreateTableConfiguration {
     pub partition_by: Option<Box<Expr>>,
     pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
-    pub options: Option<Vec<SqlOption>>,
     pub inherits: Option<Vec<ObjectName>>,
+    pub table_options: CreateTableOptions,
 }
 
 #[cfg(test)]

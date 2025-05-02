@@ -25,8 +25,8 @@ use crate::ast::helpers::stmt_data_loading::{
 use crate::ast::{
     ColumnOption, ColumnPolicy, ColumnPolicyProperty, CopyIntoSnowflakeKind, Ident,
     IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
-    IdentityPropertyOrder, ObjectName, RowAccessPolicy, ShowObjects, Statement, TagsColumnOption,
-    WrappedCollection,
+    IdentityPropertyOrder, ObjectName, RowAccessPolicy, ShowObjects, SqlOption, Statement,
+    TagsColumnOption, WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
@@ -417,6 +417,8 @@ pub fn parse_create_table(
     // "CREATE TABLE x COPY GRANTS (c INT)" and "CREATE TABLE x (c INT) COPY GRANTS" are both
     // accepted by Snowflake
 
+    let mut plain_options = vec![];
+
     loop {
         let next_token = parser.next_token();
         match &next_token.token {
@@ -428,7 +430,9 @@ pub fn parse_create_table(
                 Keyword::COMMENT => {
                     // Rewind the COMMENT keyword
                     parser.prev_token();
-                    builder = builder.comment(parser.parse_optional_inline_comment()?);
+                    if let Some(comment_def) = parser.parse_optional_inline_comment()? {
+                        plain_options.push(SqlOption::Comment(comment_def))
+                    }
                 }
                 Keyword::AS => {
                     let query = parser.parse_query()?;
@@ -589,6 +593,13 @@ pub fn parse_create_table(
             }
         }
     }
+    let table_options = if !plain_options.is_empty() {
+        crate::ast::CreateTableOptions::Plain(plain_options)
+    } else {
+        crate::ast::CreateTableOptions::None
+    };
+
+    builder = builder.table_options(table_options);
 
     if iceberg && builder.base_location.is_none() {
         return Err(ParserError::ParserError(

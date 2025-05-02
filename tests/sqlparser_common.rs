@@ -3657,7 +3657,7 @@ fn parse_create_table() {
             name,
             columns,
             constraints,
-            with_options,
+            table_options,
             if_not_exists: false,
             external: false,
             file_format: None,
@@ -3795,7 +3795,7 @@ fn parse_create_table() {
                     },
                 ]
             );
-            assert_eq!(with_options, vec![]);
+            assert_eq!(table_options, CreateTableOptions::None);
         }
         _ => unreachable!(),
     }
@@ -3840,7 +3840,7 @@ fn parse_create_table_with_constraint_characteristics() {
             name,
             columns,
             constraints,
-            with_options,
+            table_options,
             if_not_exists: false,
             external: false,
             file_format: None,
@@ -3934,7 +3934,7 @@ fn parse_create_table_with_constraint_characteristics() {
                     },
                 ]
             );
-            assert_eq!(with_options, vec![]);
+            assert_eq!(table_options, CreateTableOptions::None);
         }
         _ => unreachable!(),
     }
@@ -4421,7 +4421,11 @@ fn parse_create_table_with_options() {
 
     let sql = "CREATE TABLE t (c INT) WITH (foo = 'bar', a = 123)";
     match generic.verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { with_options, .. }) => {
+        Statement::CreateTable(CreateTable { table_options, .. }) => {
+            let with_options = match table_options {
+                CreateTableOptions::With(options) => options,
+                _ => unreachable!(),
+            };
             assert_eq!(
                 vec![
                     SqlOption::KeyValue {
@@ -4482,7 +4486,7 @@ fn parse_create_external_table() {
             name,
             columns,
             constraints,
-            with_options,
+            table_options,
             if_not_exists,
             external,
             file_format,
@@ -4525,7 +4529,7 @@ fn parse_create_external_table() {
             assert_eq!(FileFormat::TEXTFILE, file_format.unwrap());
             assert_eq!("/tmp/example.csv", location.unwrap());
 
-            assert_eq!(with_options, vec![]);
+            assert_eq!(table_options, CreateTableOptions::None);
             assert!(!if_not_exists);
         }
         _ => unreachable!(),
@@ -4550,7 +4554,7 @@ fn parse_create_or_replace_external_table() {
             name,
             columns,
             constraints,
-            with_options,
+            table_options,
             if_not_exists,
             external,
             file_format,
@@ -4579,7 +4583,7 @@ fn parse_create_or_replace_external_table() {
             assert_eq!(FileFormat::TEXTFILE, file_format.unwrap());
             assert_eq!("/tmp/example.csv", location.unwrap());
 
-            assert_eq!(with_options, vec![]);
+            assert_eq!(table_options, CreateTableOptions::None);
             assert!(!if_not_exists);
             assert!(or_replace);
         }
@@ -11420,7 +11424,9 @@ fn test_parse_inline_comment() {
     // [Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable)
     match all_dialects_except(|d| d.is::<HiveDialect>()).verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
-            columns, comment, ..
+            columns,
+            table_options,
+            ..
         }) => {
             assert_eq!(
                 columns,
@@ -11434,8 +11440,10 @@ fn test_parse_inline_comment() {
                 }]
             );
             assert_eq!(
-                comment.unwrap(),
-                CommentDef::WithEq("comment with equal".to_string())
+                table_options,
+                CreateTableOptions::Plain(vec![SqlOption::Comment(CommentDef::WithEq(
+                    "comment with equal".to_string()
+                ))])
             );
         }
         _ => unreachable!(),
@@ -12458,21 +12466,6 @@ fn parse_select_wildcard_with_except() {
             .to_string(),
         "sql parser error: Expected: identifier, found: )"
     );
-}
-
-#[test]
-fn parse_auto_increment_too_large() {
-    let dialect = GenericDialect {};
-    let u64_max = u64::MAX;
-    let sql =
-        format!("CREATE TABLE foo (bar INT NOT NULL AUTO_INCREMENT) AUTO_INCREMENT=1{u64_max}");
-
-    let res = Parser::new(&dialect)
-        .try_with_sql(&sql)
-        .expect("tokenize to work")
-        .parse_statements();
-
-    assert!(res.is_err(), "{res:?}");
 }
 
 #[test]

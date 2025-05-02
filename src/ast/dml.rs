@@ -33,11 +33,11 @@ pub use super::ddl::{ColumnDef, TableConstraint};
 
 use super::{
     display_comma_separated, display_separated, query::InputFormatClause, Assignment, ClusteredBy,
-    CommentDef, Expr, FileFormat, FromTable, HiveDistributionStyle, HiveFormat, HiveIOFormat,
-    HiveRowFormat, Ident, IndexType, InsertAliases, MysqlInsertPriority, ObjectName, OnCommit,
-    OnInsert, OneOrManyWithParens, OrderByExpr, Query, RowAccessPolicy, SelectItem, Setting,
-    SqlOption, SqliteOnConflict, StorageSerializationPolicy, TableEngine, TableObject,
-    TableWithJoins, Tag, WrappedCollection,
+    CommentDef, CreateTableOptions, Expr, FileFormat, FromTable, HiveDistributionStyle, HiveFormat,
+    HiveIOFormat, HiveRowFormat, Ident, IndexType, InsertAliases, MysqlInsertPriority, ObjectName,
+    OnCommit, OnInsert, OneOrManyWithParens, OrderByExpr, Query, RowAccessPolicy, SelectItem,
+    Setting, SqliteOnConflict, StorageSerializationPolicy, TableObject, TableWithJoins, Tag,
+    WrappedCollection,
 };
 
 /// Index column type.
@@ -146,19 +146,17 @@ pub struct CreateTable {
     pub constraints: Vec<TableConstraint>,
     pub hive_distribution: HiveDistributionStyle,
     pub hive_formats: Option<HiveFormat>,
-    pub table_properties: Vec<SqlOption>,
-    pub with_options: Vec<SqlOption>,
+    pub table_options: CreateTableOptions,
     pub file_format: Option<FileFormat>,
     pub location: Option<String>,
     pub query: Option<Box<Query>>,
     pub without_rowid: bool,
     pub like: Option<ObjectName>,
     pub clone: Option<ObjectName>,
-    pub engine: Option<TableEngine>,
+    // For Hive dialect, the table comment is after the column definitions without `=`,
+    // so the `comment` field is optional and different than the comment field in the general options list.
+    // [Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable)
     pub comment: Option<CommentDef>,
-    pub auto_increment_offset: Option<u32>,
-    pub default_charset: Option<String>,
-    pub collation: Option<String>,
     pub on_commit: Option<OnCommit>,
     /// ClickHouse "ON CLUSTER" clause:
     /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>
@@ -179,9 +177,6 @@ pub struct CreateTable {
     /// Hive: Table clustering column list.
     /// <https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable>
     pub clustered_by: Option<ClusteredBy>,
-    /// BigQuery: Table options list.
-    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
-    pub options: Option<Vec<SqlOption>>,
     /// Postgres `INHERITs` clause, which contains the list of tables from which
     /// the new table inherits.
     /// <https://www.postgresql.org/docs/current/ddl-inherit.html>
@@ -282,7 +277,7 @@ impl Display for CreateTable {
 
         // Hive table comment should be after column definitions, please refer to:
         // [Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable)
-        if let Some(CommentDef::AfterColumnDefsWithoutEq(comment)) = &self.comment {
+        if let Some(comment) = &self.comment {
             write!(f, " COMMENT '{comment}'")?;
         }
 
@@ -375,35 +370,14 @@ impl Display for CreateTable {
             }
             write!(f, " LOCATION '{}'", self.location.as_ref().unwrap())?;
         }
-        if !self.table_properties.is_empty() {
-            write!(
-                f,
-                " TBLPROPERTIES ({})",
-                display_comma_separated(&self.table_properties)
-            )?;
-        }
-        if !self.with_options.is_empty() {
-            write!(f, " WITH ({})", display_comma_separated(&self.with_options))?;
-        }
-        if let Some(engine) = &self.engine {
-            write!(f, " ENGINE={engine}")?;
-        }
-        if let Some(comment_def) = &self.comment {
-            match comment_def {
-                CommentDef::WithEq(comment) => {
-                    write!(f, " COMMENT = '{comment}'")?;
-                }
-                CommentDef::WithoutEq(comment) => {
-                    write!(f, " COMMENT '{comment}'")?;
-                }
-                // For CommentDef::AfterColumnDefsWithoutEq will be displayed after column definition
-                CommentDef::AfterColumnDefsWithoutEq(_) => (),
-            }
+
+        match &self.table_options {
+            options @ CreateTableOptions::With(_)
+            | options @ CreateTableOptions::Plain(_)
+            | options @ CreateTableOptions::TableProperties(_) => write!(f, " {}", options)?,
+            _ => (),
         }
 
-        if let Some(auto_increment_offset) = self.auto_increment_offset {
-            write!(f, " AUTO_INCREMENT {auto_increment_offset}")?;
-        }
         if let Some(primary_key) = &self.primary_key {
             write!(f, " PRIMARY KEY {}", primary_key)?;
         }
@@ -419,15 +393,9 @@ impl Display for CreateTable {
         if let Some(cluster_by) = self.cluster_by.as_ref() {
             write!(f, " CLUSTER BY {cluster_by}")?;
         }
-
-        if let Some(options) = self.options.as_ref() {
-            write!(
-                f,
-                " OPTIONS({})",
-                display_comma_separated(options.as_slice())
-            )?;
+        if let options @ CreateTableOptions::Options(_) = &self.table_options {
+            write!(f, " {}", options)?;
         }
-
         if let Some(external_volume) = self.external_volume.as_ref() {
             write!(f, " EXTERNAL_VOLUME = '{external_volume}'")?;
         }
@@ -501,13 +469,6 @@ impl Display for CreateTable {
 
         if let Some(tag) = &self.with_tags {
             write!(f, " WITH TAG ({})", display_comma_separated(tag.as_slice()))?;
-        }
-
-        if let Some(default_charset) = &self.default_charset {
-            write!(f, " DEFAULT CHARSET={default_charset}")?;
-        }
-        if let Some(collation) = &self.collation {
-            write!(f, " COLLATE={collation}")?;
         }
 
         if self.on_commit.is_some() {

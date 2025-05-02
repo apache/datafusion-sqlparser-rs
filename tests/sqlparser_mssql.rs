@@ -1725,7 +1725,6 @@ fn parse_create_table_with_valid_options() {
                             span: Span::empty(),
                         },
                         data_type: Int(None,),
-
                         options: vec![],
                     },
                     ColumnDef {
@@ -1735,7 +1734,6 @@ fn parse_create_table_with_valid_options() {
                             span: Span::empty(),
                         },
                         data_type: Int(None,),
-
                         options: vec![],
                     },
                 ],
@@ -1747,19 +1745,13 @@ fn parse_create_table_with_valid_options() {
                     storage: None,
                     location: None,
                 },),
-                table_properties: vec![],
-                with_options,
                 file_format: None,
                 location: None,
                 query: None,
                 without_rowid: false,
                 like: None,
                 clone: None,
-                engine: None,
                 comment: None,
-                auto_increment_offset: None,
-                default_charset: None,
-                collation: None,
                 on_commit: None,
                 on_cluster: None,
                 primary_key: None,
@@ -1767,7 +1759,6 @@ fn parse_create_table_with_valid_options() {
                 partition_by: None,
                 cluster_by: None,
                 clustered_by: None,
-                options: None,
                 inherits: None,
                 strict: false,
                 iceberg: false,
@@ -1785,6 +1776,7 @@ fn parse_create_table_with_valid_options() {
                 catalog: None,
                 catalog_sync: None,
                 storage_serialization_policy: None,
+                table_options: CreateTableOptions::With(with_options)
             })
         );
     }
@@ -1918,19 +1910,13 @@ fn parse_create_table_with_identity_column() {
                     storage: None,
                     location: None,
                 },),
-                table_properties: vec![],
-                with_options: vec![],
                 file_format: None,
                 location: None,
                 query: None,
                 without_rowid: false,
                 like: None,
                 clone: None,
-                engine: None,
                 comment: None,
-                auto_increment_offset: None,
-                default_charset: None,
-                collation: None,
                 on_commit: None,
                 on_cluster: None,
                 primary_key: None,
@@ -1938,7 +1924,6 @@ fn parse_create_table_with_identity_column() {
                 partition_by: None,
                 cluster_by: None,
                 clustered_by: None,
-                options: None,
                 inherits: None,
                 strict: false,
                 copy_grants: false,
@@ -1955,6 +1940,7 @@ fn parse_create_table_with_identity_column() {
                 catalog: None,
                 catalog_sync: None,
                 storage_serialization_policy: None,
+                table_options: CreateTableOptions::None
             }),
         );
     }

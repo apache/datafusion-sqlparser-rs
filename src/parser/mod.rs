@@ -5524,12 +5524,17 @@ impl<'a> Parser<'a> {
         };
         let location = hive_formats.location.clone();
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
+        let table_options = if !table_properties.is_empty() {
+            CreateTableOptions::TableProperties(table_properties)
+        } else {
+            CreateTableOptions::None
+        };
         Ok(CreateTableBuilder::new(table_name)
             .columns(columns)
             .constraints(constraints)
             .hive_distribution(hive_distribution)
             .hive_formats(Some(hive_formats))
-            .table_properties(table_properties)
+            .table_options(table_options)
             .or_replace(or_replace)
             .if_not_exists(if_not_exists)
             .external(true)
@@ -7041,17 +7046,16 @@ impl<'a> Parser<'a> {
 
         // parse optional column list (schema)
         let (columns, constraints) = self.parse_columns()?;
-        let mut comment = if dialect_of!(self is HiveDialect)
-            && self.parse_keyword(Keyword::COMMENT)
-        {
-            let next_token = self.next_token();
-            match next_token.token {
-                Token::SingleQuotedString(str) => Some(CommentDef::AfterColumnDefsWithoutEq(str)),
-                _ => self.expected("comment", next_token)?,
-            }
-        } else {
-            None
-        };
+        let comment_after_column_def =
+            if dialect_of!(self is HiveDialect) && self.parse_keyword(Keyword::COMMENT) {
+                let next_token = self.next_token();
+                match next_token.token {
+                    Token::SingleQuotedString(str) => Some(CommentDef::WithoutEq(str)),
+                    _ => self.expected("comment", next_token)?,
+                }
+            } else {
+                None
+            };
 
         // SQLite supports `WITHOUT ROWID` at the end of `CREATE TABLE`
         let without_rowid = self.parse_keywords(&[Keyword::WITHOUT, Keyword::ROWID]);
@@ -7059,39 +7063,8 @@ impl<'a> Parser<'a> {
         let hive_distribution = self.parse_hive_distribution()?;
         let clustered_by = self.parse_optional_clustered_by()?;
         let hive_formats = self.parse_hive_formats()?;
-        // PostgreSQL supports `WITH ( options )`, before `AS`
-        let with_options = self.parse_options(Keyword::WITH)?;
-        let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
 
-        let engine = if self.parse_keyword(Keyword::ENGINE) {
-            self.expect_token(&Token::Eq)?;
-            let next_token = self.next_token();
-            match next_token.token {
-                Token::Word(w) => {
-                    let name = w.value;
-                    let parameters = if self.peek_token() == Token::LParen {
-                        Some(self.parse_parenthesized_identifiers()?)
-                    } else {
-                        None
-                    };
-                    Some(TableEngine { name, parameters })
-                }
-                _ => self.expected("identifier", next_token)?,
-            }
-        } else {
-            None
-        };
-
-        let auto_increment_offset = if self.parse_keyword(Keyword::AUTO_INCREMENT) {
-            let _ = self.consume_token(&Token::Eq);
-            let next_token = self.next_token();
-            match next_token.token {
-                Token::Number(s, _) => Some(Self::parse::<u32>(s, next_token.span.start)?),
-                _ => self.expected("literal int", next_token)?,
-            }
-        } else {
-            None
-        };
+        let create_table_config = self.parse_optional_create_table_config()?;
 
         // ClickHouse supports `PRIMARY KEY`, before `ORDER BY`
         // https://clickhouse.com/docs/en/sql-reference/statements/create/table#primary-key
@@ -7119,30 +7092,6 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let create_table_config = self.parse_optional_create_table_config()?;
-
-        let default_charset = if self.parse_keywords(&[Keyword::DEFAULT, Keyword::CHARSET]) {
-            self.expect_token(&Token::Eq)?;
-            let next_token = self.next_token();
-            match next_token.token {
-                Token::Word(w) => Some(w.value),
-                _ => self.expected("identifier", next_token)?,
-            }
-        } else {
-            None
-        };
-
-        let collation = if self.parse_keywords(&[Keyword::COLLATE]) {
-            self.expect_token(&Token::Eq)?;
-            let next_token = self.next_token();
-            match next_token.token {
-                Token::Word(w) => Some(w.value),
-                _ => self.expected("identifier", next_token)?,
-            }
-        } else {
-            None
-        };
-
         let on_commit = if self.parse_keywords(&[Keyword::ON, Keyword::COMMIT]) {
             Some(self.parse_create_table_on_commit()?)
         } else {
@@ -7150,13 +7099,6 @@ impl<'a> Parser<'a> {
         };
 
         let strict = self.parse_keyword(Keyword::STRICT);
-
-        // Excludes Hive dialect here since it has been handled after table column definitions.
-        if !dialect_of!(self is HiveDialect) && self.parse_keyword(Keyword::COMMENT) {
-            // rewind the COMMENT keyword
-            self.prev_token();
-            comment = self.parse_optional_inline_comment()?
-        };
 
         // Parse optional `AS ( query )`
         let query = if self.parse_keyword(Keyword::AS) {
@@ -7174,8 +7116,6 @@ impl<'a> Parser<'a> {
             .temporary(temporary)
             .columns(columns)
             .constraints(constraints)
-            .with_options(with_options)
-            .table_properties(table_properties)
             .or_replace(or_replace)
             .if_not_exists(if_not_exists)
             .transient(transient)
@@ -7186,19 +7126,15 @@ impl<'a> Parser<'a> {
             .without_rowid(without_rowid)
             .like(like)
             .clone_clause(clone)
-            .engine(engine)
-            .comment(comment)
-            .auto_increment_offset(auto_increment_offset)
+            .comment_after_column_def(comment_after_column_def)
             .order_by(order_by)
-            .default_charset(default_charset)
-            .collation(collation)
             .on_commit(on_commit)
             .on_cluster(on_cluster)
             .clustered_by(clustered_by)
             .partition_by(create_table_config.partition_by)
             .cluster_by(create_table_config.cluster_by)
-            .options(create_table_config.options)
             .inherits(create_table_config.inherits)
+            .table_options(create_table_config.table_options)
             .primary_key(primary_key)
             .strict(strict)
             .build())
@@ -7222,17 +7158,29 @@ impl<'a> Parser<'a> {
     /// Parse configuration like inheritance, partitioning, clustering information during the table creation.
     ///
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_2)
-    /// [PostgreSQL Partitioning](https://www.postgresql.org/docs/current/ddl-partitioning.html)
-    /// [PostgreSQL Inheritance](https://www.postgresql.org/docs/current/ddl-inherit.html)
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/ddl-partitioning.html)
+    /// [MySql](https://dev.mysql.com/doc/refman/8.4/en/create-table.html)
     fn parse_optional_create_table_config(
         &mut self,
     ) -> Result<CreateTableConfiguration, ParserError> {
+        let mut table_options = CreateTableOptions::None;
+
         let inherits = if self.parse_keyword(Keyword::INHERITS) {
             Some(self.parse_parenthesized_qualified_column_list(IsOptional::Mandatory, false)?)
         } else {
             None
         };
 
+        // PostgreSQL supports `WITH ( options )`, before `AS`
+        let with_options = self.parse_options(Keyword::WITH)?;
+        if !with_options.is_empty() {
+            table_options = CreateTableOptions::With(with_options)
+        }
+
+        let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
+        if !table_properties.is_empty() {
+            table_options = CreateTableOptions::TableProperties(table_properties);
+        }
         let partition_by = if dialect_of!(self is BigQueryDialect | PostgreSqlDialect | GenericDialect)
             && self.parse_keywords(&[Keyword::PARTITION, Keyword::BY])
         {
@@ -7242,7 +7190,6 @@ impl<'a> Parser<'a> {
         };
 
         let mut cluster_by = None;
-        let mut options = None;
         if dialect_of!(self is BigQueryDialect | GenericDialect) {
             if self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {
                 cluster_by = Some(WrappedCollection::NoWrapping(
@@ -7252,17 +7199,228 @@ impl<'a> Parser<'a> {
 
             if let Token::Word(word) = self.peek_token().token {
                 if word.keyword == Keyword::OPTIONS {
-                    options = Some(self.parse_options(Keyword::OPTIONS)?);
+                    table_options =
+                        CreateTableOptions::Options(self.parse_options(Keyword::OPTIONS)?)
                 }
             };
         }
 
+        if !dialect_of!(self is HiveDialect) && table_options == CreateTableOptions::None {
+            let plain_options = self.parse_plain_options()?;
+            if !plain_options.is_empty() {
+                table_options = CreateTableOptions::Plain(plain_options)
+            }
+        };
+
         Ok(CreateTableConfiguration {
             partition_by,
             cluster_by,
-            options,
             inherits,
+            table_options,
         })
+    }
+
+    fn parse_plain_option(&mut self) -> Result<Option<SqlOption>, ParserError> {
+        // Single parameter option
+        // <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
+        if self.parse_keywords(&[Keyword::START, Keyword::TRANSACTION]) {
+            return Ok(Some(SqlOption::Ident(Ident::new("START TRANSACTION"))));
+        }
+
+        // Custom option
+        // <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
+        if self.parse_keywords(&[Keyword::COMMENT]) {
+            let has_eq = self.consume_token(&Token::Eq);
+            let value = self.next_token();
+
+            let comment = match (has_eq, value.token) {
+                (true, Token::SingleQuotedString(s)) => {
+                    Ok(Some(SqlOption::Comment(CommentDef::WithEq(s))))
+                }
+                (false, Token::SingleQuotedString(s)) => {
+                    Ok(Some(SqlOption::Comment(CommentDef::WithoutEq(s))))
+                }
+                (_, token) => {
+                    self.expected("Token::SingleQuotedString", TokenWithSpan::wrap(token))
+                }
+            };
+            return comment;
+        }
+
+        // <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
+        // <https://clickhouse.com/docs/sql-reference/statements/create/table>
+        if self.parse_keywords(&[Keyword::ENGINE]) {
+            let _ = self.consume_token(&Token::Eq);
+            let value = self.next_token();
+
+            let engine = match value.token {
+                Token::Word(w) => {
+                    let parameters = if self.peek_token() == Token::LParen {
+                        self.parse_parenthesized_identifiers()?
+                    } else {
+                        vec![]
+                    };
+
+                    Ok(Some(SqlOption::NamedParenthesizedList(
+                        NamedParenthesizedList {
+                            key: Ident::new("ENGINE"),
+                            name: Some(Ident::new(w.value)),
+                            values: parameters,
+                        },
+                    )))
+                }
+                _ => {
+                    return self.expected("Token::Word", value)?;
+                }
+            };
+
+            return engine;
+        }
+
+        // <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
+        if self.parse_keywords(&[Keyword::TABLESPACE]) {
+            let _ = self.consume_token(&Token::Eq);
+            let value = self.next_token();
+
+            let tablespace = match value.token {
+                Token::Word(Word { value: name, .. }) | Token::SingleQuotedString(name) => {
+                    let storage = match self.parse_keyword(Keyword::STORAGE) {
+                        true => {
+                            let _ = self.consume_token(&Token::Eq);
+                            let storage_token = self.next_token();
+                            match &storage_token.token {
+                                Token::Word(w) => match w.value.to_uppercase().as_str() {
+                                    "DISK" => Some(StorageType::Disk),
+                                    "MEMORY" => Some(StorageType::Memory),
+                                    _ => self
+                                        .expected("Storage type (DISK or MEMORY)", storage_token)?,
+                                },
+                                _ => self.expected("Token::Word", storage_token)?,
+                            }
+                        }
+                        false => None,
+                    };
+
+                    Ok(Some(SqlOption::TableSpace(TablespaceOption {
+                        name,
+                        storage,
+                    })))
+                }
+                _ => {
+                    return self.expected("Token::Word", value)?;
+                }
+            };
+
+            return tablespace;
+        }
+
+        // <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
+        if self.parse_keyword(Keyword::UNION) {
+            let _ = self.consume_token(&Token::Eq);
+            let value = self.next_token();
+
+            match value.token {
+                Token::LParen => {
+                    let tables: Vec<Ident> =
+                        self.parse_comma_separated0(Parser::parse_identifier, Token::RParen)?;
+                    self.expect_token(&Token::RParen)?;
+
+                    return Ok(Some(SqlOption::NamedParenthesizedList(
+                        NamedParenthesizedList {
+                            key: Ident::new("UNION"),
+                            name: None,
+                            values: tables,
+                        },
+                    )));
+                }
+                _ => {
+                    return self.expected("Token::LParen", value)?;
+                }
+            }
+        }
+
+        // Key/Value parameter option
+        let key = if self.parse_keywords(&[Keyword::DEFAULT, Keyword::CHARSET]) {
+            Ident::new("DEFAULT CHARSET")
+        } else if self.parse_keyword(Keyword::CHARSET) {
+            Ident::new("CHARSET")
+        } else if self.parse_keywords(&[Keyword::DEFAULT, Keyword::CHARACTER, Keyword::SET]) {
+            Ident::new("DEFAULT CHARACTER SET")
+        } else if self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET]) {
+            Ident::new("CHARACTER SET")
+        } else if self.parse_keywords(&[Keyword::DEFAULT, Keyword::COLLATE]) {
+            Ident::new("DEFAULT COLLATE")
+        } else if self.parse_keyword(Keyword::COLLATE) {
+            Ident::new("COLLATE")
+        } else if self.parse_keywords(&[Keyword::DATA, Keyword::DIRECTORY]) {
+            Ident::new("DATA DIRECTORY")
+        } else if self.parse_keywords(&[Keyword::INDEX, Keyword::DIRECTORY]) {
+            Ident::new("INDEX DIRECTORY")
+        } else if self.parse_keyword(Keyword::KEY_BLOCK_SIZE) {
+            Ident::new("KEY_BLOCK_SIZE")
+        } else if self.parse_keyword(Keyword::ROW_FORMAT) {
+            Ident::new("ROW_FORMAT")
+        } else if self.parse_keyword(Keyword::PACK_KEYS) {
+            Ident::new("PACK_KEYS")
+        } else if self.parse_keyword(Keyword::STATS_AUTO_RECALC) {
+            Ident::new("STATS_AUTO_RECALC")
+        } else if self.parse_keyword(Keyword::STATS_PERSISTENT) {
+            Ident::new("STATS_PERSISTENT")
+        } else if self.parse_keyword(Keyword::STATS_SAMPLE_PAGES) {
+            Ident::new("STATS_SAMPLE_PAGES")
+        } else if self.parse_keyword(Keyword::DELAY_KEY_WRITE) {
+            Ident::new("DELAY_KEY_WRITE")
+        } else if self.parse_keyword(Keyword::COMPRESSION) {
+            Ident::new("COMPRESSION")
+        } else if self.parse_keyword(Keyword::ENCRYPTION) {
+            Ident::new("ENCRYPTION")
+        } else if self.parse_keyword(Keyword::MAX_ROWS) {
+            Ident::new("MAX_ROWS")
+        } else if self.parse_keyword(Keyword::MIN_ROWS) {
+            Ident::new("MIN_ROWS")
+        } else if self.parse_keyword(Keyword::AUTOEXTEND_SIZE) {
+            Ident::new("AUTOEXTEND_SIZE")
+        } else if self.parse_keyword(Keyword::AVG_ROW_LENGTH) {
+            Ident::new("AVG_ROW_LENGTH")
+        } else if self.parse_keyword(Keyword::CHECKSUM) {
+            Ident::new("CHECKSUM")
+        } else if self.parse_keyword(Keyword::CONNECTION) {
+            Ident::new("CONNECTION")
+        } else if self.parse_keyword(Keyword::ENGINE_ATTRIBUTE) {
+            Ident::new("ENGINE_ATTRIBUTE")
+        } else if self.parse_keyword(Keyword::PASSWORD) {
+            Ident::new("PASSWORD")
+        } else if self.parse_keyword(Keyword::SECONDARY_ENGINE_ATTRIBUTE) {
+            Ident::new("SECONDARY_ENGINE_ATTRIBUTE")
+        } else if self.parse_keyword(Keyword::INSERT_METHOD) {
+            Ident::new("INSERT_METHOD")
+        } else if self.parse_keyword(Keyword::AUTO_INCREMENT) {
+            Ident::new("AUTO_INCREMENT")
+        } else {
+            return Ok(None);
+        };
+
+        let _ = self.consume_token(&Token::Eq);
+
+        let value = match self
+            .maybe_parse(|parser| parser.parse_value())?
+            .map(Expr::Value)
+        {
+            Some(expr) => expr,
+            None => Expr::Identifier(self.parse_identifier()?),
+        };
+
+        Ok(Some(SqlOption::KeyValue { key, value }))
+    }
+
+    pub fn parse_plain_options(&mut self) -> Result<Vec<SqlOption>, ParserError> {
+        let mut options = Vec::new();
+
+        while let Some(option) = self.parse_plain_option()? {
+            options.push(option);
+        }
+
+        Ok(options)
     }
 
     pub fn parse_optional_inline_comment(&mut self) -> Result<Option<CommentDef>, ParserError> {

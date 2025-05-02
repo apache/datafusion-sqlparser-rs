@@ -484,7 +484,7 @@ fn parse_create_table_with_options() {
             columns,
             partition_by,
             cluster_by,
-            options,
+            table_options,
             ..
         }) => {
             assert_eq!(
@@ -539,7 +539,7 @@ fn parse_create_table_with_options() {
                         Ident::new("userid"),
                         Ident::new("age"),
                     ])),
-                    Some(vec![
+                    CreateTableOptions::Options(vec![
                         SqlOption::KeyValue {
                             key: Ident::new("partition_expiration_days"),
                             value: Expr::Value(
@@ -561,7 +561,7 @@ fn parse_create_table_with_options() {
                         },
                     ])
                 ),
-                (partition_by, cluster_by, options)
+                (partition_by, cluster_by, table_options)
             )
         }
         _ => unreachable!(),

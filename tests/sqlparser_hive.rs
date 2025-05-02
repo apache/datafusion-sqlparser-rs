@@ -133,9 +133,7 @@ fn create_table_with_comment() {
         Statement::CreateTable(CreateTable { comment, .. }) => {
             assert_eq!(
                 comment,
-                Some(CommentDef::AfterColumnDefsWithoutEq(
-                    "table comment".to_string()
-                ))
+                Some(CommentDef::WithoutEq("table comment".to_string()))
             )
         }
         _ => unreachable!(),

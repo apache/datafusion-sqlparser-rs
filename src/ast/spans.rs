@@ -30,10 +30,10 @@ use super::{
     Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
     FunctionArguments, GroupByExpr, HavingBound, IfStatement, IlikeSelectItem, Insert, Interpolate,
     InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView,
-    LimitClause, MatchRecognizePattern, Measure, NamedWindowDefinition, ObjectName, ObjectNamePart,
-    Offset, OnConflict, OnConflictAction, OnInsert, OpenStatement, OrderBy, OrderByExpr,
-    OrderByKind, Partition, PivotValueSource, ProjectionSelect, Query, RaiseStatement,
-    RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
+    LimitClause, MatchRecognizePattern, Measure, NamedParenthesizedList, NamedWindowDefinition,
+    ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction, OnInsert, OpenStatement,
+    OrderBy, OrderByExpr, OrderByKind, Partition, PivotValueSource, ProjectionSelect, Query,
+    RaiseStatement, RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
     ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
     SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
     TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use, Value, Values, ViewColumnDef,
@@ -567,27 +567,20 @@ impl Spanned for CreateTable {
             constraints,
             hive_distribution: _, // hive specific
             hive_formats: _,      // hive specific
-            table_properties,
-            with_options,
-            file_format: _, // enum
-            location: _,    // string, no span
+            file_format: _,       // enum
+            location: _,          // string, no span
             query,
             without_rowid: _, // bool
             like,
             clone,
-            engine: _,                          // todo
-            comment: _,                         // todo, no span
-            auto_increment_offset: _,           // u32, no span
-            default_charset: _,                 // string, no span
-            collation: _,                       // string, no span
-            on_commit: _,                       // enum
+            comment: _, // todo, no span
+            on_commit: _,
             on_cluster: _,                      // todo, clickhouse specific
             primary_key: _,                     // todo, clickhouse specific
             order_by: _,                        // todo, clickhouse specific
             partition_by: _,                    // todo, BigQuery specific
             cluster_by: _,                      // todo, BigQuery specific
             clustered_by: _,                    // todo, Hive specific
-            options: _,                         // todo, BigQuery specific
             inherits: _,                        // todo, PostgreSQL specific
             strict: _,                          // bool
             copy_grants: _,                     // bool
@@ -603,15 +596,15 @@ impl Spanned for CreateTable {
             base_location: _,                   // todo, Snowflake specific
             catalog: _,                         // todo, Snowflake specific
             catalog_sync: _,                    // todo, Snowflake specific
-            storage_serialization_policy: _,    // todo, Snowflake specific
+            storage_serialization_policy: _,
+            table_options,
         } = self;
 
         union_spans(
             core::iter::once(name.span())
+                .chain(core::iter::once(table_options.span()))
                 .chain(columns.iter().map(|i| i.span()))
                 .chain(constraints.iter().map(|i| i.span()))
-                .chain(table_properties.iter().map(|i| i.span()))
-                .chain(with_options.iter().map(|i| i.span()))
                 .chain(query.iter().map(|i| i.span()))
                 .chain(like.iter().map(|i| i.span()))
                 .chain(clone.iter().map(|i| i.span())),
@@ -1004,6 +997,14 @@ impl Spanned for SqlOption {
             } => union_spans(
                 core::iter::once(column_name.span).chain(for_values.iter().map(|i| i.span())),
             ),
+            SqlOption::TableSpace(_) => Span::empty(),
+            SqlOption::Comment(_) => Span::empty(),
+            SqlOption::NamedParenthesizedList(NamedParenthesizedList {
+                key: name,
+                name: value,
+                values,
+            }) => union_spans(core::iter::once(name.span).chain(values.iter().map(|i| i.span)))
+                .union_opt(&value.as_ref().map(|i| i.span)),
         }
     }
 }
@@ -1041,6 +1042,8 @@ impl Spanned for CreateTableOptions {
             CreateTableOptions::None => Span::empty(),
             CreateTableOptions::With(vec) => union_spans(vec.iter().map(|i| i.span())),
             CreateTableOptions::Options(vec) => union_spans(vec.iter().map(|i| i.span())),
+            CreateTableOptions::Plain(vec) => union_spans(vec.iter().map(|i| i.span())),
+            CreateTableOptions::TableProperties(vec) => union_spans(vec.iter().map(|i| i.span())),
         }
     }
 }

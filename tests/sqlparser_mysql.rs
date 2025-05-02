@@ -3283,6 +3283,7 @@ fn parse_grant() {
         objects,
         grantees,
         with_grant_option,
+        as_grantor: _,
         granted_by,
     } = stmt
     {

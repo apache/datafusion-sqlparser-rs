@@ -13393,15 +13393,26 @@ impl<'a> Parser<'a> {
         let with_grant_option =
             self.parse_keywords(&[Keyword::WITH, Keyword::GRANT, Keyword::OPTION]);
 
-        let granted_by = self
-            .parse_keywords(&[Keyword::GRANTED, Keyword::BY])
-            .then(|| self.parse_identifier().unwrap());
+        let as_grantor = if self.peek_keyword(Keyword::AS) {
+            self.parse_keywords(&[Keyword::AS])
+                .then(|| self.parse_identifier().unwrap())
+        } else {
+            None
+        };
+
+        let granted_by = if self.peek_keywords(&[Keyword::GRANTED, Keyword::BY]) {
+            self.parse_keywords(&[Keyword::GRANTED, Keyword::BY])
+                .then(|| self.parse_identifier().unwrap())
+        } else {
+            None
+        };
 
         Ok(Statement::Grant {
             privileges,
             objects,
             grantees,
             with_grant_option,
+            as_grantor,
             granted_by,
         })
     }

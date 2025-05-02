@@ -3903,6 +3903,7 @@ pub enum Statement {
         objects: Option<GrantObjects>,
         grantees: Vec<Grantee>,
         with_grant_option: bool,
+        as_grantor: Option<Ident>,
         granted_by: Option<Ident>,
     },
     /// ```sql
@@ -5584,6 +5585,7 @@ impl fmt::Display for Statement {
                 objects,
                 grantees,
                 with_grant_option,
+                as_grantor,
                 granted_by,
             } => {
                 write!(f, "GRANT {privileges} ")?;
@@ -5593,6 +5595,9 @@ impl fmt::Display for Statement {
                 write!(f, "TO {}", display_comma_separated(grantees))?;
                 if *with_grant_option {
                     write!(f, " WITH GRANT OPTION")?;
+                }
+                if let Some(grantor) = as_grantor {
+                    write!(f, " AS {grantor}")?;
                 }
                 if let Some(grantor) = granted_by {
                     write!(f, " GRANTED BY {grantor}")?;

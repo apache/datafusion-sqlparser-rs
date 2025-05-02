@@ -985,6 +985,7 @@ define_keywords!(
     WHEN,
     WHENEVER,
     WHERE,
+    WHILE,
     WIDTH_BUCKET,
     WINDOW,
     WITH,
@@ -1068,6 +1069,7 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::SAMPLE,
     Keyword::TABLESAMPLE,
     Keyword::FROM,
+    Keyword::OPEN,
 ];
 
 /// Can't be used as a column alias, so that `SELECT <expr> alias`

@@ -31,13 +31,13 @@ use super::{
     FunctionArguments, GroupByExpr, HavingBound, IfStatement, IlikeSelectItem, Insert, Interpolate,
     InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView,
     LimitClause, MatchRecognizePattern, Measure, NamedWindowDefinition, ObjectName, ObjectNamePart,
-    Offset, OnConflict, OnConflictAction, OnInsert, OrderBy, OrderByExpr, OrderByKind, Partition,
-    PivotValueSource, ProjectionSelect, Query, RaiseStatement, RaiseStatementValue,
-    ReferentialAction, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
-    SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias,
-    TableAliasColumnDef, TableConstraint, TableFactor, TableObject, TableOptionsClustered,
-    TableWithJoins, UpdateTableFromKind, Use, Value, Values, ViewColumnDef,
-    WildcardAdditionalOptions, With, WithFill,
+    Offset, OnConflict, OnConflictAction, OnInsert, OpenStatement, OrderBy, OrderByExpr,
+    OrderByKind, Partition, PivotValueSource, ProjectionSelect, Query, RaiseStatement,
+    RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
+    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
+    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
+    TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use, Value, Values, ViewColumnDef,
+    WhileStatement, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -339,6 +339,7 @@ impl Spanned for Statement {
             } => source.span(),
             Statement::Case(stmt) => stmt.span(),
             Statement::If(stmt) => stmt.span(),
+            Statement::While(stmt) => stmt.span(),
             Statement::Raise(stmt) => stmt.span(),
             Statement::Call(function) => function.span(),
             Statement::Copy {
@@ -365,6 +366,7 @@ impl Spanned for Statement {
                 from_query: _,
                 partition: _,
             } => Span::empty(),
+            Statement::Open(open) => open.span(),
             Statement::Close { cursor } => match cursor {
                 CloseCursor::All => Span::empty(),
                 CloseCursor::Specific { name } => name.span,
@@ -773,6 +775,14 @@ impl Spanned for IfStatement {
                 .chain(else_block.as_ref().map(|b| b.span()))
                 .chain(end_token.as_ref().map(|AttachedToken(t)| t.span)),
         )
+    }
+}
+
+impl Spanned for WhileStatement {
+    fn span(&self) -> Span {
+        let WhileStatement { while_block } = self;
+
+        while_block.span()
     }
 }
 
@@ -2294,6 +2304,13 @@ impl Spanned for BeginEndStatements {
                 .chain(statements.iter().map(|i| i.span()))
                 .chain(core::iter::once(end_token.0.span)),
         )
+    }
+}
+
+impl Spanned for OpenStatement {
+    fn span(&self) -> Span {
+        let OpenStatement { cursor_name } = self;
+        cursor_name.span
     }
 }
 

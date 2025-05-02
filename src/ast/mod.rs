@@ -2228,7 +2228,33 @@ impl fmt::Display for IfStatement {
     }
 }
 
-/// A block within a [Statement::Case] or [Statement::If]-like statement
+/// A `WHILE` statement.
+///
+/// Example:
+/// ```sql
+/// WHILE @@FETCH_STATUS = 0
+/// BEGIN
+///    FETCH NEXT FROM c1 INTO @var1, @var2;
+/// END
+/// ```
+///
+/// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/language-elements/while-transact-sql)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct WhileStatement {
+    pub while_block: ConditionalStatementBlock,
+}
+
+impl fmt::Display for WhileStatement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let WhileStatement { while_block } = self;
+        write!(f, "{while_block}")?;
+        Ok(())
+    }
+}
+
+/// A block within a [Statement::Case] or [Statement::If] or [Statement::While]-like statement
 ///
 /// Example 1:
 /// ```sql
@@ -2243,6 +2269,14 @@ impl fmt::Display for IfStatement {
 /// Example 3:
 /// ```sql
 /// ELSE SELECT 1; SELECT 2;
+/// ```
+///
+/// Example 4:
+/// ```sql
+/// WHILE @@FETCH_STATUS = 0
+/// BEGIN
+///    FETCH NEXT FROM c1 INTO @var1, @var2;
+/// END
 /// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -2983,6 +3017,8 @@ pub enum Statement {
     Case(CaseStatement),
     /// An `IF` statement.
     If(IfStatement),
+    /// A `WHILE` statement.
+    While(WhileStatement),
     /// A `RAISE` statement.
     Raise(RaiseStatement),
     /// ```sql
@@ -3033,6 +3069,11 @@ pub enum Statement {
         validation_mode: Option<String>,
         partition: Option<Box<Expr>>,
     },
+    /// ```sql
+    /// OPEN cursor_name
+    /// ```
+    /// Opens a cursor.
+    Open(OpenStatement),
     /// ```sql
     /// CLOSE
     /// ```
@@ -3413,6 +3454,7 @@ pub enum Statement {
         /// Cursor name
         name: Ident,
         direction: FetchDirection,
+        position: FetchPosition,
         /// Optional, It's possible to fetch rows form cursor to the table
         into: Option<ObjectName>,
     },
@@ -4235,11 +4277,10 @@ impl fmt::Display for Statement {
             Statement::Fetch {
                 name,
                 direction,
+                position,
                 into,
             } => {
-                write!(f, "FETCH {direction} ")?;
-
-                write!(f, "IN {name}")?;
+                write!(f, "FETCH {direction} {position} {name}")?;
 
                 if let Some(into) = into {
                     write!(f, " INTO {into}")?;
@@ -4327,6 +4368,9 @@ impl fmt::Display for Statement {
                 write!(f, "{stmt}")
             }
             Statement::If(stmt) => {
+                write!(f, "{stmt}")
+            }
+            Statement::While(stmt) => {
                 write!(f, "{stmt}")
             }
             Statement::Raise(stmt) => {
@@ -4498,6 +4542,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Delete(delete) => write!(f, "{delete}"),
+            Statement::Open(open) => write!(f, "{open}"),
             Statement::Close { cursor } => {
                 write!(f, "CLOSE {cursor}")?;
 
@@ -6181,6 +6226,28 @@ impl fmt::Display for FetchDirection {
                 }
             }
             FetchDirection::BackwardAll => f.write_str("BACKWARD ALL")?,
+        };
+
+        Ok(())
+    }
+}
+
+/// The "position" for a FETCH statement.
+///
+/// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/language-elements/fetch-transact-sql)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FetchPosition {
+    From,
+    In,
+}
+
+impl fmt::Display for FetchPosition {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FetchPosition::From => f.write_str("FROM")?,
+            FetchPosition::In => f.write_str("IN")?,
         };
 
         Ok(())
@@ -9352,6 +9419,21 @@ impl fmt::Display for ReturnStatement {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ReturnStatementValue {
     Expr(Expr),
+}
+
+/// Represents an `OPEN` statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct OpenStatement {
+    /// Cursor name
+    pub cursor_name: Ident,
+}
+
+impl fmt::Display for OpenStatement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "OPEN {}", self.cursor_name)
+    }
 }
 
 #[cfg(test)]

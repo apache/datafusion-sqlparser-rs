@@ -23,7 +23,8 @@
 mod test_utils;
 
 use helpers::attached_token::AttachedToken;
-use sqlparser::tokenizer::{Location, Span};
+use sqlparser::keywords::Keyword;
+use sqlparser::tokenizer::{Location, Span, Token, TokenWithSpan, Word};
 use test_utils::*;
 
 use sqlparser::ast::DataType::{Int, Text, Varbinary};
@@ -223,7 +224,7 @@ fn parse_create_function() {
                     value: Some(ReturnStatementValue::Expr(Expr::Value(
                         (number("1")).with_empty_span()
                     ))),
-                }),],
+                })],
                 end_token: AttachedToken::empty(),
             })),
             behavior: None,
@@ -1395,6 +1396,85 @@ fn parse_mssql_declare() {
     let declare_cursor_for_select =
         "DECLARE vend_cursor CURSOR FOR SELECT * FROM Purchasing.Vendor";
     let _ = ms().verified_stmt(declare_cursor_for_select);
+}
+
+#[test]
+fn test_mssql_cursor() {
+    let full_cursor_usage = "\
+        DECLARE Employee_Cursor CURSOR FOR \
+        SELECT LastName, FirstName \
+        FROM AdventureWorks2022.HumanResources.vEmployee \
+        WHERE LastName LIKE 'B%'; \
+        \
+        OPEN Employee_Cursor; \
+        \
+        FETCH NEXT FROM Employee_Cursor; \
+        \
+        WHILE @@FETCH_STATUS = 0 \
+        BEGIN \
+            FETCH NEXT FROM Employee_Cursor; \
+        END; \
+        \
+        CLOSE Employee_Cursor; \
+        DEALLOCATE Employee_Cursor\
+    ";
+    let _ = ms().statements_parse_to(full_cursor_usage, "");
+}
+
+#[test]
+fn test_mssql_while_statement() {
+    let while_single_statement = "WHILE 1 = 0 PRINT 'Hello World';";
+    let stmt = ms().verified_stmt(while_single_statement);
+    assert_eq!(
+        stmt,
+        Statement::While(sqlparser::ast::WhileStatement {
+            while_block: ConditionalStatementBlock {
+                start_token: AttachedToken(TokenWithSpan {
+                    token: Token::Word(Word {
+                        value: "WHILE".to_string(),
+                        quote_style: None,
+                        keyword: Keyword::WHILE
+                    }),
+                    span: Span::empty()
+                }),
+                condition: Some(Expr::BinaryOp {
+                    left: Box::new(Expr::Value(
+                        (Value::Number("1".parse().unwrap(), false)).with_empty_span()
+                    )),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(
+                        (Value::Number("0".parse().unwrap(), false)).with_empty_span()
+                    )),
+                }),
+                then_token: None,
+                conditional_statements: ConditionalStatements::Sequence {
+                    statements: vec![Statement::Print(PrintStatement {
+                        message: Box::new(Expr::Value(
+                            (Value::SingleQuotedString("Hello World".to_string()))
+                                .with_empty_span()
+                        )),
+                    })],
+                }
+            }
+        })
+    );
+
+    let while_begin_end = "\
+        WHILE @@FETCH_STATUS = 0 \
+        BEGIN \
+            FETCH NEXT FROM Employee_Cursor; \
+        END\
+    ";
+    let _ = ms().verified_stmt(while_begin_end);
+
+    let while_begin_end_multiple_statements = "\
+        WHILE @@FETCH_STATUS = 0 \
+        BEGIN \
+            FETCH NEXT FROM Employee_Cursor; \
+            PRINT 'Hello World'; \
+        END\
+    ";
+    let _ = ms().verified_stmt(while_begin_end_multiple_statements);
 }
 
 #[test]

@@ -536,6 +536,10 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     self.parse_if_stmt()
                 }
+                Keyword::WHILE => {
+                    self.prev_token();
+                    self.parse_while()
+                }
                 Keyword::RAISE => {
                     self.prev_token();
                     self.parse_raise_stmt()
@@ -570,6 +574,10 @@ impl<'a> Parser<'a> {
                 Keyword::ALTER => self.parse_alter(),
                 Keyword::CALL => self.parse_call(),
                 Keyword::COPY => self.parse_copy(),
+                Keyword::OPEN => {
+                    self.prev_token();
+                    self.parse_open()
+                }
                 Keyword::CLOSE => self.parse_close(),
                 Keyword::SET => self.parse_set(),
                 Keyword::SHOW => self.parse_show(),
@@ -700,8 +708,18 @@ impl<'a> Parser<'a> {
         }))
     }
 
+    /// Parse a `WHILE` statement.
+    ///
+    /// See [Statement::While]
+    fn parse_while(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword_is(Keyword::WHILE)?;
+        let while_block = self.parse_conditional_statement_block(&[Keyword::END])?;
+
+        Ok(Statement::While(WhileStatement { while_block }))
+    }
+
     /// Parses an expression and associated list of statements
-    /// belonging to a conditional statement like `IF` or `WHEN`.
+    /// belonging to a conditional statement like `IF` or `WHEN` or `WHILE`.
     ///
     /// Example:
     /// ```sql
@@ -716,6 +734,10 @@ impl<'a> Parser<'a> {
 
         let condition = match &start_token.token {
             Token::Word(w) if w.keyword == Keyword::ELSE => None,
+            Token::Word(w) if w.keyword == Keyword::WHILE => {
+                let expr = self.parse_expr()?;
+                Some(expr)
+            }
             _ => {
                 let expr = self.parse_expr()?;
                 then_token = Some(AttachedToken(self.expect_keyword(Keyword::THEN)?));
@@ -723,13 +745,25 @@ impl<'a> Parser<'a> {
             }
         };
 
-        let statements = self.parse_statement_list(terminal_keywords)?;
+        let conditional_statements = if self.peek_keyword(Keyword::BEGIN) {
+            let begin_token = self.expect_keyword(Keyword::BEGIN)?;
+            let statements = self.parse_statement_list(terminal_keywords)?;
+            let end_token = self.expect_keyword(Keyword::END)?;
+            ConditionalStatements::BeginEnd(BeginEndStatements {
+                begin_token: AttachedToken(begin_token),
+                statements,
+                end_token: AttachedToken(end_token),
+            })
+        } else {
+            let statements = self.parse_statement_list(terminal_keywords)?;
+            ConditionalStatements::Sequence { statements }
+        };
 
         Ok(ConditionalStatementBlock {
             start_token: AttachedToken(start_token),
             condition,
             then_token,
-            conditional_statements: ConditionalStatements::Sequence { statements },
+            conditional_statements,
         })
     }
 
@@ -4467,11 +4501,16 @@ impl<'a> Parser<'a> {
     ) -> Result<Vec<Statement>, ParserError> {
         let mut values = vec![];
         loop {
-            if let Token::Word(w) = &self.peek_nth_token_ref(0).token {
-                if w.quote_style.is_none() && terminal_keywords.contains(&w.keyword) {
-                    break;
+            match &self.peek_nth_token_ref(0).token {
+                Token::EOF => break,
+                Token::Word(w) => {
+                    if w.quote_style.is_none() && terminal_keywords.contains(&w.keyword) {
+                        break;
+                    }
                 }
+                _ => {}
             }
+
             values.push(self.parse_statement()?);
             self.expect_token(&Token::SemiColon)?;
         }
@@ -6644,7 +6683,15 @@ impl<'a> Parser<'a> {
             }
         };
 
-        self.expect_one_of_keywords(&[Keyword::FROM, Keyword::IN])?;
+        let position = if self.peek_keyword(Keyword::FROM) {
+            self.expect_keyword(Keyword::FROM)?;
+            FetchPosition::From
+        } else if self.peek_keyword(Keyword::IN) {
+            self.expect_keyword(Keyword::IN)?;
+            FetchPosition::In
+        } else {
+            return parser_err!("Expected FROM or IN", self.peek_token().span.start);
+        };
 
         let name = self.parse_identifier()?;
 
@@ -6657,6 +6704,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::Fetch {
             name,
             direction,
+            position,
             into,
         })
     }
@@ -8768,6 +8816,14 @@ impl<'a> Parser<'a> {
             legacy_options,
             values,
         })
+    }
+
+    /// Parse [Statement::Open]
+    fn parse_open(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword(Keyword::OPEN)?;
+        Ok(Statement::Open(OpenStatement {
+            cursor_name: self.parse_identifier()?,
+        }))
     }
 
     pub fn parse_close(&mut self) -> Result<Statement, ParserError> {

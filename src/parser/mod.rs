@@ -745,19 +745,7 @@ impl<'a> Parser<'a> {
             }
         };
 
-        let conditional_statements = if self.peek_keyword(Keyword::BEGIN) {
-            let begin_token = self.expect_keyword(Keyword::BEGIN)?;
-            let statements = self.parse_statement_list(terminal_keywords)?;
-            let end_token = self.expect_keyword(Keyword::END)?;
-            ConditionalStatements::BeginEnd(BeginEndStatements {
-                begin_token: AttachedToken(begin_token),
-                statements,
-                end_token: AttachedToken(end_token),
-            })
-        } else {
-            let statements = self.parse_statement_list(terminal_keywords)?;
-            ConditionalStatements::Sequence { statements }
-        };
+        let conditional_statements = self.parse_conditional_statements(terminal_keywords)?;
 
         Ok(ConditionalStatementBlock {
             start_token: AttachedToken(start_token),
@@ -765,6 +753,30 @@ impl<'a> Parser<'a> {
             then_token,
             conditional_statements,
         })
+    }
+
+    /// Parse a BEGIN/END block or a sequence of statements
+    /// This could be inside of a conditional (IF, CASE, WHILE etc.) or an object body defined optionally BEGIN/END and one or more statements.
+    pub(crate) fn parse_conditional_statements(
+        &mut self,
+        terminal_keywords: &[Keyword],
+    ) -> Result<ConditionalStatements, ParserError> {
+        let conditional_statements = if self.peek_keyword(Keyword::BEGIN) {
+            let begin_token = self.expect_keyword(Keyword::BEGIN)?;
+            let statements = self.parse_statement_list(terminal_keywords)?;
+            let end_token = self.expect_keyword(Keyword::END)?;
+
+            ConditionalStatements::BeginEnd(BeginEndStatements {
+                begin_token: AttachedToken(begin_token),
+                statements,
+                end_token: AttachedToken(end_token),
+            })
+        } else {
+            ConditionalStatements::Sequence {
+                statements: self.parse_statement_list(terminal_keywords)?,
+            }
+        };
+        Ok(conditional_statements)
     }
 
     /// Parse a `RAISE` statement.

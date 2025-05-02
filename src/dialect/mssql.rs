@@ -240,22 +240,7 @@ impl MsSqlDialect {
         let events = parser.parse_comma_separated(Parser::parse_trigger_event)?;
 
         parser.expect_keyword_is(Keyword::AS)?;
-
-        let trigger_statements_body = if parser.peek_keyword(Keyword::BEGIN) {
-            let begin_token = parser.expect_keyword(Keyword::BEGIN)?;
-            let statements = parser.parse_statement_list(&[Keyword::END])?;
-            let end_token = parser.expect_keyword(Keyword::END)?;
-
-            ConditionalStatements::BeginEnd(BeginEndStatements {
-                begin_token: AttachedToken(begin_token),
-                statements,
-                end_token: AttachedToken(end_token),
-            })
-        } else {
-            ConditionalStatements::Sequence {
-                statements: parser.parse_statements()?,
-            }
-        };
+        let statements = Some(parser.parse_conditional_statements(&[Keyword::END])?);
 
         Ok(Statement::CreateTrigger {
             or_alter,
@@ -271,7 +256,7 @@ impl MsSqlDialect {
             include_each: false,
             condition: None,
             exec_body: None,
-            statements: Some(trigger_statements_body),
+            statements,
             characteristics: None,
         })
     }

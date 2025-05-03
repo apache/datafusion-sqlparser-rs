@@ -5896,20 +5896,8 @@ impl<'a> Parser<'a> {
         Ok(owner)
     }
 
-    /// ```sql
-    ///     CREATE DOMAIN name [ AS ] data_type
-    ///             [ COLLATE collation ]
-    ///             [ DEFAULT expression ]
-    ///             [ domain_constraint [ ... ] ]
-    ///     
-    ///         where domain_constraint is:
-    ///     
-    ///         [ CONSTRAINT constraint_name ]
-    ///         { NOT NULL | NULL | CHECK (expression) }
-    /// ```
-    ///
-    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createdomain.html)
-    pub fn parse_create_domain(&mut self) -> Result<Statement, ParserError> {
+    /// Parses a [Statement::CreateDomain] statement.
+    fn parse_create_domain(&mut self) -> Result<Statement, ParserError> {
         let name = self.parse_object_name(false)?;
         self.expect_keyword_is(Keyword::AS)?;
         let data_type = self.parse_data_type()?;

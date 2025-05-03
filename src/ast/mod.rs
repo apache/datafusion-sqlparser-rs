@@ -3967,18 +3967,7 @@ pub enum Statement {
         sequence_options: Vec<SequenceOptions>,
         owned_by: Option<ObjectName>,
     },
-    /// ```sql
-    /// CREATE DOMAIN name [ AS ] data_type
-    ///         [ COLLATE collation ]
-    ///         [ DEFAULT expression ]
-    ///         [ domain_constraint [ ... ] ]
-    ///
-    ///     where domain_constraint is:
-    ///
-    ///     [ CONSTRAINT constraint_name ]
-    ///     { NOT NULL | NULL | CHECK (expression) }
-    /// ```
-    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createdomain.html)
+    /// A `CREATE DOMAIN` statement.
     CreateDomain(CreateDomain),
     /// ```sql
     /// CREATE TYPE <name>

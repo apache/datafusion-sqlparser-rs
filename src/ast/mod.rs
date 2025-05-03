@@ -2380,11 +2380,16 @@ impl fmt::Display for BeginEndStatements {
             end_token: AttachedToken(end_token),
         } = self;
 
-        write!(f, "{begin_token} ")?;
+        if begin_token.token != Token::EOF {
+            write!(f, "{begin_token} ")?;
+        }
         if !statements.is_empty() {
             format_statement_list(f, statements)?;
         }
-        write!(f, " {end_token}")
+        if end_token.token != Token::EOF {
+            write!(f, " {end_token}")?;
+        }
+        Ok(())
     }
 }
 
@@ -3729,7 +3734,12 @@ pub enum Statement {
     /// ```
     ///
     /// Postgres: <https://www.postgresql.org/docs/current/sql-createtrigger.html>
+    /// SQL Server: <https://learn.microsoft.com/en-us/sql/t-sql/statements/create-trigger-transact-sql>
     CreateTrigger {
+        /// True if this is a `CREATE OR ALTER TRIGGER` statement
+        ///
+        /// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-trigger-transact-sql?view=sql-server-ver16#arguments)
+        or_alter: bool,
         /// The `OR REPLACE` clause is used to re-create the trigger if it already exists.
         ///
         /// Example:
@@ -3790,7 +3800,9 @@ pub enum Statement {
         ///  Triggering conditions
         condition: Option<Expr>,
         /// Execute logic block
-        exec_body: TriggerExecBody,
+        exec_body: Option<TriggerExecBody>,
+        /// For SQL dialects with statement(s) for a body
+        statements: Option<ConditionalStatements>,
         /// The characteristic of the trigger, which include whether the trigger is `DEFERRABLE`, `INITIALLY DEFERRED`, or `INITIALLY IMMEDIATE`,
         characteristics: Option<ConstraintCharacteristics>,
     },
@@ -4587,6 +4599,7 @@ impl fmt::Display for Statement {
             }
             Statement::CreateFunction(create_function) => create_function.fmt(f),
             Statement::CreateTrigger {
+                or_alter,
                 or_replace,
                 is_constraint,
                 name,
@@ -4599,19 +4612,30 @@ impl fmt::Display for Statement {
                 condition,
                 include_each,
                 exec_body,
+                statements,
                 characteristics,
             } => {
                 write!(
                     f,
-                    "CREATE {or_replace}{is_constraint}TRIGGER {name} {period}",
+                    "CREATE {or_alter}{or_replace}{is_constraint}TRIGGER {name} ",
+                    or_alter = if *or_alter { "OR ALTER " } else { "" },
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
                     is_constraint = if *is_constraint { "CONSTRAINT " } else { "" },
                 )?;
 
-                if !events.is_empty() {
-                    write!(f, " {}", display_separated(events, " OR "))?;
+                if exec_body.is_some() {
+                    write!(f, "{period}")?;
+                    if !events.is_empty() {
+                        write!(f, " {}", display_separated(events, " OR "))?;
+                    }
+                    write!(f, " ON {table_name}")?;
+                } else {
+                    write!(f, "ON {table_name}")?;
+                    write!(f, " {period}")?;
+                    if !events.is_empty() {
+                        write!(f, " {}", display_separated(events, ", "))?;
+                    }
                 }
-                write!(f, " ON {table_name}")?;
 
                 if let Some(referenced_table_name) = referenced_table_name {
                     write!(f, " FROM {referenced_table_name}")?;
@@ -4627,13 +4651,19 @@ impl fmt::Display for Statement {
 
                 if *include_each {
                     write!(f, " FOR EACH {trigger_object}")?;
-                } else {
+                } else if exec_body.is_some() {
                     write!(f, " FOR {trigger_object}")?;
                 }
                 if let Some(condition) = condition {
                     write!(f, " WHEN {condition}")?;
                 }
-                write!(f, " EXECUTE {exec_body}")
+                if let Some(exec_body) = exec_body {
+                    write!(f, " EXECUTE {exec_body}")?;
+                }
+                if let Some(statements) = statements {
+                    write!(f, " AS {statements}")?;
+                }
+                Ok(())
             }
             Statement::DropTrigger {
                 if_exists,

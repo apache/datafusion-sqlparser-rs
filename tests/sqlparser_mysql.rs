@@ -3779,6 +3779,7 @@ fn parse_create_trigger() {
     assert_eq!(
         create_stmt,
         Statement::CreateTrigger {
+            or_alter: false,
             or_replace: false,
             is_constraint: false,
             name: ObjectName::from(vec![Ident::new("emp_stamp")]),
@@ -3790,13 +3791,14 @@ fn parse_create_trigger() {
             trigger_object: TriggerObject::Row,
             include_each: true,
             condition: None,
-            exec_body: TriggerExecBody {
+            exec_body: Some(TriggerExecBody {
                 exec_type: TriggerExecBodyType::Function,
                 func_desc: FunctionDesc {
                     name: ObjectName::from(vec![Ident::new("emp_stamp")]),
                     args: None,
                 }
-            },
+            }),
+            statements: None,
             characteristics: None,
         }
     );

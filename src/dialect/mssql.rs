@@ -18,6 +18,7 @@
 use crate::ast::helpers::attached_token::AttachedToken;
 use crate::ast::{
     BeginEndStatements, ConditionalStatementBlock, ConditionalStatements, IfStatement, Statement,
+    TriggerObject,
 };
 use crate::dialect::Dialect;
 use crate::keywords::{self, Keyword};
@@ -125,6 +126,15 @@ impl Dialect for MsSqlDialect {
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
         if parser.peek_keyword(Keyword::IF) {
             Some(self.parse_if_stmt(parser))
+        } else if parser.parse_keywords(&[Keyword::CREATE, Keyword::TRIGGER]) {
+            Some(self.parse_create_trigger(parser, false))
+        } else if parser.parse_keywords(&[
+            Keyword::CREATE,
+            Keyword::OR,
+            Keyword::ALTER,
+            Keyword::TRIGGER,
+        ]) {
+            Some(self.parse_create_trigger(parser, true))
         } else {
             None
         }
@@ -213,6 +223,42 @@ impl MsSqlDialect {
             elseif_blocks: Vec::new(),
             end_token: None,
         }))
+    }
+
+    /// Parse `CREATE TRIGGER` for [MsSql]
+    ///
+    /// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-trigger-transact-sql
+    fn parse_create_trigger(
+        &self,
+        parser: &mut Parser,
+        or_alter: bool,
+    ) -> Result<Statement, ParserError> {
+        let name = parser.parse_object_name(false)?;
+        parser.expect_keyword_is(Keyword::ON)?;
+        let table_name = parser.parse_object_name(false)?;
+        let period = parser.parse_trigger_period()?;
+        let events = parser.parse_comma_separated(Parser::parse_trigger_event)?;
+
+        parser.expect_keyword_is(Keyword::AS)?;
+        let statements = Some(parser.parse_conditional_statements(&[Keyword::END])?);
+
+        Ok(Statement::CreateTrigger {
+            or_alter,
+            or_replace: false,
+            is_constraint: false,
+            name,
+            period,
+            events,
+            table_name,
+            referenced_table_name: None,
+            referencing: Vec::new(),
+            trigger_object: TriggerObject::Statement,
+            include_each: false,
+            condition: None,
+            exec_body: None,
+            statements,
+            characteristics: None,
+        })
     }
 
     /// Parse a sequence of statements, optionally separated by semicolon.

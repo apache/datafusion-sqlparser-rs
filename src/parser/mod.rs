@@ -745,19 +745,7 @@ impl<'a> Parser<'a> {
             }
         };
 
-        let conditional_statements = if self.peek_keyword(Keyword::BEGIN) {
-            let begin_token = self.expect_keyword(Keyword::BEGIN)?;
-            let statements = self.parse_statement_list(terminal_keywords)?;
-            let end_token = self.expect_keyword(Keyword::END)?;
-            ConditionalStatements::BeginEnd(BeginEndStatements {
-                begin_token: AttachedToken(begin_token),
-                statements,
-                end_token: AttachedToken(end_token),
-            })
-        } else {
-            let statements = self.parse_statement_list(terminal_keywords)?;
-            ConditionalStatements::Sequence { statements }
-        };
+        let conditional_statements = self.parse_conditional_statements(terminal_keywords)?;
 
         Ok(ConditionalStatementBlock {
             start_token: AttachedToken(start_token),
@@ -765,6 +753,30 @@ impl<'a> Parser<'a> {
             then_token,
             conditional_statements,
         })
+    }
+
+    /// Parse a BEGIN/END block or a sequence of statements
+    /// This could be inside of a conditional (IF, CASE, WHILE etc.) or an object body defined optionally BEGIN/END and one or more statements.
+    pub(crate) fn parse_conditional_statements(
+        &mut self,
+        terminal_keywords: &[Keyword],
+    ) -> Result<ConditionalStatements, ParserError> {
+        let conditional_statements = if self.peek_keyword(Keyword::BEGIN) {
+            let begin_token = self.expect_keyword(Keyword::BEGIN)?;
+            let statements = self.parse_statement_list(terminal_keywords)?;
+            let end_token = self.expect_keyword(Keyword::END)?;
+
+            ConditionalStatements::BeginEnd(BeginEndStatements {
+                begin_token: AttachedToken(begin_token),
+                statements,
+                end_token: AttachedToken(end_token),
+            })
+        } else {
+            ConditionalStatements::Sequence {
+                statements: self.parse_statement_list(terminal_keywords)?,
+            }
+        };
+        Ok(conditional_statements)
     }
 
     /// Parse a `RAISE` statement.
@@ -4614,9 +4626,9 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::FUNCTION) {
             self.parse_create_function(or_alter, or_replace, temporary)
         } else if self.parse_keyword(Keyword::TRIGGER) {
-            self.parse_create_trigger(or_replace, false)
+            self.parse_create_trigger(or_alter, or_replace, false)
         } else if self.parse_keywords(&[Keyword::CONSTRAINT, Keyword::TRIGGER]) {
-            self.parse_create_trigger(or_replace, true)
+            self.parse_create_trigger(or_alter, or_replace, true)
         } else if self.parse_keyword(Keyword::MACRO) {
             self.parse_create_macro(or_replace, temporary)
         } else if self.parse_keyword(Keyword::SECRET) {
@@ -5314,10 +5326,11 @@ impl<'a> Parser<'a> {
 
     pub fn parse_create_trigger(
         &mut self,
+        or_alter: bool,
         or_replace: bool,
         is_constraint: bool,
     ) -> Result<Statement, ParserError> {
-        if !dialect_of!(self is PostgreSqlDialect | GenericDialect | MySqlDialect) {
+        if !dialect_of!(self is PostgreSqlDialect | GenericDialect | MySqlDialect | MsSqlDialect) {
             self.prev_token();
             return self.expected("an object type after CREATE", self.peek_token());
         }
@@ -5363,6 +5376,7 @@ impl<'a> Parser<'a> {
         let exec_body = self.parse_trigger_exec_body()?;
 
         Ok(Statement::CreateTrigger {
+            or_alter,
             or_replace,
             is_constraint,
             name,
@@ -5374,7 +5388,8 @@ impl<'a> Parser<'a> {
             trigger_object,
             include_each,
             condition,
-            exec_body,
+            exec_body: Some(exec_body),
+            statements: None,
             characteristics,
         })
     }
@@ -5382,10 +5397,12 @@ impl<'a> Parser<'a> {
     pub fn parse_trigger_period(&mut self) -> Result<TriggerPeriod, ParserError> {
         Ok(
             match self.expect_one_of_keywords(&[
+                Keyword::FOR,
                 Keyword::BEFORE,
                 Keyword::AFTER,
                 Keyword::INSTEAD,
             ])? {
+                Keyword::FOR => TriggerPeriod::For,
                 Keyword::BEFORE => TriggerPeriod::Before,
                 Keyword::AFTER => TriggerPeriod::After,
                 Keyword::INSTEAD => self

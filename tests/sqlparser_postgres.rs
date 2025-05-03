@@ -5157,6 +5157,7 @@ fn test_escaped_string_literal() {
 fn parse_create_simple_before_insert_trigger() {
     let sql = "CREATE TRIGGER check_insert BEFORE INSERT ON accounts FOR EACH ROW EXECUTE FUNCTION check_account_insert";
     let expected = Statement::CreateTrigger {
+        or_alter: false,
         or_replace: false,
         is_constraint: false,
         name: ObjectName::from(vec![Ident::new("check_insert")]),
@@ -5168,13 +5169,14 @@ fn parse_create_simple_before_insert_trigger() {
         trigger_object: TriggerObject::Row,
         include_each: true,
         condition: None,
-        exec_body: TriggerExecBody {
+        exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
             func_desc: FunctionDesc {
                 name: ObjectName::from(vec![Ident::new("check_account_insert")]),
                 args: None,
             },
-        },
+        }),
+        statements: None,
         characteristics: None,
     };
 
@@ -5185,6 +5187,7 @@ fn parse_create_simple_before_insert_trigger() {
 fn parse_create_after_update_trigger_with_condition() {
     let sql = "CREATE TRIGGER check_update AFTER UPDATE ON accounts FOR EACH ROW WHEN (NEW.balance > 10000) EXECUTE FUNCTION check_account_update";
     let expected = Statement::CreateTrigger {
+        or_alter: false,
         or_replace: false,
         is_constraint: false,
         name: ObjectName::from(vec![Ident::new("check_update")]),
@@ -5203,13 +5206,14 @@ fn parse_create_after_update_trigger_with_condition() {
             op: BinaryOperator::Gt,
             right: Box::new(Expr::value(number("10000"))),
         }))),
-        exec_body: TriggerExecBody {
+        exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
             func_desc: FunctionDesc {
                 name: ObjectName::from(vec![Ident::new("check_account_update")]),
                 args: None,
             },
-        },
+        }),
+        statements: None,
         characteristics: None,
     };
 
@@ -5220,6 +5224,7 @@ fn parse_create_after_update_trigger_with_condition() {
 fn parse_create_instead_of_delete_trigger() {
     let sql = "CREATE TRIGGER check_delete INSTEAD OF DELETE ON accounts FOR EACH ROW EXECUTE FUNCTION check_account_deletes";
     let expected = Statement::CreateTrigger {
+        or_alter: false,
         or_replace: false,
         is_constraint: false,
         name: ObjectName::from(vec![Ident::new("check_delete")]),
@@ -5231,13 +5236,14 @@ fn parse_create_instead_of_delete_trigger() {
         trigger_object: TriggerObject::Row,
         include_each: true,
         condition: None,
-        exec_body: TriggerExecBody {
+        exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
             func_desc: FunctionDesc {
                 name: ObjectName::from(vec![Ident::new("check_account_deletes")]),
                 args: None,
             },
-        },
+        }),
+        statements: None,
         characteristics: None,
     };
 
@@ -5248,6 +5254,7 @@ fn parse_create_instead_of_delete_trigger() {
 fn parse_create_trigger_with_multiple_events_and_deferrable() {
     let sql = "CREATE CONSTRAINT TRIGGER check_multiple_events BEFORE INSERT OR UPDATE OR DELETE ON accounts DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION check_account_changes";
     let expected = Statement::CreateTrigger {
+        or_alter: false,
         or_replace: false,
         is_constraint: true,
         name: ObjectName::from(vec![Ident::new("check_multiple_events")]),
@@ -5263,13 +5270,14 @@ fn parse_create_trigger_with_multiple_events_and_deferrable() {
         trigger_object: TriggerObject::Row,
         include_each: true,
         condition: None,
-        exec_body: TriggerExecBody {
+        exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
             func_desc: FunctionDesc {
                 name: ObjectName::from(vec![Ident::new("check_account_changes")]),
                 args: None,
             },
-        },
+        }),
+        statements: None,
         characteristics: Some(ConstraintCharacteristics {
             deferrable: Some(true),
             initially: Some(DeferrableInitial::Deferred),
@@ -5284,6 +5292,7 @@ fn parse_create_trigger_with_multiple_events_and_deferrable() {
 fn parse_create_trigger_with_referencing() {
     let sql = "CREATE TRIGGER check_referencing BEFORE INSERT ON accounts REFERENCING NEW TABLE AS new_accounts OLD TABLE AS old_accounts FOR EACH ROW EXECUTE FUNCTION check_account_referencing";
     let expected = Statement::CreateTrigger {
+        or_alter: false,
         or_replace: false,
         is_constraint: false,
         name: ObjectName::from(vec![Ident::new("check_referencing")]),
@@ -5306,13 +5315,14 @@ fn parse_create_trigger_with_referencing() {
         trigger_object: TriggerObject::Row,
         include_each: true,
         condition: None,
-        exec_body: TriggerExecBody {
+        exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
             func_desc: FunctionDesc {
                 name: ObjectName::from(vec![Ident::new("check_account_referencing")]),
                 args: None,
             },
-        },
+        }),
+        statements: None,
         characteristics: None,
     };
 
@@ -5332,7 +5342,7 @@ fn parse_create_trigger_invalid_cases() {
         ),
         (
             "CREATE TRIGGER check_update TOMORROW UPDATE ON accounts EXECUTE FUNCTION check_account_update",
-            "Expected: one of BEFORE or AFTER or INSTEAD, found: TOMORROW"
+            "Expected: one of FOR or BEFORE or AFTER or INSTEAD, found: TOMORROW"
         ),
         (
             "CREATE TRIGGER check_update BEFORE SAVE ON accounts EXECUTE FUNCTION check_account_update",
@@ -5590,6 +5600,7 @@ fn parse_trigger_related_functions() {
     assert_eq!(
         create_trigger,
         Statement::CreateTrigger {
+            or_alter: false,
             or_replace: false,
             is_constraint: false,
             name: ObjectName::from(vec![Ident::new("emp_stamp")]),
@@ -5601,13 +5612,14 @@ fn parse_trigger_related_functions() {
             trigger_object: TriggerObject::Row,
             include_each: true,
             condition: None,
-            exec_body: TriggerExecBody {
+            exec_body: Some(TriggerExecBody {
                 exec_type: TriggerExecBodyType::Function,
                 func_desc: FunctionDesc {
                     name: ObjectName::from(vec![Ident::new("emp_stamp")]),
                     args: None,
                 }
-            },
+            }),
+            statements: None,
             characteristics: None
         }
     );

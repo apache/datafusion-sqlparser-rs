@@ -483,6 +483,7 @@ impl Spanned for Statement {
             Statement::CreateSchema { .. } => Span::empty(),
             Statement::CreateDatabase { .. } => Span::empty(),
             Statement::CreateFunction { .. } => Span::empty(),
+            Statement::CreateDomain { .. } => Span::empty(),
             Statement::CreateTrigger { .. } => Span::empty(),
             Statement::DropTrigger { .. } => Span::empty(),
             Statement::CreateProcedure { .. } => Span::empty(),

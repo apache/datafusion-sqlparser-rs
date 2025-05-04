@@ -55,12 +55,12 @@ pub use self::ddl::{
     AlterTableAlgorithm, AlterTableLock, AlterTableOperation, AlterType, AlterTypeAddValue,
     AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
     ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnPolicy, ColumnPolicyProperty,
-    ConstraintCharacteristics, CreateConnector, CreateFunction, Deduplicate, DeferrableInitial,
-    DropBehavior, GeneratedAs, GeneratedExpressionMode, IdentityParameters, IdentityProperty,
-    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, IndexOption,
-    IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition, ProcedureParam,
-    ReferentialAction, TableConstraint, TagsColumnOption, UserDefinedTypeCompositeAttributeDef,
-    UserDefinedTypeRepresentation, ViewColumnDef,
+    ConstraintCharacteristics, CreateConnector, CreateDomain, CreateFunction, Deduplicate,
+    DeferrableInitial, DropBehavior, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
+    IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
+    IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition,
+    ProcedureParam, ReferentialAction, TableConstraint, TagsColumnOption,
+    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{CreateIndex, CreateTable, Delete, IndexColumn, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -4049,6 +4049,8 @@ pub enum Statement {
         sequence_options: Vec<SequenceOptions>,
         owned_by: Option<ObjectName>,
     },
+    /// A `CREATE DOMAIN` statement.
+    CreateDomain(CreateDomain),
     /// ```sql
     /// CREATE TYPE <name>
     /// ```
@@ -4598,6 +4600,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::CreateFunction(create_function) => create_function.fmt(f),
+            Statement::CreateDomain(create_domain) => create_domain.fmt(f),
             Statement::CreateTrigger {
                 or_alter,
                 or_replace,

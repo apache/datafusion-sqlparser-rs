@@ -5154,6 +5154,99 @@ fn test_escaped_string_literal() {
 }
 
 #[test]
+fn parse_create_domain() {
+    let sql1 = "CREATE DOMAIN my_domain AS INTEGER CHECK (VALUE > 0)";
+    let expected = Statement::CreateDomain(CreateDomain {
+        name: ObjectName::from(vec![Ident::new("my_domain")]),
+        data_type: DataType::Integer(None),
+        collation: None,
+        default: None,
+        constraints: vec![TableConstraint::Check {
+            name: None,
+            expr: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("VALUE"))),
+                op: BinaryOperator::Gt,
+                right: Box::new(Expr::Value(test_utils::number("0").into())),
+            }),
+        }],
+    });
+
+    assert_eq!(pg().verified_stmt(sql1), expected);
+
+    let sql2 = "CREATE DOMAIN my_domain AS INTEGER COLLATE \"en_US\" CHECK (VALUE > 0)";
+    let expected = Statement::CreateDomain(CreateDomain {
+        name: ObjectName::from(vec![Ident::new("my_domain")]),
+        data_type: DataType::Integer(None),
+        collation: Some(Ident::with_quote('"', "en_US")),
+        default: None,
+        constraints: vec![TableConstraint::Check {
+            name: None,
+            expr: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("VALUE"))),
+                op: BinaryOperator::Gt,
+                right: Box::new(Expr::Value(test_utils::number("0").into())),
+            }),
+        }],
+    });
+
+    assert_eq!(pg().verified_stmt(sql2), expected);
+
+    let sql3 = "CREATE DOMAIN my_domain AS INTEGER DEFAULT 1 CHECK (VALUE > 0)";
+    let expected = Statement::CreateDomain(CreateDomain {
+        name: ObjectName::from(vec![Ident::new("my_domain")]),
+        data_type: DataType::Integer(None),
+        collation: None,
+        default: Some(Expr::Value(test_utils::number("1").into())),
+        constraints: vec![TableConstraint::Check {
+            name: None,
+            expr: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("VALUE"))),
+                op: BinaryOperator::Gt,
+                right: Box::new(Expr::Value(test_utils::number("0").into())),
+            }),
+        }],
+    });
+
+    assert_eq!(pg().verified_stmt(sql3), expected);
+
+    let sql4 = "CREATE DOMAIN my_domain AS INTEGER COLLATE \"en_US\" DEFAULT 1 CHECK (VALUE > 0)";
+    let expected = Statement::CreateDomain(CreateDomain {
+        name: ObjectName::from(vec![Ident::new("my_domain")]),
+        data_type: DataType::Integer(None),
+        collation: Some(Ident::with_quote('"', "en_US")),
+        default: Some(Expr::Value(test_utils::number("1").into())),
+        constraints: vec![TableConstraint::Check {
+            name: None,
+            expr: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("VALUE"))),
+                op: BinaryOperator::Gt,
+                right: Box::new(Expr::Value(test_utils::number("0").into())),
+            }),
+        }],
+    });
+
+    assert_eq!(pg().verified_stmt(sql4), expected);
+
+    let sql5 = "CREATE DOMAIN my_domain AS INTEGER CONSTRAINT my_constraint CHECK (VALUE > 0)";
+    let expected = Statement::CreateDomain(CreateDomain {
+        name: ObjectName::from(vec![Ident::new("my_domain")]),
+        data_type: DataType::Integer(None),
+        collation: None,
+        default: None,
+        constraints: vec![TableConstraint::Check {
+            name: Some(Ident::new("my_constraint")),
+            expr: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("VALUE"))),
+                op: BinaryOperator::Gt,
+                right: Box::new(Expr::Value(test_utils::number("0").into())),
+            }),
+        }],
+    });
+
+    assert_eq!(pg().verified_stmt(sql5), expected);
+}
+
+#[test]
 fn parse_create_simple_before_insert_trigger() {
     let sql = "CREATE TRIGGER check_insert BEFORE INSERT ON accounts FOR EACH ROW EXECUTE FUNCTION check_account_insert";
     let expected = Statement::CreateTrigger {

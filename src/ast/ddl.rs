@@ -2156,6 +2156,55 @@ impl fmt::Display for ClusteredBy {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// ```sql
+/// CREATE DOMAIN name [ AS ] data_type
+///         [ COLLATE collation ]
+///         [ DEFAULT expression ]
+///         [ domain_constraint [ ... ] ]
+///
+///     where domain_constraint is:
+///
+///     [ CONSTRAINT constraint_name ]
+///     { NOT NULL | NULL | CHECK (expression) }
+/// ```
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createdomain.html)
+pub struct CreateDomain {
+    /// The name of the domain to be created.
+    pub name: ObjectName,
+    /// The data type of the domain.
+    pub data_type: DataType,
+    /// The collation of the domain.
+    pub collation: Option<Ident>,
+    /// The default value of the domain.
+    pub default: Option<Expr>,
+    /// The constraints of the domain.
+    pub constraints: Vec<TableConstraint>,
+}
+
+impl fmt::Display for CreateDomain {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CREATE DOMAIN {name} AS {data_type}",
+            name = self.name,
+            data_type = self.data_type
+        )?;
+        if let Some(collation) = &self.collation {
+            write!(f, " COLLATE {collation}")?;
+        }
+        if let Some(default) = &self.default {
+            write!(f, " DEFAULT {default}")?;
+        }
+        if !self.constraints.is_empty() {
+            write!(f, " {}", display_separated(&self.constraints, " "))?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct CreateFunction {
     /// True if this is a `CREATE OR ALTER FUNCTION` statement
     ///

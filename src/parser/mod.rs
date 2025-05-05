@@ -13393,16 +13393,14 @@ impl<'a> Parser<'a> {
         let with_grant_option =
             self.parse_keywords(&[Keyword::WITH, Keyword::GRANT, Keyword::OPTION]);
 
-        let as_grantor = if self.peek_keyword(Keyword::AS) {
-            self.parse_keywords(&[Keyword::AS])
-                .then(|| self.parse_identifier().unwrap())
+        let as_grantor = if self.parse_keywords(&[Keyword::AS]) {
+            Some(self.parse_identifier()?)
         } else {
             None
         };
 
-        let granted_by = if self.peek_keywords(&[Keyword::GRANTED, Keyword::BY]) {
-            self.parse_keywords(&[Keyword::GRANTED, Keyword::BY])
-                .then(|| self.parse_identifier().unwrap())
+        let granted_by = if self.parse_keywords(&[Keyword::GRANTED, Keyword::BY]) {
+            Some(self.parse_identifier()?)
         } else {
             None
         };
@@ -13842,9 +13840,11 @@ impl<'a> Parser<'a> {
         self.expect_keyword_is(Keyword::TO)?;
         let grantees = self.parse_grantees()?;
         let cascade = self.parse_cascade_option();
-        let granted_by = self
-            .parse_keywords(&[Keyword::AS])
-            .then(|| self.parse_identifier().unwrap());
+        let granted_by = if self.parse_keywords(&[Keyword::AS]) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
 
         Ok(Statement::Deny(DenyStatement {
             privileges,
@@ -13862,9 +13862,11 @@ impl<'a> Parser<'a> {
         self.expect_keyword_is(Keyword::FROM)?;
         let grantees = self.parse_grantees()?;
 
-        let granted_by = self
-            .parse_keywords(&[Keyword::GRANTED, Keyword::BY])
-            .then(|| self.parse_identifier().unwrap());
+        let granted_by = if self.parse_keywords(&[Keyword::GRANTED, Keyword::BY]) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
 
         let cascade = self.parse_cascade_option();
 

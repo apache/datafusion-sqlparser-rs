@@ -5216,7 +5216,10 @@ impl<'a> Parser<'a> {
                     )?,
                 }
             } else {
-                parser_err!("Expected TABLE keyword after return type", p.peek_token().span.start)?
+                parser_err!(
+                    "Expected TABLE keyword after return type",
+                    p.peek_token().span.start
+                )?
             };
             Ok(DataType::NamedTable(
                 ObjectName(vec![ObjectNamePart::Identifier(return_table_name)]),

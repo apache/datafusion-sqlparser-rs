@@ -327,6 +327,17 @@ fn parse_create_function() {
         &create_multi_statement_table_value_function_without_as,
         create_multi_statement_table_value_function,
     );
+
+    let create_multi_statement_table_value_function_with_constraints = "\
+        CREATE FUNCTION some_multi_statement_tvf(@foo INT, @bar VARCHAR(256)) \
+        RETURNS @t TABLE (col_1 INT NOT NULL) \
+        AS \
+        BEGIN \
+            INSERT INTO @t SELECT 1; \
+            RETURN @t; \
+        END\
+    ";
+    let _ = ms().verified_stmt(create_multi_statement_table_value_function_with_constraints);
 }
 
 #[test]

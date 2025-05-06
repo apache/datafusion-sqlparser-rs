@@ -9867,13 +9867,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_returns_table_column(&mut self) -> Result<ColumnDef, ParserError> {
-        let name = self.parse_identifier()?;
-        let data_type = self.parse_data_type()?;
-        Ok(ColumnDef {
-            name,
-            data_type,
-            options: Vec::new(), // No constraints expected here
-        })
+        self.parse_column_def()
     }
 
     fn parse_returns_table_columns(&mut self) -> Result<Vec<ColumnDef>, ParserError> {

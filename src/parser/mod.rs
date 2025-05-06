@@ -5230,7 +5230,9 @@ impl<'a> Parser<'a> {
             Some(self.parse_data_type()?)
         };
 
-        self.expect_keyword_is(Keyword::AS)?;
+        if self.peek_keyword(Keyword::AS) {
+            self.expect_keyword_is(Keyword::AS)?;
+        }
 
         let function_body = if self.peek_keyword(Keyword::BEGIN) {
             let begin_token = self.expect_keyword(Keyword::BEGIN)?;
@@ -9819,7 +9821,7 @@ impl<'a> Parser<'a> {
                     Ok(DataType::AnyType)
                 }
                 Keyword::TABLE => {
-                    if self.peek_keyword(Keyword::AS) {
+                    if self.peek_token() != Token::LParen {
                         Ok(DataType::Table(Vec::<ColumnDef>::new()))
                     } else {
                         let columns = self.parse_returns_table_columns()?;

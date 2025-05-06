@@ -254,6 +254,12 @@ fn parse_create_function() {
     ";
     let _ = ms().verified_stmt(multi_statement_function);
 
+    let multi_statement_function_without_as = multi_statement_function.replace(" AS", "");
+    let _ = ms().one_statement_parses_to(
+        &multi_statement_function_without_as,
+        multi_statement_function,
+    );
+
     let create_function_with_conditional = "\
         CREATE FUNCTION some_scalar_udf() \
         RETURNS INT \
@@ -297,6 +303,13 @@ fn parse_create_function() {
     ";
     let _ = ms().verified_stmt(create_inline_table_value_function);
 
+    let create_inline_table_value_function_without_as =
+        create_inline_table_value_function.replace(" AS", "");
+    let _ = ms().one_statement_parses_to(
+        &create_inline_table_value_function_without_as,
+        create_inline_table_value_function,
+    );
+
     let create_multi_statement_table_value_function = "\
         CREATE FUNCTION some_multi_statement_tvf(@foo INT, @bar VARCHAR(256)) \
         RETURNS @t TABLE (col_1 INT) \
@@ -307,6 +320,13 @@ fn parse_create_function() {
         END\
     ";
     let _ = ms().verified_stmt(create_multi_statement_table_value_function);
+
+    let create_multi_statement_table_value_function_without_as =
+        create_multi_statement_table_value_function.replace(" AS", "");
+    let _ = ms().one_statement_parses_to(
+        &create_multi_statement_table_value_function_without_as,
+        create_multi_statement_table_value_function,
+    );
 }
 
 #[test]

@@ -50,6 +50,13 @@ pub enum DataType {
     /// [PostgreSQL]: https://www.postgresql.org/docs/15/sql-createfunction.html
     /// [MsSQL]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql?view=sql-server-ver16#c-create-a-multi-statement-table-valued-function
     Table(Vec<ColumnDef>),
+    /// Table type with a name, e.g. CREATE FUNCTION RETURNS @result TABLE(...).
+    NamedTable(
+        /// Table name.
+        ObjectName,
+        /// Table columns.
+        Vec<ColumnDef>,
+    ),
     /// Fixed-length character type, e.g. CHARACTER(10).
     Character(Option<CharacterLength>),
     /// Fixed-length char type, e.g. CHAR(10).
@@ -722,6 +729,9 @@ impl fmt::Display for DataType {
                     return write!(f, "TABLE");
                 }
                 write!(f, "TABLE({})", display_comma_separated(fields))
+            }
+            DataType::NamedTable(name, fields) => {
+                write!(f, "{} TABLE ({})", name, display_comma_separated(fields))
             }
             DataType::GeometricType(kind) => write!(f, "{}", kind),
         }

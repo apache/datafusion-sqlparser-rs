@@ -5204,7 +5204,31 @@ impl<'a> Parser<'a> {
         let (name, args) = self.parse_create_function_name_and_params()?;
 
         self.expect_keyword(Keyword::RETURNS)?;
-        let return_type = Some(self.parse_data_type()?);
+
+        let return_table = self.maybe_parse(|p| {
+            let return_table_name = p.parse_identifier()?;
+            let table_column_defs = if p.peek_keyword(Keyword::TABLE) {
+                match p.parse_data_type()? {
+                    DataType::Table(t) => t,
+                    _ => parser_err!(
+                        "Expected table data type after TABLE keyword",
+                        p.peek_token().span.start
+                    )?,
+                }
+            } else {
+                parser_err!("Expected TABLE keyword after return type", p.peek_token().span.start)?
+            };
+            Ok(DataType::NamedTable(
+                ObjectName(vec![ObjectNamePart::Identifier(return_table_name)]),
+                table_column_defs.clone(),
+            ))
+        })?;
+
+        let return_type = if return_table.is_some() {
+            return_table
+        } else {
+            Some(self.parse_data_type()?)
+        };
 
         self.expect_keyword_is(Keyword::AS)?;
 

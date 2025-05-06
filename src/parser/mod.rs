@@ -5208,15 +5208,26 @@ impl<'a> Parser<'a> {
 
         self.expect_keyword_is(Keyword::AS)?;
 
-        let begin_token = self.expect_keyword(Keyword::BEGIN)?;
-        let statements = self.parse_statement_list(&[Keyword::END])?;
-        let end_token = self.expect_keyword(Keyword::END)?;
+        let function_body = if self.peek_keyword(Keyword::BEGIN) {
+            let begin_token = self.expect_keyword(Keyword::BEGIN)?;
+            let statements = self.parse_statement_list(&[Keyword::END])?;
+            let end_token = self.expect_keyword(Keyword::END)?;
 
-        let function_body = Some(CreateFunctionBody::AsBeginEnd(BeginEndStatements {
-            begin_token: AttachedToken(begin_token),
-            statements,
-            end_token: AttachedToken(end_token),
-        }));
+            Some(CreateFunctionBody::AsBeginEnd(BeginEndStatements {
+                begin_token: AttachedToken(begin_token),
+                statements,
+                end_token: AttachedToken(end_token),
+            }))
+        } else if self.peek_keyword(Keyword::RETURN) {
+            self.expect_keyword(Keyword::RETURN)?;
+            let expr = self.parse_expr()?;
+            if !matches!(expr, Expr::Subquery(_)) {
+                parser_err!("Expected a subquery after RETURN", expr.span().start)?;
+            }
+            Some(CreateFunctionBody::AsReturn(expr))
+        } else {
+            parser_err!("Unparsable function body", self.peek_token().span.start)?
+        };
 
         Ok(Statement::CreateFunction(CreateFunction {
             or_alter,
@@ -9784,8 +9795,12 @@ impl<'a> Parser<'a> {
                     Ok(DataType::AnyType)
                 }
                 Keyword::TABLE => {
-                    let columns = self.parse_returns_table_columns()?;
-                    Ok(DataType::Table(columns))
+                    if self.peek_keyword(Keyword::AS) {
+                        Ok(DataType::Table(Vec::<ColumnDef>::new()))
+                    } else {
+                        let columns = self.parse_returns_table_columns()?;
+                        Ok(DataType::Table(columns))
+                    }
                 }
                 Keyword::SIGNED => {
                     if self.parse_keyword(Keyword::INTEGER) {

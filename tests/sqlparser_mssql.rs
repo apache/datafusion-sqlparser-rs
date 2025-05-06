@@ -288,6 +288,14 @@ fn parse_create_function() {
         END\
     ";
     let _ = ms().verified_stmt(create_function_with_return_expression);
+
+    let create_inline_table_value_function = "\
+        CREATE FUNCTION some_inline_tvf(@foo INT, @bar VARCHAR(256)) \
+        RETURNS TABLE \
+        AS \
+        RETURN (SELECT 1 AS col_1)\
+    ";
+    let _ = ms().verified_stmt(create_inline_table_value_function);
 }
 
 #[test]

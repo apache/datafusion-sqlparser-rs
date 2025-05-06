@@ -48,6 +48,7 @@ pub enum DataType {
     /// Table type in [PostgreSQL], e.g. CREATE FUNCTION RETURNS TABLE(...).
     ///
     /// [PostgreSQL]: https://www.postgresql.org/docs/15/sql-createfunction.html
+    /// [MsSQL]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql?view=sql-server-ver16#c-create-a-multi-statement-table-valued-function
     Table(Vec<ColumnDef>),
     /// Fixed-length character type, e.g. CHARACTER(10).
     Character(Option<CharacterLength>),
@@ -716,7 +717,12 @@ impl fmt::Display for DataType {
             DataType::Unspecified => Ok(()),
             DataType::Trigger => write!(f, "TRIGGER"),
             DataType::AnyType => write!(f, "ANY TYPE"),
-            DataType::Table(fields) => write!(f, "TABLE({})", display_comma_separated(fields)),
+            DataType::Table(fields) => {
+                if fields.is_empty() {
+                    return write!(f, "TABLE");
+                }
+                write!(f, "TABLE({})", display_comma_separated(fields))
+            }
             DataType::GeometricType(kind) => write!(f, "{}", kind),
         }
     }

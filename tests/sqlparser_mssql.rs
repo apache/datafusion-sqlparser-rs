@@ -296,6 +296,17 @@ fn parse_create_function() {
         RETURN (SELECT 1 AS col_1)\
     ";
     let _ = ms().verified_stmt(create_inline_table_value_function);
+
+    let create_multi_statement_table_value_function = "\
+        CREATE FUNCTION some_multi_statement_tvf(@foo INT, @bar VARCHAR(256)) \
+        RETURNS @t TABLE (col_1 INT) \
+        AS \
+        BEGIN \
+            INSERT INTO @t SELECT 1; \
+            RETURN; \
+        END\
+    ";
+    let _ = ms().verified_stmt(create_multi_statement_table_value_function);
 }
 
 #[test]

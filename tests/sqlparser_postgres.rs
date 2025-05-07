@@ -5959,3 +5959,30 @@ fn parse_varbit_datatype() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn parse_alter_table_replica_identity() {
+    match pg_and_generic().verified_stmt("ALTER TABLE foo REPLICA IDENTITY FULL") {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::ReplicaIdentity {
+                    identity: ReplicaIdentity::Full
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match pg_and_generic().verified_stmt("ALTER TABLE foo REPLICA IDENTITY USING INDEX foo_idx") {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::ReplicaIdentity {
+                    identity: ReplicaIdentity::Index("foo_idx".into())
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+}

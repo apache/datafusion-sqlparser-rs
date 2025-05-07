@@ -39,6 +39,27 @@ use crate::ast::{
 use crate::keywords::Keyword;
 use crate::tokenizer::Token;
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ReplicaIdentity {
+    None,
+    Full,
+    Default,
+    Index(Ident),
+}
+
+impl fmt::Display for ReplicaIdentity {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ReplicaIdentity::None => f.write_str("NONE"),
+            ReplicaIdentity::Full => f.write_str("FULL"),
+            ReplicaIdentity::Default => f.write_str("DEFAULT"),
+            ReplicaIdentity::Index(idx) => write!(f, "USING INDEX {}", idx),
+        }
+    }
+}
+
 /// An `ALTER TABLE` (`Statement::AlterTable`) operation
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -207,6 +228,12 @@ pub enum AlterTableOperation {
     RenamePartitions {
         old_partitions: Vec<Expr>,
         new_partitions: Vec<Expr>,
+    },
+    /// REPLICA IDENTITY { DEFAULT | USING INDEX index_name | FULL | NOTHING }
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    ReplicaIdentity {
+        identity: ReplicaIdentity,
     },
     /// Add Partitions
     AddPartitions {
@@ -728,6 +755,9 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::Lock { equals, lock } => {
                 write!(f, "LOCK {}{}", if *equals { "= " } else { "" }, lock)
+            }
+            AlterTableOperation::ReplicaIdentity { identity } => {
+                write!(f, "REPLICA IDENTITY {identity}")
             }
         }
     }

@@ -8770,6 +8770,23 @@ impl<'a> Parser<'a> {
             let equals = self.consume_token(&Token::Eq);
             let value = self.parse_number_value()?;
             AlterTableOperation::AutoIncrement { equals, value }
+        } else if self.parse_keywords(&[Keyword::REPLICA, Keyword::IDENTITY]) {
+            let identity = if self.parse_keyword(Keyword::NONE) {
+                ReplicaIdentity::None
+            } else if self.parse_keyword(Keyword::FULL) {
+                ReplicaIdentity::Full
+            } else if self.parse_keyword(Keyword::DEFAULT) {
+                ReplicaIdentity::Default
+            } else if self.parse_keywords(&[Keyword::USING, Keyword::INDEX]) {
+                ReplicaIdentity::Index(self.parse_identifier()?)
+            } else {
+                return self.expected(
+                    "NONE, FULL, DEFAULT, or USING INDEX index_name after REPLICA IDENTITY",
+                    self.peek_token(),
+                );
+            };
+
+            AlterTableOperation::ReplicaIdentity { identity }
         } else {
             let options: Vec<SqlOption> =
                 self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;
@@ -8779,7 +8796,7 @@ impl<'a> Parser<'a> {
                 }
             } else {
                 return self.expected(
-                    "ADD, RENAME, PARTITION, SWAP, DROP, or SET TBLPROPERTIES after ALTER TABLE",
+                    "ADD, RENAME, PARTITION, SWAP, DROP, REPLICA IDENTITY, or SET TBLPROPERTIES after ALTER TABLE",
                     self.peek_token(),
                 );
             }

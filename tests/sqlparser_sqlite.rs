@@ -574,6 +574,7 @@ fn test_match_operator() {
             ))
         }
     );
+    sqlite().verified_only_select("SELECT * FROM email WHERE email MATCH 'fts5'");
 }
 
 #[test]
@@ -588,6 +589,7 @@ fn test_regexp_operator() {
             ))
         }
     );
+    sqlite().verified_only_select(r#"SELECT count(*) FROM messages WHERE msg_text REGEXP '\d+'"#);
 }
 
 fn sqlite() -> TestedDialects {

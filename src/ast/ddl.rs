@@ -2346,7 +2346,10 @@ impl fmt::Display for CreateFunction {
         if let Some(CreateFunctionBody::Return(function_body)) = &self.function_body {
             write!(f, " RETURN {function_body}")?;
         }
-        if let Some(CreateFunctionBody::AsReturn(function_body)) = &self.function_body {
+        if let Some(CreateFunctionBody::AsReturnSubquery(function_body)) = &self.function_body {
+            write!(f, " AS RETURN {function_body}")?;
+        }
+        if let Some(CreateFunctionBody::AsReturnSelect(function_body)) = &self.function_body {
             write!(f, " AS RETURN {function_body}")?;
         }
         if let Some(using) = &self.using {

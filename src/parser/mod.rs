@@ -5249,11 +5249,25 @@ impl<'a> Parser<'a> {
             }))
         } else if self.peek_keyword(Keyword::RETURN) {
             self.expect_keyword(Keyword::RETURN)?;
-            let expr = self.parse_expr()?;
-            if !matches!(expr, Expr::Subquery(_)) {
-                parser_err!("Expected a subquery after RETURN", expr.span().start)?;
+
+            if self.peek_token() == Token::LParen {
+                let expr = self.parse_expr()?;
+                if !matches!(expr, Expr::Subquery(_)) {
+                    parser_err!(
+                        "Expected a subquery after RETURN",
+                        self.peek_token().span.start
+                    )?
+                }
+                Some(CreateFunctionBody::AsReturnSubquery(expr))
+            } else if self.peek_keyword(Keyword::SELECT) {
+                let select = self.parse_select()?;
+                Some(CreateFunctionBody::AsReturnSelect(select))
+            } else {
+                parser_err!(
+                    "Expected a subquery (or bare SELECT statement) after RETURN",
+                    self.peek_token().span.start
+                )?
             }
-            Some(CreateFunctionBody::AsReturn(expr))
         } else {
             parser_err!("Unparsable function body", self.peek_token().span.start)?
         };

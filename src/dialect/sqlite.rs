@@ -15,6 +15,9 @@
 // specific language governing permissions and limitations
 // under the License.
 
+#[cfg(not(feature = "std"))]
+use alloc::boxed::Box;
+
 use crate::ast::BinaryOperator;
 use crate::ast::{Expr, Statement};
 use crate::dialect::Dialect;

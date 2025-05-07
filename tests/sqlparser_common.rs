@@ -667,6 +667,23 @@ fn parse_select_with_table_alias() {
 }
 
 #[test]
+fn parse_consecutive_queries() {
+    let select_then_exec = "SELECT * FROM deleted; EXECUTE my_sp 'some', 'params'";
+    let _ = all_dialects()
+        .parse_sql_statements(select_then_exec)
+        .unwrap();
+    let _ = all_dialects_not_requiring_semicolon_statement_delimiter()
+        .statements_without_semicolons_parse_to(select_then_exec, "");
+
+    let select_then_update = "SELECT 1 FROM x; UPDATE y SET z = 1";
+    let _ = all_dialects()
+        .parse_sql_statements(select_then_update)
+        .unwrap();
+    let _ = all_dialects_not_requiring_semicolon_statement_delimiter()
+        .statements_without_semicolons_parse_to(select_then_update, "");
+}
+
+#[test]
 fn parse_analyze() {
     verified_stmt("ANALYZE TABLE test_table");
     verified_stmt("ANALYZE test_table");

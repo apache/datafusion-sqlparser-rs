@@ -5937,6 +5937,36 @@ fn parse_bitstring_literal() {
 }
 
 #[test]
+fn parse_arbitrary_operator_with_any_and_all() {
+    // The following statement is semantically non-sensical on vanilla postgres but it should *parse* in order to
+    // support situations where PG operators have been overloaded.
+    let select = pg().verified_only_select("SELECT 123 % ANY(ARRAY[1, 2, 3])");
+    assert!(
+        matches!(
+            select.projection[0],
+            SelectItem::UnnamedExpr(Expr::AnyOp {
+                left: _,
+                compare_op: BinaryOperator::Modulo,
+                right: _,
+                is_some: false
+            })
+        )
+    );
+
+    let select = pg().verified_only_select("SELECT 123 % ALL(ARRAY[1, 2, 3])");
+    assert!(
+        matches!(
+            select.projection[0],
+            SelectItem::UnnamedExpr(Expr::AllOp {
+                left: _,
+                compare_op: BinaryOperator::Modulo,
+                right: _,
+            })
+        )
+    );
+}
+
+#[test]
 fn parse_varbit_datatype() {
     match pg_and_generic().verified_stmt("CREATE TABLE foo (x VARBIT, y VARBIT(42))") {
         Statement::CreateTable(CreateTable { columns, .. }) => {

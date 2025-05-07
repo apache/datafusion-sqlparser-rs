@@ -303,6 +303,14 @@ fn parse_create_function() {
     ";
     let _ = ms().verified_stmt(create_inline_table_value_function);
 
+    let create_inline_table_value_function_without_parentheses = "\
+        CREATE FUNCTION some_inline_tvf(@foo INT, @bar VARCHAR(256)) \
+        RETURNS TABLE \
+        AS \
+        RETURN SELECT 1 AS col_1\
+    ";
+    let _ = ms().verified_stmt(create_inline_table_value_function_without_parentheses);
+
     let create_inline_table_value_function_without_as =
         create_inline_table_value_function.replace(" AS", "");
     let _ = ms().one_statement_parses_to(

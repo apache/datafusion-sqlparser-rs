@@ -8789,7 +8789,17 @@ pub enum CreateFunctionBody {
     /// ```
     ///
     /// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql
-    AsReturn(Expr),
+    AsReturnSubquery(Expr),
+
+    /// Function body expression using the 'AS RETURN' keywords, with an un-parenthesized SELECT query
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE FUNCTION myfunc(a INT, b INT)
+    /// RETURNS TABLE
+    /// AS RETURN SELECT a + b AS sum;
+    /// ```
+    AsReturnSelect(Select),
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

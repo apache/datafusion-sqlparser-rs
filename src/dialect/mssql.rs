@@ -63,7 +63,7 @@ impl Dialect for MsSqlDialect {
     }
 
     fn supports_connect_by(&self) -> bool {
-        true
+        false
     }
 
     fn supports_eq_alias_assignment(&self) -> bool {
@@ -116,6 +116,10 @@ impl Dialect for MsSqlDialect {
 
     /// See <https://learn.microsoft.com/en-us/sql/t-sql/queries/from-transact-sql>
     fn supports_object_name_double_dot_notation(&self) -> bool {
+        true
+    }
+
+    fn supports_statements_without_semicolon_delimiter(&self) -> bool {
         true
     }
 
@@ -271,6 +275,9 @@ impl MsSqlDialect {
     ) -> Result<Vec<Statement>, ParserError> {
         let mut stmts = Vec::new();
         loop {
+            while let Token::SemiColon = parser.peek_token_ref().token {
+                parser.advance_token();
+            }
             if let Token::EOF = parser.peek_token_ref().token {
                 break;
             }

@@ -958,8 +958,14 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the specified keyword should be parsed as a table factor alias.
     /// When explicit is true, the keyword is preceded by an `AS` word. Parser is provided
     /// to enable looking ahead if needed.
+    ///
+    /// When the dialect supports statements without semicolon delimiter, actual keywords aren't parsed as aliases.
     fn is_table_factor_alias(&self, explicit: bool, kw: &Keyword, _parser: &mut Parser) -> bool {
-        explicit || !keywords::RESERVED_FOR_TABLE_ALIAS.contains(kw)
+        if self.supports_statements_without_semicolon_delimiter() {
+            kw == &Keyword::NoKeyword
+        } else {
+            explicit || !keywords::RESERVED_FOR_TABLE_ALIAS.contains(kw)
+        }
     }
 
     /// Returns true if this dialect supports querying historical table data

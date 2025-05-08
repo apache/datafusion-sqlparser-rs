@@ -667,6 +667,28 @@ fn parse_select_with_table_alias() {
 }
 
 #[test]
+fn parse_select_with_table_alias_keyword() {
+    // note: DECLARE isn't included in RESERVED_FOR_TABLE_ALIAS
+    let table_alias_non_reserved_keyword = "SELECT a FROM lineitem DECLARE";
+    let statements = all_dialects_requiring_semicolon_statement_delimiter()
+        .parse_sql_statements(table_alias_non_reserved_keyword)
+        .unwrap();
+    assert_eq!(1, statements.len());
+    assert_eq!(
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string()),
+        all_dialects_not_requiring_semicolon_statement_delimiter()
+            .parse_sql_statements(table_alias_non_reserved_keyword)
+            .unwrap_err()
+    );
+
+    let table_alias_quoted_keyword = "SELECT a FROM lineitem \"DECLARE\"";
+    let statements = all_dialects()
+        .parse_sql_statements(table_alias_quoted_keyword)
+        .unwrap();
+    assert_eq!(1, statements.len());
+}
+
+#[test]
 fn parse_consecutive_queries() {
     let select_then_exec = "SELECT * FROM deleted; EXECUTE my_sp 'some', 'params'";
     let _ = all_dialects()
@@ -949,7 +971,18 @@ fn parse_limit() {
 
 #[test]
 fn parse_invalid_limit_by() {
-    assert_err_parse_statements("SELECT * FROM user BY name", "name");
+    assert_eq!(
+        ParserError::ParserError("Expected: end of statement, found: name".to_string()),
+        all_dialects_requiring_semicolon_statement_delimiter()
+            .parse_sql_statements("SELECT * FROM user BY name")
+            .unwrap_err()
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected: an SQL statement, found: BY".to_string()),
+        all_dialects_not_requiring_semicolon_statement_delimiter()
+            .parse_sql_statements("SELECT * FROM user BY name")
+            .unwrap_err()
+    );
 }
 
 #[test]
@@ -10826,7 +10859,9 @@ fn parse_select_table_with_index_hints() {
 
     // Test that dialects that don't support table hints will keep parsing the USE as table alias
     let sql = "SELECT * FROM T USE LIMIT 1";
-    let unsupported_dialects = all_dialects_where(|d| !d.supports_table_hints());
+    let unsupported_dialects = all_dialects_where(|d| {
+        !d.supports_table_hints() && !d.supports_statements_without_semicolon_delimiter()
+    });
     let select = unsupported_dialects
         .verified_only_select_with_canonical(sql, "SELECT * FROM T AS USE LIMIT 1");
     assert_eq!(

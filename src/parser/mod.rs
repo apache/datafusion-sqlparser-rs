@@ -15505,14 +15505,14 @@ impl<'a> Parser<'a> {
         let name = self.parse_object_name(false)?;
         let params = self.parse_optional_procedure_parameters()?;
         self.expect_keyword_is(Keyword::AS)?;
-        self.expect_keyword_is(Keyword::BEGIN)?;
-        let statements = self.parse_statements()?;
-        self.expect_keyword_is(Keyword::END)?;
+
+        let body = self.parse_conditional_statements(&[Keyword::END])?;
+
         Ok(Statement::CreateProcedure {
             name,
             or_alter,
             params,
-            body: statements,
+            body,
         })
     }
 

@@ -100,48 +100,52 @@ fn parse_mssql_delimited_identifiers() {
 
 #[test]
 fn parse_create_procedure() {
-    let sql = "CREATE OR ALTER PROCEDURE test (@foo INT, @bar VARCHAR(256)) AS BEGIN SELECT 1 END";
+    let sql = "CREATE OR ALTER PROCEDURE test (@foo INT, @bar VARCHAR(256)) AS BEGIN SELECT 1; END";
 
     assert_eq!(
         ms().verified_stmt(sql),
         Statement::CreateProcedure {
             or_alter: true,
-            body: vec![Statement::Query(Box::new(Query {
-                with: None,
-                limit_clause: None,
-                fetch: None,
-                locks: vec![],
-                for_clause: None,
-                order_by: None,
-                settings: None,
-                format_clause: None,
-                pipe_operators: vec![],
-                body: Box::new(SetExpr::Select(Box::new(Select {
-                    select_token: AttachedToken::empty(),
-                    distinct: None,
-                    top: None,
-                    top_before_distinct: false,
-                    projection: vec![SelectItem::UnnamedExpr(Expr::Value(
-                        (number("1")).with_empty_span()
-                    ))],
-                    into: None,
-                    from: vec![],
-                    lateral_views: vec![],
-                    prewhere: None,
-                    selection: None,
-                    group_by: GroupByExpr::Expressions(vec![], vec![]),
-                    cluster_by: vec![],
-                    distribute_by: vec![],
-                    sort_by: vec![],
-                    having: None,
-                    named_window: vec![],
-                    window_before_qualify: false,
-                    qualify: None,
-                    value_table_mode: None,
-                    connect_by: None,
-                    flavor: SelectFlavor::Standard,
-                })))
-            }))],
+            body: ConditionalStatements::BeginEnd(BeginEndStatements {
+                begin_token: AttachedToken::empty(),
+                statements: vec![Statement::Query(Box::new(Query {
+                    with: None,
+                    limit_clause: None,
+                    fetch: None,
+                    locks: vec![],
+                    for_clause: None,
+                    order_by: None,
+                    settings: None,
+                    format_clause: None,
+                    pipe_operators: vec![],
+                    body: Box::new(SetExpr::Select(Box::new(Select {
+                        select_token: AttachedToken::empty(),
+                        distinct: None,
+                        top: None,
+                        top_before_distinct: false,
+                        projection: vec![SelectItem::UnnamedExpr(Expr::Value(
+                            (number("1")).with_empty_span()
+                        ))],
+                        into: None,
+                        from: vec![],
+                        lateral_views: vec![],
+                        prewhere: None,
+                        selection: None,
+                        group_by: GroupByExpr::Expressions(vec![], vec![]),
+                        cluster_by: vec![],
+                        distribute_by: vec![],
+                        sort_by: vec![],
+                        having: None,
+                        named_window: vec![],
+                        window_before_qualify: false,
+                        qualify: None,
+                        value_table_mode: None,
+                        connect_by: None,
+                        flavor: SelectFlavor::Standard,
+                    })))
+                }))],
+                end_token: AttachedToken::empty(),
+            }),
             params: Some(vec![
                 ProcedureParam {
                     name: Ident {
@@ -174,19 +178,20 @@ fn parse_create_procedure() {
 
 #[test]
 fn parse_mssql_create_procedure() {
-    let _ = ms_and_generic().verified_stmt("CREATE OR ALTER PROCEDURE foo AS BEGIN SELECT 1 END");
-    let _ = ms_and_generic().verified_stmt("CREATE PROCEDURE foo AS BEGIN SELECT 1 END");
+    let _ = ms_and_generic().verified_stmt("CREATE OR ALTER PROCEDURE foo AS SELECT 1;");
+    let _ = ms_and_generic().verified_stmt("CREATE OR ALTER PROCEDURE foo AS BEGIN SELECT 1; END");
+    let _ = ms_and_generic().verified_stmt("CREATE PROCEDURE foo AS BEGIN SELECT 1; END");
     let _ = ms().verified_stmt(
-        "CREATE PROCEDURE foo AS BEGIN SELECT [myColumn] FROM [myschema].[mytable] END",
+        "CREATE PROCEDURE foo AS BEGIN SELECT [myColumn] FROM [myschema].[mytable]; END",
     );
     let _ = ms_and_generic().verified_stmt(
-        "CREATE PROCEDURE foo (@CustomerName NVARCHAR(50)) AS BEGIN SELECT * FROM DEV END",
+        "CREATE PROCEDURE foo (@CustomerName NVARCHAR(50)) AS BEGIN SELECT * FROM DEV; END",
     );
-    let _ = ms().verified_stmt("CREATE PROCEDURE [foo] AS BEGIN UPDATE bar SET col = 'test' END");
+    let _ = ms().verified_stmt("CREATE PROCEDURE [foo] AS BEGIN UPDATE bar SET col = 'test'; END");
     // Test a statement with END in it
-    let _ = ms().verified_stmt("CREATE PROCEDURE [foo] AS BEGIN SELECT [foo], CASE WHEN [foo] IS NULL THEN 'empty' ELSE 'notempty' END AS [foo] END");
+    let _ = ms().verified_stmt("CREATE PROCEDURE [foo] AS BEGIN SELECT [foo], CASE WHEN [foo] IS NULL THEN 'empty' ELSE 'notempty' END AS [foo]; END");
     // Multiple statements
-    let _ = ms().verified_stmt("CREATE PROCEDURE [foo] AS BEGIN UPDATE bar SET col = 'test'; SELECT [foo] FROM BAR WHERE [FOO] > 10 END");
+    let _ = ms().verified_stmt("CREATE PROCEDURE [foo] AS BEGIN UPDATE bar SET col = 'test'; SELECT [foo] FROM BAR WHERE [FOO] > 10; END");
 }
 
 #[test]

@@ -139,6 +139,11 @@ pub enum BinaryOperator {
     DuckIntegerDivide,
     /// MySQL [`DIV`](https://dev.mysql.com/doc/refman/8.0/en/arithmetic-functions.html) integer division
     MyIntegerDivide,
+    /// MATCH operator, e.g. `a MATCH b` (SQLite-specific)
+    /// See <https://www.sqlite.org/lang_expr.html#the_like_glob_regexp_match_and_extract_operators>
+    Match,
+    /// REGEXP operator, e.g. `a REGEXP b` (SQLite-specific)
+    Regexp,
     /// Support for custom operators (such as Postgres custom operators)
     Custom(String),
     /// Bitwise XOR, e.g. `a # b` (PostgreSQL-specific)
@@ -350,6 +355,8 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::BitwiseXor => f.write_str("^"),
             BinaryOperator::DuckIntegerDivide => f.write_str("//"),
             BinaryOperator::MyIntegerDivide => f.write_str("DIV"),
+            BinaryOperator::Match => f.write_str("MATCH"),
+            BinaryOperator::Regexp => f.write_str("REGEXP"),
             BinaryOperator::Custom(s) => f.write_str(s),
             BinaryOperator::PGBitwiseXor => f.write_str("#"),
             BinaryOperator::PGBitwiseShiftLeft => f.write_str("<<"),

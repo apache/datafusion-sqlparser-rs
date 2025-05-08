@@ -562,6 +562,36 @@ fn test_dollar_identifier_as_placeholder() {
     }
 }
 
+#[test]
+fn test_match_operator() {
+    assert_eq!(
+        sqlite().verified_expr("col MATCH 'pattern'"),
+        Expr::BinaryOp {
+            op: BinaryOperator::Match,
+            left: Box::new(Expr::Identifier(Ident::new("col"))),
+            right: Box::new(Expr::Value(
+                (Value::SingleQuotedString("pattern".to_string())).with_empty_span()
+            ))
+        }
+    );
+    sqlite().verified_only_select("SELECT * FROM email WHERE email MATCH 'fts5'");
+}
+
+#[test]
+fn test_regexp_operator() {
+    assert_eq!(
+        sqlite().verified_expr("col REGEXP 'pattern'"),
+        Expr::BinaryOp {
+            op: BinaryOperator::Regexp,
+            left: Box::new(Expr::Identifier(Ident::new("col"))),
+            right: Box::new(Expr::Value(
+                (Value::SingleQuotedString("pattern".to_string())).with_empty_span()
+            ))
+        }
+    );
+    sqlite().verified_only_select(r#"SELECT count(*) FROM messages WHERE msg_text REGEXP '\d+'"#);
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

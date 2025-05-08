@@ -15,7 +15,11 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::ast::Statement;
+#[cfg(not(feature = "std"))]
+use alloc::boxed::Box;
+
+use crate::ast::BinaryOperator;
+use crate::ast::{Expr, Statement};
 use crate::dialect::Dialect;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -68,6 +72,27 @@ impl Dialect for SQLiteDialect {
         } else {
             None
         }
+    }
+
+    fn parse_infix(
+        &self,
+        parser: &mut crate::parser::Parser,
+        expr: &crate::ast::Expr,
+        _precedence: u8,
+    ) -> Option<Result<crate::ast::Expr, ParserError>> {
+        // Parse MATCH and REGEXP as operators
+        // See <https://www.sqlite.org/lang_expr.html#the_like_glob_regexp_match_and_extract_operators>
+        for (keyword, op) in [
+            (Keyword::REGEXP, BinaryOperator::Regexp),
+            (Keyword::MATCH, BinaryOperator::Match),
+        ] {
+            if parser.parse_keyword(keyword) {
+                let left = Box::new(expr.clone());
+                let right = Box::new(parser.parse_expr().unwrap());
+                return Some(Ok(Expr::BinaryOp { left, op, right }));
+            }
+        }
+        None
     }
 
     fn supports_in_empty_list(&self) -> bool {

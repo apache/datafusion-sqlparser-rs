@@ -5236,9 +5236,7 @@ impl<'a> Parser<'a> {
             Some(self.parse_data_type()?)
         };
 
-        if self.peek_keyword(Keyword::AS) {
-            self.expect_keyword_is(Keyword::AS)?;
-        }
+        let _ = self.parse_keyword(Keyword::AS);
 
         let function_body = if self.peek_keyword(Keyword::BEGIN) {
             let begin_token = self.expect_keyword(Keyword::BEGIN)?;
@@ -5250,9 +5248,7 @@ impl<'a> Parser<'a> {
                 statements,
                 end_token: AttachedToken(end_token),
             }))
-        } else if self.peek_keyword(Keyword::RETURN) {
-            self.expect_keyword(Keyword::RETURN)?;
-
+        } else if self.parse_keyword(Keyword::RETURN) {
             if self.peek_token() == Token::LParen {
                 let expr = self.parse_expr()?;
                 if !matches!(expr, Expr::Subquery(_)) {

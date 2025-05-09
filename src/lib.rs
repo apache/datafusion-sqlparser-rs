@@ -142,6 +142,7 @@ extern crate pretty_assertions;
 pub mod ast;
 #[macro_use]
 pub mod dialect;
+mod display_utils;
 pub mod keywords;
 pub mod parser;
 pub mod tokenizer;

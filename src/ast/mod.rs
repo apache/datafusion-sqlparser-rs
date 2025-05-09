@@ -40,8 +40,11 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::keywords::Keyword;
 use crate::tokenizer::{Span, Token};
+use crate::{
+    display_utils::{Indent, NewLine},
+    keywords::Keyword,
+};
 
 pub use self::data_type::{
     ArrayElemTypeDef, BinaryLength, CharLengthUnits, CharacterLength, DataType, EnumMember,
@@ -134,9 +137,9 @@ where
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut delim = "";
         for t in self.slice {
-            write!(f, "{delim}")?;
+            f.write_str(delim)?;
             delim = self.sep;
-            write!(f, "{t}")?;
+            t.fmt(f)?;
         }
         Ok(())
     }
@@ -4219,7 +4222,8 @@ impl fmt::Display for Statement {
             } => {
                 write!(f, "FLUSH")?;
                 if let Some(location) = location {
-                    write!(f, " {location}")?;
+                    f.write_str(" ")?;
+                    location.fmt(f)?;
                 }
                 write!(f, " {object_type}")?;
 
@@ -4301,7 +4305,7 @@ impl fmt::Display for Statement {
 
                 write!(f, "{statement}")
             }
-            Statement::Query(s) => write!(f, "{s}"),
+            Statement::Query(s) => s.fmt(f),
             Statement::Declare { stmts } => {
                 write!(f, "DECLARE ")?;
                 write!(f, "{}", display_separated(stmts, "; "))

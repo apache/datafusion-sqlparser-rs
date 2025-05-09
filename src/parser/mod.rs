@@ -5221,9 +5221,19 @@ impl<'a> Parser<'a> {
                     p.peek_token().span.start
                 )?
             };
+
+            if table_column_defs.is_none()
+                || table_column_defs.clone().is_some_and(|tcd| tcd.is_empty())
+            {
+                parser_err!(
+                    "Expected table column definitions after TABLE keyword",
+                    p.peek_token().span.start
+                )?
+            }
+
             Ok(DataType::NamedTable(
                 ObjectName(vec![ObjectNamePart::Identifier(return_table_name)]),
-                table_column_defs.clone(),
+                table_column_defs.clone().unwrap(),
             ))
         })?;
 
@@ -9835,10 +9845,10 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::TABLE => {
                     if self.peek_token() != Token::LParen {
-                        Ok(DataType::Table(Vec::<ColumnDef>::new()))
+                        Ok(DataType::Table(None))
                     } else {
                         let columns = self.parse_returns_table_columns()?;
-                        Ok(DataType::Table(columns))
+                        Ok(DataType::Table(Some(columns)))
                     }
                 }
                 Keyword::SIGNED => {

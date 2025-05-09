@@ -49,7 +49,7 @@ pub enum DataType {
     ///
     /// [PostgreSQL]: https://www.postgresql.org/docs/15/sql-createfunction.html
     /// [MsSQL]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql?view=sql-server-ver16#c-create-a-multi-statement-table-valued-function
-    Table(Vec<ColumnDef>),
+    Table(Option<Vec<ColumnDef>>),
     /// Table type with a name, e.g. CREATE FUNCTION RETURNS @result TABLE(...).
     NamedTable(
         /// Table name.
@@ -724,12 +724,14 @@ impl fmt::Display for DataType {
             DataType::Unspecified => Ok(()),
             DataType::Trigger => write!(f, "TRIGGER"),
             DataType::AnyType => write!(f, "ANY TYPE"),
-            DataType::Table(fields) => {
-                if fields.is_empty() {
-                    return write!(f, "TABLE");
+            DataType::Table(fields) => match fields {
+                Some(fields) => {
+                    write!(f, "TABLE({})", display_comma_separated(fields))
                 }
-                write!(f, "TABLE({})", display_comma_separated(fields))
-            }
+                None => {
+                    write!(f, "TABLE")
+                }
+            },
             DataType::NamedTable(name, fields) => {
                 write!(f, "{} TABLE ({})", name, display_comma_separated(fields))
             }

@@ -1189,8 +1189,24 @@ impl<'a> Tokenizer<'a> {
 
                     Ok(Some(Token::make_word(&word.concat(), Some(quote_start))))
                 }
-                // Numbers
-                '0'..='9' => {
+                // numbers and period
+                '0'..='9' | '.' => {
+                    // special case where if ._ is encountered after a word then that word
+                    // is a table and the _ is the start of the col name.
+                    // if the prev token is not a word, then this is not a valid sql
+                    // word or number.
+                    if ch == '.' && chars.peekable.clone().nth(1) == Some('_') {
+                        if let Some(Token::Word(_)) = prev_token {
+                            chars.next();
+                            return Ok(Some(Token::Period));
+                        }
+
+                        return self.tokenizer_error(
+                            chars.location(),
+                            "Unexpected character '_'".to_string(),
+                        );
+                    }
+
                     // Some dialects support underscore as number separator
                     // There can only be one at a time and it must be followed by another digit
                     let is_number_separator = |ch: char, next_char: Option<char>| {
@@ -1199,12 +1215,11 @@ impl<'a> Tokenizer<'a> {
                             && next_char.is_some_and(|next_ch| next_ch.is_ascii_hexdigit())
                     };
 
-                    // Start with number or potential separator
                     let mut s = peeking_next_take_while(chars, |ch, next_ch| {
                         ch.is_ascii_digit() || is_number_separator(ch, next_ch)
                     });
 
-                    // Match binary literal that starts with 0x
+                    // match binary literal that starts with 0x
                     if s == "0" && chars.peek() == Some(&'x') {
                         chars.next();
                         let s2 = peeking_next_take_while(chars, |ch, next_ch| {
@@ -1213,34 +1228,51 @@ impl<'a> Tokenizer<'a> {
                         return Ok(Some(Token::HexStringLiteral(s2)));
                     }
 
-                    // Match fractional part after a dot
+                    // match one period
                     if let Some('.') = chars.peek() {
                         s.push('.');
                         chars.next();
                     }
 
-                    // Consume fractional digits
+                    // If the dialect supports identifiers that start with a numeric prefix
+                    // and we have now consumed a dot, check if the previous token was a Word.
+                    // If so, what follows is definitely not part of a decimal number and
+                    // we should yield the dot as a dedicated token so compound identifiers
+                    // starting with digits can be parsed correctly.
+                    if s == "." && self.dialect.supports_numeric_prefix() {
+                        if let Some(Token::Word(_)) = prev_token {
+                            return Ok(Some(Token::Period));
+                        }
+                    }
+
+                    // Consume fractional digits.
                     s += &peeking_next_take_while(chars, |ch, next_ch| {
                         ch.is_ascii_digit() || is_number_separator(ch, next_ch)
                     });
 
-                    // Parse exponent part (e.g., e+10 or E-5)
+                    // No fraction -> Token::Period
+                    if s == "." {
+                        return Ok(Some(Token::Period));
+                    }
+
+                    // Parse exponent as number
                     let mut exponent_part = String::new();
                     if chars.peek() == Some(&'e') || chars.peek() == Some(&'E') {
                         let mut char_clone = chars.peekable.clone();
-                        exponent_part.push(char_clone.next().unwrap()); // consume 'e' or 'E'
+                        exponent_part.push(char_clone.next().unwrap());
 
                         // Optional sign
-                        if let Some(&c) = char_clone.peek() {
-                            if c == '+' || c == '-' {
+                        match char_clone.peek() {
+                            Some(&c) if matches!(c, '+' | '-') => {
                                 exponent_part.push(c);
                                 char_clone.next();
                             }
+                            _ => (),
                         }
 
-                        // Parse digits after the exponent
-                        if let Some(&c) = char_clone.peek() {
-                            if c.is_ascii_digit() {
+                        match char_clone.peek() {
+                            // Definitely an exponent, get original iterator up to speed and use it
+                            Some(&c) if c.is_ascii_digit() => {
                                 for _ in 0..exponent_part.len() {
                                     chars.next();
                                 }
@@ -1248,6 +1280,8 @@ impl<'a> Tokenizer<'a> {
                                     &peeking_take_while(chars, |ch| ch.is_ascii_digit());
                                 s += exponent_part.as_str();
                             }
+                            // Not an exponent, discard the work done
+                            _ => (),
                         }
                     }
 
@@ -1256,7 +1290,8 @@ impl<'a> Tokenizer<'a> {
                     // be tokenized as a word.
                     if self.dialect.supports_numeric_prefix() {
                         if exponent_part.is_empty() {
-                            // Handle as potential word if no exponent part
+                            // If it is not a number with an exponent, it may be
+                            // an identifier starting with digits.
                             let word =
                                 peeking_take_while(chars, |ch| self.dialect.is_identifier_part(ch));
 
@@ -1265,90 +1300,19 @@ impl<'a> Tokenizer<'a> {
                                 return Ok(Some(Token::make_word(s.as_str(), None)));
                             }
                         } else if prev_token == Some(&Token::Period) {
-                            // Handle as word if it follows a period
+                            // If the previous token was a period, thus not belonging to a number,
+                            // the value we have is part of an identifier.
                             return Ok(Some(Token::make_word(s.as_str(), None)));
                         }
                     }
 
-                    // Handle "L" suffix for long numbers
                     let long = if chars.peek() == Some(&'L') {
                         chars.next();
                         true
                     } else {
                         false
                     };
-
-                    // Return the final token for the number
                     Ok(Some(Token::Number(s, long)))
-                }
-
-                // Period (`.`) handling
-                '.' => {
-                    chars.next(); // consume the dot
-
-                    match chars.peek() {
-                        // Handle "._" case as a period followed by identifier
-                        // if the last token was a word
-                        Some('_') if matches!(prev_token, Some(Token::Word(_))) => {
-                            Ok(Some(Token::Period))
-                        }
-                        Some('_') => {
-                            self.tokenizer_error(
-                                chars.location(),
-                                "Unexpected underscore here".to_string(),
-                            )
-                        }
-                        Some(ch)
-                            //  Hive and mysql dialects allow numeric prefixes for identifers
-                            if ch.is_ascii_digit()
-                                && self.dialect.supports_numeric_prefix()
-                                && matches!(prev_token, Some(Token::Word(_))) =>
-                        {
-                            Ok(Some(Token::Period))
-                        }
-                        Some(ch) if ch.is_ascii_digit() => {
-                            // Handle numbers starting with a dot (e.g., ".123")
-                            let mut s = String::from(".");
-                            let is_number_separator = |ch: char, next_char: Option<char>| {
-                                self.dialect.supports_numeric_literal_underscores()
-                                    && ch == '_'
-                                    && next_char.is_some_and(|c| c.is_ascii_digit())
-                            };
-
-                            s += &peeking_next_take_while(chars, |ch, next_ch| {
-                                ch.is_ascii_digit() || is_number_separator(ch, next_ch)
-                            });
-
-                            // Handle exponent part
-                            if matches!(chars.peek(), Some('e' | 'E')) {
-                                let mut exp = String::new();
-                                exp.push(chars.next().unwrap());
-
-                                if matches!(chars.peek(), Some('+' | '-')) {
-                                    exp.push(chars.next().unwrap());
-                                }
-
-                                if matches!(chars.peek(), Some(c) if c.is_ascii_digit()) {
-                                    exp += &peeking_take_while(chars, |c| c.is_ascii_digit());
-                                    s += &exp;
-                                }
-                            }
-
-                            // Handle "L" suffix for long numbers
-                            let long = if chars.peek() == Some(&'L') {
-                                chars.next();
-                                true
-                            } else {
-                                false
-                            };
-
-                            Ok(Some(Token::Number(s, long)))
-                        }
-                        _ => {
-                            // Just a plain period
-                            Ok(Some(Token::Period))
-                        }
-                    }
                 }
                 // punctuation
                 '(' => self.consume_and_return(chars, Token::LParen),
@@ -2485,42 +2449,6 @@ mod tests {
         ];
 
         compare(expected, tokens);
-    }
-
-    #[test]
-    fn tokenize_period_underscore() {
-        let sql = String::from("SELECT table._col");
-        // a dialect that supports underscores in numeric literals
-        let dialect = PostgreSqlDialect {};
-        let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
-
-        let expected = vec![
-            Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
-            Token::Word(Word {
-                value: "table".to_string(),
-                quote_style: None,
-                keyword: Keyword::TABLE,
-            }),
-            Token::Period,
-            Token::Word(Word {
-                value: "_col".to_string(),
-                quote_style: None,
-                keyword: Keyword::NoKeyword,
-            }),
-        ];
-
-        compare(expected, tokens);
-
-        let sql = String::from("SELECT ._123");
-        if let Ok(tokens) = Tokenizer::new(&dialect, &sql).tokenize() {
-            panic!("Tokenizer should have failed on {sql}, but it succeeded with {tokens:?}");
-        }
-
-        let sql = String::from("SELECT ._abc");
-        if let Ok(tokens) = Tokenizer::new(&dialect, &sql).tokenize() {
-            panic!("Tokenizer should have failed on {sql}, but it succeeded with {tokens:?}");
-        }
     }
 
     #[test]
@@ -4105,5 +4033,41 @@ mod tests {
                 Token::make_word("1two3", None),
             ],
         );
+    }
+
+    #[test]
+    fn tokenize_period_underscore() {
+        let sql = String::from("SELECT table._col");
+        // a dialect that supports underscores in numeric literals
+        let dialect = PostgreSqlDialect {};
+        let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
+
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Word(Word {
+                value: "table".to_string(),
+                quote_style: None,
+                keyword: Keyword::TABLE,
+            }),
+            Token::Period,
+            Token::Word(Word {
+                value: "_col".to_string(),
+                quote_style: None,
+                keyword: Keyword::NoKeyword,
+            }),
+        ];
+
+        compare(expected, tokens);
+
+        let sql = String::from("SELECT ._123");
+        if let Ok(tokens) = Tokenizer::new(&dialect, &sql).tokenize() {
+            panic!("Tokenizer should have failed on {sql}, but it succeeded with {tokens:?}");
+        }
+
+        let sql = String::from("SELECT ._abc");
+        if let Ok(tokens) = Tokenizer::new(&dialect, &sql).tokenize() {
+            panic!("Tokenizer should have failed on {sql}, but it succeeded with {tokens:?}");
+        }
     }
 }

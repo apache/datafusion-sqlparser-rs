@@ -4207,6 +4207,28 @@ impl fmt::Display for RaisErrorOption {
 }
 
 impl fmt::Display for Statement {
+    /// Formats a SQL statement with support for pretty printing.
+    ///
+    /// When using the alternate flag (`{:#}`), the statement will be formatted with proper
+    /// indentation and line breaks. For example:
+    ///
+    /// ```
+    /// # use sqlparser::dialect::GenericDialect;
+    /// # use sqlparser::parser::Parser;
+    /// let sql = "SELECT a, b FROM table_1";
+    /// let ast = Parser::parse_sql(&GenericDialect, sql).unwrap();
+    ///
+    /// // Regular formatting
+    /// assert_eq!(format!("{}", ast[0]), "SELECT a, b FROM table_1");
+    ///
+    /// // Pretty printing
+    /// assert_eq!(format!("{:#}", ast[0]),
+    /// r#"SELECT
+    ///   a,
+    ///   b
+    /// FROM
+    ///   table_1"#);
+    /// ```
     // Clippy thinks this function is too complicated, but it is painful to
     // split up without extracting structs for each `Statement` variant.
     #[allow(clippy::cognitive_complexity)]

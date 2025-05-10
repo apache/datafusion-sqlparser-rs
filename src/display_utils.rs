@@ -1,3 +1,9 @@
+//! Utilities for formatting SQL AST nodes with pretty printing support.
+//!
+//! The module provides formatters that implement the `Display` trait with support
+//! for both regular (`{}`) and pretty (`{:#}`) formatting modes. Pretty printing
+//! adds proper indentation and line breaks to make SQL statements more readable.
+
 use core::fmt::{self, Display, Write};
 
 /// A wrapper around a value that adds an indent to the value when displayed with {:#}.

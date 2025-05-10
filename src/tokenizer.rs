@@ -1191,6 +1191,22 @@ impl<'a> Tokenizer<'a> {
                 }
                 // numbers and period
                 '0'..='9' | '.' => {
+                    // special case where if ._ is encountered after a word then that word
+                    // is a table and the _ is the start of the col name.
+                    // if the prev token is not a word, then this is not a valid sql
+                    // word or number.
+                    if ch == '.' && chars.peekable.clone().nth(1) == Some('_') {
+                        if let Some(Token::Word(_)) = prev_token {
+                            chars.next();
+                            return Ok(Some(Token::Period));
+                        }
+
+                        return self.tokenizer_error(
+                            chars.location(),
+                            "Unexpected character '_'".to_string(),
+                        );
+                    }
+
                     // Some dialects support underscore as number separator
                     // There can only be one at a time and it must be followed by another digit
                     let is_number_separator = |ch: char, next_char: Option<char>| {
@@ -4017,5 +4033,41 @@ mod tests {
                 Token::make_word("1two3", None),
             ],
         );
+    }
+
+    #[test]
+    fn tokenize_period_underscore() {
+        let sql = String::from("SELECT table._col");
+        // a dialect that supports underscores in numeric literals
+        let dialect = PostgreSqlDialect {};
+        let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
+
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Word(Word {
+                value: "table".to_string(),
+                quote_style: None,
+                keyword: Keyword::TABLE,
+            }),
+            Token::Period,
+            Token::Word(Word {
+                value: "_col".to_string(),
+                quote_style: None,
+                keyword: Keyword::NoKeyword,
+            }),
+        ];
+
+        compare(expected, tokens);
+
+        let sql = String::from("SELECT ._123");
+        if let Ok(tokens) = Tokenizer::new(&dialect, &sql).tokenize() {
+            panic!("Tokenizer should have failed on {sql}, but it succeeded with {tokens:?}");
+        }
+
+        let sql = String::from("SELECT ._abc");
+        if let Ok(tokens) = Tokenizer::new(&dialect, &sql).tokenize() {
+            panic!("Tokenizer should have failed on {sql}, but it succeeded with {tokens:?}");
+        }
     }
 }

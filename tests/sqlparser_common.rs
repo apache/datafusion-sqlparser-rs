@@ -9331,6 +9331,39 @@ fn parse_grant() {
     verified_stmt("GRANT USAGE ON WAREHOUSE wh1 TO ROLE role1");
     verified_stmt("GRANT OWNERSHIP ON INTEGRATION int1 TO ROLE role1");
     verified_stmt("GRANT SELECT ON VIEW view1 TO ROLE role1");
+    verified_stmt("GRANT EXEC ON my_sp TO runner");
+    verified_stmt("GRANT UPDATE ON my_table TO updater_role AS dbo");
+
+    all_dialects_where(|d| d.identifier_quote_style("none") == Some('['))
+        .verified_stmt("GRANT SELECT ON [my_table] TO [public]");
+}
+
+#[test]
+fn parse_deny() {
+    let sql = "DENY INSERT, DELETE ON users TO analyst CASCADE AS admin";
+    match verified_stmt(sql) {
+        Statement::Deny(deny) => {
+            assert_eq!(
+                Privileges::Actions(vec![Action::Insert { columns: None }, Action::Delete]),
+                deny.privileges
+            );
+            assert_eq!(
+                &GrantObjects::Tables(vec![ObjectName::from(vec![Ident::new("users")])]),
+                &deny.objects
+            );
+            assert_eq_vec(&["analyst"], &deny.grantees);
+            assert_eq!(Some(CascadeOption::Cascade), deny.cascade);
+            assert_eq!(Some(Ident::from("admin")), deny.granted_by);
+        }
+        _ => unreachable!(),
+    }
+
+    verified_stmt("DENY SELECT, INSERT, UPDATE, DELETE ON db1.sc1 TO role1, role2");
+    verified_stmt("DENY ALL ON db1.sc1 TO role1");
+    verified_stmt("DENY EXEC ON my_sp TO runner");
+
+    all_dialects_where(|d| d.identifier_quote_style("none") == Some('['))
+        .verified_stmt("DENY SELECT ON [my_table] TO [public]");
 }
 
 #[test]

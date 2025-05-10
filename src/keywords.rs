@@ -278,6 +278,7 @@ define_keywords!(
     DELIMITER,
     DELTA,
     DENSE_RANK,
+    DENY,
     DEREF,
     DESC,
     DESCRIBE,

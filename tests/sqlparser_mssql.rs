@@ -2340,3 +2340,13 @@ fn parse_print() {
     let _ = ms().verified_stmt("PRINT N'Hello, ⛄️!'");
     let _ = ms().verified_stmt("PRINT @my_variable");
 }
+
+#[test]
+fn parse_mssql_grant() {
+    ms().verified_stmt("GRANT SELECT ON my_table TO public, db_admin");
+}
+
+#[test]
+fn parse_mssql_deny() {
+    ms().verified_stmt("DENY SELECT ON my_table TO public, db_admin");
+}

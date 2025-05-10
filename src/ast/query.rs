@@ -1405,7 +1405,6 @@ pub enum TableFactor {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-
 pub enum TableSampleKind {
     /// Table sample located before the table alias option
     BeforeTableAlias(Box<TableSample>),

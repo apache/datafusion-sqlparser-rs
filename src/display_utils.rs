@@ -1,4 +1,4 @@
-use std::fmt::{self, Display, Write};
+use core::fmt::{self, Display, Write};
 
 /// A wrapper around a value that adds an indent to the value when displayed with {:#}.
 pub(crate) struct Indent<T>(pub T);

@@ -979,7 +979,7 @@ impl fmt::Display for ReplaceSelectElement {
 
 impl fmt::Display for SelectItem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use std::fmt::Write;
+        use core::fmt::Write;
         match &self {
             SelectItem::UnnamedExpr(expr) => expr.fmt(f),
             SelectItem::ExprWithAlias { expr, alias } => {

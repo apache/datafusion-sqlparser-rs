@@ -40,7 +40,10 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::tokenizer::{Span, Token};
+use crate::{
+    display_utils::SpaceOrNewline,
+    tokenizer::{Span, Token},
+};
 use crate::{
     display_utils::{Indent, NewLine},
     keywords::Keyword,
@@ -631,7 +634,12 @@ pub struct CaseWhen {
 
 impl fmt::Display for CaseWhen {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "WHEN {} THEN {}", self.condition, self.result)
+        f.write_str("WHEN ")?;
+        self.condition.fmt(f)?;
+        f.write_str(" THEN")?;
+        SpaceOrNewline.fmt(f)?;
+        Indent(&self.result).fmt(f)?;
+        Ok(())
     }
 }
 
@@ -1671,17 +1679,23 @@ impl fmt::Display for Expr {
                 conditions,
                 else_result,
             } => {
-                write!(f, "CASE")?;
+                f.write_str("CASE")?;
                 if let Some(operand) = operand {
-                    write!(f, " {operand}")?;
+                    f.write_str(" ")?;
+                    operand.fmt(f)?;
                 }
                 for when in conditions {
-                    write!(f, " {when}")?;
+                    SpaceOrNewline.fmt(f)?;
+                    Indent(when).fmt(f)?;
                 }
                 if let Some(else_result) = else_result {
-                    write!(f, " ELSE {else_result}")?;
+                    SpaceOrNewline.fmt(f)?;
+                    Indent("ELSE").fmt(f)?;
+                    SpaceOrNewline.fmt(f)?;
+                    Indent(Indent(else_result)).fmt(f)?;
                 }
-                write!(f, " END")
+                SpaceOrNewline.fmt(f)?;
+                f.write_str("END")
             }
             Expr::Exists { subquery, negated } => write!(
                 f,

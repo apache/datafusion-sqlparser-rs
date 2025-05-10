@@ -112,3 +112,24 @@ FROM
   cte"#
     );
 }
+
+#[test]
+fn test_pretty_print_case_when() {
+    let sql = "SELECT CASE WHEN x > 0 THEN 'positive' WHEN x < 0 THEN 'negative' ELSE 'zero' END FROM my_table";
+    let ast = Parser::parse_sql(&GenericDialect {}, sql).unwrap();
+    let pretty = format!("{:#}", ast[0]);
+    assert_eq!(
+        pretty,
+        r#"SELECT
+  CASE
+    WHEN x > 0 THEN
+      'positive'
+    WHEN x < 0 THEN
+      'negative'
+    ELSE
+      'zero'
+  END
+FROM
+  my_table"#
+    );
+}

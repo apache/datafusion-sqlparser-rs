@@ -64,6 +64,27 @@
 //! // The original SQL text can be generated from the AST
 //! assert_eq!(ast[0].to_string(), sql);
 //! ```
+//!
+//! # Pretty Printing
+//!
+//! SQL statements can be pretty-printed with proper indentation and line breaks using the alternate flag (`{:#}`):
+//!
+//! ```
+//! # use sqlparser::dialect::GenericDialect;
+//! # use sqlparser::parser::Parser;
+//! let sql = "SELECT a, b FROM table_1";
+//! let ast = Parser::parse_sql(&GenericDialect, sql).unwrap();
+//!
+//! // Pretty print with indentation and line breaks
+//! let pretty_sql = format!("{:#}", ast[0]);
+//! assert_eq!(pretty_sql, r#"
+//! SELECT
+//!   a,
+//!   b
+//! FROM
+//!   table_1
+//! "#.trim());
+//! ```
 //! [sqlparser crates.io page]: https://crates.io/crates/sqlparser
 //! [`Parser::parse_sql`]: crate::parser::Parser::parse_sql
 //! [`Parser::new`]: crate::parser::Parser::new
@@ -142,6 +163,7 @@ extern crate pretty_assertions;
 pub mod ast;
 #[macro_use]
 pub mod dialect;
+mod display_utils;
 pub mod keywords;
 pub mod parser;
 pub mod tokenizer;

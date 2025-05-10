@@ -40,8 +40,14 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::keywords::Keyword;
-use crate::tokenizer::{Span, Token};
+use crate::{
+    display_utils::SpaceOrNewline,
+    tokenizer::{Span, Token},
+};
+use crate::{
+    display_utils::{Indent, NewLine},
+    keywords::Keyword,
+};
 
 pub use self::data_type::{
     ArrayElemTypeDef, BinaryLength, CharLengthUnits, CharacterLength, DataType, EnumMember,
@@ -134,9 +140,9 @@ where
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut delim = "";
         for t in self.slice {
-            write!(f, "{delim}")?;
+            f.write_str(delim)?;
             delim = self.sep;
-            write!(f, "{t}")?;
+            t.fmt(f)?;
         }
         Ok(())
     }
@@ -628,7 +634,12 @@ pub struct CaseWhen {
 
 impl fmt::Display for CaseWhen {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "WHEN {} THEN {}", self.condition, self.result)
+        f.write_str("WHEN ")?;
+        self.condition.fmt(f)?;
+        f.write_str(" THEN")?;
+        SpaceOrNewline.fmt(f)?;
+        Indent(&self.result).fmt(f)?;
+        Ok(())
     }
 }
 
@@ -1662,23 +1673,29 @@ impl fmt::Display for Expr {
                 write!(f, "{data_type}")?;
                 write!(f, " {value}")
             }
-            Expr::Function(fun) => write!(f, "{fun}"),
+            Expr::Function(fun) => fun.fmt(f),
             Expr::Case {
                 operand,
                 conditions,
                 else_result,
             } => {
-                write!(f, "CASE")?;
+                f.write_str("CASE")?;
                 if let Some(operand) = operand {
-                    write!(f, " {operand}")?;
+                    f.write_str(" ")?;
+                    operand.fmt(f)?;
                 }
                 for when in conditions {
-                    write!(f, " {when}")?;
+                    SpaceOrNewline.fmt(f)?;
+                    Indent(when).fmt(f)?;
                 }
                 if let Some(else_result) = else_result {
-                    write!(f, " ELSE {else_result}")?;
+                    SpaceOrNewline.fmt(f)?;
+                    Indent("ELSE").fmt(f)?;
+                    SpaceOrNewline.fmt(f)?;
+                    Indent(Indent(else_result)).fmt(f)?;
                 }
-                write!(f, " END")
+                SpaceOrNewline.fmt(f)?;
+                f.write_str("END")
             }
             Expr::Exists { subquery, negated } => write!(
                 f,
@@ -1867,8 +1884,14 @@ pub enum WindowType {
 impl Display for WindowType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            WindowType::WindowSpec(spec) => write!(f, "({})", spec),
-            WindowType::NamedWindow(name) => write!(f, "{}", name),
+            WindowType::WindowSpec(spec) => {
+                f.write_str("(")?;
+                NewLine.fmt(f)?;
+                Indent(spec).fmt(f)?;
+                NewLine.fmt(f)?;
+                f.write_str(")")
+            }
+            WindowType::NamedWindow(name) => name.fmt(f),
         }
     }
 }
@@ -1896,14 +1919,19 @@ pub struct WindowSpec {
 
 impl fmt::Display for WindowSpec {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut delim = "";
+        let mut is_first = true;
         if let Some(window_name) = &self.window_name {
-            delim = " ";
+            if !is_first {
+                SpaceOrNewline.fmt(f)?;
+            }
+            is_first = false;
             write!(f, "{window_name}")?;
         }
         if !self.partition_by.is_empty() {
-            f.write_str(delim)?;
-            delim = " ";
+            if !is_first {
+                SpaceOrNewline.fmt(f)?;
+            }
+            is_first = false;
             write!(
                 f,
                 "PARTITION BY {}",
@@ -1911,12 +1939,16 @@ impl fmt::Display for WindowSpec {
             )?;
         }
         if !self.order_by.is_empty() {
-            f.write_str(delim)?;
-            delim = " ";
+            if !is_first {
+                SpaceOrNewline.fmt(f)?;
+            }
+            is_first = false;
             write!(f, "ORDER BY {}", display_comma_separated(&self.order_by))?;
         }
         if let Some(window_frame) = &self.window_frame {
-            f.write_str(delim)?;
+            if !is_first {
+                SpaceOrNewline.fmt(f)?;
+            }
             if let Some(end_bound) = &window_frame.end_bound {
                 write!(
                     f,
@@ -4204,6 +4236,28 @@ impl fmt::Display for RaisErrorOption {
 }
 
 impl fmt::Display for Statement {
+    /// Formats a SQL statement with support for pretty printing.
+    ///
+    /// When using the alternate flag (`{:#}`), the statement will be formatted with proper
+    /// indentation and line breaks. For example:
+    ///
+    /// ```
+    /// # use sqlparser::dialect::GenericDialect;
+    /// # use sqlparser::parser::Parser;
+    /// let sql = "SELECT a, b FROM table_1";
+    /// let ast = Parser::parse_sql(&GenericDialect, sql).unwrap();
+    ///
+    /// // Regular formatting
+    /// assert_eq!(format!("{}", ast[0]), "SELECT a, b FROM table_1");
+    ///
+    /// // Pretty printing
+    /// assert_eq!(format!("{:#}", ast[0]),
+    /// r#"SELECT
+    ///   a,
+    ///   b
+    /// FROM
+    ///   table_1"#);
+    /// ```
     // Clippy thinks this function is too complicated, but it is painful to
     // split up without extracting structs for each `Statement` variant.
     #[allow(clippy::cognitive_complexity)]
@@ -4219,7 +4273,8 @@ impl fmt::Display for Statement {
             } => {
                 write!(f, "FLUSH")?;
                 if let Some(location) = location {
-                    write!(f, " {location}")?;
+                    f.write_str(" ")?;
+                    location.fmt(f)?;
                 }
                 write!(f, " {object_type}")?;
 
@@ -4301,7 +4356,7 @@ impl fmt::Display for Statement {
 
                 write!(f, "{statement}")
             }
-            Statement::Query(s) => write!(f, "{s}"),
+            Statement::Query(s) => s.fmt(f),
             Statement::Declare { stmts } => {
                 write!(f, "DECLARE ")?;
                 write!(f, "{}", display_separated(stmts, "; "))
@@ -7056,7 +7111,8 @@ impl fmt::Display for Function {
         }
 
         if let Some(o) = &self.over {
-            write!(f, " OVER {o}")?;
+            f.write_str(" OVER ")?;
+            o.fmt(f)?;
         }
 
         if self.uses_odbc_syntax {

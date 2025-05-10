@@ -1,47 +1,50 @@
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 
+fn parse_and_format(sql: &str) -> String {
+    let ast = Parser::parse_sql(&GenericDialect {}, sql).unwrap();
+    format!("{:#}", ast[0])
+}
+
 #[test]
 fn test_pretty_print_select() {
-    let sql = "SELECT a, b, c FROM my_table WHERE x = 1 AND y = 2";
-    let ast = Parser::parse_sql(&GenericDialect {}, sql).unwrap();
-    let pretty = format!("{:#}", ast[0]);
     assert_eq!(
-        pretty,
-        r#"SELECT
+        parse_and_format("SELECT a, b, c FROM my_table WHERE x = 1 AND y = 2"),
+        r#"
+SELECT
   a,
   b,
   c
 FROM
   my_table
 WHERE
-  x = 1 AND y = 2"#
+  x = 1 AND y = 2
+"#
+        .trim()
     );
 }
 
 #[test]
 fn test_pretty_print_join() {
-    let sql = "SELECT a FROM table1 JOIN table2 ON table1.id = table2.id";
-    let ast = Parser::parse_sql(&GenericDialect {}, sql).unwrap();
-    let pretty = format!("{:#}", ast[0]);
     assert_eq!(
-        pretty,
-        r#"SELECT
+        parse_and_format("SELECT a FROM table1 JOIN table2 ON table1.id = table2.id"),
+        r#"
+SELECT
   a
 FROM
   table1
-  JOIN table2 ON table1.id = table2.id"#
+  JOIN table2 ON table1.id = table2.id
+"#
+        .trim()
     );
 }
 
 #[test]
 fn test_pretty_print_subquery() {
-    let sql = "SELECT * FROM (SELECT a, b FROM my_table) AS subquery";
-    let ast = Parser::parse_sql(&GenericDialect {}, sql).unwrap();
-    let pretty = format!("{:#}", ast[0]);
     assert_eq!(
-        pretty,
-        r#"SELECT
+        parse_and_format("SELECT * FROM (SELECT a, b FROM my_table) AS subquery"),
+        r#"
+SELECT
   *
 FROM
   (
@@ -50,18 +53,18 @@ FROM
       b
     FROM
       my_table
-  ) AS subquery"#
+  ) AS subquery
+"#
+        .trim()
     );
 }
 
 #[test]
 fn test_pretty_print_union() {
-    let sql = "SELECT a FROM table1 UNION SELECT b FROM table2";
-    let ast = Parser::parse_sql(&GenericDialect {}, sql).unwrap();
-    let pretty = format!("{:#}", ast[0]);
     assert_eq!(
-        pretty,
-        r#"SELECT
+        parse_and_format("SELECT a FROM table1 UNION SELECT b FROM table2"),
+        r#"
+SELECT
   a
 FROM
   table1
@@ -69,18 +72,18 @@ UNION
 SELECT
   b
 FROM
-  table2"#
+  table2
+"#
+        .trim()
     );
 }
 
 #[test]
 fn test_pretty_print_group_by() {
-    let sql = "SELECT a, COUNT(*) FROM my_table GROUP BY a HAVING COUNT(*) > 1";
-    let ast = Parser::parse_sql(&GenericDialect {}, sql).unwrap();
-    let pretty = format!("{:#}", ast[0]);
     assert_eq!(
-        pretty,
-        r#"SELECT
+        parse_and_format("SELECT a, COUNT(*) FROM my_table GROUP BY a HAVING COUNT(*) > 1"),
+        r#"
+SELECT
   a,
   COUNT(*)
 FROM
@@ -88,18 +91,18 @@ FROM
 GROUP BY
   a
 HAVING
-  COUNT(*) > 1"#
+  COUNT(*) > 1
+"#
+        .trim()
     );
 }
 
 #[test]
 fn test_pretty_print_cte() {
-    let sql = "WITH cte AS (SELECT a, b FROM my_table) SELECT * FROM cte";
-    let ast = Parser::parse_sql(&GenericDialect {}, sql).unwrap();
-    let pretty = format!("{:#}", ast[0]);
     assert_eq!(
-        pretty,
-        r#"WITH cte AS (
+        parse_and_format("WITH cte AS (SELECT a, b FROM my_table) SELECT * FROM cte"),
+        r#"
+WITH cte AS (
   SELECT
     a,
     b
@@ -109,18 +112,18 @@ fn test_pretty_print_cte() {
 SELECT
   *
 FROM
-  cte"#
+  cte
+"#
+        .trim()
     );
 }
 
 #[test]
 fn test_pretty_print_case_when() {
-    let sql = "SELECT CASE WHEN x > 0 THEN 'positive' WHEN x < 0 THEN 'negative' ELSE 'zero' END FROM my_table";
-    let ast = Parser::parse_sql(&GenericDialect {}, sql).unwrap();
-    let pretty = format!("{:#}", ast[0]);
     assert_eq!(
-        pretty,
-        r#"SELECT
+        parse_and_format("SELECT CASE WHEN x > 0 THEN 'positive' WHEN x < 0 THEN 'negative' ELSE 'zero' END FROM my_table"),
+        r#"
+SELECT
   CASE
     WHEN x > 0 THEN
       'positive'
@@ -130,18 +133,17 @@ fn test_pretty_print_case_when() {
       'zero'
   END
 FROM
-  my_table"#
+  my_table
+"#.trim()
     );
 }
 
 #[test]
 fn test_pretty_print_window_function() {
-    let sql = "SELECT id, value, ROW_NUMBER() OVER (PARTITION BY category ORDER BY value DESC) as rank FROM my_table";
-    let ast = Parser::parse_sql(&GenericDialect {}, sql).unwrap();
-    let pretty = format!("{:#}", ast[0]);
     assert_eq!(
-        pretty,
-        r#"SELECT
+        parse_and_format("SELECT id, value, ROW_NUMBER() OVER (PARTITION BY category ORDER BY value DESC) as rank FROM my_table"),
+        r#"
+SELECT
   id,
   value,
   ROW_NUMBER() OVER (
@@ -149,6 +151,7 @@ fn test_pretty_print_window_function() {
     ORDER BY value DESC
   ) AS rank
 FROM
-  my_table"#
+  my_table
+"#.trim()
     );
 }

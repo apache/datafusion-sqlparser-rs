@@ -1673,7 +1673,7 @@ impl fmt::Display for Expr {
                 write!(f, "{data_type}")?;
                 write!(f, " {value}")
             }
-            Expr::Function(fun) => write!(f, "{fun}"),
+            Expr::Function(fun) => fun.fmt(f),
             Expr::Case {
                 operand,
                 conditions,
@@ -1884,8 +1884,14 @@ pub enum WindowType {
 impl Display for WindowType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            WindowType::WindowSpec(spec) => write!(f, "({})", spec),
-            WindowType::NamedWindow(name) => write!(f, "{}", name),
+            WindowType::WindowSpec(spec) => {
+                f.write_str("(")?;
+                NewLine.fmt(f)?;
+                Indent(spec).fmt(f)?;
+                NewLine.fmt(f)?;
+                f.write_str(")")
+            }
+            WindowType::NamedWindow(name) => name.fmt(f),
         }
     }
 }
@@ -1913,14 +1919,19 @@ pub struct WindowSpec {
 
 impl fmt::Display for WindowSpec {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut delim = "";
+        let mut is_first = true;
         if let Some(window_name) = &self.window_name {
-            delim = " ";
+            if !is_first {
+                SpaceOrNewline.fmt(f)?;
+            }
+            is_first = false;
             write!(f, "{window_name}")?;
         }
         if !self.partition_by.is_empty() {
-            f.write_str(delim)?;
-            delim = " ";
+            if !is_first {
+                SpaceOrNewline.fmt(f)?;
+            }
+            is_first = false;
             write!(
                 f,
                 "PARTITION BY {}",
@@ -1928,12 +1939,16 @@ impl fmt::Display for WindowSpec {
             )?;
         }
         if !self.order_by.is_empty() {
-            f.write_str(delim)?;
-            delim = " ";
+            if !is_first {
+                SpaceOrNewline.fmt(f)?;
+            }
+            is_first = false;
             write!(f, "ORDER BY {}", display_comma_separated(&self.order_by))?;
         }
         if let Some(window_frame) = &self.window_frame {
-            f.write_str(delim)?;
+            if !is_first {
+                SpaceOrNewline.fmt(f)?;
+            }
             if let Some(end_bound) = &window_frame.end_bound {
                 write!(
                     f,
@@ -7096,7 +7111,8 @@ impl fmt::Display for Function {
         }
 
         if let Some(o) = &self.over {
-            write!(f, " OVER {o}")?;
+            f.write_str(" OVER ")?;
+            o.fmt(f)?;
         }
 
         if self.uses_odbc_syntax {

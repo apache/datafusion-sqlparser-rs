@@ -133,3 +133,22 @@ FROM
   my_table"#
     );
 }
+
+#[test]
+fn test_pretty_print_window_function() {
+    let sql = "SELECT id, value, ROW_NUMBER() OVER (PARTITION BY category ORDER BY value DESC) as rank FROM my_table";
+    let ast = Parser::parse_sql(&GenericDialect {}, sql).unwrap();
+    let pretty = format!("{:#}", ast[0]);
+    assert_eq!(
+        pretty,
+        r#"SELECT
+  id,
+  value,
+  ROW_NUMBER() OVER (
+    PARTITION BY category
+    ORDER BY value DESC
+  ) AS rank
+FROM
+  my_table"#
+    );
+}

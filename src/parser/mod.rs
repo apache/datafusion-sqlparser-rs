@@ -3471,7 +3471,7 @@ impl<'a> Parser<'a> {
                     right
                 };
 
-                if !matches!(
+                if !dialect_of!(self is PostgreSqlDialect) && !matches!(
                     op,
                     BinaryOperator::Gt
                         | BinaryOperator::Lt

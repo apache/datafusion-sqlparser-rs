@@ -39,6 +39,8 @@ use crate::ast::{
 use crate::keywords::Keyword;
 use crate::tokenizer::Token;
 
+/// ALTER TABLE operation REPLICA IDENTITY values
+/// See [Postgres ALTER TABLE docs](https://www.postgresql.org/docs/current/sql-altertable.html)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -232,6 +234,7 @@ pub enum AlterTableOperation {
     /// REPLICA IDENTITY { DEFAULT | USING INDEX index_name | FULL | NOTHING }
     ///
     /// Note: this is a PostgreSQL-specific operation.
+    /// Please refer to [PostgreSQL documentation](https://www.postgresql.org/docs/current/sql-altertable.html)
     ReplicaIdentity {
         identity: ReplicaIdentity,
     },

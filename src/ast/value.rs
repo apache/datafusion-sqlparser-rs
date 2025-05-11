@@ -474,7 +474,7 @@ impl fmt::Display for EscapeQuotedString<'_> {
                         }
                         _ => {
                             // The quote is not escaped.
-                            // Not calling .next(), so the quote at idx will be printed twice:
+                            // Including idx in the range, so the quote at idx will be printed twice:
                             // in this call to write_str() and in the next one.
                             f.write_str(&self.string[start_idx..=idx])?;
                             start_idx = idx;

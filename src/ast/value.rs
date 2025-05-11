@@ -456,30 +456,34 @@ impl fmt::Display for EscapeQuotedString<'_> {
         // | `"A\"B\"A"`    | default   | `DoubleQuotedString(String::from("A\"B\"A"))`      | `"A""B""A"`  |
         let quote = self.quote;
         let mut previous_char = char::default();
-        let mut peekable_chars = self.string.chars().peekable();
-        while let Some(&ch) = peekable_chars.peek() {
+        let mut start_idx = 0;
+        let mut peekable_chars = self.string.char_indices().peekable();
+        while let Some(&(idx, ch)) = peekable_chars.peek() {
             match ch {
                 char if char == quote => {
                     if previous_char == '\\' {
-                        write!(f, "{char}")?;
                         peekable_chars.next();
                         continue;
                     }
                     peekable_chars.next();
-                    if peekable_chars.peek().map(|c| *c == quote).unwrap_or(false) {
-                        write!(f, "{char}{char}")?;
-                        peekable_chars.next();
-                    } else {
-                        write!(f, "{char}{char}")?;
+                    match peekable_chars.peek() {
+                        Some((_, c)) if *c == quote => {
+                            peekable_chars.next();
+                        }
+                        _ => {
+                            // not calling .next(), so the quote at idx will be printed twice
+                            f.write_str(&self.string[start_idx..=idx])?;
+                            start_idx = idx;
+                        }
                     }
                 }
                 _ => {
-                    write!(f, "{ch}")?;
                     peekable_chars.next();
                 }
             }
             previous_char = ch;
         }
+        f.write_str(&self.string[start_idx..])?;
         Ok(())
     }
 }

@@ -462,16 +462,20 @@ impl fmt::Display for EscapeQuotedString<'_> {
             match ch {
                 char if char == quote => {
                     if previous_char == '\\' {
+                        // the quote is already escaped with a backslash, skip
                         peekable_chars.next();
                         continue;
                     }
                     peekable_chars.next();
                     match peekable_chars.peek() {
                         Some((_, c)) if *c == quote => {
+                            // the quote is already escaped with another quote, skip
                             peekable_chars.next();
                         }
                         _ => {
-                            // not calling .next(), so the quote at idx will be printed twice
+                            // The quote is not escaped.
+                            // Not calling .next(), so the quote at idx will be printed twice:
+                            // in this call to write_str() and in the next one.
                             f.write_str(&self.string[start_idx..=idx])?;
                             start_idx = idx;
                         }

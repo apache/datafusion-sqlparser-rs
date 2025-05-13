@@ -13419,7 +13419,7 @@ impl<'a> Parser<'a> {
         let mut values = vec![];
         let mut grantee_type = GranteesType::None;
         loop {
-            grantee_type = if self.parse_keyword(Keyword::ROLE) {
+            let new_grantee_type = if self.parse_keyword(Keyword::ROLE) {
                 GranteesType::Role
             } else if self.parse_keyword(Keyword::USER) {
                 GranteesType::User
@@ -13427,21 +13427,27 @@ impl<'a> Parser<'a> {
                 GranteesType::Share
             } else if self.parse_keyword(Keyword::GROUP) {
                 GranteesType::Group
+            } else if self.parse_keyword(Keyword::PUBLIC) {
+                GranteesType::Public
             } else if self.parse_keywords(&[Keyword::DATABASE, Keyword::ROLE]) {
                 GranteesType::DatabaseRole
             } else if self.parse_keywords(&[Keyword::APPLICATION, Keyword::ROLE]) {
                 GranteesType::ApplicationRole
             } else if self.parse_keyword(Keyword::APPLICATION) {
                 GranteesType::Application
-            } else if self.peek_keyword(Keyword::PUBLIC) {
-                if dialect_of!(self is MsSqlDialect) {
-                    grantee_type
-                } else {
-                    GranteesType::Public
-                }
             } else {
-                grantee_type // keep from previous iteraton, if not specified
+                grantee_type.clone() // keep from previous iteraton, if not specified
             };
+
+            if self
+                .dialect
+                .get_reserved_grantees_types()
+                .contains(&new_grantee_type)
+            {
+                self.prev_token();
+            } else {
+                grantee_type = new_grantee_type;
+            }
 
             let grantee = if grantee_type == GranteesType::Public {
                 Grantee {

@@ -17,8 +17,8 @@
 
 use crate::ast::helpers::attached_token::AttachedToken;
 use crate::ast::{
-    BeginEndStatements, ConditionalStatementBlock, ConditionalStatements, IfStatement, Statement,
-    TriggerObject,
+    BeginEndStatements, ConditionalStatementBlock, ConditionalStatements, GranteesType,
+    IfStatement, Statement, TriggerObject,
 };
 use crate::dialect::Dialect;
 use crate::keywords::{self, Keyword};
@@ -121,6 +121,11 @@ impl Dialect for MsSqlDialect {
     /// See <https://learn.microsoft.com/en-us/sql/t-sql/queries/from-transact-sql>
     fn supports_object_name_double_dot_notation(&self) -> bool {
         true
+    }
+
+    /// See <https://learn.microsoft.com/en-us/sql/relational-databases/security/authentication-access/server-level-roles>
+    fn get_reserved_grantees_types(&self) -> &[GranteesType] {
+        &[GranteesType::Public]
     }
 
     fn is_column_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {

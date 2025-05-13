@@ -155,3 +155,17 @@ FROM
 "#.trim()
     );
 }
+
+#[test]
+fn test_pretty_print_multiline_string() {
+    assert_eq!(
+        prettify("SELECT 'multiline\nstring' AS str"),
+        r#"
+SELECT
+  'multiline
+string' AS str
+"#
+        .trim(),
+        "A  literal string with a newline should be kept as is. The contents of the string should not be indented."
+    );
+}

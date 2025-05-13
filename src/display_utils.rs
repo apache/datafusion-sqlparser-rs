@@ -31,13 +31,10 @@ where
     T: Write,
 {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        let mut first = true;
-        for line in s.split('\n') {
-            if !first {
-                write!(self.0, "\n{INDENT}")?;
-            }
-            self.0.write_str(line)?;
-            first = false;
+        self.0.write_str(s)?;
+        // Our NewLine and SpaceOrNewline utils always print individual newlines as a single-character string.
+        if s == "\n" {
+            self.0.write_str(INDENT)?;
         }
         Ok(())
     }
@@ -98,36 +95,24 @@ pub(crate) fn indented_list<T: fmt::Display>(f: &mut fmt::Formatter, slice: &[T]
 mod tests {
     use super::*;
 
-    struct DisplayCharByChar<T: Display>(T);
-
-    impl<T: Display> Display for DisplayCharByChar<T> {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            for c in self.0.to_string().chars() {
-                write!(f, "{}", c)?;
-            }
-            Ok(())
-        }
-    }
-
     #[test]
     fn test_indent() {
-        let original = "line 1\nline 2";
-        let indent = Indent(original);
+        struct TwoLines;
+
+        impl Display for TwoLines {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("line 1")?;
+                SpaceOrNewline.fmt(f)?;
+                f.write_str("line 2")
+            }
+        }
+
+        let indent = Indent(TwoLines);
         assert_eq!(
             indent.to_string(),
-            original,
+            TwoLines.to_string(),
             "Only the alternate form should be indented"
         );
-        let expected = "  line 1\n  line 2";
-        assert_eq!(format!("{:#}", indent), expected);
-        let display_char_by_char = DisplayCharByChar(original);
-        assert_eq!(format!("{:#}", Indent(display_char_by_char)), expected);
-    }
-
-    #[test]
-    fn test_space_or_newline() {
-        let space_or_newline = SpaceOrNewline;
-        assert_eq!(format!("{}", space_or_newline), " ");
-        assert_eq!(format!("{:#}", space_or_newline), "\n");
+        assert_eq!(format!("{:#}", indent), "  line 1\n  line 2");
     }
 }

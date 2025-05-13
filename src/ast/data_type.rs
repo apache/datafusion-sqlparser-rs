@@ -51,12 +51,12 @@ pub enum DataType {
     /// [MsSQL]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql?view=sql-server-ver16#c-create-a-multi-statement-table-valued-function
     Table(Option<Vec<ColumnDef>>),
     /// Table type with a name, e.g. CREATE FUNCTION RETURNS @result TABLE(...).
-    NamedTable(
+    NamedTable {
         /// Table name.
-        ObjectName,
+        name: ObjectName,
         /// Table columns.
-        Vec<ColumnDef>,
-    ),
+        columns: Vec<ColumnDef>,
+    },
     /// Fixed-length character type, e.g. CHARACTER(10).
     Character(Option<CharacterLength>),
     /// Fixed-length char type, e.g. CHAR(10).
@@ -732,8 +732,8 @@ impl fmt::Display for DataType {
                     write!(f, "TABLE")
                 }
             },
-            DataType::NamedTable(name, fields) => {
-                write!(f, "{} TABLE ({})", name, display_comma_separated(fields))
+            DataType::NamedTable { name, columns } => {
+                write!(f, "{} TABLE ({})", name, display_comma_separated(columns))
             }
             DataType::GeometricType(kind) => write!(f, "{}", kind),
         }

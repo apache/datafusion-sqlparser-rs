@@ -222,14 +222,27 @@ RETURNING
 }
 
 #[test]
-#[ignore = "https://github.com/apache/datafusion-sqlparser-rs/issues/1850"]
 fn test_pretty_print_delete() {
     assert_eq!(
-        prettify("DELETE FROM my_table WHERE x > 0"),
+        prettify("DELETE FROM my_table WHERE x > 0 RETURNING id, name"),
         r#"
-DELETE FROM my_table
+DELETE FROM
+  my_table
 WHERE
   x > 0
+RETURNING
+  id,
+  name
+"#
+        .trim()
+    );
+
+    assert_eq!(
+        prettify("DELETE table1, table2"),
+        r#"
+DELETE
+  table1,
+  table2
 "#
         .trim()
     );

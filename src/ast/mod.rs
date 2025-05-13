@@ -4640,8 +4640,8 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Delete(delete) => write!(f, "{delete}"),
-            Statement::Open(open) => write!(f, "{open}"),
+            Statement::Delete(delete) => delete.fmt(f),
+            Statement::Open(open) => open.fmt(f),
             Statement::Close { cursor } => {
                 write!(f, "CLOSE {cursor}")?;
 

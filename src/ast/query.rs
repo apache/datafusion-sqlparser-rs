@@ -2887,7 +2887,7 @@ impl fmt::Display for Values {
             exprs: &'a [Expr],
             explicit_row: bool,
         }
-        impl<'a> fmt::Display for DisplayRow<'a> {
+        impl fmt::Display for DisplayRow<'_> {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 let comma_separated = display_comma_separated(self.exprs);
                 if self.explicit_row {

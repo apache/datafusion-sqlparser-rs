@@ -203,10 +203,9 @@ FROM
 }
 
 #[test]
-#[ignore = "https://github.com/apache/datafusion-sqlparser-rs/issues/1850"]
 fn test_pretty_print_update() {
     assert_eq!(
-        prettify("UPDATE my_table SET a = 1, b = 2 WHERE x > 0"),
+        prettify("UPDATE my_table SET a = 1, b = 2 WHERE x > 0 RETURNING id, name"),
         r#"
 UPDATE my_table
 SET
@@ -214,6 +213,9 @@ SET
   b = 2
 WHERE
   x > 0
+RETURNING
+  id,
+  name
 "#
         .trim()
     );

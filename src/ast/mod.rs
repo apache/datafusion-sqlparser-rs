@@ -41,7 +41,7 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::{
-    display_utils::SpaceOrNewline,
+    display_utils::{indented_list, SpaceOrNewline},
     tokenizer::{Span, Token},
 };
 use crate::{
@@ -4606,25 +4606,37 @@ impl fmt::Display for Statement {
                 returning,
                 or,
             } => {
-                write!(f, "UPDATE ")?;
+                f.write_str("UPDATE ")?;
                 if let Some(or) = or {
-                    write!(f, "{or} ")?;
+                    or.fmt(f)?;
+                    f.write_str(" ")?;
                 }
-                write!(f, "{table}")?;
+                table.fmt(f)?;
                 if let Some(UpdateTableFromKind::BeforeSet(from)) = from {
-                    write!(f, " FROM {}", display_comma_separated(from))?;
+                    SpaceOrNewline.fmt(f)?;
+                    f.write_str("FROM")?;
+                    indented_list(f, from)?;
                 }
                 if !assignments.is_empty() {
-                    write!(f, " SET {}", display_comma_separated(assignments))?;
+                    SpaceOrNewline.fmt(f)?;
+                    f.write_str("SET")?;
+                    indented_list(f, assignments)?;
                 }
                 if let Some(UpdateTableFromKind::AfterSet(from)) = from {
-                    write!(f, " FROM {}", display_comma_separated(from))?;
+                    SpaceOrNewline.fmt(f)?;
+                    f.write_str("FROM")?;
+                    indented_list(f, from)?;
                 }
                 if let Some(selection) = selection {
-                    write!(f, " WHERE {selection}")?;
+                    SpaceOrNewline.fmt(f)?;
+                    f.write_str("WHERE")?;
+                    SpaceOrNewline.fmt(f)?;
+                    Indent(selection).fmt(f)?;
                 }
                 if let Some(returning) = returning {
-                    write!(f, " RETURNING {}", display_comma_separated(returning))?;
+                    SpaceOrNewline.fmt(f)?;
+                    f.write_str("RETURNING")?;
+                    indented_list(f, returning)?;
                 }
                 Ok(())
             }

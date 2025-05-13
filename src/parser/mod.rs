@@ -5238,10 +5238,10 @@ impl<'a> Parser<'a> {
                 )?,
             };
 
-            Ok(DataType::NamedTable(
-                ObjectName(vec![ObjectNamePart::Identifier(return_table_name)]),
-                table_column_defs,
-            ))
+            Ok(DataType::NamedTable {
+                name: ObjectName(vec![ObjectNamePart::Identifier(return_table_name)]),
+                columns: table_column_defs,
+            })
         })?;
 
         let return_type = if return_table.is_some() {

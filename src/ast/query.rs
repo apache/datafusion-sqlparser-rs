@@ -27,6 +27,7 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::{
     ast::*,
+    display_utils::{indented_list, SpaceOrNewline},
     tokenizer::{Token, TokenWithSpan},
 };
 
@@ -70,33 +71,41 @@ pub struct Query {
 impl fmt::Display for Query {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(ref with) = self.with {
-            write!(f, "{with} ")?;
+            with.fmt(f)?;
+            SpaceOrNewline.fmt(f)?;
         }
-        write!(f, "{}", self.body)?;
+        self.body.fmt(f)?;
         if let Some(ref order_by) = self.order_by {
-            write!(f, " {order_by}")?;
+            f.write_str(" ")?;
+            order_by.fmt(f)?;
         }
 
         if let Some(ref limit_clause) = self.limit_clause {
             limit_clause.fmt(f)?;
         }
         if let Some(ref settings) = self.settings {
-            write!(f, " SETTINGS {}", display_comma_separated(settings))?;
+            f.write_str(" SETTINGS ")?;
+            display_comma_separated(settings).fmt(f)?;
         }
         if let Some(ref fetch) = self.fetch {
-            write!(f, " {fetch}")?;
+            f.write_str(" ")?;
+            fetch.fmt(f)?;
         }
         if !self.locks.is_empty() {
-            write!(f, " {}", display_separated(&self.locks, " "))?;
+            f.write_str(" ")?;
+            display_separated(&self.locks, " ").fmt(f)?;
         }
         if let Some(ref for_clause) = self.for_clause {
-            write!(f, " {}", for_clause)?;
+            f.write_str(" ")?;
+            for_clause.fmt(f)?;
         }
         if let Some(ref format) = self.format_clause {
-            write!(f, " {}", format)?;
+            f.write_str(" ")?;
+            format.fmt(f)?;
         }
         for pipe_operator in &self.pipe_operators {
-            write!(f, " |> {}", pipe_operator)?;
+            f.write_str(" |> ")?;
+            pipe_operator.fmt(f)?;
         }
         Ok(())
     }
@@ -169,29 +178,39 @@ impl SetExpr {
 impl fmt::Display for SetExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            SetExpr::Select(s) => write!(f, "{s}"),
-            SetExpr::Query(q) => write!(f, "({q})"),
-            SetExpr::Values(v) => write!(f, "{v}"),
-            SetExpr::Insert(v) => write!(f, "{v}"),
-            SetExpr::Update(v) => write!(f, "{v}"),
-            SetExpr::Delete(v) => write!(f, "{v}"),
-            SetExpr::Table(t) => write!(f, "{t}"),
+            SetExpr::Select(s) => s.fmt(f),
+            SetExpr::Query(q) => {
+                f.write_str("(")?;
+                q.fmt(f)?;
+                f.write_str(")")
+            }
+            SetExpr::Values(v) => v.fmt(f),
+            SetExpr::Insert(v) => v.fmt(f),
+            SetExpr::Update(v) => v.fmt(f),
+            SetExpr::Delete(v) => v.fmt(f),
+            SetExpr::Table(t) => t.fmt(f),
             SetExpr::SetOperation {
                 left,
                 right,
                 op,
                 set_quantifier,
             } => {
-                write!(f, "{left} {op}")?;
+                left.fmt(f)?;
+                SpaceOrNewline.fmt(f)?;
+                op.fmt(f)?;
                 match set_quantifier {
                     SetQuantifier::All
                     | SetQuantifier::Distinct
                     | SetQuantifier::ByName
                     | SetQuantifier::AllByName
-                    | SetQuantifier::DistinctByName => write!(f, " {set_quantifier}")?,
-                    SetQuantifier::None => write!(f, "{set_quantifier}")?,
+                    | SetQuantifier::DistinctByName => {
+                        f.write_str(" ")?;
+                        set_quantifier.fmt(f)?;
+                    }
+                    SetQuantifier::None => {}
                 }
-                write!(f, " {right}")?;
+                SpaceOrNewline.fmt(f)?;
+                right.fmt(f)?;
                 Ok(())
             }
         }
@@ -242,7 +261,7 @@ impl fmt::Display for SetQuantifier {
             SetQuantifier::ByName => write!(f, "BY NAME"),
             SetQuantifier::AllByName => write!(f, "ALL BY NAME"),
             SetQuantifier::DistinctByName => write!(f, "DISTINCT BY NAME"),
-            SetQuantifier::None => write!(f, ""),
+            SetQuantifier::None => Ok(()),
         }
     }
 }
@@ -357,90 +376,122 @@ impl fmt::Display for Select {
         }
 
         if let Some(value_table_mode) = self.value_table_mode {
-            write!(f, " {value_table_mode}")?;
+            f.write_str(" ")?;
+            value_table_mode.fmt(f)?;
         }
 
         if let Some(ref top) = self.top {
             if self.top_before_distinct {
-                write!(f, " {top}")?;
+                f.write_str(" ")?;
+                top.fmt(f)?;
             }
         }
         if let Some(ref distinct) = self.distinct {
-            write!(f, " {distinct}")?;
+            f.write_str(" ")?;
+            distinct.fmt(f)?;
         }
         if let Some(ref top) = self.top {
             if !self.top_before_distinct {
-                write!(f, " {top}")?;
+                f.write_str(" ")?;
+                top.fmt(f)?;
             }
         }
 
         if !self.projection.is_empty() {
-            write!(f, " {}", display_comma_separated(&self.projection))?;
+            indented_list(f, &self.projection)?;
         }
 
         if let Some(ref into) = self.into {
-            write!(f, " {into}")?;
+            f.write_str(" ")?;
+            into.fmt(f)?;
         }
 
         if self.flavor == SelectFlavor::Standard && !self.from.is_empty() {
-            write!(f, " FROM {}", display_comma_separated(&self.from))?;
+            SpaceOrNewline.fmt(f)?;
+            f.write_str("FROM")?;
+            indented_list(f, &self.from)?;
         }
         if !self.lateral_views.is_empty() {
             for lv in &self.lateral_views {
-                write!(f, "{lv}")?;
+                lv.fmt(f)?;
             }
         }
         if let Some(ref prewhere) = self.prewhere {
-            write!(f, " PREWHERE {prewhere}")?;
+            f.write_str(" PREWHERE ")?;
+            prewhere.fmt(f)?;
         }
         if let Some(ref selection) = self.selection {
-            write!(f, " WHERE {selection}")?;
+            SpaceOrNewline.fmt(f)?;
+            f.write_str("WHERE")?;
+            SpaceOrNewline.fmt(f)?;
+            Indent(selection).fmt(f)?;
         }
         match &self.group_by {
-            GroupByExpr::All(_) => write!(f, " {}", self.group_by)?,
+            GroupByExpr::All(_) => {
+                SpaceOrNewline.fmt(f)?;
+                self.group_by.fmt(f)?;
+            }
             GroupByExpr::Expressions(exprs, _) => {
                 if !exprs.is_empty() {
-                    write!(f, " {}", self.group_by)?
+                    SpaceOrNewline.fmt(f)?;
+                    self.group_by.fmt(f)?;
                 }
             }
         }
         if !self.cluster_by.is_empty() {
-            write!(
-                f,
-                " CLUSTER BY {}",
-                display_comma_separated(&self.cluster_by)
-            )?;
+            SpaceOrNewline.fmt(f)?;
+            f.write_str("CLUSTER BY")?;
+            SpaceOrNewline.fmt(f)?;
+            Indent(display_comma_separated(&self.cluster_by)).fmt(f)?;
         }
         if !self.distribute_by.is_empty() {
-            write!(
-                f,
-                " DISTRIBUTE BY {}",
-                display_comma_separated(&self.distribute_by)
-            )?;
+            SpaceOrNewline.fmt(f)?;
+            f.write_str("DISTRIBUTE BY")?;
+            SpaceOrNewline.fmt(f)?;
+            display_comma_separated(&self.distribute_by).fmt(f)?;
         }
         if !self.sort_by.is_empty() {
-            write!(f, " SORT BY {}", display_comma_separated(&self.sort_by))?;
+            SpaceOrNewline.fmt(f)?;
+            f.write_str("SORT BY")?;
+            SpaceOrNewline.fmt(f)?;
+            Indent(display_comma_separated(&self.sort_by)).fmt(f)?;
         }
         if let Some(ref having) = self.having {
-            write!(f, " HAVING {having}")?;
+            SpaceOrNewline.fmt(f)?;
+            f.write_str("HAVING")?;
+            SpaceOrNewline.fmt(f)?;
+            Indent(having).fmt(f)?;
         }
         if self.window_before_qualify {
             if !self.named_window.is_empty() {
-                write!(f, " WINDOW {}", display_comma_separated(&self.named_window))?;
+                SpaceOrNewline.fmt(f)?;
+                f.write_str("WINDOW")?;
+                SpaceOrNewline.fmt(f)?;
+                display_comma_separated(&self.named_window).fmt(f)?;
             }
             if let Some(ref qualify) = self.qualify {
-                write!(f, " QUALIFY {qualify}")?;
+                SpaceOrNewline.fmt(f)?;
+                f.write_str("QUALIFY")?;
+                SpaceOrNewline.fmt(f)?;
+                qualify.fmt(f)?;
             }
         } else {
             if let Some(ref qualify) = self.qualify {
-                write!(f, " QUALIFY {qualify}")?;
+                SpaceOrNewline.fmt(f)?;
+                f.write_str("QUALIFY")?;
+                SpaceOrNewline.fmt(f)?;
+                qualify.fmt(f)?;
             }
             if !self.named_window.is_empty() {
-                write!(f, " WINDOW {}", display_comma_separated(&self.named_window))?;
+                SpaceOrNewline.fmt(f)?;
+                f.write_str("WINDOW")?;
+                SpaceOrNewline.fmt(f)?;
+                display_comma_separated(&self.named_window).fmt(f)?;
             }
         }
         if let Some(ref connect_by) = self.connect_by {
-            write!(f, " {connect_by}")?;
+            SpaceOrNewline.fmt(f)?;
+            connect_by.fmt(f)?;
         }
         Ok(())
     }
@@ -546,12 +597,12 @@ pub struct With {
 
 impl fmt::Display for With {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "WITH {}{}",
-            if self.recursive { "RECURSIVE " } else { "" },
-            display_comma_separated(&self.cte_tables)
-        )
+        f.write_str("WITH ")?;
+        if self.recursive {
+            f.write_str("RECURSIVE ")?;
+        }
+        display_comma_separated(&self.cte_tables).fmt(f)?;
+        Ok(())
     }
 }
 
@@ -598,8 +649,24 @@ pub struct Cte {
 impl fmt::Display for Cte {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.materialized.as_ref() {
-            None => write!(f, "{} AS ({})", self.alias, self.query)?,
-            Some(materialized) => write!(f, "{} AS {materialized} ({})", self.alias, self.query)?,
+            None => {
+                self.alias.fmt(f)?;
+                f.write_str(" AS (")?;
+                NewLine.fmt(f)?;
+                Indent(&self.query).fmt(f)?;
+                NewLine.fmt(f)?;
+                f.write_str(")")?;
+            }
+            Some(materialized) => {
+                self.alias.fmt(f)?;
+                f.write_str(" AS ")?;
+                materialized.fmt(f)?;
+                f.write_str(" (")?;
+                NewLine.fmt(f)?;
+                Indent(&self.query).fmt(f)?;
+                NewLine.fmt(f)?;
+                f.write_str(")")?;
+            }
         };
         if let Some(ref fr) = self.from {
             write!(f, " FROM {fr}")?;
@@ -912,18 +979,21 @@ impl fmt::Display for ReplaceSelectElement {
 
 impl fmt::Display for SelectItem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use core::fmt::Write;
         match &self {
-            SelectItem::UnnamedExpr(expr) => write!(f, "{expr}"),
-            SelectItem::ExprWithAlias { expr, alias } => write!(f, "{expr} AS {alias}"),
+            SelectItem::UnnamedExpr(expr) => expr.fmt(f),
+            SelectItem::ExprWithAlias { expr, alias } => {
+                expr.fmt(f)?;
+                f.write_str(" AS ")?;
+                alias.fmt(f)
+            }
             SelectItem::QualifiedWildcard(kind, additional_options) => {
-                write!(f, "{kind}")?;
-                write!(f, "{additional_options}")?;
-                Ok(())
+                kind.fmt(f)?;
+                additional_options.fmt(f)
             }
             SelectItem::Wildcard(additional_options) => {
-                write!(f, "*")?;
-                write!(f, "{additional_options}")?;
-                Ok(())
+                f.write_char('*')?;
+                additional_options.fmt(f)
             }
         }
     }
@@ -939,9 +1009,10 @@ pub struct TableWithJoins {
 
 impl fmt::Display for TableWithJoins {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.relation)?;
+        self.relation.fmt(f)?;
         for join in &self.joins {
-            write!(f, "{join}")?;
+            SpaceOrNewline.fmt(f)?;
+            join.fmt(f)?;
         }
         Ok(())
     }
@@ -1334,7 +1405,6 @@ pub enum TableFactor {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-
 pub enum TableSampleKind {
     /// Table sample located before the table alias option
     BeforeTableAlias(Box<TableSample>),
@@ -1769,9 +1839,9 @@ impl fmt::Display for TableFactor {
                 sample,
                 index_hints,
             } => {
-                write!(f, "{name}")?;
+                name.fmt(f)?;
                 if let Some(json_path) = json_path {
-                    write!(f, "{json_path}")?;
+                    json_path.fmt(f)?;
                 }
                 if !partitions.is_empty() {
                     write!(f, "PARTITION ({})", display_comma_separated(partitions))?;
@@ -1818,7 +1888,11 @@ impl fmt::Display for TableFactor {
                 if *lateral {
                     write!(f, "LATERAL ")?;
                 }
-                write!(f, "({subquery})")?;
+                f.write_str("(")?;
+                NewLine.fmt(f)?;
+                Indent(subquery).fmt(f)?;
+                NewLine.fmt(f)?;
+                f.write_str(")")?;
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
                 }
@@ -2132,116 +2206,104 @@ impl fmt::Display for Join {
             Suffix(constraint)
         }
         if self.global {
-            write!(f, " GLOBAL")?;
+            write!(f, "GLOBAL ")?;
         }
 
         match &self.join_operator {
-            JoinOperator::Join(constraint) => write!(
-                f,
-                " {}JOIN {}{}",
+            JoinOperator::Join(constraint) => f.write_fmt(format_args!(
+                "{}JOIN {}{}",
                 prefix(constraint),
                 self.relation,
                 suffix(constraint)
-            ),
-            JoinOperator::Inner(constraint) => write!(
-                f,
-                " {}INNER JOIN {}{}",
+            )),
+            JoinOperator::Inner(constraint) => f.write_fmt(format_args!(
+                "{}INNER JOIN {}{}",
                 prefix(constraint),
                 self.relation,
                 suffix(constraint)
-            ),
-            JoinOperator::Left(constraint) => write!(
-                f,
-                " {}LEFT JOIN {}{}",
+            )),
+            JoinOperator::Left(constraint) => f.write_fmt(format_args!(
+                "{}LEFT JOIN {}{}",
                 prefix(constraint),
                 self.relation,
                 suffix(constraint)
-            ),
-            JoinOperator::LeftOuter(constraint) => write!(
-                f,
-                " {}LEFT OUTER JOIN {}{}",
+            )),
+            JoinOperator::LeftOuter(constraint) => f.write_fmt(format_args!(
+                "{}LEFT OUTER JOIN {}{}",
                 prefix(constraint),
                 self.relation,
                 suffix(constraint)
-            ),
-            JoinOperator::Right(constraint) => write!(
-                f,
-                " {}RIGHT JOIN {}{}",
+            )),
+            JoinOperator::Right(constraint) => f.write_fmt(format_args!(
+                "{}RIGHT JOIN {}{}",
                 prefix(constraint),
                 self.relation,
                 suffix(constraint)
-            ),
-            JoinOperator::RightOuter(constraint) => write!(
-                f,
-                " {}RIGHT OUTER JOIN {}{}",
+            )),
+            JoinOperator::RightOuter(constraint) => f.write_fmt(format_args!(
+                "{}RIGHT OUTER JOIN {}{}",
                 prefix(constraint),
                 self.relation,
                 suffix(constraint)
-            ),
-            JoinOperator::FullOuter(constraint) => write!(
-                f,
-                " {}FULL JOIN {}{}",
+            )),
+            JoinOperator::FullOuter(constraint) => f.write_fmt(format_args!(
+                "{}FULL JOIN {}{}",
                 prefix(constraint),
                 self.relation,
                 suffix(constraint)
-            ),
-            JoinOperator::CrossJoin => write!(f, " CROSS JOIN {}", self.relation),
-            JoinOperator::Semi(constraint) => write!(
-                f,
-                " {}SEMI JOIN {}{}",
+            )),
+            JoinOperator::CrossJoin => f.write_fmt(format_args!("CROSS JOIN {}", self.relation)),
+            JoinOperator::Semi(constraint) => f.write_fmt(format_args!(
+                "{}SEMI JOIN {}{}",
                 prefix(constraint),
                 self.relation,
                 suffix(constraint)
-            ),
-            JoinOperator::LeftSemi(constraint) => write!(
-                f,
-                " {}LEFT SEMI JOIN {}{}",
+            )),
+            JoinOperator::LeftSemi(constraint) => f.write_fmt(format_args!(
+                "{}LEFT SEMI JOIN {}{}",
                 prefix(constraint),
                 self.relation,
                 suffix(constraint)
-            ),
-            JoinOperator::RightSemi(constraint) => write!(
-                f,
-                " {}RIGHT SEMI JOIN {}{}",
+            )),
+            JoinOperator::RightSemi(constraint) => f.write_fmt(format_args!(
+                "{}RIGHT SEMI JOIN {}{}",
                 prefix(constraint),
                 self.relation,
                 suffix(constraint)
-            ),
-            JoinOperator::Anti(constraint) => write!(
-                f,
-                " {}ANTI JOIN {}{}",
+            )),
+            JoinOperator::Anti(constraint) => f.write_fmt(format_args!(
+                "{}ANTI JOIN {}{}",
                 prefix(constraint),
                 self.relation,
                 suffix(constraint)
-            ),
-            JoinOperator::LeftAnti(constraint) => write!(
-                f,
-                " {}LEFT ANTI JOIN {}{}",
+            )),
+            JoinOperator::LeftAnti(constraint) => f.write_fmt(format_args!(
+                "{}LEFT ANTI JOIN {}{}",
                 prefix(constraint),
                 self.relation,
                 suffix(constraint)
-            ),
-            JoinOperator::RightAnti(constraint) => write!(
-                f,
-                " {}RIGHT ANTI JOIN {}{}",
+            )),
+            JoinOperator::RightAnti(constraint) => f.write_fmt(format_args!(
+                "{}RIGHT ANTI JOIN {}{}",
                 prefix(constraint),
                 self.relation,
                 suffix(constraint)
-            ),
-            JoinOperator::CrossApply => write!(f, " CROSS APPLY {}", self.relation),
-            JoinOperator::OuterApply => write!(f, " OUTER APPLY {}", self.relation),
+            )),
+            JoinOperator::CrossApply => f.write_fmt(format_args!("CROSS APPLY {}", self.relation)),
+            JoinOperator::OuterApply => f.write_fmt(format_args!("OUTER APPLY {}", self.relation)),
             JoinOperator::AsOf {
                 match_condition,
                 constraint,
-            } => write!(
-                f,
-                " ASOF JOIN {} MATCH_CONDITION ({match_condition}){}",
+            } => f.write_fmt(format_args!(
+                "ASOF JOIN {} MATCH_CONDITION ({match_condition}){}",
                 self.relation,
                 suffix(constraint)
-            ),
-            JoinOperator::StraightJoin(constraint) => {
-                write!(f, " STRAIGHT_JOIN {}{}", self.relation, suffix(constraint))
-            }
+            )),
+            JoinOperator::StraightJoin(constraint) => f.write_fmt(format_args!(
+                "STRAIGHT_JOIN {}{}",
+                self.relation,
+                suffix(constraint)
+            )),
         }
     }
 }
@@ -2914,8 +2976,9 @@ impl fmt::Display for GroupByExpr {
                 Ok(())
             }
             GroupByExpr::Expressions(col_names, modifiers) => {
-                let col_names = display_comma_separated(col_names);
-                write!(f, "GROUP BY {col_names}")?;
+                f.write_str("GROUP BY")?;
+                SpaceOrNewline.fmt(f)?;
+                Indent(display_comma_separated(col_names)).fmt(f)?;
                 if !modifiers.is_empty() {
                     write!(f, " {}", display_separated(modifiers, " "))?;
                 }

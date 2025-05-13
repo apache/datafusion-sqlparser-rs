@@ -171,7 +171,6 @@ string' AS str
 }
 
 #[test]
-#[ignore = "https://github.com/apache/datafusion-sqlparser-rs/issues/1850"]
 fn test_pretty_print_insert_values() {
     assert_eq!(
         prettify("INSERT INTO my_table (a, b, c) VALUES (1, 2, 3), (4, 5, 6)"),
@@ -186,10 +185,9 @@ VALUES
 }
 
 #[test]
-#[ignore = "https://github.com/apache/datafusion-sqlparser-rs/issues/1850"]
 fn test_pretty_print_insert_select() {
     assert_eq!(
-        prettify("INSERT INTO my_table (a, b) SELECT x, y FROM source_table"),
+        prettify("INSERT INTO my_table (a, b) SELECT x, y FROM source_table RETURNING a AS id"),
         r#"
 INSERT INTO my_table (a, b)
 SELECT
@@ -197,6 +195,8 @@ SELECT
   y
 FROM
   source_table
+RETURNING
+  a AS id
 "#
         .trim()
     );

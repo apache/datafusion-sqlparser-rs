@@ -68,12 +68,17 @@ impl Display for SpaceOrNewline {
 
 /// A value that displays a comma-separated list of values.
 /// When pretty-printed (using {:#}), it displays each value on a new line.
-pub(crate) struct DisplayCommaSeparated<'a, T: fmt::Display>(&'a [T]);
+pub(crate) struct DisplayCommaSeparated<I, T: fmt::Display>(I)
+where
+    I: IntoIterator<Item = T> + Clone;
 
-impl<T: fmt::Display> fmt::Display for DisplayCommaSeparated<'_, T> {
+impl<I, T: fmt::Display> fmt::Display for DisplayCommaSeparated<I, T>
+where
+    I: IntoIterator<Item = T> + Clone,
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut first = true;
-        for t in self.0 {
+        for t in self.0.clone() {
             if !first {
                 f.write_char(',')?;
                 SpaceOrNewline.fmt(f)?;
@@ -86,9 +91,12 @@ impl<T: fmt::Display> fmt::Display for DisplayCommaSeparated<'_, T> {
 }
 
 /// Displays a whitespace, followed by a comma-separated list that is indented when pretty-printed.
-pub(crate) fn indented_list<T: fmt::Display>(f: &mut fmt::Formatter, slice: &[T]) -> fmt::Result {
+pub(crate) fn indented_list<I, T: fmt::Display>(f: &mut fmt::Formatter, iter: I) -> fmt::Result
+where
+    I: IntoIterator<Item = T> + Clone,
+{
     SpaceOrNewline.fmt(f)?;
-    Indent(DisplayCommaSeparated(slice)).fmt(f)
+    Indent(DisplayCommaSeparated(iter)).fmt(f)
 }
 
 #[cfg(test)]

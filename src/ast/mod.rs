@@ -4543,7 +4543,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Insert(insert) => write!(f, "{insert}"),
+            Statement::Insert(insert) => insert.fmt(f),
             Statement::Install {
                 extension_name: name,
             } => write!(f, "INSTALL {name}"),

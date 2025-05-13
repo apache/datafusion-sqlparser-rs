@@ -581,28 +581,32 @@ impl Display for Insert {
             )?;
         }
         if !self.columns.is_empty() {
-            write!(f, "({}) ", display_comma_separated(&self.columns))?;
+            write!(f, "({})", display_comma_separated(&self.columns))?;
+            SpaceOrNewline.fmt(f)?;
         }
         if let Some(ref parts) = self.partitioned {
             if !parts.is_empty() {
-                write!(f, "PARTITION ({}) ", display_comma_separated(parts))?;
+                write!(f, "PARTITION ({})", display_comma_separated(parts))?;
+                SpaceOrNewline.fmt(f)?;
             }
         }
         if !self.after_columns.is_empty() {
-            write!(f, "({}) ", display_comma_separated(&self.after_columns))?;
+            write!(f, "({})", display_comma_separated(&self.after_columns))?;
+            SpaceOrNewline.fmt(f)?;
         }
 
         if let Some(settings) = &self.settings {
-            write!(f, "SETTINGS {} ", display_comma_separated(settings))?;
+            write!(f, "SETTINGS {}", display_comma_separated(settings))?;
+            SpaceOrNewline.fmt(f)?;
         }
 
         if let Some(source) = &self.source {
-            write!(f, "{source}")?;
+            source.fmt(f)?;
         } else if !self.assignments.is_empty() {
-            write!(f, "SET ")?;
-            write!(f, "{}", display_comma_separated(&self.assignments))?;
+            write!(f, "SET")?;
+            indented_list(f, &self.assignments)?;
         } else if let Some(format_clause) = &self.format_clause {
-            write!(f, "{format_clause}")?;
+            format_clause.fmt(f)?;
         } else if self.columns.is_empty() {
             write!(f, "DEFAULT VALUES")?;
         }
@@ -622,7 +626,9 @@ impl Display for Insert {
         }
 
         if let Some(returning) = &self.returning {
-            write!(f, " RETURNING {}", display_comma_separated(returning))?;
+            SpaceOrNewline.fmt(f)?;
+            f.write_str("RETURNING")?;
+            indented_list(f, returning)?;
         }
         Ok(())
     }

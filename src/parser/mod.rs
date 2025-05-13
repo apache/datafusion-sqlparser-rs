@@ -5207,33 +5207,40 @@ impl<'a> Parser<'a> {
 
         let return_table = self.maybe_parse(|p| {
             let return_table_name = p.parse_identifier()?;
-            let table_column_defs = if p.peek_keyword(Keyword::TABLE) {
-                match p.parse_data_type()? {
-                    DataType::Table(t) => t,
-                    _ => parser_err!(
-                        "Expected table data type after TABLE keyword",
-                        p.peek_token().span.start
-                    )?,
-                }
-            } else {
+
+            if !p.peek_keyword(Keyword::TABLE) {
                 parser_err!(
                     "Expected TABLE keyword after return type",
                     p.peek_token().span.start
                 )?
-            };
-
-            if table_column_defs.is_none()
-                || table_column_defs.clone().is_some_and(|tcd| tcd.is_empty())
-            {
-                parser_err!(
-                    "Expected table column definitions after TABLE keyword",
-                    p.peek_token().span.start
-                )?
             }
+
+            let table_column_defs = match p.parse_data_type()? {
+                DataType::Table(maybe_table_column_defs) => match maybe_table_column_defs {
+                    Some(table_column_defs) => {
+                        if table_column_defs.is_empty() {
+                            parser_err!(
+                                "Expected table column definitions after TABLE keyword",
+                                p.peek_token().span.start
+                            )?
+                        }
+
+                        table_column_defs
+                    }
+                    None => parser_err!(
+                        "Expected table column definitions after TABLE keyword",
+                        p.peek_token().span.start
+                    )?,
+                },
+                _ => parser_err!(
+                    "Expected table data type after TABLE keyword",
+                    p.peek_token().span.start
+                )?,
+            };
 
             Ok(DataType::NamedTable(
                 ObjectName(vec![ObjectNamePart::Identifier(return_table_name)]),
-                table_column_defs.clone().unwrap(),
+                table_column_defs,
             ))
         })?;
 

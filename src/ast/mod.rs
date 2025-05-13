@@ -8799,6 +8799,8 @@ pub enum CreateFunctionBody {
     /// RETURNS TABLE
     /// AS RETURN SELECT a + b AS sum;
     /// ```
+    ///
+    /// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql?view=sql-server-ver16#select_stmt
     AsReturnSelect(Select),
 }
 

@@ -51,6 +51,8 @@ pub enum DataType {
     /// [MsSQL]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql?view=sql-server-ver16#c-create-a-multi-statement-table-valued-function
     Table(Option<Vec<ColumnDef>>),
     /// Table type with a name, e.g. CREATE FUNCTION RETURNS @result TABLE(...).
+    ///
+    /// [MsSQl]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql?view=sql-server-ver16#table
     NamedTable {
         /// Table name.
         name: ObjectName,

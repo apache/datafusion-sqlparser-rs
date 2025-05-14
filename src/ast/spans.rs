@@ -1944,7 +1944,7 @@ impl Spanned for TableFactor {
             TableFactor::Unpivot {
                 table,
                 value,
-                include_nulls: _,
+                null_inclusion: _,
                 name,
                 columns,
                 alias,

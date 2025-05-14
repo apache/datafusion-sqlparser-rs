@@ -10762,7 +10762,7 @@ fn parse_unpivot_table() {
             sample: None,
             index_hints: vec![],
         }),
-        include_nulls: None,
+        null_inclusion: None,
         value: Ident {
             value: "quantity".to_string(),
             quote_style: None,
@@ -10812,10 +10812,10 @@ fn parse_unpivot_table() {
     "UNPIVOT EXCLUDE NULLS (quantity FOR quarter IN (Q1, Q2, Q3, Q4)) AS u (product, quarter, quantity)"
     );
 
-    if let Unpivot { include_nulls, .. } =
+    if let Unpivot { null_inclusion, .. } =
         &verified_only_select(sql_unpivot_exclude_nulls).from[0].relation
     {
-        assert_eq!(*include_nulls, Some(NullInclusion::ExcludeNulls));
+        assert_eq!(*null_inclusion, Some(NullInclusion::ExcludeNulls));
     }
 
     assert_eq!(
@@ -10828,10 +10828,10 @@ fn parse_unpivot_table() {
         "UNPIVOT INCLUDE NULLS (quantity FOR quarter IN (Q1, Q2, Q3, Q4)) AS u (product, quarter, quantity)"
     );
 
-    if let Unpivot { include_nulls, .. } =
+    if let Unpivot { null_inclusion, .. } =
         &verified_only_select(sql_unpivot_include_nulls).from[0].relation
     {
-        assert_eq!(*include_nulls, Some(NullInclusion::IncludeNulls));
+        assert_eq!(*null_inclusion, Some(NullInclusion::IncludeNulls));
     }
 
     assert_eq!(
@@ -10934,7 +10934,7 @@ fn parse_pivot_unpivot_table() {
                     sample: None,
                     index_hints: vec![],
                 }),
-                include_nulls: None,
+                null_inclusion: None,
                 value: Ident {
                     value: "population".to_string(),
                     quote_style: None,

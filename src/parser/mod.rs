@@ -583,6 +583,10 @@ impl<'a> Parser<'a> {
                 Keyword::SHOW => self.parse_show(),
                 Keyword::USE => self.parse_use(),
                 Keyword::GRANT => self.parse_grant(),
+                Keyword::DENY => {
+                    self.prev_token();
+                    self.parse_deny()
+                }
                 Keyword::REVOKE => self.parse_revoke(),
                 Keyword::START => self.parse_start_transaction(),
                 Keyword::BEGIN => self.parse_begin(),
@@ -13381,7 +13385,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a GRANT statement.
     pub fn parse_grant(&mut self) -> Result<Statement, ParserError> {
-        let (privileges, objects) = self.parse_grant_revoke_privileges_objects()?;
+        let (privileges, objects) = self.parse_grant_deny_revoke_privileges_objects()?;
 
         self.expect_keyword_is(Keyword::TO)?;
         let grantees = self.parse_grantees()?;
@@ -13389,15 +13393,24 @@ impl<'a> Parser<'a> {
         let with_grant_option =
             self.parse_keywords(&[Keyword::WITH, Keyword::GRANT, Keyword::OPTION]);
 
-        let granted_by = self
-            .parse_keywords(&[Keyword::GRANTED, Keyword::BY])
-            .then(|| self.parse_identifier().unwrap());
+        let as_grantor = if self.parse_keywords(&[Keyword::AS]) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+
+        let granted_by = if self.parse_keywords(&[Keyword::GRANTED, Keyword::BY]) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
 
         Ok(Statement::Grant {
             privileges,
             objects,
             grantees,
             with_grant_option,
+            as_grantor,
             granted_by,
         })
     }
@@ -13406,7 +13419,7 @@ impl<'a> Parser<'a> {
         let mut values = vec![];
         let mut grantee_type = GranteesType::None;
         loop {
-            grantee_type = if self.parse_keyword(Keyword::ROLE) {
+            let new_grantee_type = if self.parse_keyword(Keyword::ROLE) {
                 GranteesType::Role
             } else if self.parse_keyword(Keyword::USER) {
                 GranteesType::User
@@ -13423,8 +13436,18 @@ impl<'a> Parser<'a> {
             } else if self.parse_keyword(Keyword::APPLICATION) {
                 GranteesType::Application
             } else {
-                grantee_type // keep from previous iteraton, if not specified
+                grantee_type.clone() // keep from previous iteraton, if not specified
             };
+
+            if self
+                .dialect
+                .get_reserved_grantees_types()
+                .contains(&new_grantee_type)
+            {
+                self.prev_token();
+            } else {
+                grantee_type = new_grantee_type;
+            }
 
             let grantee = if grantee_type == GranteesType::Public {
                 Grantee {
@@ -13460,7 +13483,7 @@ impl<'a> Parser<'a> {
         Ok(values)
     }
 
-    pub fn parse_grant_revoke_privileges_objects(
+    pub fn parse_grant_deny_revoke_privileges_objects(
         &mut self,
     ) -> Result<(Privileges, Option<GrantObjects>), ParserError> {
         let privileges = if self.parse_keyword(Keyword::ALL) {
@@ -13509,7 +13532,6 @@ impl<'a> Parser<'a> {
             } else {
                 let object_type = self.parse_one_of_keywords(&[
                     Keyword::SEQUENCE,
-                    Keyword::DATABASE,
                     Keyword::DATABASE,
                     Keyword::SCHEMA,
                     Keyword::TABLE,
@@ -13605,6 +13627,9 @@ impl<'a> Parser<'a> {
             Ok(Action::Create { obj_type })
         } else if self.parse_keyword(Keyword::DELETE) {
             Ok(Action::Delete)
+        } else if self.parse_keyword(Keyword::EXEC) {
+            let obj_type = self.maybe_parse_action_execute_obj_type();
+            Ok(Action::Exec { obj_type })
         } else if self.parse_keyword(Keyword::EXECUTE) {
             let obj_type = self.maybe_parse_action_execute_obj_type();
             Ok(Action::Execute { obj_type })
@@ -13803,16 +13828,51 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse [`Statement::Deny`]
+    pub fn parse_deny(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword(Keyword::DENY)?;
+
+        let (privileges, objects) = self.parse_grant_deny_revoke_privileges_objects()?;
+        let objects = match objects {
+            Some(o) => o,
+            None => {
+                return parser_err!(
+                    "DENY statements must specify an object",
+                    self.peek_token().span.start
+                )
+            }
+        };
+
+        self.expect_keyword_is(Keyword::TO)?;
+        let grantees = self.parse_grantees()?;
+        let cascade = self.parse_cascade_option();
+        let granted_by = if self.parse_keywords(&[Keyword::AS]) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+
+        Ok(Statement::Deny(DenyStatement {
+            privileges,
+            objects,
+            grantees,
+            cascade,
+            granted_by,
+        }))
+    }
+
     /// Parse a REVOKE statement
     pub fn parse_revoke(&mut self) -> Result<Statement, ParserError> {
-        let (privileges, objects) = self.parse_grant_revoke_privileges_objects()?;
+        let (privileges, objects) = self.parse_grant_deny_revoke_privileges_objects()?;
 
         self.expect_keyword_is(Keyword::FROM)?;
         let grantees = self.parse_grantees()?;
 
-        let granted_by = self
-            .parse_keywords(&[Keyword::GRANTED, Keyword::BY])
-            .then(|| self.parse_identifier().unwrap());
+        let granted_by = if self.parse_keywords(&[Keyword::GRANTED, Keyword::BY]) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
 
         let cascade = self.parse_cascade_option();
 

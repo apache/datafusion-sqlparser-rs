@@ -3903,8 +3903,13 @@ pub enum Statement {
         objects: Option<GrantObjects>,
         grantees: Vec<Grantee>,
         with_grant_option: bool,
+        as_grantor: Option<Ident>,
         granted_by: Option<Ident>,
     },
+    /// ```sql
+    /// DENY privileges ON object TO grantees
+    /// ```
+    Deny(DenyStatement),
     /// ```sql
     /// REVOKE privileges ON objects FROM grantees
     /// ```
@@ -5580,6 +5585,7 @@ impl fmt::Display for Statement {
                 objects,
                 grantees,
                 with_grant_option,
+                as_grantor,
                 granted_by,
             } => {
                 write!(f, "GRANT {privileges} ")?;
@@ -5590,11 +5596,15 @@ impl fmt::Display for Statement {
                 if *with_grant_option {
                     write!(f, " WITH GRANT OPTION")?;
                 }
+                if let Some(grantor) = as_grantor {
+                    write!(f, " AS {grantor}")?;
+                }
                 if let Some(grantor) = granted_by {
                     write!(f, " GRANTED BY {grantor}")?;
                 }
                 Ok(())
             }
+            Statement::Deny(s) => write!(f, "{s}"),
             Statement::Revoke {
                 privileges,
                 objects,
@@ -6380,6 +6390,9 @@ pub enum Action {
     },
     Delete,
     EvolveSchema,
+    Exec {
+        obj_type: Option<ActionExecuteObjectType>,
+    },
     Execute {
         obj_type: Option<ActionExecuteObjectType>,
     },
@@ -6446,6 +6459,12 @@ impl fmt::Display for Action {
             Action::DatabaseRole { role } => write!(f, "DATABASE ROLE {role}")?,
             Action::Delete => f.write_str("DELETE")?,
             Action::EvolveSchema => f.write_str("EVOLVE SCHEMA")?,
+            Action::Exec { obj_type } => {
+                f.write_str("EXEC")?;
+                if let Some(obj_type) = obj_type {
+                    write!(f, " {obj_type}")?
+                }
+            }
             Action::Execute { obj_type } => {
                 f.write_str("EXECUTE")?;
                 if let Some(obj_type) = obj_type {
@@ -6864,6 +6883,37 @@ impl fmt::Display for GrantObjects {
                 write!(f, "EXTERNAL VOLUME {}", display_comma_separated(objects))
             }
         }
+    }
+}
+
+/// A `DENY` statement
+///
+/// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/statements/deny-transact-sql)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DenyStatement {
+    pub privileges: Privileges,
+    pub objects: GrantObjects,
+    pub grantees: Vec<Grantee>,
+    pub granted_by: Option<Ident>,
+    pub cascade: Option<CascadeOption>,
+}
+
+impl fmt::Display for DenyStatement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "DENY {}", self.privileges)?;
+        write!(f, " ON {}", self.objects)?;
+        if !self.grantees.is_empty() {
+            write!(f, " TO {}", display_comma_separated(&self.grantees))?;
+        }
+        if let Some(cascade) = &self.cascade {
+            write!(f, " {cascade}")?;
+        }
+        if let Some(granted_by) = &self.granted_by {
+            write!(f, " AS {granted_by}")?;
+        }
+        Ok(())
     }
 }
 

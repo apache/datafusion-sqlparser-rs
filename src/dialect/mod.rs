@@ -49,7 +49,7 @@ pub use self::postgresql::PostgreSqlDialect;
 pub use self::redshift::RedshiftSqlDialect;
 pub use self::snowflake::SnowflakeDialect;
 pub use self::sqlite::SQLiteDialect;
-use crate::ast::{ColumnOption, Expr, Statement};
+use crate::ast::{ColumnOption, Expr, GranteesType, Statement};
 pub use crate::keywords;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -907,6 +907,11 @@ pub trait Dialect: Debug + Any {
     /// Returns reserved keywords that may prefix a select item expression
     /// e.g. `SELECT CONNECT_BY_ROOT name FROM Tbl2` (Snowflake)
     fn get_reserved_keywords_for_select_item_operator(&self) -> &[Keyword] {
+        &[]
+    }
+
+    /// Returns grantee types that should be treated as identifiers
+    fn get_reserved_grantees_types(&self) -> &[GranteesType] {
         &[]
     }
 

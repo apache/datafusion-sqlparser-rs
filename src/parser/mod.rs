@@ -13370,10 +13370,10 @@ impl<'a> Parser<'a> {
     ) -> Result<TableFactor, ParserError> {
         let include_nulls = if self.parse_keyword(Keyword::INCLUDE) {
             self.expect_keyword_is(Keyword::NULLS)?;
-            Some(true)
+            Some(NullInclusion::IncludeNulls)
         } else if self.parse_keyword(Keyword::EXCLUDE) {
             self.expect_keyword_is(Keyword::NULLS)?;
-            Some(false)
+            Some(NullInclusion::ExcludeNulls)
         } else {
             None
         };

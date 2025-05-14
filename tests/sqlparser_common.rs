@@ -10815,7 +10815,7 @@ fn parse_unpivot_table() {
     if let Unpivot { include_nulls, .. } =
         &verified_only_select(sql_unpivot_exclude_nulls).from[0].relation
     {
-        assert_eq!(*include_nulls, Some(false));
+        assert_eq!(*include_nulls, Some(NullInclusion::ExcludeNulls));
     }
 
     assert_eq!(
@@ -10831,7 +10831,7 @@ fn parse_unpivot_table() {
     if let Unpivot { include_nulls, .. } =
         &verified_only_select(sql_unpivot_include_nulls).from[0].relation
     {
-        assert_eq!(*include_nulls, Some(true));
+        assert_eq!(*include_nulls, Some(NullInclusion::IncludeNulls));
     }
 
     assert_eq!(

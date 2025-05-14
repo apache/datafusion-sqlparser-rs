@@ -9633,6 +9633,26 @@ impl fmt::Display for OpenStatement {
     }
 }
 
+/// Specifies Include / Exclude NULL within UNPIVOT command.
+/// For example
+/// `UNPIVOT (column1 FOR new_column IN (col3, col4, col5, col6))`
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum NullInclusion {
+    IncludeNulls,
+    ExcludeNulls,
+}
+
+impl fmt::Display for NullInclusion {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            NullInclusion::IncludeNulls => write!(f, "INCLUDE NULLS"),
+            NullInclusion::ExcludeNulls => write!(f, "EXCLUDE NULLS"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

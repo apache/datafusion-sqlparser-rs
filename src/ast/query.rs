@@ -1345,7 +1345,7 @@ pub enum TableFactor {
         value: Ident,
         name: Ident,
         columns: Vec<Ident>,
-        include_nulls: Option<bool>,
+        include_nulls: Option<NullInclusion>,
         alias: Option<TableAlias>,
     },
     /// A `MATCH_RECOGNIZE` operation on a table.
@@ -2024,11 +2024,7 @@ impl fmt::Display for TableFactor {
             } => {
                 write!(f, "{table} UNPIVOT")?;
                 if let Some(include_nulls) = include_nulls {
-                    if *include_nulls {
-                        write!(f, " INCLUDE NULLS ")?;
-                    } else {
-                        write!(f, " EXCLUDE NULLS ")?;
-                    }
+                    write!(f, " {include_nulls} ")?;
                 }
                 write!(
                     f,

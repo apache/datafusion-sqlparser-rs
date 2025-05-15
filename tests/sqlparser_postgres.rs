@@ -21,6 +21,7 @@
 
 #[macro_use]
 mod test_utils;
+
 use helpers::attached_token::AttachedToken;
 use sqlparser::tokenizer::Span;
 use test_utils::*;
@@ -4264,6 +4265,51 @@ $$"#;
             remote_connection: None,
         })
     );
+
+    let sql5 = r#"CREATE OR REPLACE FUNCTION foo(a TIMESTAMP WITH TIME ZONE, b VARCHAR) RETURNS BOOLEAN LANGUAGE plpgsql AS $$
+    BEGIN
+        RETURN TRUE;
+    END;
+    $$"#;
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql5),
+        Statement::CreateFunction(CreateFunction {
+            or_alter: false,
+            or_replace: true,
+            temporary: false,
+            name: ObjectName::from(vec![Ident::new("foo")]),
+            args: Some(vec![
+                OperateFunctionArg::with_name(
+                    "a",
+                    DataType::Timestamp(None, TimezoneInfo::WithTimeZone)
+                ),
+                OperateFunctionArg::with_name("b", DataType::Varchar(None)),
+            ]),
+            return_type: Some(DataType::Boolean),
+            language: Some("plpgsql".into()),
+            behavior: None,
+            called_on_null: None,
+            parallel: None,
+            function_body: Some(CreateFunctionBody::AsBeforeOptions(Expr::Value(
+                (Value::DollarQuotedString(DollarQuotedString {
+                    value: "\n    BEGIN\n        RETURN TRUE;\n    END;\n    ".to_owned(),
+                    tag: None
+                }))
+                .with_empty_span()
+            ))),
+            if_not_exists: false,
+            using: None,
+            determinism_specifier: None,
+            options: None,
+            remote_connection: None,
+        })
+    );
+}
+
+#[test]
+fn parser_create_function_with_invalid_args() {
+    let sql = "CREATE FUNCTION add(function(struct<a,b> int64), b INTEGER) RETURNS INTEGER LANGUAGE SQL IMMUTABLE STRICT PARALLEL SAFE AS 'select $1 + $2;'";
+    assert!(pg().parse_sql_statements(sql).is_err(),);
 }
 
 #[test]

@@ -5264,14 +5264,7 @@ impl<'a> Parser<'a> {
             }))
         } else if self.parse_keyword(Keyword::RETURN) {
             if self.peek_token() == Token::LParen {
-                let expr = self.parse_expr()?;
-                if !matches!(expr, Expr::Subquery(_)) {
-                    parser_err!(
-                        "Expected a subquery after RETURN",
-                        self.peek_token().span.start
-                    )?
-                }
-                Some(CreateFunctionBody::AsReturnSubquery(expr))
+                Some(CreateFunctionBody::AsReturnExpr(self.parse_expr()?))
             } else if self.peek_keyword(Keyword::SELECT) {
                 let select = self.parse_select()?;
                 Some(CreateFunctionBody::AsReturnSelect(select))

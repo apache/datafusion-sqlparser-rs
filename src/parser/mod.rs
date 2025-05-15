@@ -16590,7 +16590,7 @@ mod tests {
         if let Statement::CreateTable(v) = &ast[0] {
             assert_eq!(
                 v.columns[0].options[0].option,
-                ColumnOption::Srid(Expr::value(Value::Number("4326".to_string(), false)))
+                ColumnOption::Srid(Expr::value(Value::Number("4326".parse().unwrap(), false)))
             );
         }
     }

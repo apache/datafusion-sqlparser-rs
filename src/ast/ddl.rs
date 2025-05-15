@@ -1764,7 +1764,7 @@ pub enum ColumnOption {
     /// CREATE TABLE geom (g GEOMETRY NOT NULL SRID 4326);
     /// ```
     /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/creating-spatial-indexes.html
-    Srid(Expr),
+    Srid(Box<Expr>),
 }
 
 impl fmt::Display for ColumnOption {

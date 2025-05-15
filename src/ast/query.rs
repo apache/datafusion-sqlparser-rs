@@ -2883,26 +2883,15 @@ pub struct Values {
 
 impl fmt::Display for Values {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        struct DisplayRow<'a> {
-            exprs: &'a [Expr],
-            explicit_row: bool,
-        }
-        impl fmt::Display for DisplayRow<'_> {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                let comma_separated = display_comma_separated(self.exprs);
-                if self.explicit_row {
-                    write!(f, "ROW({})", comma_separated)
-                } else {
-                    write!(f, "({})", comma_separated)
-                }
-            }
-        }
-        let row_display_iter = self.rows.iter().map(|row| DisplayRow {
-            exprs: row,
-            explicit_row: self.explicit_row,
-        });
         f.write_str("VALUES")?;
-        indented_list(f, row_display_iter)?;
+        let prefix = if self.explicit_row { "ROW" } else { "" };
+        let mut delim = "";
+        for row in &self.rows {
+            f.write_str(delim)?;
+            delim = ",";
+            SpaceOrNewline.fmt(f)?;
+            Indent(format_args!("{prefix}({})", display_comma_separated(row))).fmt(f)?;
+        }
         Ok(())
     }
 }

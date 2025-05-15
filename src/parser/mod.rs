@@ -7757,7 +7757,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::SRID)
             && dialect_of!(self is MySqlDialect | GenericDialect)
         {
-            Ok(Some(ColumnOption::Srid(self.parse_expr()?)))
+            Ok(Some(ColumnOption::Srid(Box::new(self.parse_expr()?))))
         } else if self.parse_keyword(Keyword::IDENTITY)
             && dialect_of!(self is MsSqlDialect | GenericDialect)
         {
@@ -16590,7 +16590,10 @@ mod tests {
         if let Statement::CreateTable(v) = &ast[0] {
             assert_eq!(
                 v.columns[0].options[0].option,
-                ColumnOption::Srid(Expr::value(Value::Number("4326".parse().unwrap(), false)))
+                ColumnOption::Srid(Box::new(Expr::value(Value::Number(
+                    "4326".parse().unwrap(),
+                    false
+                ))))
             );
         }
     }

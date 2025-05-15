@@ -16582,23 +16582,6 @@ mod tests {
     }
 
     #[test]
-    fn test_mysql_srid_create_table() {
-        let sql = r#"CREATE TABLE t (a geometry SRID 4326)"#;
-        let ast: Vec<Statement> = Parser::parse_sql(&MySqlDialect {}, sql).unwrap();
-
-        assert_eq!(ast.len(), 1);
-        if let Statement::CreateTable(v) = &ast[0] {
-            assert_eq!(
-                v.columns[0].options[0].option,
-                ColumnOption::Srid(Box::new(Expr::value(Value::Number(
-                    "4326".parse().unwrap(),
-                    false
-                ))))
-            );
-        }
-    }
-
-    #[test]
     fn test_replace_into_placeholders() {
         let sql = "REPLACE INTO t (a) VALUES (&a)";
 

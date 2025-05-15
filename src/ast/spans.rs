@@ -871,6 +871,7 @@ impl Spanned for ColumnOption {
             ColumnOption::OnConflict(..) => Span::empty(),
             ColumnOption::Policy(..) => Span::empty(),
             ColumnOption::Tags(..) => Span::empty(),
+            ColumnOption::Srid(..) => Span::empty(),
         }
     }
 }

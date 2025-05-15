@@ -1758,6 +1758,13 @@ pub enum ColumnOption {
     /// ```
     /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
     Tags(TagsColumnOption),
+    /// MySQL specific: Spatial reference identifier
+    /// Syntax:
+    /// ```sql
+    /// CREATE TABLE geom (g GEOMETRY NOT NULL SRID 4326);
+    /// ```
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/creating-spatial-indexes.html
+    Srid(Expr),
 }
 
 impl fmt::Display for ColumnOption {
@@ -1872,6 +1879,9 @@ impl fmt::Display for ColumnOption {
             }
             Tags(tags) => {
                 write!(f, "{tags}")
+            }
+            Srid(srid) => {
+                write!(f, "SRID {srid}")
             }
         }
     }

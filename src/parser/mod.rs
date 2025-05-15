@@ -9851,11 +9851,13 @@ impl<'a> Parser<'a> {
                     Ok(DataType::AnyType)
                 }
                 Keyword::TABLE => {
-                    if self.peek_token() != Token::LParen {
-                        Ok(DataType::Table(None))
-                    } else {
+                    // an LParen after the TABLE keyword indicates that table columns are being defined
+                    // whereas no LParen indicates an anonymous table expression will be returned
+                    if self.peek_token() == Token::LParen {
                         let columns = self.parse_returns_table_columns()?;
                         Ok(DataType::Table(Some(columns)))
+                    } else {
+                        Ok(DataType::Table(None))
                     }
                 }
                 Keyword::SIGNED => {

@@ -2888,13 +2888,14 @@ pub struct Values {
 
 impl fmt::Display for Values {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "VALUES ")?;
+        f.write_str("VALUES")?;
         let prefix = if self.explicit_row { "ROW" } else { "" };
         let mut delim = "";
         for row in &self.rows {
-            write!(f, "{delim}")?;
-            delim = ", ";
-            write!(f, "{prefix}({})", display_comma_separated(row))?;
+            f.write_str(delim)?;
+            delim = ",";
+            SpaceOrNewline.fmt(f)?;
+            Indent(format_args!("{prefix}({})", display_comma_separated(row))).fmt(f)?;
         }
         Ok(())
     }

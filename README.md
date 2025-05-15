@@ -89,10 +89,14 @@ keywords, the following should hold true for all SQL:
 
 ```rust
 // Parse SQL
+let sql = "SELECT 'hello'";
 let ast = Parser::parse_sql(&GenericDialect, sql).unwrap();
 
 // The original SQL text can be generated from the AST
 assert_eq!(ast[0].to_string(), sql);
+
+// The SQL can also be pretty-printed with newlines and indentation
+assert_eq!(format!("{:#}", ast[0]), "SELECT\n  'hello'");
 ```
 
 There are still some cases in this crate where different SQL with seemingly

@@ -7754,6 +7754,10 @@ impl<'a> Parser<'a> {
             && dialect_of!(self is MySqlDialect | SQLiteDialect | DuckDbDialect | GenericDialect)
         {
             self.parse_optional_column_option_as()
+        } else if self.parse_keyword(Keyword::SRID)
+            && dialect_of!(self is MySqlDialect | GenericDialect)
+        {
+            Ok(Some(ColumnOption::Srid(self.parse_expr()?)))
         } else if self.parse_keyword(Keyword::IDENTITY)
             && dialect_of!(self is MsSqlDialect | GenericDialect)
         {
@@ -16574,6 +16578,20 @@ mod tests {
             }
         } else {
             panic!("fail to parse mysql partition selection");
+        }
+    }
+
+    #[test]
+    fn test_mysql_srid_create_table() {
+        let sql = r#"CREATE TABLE t (a geometry SRID 4326)"#;
+        let ast: Vec<Statement> = Parser::parse_sql(&MySqlDialect {}, sql).unwrap();
+
+        assert_eq!(ast.len(), 1);
+        if let Statement::CreateTable(v) = &ast[0] {
+            assert_eq!(
+                v.columns[0].options[0].option,
+                ColumnOption::Srid(Expr::value(Value::Number("4326".to_string(), false)))
+            );
         }
     }
 

@@ -13368,6 +13368,15 @@ impl<'a> Parser<'a> {
         &mut self,
         table: TableFactor,
     ) -> Result<TableFactor, ParserError> {
+        let null_inclusion = if self.parse_keyword(Keyword::INCLUDE) {
+            self.expect_keyword_is(Keyword::NULLS)?;
+            Some(NullInclusion::IncludeNulls)
+        } else if self.parse_keyword(Keyword::EXCLUDE) {
+            self.expect_keyword_is(Keyword::NULLS)?;
+            Some(NullInclusion::ExcludeNulls)
+        } else {
+            None
+        };
         self.expect_token(&Token::LParen)?;
         let value = self.parse_identifier()?;
         self.expect_keyword_is(Keyword::FOR)?;
@@ -13379,6 +13388,7 @@ impl<'a> Parser<'a> {
         Ok(TableFactor::Unpivot {
             table: Box::new(table),
             value,
+            null_inclusion,
             name,
             columns,
             alias,

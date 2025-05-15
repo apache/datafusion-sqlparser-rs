@@ -10746,49 +10746,47 @@ fn parse_unpivot_table() {
         "SELECT * FROM sales AS s ",
         "UNPIVOT(quantity FOR quarter IN (Q1, Q2, Q3, Q4)) AS u (product, quarter, quantity)"
     );
-
-    pretty_assertions::assert_eq!(
-        verified_only_select(sql).from[0].relation,
-        Unpivot {
-            table: Box::new(TableFactor::Table {
-                name: ObjectName::from(vec![Ident::new("sales")]),
-                alias: Some(TableAlias {
-                    name: Ident::new("s"),
-                    columns: vec![]
-                }),
-                args: None,
-                with_hints: vec![],
-                version: None,
-                partitions: vec![],
-                with_ordinality: false,
-                json_path: None,
-                sample: None,
-                index_hints: vec![],
-            }),
-            value: Ident {
-                value: "quantity".to_string(),
-                quote_style: None,
-                span: Span::empty()
-            },
-
-            name: Ident {
-                value: "quarter".to_string(),
-                quote_style: None,
-                span: Span::empty()
-            },
-            columns: ["Q1", "Q2", "Q3", "Q4"]
-                .into_iter()
-                .map(Ident::new)
-                .collect(),
+    let base_unpivot = Unpivot {
+        table: Box::new(TableFactor::Table {
+            name: ObjectName::from(vec![Ident::new("sales")]),
             alias: Some(TableAlias {
-                name: Ident::new("u"),
-                columns: ["product", "quarter", "quantity"]
-                    .into_iter()
-                    .map(TableAliasColumnDef::from_name)
-                    .collect(),
+                name: Ident::new("s"),
+                columns: vec![],
             }),
-        }
-    );
+            args: None,
+            with_hints: vec![],
+            version: None,
+            partitions: vec![],
+            with_ordinality: false,
+            json_path: None,
+            sample: None,
+            index_hints: vec![],
+        }),
+        null_inclusion: None,
+        value: Ident {
+            value: "quantity".to_string(),
+            quote_style: None,
+            span: Span::empty(),
+        },
+
+        name: Ident {
+            value: "quarter".to_string(),
+            quote_style: None,
+            span: Span::empty(),
+        },
+        columns: ["Q1", "Q2", "Q3", "Q4"]
+            .into_iter()
+            .map(Ident::new)
+            .collect(),
+        alias: Some(TableAlias {
+            name: Ident::new("u"),
+            columns: ["product", "quarter", "quantity"]
+                .into_iter()
+                .map(TableAliasColumnDef::from_name)
+                .collect(),
+        }),
+    };
+    pretty_assertions::assert_eq!(verified_only_select(sql).from[0].relation, base_unpivot);
     assert_eq!(verified_stmt(sql).to_string(), sql);
 
     let sql_without_aliases = concat!(
@@ -10807,6 +10805,38 @@ fn parse_unpivot_table() {
     assert_eq!(
         verified_stmt(sql_without_aliases).to_string(),
         sql_without_aliases
+    );
+
+    let sql_unpivot_exclude_nulls = concat!(
+    "SELECT * FROM sales AS s ",
+    "UNPIVOT EXCLUDE NULLS (quantity FOR quarter IN (Q1, Q2, Q3, Q4)) AS u (product, quarter, quantity)"
+    );
+
+    if let Unpivot { null_inclusion, .. } =
+        &verified_only_select(sql_unpivot_exclude_nulls).from[0].relation
+    {
+        assert_eq!(*null_inclusion, Some(NullInclusion::ExcludeNulls));
+    }
+
+    assert_eq!(
+        verified_stmt(sql_unpivot_exclude_nulls).to_string(),
+        sql_unpivot_exclude_nulls
+    );
+
+    let sql_unpivot_include_nulls = concat!(
+        "SELECT * FROM sales AS s ",
+        "UNPIVOT INCLUDE NULLS (quantity FOR quarter IN (Q1, Q2, Q3, Q4)) AS u (product, quarter, quantity)"
+    );
+
+    if let Unpivot { null_inclusion, .. } =
+        &verified_only_select(sql_unpivot_include_nulls).from[0].relation
+    {
+        assert_eq!(*null_inclusion, Some(NullInclusion::IncludeNulls));
+    }
+
+    assert_eq!(
+        verified_stmt(sql_unpivot_include_nulls).to_string(),
+        sql_unpivot_include_nulls
     );
 }
 
@@ -10904,6 +10934,7 @@ fn parse_pivot_unpivot_table() {
                     sample: None,
                     index_hints: vec![],
                 }),
+                null_inclusion: None,
                 value: Ident {
                     value: "population".to_string(),
                     quote_style: None,

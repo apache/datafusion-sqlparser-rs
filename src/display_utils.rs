@@ -68,7 +68,7 @@ impl Display for SpaceOrNewline {
 
 /// A value that displays a comma-separated list of values.
 /// When pretty-printed (using {:#}), it displays each value on a new line.
-pub(crate) struct DisplayCommaSeparated<'a, T: fmt::Display>(&'a [T]);
+pub(crate) struct DisplayCommaSeparated<'a, T: fmt::Display>(pub(crate) &'a [T]);
 
 impl<T: fmt::Display> fmt::Display for DisplayCommaSeparated<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

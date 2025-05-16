@@ -149,6 +149,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![allow(clippy::upper_case_acronyms)]
+// The AST represents rich AST nodes,
+// and favors expressiveness and ease of use over speed and memory usage.
+#![allow(clippy::large_enum_variant)]
 
 // Allow proc-macros to find this crate
 extern crate self as sqlparser;

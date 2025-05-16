@@ -977,7 +977,8 @@ mod visit_mut_tests {
             .parse_statement()
             .unwrap();
 
-        s.visit(visitor);
+        let flow = s.visit(visitor);
+        assert_eq!(flow, ControlFlow::Continue(()));
         s
     }
 

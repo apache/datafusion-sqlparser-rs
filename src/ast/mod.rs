@@ -4858,7 +4858,9 @@ impl fmt::Display for Statement {
                 if matches!(options, CreateTableOptions::Options(_)) {
                     write!(f, " {options}")?;
                 }
-                write!(f, " AS {query}")?;
+                f.write_str(" AS")?;
+                SpaceOrNewline.fmt(f)?;
+                query.fmt(f)?;
                 if *with_no_schema_binding {
                     write!(f, " WITH NO SCHEMA BINDING")?;
                 }

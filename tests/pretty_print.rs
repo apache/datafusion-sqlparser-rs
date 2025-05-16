@@ -249,7 +249,6 @@ DELETE
 }
 
 #[test]
-#[ignore = "https://github.com/apache/datafusion-sqlparser-rs/issues/1850"]
 fn test_pretty_print_create_table() {
     assert_eq!(
         prettify("CREATE TABLE my_table (id INT PRIMARY KEY, name VARCHAR(255) NOT NULL, CONSTRAINT fk_other FOREIGN KEY (id) REFERENCES other_table(id))"),

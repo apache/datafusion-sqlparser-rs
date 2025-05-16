@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::display_utils::{indented_list, Indent, SpaceOrNewline};
+use crate::display_utils::{indented_list, DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
 
 pub use super::ddl::{ColumnDef, TableConstraint};
 
@@ -267,14 +267,19 @@ impl Display for CreateTable {
             write!(f, " ON CLUSTER {}", on_cluster)?;
         }
         if !self.columns.is_empty() || !self.constraints.is_empty() {
-            write!(f, " ({}", display_comma_separated(&self.columns))?;
+            f.write_str(" (")?;
+            NewLine.fmt(f)?;
+            Indent(DisplayCommaSeparated(&self.columns)).fmt(f)?;
             if !self.columns.is_empty() && !self.constraints.is_empty() {
-                write!(f, ", ")?;
+                f.write_str(",")?;
+                SpaceOrNewline.fmt(f)?;
             }
-            write!(f, "{})", display_comma_separated(&self.constraints))?;
+            Indent(DisplayCommaSeparated(&self.constraints)).fmt(f)?;
+            NewLine.fmt(f)?;
+            f.write_str(")")?;
         } else if self.query.is_none() && self.like.is_none() && self.clone.is_none() {
             // PostgreSQL allows `CREATE TABLE t ();`, but requires empty parens
-            write!(f, " ()")?;
+            f.write_str(" ()")?;
         }
 
         // Hive table comment should be after column definitions, please refer to:

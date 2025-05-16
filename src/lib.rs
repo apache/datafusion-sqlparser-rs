@@ -149,8 +149,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![allow(clippy::upper_case_acronyms)]
-// The AST represents rich AST nodes,
-// and favors expressiveness and ease of use over speed and memory usage.
+// Permit large enum variants to keep a unified, expressive AST.
+// Splitting complex nodes (expressions, statements, types) into separate types
+// would bloat the API and hide intent. Extra memory is a worthwhile tradeoff.
 #![allow(clippy::large_enum_variant)]
 
 // Allow proc-macros to find this crate

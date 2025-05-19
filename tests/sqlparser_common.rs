@@ -14346,7 +14346,7 @@ fn test_visit_order() {
     let sql = "SELECT CASE a WHEN 1 THEN 2 WHEN 3 THEN 4 ELSE 5 END";
     let stmt = verified_stmt(sql);
     let mut visited = vec![];
-    sqlparser::ast::visit_expressions(&stmt, |expr| {
+    let _ = sqlparser::ast::visit_expressions(&stmt, |expr| {
         visited.push(expr.to_string());
         core::ops::ControlFlow::<()>::Continue(())
     });

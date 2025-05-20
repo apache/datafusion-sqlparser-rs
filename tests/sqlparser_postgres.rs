@@ -4304,12 +4304,9 @@ $$"#;
             remote_connection: None,
         })
     );
-}
 
-#[test]
-fn parser_create_function_with_invalid_args() {
-    let sql = "CREATE FUNCTION add(function(struct<a,b> int64), b INTEGER) RETURNS INTEGER LANGUAGE SQL IMMUTABLE STRICT PARALLEL SAFE AS 'select $1 + $2;'";
-    assert!(pg().parse_sql_statements(sql).is_err(),);
+    let incorrect_sql = "CREATE FUNCTION add(function(struct<a,b> int64), b INTEGER) RETURNS INTEGER LANGUAGE SQL IMMUTABLE STRICT PARALLEL SAFE AS 'select $1 + $2;'";
+    assert!(pg().parse_sql_statements(incorrect_sql).is_err(),);
 }
 
 #[test]

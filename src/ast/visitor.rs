@@ -741,7 +741,7 @@ mod tests {
         }
     }
 
-    fn do_visit<V: Visitor>(sql: &str, visitor: &mut V) -> Statement {
+    fn do_visit<V: Visitor<Break = ()>>(sql: &str, visitor: &mut V) -> Statement {
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let s = Parser::new(&dialect)
@@ -749,7 +749,8 @@ mod tests {
             .parse_statement()
             .unwrap();
 
-        s.visit(visitor);
+        let flow = s.visit(visitor);
+        assert_eq!(flow, ControlFlow::Continue(()));
         s
     }
 
@@ -938,7 +939,8 @@ mod tests {
             .unwrap();
 
         let mut visitor = QuickVisitor {};
-        s.visit(&mut visitor);
+        let flow = s.visit(&mut visitor);
+        assert_eq!(flow, ControlFlow::Continue(()));
     }
 }
 
@@ -969,7 +971,7 @@ mod visit_mut_tests {
         }
     }
 
-    fn do_visit_mut<V: VisitorMut>(sql: &str, visitor: &mut V) -> Statement {
+    fn do_visit_mut<V: VisitorMut<Break = ()>>(sql: &str, visitor: &mut V) -> Statement {
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let mut s = Parser::new(&dialect)
@@ -977,7 +979,8 @@ mod visit_mut_tests {
             .parse_statement()
             .unwrap();
 
-        s.visit(visitor);
+        let flow = s.visit(visitor);
+        assert_eq!(flow, ControlFlow::Continue(()));
         s
     }
 

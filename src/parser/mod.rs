@@ -4635,6 +4635,18 @@ impl<'a> Parser<'a> {
             return Ok(vec![]);
         }
 
+        if end_token == Token::SemiColon
+            && self
+                .dialect
+                .supports_statements_without_semicolon_delimiter()
+        {
+            if let Token::Word(ref kw) = self.peek_token().token {
+                if kw.keyword != Keyword::NoKeyword {
+                    return Ok(vec![]);
+                }
+            }
+        }
+
         if self.options.trailing_commas && self.peek_tokens() == [Token::Comma, end_token] {
             let _ = self.consume_token(&Token::Comma);
             return Ok(vec![]);

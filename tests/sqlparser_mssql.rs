@@ -2536,7 +2536,6 @@ DECLARE @Y AS NVARCHAR(MAX)='y'
 #[test]
 fn test_supports_statements_without_semicolon_delimiter() {
     use sqlparser::ast::Ident;
-
     use sqlparser::tokenizer::Location;
 
     fn parse_n_statements(n: usize, sql: &str) -> Vec<Statement> {
@@ -2845,5 +2844,121 @@ fn test_supports_statements_without_semicolon_delimiter() {
                 ],
             },
         }
+    );
+
+    let exec_then_update = "\
+        EXEC my_sp \
+        UPDATE my_table SET col = 1 \
+    ";
+    assert_eq!(
+        parse_n_statements(2, exec_then_update),
+        vec![
+            Statement::Execute {
+                name: Some(ObjectName::from(vec![Ident::new("my_sp")])),
+                parameters: vec![],
+                has_parentheses: false,
+                immediate: false,
+                into: vec![],
+                using: vec![],
+                output: false,
+                default: false,
+            },
+            Statement::Update {
+                table: TableWithJoins {
+                    relation: TableFactor::Table {
+                        name: ObjectName::from(vec![Ident::new("my_table")]),
+                        alias: None,
+                        with_hints: vec![],
+                        args: None,
+                        version: None,
+                        with_ordinality: false,
+                        partitions: vec![],
+                        json_path: None,
+                        sample: None,
+                        index_hints: vec![]
+                    },
+                    joins: vec![],
+                },
+                assignments: vec![Assignment {
+                    value: Expr::Value(
+                        number("1")
+                            .with_span(Span::new(Location::new(3, 16), Location::new(3, 17)))
+                    ),
+                    target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new("col")])),
+                },],
+                selection: None,
+                returning: None,
+                from: None,
+                or: None,
+                limit: None,
+            },
+        ]
+    );
+
+    let exec_params_then_update = "\
+        EXEC my_sp 1, 2 \
+        UPDATE my_table SET col = 1 \
+    ";
+    assert_eq!(
+        parse_n_statements(2, exec_params_then_update),
+        vec![
+            Statement::Execute {
+                name: Some(ObjectName::from(vec![Ident::with_span(
+                    Span::new(Location::new(1, 6), Location::new(1, 11)),
+                    "my_sp"
+                )])),
+                parameters: vec![
+                    Expr::Value(
+                        number("1")
+                            .with_span(Span::new(Location::new(1, 12), Location::new(1, 13)))
+                    ),
+                    Expr::Value(
+                        number("2")
+                            .with_span(Span::new(Location::new(1, 15), Location::new(1, 17)))
+                    ),
+                ],
+                has_parentheses: false,
+                immediate: false,
+                into: vec![],
+                using: vec![],
+                output: false,
+                default: false,
+            },
+            Statement::Update {
+                table: TableWithJoins {
+                    relation: TableFactor::Table {
+                        name: ObjectName::from(vec![Ident::with_span(
+                            Span::new(Location::new(1, 24), Location::new(1, 32)),
+                            "my_table"
+                        )]),
+                        alias: None,
+                        with_hints: vec![],
+                        args: None,
+                        version: None,
+                        with_ordinality: false,
+                        partitions: vec![],
+                        json_path: None,
+                        sample: None,
+                        index_hints: vec![]
+                    },
+                    joins: vec![],
+                },
+                assignments: vec![Assignment {
+                    value: Expr::Value(
+                        number("1")
+                            .with_span(Span::new(Location::new(3, 16), Location::new(3, 17)))
+                    ),
+                    target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::with_span(
+                        Span::new(Location::new(1, 37), Location::new(1, 40)),
+                        "col"
+                    )])),
+                },],
+                selection: None,
+                returning: None,
+                from: None,
+                or: None,
+                limit: None,
+            },
+        ]
     );
 }

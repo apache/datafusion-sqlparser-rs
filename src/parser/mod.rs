@@ -5201,11 +5201,6 @@ impl<'a> Parser<'a> {
         let mut name = None;
         let mut data_type = self.parse_data_type()?;
 
-        // It may appear that the first token can be converted into a known
-        // type, but this could also be a collision as some types are only
-        // present in some dialects and therefore some type reserved keywords
-        // may be freely used as argument names in other dialects.
-
         // To check whether the first token is a name or a type, we need to
         // peek the next token, which if it is another type keyword, then the
         // first token is a name and not a type in itself.

@@ -68,7 +68,7 @@ fn basic_queries(c: &mut Criterion) {
     };
 
     group.bench_function("parse_large_statement", |b| {
-        b.iter(|| Parser::parse_sql(&dialect, criterion::black_box(large_statement.as_str())));
+        b.iter(|| Parser::parse_sql(&dialect, std::hint::black_box(large_statement.as_str())));
     });
 
     let large_statement = Parser::parse_sql(&dialect, large_statement.as_str())

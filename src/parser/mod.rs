@@ -5208,12 +5208,8 @@ impl<'a> Parser<'a> {
         let return_table = self.maybe_parse(|p| {
             let return_table_name = p.parse_identifier()?;
 
-            if !p.peek_keyword(Keyword::TABLE) {
-                parser_err!(
-                    "Expected TABLE keyword after return type",
-                    p.peek_token().span.start
-                )?
-            }
+            p.expect_keyword_is(Keyword::TABLE)?;
+            p.prev_token();
 
             let table_column_defs = match p.parse_data_type()? {
                 DataType::Table(maybe_table_column_defs) => match maybe_table_column_defs {

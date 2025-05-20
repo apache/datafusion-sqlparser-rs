@@ -5212,24 +5212,11 @@ impl<'a> Parser<'a> {
             p.prev_token();
 
             let table_column_defs = match p.parse_data_type()? {
-                DataType::Table(maybe_table_column_defs) => match maybe_table_column_defs {
-                    Some(table_column_defs) => {
-                        if table_column_defs.is_empty() {
-                            parser_err!(
-                                "Expected table column definitions after TABLE keyword",
-                                p.peek_token().span.start
-                            )?
-                        }
-
-                        table_column_defs
-                    }
-                    None => parser_err!(
-                        "Expected table column definitions after TABLE keyword",
-                        p.peek_token().span.start
-                    )?,
-                },
+                DataType::Table(Some(table_column_defs)) if !table_column_defs.is_empty() => {
+                    table_column_defs
+                }
                 _ => parser_err!(
-                    "Expected table data type after TABLE keyword",
+                    "Expected table column definitions after TABLE keyword",
                     p.peek_token().span.start
                 )?,
             };

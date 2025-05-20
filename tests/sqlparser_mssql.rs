@@ -346,6 +346,35 @@ fn parse_create_function() {
         END\
     ";
     let _ = ms().verified_stmt(create_multi_statement_table_value_function_with_constraints);
+
+    let create_multi_statement_tvf_without_table_definition = "\
+        CREATE FUNCTION incorrect_tvf(@foo INT, @bar VARCHAR(256)) \
+        RETURNS @t TABLE ()
+        AS \
+        BEGIN \
+            INSERT INTO @t SELECT 1; \
+            RETURN @t; \
+        END\
+    ";
+    assert_eq!(
+        ParserError::ParserError("Unparsable function body".to_owned()),
+        ms().parse_sql_statements(create_multi_statement_tvf_without_table_definition)
+            .unwrap_err()
+    );
+
+    let create_inline_tvf_without_subquery_or_bare_select = "\
+        CREATE FUNCTION incorrect_tvf(@foo INT, @bar VARCHAR(256)) \
+        RETURNS TABLE
+        AS \
+        RETURN 'hi'\
+    ";
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected a subquery (or bare SELECT statement) after RETURN".to_owned()
+        ),
+        ms().parse_sql_statements(create_inline_tvf_without_subquery_or_bare_select)
+            .unwrap_err()
+    );
 }
 
 #[test]

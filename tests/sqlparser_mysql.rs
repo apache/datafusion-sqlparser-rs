@@ -3746,6 +3746,11 @@ fn parse_begin_without_transaction() {
 }
 
 #[test]
+fn parse_geometric_types_srid_option() {
+    mysql_and_generic().verified_stmt("CREATE TABLE t (a geometry SRID 4326)");
+}
+
+#[test]
 fn parse_double_precision() {
     mysql().verified_stmt("CREATE TABLE foo (bar DOUBLE)");
     mysql().verified_stmt("CREATE TABLE foo (bar DOUBLE(11,0))");

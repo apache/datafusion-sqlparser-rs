@@ -264,7 +264,6 @@ CREATE TABLE my_table (
 }
 
 #[test]
-#[ignore = "https://github.com/apache/datafusion-sqlparser-rs/issues/1850"]
 fn test_pretty_print_create_view() {
     assert_eq!(
         prettify("CREATE VIEW my_view AS SELECT a, b FROM my_table WHERE x > 0"),

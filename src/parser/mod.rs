@@ -5273,12 +5273,21 @@ impl<'a> Parser<'a> {
         // parse: [ argname ] argtype
         let mut name = None;
         let mut data_type = self.parse_data_type()?;
-        if let DataType::Custom(n, _) = &data_type {
-            // the first token is actually a name
-            match n.0[0].clone() {
-                ObjectNamePart::Identifier(ident) => name = Some(ident),
+
+        // To check whether the first token is a name or a type, we need to
+        // peek the next token, which if it is another type keyword, then the
+        // first token is a name and not a type in itself.
+        let data_type_idx = self.get_current_index();
+        if let Some(next_data_type) = self.maybe_parse(|parser| parser.parse_data_type())? {
+            let token = self.token_at(data_type_idx);
+
+            // We ensure that the token is a `Word` token, and not other special tokens.
+            if !matches!(token.token, Token::Word(_)) {
+                return self.expected("a name or type", token.clone());
             }
-            data_type = self.parse_data_type()?;
+
+            name = Some(Ident::new(token.to_string()));
+            data_type = next_data_type;
         }
 
         let default_expr = if self.parse_keyword(Keyword::DEFAULT) || self.consume_token(&Token::Eq)

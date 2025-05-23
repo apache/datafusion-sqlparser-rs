@@ -7754,6 +7754,10 @@ impl<'a> Parser<'a> {
             && dialect_of!(self is MySqlDialect | SQLiteDialect | DuckDbDialect | GenericDialect)
         {
             self.parse_optional_column_option_as()
+        } else if self.parse_keyword(Keyword::SRID)
+            && dialect_of!(self is MySqlDialect | GenericDialect)
+        {
+            Ok(Some(ColumnOption::Srid(Box::new(self.parse_expr()?))))
         } else if self.parse_keyword(Keyword::IDENTITY)
             && dialect_of!(self is MsSqlDialect | GenericDialect)
         {

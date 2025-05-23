@@ -8780,6 +8780,30 @@ pub enum CreateFunctionBody {
     ///
     /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createfunction.html
     Return(Expr),
+
+    /// Function body expression using the 'AS RETURN' keywords
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE FUNCTION myfunc(a INT, b INT)
+    /// RETURNS TABLE
+    /// AS RETURN (SELECT a + b AS sum);
+    /// ```
+    ///
+    /// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql
+    AsReturnExpr(Expr),
+
+    /// Function body expression using the 'AS RETURN' keywords, with an un-parenthesized SELECT query
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE FUNCTION myfunc(a INT, b INT)
+    /// RETURNS TABLE
+    /// AS RETURN SELECT a + b AS sum;
+    /// ```
+    ///
+    /// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql?view=sql-server-ver16#select_stmt
+    AsReturnSelect(Select),
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

@@ -5204,19 +5204,62 @@ impl<'a> Parser<'a> {
         let (name, args) = self.parse_create_function_name_and_params()?;
 
         self.expect_keyword(Keyword::RETURNS)?;
-        let return_type = Some(self.parse_data_type()?);
 
-        self.expect_keyword_is(Keyword::AS)?;
+        let return_table = self.maybe_parse(|p| {
+            let return_table_name = p.parse_identifier()?;
 
-        let begin_token = self.expect_keyword(Keyword::BEGIN)?;
-        let statements = self.parse_statement_list(&[Keyword::END])?;
-        let end_token = self.expect_keyword(Keyword::END)?;
+            p.expect_keyword_is(Keyword::TABLE)?;
+            p.prev_token();
 
-        let function_body = Some(CreateFunctionBody::AsBeginEnd(BeginEndStatements {
-            begin_token: AttachedToken(begin_token),
-            statements,
-            end_token: AttachedToken(end_token),
-        }));
+            let table_column_defs = match p.parse_data_type()? {
+                DataType::Table(Some(table_column_defs)) if !table_column_defs.is_empty() => {
+                    table_column_defs
+                }
+                _ => parser_err!(
+                    "Expected table column definitions after TABLE keyword",
+                    p.peek_token().span.start
+                )?,
+            };
+
+            Ok(DataType::NamedTable {
+                name: ObjectName(vec![ObjectNamePart::Identifier(return_table_name)]),
+                columns: table_column_defs,
+            })
+        })?;
+
+        let return_type = if return_table.is_some() {
+            return_table
+        } else {
+            Some(self.parse_data_type()?)
+        };
+
+        let _ = self.parse_keyword(Keyword::AS);
+
+        let function_body = if self.peek_keyword(Keyword::BEGIN) {
+            let begin_token = self.expect_keyword(Keyword::BEGIN)?;
+            let statements = self.parse_statement_list(&[Keyword::END])?;
+            let end_token = self.expect_keyword(Keyword::END)?;
+
+            Some(CreateFunctionBody::AsBeginEnd(BeginEndStatements {
+                begin_token: AttachedToken(begin_token),
+                statements,
+                end_token: AttachedToken(end_token),
+            }))
+        } else if self.parse_keyword(Keyword::RETURN) {
+            if self.peek_token() == Token::LParen {
+                Some(CreateFunctionBody::AsReturnExpr(self.parse_expr()?))
+            } else if self.peek_keyword(Keyword::SELECT) {
+                let select = self.parse_select()?;
+                Some(CreateFunctionBody::AsReturnSelect(select))
+            } else {
+                parser_err!(
+                    "Expected a subquery (or bare SELECT statement) after RETURN",
+                    self.peek_token().span.start
+                )?
+            }
+        } else {
+            parser_err!("Unparsable function body", self.peek_token().span.start)?
+        };
 
         Ok(Statement::CreateFunction(CreateFunction {
             or_alter,
@@ -9797,8 +9840,14 @@ impl<'a> Parser<'a> {
                     Ok(DataType::AnyType)
                 }
                 Keyword::TABLE => {
-                    let columns = self.parse_returns_table_columns()?;
-                    Ok(DataType::Table(columns))
+                    // an LParen after the TABLE keyword indicates that table columns are being defined
+                    // whereas no LParen indicates an anonymous table expression will be returned
+                    if self.peek_token() == Token::LParen {
+                        let columns = self.parse_returns_table_columns()?;
+                        Ok(DataType::Table(Some(columns)))
+                    } else {
+                        Ok(DataType::Table(None))
+                    }
                 }
                 Keyword::SIGNED => {
                     if self.parse_keyword(Keyword::INTEGER) {
@@ -9839,13 +9888,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_returns_table_column(&mut self) -> Result<ColumnDef, ParserError> {
-        let name = self.parse_identifier()?;
-        let data_type = self.parse_data_type()?;
-        Ok(ColumnDef {
-            name,
-            data_type,
-            options: Vec::new(), // No constraints expected here
-        })
+        self.parse_column_def()
     }
 
     fn parse_returns_table_columns(&mut self) -> Result<Vec<ColumnDef>, ParserError> {

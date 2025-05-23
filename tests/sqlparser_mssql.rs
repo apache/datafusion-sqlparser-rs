@@ -254,6 +254,12 @@ fn parse_create_function() {
     ";
     let _ = ms().verified_stmt(multi_statement_function);
 
+    let multi_statement_function_without_as = multi_statement_function.replace(" AS", "");
+    let _ = ms().one_statement_parses_to(
+        &multi_statement_function_without_as,
+        multi_statement_function,
+    );
+
     let create_function_with_conditional = "\
         CREATE FUNCTION some_scalar_udf() \
         RETURNS INT \
@@ -288,6 +294,87 @@ fn parse_create_function() {
         END\
     ";
     let _ = ms().verified_stmt(create_function_with_return_expression);
+
+    let create_inline_table_value_function = "\
+        CREATE FUNCTION some_inline_tvf(@foo INT, @bar VARCHAR(256)) \
+        RETURNS TABLE \
+        AS \
+        RETURN (SELECT 1 AS col_1)\
+    ";
+    let _ = ms().verified_stmt(create_inline_table_value_function);
+
+    let create_inline_table_value_function_without_parentheses = "\
+        CREATE FUNCTION some_inline_tvf(@foo INT, @bar VARCHAR(256)) \
+        RETURNS TABLE \
+        AS \
+        RETURN SELECT 1 AS col_1\
+    ";
+    let _ = ms().verified_stmt(create_inline_table_value_function_without_parentheses);
+
+    let create_inline_table_value_function_without_as =
+        create_inline_table_value_function.replace(" AS", "");
+    let _ = ms().one_statement_parses_to(
+        &create_inline_table_value_function_without_as,
+        create_inline_table_value_function,
+    );
+
+    let create_multi_statement_table_value_function = "\
+        CREATE FUNCTION some_multi_statement_tvf(@foo INT, @bar VARCHAR(256)) \
+        RETURNS @t TABLE (col_1 INT) \
+        AS \
+        BEGIN \
+            INSERT INTO @t SELECT 1; \
+            RETURN; \
+        END\
+    ";
+    let _ = ms().verified_stmt(create_multi_statement_table_value_function);
+
+    let create_multi_statement_table_value_function_without_as =
+        create_multi_statement_table_value_function.replace(" AS", "");
+    let _ = ms().one_statement_parses_to(
+        &create_multi_statement_table_value_function_without_as,
+        create_multi_statement_table_value_function,
+    );
+
+    let create_multi_statement_table_value_function_with_constraints = "\
+        CREATE FUNCTION some_multi_statement_tvf(@foo INT, @bar VARCHAR(256)) \
+        RETURNS @t TABLE (col_1 INT NOT NULL) \
+        AS \
+        BEGIN \
+            INSERT INTO @t SELECT 1; \
+            RETURN @t; \
+        END\
+    ";
+    let _ = ms().verified_stmt(create_multi_statement_table_value_function_with_constraints);
+
+    let create_multi_statement_tvf_without_table_definition = "\
+        CREATE FUNCTION incorrect_tvf(@foo INT, @bar VARCHAR(256)) \
+        RETURNS @t TABLE ()
+        AS \
+        BEGIN \
+            INSERT INTO @t SELECT 1; \
+            RETURN @t; \
+        END\
+    ";
+    assert_eq!(
+        ParserError::ParserError("Unparsable function body".to_owned()),
+        ms().parse_sql_statements(create_multi_statement_tvf_without_table_definition)
+            .unwrap_err()
+    );
+
+    let create_inline_tvf_without_subquery_or_bare_select = "\
+        CREATE FUNCTION incorrect_tvf(@foo INT, @bar VARCHAR(256)) \
+        RETURNS TABLE
+        AS \
+        RETURN 'hi'\
+    ";
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected a subquery (or bare SELECT statement) after RETURN".to_owned()
+        ),
+        ms().parse_sql_statements(create_inline_tvf_without_subquery_or_bare_select)
+            .unwrap_err()
+    );
 }
 
 #[test]

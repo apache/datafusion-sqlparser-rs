@@ -15155,6 +15155,12 @@ fn parse_pipeline_operator() {
     dialects.verified_stmt("SELECT * FROM users |> ORDER BY id DESC");
     dialects.verified_stmt("SELECT * FROM users |> ORDER BY id DESC, name ASC");
 
+    // tablesample pipe operator
+    dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE BERNOULLI (50)");
+    dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE SYSTEM (50)");
+    // TODO: Technically, REPEATABLE is not available in BigQuery, but it is used with TABLESAMPLE in other dialects
+    dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE SYSTEM (50) REPEATABLE (10)");
+
     // many pipes
     dialects.verified_stmt(
         "SELECT * FROM CustomerOrders |> AGGREGATE SUM(cost) AS total_cost GROUP BY customer_id, state, item_type |> EXTEND COUNT(*) OVER (PARTITION BY customer_id) AS num_orders |> WHERE num_orders > 1 |> AGGREGATE AVG(total_cost) AS average GROUP BY state DESC, item_type ASC",

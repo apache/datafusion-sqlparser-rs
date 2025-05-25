@@ -11047,6 +11047,7 @@ impl<'a> Parser<'a> {
                 Keyword::LIMIT,
                 Keyword::AGGREGATE,
                 Keyword::ORDER,
+                Keyword::TABLESAMPLE,
             ])?;
             match kw {
                 Keyword::SELECT => {
@@ -11108,6 +11109,12 @@ impl<'a> Parser<'a> {
                     self.expect_one_of_keywords(&[Keyword::BY])?;
                     let exprs = self.parse_comma_separated(Parser::parse_order_by_expr)?;
                     pipe_operators.push(PipeOperator::OrderBy { exprs })
+                }
+                Keyword::TABLESAMPLE => {
+                    if let Some(sample) = self.maybe_parse_table_sample()? {
+                        pipe_operators.push(PipeOperator::TableSample { sample });
+                    };
+
                 }
                 unhandled => {
                     return Err(ParserError::ParserError(format!(

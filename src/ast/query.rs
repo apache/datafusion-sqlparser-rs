@@ -2680,6 +2680,10 @@ pub enum PipeOperator {
         full_table_exprs: Vec<ExprWithAliasAndOrderBy>,
         group_by_expr: Vec<ExprWithAliasAndOrderBy>,
     },
+    /// Selects a random sample of rows from the input table.
+    /// Syntax: `|> TABLESAMPLE <method> (<size> {ROWS | PERCENT})`
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#tablesample_pipe_operator>
+    TableSample { sample: Box <TableSample> },
 }
 
 impl fmt::Display for PipeOperator {
@@ -2730,6 +2734,10 @@ impl fmt::Display for PipeOperator {
             }
             PipeOperator::OrderBy { exprs } => {
                 write!(f, "ORDER BY {}", display_comma_separated(exprs.as_slice()))
+            }
+
+            PipeOperator::TableSample { sample } => {
+                write!(f, " {}", sample)
             }
         }
     }

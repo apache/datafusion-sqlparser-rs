@@ -104,7 +104,7 @@ impl fmt::Display for Query {
             format.fmt(f)?;
         }
         for pipe_operator in &self.pipe_operators {
-            f.write_str(" |> ")?;
+            f.write_str(" |>")?;
             pipe_operator.fmt(f)?;
         }
         Ok(())
@@ -2690,22 +2690,22 @@ impl fmt::Display for PipeOperator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             PipeOperator::Select { exprs } => {
-                write!(f, "SELECT {}", display_comma_separated(exprs.as_slice()))
+                write!(f, " SELECT {}", display_comma_separated(exprs.as_slice()))
             }
             PipeOperator::Extend { exprs } => {
-                write!(f, "EXTEND {}", display_comma_separated(exprs.as_slice()))
+                write!(f, " EXTEND {}", display_comma_separated(exprs.as_slice()))
             }
             PipeOperator::Set { assignments } => {
-                write!(f, "SET {}", display_comma_separated(assignments.as_slice()))
+                write!(f, " SET {}", display_comma_separated(assignments.as_slice()))
             }
             PipeOperator::Drop { columns } => {
-                write!(f, "DROP {}", display_comma_separated(columns.as_slice()))
+                write!(f, " DROP {}", display_comma_separated(columns.as_slice()))
             }
             PipeOperator::As { alias } => {
-                write!(f, "AS {}", alias)
+                write!(f, " AS {}", alias)
             }
             PipeOperator::Limit { expr, offset } => {
-                write!(f, "LIMIT {}", expr)?;
+                write!(f, " LIMIT {}", expr)?;
                 if let Some(offset) = offset {
                     write!(f, " OFFSET {}", offset)?;
                 }
@@ -2715,7 +2715,7 @@ impl fmt::Display for PipeOperator {
                 full_table_exprs,
                 group_by_expr,
             } => {
-                write!(f, "AGGREGATE")?;
+                write!(f, " AGGREGATE")?;
                 if !full_table_exprs.is_empty() {
                     write!(
                         f,
@@ -2730,14 +2730,14 @@ impl fmt::Display for PipeOperator {
             }
 
             PipeOperator::Where { expr } => {
-                write!(f, "WHERE {}", expr)
+                write!(f, " WHERE {}", expr)
             }
             PipeOperator::OrderBy { exprs } => {
-                write!(f, "ORDER BY {}", display_comma_separated(exprs.as_slice()))
+                write!(f, " ORDER BY {}", display_comma_separated(exprs.as_slice()))
             }
 
             PipeOperator::TableSample { sample } => {
-                write!(f, " {}", sample)
+                write!(f, "{}", sample)
             }
         }
     }

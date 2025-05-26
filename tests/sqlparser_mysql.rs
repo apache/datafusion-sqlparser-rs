@@ -2801,6 +2801,7 @@ fn parse_alter_table_with_algorithm() {
                 operations,
                 vec![
                     AlterTableOperation::DropColumn {
+                        has_column_keyword: true,
                         column_name: Ident::new("password_digest"),
                         if_exists: false,
                         drop_behavior: None,
@@ -2848,6 +2849,7 @@ fn parse_alter_table_with_lock() {
                 operations,
                 vec![
                     AlterTableOperation::DropColumn {
+                        has_column_keyword: true,
                         column_name: Ident::new("password_digest"),
                         if_exists: false,
                         drop_behavior: None,

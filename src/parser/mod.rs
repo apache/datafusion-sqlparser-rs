@@ -8608,11 +8608,12 @@ impl<'a> Parser<'a> {
             } else if self.parse_keywords(&[Keyword::CLUSTERING, Keyword::KEY]) {
                 AlterTableOperation::DropClusteringKey
             } else {
-                let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
+                let has_column_keyword = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
                 let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
                 let column_name = self.parse_identifier()?;
                 let drop_behavior = self.parse_optional_drop_behavior();
                 AlterTableOperation::DropColumn {
+                    has_column_keyword,
                     column_name,
                     if_exists,
                     drop_behavior,

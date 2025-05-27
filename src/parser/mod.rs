@@ -6249,6 +6249,11 @@ impl<'a> Parser<'a> {
                 loc
             );
         }
+        // Mysql requires table specification on index drop
+        let table = match self.parse_keyword(Keyword::ON) {
+            true => Some(self.parse_object_name(false)?),
+            false => None,
+        };
         Ok(Statement::Drop {
             object_type,
             if_exists,
@@ -6257,6 +6262,7 @@ impl<'a> Parser<'a> {
             restrict,
             purge,
             temporary,
+            table,
         })
     }
 

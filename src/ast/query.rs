@@ -2681,7 +2681,7 @@ pub enum PipeOperator {
         group_by_expr: Vec<ExprWithAliasAndOrderBy>,
     },
     /// Selects a random sample of rows from the input table.
-    /// Syntax: `|> TABLESAMPLE <method> (<size> {ROWS | PERCENT})`
+    /// Syntax: `|> TABLESAMPLE SYSTEM (10 PERCENT)
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#tablesample_pipe_operator>
     TableSample { sample: Box <TableSample> },
 }

@@ -2707,7 +2707,7 @@ impl fmt::Display for PipeOperator {
             PipeOperator::Limit { expr, offset } => {
                 write!(f, "LIMIT {}", expr)?;
                 if let Some(offset) = offset {
-                    write!(f, "OFFSET {}", offset)?;
+                    write!(f, " OFFSET {}", offset)?;
                 }
                 Ok(())
             }
@@ -2719,12 +2719,12 @@ impl fmt::Display for PipeOperator {
                 if !full_table_exprs.is_empty() {
                     write!(
                         f,
-                        "{}",
+                        " {}",
                         display_comma_separated(full_table_exprs.as_slice())
                     )?;
                 }
                 if !group_by_expr.is_empty() {
-                    write!(f, "GROUP BY {}", display_comma_separated(group_by_expr))?;
+                    write!(f, " GROUP BY {}", display_comma_separated(group_by_expr))?;
                 }
                 Ok(())
             }

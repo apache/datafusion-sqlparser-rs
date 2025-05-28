@@ -3985,3 +3985,26 @@ fn parse_straight_join() {
     mysql()
         .verified_stmt("SELECT a.*, b.* FROM table_a STRAIGHT_JOIN table_b AS b ON a.b_id = b.id");
 }
+
+#[test]
+fn parse_drop_index() {
+    let sql_drop_index = "DROP INDEX idx_name ON tab_name;";
+    let drop_stmt = mysql().one_statement_parses_to(sql_drop_index, "");
+    assert_eq!(
+        drop_stmt,
+        Statement::DropIndex {
+            index_name: ObjectName::from(vec![Ident::new("idx_name")]),
+            table_name: Some(ObjectName::from(vec![Ident::new("tab_name")])),
+        }
+    );
+}
+
+#[test]
+fn parse_alter_table_drop_index() {
+    assert_matches!(
+        alter_table_op(
+            mysql_and_generic().verified_stmt("ALTER TABLE tab DROP INDEX idx_index")
+        ),
+        AlterTableOperation::DropIndex { name } if name.value == "idx_index"
+    );
+}

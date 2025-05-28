@@ -186,6 +186,14 @@ pub enum AlterTableOperation {
     DropForeignKey {
         name: Ident,
     },
+    /// `DROP INDEX <index_name>`
+    ///
+    /// Note: this is a [MySQL]-specific operation.
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
+    DropIndex {
+        name: Ident,
+    },
     /// `ENABLE ALWAYS RULE rewrite_rule_name`
     ///
     /// Note: this is a PostgreSQL-specific operation.
@@ -605,6 +613,7 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::DropPrimaryKey => write!(f, "DROP PRIMARY KEY"),
             AlterTableOperation::DropForeignKey { name } => write!(f, "DROP FOREIGN KEY {name}"),
+            AlterTableOperation::DropIndex { name } => write!(f, "DROP INDEX {name}"),
             AlterTableOperation::DropColumn {
                 column_name,
                 if_exists,

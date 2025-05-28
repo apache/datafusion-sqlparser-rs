@@ -9099,7 +9099,9 @@ fn test_create_index_with_with_clause() {
 #[test]
 fn parse_drop_index() {
     let sql = "DROP INDEX idx_a";
-    match verified_stmt(sql) {
+    // MySql dialect doesn't support `DROP INDEX idx_a`,you need to specify a specific table, please refer:
+    // [MySql](https://dev.mysql.com/doc/refman/8.4/en/drop-index.html)
+    match all_dialects_except(|d| d.is::<MySqlDialect>()).verified_stmt(sql) {
         Statement::Drop {
             names, object_type, ..
         } => {

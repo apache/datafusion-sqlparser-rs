@@ -4926,17 +4926,18 @@ fn parse_alter_table_drop_column() {
     check_one("DROP COLUMN IF EXISTS is_active CASCADE");
     check_one("DROP COLUMN IF EXISTS is_active RESTRICT");
     one_statement_parses_to(
-        "ALTER TABLE tab DROP IF EXISTS is_active CASCADE",
+        "ALTER TABLE tab DROP COLUMN IF EXISTS is_active CASCADE",
         "ALTER TABLE tab DROP COLUMN IF EXISTS is_active CASCADE",
     );
     one_statement_parses_to(
         "ALTER TABLE tab DROP is_active CASCADE",
-        "ALTER TABLE tab DROP COLUMN is_active CASCADE",
+        "ALTER TABLE tab DROP is_active CASCADE",
     );
 
     fn check_one(constraint_text: &str) {
         match alter_table_op(verified_stmt(&format!("ALTER TABLE tab {constraint_text}"))) {
             AlterTableOperation::DropColumn {
+                has_column_keyword: true,
                 column_name,
                 if_exists,
                 drop_behavior,

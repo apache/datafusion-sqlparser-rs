@@ -139,6 +139,7 @@ pub enum AlterTableOperation {
     },
     /// `DROP [ COLUMN ] [ IF EXISTS ] <column_name> [ CASCADE ]`
     DropColumn {
+        has_column_keyword: bool,
         column_name: Ident,
         if_exists: bool,
         drop_behavior: Option<DropBehavior>,
@@ -606,12 +607,14 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::DropPrimaryKey => write!(f, "DROP PRIMARY KEY"),
             AlterTableOperation::DropForeignKey { name } => write!(f, "DROP FOREIGN KEY {name}"),
             AlterTableOperation::DropColumn {
+                has_column_keyword,
                 column_name,
                 if_exists,
                 drop_behavior,
             } => write!(
                 f,
-                "DROP COLUMN {}{}{}",
+                "DROP {}{}{}{}",
+                if *has_column_keyword { "COLUMN " } else { "" },
                 if *if_exists { "IF EXISTS " } else { "" },
                 column_name,
                 match drop_behavior {

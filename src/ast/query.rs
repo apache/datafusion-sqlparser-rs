@@ -1559,7 +1559,7 @@ impl fmt::Display for TableSampleBucket {
 }
 impl fmt::Display for TableSample {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, " {}", self.modifier)?;
+        write!(f, "{}", self.modifier)?;
         if let Some(name) = &self.name {
             write!(f, " {}", name)?;
         }
@@ -1862,7 +1862,7 @@ impl fmt::Display for TableFactor {
                     write!(f, " WITH ORDINALITY")?;
                 }
                 if let Some(TableSampleKind::BeforeTableAlias(sample)) = sample {
-                    write!(f, "{sample}")?;
+                    write!(f, " {sample}")?;
                 }
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
@@ -1877,7 +1877,7 @@ impl fmt::Display for TableFactor {
                     write!(f, "{version}")?;
                 }
                 if let Some(TableSampleKind::AfterTableAlias(sample)) = sample {
-                    write!(f, "{sample}")?;
+                    write!(f, " {sample}")?;
                 }
                 Ok(())
             }

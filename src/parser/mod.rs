@@ -12758,7 +12758,7 @@ impl<'a> Parser<'a> {
         } else {
             return Ok(None);
         };
-        self.parse_table_sample(modifier).map(|sample| Some(sample))
+        self.parse_table_sample(modifier).map(Some)
     }
 
     fn parse_table_sample(

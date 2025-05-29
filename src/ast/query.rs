@@ -2683,7 +2683,7 @@ pub enum PipeOperator {
     /// Selects a random sample of rows from the input table.
     /// Syntax: `|> TABLESAMPLE SYSTEM (10 PERCENT)
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#tablesample_pipe_operator>
-    TableSample { sample: Box <TableSample> },
+    TableSample { sample: Box<TableSample> },
 }
 
 impl fmt::Display for PipeOperator {

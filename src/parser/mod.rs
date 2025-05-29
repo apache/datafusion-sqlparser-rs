@@ -12758,11 +12758,14 @@ impl<'a> Parser<'a> {
         } else {
             return Ok(None);
         };
-        self.parse_table_sample(modifier).map(|sample| Some(sample))       
+        self.parse_table_sample(modifier).map(|sample| Some(sample))
     }
 
-    fn parse_table_sample(&mut self, modifier: TableSampleModifier ) -> Result<Box<TableSample>, ParserError> {
-let name = match self.parse_one_of_keywords(&[
+    fn parse_table_sample(
+        &mut self,
+        modifier: TableSampleModifier,
+    ) -> Result<Box<TableSample>, ParserError> {
+        let name = match self.parse_one_of_keywords(&[
             Keyword::BERNOULLI,
             Keyword::ROW,
             Keyword::SYSTEM,

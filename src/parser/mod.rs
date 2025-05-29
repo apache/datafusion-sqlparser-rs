@@ -5289,11 +5289,17 @@ impl<'a> Parser<'a> {
             |parser: &mut Parser| -> Result<OperateFunctionArg, ParserError> {
                 let name = parser.parse_identifier()?;
                 let data_type = parser.parse_data_type()?;
+                let default_expr = if parser.consume_token(&Token::Eq) {
+                    Some(parser.parse_expr()?)
+                } else {
+                    None
+                };
+
                 Ok(OperateFunctionArg {
                     mode: None,
                     name: Some(name),
                     data_type,
-                    default_expr: None,
+                    default_expr,
                 })
             };
         self.expect_token(&Token::LParen)?;

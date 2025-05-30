@@ -3987,3 +3987,34 @@ fn parse_straight_join() {
     mysql()
         .verified_stmt("SELECT a.*, b.* FROM table_a STRAIGHT_JOIN table_b AS b ON a.b_id = b.id");
 }
+
+#[test]
+fn parse_drop_index() {
+    let sql = "DROP INDEX idx_name ON table_name";
+    match mysql().verified_stmt(sql) {
+        Statement::Drop {
+            object_type,
+            if_exists,
+            names,
+            cascade,
+            restrict,
+            purge,
+            temporary,
+            table,
+        } => {
+            assert!(!if_exists);
+            assert_eq!(ObjectType::Index, object_type);
+            assert_eq!(
+                vec!["idx_name"],
+                names.iter().map(ToString::to_string).collect::<Vec<_>>()
+            );
+            assert!(!cascade);
+            assert!(!restrict);
+            assert!(!purge);
+            assert!(!temporary);
+            assert!(table.is_some());
+            assert_eq!("table_name", table.unwrap().to_string());
+        }
+        _ => unreachable!(),
+    }
+}

@@ -6255,6 +6255,11 @@ impl<'a> Parser<'a> {
                 loc
             );
         }
+        let table = if self.parse_keyword(Keyword::ON) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
         Ok(Statement::Drop {
             object_type,
             if_exists,
@@ -6263,6 +6268,7 @@ impl<'a> Parser<'a> {
             restrict,
             purge,
             temporary,
+            table,
         })
     }
 

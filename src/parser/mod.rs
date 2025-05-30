@@ -2273,6 +2273,16 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // Helper function to parse an element within GROUPING SETS
+    // This element can either be a single expression or a parenthesized list of expressions.
+    fn parse_grouping_set_element(&mut self) -> Result<Vec<Expr>, ParserError> {
+        if self.peek_token_ref().token == Token::LParen {
+            self.parse_tuple(true, true)
+        } else {
+            Ok(vec![self.parse_expr()?])
+        }
+    }
+
     pub fn parse_case_expr(&mut self) -> Result<Expr, ParserError> {
         let mut operand = None;
         if !self.parse_keyword(Keyword::WHEN) {
@@ -10045,7 +10055,7 @@ impl<'a> Parser<'a> {
             }
             if self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS]) {
                 self.expect_token(&Token::LParen)?;
-                let result = self.parse_comma_separated(|p| p.parse_tuple(true, true))?;
+                let result = self.parse_comma_separated(|p| p.parse_grouping_set_element())?;
                 self.expect_token(&Token::RParen)?;
                 modifiers.push(GroupByWithModifier::GroupingSets(Expr::GroupingSets(
                     result,

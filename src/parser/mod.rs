@@ -11054,6 +11054,7 @@ impl<'a> Parser<'a> {
                 Keyword::LIMIT,
                 Keyword::AGGREGATE,
                 Keyword::ORDER,
+                Keyword::TABLESAMPLE,
             ])?;
             match kw {
                 Keyword::SELECT => {
@@ -11115,6 +11116,10 @@ impl<'a> Parser<'a> {
                     self.expect_one_of_keywords(&[Keyword::BY])?;
                     let exprs = self.parse_comma_separated(Parser::parse_order_by_expr)?;
                     pipe_operators.push(PipeOperator::OrderBy { exprs })
+                }
+                Keyword::TABLESAMPLE => {
+                    let sample = self.parse_table_sample(TableSampleModifier::TableSample)?;
+                    pipe_operators.push(PipeOperator::TableSample { sample });
                 }
                 unhandled => {
                     return Err(ParserError::ParserError(format!(
@@ -12760,7 +12765,13 @@ impl<'a> Parser<'a> {
         } else {
             return Ok(None);
         };
+        self.parse_table_sample(modifier).map(Some)
+    }
 
+    fn parse_table_sample(
+        &mut self,
+        modifier: TableSampleModifier,
+    ) -> Result<Box<TableSample>, ParserError> {
         let name = match self.parse_one_of_keywords(&[
             Keyword::BERNOULLI,
             Keyword::ROW,
@@ -12842,14 +12853,14 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(Some(Box::new(TableSample {
+        Ok(Box::new(TableSample {
             modifier,
             name,
             quantity,
             seed,
             bucket,
             offset,
-        })))
+        }))
     }
 
     fn parse_table_sample_seed(

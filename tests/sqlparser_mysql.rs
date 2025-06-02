@@ -2509,9 +2509,11 @@ fn parse_alter_table_add_column() {
             operations,
             location: _,
             on_cluster: _,
+            iceberg,
         } => {
             assert_eq!(name.to_string(), "tab");
             assert!(!if_exists);
+            assert!(!iceberg);
             assert!(!only);
             assert_eq!(
                 operations,
@@ -2538,6 +2540,7 @@ fn parse_alter_table_add_column() {
             operations,
             location: _,
             on_cluster: _,
+            iceberg: _,
         } => {
             assert_eq!(name.to_string(), "tab");
             assert!(!if_exists);
@@ -2576,6 +2579,7 @@ fn parse_alter_table_add_columns() {
             operations,
             location: _,
             on_cluster: _,
+            iceberg: _,
         } => {
             assert_eq!(name.to_string(), "tab");
             assert!(!if_exists);

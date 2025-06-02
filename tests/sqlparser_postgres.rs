@@ -836,6 +836,7 @@ fn parse_alter_table_add_columns() {
             operations,
             location: _,
             on_cluster: _,
+            iceberg: _,
         } => {
             assert_eq!(name.to_string(), "tab");
             assert!(if_exists);
@@ -917,6 +918,7 @@ fn parse_alter_table_owner_to() {
                 operations,
                 location: _,
                 on_cluster: _,
+                iceberg: _,
             } => {
                 assert_eq!(name.to_string(), "tab");
                 assert_eq!(

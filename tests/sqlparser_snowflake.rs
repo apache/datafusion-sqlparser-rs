@@ -1592,6 +1592,13 @@ fn test_alter_table_clustering() {
 }
 
 #[test]
+fn test_alter_iceberg_table() {
+    snowflake_and_generic().verified_stmt("ALTER ICEBERG TABLE tbl DROP CLUSTERING KEY");
+    snowflake_and_generic().verified_stmt("ALTER ICEBERG TABLE tbl SUSPEND RECLUSTER");
+    snowflake_and_generic().verified_stmt("ALTER ICEBERG TABLE tbl RESUME RECLUSTER");
+}
+
+#[test]
 fn test_drop_stage() {
     match snowflake_and_generic().verified_stmt("DROP STAGE s1") {
         Statement::Drop {

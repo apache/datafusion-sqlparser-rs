@@ -10111,7 +10111,13 @@ impl<'a> Parser<'a> {
             }
             if self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS]) {
                 self.expect_token(&Token::LParen)?;
-                let result = self.parse_comma_separated(|p| p.parse_tuple(true, true))?;
+                let result = self.parse_comma_separated(|p| {
+                    if p.peek_token_ref().token == Token::LParen {
+                        p.parse_tuple(true, true)
+                    } else {
+                        Ok(vec![p.parse_expr()?])
+                    }
+                })?;
                 self.expect_token(&Token::RParen)?;
                 modifiers.push(GroupByWithModifier::GroupingSets(Expr::GroupingSets(
                     result,

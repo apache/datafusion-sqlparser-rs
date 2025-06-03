@@ -1029,10 +1029,13 @@ pub enum TableConstraint {
         on_update: Option<ReferentialAction>,
         characteristics: Option<ConstraintCharacteristics>,
     },
-    /// `[ CONSTRAINT <name> ] CHECK (<expr>)`
+    /// `[ CONSTRAINT <name> ] CHECK (<expr>) [[NOT] ENFORCED]`
     Check {
         name: Option<Ident>,
         expr: Box<Expr>,
+        /// MySQL-specific syntax
+        /// https://dev.mysql.com/doc/refman/8.4/en/create-table.html
+        enforced: Option<bool>,
     },
     /// MySQLs [index definition][1] for index creation. Not present on ANSI so, for now, the usage
     /// is restricted to MySQL, as no other dialects that support this syntax were found.
@@ -1162,8 +1165,17 @@ impl fmt::Display for TableConstraint {
                 }
                 Ok(())
             }
-            TableConstraint::Check { name, expr } => {
-                write!(f, "{}CHECK ({})", display_constraint_name(name), expr)
+            TableConstraint::Check {
+                name,
+                expr,
+                enforced,
+            } => {
+                write!(f, "{}CHECK ({})", display_constraint_name(name), expr)?;
+                if let Some(b) = enforced {
+                    write!(f, " {}", if *b { "ENFORCED" } else { "NOT ENFORCED" })
+                } else {
+                    Ok(())
+                }
             }
             TableConstraint::Index {
                 display_as_key,

@@ -1019,6 +1019,9 @@ pub enum TableConstraint {
     /// }`).
     ForeignKey {
         name: Option<Ident>,
+        /// MySQL-specific field
+        /// <https://dev.mysql.com/doc/refman/8.4/en/create-table-foreign-keys.html>
+        index_name: Option<Ident>,
         columns: Vec<Ident>,
         foreign_table: ObjectName,
         referred_columns: Vec<Ident>,
@@ -1129,6 +1132,7 @@ impl fmt::Display for TableConstraint {
             }
             TableConstraint::ForeignKey {
                 name,
+                index_name,
                 columns,
                 foreign_table,
                 referred_columns,
@@ -1138,8 +1142,9 @@ impl fmt::Display for TableConstraint {
             } => {
                 write!(
                     f,
-                    "{}FOREIGN KEY ({}) REFERENCES {}",
+                    "{}FOREIGN KEY{} ({}) REFERENCES {}",
                     display_constraint_name(name),
+                    display_option_spaced(index_name),
                     display_comma_separated(columns),
                     foreign_table,
                 )?;

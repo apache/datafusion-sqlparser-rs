@@ -8061,7 +8061,7 @@ impl<'a> Parser<'a> {
                 let nulls_distinct = self.parse_optional_nulls_distinct()?;
 
                 // optional index name
-                let index_name = self.parse_optional_indent()?;
+                let index_name = self.parse_optional_ident()?;
                 let index_type = self.parse_optional_using_then_index_type()?;
 
                 let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
@@ -8083,7 +8083,7 @@ impl<'a> Parser<'a> {
                 self.expect_keyword_is(Keyword::KEY)?;
 
                 // optional index name
-                let index_name = self.parse_optional_indent()?;
+                let index_name = self.parse_optional_ident()?;
                 let index_type = self.parse_optional_using_then_index_type()?;
 
                 let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
@@ -8100,6 +8100,7 @@ impl<'a> Parser<'a> {
             }
             Token::Word(w) if w.keyword == Keyword::FOREIGN => {
                 self.expect_keyword_is(Keyword::KEY)?;
+                let index_name = self.parse_optional_ident()?;
                 let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
                 self.expect_keyword_is(Keyword::REFERENCES)?;
                 let foreign_table = self.parse_object_name(false)?;
@@ -8122,6 +8123,7 @@ impl<'a> Parser<'a> {
 
                 Ok(Some(TableConstraint::ForeignKey {
                     name,
+                    index_name,
                     columns,
                     foreign_table,
                     referred_columns,
@@ -8145,7 +8147,7 @@ impl<'a> Parser<'a> {
 
                 let name = match self.peek_token().token {
                     Token::Word(word) if word.keyword == Keyword::USING => None,
-                    _ => self.parse_optional_indent()?,
+                    _ => self.parse_optional_ident()?,
                 };
 
                 let index_type = self.parse_optional_using_then_index_type()?;
@@ -8176,7 +8178,7 @@ impl<'a> Parser<'a> {
 
                 let index_type_display = self.parse_index_type_display();
 
-                let opt_index_name = self.parse_optional_indent()?;
+                let opt_index_name = self.parse_optional_ident()?;
 
                 let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
 
@@ -8286,7 +8288,7 @@ impl<'a> Parser<'a> {
 
     /// Parse `[ident]`, mostly `ident` is name, like:
     /// `window_name`, `index_name`, ...
-    pub fn parse_optional_indent(&mut self) -> Result<Option<Ident>, ParserError> {
+    pub fn parse_optional_ident(&mut self) -> Result<Option<Ident>, ParserError> {
         self.maybe_parse(|parser| parser.parse_identifier())
     }
 
@@ -15689,7 +15691,7 @@ impl<'a> Parser<'a> {
     pub fn parse_window_spec(&mut self) -> Result<WindowSpec, ParserError> {
         let window_name = match self.peek_token().token {
             Token::Word(word) if word.keyword == Keyword::NoKeyword => {
-                self.parse_optional_indent()?
+                self.parse_optional_ident()?
             }
             _ => None,
         };

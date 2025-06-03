@@ -670,6 +670,7 @@ impl Spanned for TableConstraint {
             TableConstraint::ForeignKey {
                 name,
                 columns,
+                index_name,
                 foreign_table,
                 referred_columns,
                 on_delete,
@@ -678,6 +679,7 @@ impl Spanned for TableConstraint {
             } => union_spans(
                 name.iter()
                     .map(|i| i.span)
+                    .chain(index_name.iter().map(|i| i.span))
                     .chain(columns.iter().map(|i| i.span))
                     .chain(core::iter::once(foreign_table.span()))
                     .chain(referred_columns.iter().map(|i| i.span))

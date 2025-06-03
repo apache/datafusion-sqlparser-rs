@@ -1034,7 +1034,7 @@ pub enum TableConstraint {
         name: Option<Ident>,
         expr: Box<Expr>,
         /// MySQL-specific syntax
-        /// https://dev.mysql.com/doc/refman/8.4/en/create-table.html
+        /// <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
         enforced: Option<bool>,
     },
     /// MySQLs [index definition][1] for index creation. Not present on ANSI so, for now, the usage

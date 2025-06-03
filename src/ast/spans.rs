@@ -311,7 +311,6 @@ impl Spanned for Statement {
                 table_names,
                 partitions,
                 table: _,
-                only: _,
                 identity: _,
                 cascade: _,
                 on_cluster: _,

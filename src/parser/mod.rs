@@ -5289,11 +5289,17 @@ impl<'a> Parser<'a> {
             |parser: &mut Parser| -> Result<OperateFunctionArg, ParserError> {
                 let name = parser.parse_identifier()?;
                 let data_type = parser.parse_data_type()?;
+                let default_expr = if parser.consume_token(&Token::Eq) {
+                    Some(parser.parse_expr()?)
+                } else {
+                    None
+                };
+
                 Ok(OperateFunctionArg {
                     mode: None,
                     name: Some(name),
                     data_type,
-                    default_expr: None,
+                    default_expr,
                 })
             };
         self.expect_token(&Token::LParen)?;
@@ -6271,6 +6277,11 @@ impl<'a> Parser<'a> {
                 loc
             );
         }
+        let table = if self.parse_keyword(Keyword::ON) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
         Ok(Statement::Drop {
             object_type,
             if_exists,
@@ -6279,6 +6290,7 @@ impl<'a> Parser<'a> {
             restrict,
             purge,
             temporary,
+            table,
         })
     }
 
@@ -8633,11 +8645,12 @@ impl<'a> Parser<'a> {
             } else if self.parse_keywords(&[Keyword::CLUSTERING, Keyword::KEY]) {
                 AlterTableOperation::DropClusteringKey
             } else {
-                let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
+                let has_column_keyword = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
                 let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
                 let column_name = self.parse_identifier()?;
                 let drop_behavior = self.parse_optional_drop_behavior();
                 AlterTableOperation::DropColumn {
+                    has_column_keyword,
                     column_name,
                     if_exists,
                     drop_behavior,
@@ -10123,7 +10136,13 @@ impl<'a> Parser<'a> {
             }
             if self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS]) {
                 self.expect_token(&Token::LParen)?;
-                let result = self.parse_comma_separated(|p| p.parse_tuple(true, true))?;
+                let result = self.parse_comma_separated(|p| {
+                    if p.peek_token_ref().token == Token::LParen {
+                        p.parse_tuple(true, true)
+                    } else {
+                        Ok(vec![p.parse_expr()?])
+                    }
+                })?;
                 self.expect_token(&Token::RParen)?;
                 modifiers.push(GroupByWithModifier::GroupingSets(Expr::GroupingSets(
                     result,
@@ -11072,6 +11091,7 @@ impl<'a> Parser<'a> {
                 Keyword::LIMIT,
                 Keyword::AGGREGATE,
                 Keyword::ORDER,
+                Keyword::TABLESAMPLE,
             ])?;
             match kw {
                 Keyword::SELECT => {
@@ -11133,6 +11153,10 @@ impl<'a> Parser<'a> {
                     self.expect_one_of_keywords(&[Keyword::BY])?;
                     let exprs = self.parse_comma_separated(Parser::parse_order_by_expr)?;
                     pipe_operators.push(PipeOperator::OrderBy { exprs })
+                }
+                Keyword::TABLESAMPLE => {
+                    let sample = self.parse_table_sample(TableSampleModifier::TableSample)?;
+                    pipe_operators.push(PipeOperator::TableSample { sample });
                 }
                 unhandled => {
                     return Err(ParserError::ParserError(format!(
@@ -12778,7 +12802,13 @@ impl<'a> Parser<'a> {
         } else {
             return Ok(None);
         };
+        self.parse_table_sample(modifier).map(Some)
+    }
 
+    fn parse_table_sample(
+        &mut self,
+        modifier: TableSampleModifier,
+    ) -> Result<Box<TableSample>, ParserError> {
         let name = match self.parse_one_of_keywords(&[
             Keyword::BERNOULLI,
             Keyword::ROW,
@@ -12860,14 +12890,14 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(Some(Box::new(TableSample {
+        Ok(Box::new(TableSample {
             modifier,
             name,
             quantity,
             seed,
             bucket,
             offset,
-        })))
+        }))
     }
 
     fn parse_table_sample_seed(

@@ -378,6 +378,46 @@ fn parse_create_function() {
 }
 
 #[test]
+fn parse_create_function_parameter_default_values() {
+    let single_default_sql =
+        "CREATE FUNCTION test_func(@param1 INT = 42) RETURNS INT AS BEGIN RETURN @param1; END";
+    assert_eq!(
+        ms().verified_stmt(single_default_sql),
+        Statement::CreateFunction(CreateFunction {
+            or_alter: false,
+            or_replace: false,
+            temporary: false,
+            if_not_exists: false,
+            name: ObjectName::from(vec![Ident::new("test_func")]),
+            args: Some(vec![OperateFunctionArg {
+                mode: None,
+                name: Some(Ident::new("@param1")),
+                data_type: DataType::Int(None),
+                default_expr: Some(Expr::Value((number("42")).with_empty_span())),
+            },]),
+            return_type: Some(DataType::Int(None)),
+            function_body: Some(CreateFunctionBody::AsBeginEnd(BeginEndStatements {
+                begin_token: AttachedToken::empty(),
+                statements: vec![Statement::Return(ReturnStatement {
+                    value: Some(ReturnStatementValue::Expr(Expr::Identifier(Ident::new(
+                        "@param1"
+                    )))),
+                })],
+                end_token: AttachedToken::empty(),
+            })),
+            behavior: None,
+            called_on_null: None,
+            parallel: None,
+            using: None,
+            language: None,
+            determinism_specifier: None,
+            options: None,
+            remote_connection: None,
+        }),
+    );
+}
+
+#[test]
 fn parse_mssql_apply_join() {
     let _ = ms_and_generic().verified_only_select(
         "SELECT * FROM sys.dm_exec_query_stats AS deqs \

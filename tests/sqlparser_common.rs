@@ -2823,6 +2823,38 @@ fn parse_group_by_special_grouping_sets() {
 }
 
 #[test]
+fn parse_group_by_grouping_sets_single_values() {
+    let sql = "SELECT a, b, SUM(c) FROM tab1 GROUP BY a, b GROUPING SETS ((a, b), a, (b), c, ())";
+    let canonical =
+        "SELECT a, b, SUM(c) FROM tab1 GROUP BY a, b GROUPING SETS ((a, b), (a), (b), (c), ())";
+    match all_dialects().one_statement_parses_to(sql, canonical) {
+        Statement::Query(query) => {
+            let group_by = &query.body.as_select().unwrap().group_by;
+            assert_eq!(
+                group_by,
+                &GroupByExpr::Expressions(
+                    vec![
+                        Expr::Identifier(Ident::new("a")),
+                        Expr::Identifier(Ident::new("b"))
+                    ],
+                    vec![GroupByWithModifier::GroupingSets(Expr::GroupingSets(vec![
+                        vec![
+                            Expr::Identifier(Ident::new("a")),
+                            Expr::Identifier(Ident::new("b"))
+                        ],
+                        vec![Expr::Identifier(Ident::new("a"))],
+                        vec![Expr::Identifier(Ident::new("b"))],
+                        vec![Expr::Identifier(Ident::new("c"))],
+                        vec![]
+                    ]))]
+                )
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_select_having() {
     let sql = "SELECT foo FROM bar GROUP BY foo HAVING COUNT(*) > 1";
     let select = verified_only_select(sql);
@@ -4926,17 +4958,18 @@ fn parse_alter_table_drop_column() {
     check_one("DROP COLUMN IF EXISTS is_active CASCADE");
     check_one("DROP COLUMN IF EXISTS is_active RESTRICT");
     one_statement_parses_to(
-        "ALTER TABLE tab DROP IF EXISTS is_active CASCADE",
+        "ALTER TABLE tab DROP COLUMN IF EXISTS is_active CASCADE",
         "ALTER TABLE tab DROP COLUMN IF EXISTS is_active CASCADE",
     );
     one_statement_parses_to(
         "ALTER TABLE tab DROP is_active CASCADE",
-        "ALTER TABLE tab DROP COLUMN is_active CASCADE",
+        "ALTER TABLE tab DROP is_active CASCADE",
     );
 
     fn check_one(constraint_text: &str) {
         match alter_table_op(verified_stmt(&format!("ALTER TABLE tab {constraint_text}"))) {
             AlterTableOperation::DropColumn {
+                has_column_keyword: true,
                 column_name,
                 if_exists,
                 drop_behavior,
@@ -15156,6 +15189,11 @@ fn parse_pipeline_operator() {
     dialects.verified_stmt("SELECT * FROM users |> ORDER BY id ASC");
     dialects.verified_stmt("SELECT * FROM users |> ORDER BY id DESC");
     dialects.verified_stmt("SELECT * FROM users |> ORDER BY id DESC, name ASC");
+
+    // tablesample pipe operator
+    dialects.verified_stmt("SELECT * FROM tbl |> TABLESAMPLE BERNOULLI (50)");
+    dialects.verified_stmt("SELECT * FROM tbl |> TABLESAMPLE SYSTEM (50 PERCENT)");
+    dialects.verified_stmt("SELECT * FROM tbl |> TABLESAMPLE SYSTEM (50) REPEATABLE (10)");
 
     // many pipes
     dialects.verified_stmt(

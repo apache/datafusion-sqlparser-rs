@@ -2801,6 +2801,7 @@ fn parse_alter_table_with_algorithm() {
                 operations,
                 vec![
                     AlterTableOperation::DropColumn {
+                        has_column_keyword: true,
                         column_name: Ident::new("password_digest"),
                         if_exists: false,
                         drop_behavior: None,
@@ -2848,6 +2849,7 @@ fn parse_alter_table_with_lock() {
                 operations,
                 vec![
                     AlterTableOperation::DropColumn {
+                        has_column_keyword: true,
                         column_name: Ident::new("password_digest"),
                         if_exists: false,
                         drop_behavior: None,
@@ -3988,15 +3990,33 @@ fn parse_straight_join() {
 
 #[test]
 fn parse_drop_index() {
-    let sql_drop_index = "DROP INDEX idx_name ON tab_name;";
-    let drop_stmt = mysql().one_statement_parses_to(sql_drop_index, "");
-    assert_eq!(
-        drop_stmt,
-        Statement::DropIndex {
-            index_name: ObjectName::from(vec![Ident::new("idx_name")]),
-            table_name: Some(ObjectName::from(vec![Ident::new("tab_name")])),
+    let sql = "DROP INDEX idx_name ON table_name";
+    match mysql().verified_stmt(sql) {
+        Statement::Drop {
+            object_type,
+            if_exists,
+            names,
+            cascade,
+            restrict,
+            purge,
+            temporary,
+            table,
+        } => {
+            assert!(!if_exists);
+            assert_eq!(ObjectType::Index, object_type);
+            assert_eq!(
+                vec!["idx_name"],
+                names.iter().map(ToString::to_string).collect::<Vec<_>>()
+            );
+            assert!(!cascade);
+            assert!(!restrict);
+            assert!(!purge);
+            assert!(!temporary);
+            assert!(table.is_some());
+            assert_eq!("table_name", table.unwrap().to_string());
         }
-    );
+        _ => unreachable!(),
+    }
 }
 
 #[test]

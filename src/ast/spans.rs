@@ -1091,6 +1091,7 @@ impl Spanned for AlterTableOperation {
                 drop_behavior: _,
             } => name.span,
             AlterTableOperation::DropColumn {
+                has_column_keyword: _,
                 column_name,
                 if_exists: _,
                 drop_behavior: _,

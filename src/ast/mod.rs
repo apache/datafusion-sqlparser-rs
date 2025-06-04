@@ -3416,6 +3416,9 @@ pub enum Statement {
         purge: bool,
         /// MySQL-specific "TEMPORARY" keyword
         temporary: bool,
+        /// MySQL-specific drop index syntax, which requires table specification  
+        /// See <https://dev.mysql.com/doc/refman/8.4/en/drop-index.html>
+        table: Option<ObjectName>,
     },
     /// ```sql
     /// DROP FUNCTION
@@ -5264,17 +5267,24 @@ impl fmt::Display for Statement {
                 restrict,
                 purge,
                 temporary,
-            } => write!(
-                f,
-                "DROP {}{}{} {}{}{}{}",
-                if *temporary { "TEMPORARY " } else { "" },
-                object_type,
-                if *if_exists { " IF EXISTS" } else { "" },
-                display_comma_separated(names),
-                if *cascade { " CASCADE" } else { "" },
-                if *restrict { " RESTRICT" } else { "" },
-                if *purge { " PURGE" } else { "" }
-            ),
+                table,
+            } => {
+                write!(
+                    f,
+                    "DROP {}{}{} {}{}{}{}",
+                    if *temporary { "TEMPORARY " } else { "" },
+                    object_type,
+                    if *if_exists { " IF EXISTS" } else { "" },
+                    display_comma_separated(names),
+                    if *cascade { " CASCADE" } else { "" },
+                    if *restrict { " RESTRICT" } else { "" },
+                    if *purge { " PURGE" } else { "" },
+                )?;
+                if let Some(table_name) = table.as_ref() {
+                    write!(f, " ON {}", table_name)?;
+                };
+                Ok(())
+            }
             Statement::DropFunction {
                 if_exists,
                 func_desc,

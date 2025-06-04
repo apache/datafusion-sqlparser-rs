@@ -341,7 +341,7 @@ pub struct Select {
     /// DISTRIBUTE BY (Hive)
     pub distribute_by: Vec<Expr>,
     /// SORT BY (Hive)
-    pub sort_by: Vec<Expr>,
+    pub sort_by: Vec<OrderByExpr>,
     /// HAVING
     pub having: Option<Expr>,
     /// WINDOW AS

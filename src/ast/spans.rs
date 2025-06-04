@@ -431,6 +431,7 @@ impl Spanned for Statement {
                 operations,
                 location: _,
                 on_cluster,
+                iceberg: _,
             } => union_spans(
                 core::iter::once(name.span())
                     .chain(operations.iter().map(|i| i.span()))

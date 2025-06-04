@@ -8893,38 +8893,15 @@ impl<'a> Parser<'a> {
             Keyword::ROLE,
             Keyword::POLICY,
             Keyword::CONNECTOR,
+            Keyword::ICEBERG,
         ])?;
         match object_type {
             Keyword::VIEW => self.parse_alter_view(),
             Keyword::TYPE => self.parse_alter_type(),
-            Keyword::TABLE => {
-                let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-                let only = self.parse_keyword(Keyword::ONLY); // [ ONLY ]
-                let table_name = self.parse_object_name(false)?;
-                let on_cluster = self.parse_optional_on_cluster()?;
-                let operations = self.parse_comma_separated(Parser::parse_alter_table_operation)?;
-
-                let mut location = None;
-                if self.parse_keyword(Keyword::LOCATION) {
-                    location = Some(HiveSetLocation {
-                        has_set: false,
-                        location: self.parse_identifier()?,
-                    });
-                } else if self.parse_keywords(&[Keyword::SET, Keyword::LOCATION]) {
-                    location = Some(HiveSetLocation {
-                        has_set: true,
-                        location: self.parse_identifier()?,
-                    });
-                }
-
-                Ok(Statement::AlterTable {
-                    name: table_name,
-                    if_exists,
-                    only,
-                    operations,
-                    location,
-                    on_cluster,
-                })
+            Keyword::TABLE => self.parse_alter_table(false),
+            Keyword::ICEBERG => {
+                self.expect_keyword(Keyword::TABLE)?;
+                self.parse_alter_table(true)
             }
             Keyword::INDEX => {
                 let index_name = self.parse_object_name(false)?;
@@ -8950,6 +8927,38 @@ impl<'a> Parser<'a> {
             // unreachable because expect_one_of_keywords used above
             _ => unreachable!(),
         }
+    }
+
+    /// Parse a [Statement::AlterTable]
+    pub fn parse_alter_table(&mut self, iceberg: bool) -> Result<Statement, ParserError> {
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let only = self.parse_keyword(Keyword::ONLY); // [ ONLY ]
+        let table_name = self.parse_object_name(false)?;
+        let on_cluster = self.parse_optional_on_cluster()?;
+        let operations = self.parse_comma_separated(Parser::parse_alter_table_operation)?;
+
+        let mut location = None;
+        if self.parse_keyword(Keyword::LOCATION) {
+            location = Some(HiveSetLocation {
+                has_set: false,
+                location: self.parse_identifier()?,
+            });
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::LOCATION]) {
+            location = Some(HiveSetLocation {
+                has_set: true,
+                location: self.parse_identifier()?,
+            });
+        }
+
+        Ok(Statement::AlterTable {
+            name: table_name,
+            if_exists,
+            only,
+            operations,
+            location,
+            on_cluster,
+            iceberg,
+        })
     }
 
     pub fn parse_alter_view(&mut self) -> Result<Statement, ParserError> {

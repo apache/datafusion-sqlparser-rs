@@ -345,10 +345,12 @@ pub fn alter_table_op_with_name(stmt: Statement, expected_name: &str) -> AlterTa
             operations,
             on_cluster: _,
             location: _,
+            iceberg,
         } => {
             assert_eq!(name.to_string(), expected_name);
             assert!(!if_exists);
             assert!(!is_only);
+            assert!(!iceberg);
             only(operations)
         }
         _ => panic!("Expected ALTER TABLE statement"),

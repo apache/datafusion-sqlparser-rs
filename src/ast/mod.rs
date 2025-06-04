@@ -3281,6 +3281,9 @@ pub enum Statement {
         /// For example: `ALTER TABLE table_name ON CLUSTER cluster_name ADD COLUMN c UInt32`
         /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/update)
         on_cluster: Option<Ident>,
+        /// Snowflake "ICEBERG" clause for Iceberg tables
+        /// <https://docs.snowflake.com/en/sql-reference/sql/alter-iceberg-table>
+        iceberg: bool,
     },
     /// ```sql
     /// ALTER INDEX
@@ -3405,7 +3408,7 @@ pub enum Statement {
         purge: bool,
         /// MySQL-specific "TEMPORARY" keyword
         temporary: bool,
-        /// MySQL-specific drop index syntax, which requires table specification  
+        /// MySQL-specific drop index syntax, which requires table specification
         /// See <https://dev.mysql.com/doc/refman/8.4/en/drop-index.html>
         table: Option<ObjectName>,
     },
@@ -5139,8 +5142,14 @@ impl fmt::Display for Statement {
                 operations,
                 location,
                 on_cluster,
+                iceberg,
             } => {
-                write!(f, "ALTER TABLE ")?;
+                if *iceberg {
+                    write!(f, "ALTER ICEBERG TABLE ")?;
+                } else {
+                    write!(f, "ALTER TABLE ")?;
+                }
+
                 if *if_exists {
                     write!(f, "IF EXISTS ")?;
                 }

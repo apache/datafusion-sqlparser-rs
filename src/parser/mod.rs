@@ -5353,24 +5353,6 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse statements of the DropIndex type such as:
-    ///
-    /// ```sql
-    /// DROP Index idx_name ON table_name
-    /// ```
-    pub fn parse_drop_index(&mut self) -> Result<Statement, ParserError> {
-        let index_name = self.parse_object_name(false)?;
-        let table_name = if self.parse_keyword(Keyword::ON) {
-            Some(self.parse_object_name(false)?)
-        } else {
-            None
-        };
-        Ok(Statement::DropIndex {
-            index_name,
-            table_name,
-        })
-    }
-
     /// Parse statements of the DropTrigger type such as:
     ///
     /// ```sql
@@ -6220,11 +6202,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keywords(&[Keyword::MATERIALIZED, Keyword::VIEW]) {
             ObjectType::MaterializedView
         } else if self.parse_keyword(Keyword::INDEX) {
-            if dialect_of!(self is MySqlDialect){
-                return self.parse_drop_index();
-            }else {
-                ObjectType::Index
-            }
+            ObjectType::Index
         } else if self.parse_keyword(Keyword::ROLE) {
             ObjectType::Role
         } else if self.parse_keyword(Keyword::SCHEMA) {

@@ -421,7 +421,6 @@ impl Spanned for Statement {
                     .chain(module_args.iter().map(|i| i.span)),
             ),
             Statement::CreateIndex(create_index) => create_index.span(),
-            Statement::DropIndex { .. } => Span::empty(),
             Statement::CreateRole { .. } => Span::empty(),
             Statement::CreateSecret { .. } => Span::empty(),
             Statement::CreateConnector { .. } => Span::empty(),

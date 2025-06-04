@@ -3208,17 +3208,6 @@ pub enum Statement {
     /// `CREATE INDEX`
     /// ```
     CreateIndex(CreateIndex),
-    /// DROP INDEX
-    ///
-    /// ```sql
-    /// DROP INDEX index_name ON tbl_name
-    /// ```
-    /// See [MySql](https://dev.mysql.com/doc/refman/8.4/en/drop-index.html)
-    /// TODO: No support `[algorithm_option | lock_option]`
-    DropIndex {
-        index_name: ObjectName,
-        table_name: Option<ObjectName>,
-    },
     /// ```sql
     /// CREATE ROLE
     /// ```
@@ -4930,17 +4919,6 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::CreateIndex(create_index) => create_index.fmt(f),
-            Statement::DropIndex {
-                index_name,
-                table_name,
-            } => {
-                write!(f, "DROP INDEX")?;
-                match &table_name {
-                    Some(table_name) => write!(f, " {index_name} ON {table_name}")?,
-                    None => write!(f, " {index_name}")?,
-                };
-                Ok(())
-            }
             Statement::CreateExtension {
                 name,
                 if_not_exists,

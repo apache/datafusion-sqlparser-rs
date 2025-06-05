@@ -15235,9 +15235,50 @@ fn parse_pipeline_operator() {
     dialects.verified_stmt("SELECT * FROM users |> INTERSECT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)");
     dialects.verified_stmt("SELECT * FROM users |> INTERSECT DISTINCT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)");
 
+    // except pipe operator (BigQuery requires DISTINCT modifier for EXCEPT)
+    dialects.verified_stmt("SELECT * FROM users |> EXCEPT DISTINCT (SELECT * FROM admins)");
+    
+    // except pipe operator with BY NAME modifier  
+    dialects.verified_stmt("SELECT * FROM users |> EXCEPT DISTINCT BY NAME (SELECT * FROM admins)");
+    
+    // except pipe operator with multiple queries
+    dialects.verified_stmt("SELECT * FROM users |> EXCEPT DISTINCT (SELECT * FROM admins), (SELECT * FROM guests)");
+    
+    // except pipe operator with BY NAME and multiple queries
+    dialects.verified_stmt("SELECT * FROM users |> EXCEPT DISTINCT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)");
+
     // many pipes
     dialects.verified_stmt(
         "SELECT * FROM CustomerOrders |> AGGREGATE SUM(cost) AS total_cost GROUP BY customer_id, state, item_type |> EXTEND COUNT(*) OVER (PARTITION BY customer_id) AS num_orders |> WHERE num_orders > 1 |> AGGREGATE AVG(total_cost) AS average GROUP BY state DESC, item_type ASC",
+    );
+}
+
+#[test]
+fn parse_pipeline_operator_negative_tests() {
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+
+    // Test that plain EXCEPT without DISTINCT fails
+    assert_eq!(
+        ParserError::ParserError("EXCEPT pipe operator requires DISTINCT modifier".to_string()),
+        dialects.parse_sql_statements("SELECT * FROM users |> EXCEPT (SELECT * FROM admins)").unwrap_err()
+    );
+
+    // Test that EXCEPT ALL fails  
+    assert_eq!(
+        ParserError::ParserError("EXCEPT pipe operator requires DISTINCT modifier".to_string()),
+        dialects.parse_sql_statements("SELECT * FROM users |> EXCEPT ALL (SELECT * FROM admins)").unwrap_err()
+    );
+
+    // Test that EXCEPT BY NAME without DISTINCT fails
+    assert_eq!(
+        ParserError::ParserError("EXCEPT pipe operator requires DISTINCT modifier".to_string()),
+        dialects.parse_sql_statements("SELECT * FROM users |> EXCEPT BY NAME (SELECT * FROM admins)").unwrap_err()
+    );
+
+    // Test that EXCEPT ALL BY NAME fails
+    assert_eq!(
+        ParserError::ParserError("EXCEPT pipe operator requires DISTINCT modifier".to_string()),
+        dialects.parse_sql_statements("SELECT * FROM users |> EXCEPT ALL BY NAME (SELECT * FROM admins)").unwrap_err()
     );
 }
 

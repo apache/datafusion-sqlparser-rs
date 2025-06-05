@@ -2708,6 +2708,15 @@ pub enum PipeOperator {
         set_quantifier: SetQuantifier,
         queries: Vec<Box<Query>>,
     },
+    /// Returns only the rows that are present in the input table but not in the specified tables.
+    ///
+    /// Syntax: `|> EXCEPT DISTINCT (<query>), (<query>), ...`
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#except_pipe_operator>
+    Except {
+        set_quantifier: SetQuantifier,
+        queries: Vec<Box<Query>>,
+    },
 }
 
 impl fmt::Display for PipeOperator {
@@ -2793,6 +2802,28 @@ impl fmt::Display for PipeOperator {
                 queries,
             } => {
                 write!(f, "INTERSECT")?;
+                match set_quantifier {
+                    SetQuantifier::All => write!(f, " ALL")?,
+                    SetQuantifier::Distinct => write!(f, " DISTINCT")?,
+                    SetQuantifier::None => {}
+                    _ => {
+                        write!(f, " {}", set_quantifier)?;
+                    }
+                }
+                write!(f, " ")?;
+                for (i, query) in queries.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "({})", query)?;
+                }
+                Ok(())
+            }
+            PipeOperator::Except {
+                set_quantifier,
+                queries,
+            } => {
+                write!(f, "EXCEPT")?;
                 match set_quantifier {
                     SetQuantifier::All => write!(f, " ALL")?,
                     SetQuantifier::Distinct => write!(f, " DISTINCT")?,

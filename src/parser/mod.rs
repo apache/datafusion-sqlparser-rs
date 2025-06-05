@@ -11086,6 +11086,7 @@ impl<'a> Parser<'a> {
                 Keyword::RENAME,
                 Keyword::UNION,
                 Keyword::INTERSECT,
+                Keyword::EXCEPT,
             ])?;
             match kw {
                 Keyword::SELECT => {
@@ -11181,6 +11182,27 @@ impl<'a> Parser<'a> {
                         Ok(query)
                     })?;
                     pipe_operators.push(PipeOperator::Intersect { set_quantifier, queries });
+                }
+                Keyword::EXCEPT => {
+                    // BigQuery EXCEPT pipe operator requires DISTINCT modifier
+                    let set_quantifier = if self.parse_keywords(&[Keyword::DISTINCT, Keyword::BY, Keyword::NAME]) {
+                        SetQuantifier::DistinctByName
+                    } else if self.parse_keyword(Keyword::DISTINCT) {
+                        SetQuantifier::Distinct
+                    } else {
+                        return Err(ParserError::ParserError(
+                            "EXCEPT pipe operator requires DISTINCT modifier".to_string()
+                        ));
+                    };
+                    // BigQuery EXCEPT pipe operator requires parentheses around queries
+                    // Parse comma-separated list of parenthesized queries
+                    let queries = self.parse_comma_separated(|parser| {
+                        parser.expect_token(&Token::LParen)?;
+                        let query = parser.parse_query()?;
+                        parser.expect_token(&Token::RParen)?;
+                        Ok(query)
+                    })?;
+                    pipe_operators.push(PipeOperator::Except { set_quantifier, queries });
                 }
                 unhandled => {
                     return Err(ParserError::ParserError(format!(

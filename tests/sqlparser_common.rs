@@ -6861,6 +6861,8 @@ fn parse_searched_case_expr() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Case {
+            case_token: AttachedToken::empty(),
+            end_token: AttachedToken::empty(),
             operand: None,
             conditions: vec![
                 CaseWhen {
@@ -6900,6 +6902,8 @@ fn parse_simple_case_expr() {
     use self::Expr::{Case, Identifier};
     assert_eq!(
         &Case {
+            case_token: AttachedToken::empty(),
+            end_token: AttachedToken::empty(),
             operand: Some(Box::new(Identifier(Ident::new("foo")))),
             conditions: vec![CaseWhen {
                 condition: Expr::value(number("1")),
@@ -14465,6 +14469,16 @@ fn test_case_statement_span() {
 }
 
 #[test]
+fn test_case_expr_span() {
+    let sql = "CASE 1 WHEN 2 THEN 3 ELSE 4 END";
+    let mut parser = Parser::new(&GenericDialect {}).try_with_sql(sql).unwrap();
+    assert_eq!(
+        parser.parse_expr().unwrap().span(),
+        Span::new(Location::new(1, 1), Location::new(1, sql.len() as u64 + 1))
+    );
+}
+
+#[test]
 fn parse_if_statement() {
     let dialects = all_dialects_except(|d| d.is::<MsSqlDialect>());
 
@@ -14642,6 +14656,8 @@ fn test_lambdas() {
                 Expr::Lambda(LambdaFunction {
                     params: OneOrManyWithParens::Many(vec![Ident::new("p1"), Ident::new("p2")]),
                     body: Box::new(Expr::Case {
+                        case_token: AttachedToken::empty(),
+                        end_token: AttachedToken::empty(),
                         operand: None,
                         conditions: vec![
                             CaseWhen {

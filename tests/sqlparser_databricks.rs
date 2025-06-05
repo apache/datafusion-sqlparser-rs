@@ -15,6 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+use sqlparser::ast::helpers::attached_token::AttachedToken;
 use sqlparser::ast::*;
 use sqlparser::dialect::{DatabricksDialect, GenericDialect};
 use sqlparser::parser::ParserError;
@@ -108,6 +109,8 @@ fn test_databricks_lambdas() {
                 Expr::Lambda(LambdaFunction {
                     params: OneOrManyWithParens::Many(vec![Ident::new("p1"), Ident::new("p2")]),
                     body: Box::new(Expr::Case {
+                        case_token: AttachedToken::empty(),
+                        end_token: AttachedToken::empty(),
                         operand: None,
                         conditions: vec![
                             CaseWhen {

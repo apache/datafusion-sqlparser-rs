@@ -2274,7 +2274,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_case_expr(&mut self) -> Result<Expr, ParserError> {
-        let case_token = AttachedToken(self.get_previous_token().clone());
+        let case_token = AttachedToken(self.get_current_token().clone());
         let mut operand = None;
         if !self.parse_keyword(Keyword::WHEN) {
             operand = Some(Box::new(self.parse_expr()?));

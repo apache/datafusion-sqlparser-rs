@@ -11157,7 +11157,8 @@ impl<'a> Parser<'a> {
                     pipe_operators.push(PipeOperator::TableSample { sample });
                 }
                 Keyword::RENAME => {
-                    let mappings = self.parse_comma_separated(Parser::parse_identifier_with_optional_alias)?;
+                    let mappings =
+                        self.parse_comma_separated(Parser::parse_identifier_with_optional_alias)?;
                     pipe_operators.push(PipeOperator::Rename { mappings });
                 }
                 Keyword::UNION => {
@@ -11171,19 +11172,23 @@ impl<'a> Parser<'a> {
                         parser.expect_token(&Token::RParen)?;
                         Ok(query)
                     })?;
-                    pipe_operators.push(PipeOperator::Union { set_quantifier, queries });
+                    pipe_operators.push(PipeOperator::Union {
+                        set_quantifier,
+                        queries,
+                    });
                 }
                 Keyword::INTERSECT => {
                     // BigQuery INTERSECT pipe operator requires DISTINCT modifier
-                    let set_quantifier = if self.parse_keywords(&[Keyword::DISTINCT, Keyword::BY, Keyword::NAME]) {
-                        SetQuantifier::DistinctByName
-                    } else if self.parse_keyword(Keyword::DISTINCT) {
-                        SetQuantifier::Distinct
-                    } else {
-                        return Err(ParserError::ParserError(
-                            "INTERSECT pipe operator requires DISTINCT modifier".to_string()
-                        ));
-                    };
+                    let set_quantifier =
+                        if self.parse_keywords(&[Keyword::DISTINCT, Keyword::BY, Keyword::NAME]) {
+                            SetQuantifier::DistinctByName
+                        } else if self.parse_keyword(Keyword::DISTINCT) {
+                            SetQuantifier::Distinct
+                        } else {
+                            return Err(ParserError::ParserError(
+                                "INTERSECT pipe operator requires DISTINCT modifier".to_string(),
+                            ));
+                        };
                     // BigQuery INTERSECT pipe operator requires parentheses around queries
                     // Parse comma-separated list of parenthesized queries
                     let queries = self.parse_comma_separated(|parser| {
@@ -11192,19 +11197,23 @@ impl<'a> Parser<'a> {
                         parser.expect_token(&Token::RParen)?;
                         Ok(query)
                     })?;
-                    pipe_operators.push(PipeOperator::Intersect { set_quantifier, queries });
+                    pipe_operators.push(PipeOperator::Intersect {
+                        set_quantifier,
+                        queries,
+                    });
                 }
                 Keyword::EXCEPT => {
                     // BigQuery EXCEPT pipe operator requires DISTINCT modifier
-                    let set_quantifier = if self.parse_keywords(&[Keyword::DISTINCT, Keyword::BY, Keyword::NAME]) {
-                        SetQuantifier::DistinctByName
-                    } else if self.parse_keyword(Keyword::DISTINCT) {
-                        SetQuantifier::Distinct
-                    } else {
-                        return Err(ParserError::ParserError(
-                            "EXCEPT pipe operator requires DISTINCT modifier".to_string()
-                        ));
-                    };
+                    let set_quantifier =
+                        if self.parse_keywords(&[Keyword::DISTINCT, Keyword::BY, Keyword::NAME]) {
+                            SetQuantifier::DistinctByName
+                        } else if self.parse_keyword(Keyword::DISTINCT) {
+                            SetQuantifier::Distinct
+                        } else {
+                            return Err(ParserError::ParserError(
+                                "EXCEPT pipe operator requires DISTINCT modifier".to_string(),
+                            ));
+                        };
                     // BigQuery EXCEPT pipe operator requires parentheses around queries
                     // Parse comma-separated list of parenthesized queries
                     let queries = self.parse_comma_separated(|parser| {
@@ -11213,7 +11222,10 @@ impl<'a> Parser<'a> {
                         parser.expect_token(&Token::RParen)?;
                         Ok(query)
                     })?;
-                    pipe_operators.push(PipeOperator::Except { set_quantifier, queries });
+                    pipe_operators.push(PipeOperator::Except {
+                        set_quantifier,
+                        queries,
+                    });
                 }
                 Keyword::CALL => {
                     let function_name = self.parse_object_name(false)?;
@@ -11229,13 +11241,14 @@ impl<'a> Parser<'a> {
                         pipe_operators.push(PipeOperator::Call { function, alias });
                     } else {
                         return Err(ParserError::ParserError(
-                            "Expected function call after CALL".to_string()
+                            "Expected function call after CALL".to_string(),
                         ));
                     }
                 }
                 Keyword::PIVOT => {
                     self.expect_token(&Token::LParen)?;
-                    let aggregate_functions = self.parse_comma_separated(Self::parse_aliased_function_call)?;
+                    let aggregate_functions =
+                        self.parse_comma_separated(Self::parse_aliased_function_call)?;
                     self.expect_keyword_is(Keyword::FOR)?;
                     let value_column = self.parse_period_separated(|p| p.parse_identifier())?;
                     self.expect_keyword_is(Keyword::IN)?;
@@ -11251,7 +11264,9 @@ impl<'a> Parser<'a> {
                     } else if self.peek_sub_query() {
                         PivotValueSource::Subquery(self.parse_query()?)
                     } else {
-                        PivotValueSource::List(self.parse_comma_separated(Self::parse_expr_with_alias)?)
+                        PivotValueSource::List(
+                            self.parse_comma_separated(Self::parse_expr_with_alias)?,
+                        )
                     };
                     self.expect_token(&Token::RParen)?;
                     self.expect_token(&Token::RParen)?;
@@ -11281,24 +11296,24 @@ impl<'a> Parser<'a> {
                 Keyword::UNPIVOT => {
                     // Parse UNPIVOT(value_column FOR name_column IN (column1, column2, ...)) [alias]
                     self.expect_token(&Token::LParen)?;
-                    
+
                     // Parse value_column
                     let value_column = self.parse_identifier()?;
-                    
+
                     // Parse FOR keyword
                     self.expect_keyword(Keyword::FOR)?;
-                    
+
                     // Parse name_column
                     let name_column = self.parse_identifier()?;
-                    
+
                     // Parse IN keyword
                     self.expect_keyword(Keyword::IN)?;
-                    
+
                     // Parse (column1, column2, ...)
                     self.expect_token(&Token::LParen)?;
                     let unpivot_columns = self.parse_comma_separated(Parser::parse_identifier)?;
                     self.expect_token(&Token::RParen)?;
-                    
+
                     self.expect_token(&Token::RParen)?;
 
                     // Parse optional alias (with or without AS keyword)

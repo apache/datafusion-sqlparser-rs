@@ -2722,7 +2722,10 @@ pub enum PipeOperator {
     /// Syntax: `|> CALL function_name(args) [AS alias]`
     ///
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#call_pipe_operator>
-    Call { function: Function, alias: Option<Ident> },
+    Call {
+        function: Function,
+        alias: Option<Ident>,
+    },
     /// Pivots data from rows to columns.
     ///
     /// Syntax: `|> PIVOT(aggregate_function(column) FOR pivot_column IN (value1, value2, ...)) [AS alias]`

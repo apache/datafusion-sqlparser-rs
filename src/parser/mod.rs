@@ -11085,6 +11085,7 @@ impl<'a> Parser<'a> {
                 Keyword::TABLESAMPLE,
                 Keyword::RENAME,
                 Keyword::UNION,
+                Keyword::INTERSECT,
             ])?;
             match kw {
                 Keyword::SELECT => {
@@ -11167,6 +11168,19 @@ impl<'a> Parser<'a> {
                         Ok(query)
                     })?;
                     pipe_operators.push(PipeOperator::Union { set_quantifier, queries });
+                }
+                Keyword::INTERSECT => {
+                    // Reuse existing set quantifier parser for consistent modifier support
+                    let set_quantifier = self.parse_set_quantifier(&Some(SetOperator::Intersect));
+                    // BigQuery INTERSECT pipe operator requires parentheses around queries
+                    // Parse comma-separated list of parenthesized queries
+                    let queries = self.parse_comma_separated(|parser| {
+                        parser.expect_token(&Token::LParen)?;
+                        let query = parser.parse_query()?;
+                        parser.expect_token(&Token::RParen)?;
+                        Ok(query)
+                    })?;
+                    pipe_operators.push(PipeOperator::Intersect { set_quantifier, queries });
                 }
                 unhandled => {
                     return Err(ParserError::ParserError(format!(

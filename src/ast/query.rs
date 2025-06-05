@@ -2695,7 +2695,16 @@ pub enum PipeOperator {
     /// Syntax: `|> UNION [ALL|DISTINCT] (<query>), (<query>), ...`
     ///
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#union_pipe_operator>
-    Union { 
+    Union {
+        set_quantifier: SetQuantifier,
+        queries: Vec<Box<Query>>,
+    },
+    /// Returns only the rows that are present in both the input table and the specified tables.
+    ///
+    /// Syntax: `|> INTERSECT [DISTINCT] (<query>), (<query>), ...`
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#intersect_pipe_operator>
+    Intersect {
         set_quantifier: SetQuantifier,
         queries: Vec<Box<Query>>,
     },
@@ -2757,12 +2766,37 @@ impl fmt::Display for PipeOperator {
             PipeOperator::Rename { mappings } => {
                 write!(f, "RENAME {}", display_comma_separated(mappings))
             }
-            PipeOperator::Union { set_quantifier, queries } => {
+            PipeOperator::Union {
+                set_quantifier,
+                queries,
+            } => {
                 write!(f, "UNION")?;
                 match set_quantifier {
                     SetQuantifier::All => write!(f, " ALL")?,
                     SetQuantifier::Distinct => write!(f, " DISTINCT")?,
-                    SetQuantifier::None => {},
+                    SetQuantifier::None => {}
+                    _ => {
+                        write!(f, " {}", set_quantifier)?;
+                    }
+                }
+                write!(f, " ")?;
+                for (i, query) in queries.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "({})", query)?;
+                }
+                Ok(())
+            }
+            PipeOperator::Intersect {
+                set_quantifier,
+                queries,
+            } => {
+                write!(f, "INTERSECT")?;
+                match set_quantifier {
+                    SetQuantifier::All => write!(f, " ALL")?,
+                    SetQuantifier::Distinct => write!(f, " DISTINCT")?,
+                    SetQuantifier::None => {}
                     _ => {
                         write!(f, " {}", set_quantifier)?;
                     }

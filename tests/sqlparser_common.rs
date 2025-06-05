@@ -15219,6 +15219,22 @@ fn parse_pipeline_operator() {
     // union pipe operator with BY NAME and multiple queries
     dialects.verified_stmt("SELECT * FROM users |> UNION BY NAME (SELECT * FROM admins), (SELECT * FROM guests)");
 
+    // intersect pipe operator (BigQuery does not support ALL modifier for INTERSECT)
+    dialects.verified_stmt("SELECT * FROM users |> INTERSECT (SELECT * FROM admins)");
+    dialects.verified_stmt("SELECT * FROM users |> INTERSECT DISTINCT (SELECT * FROM admins)");
+    
+    // intersect pipe operator with BY NAME modifier
+    dialects.verified_stmt("SELECT * FROM users |> INTERSECT BY NAME (SELECT * FROM admins)");
+    dialects.verified_stmt("SELECT * FROM users |> INTERSECT DISTINCT BY NAME (SELECT * FROM admins)");
+    
+    // intersect pipe operator with multiple queries
+    dialects.verified_stmt("SELECT * FROM users |> INTERSECT (SELECT * FROM admins), (SELECT * FROM guests)");
+    dialects.verified_stmt("SELECT * FROM users |> INTERSECT DISTINCT (SELECT * FROM admins), (SELECT * FROM guests)");
+    
+    // intersect pipe operator with BY NAME and multiple queries
+    dialects.verified_stmt("SELECT * FROM users |> INTERSECT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)");
+    dialects.verified_stmt("SELECT * FROM users |> INTERSECT DISTINCT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)");
+
     // many pipes
     dialects.verified_stmt(
         "SELECT * FROM CustomerOrders |> AGGREGATE SUM(cost) AS total_cost GROUP BY customer_id, state, item_type |> EXTEND COUNT(*) OVER (PARTITION BY customer_id) AS num_orders |> WHERE num_orders > 1 |> AGGREGATE AVG(total_cost) AS average GROUP BY state DESC, item_type ASC",

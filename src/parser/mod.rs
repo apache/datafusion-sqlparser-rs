@@ -11171,8 +11171,16 @@ impl<'a> Parser<'a> {
                     pipe_operators.push(PipeOperator::Union { set_quantifier, queries });
                 }
                 Keyword::INTERSECT => {
-                    // Reuse existing set quantifier parser for consistent modifier support
-                    let set_quantifier = self.parse_set_quantifier(&Some(SetOperator::Intersect));
+                    // BigQuery INTERSECT pipe operator requires DISTINCT modifier
+                    let set_quantifier = if self.parse_keywords(&[Keyword::DISTINCT, Keyword::BY, Keyword::NAME]) {
+                        SetQuantifier::DistinctByName
+                    } else if self.parse_keyword(Keyword::DISTINCT) {
+                        SetQuantifier::Distinct
+                    } else {
+                        return Err(ParserError::ParserError(
+                            "INTERSECT pipe operator requires DISTINCT modifier".to_string()
+                        ));
+                    };
                     // BigQuery INTERSECT pipe operator requires parentheses around queries
                     // Parse comma-separated list of parenthesized queries
                     let queries = self.parse_comma_separated(|parser| {

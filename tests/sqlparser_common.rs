@@ -15219,20 +15219,16 @@ fn parse_pipeline_operator() {
     // union pipe operator with BY NAME and multiple queries
     dialects.verified_stmt("SELECT * FROM users |> UNION BY NAME (SELECT * FROM admins), (SELECT * FROM guests)");
 
-    // intersect pipe operator (BigQuery does not support ALL modifier for INTERSECT)
-    dialects.verified_stmt("SELECT * FROM users |> INTERSECT (SELECT * FROM admins)");
+    // intersect pipe operator (BigQuery requires DISTINCT modifier for INTERSECT)
     dialects.verified_stmt("SELECT * FROM users |> INTERSECT DISTINCT (SELECT * FROM admins)");
     
     // intersect pipe operator with BY NAME modifier
-    dialects.verified_stmt("SELECT * FROM users |> INTERSECT BY NAME (SELECT * FROM admins)");
     dialects.verified_stmt("SELECT * FROM users |> INTERSECT DISTINCT BY NAME (SELECT * FROM admins)");
     
     // intersect pipe operator with multiple queries
-    dialects.verified_stmt("SELECT * FROM users |> INTERSECT (SELECT * FROM admins), (SELECT * FROM guests)");
     dialects.verified_stmt("SELECT * FROM users |> INTERSECT DISTINCT (SELECT * FROM admins), (SELECT * FROM guests)");
     
     // intersect pipe operator with BY NAME and multiple queries
-    dialects.verified_stmt("SELECT * FROM users |> INTERSECT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)");
     dialects.verified_stmt("SELECT * FROM users |> INTERSECT DISTINCT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)");
 
     // except pipe operator (BigQuery requires DISTINCT modifier for EXCEPT)
@@ -15279,6 +15275,30 @@ fn parse_pipeline_operator_negative_tests() {
     assert_eq!(
         ParserError::ParserError("EXCEPT pipe operator requires DISTINCT modifier".to_string()),
         dialects.parse_sql_statements("SELECT * FROM users |> EXCEPT ALL BY NAME (SELECT * FROM admins)").unwrap_err()
+    );
+
+    // Test that plain INTERSECT without DISTINCT fails
+    assert_eq!(
+        ParserError::ParserError("INTERSECT pipe operator requires DISTINCT modifier".to_string()),
+        dialects.parse_sql_statements("SELECT * FROM users |> INTERSECT (SELECT * FROM admins)").unwrap_err()
+    );
+
+    // Test that INTERSECT ALL fails  
+    assert_eq!(
+        ParserError::ParserError("INTERSECT pipe operator requires DISTINCT modifier".to_string()),
+        dialects.parse_sql_statements("SELECT * FROM users |> INTERSECT ALL (SELECT * FROM admins)").unwrap_err()
+    );
+
+    // Test that INTERSECT BY NAME without DISTINCT fails
+    assert_eq!(
+        ParserError::ParserError("INTERSECT pipe operator requires DISTINCT modifier".to_string()),
+        dialects.parse_sql_statements("SELECT * FROM users |> INTERSECT BY NAME (SELECT * FROM admins)").unwrap_err()
+    );
+
+    // Test that INTERSECT ALL BY NAME fails
+    assert_eq!(
+        ParserError::ParserError("INTERSECT pipe operator requires DISTINCT modifier".to_string()),
+        dialects.parse_sql_statements("SELECT * FROM users |> INTERSECT ALL BY NAME (SELECT * FROM admins)").unwrap_err()
     );
 }
 

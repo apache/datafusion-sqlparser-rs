@@ -2717,6 +2717,12 @@ pub enum PipeOperator {
         set_quantifier: SetQuantifier,
         queries: Vec<Box<Query>>,
     },
+    /// Calls a table function or procedure that returns a table.
+    ///
+    /// Syntax: `|> CALL function_name(args) [AS alias]`
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#call_pipe_operator>
+    Call { function: Function, alias: Option<Ident> },
 }
 
 impl fmt::Display for PipeOperator {
@@ -2838,6 +2844,13 @@ impl fmt::Display for PipeOperator {
                         write!(f, ", ")?;
                     }
                     write!(f, "({})", query)?;
+                }
+                Ok(())
+            }
+            PipeOperator::Call { function, alias } => {
+                write!(f, "CALL {}", function)?;
+                if let Some(alias) = alias {
+                    write!(f, " AS {}", alias)?;
                 }
                 Ok(())
             }

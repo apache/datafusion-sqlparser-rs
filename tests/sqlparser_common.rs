@@ -15243,6 +15243,32 @@ fn parse_pipeline_operator() {
     // except pipe operator with BY NAME and multiple queries
     dialects.verified_stmt("SELECT * FROM users |> EXCEPT DISTINCT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)");
 
+    // call pipe operator
+    dialects.verified_stmt("SELECT * FROM users |> CALL my_function()");
+    dialects.verified_stmt("SELECT * FROM users |> CALL process_data(5, 'test')");
+    dialects.verified_stmt("SELECT * FROM users |> CALL namespace.function_name(col1, col2, 'literal')");
+    
+    // call pipe operator with complex arguments
+    dialects.verified_stmt("SELECT * FROM users |> CALL transform_data(col1 + col2)");
+    dialects.verified_stmt("SELECT * FROM users |> CALL analyze_data('param1', 100, true)");
+    
+    // call pipe operator with aliases
+    dialects.verified_stmt("SELECT * FROM input_table |> CALL tvf1(arg1) AS al");
+    dialects.verified_stmt("SELECT * FROM users |> CALL process_data(5) AS result_table");
+    dialects.verified_stmt("SELECT * FROM users |> CALL namespace.func() AS my_alias");
+    
+    // multiple call pipe operators in sequence
+    dialects.verified_stmt("SELECT * FROM input_table |> CALL tvf1(arg1) |> CALL tvf2(arg2, arg3)");
+    dialects.verified_stmt("SELECT * FROM data |> CALL transform(col1) |> CALL validate() |> CALL process(param)");
+    
+    // multiple call pipe operators with aliases
+    dialects.verified_stmt("SELECT * FROM input_table |> CALL tvf1(arg1) AS step1 |> CALL tvf2(arg2) AS step2");
+    dialects.verified_stmt("SELECT * FROM data |> CALL preprocess() AS clean_data |> CALL analyze(mode) AS results");
+    
+    // call pipe operators mixed with other pipe operators
+    dialects.verified_stmt("SELECT * FROM users |> CALL transform() |> WHERE status = 'active' |> CALL process(param)");
+    dialects.verified_stmt("SELECT * FROM data |> CALL preprocess() AS clean |> SELECT col1, col2 |> CALL validate()");
+
     // many pipes
     dialects.verified_stmt(
         "SELECT * FROM CustomerOrders |> AGGREGATE SUM(cost) AS total_cost GROUP BY customer_id, state, item_type |> EXTEND COUNT(*) OVER (PARTITION BY customer_id) AS num_orders |> WHERE num_orders > 1 |> AGGREGATE AVG(total_cost) AS average GROUP BY state DESC, item_type ASC",
@@ -15299,6 +15325,31 @@ fn parse_pipeline_operator_negative_tests() {
     assert_eq!(
         ParserError::ParserError("INTERSECT pipe operator requires DISTINCT modifier".to_string()),
         dialects.parse_sql_statements("SELECT * FROM users |> INTERSECT ALL BY NAME (SELECT * FROM admins)").unwrap_err()
+    );
+
+    // Test that CALL without function name fails
+    assert!(
+        dialects.parse_sql_statements("SELECT * FROM users |> CALL").is_err()
+    );
+
+    // Test that CALL without parentheses fails  
+    assert!(
+        dialects.parse_sql_statements("SELECT * FROM users |> CALL my_function").is_err()
+    );
+
+    // Test that CALL with invalid function syntax fails
+    assert!(
+        dialects.parse_sql_statements("SELECT * FROM users |> CALL 123invalid").is_err()
+    );
+
+    // Test that CALL with malformed arguments fails
+    assert!(
+        dialects.parse_sql_statements("SELECT * FROM users |> CALL my_function(,)").is_err()
+    );
+
+    // Test that CALL with invalid alias syntax fails
+    assert!(
+        dialects.parse_sql_statements("SELECT * FROM users |> CALL my_function() AS").is_err()
     );
 }
 

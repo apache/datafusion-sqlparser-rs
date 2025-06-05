@@ -11087,6 +11087,7 @@ impl<'a> Parser<'a> {
                 Keyword::UNION,
                 Keyword::INTERSECT,
                 Keyword::EXCEPT,
+                Keyword::CALL,
             ])?;
             match kw {
                 Keyword::SELECT => {
@@ -11211,6 +11212,24 @@ impl<'a> Parser<'a> {
                         Ok(query)
                     })?;
                     pipe_operators.push(PipeOperator::Except { set_quantifier, queries });
+                }
+                Keyword::CALL => {
+                    let function_name = self.parse_object_name(false)?;
+                    let function_expr = self.parse_function(function_name)?;
+                    // Extract Function from Expr::Function
+                    if let Expr::Function(function) = function_expr {
+                        // Parse optional alias
+                        let alias = if self.parse_keyword(Keyword::AS) {
+                            Some(self.parse_identifier()?)
+                        } else {
+                            None
+                        };
+                        pipe_operators.push(PipeOperator::Call { function, alias });
+                    } else {
+                        return Err(ParserError::ParserError(
+                            "Expected function call after CALL".to_string()
+                        ));
+                    }
                 }
                 unhandled => {
                     return Err(ParserError::ParserError(format!(

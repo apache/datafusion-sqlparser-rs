@@ -2684,6 +2684,12 @@ pub enum PipeOperator {
     /// Syntax: `|> TABLESAMPLE SYSTEM (10 PERCENT)
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#tablesample_pipe_operator>
     TableSample { sample: Box<TableSample> },
+    /// Renames columns in the input table.
+    ///
+    /// Syntax: `|> RENAME old_name AS new_name, ...`
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#rename_pipe_operator>
+    Rename { mappings: Vec<IdentWithAlias> },
 }
 
 impl fmt::Display for PipeOperator {
@@ -2738,6 +2744,9 @@ impl fmt::Display for PipeOperator {
 
             PipeOperator::TableSample { sample } => {
                 write!(f, "{}", sample)
+            }
+            PipeOperator::Rename { mappings } => {
+                write!(f, "RENAME {}", display_comma_separated(mappings))
             }
         }
     }

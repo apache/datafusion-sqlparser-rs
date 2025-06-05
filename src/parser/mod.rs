@@ -9947,6 +9947,13 @@ impl<'a> Parser<'a> {
         Ok(IdentWithAlias { ident, alias })
     }
 
+    pub fn parse_identifier_with_optional_alias(&mut self) -> Result<IdentWithAlias, ParserError> {
+        let ident = self.parse_identifier()?;
+        let _after_as = self.parse_keyword(Keyword::AS);
+        let alias = self.parse_identifier()?;
+        Ok(IdentWithAlias { ident, alias })
+    }
+
     /// Optionally parses an alias for a select list item
     fn maybe_parse_select_item_alias(&mut self) -> Result<Option<Ident>, ParserError> {
         fn validator(explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
@@ -11076,6 +11083,7 @@ impl<'a> Parser<'a> {
                 Keyword::AGGREGATE,
                 Keyword::ORDER,
                 Keyword::TABLESAMPLE,
+                Keyword::RENAME,
             ])?;
             match kw {
                 Keyword::SELECT => {
@@ -11141,6 +11149,10 @@ impl<'a> Parser<'a> {
                 Keyword::TABLESAMPLE => {
                     let sample = self.parse_table_sample(TableSampleModifier::TableSample)?;
                     pipe_operators.push(PipeOperator::TableSample { sample });
+                }
+                Keyword::RENAME => {
+                    let mappings = self.parse_comma_separated(Parser::parse_identifier_with_optional_alias)?;
+                    pipe_operators.push(PipeOperator::Rename { mappings });
                 }
                 unhandled => {
                     return Err(ParserError::ParserError(format!(

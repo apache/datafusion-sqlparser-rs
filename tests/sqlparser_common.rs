@@ -15193,6 +15193,14 @@ fn parse_pipeline_operator() {
     dialects.verified_stmt("SELECT * FROM tbl |> TABLESAMPLE SYSTEM (50 PERCENT)");
     dialects.verified_stmt("SELECT * FROM tbl |> TABLESAMPLE SYSTEM (50) REPEATABLE (10)");
 
+    // rename pipe operator
+    dialects.verified_stmt("SELECT * FROM users |> RENAME old_name AS new_name");
+    dialects.verified_stmt("SELECT * FROM users |> RENAME id AS user_id, name AS user_name");
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM users |> RENAME id user_id",
+        "SELECT * FROM users |> RENAME id AS user_id",
+    );
+
     // many pipes
     dialects.verified_stmt(
         "SELECT * FROM CustomerOrders |> AGGREGATE SUM(cost) AS total_cost GROUP BY customer_id, state, item_type |> EXTEND COUNT(*) OVER (PARTITION BY customer_id) AS num_orders |> WHERE num_orders > 1 |> AGGREGATE AVG(total_cost) AS average GROUP BY state DESC, item_type ASC",

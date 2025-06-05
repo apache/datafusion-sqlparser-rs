@@ -11089,6 +11089,7 @@ impl<'a> Parser<'a> {
                 Keyword::EXCEPT,
                 Keyword::CALL,
                 Keyword::PIVOT,
+                Keyword::UNPIVOT,
             ])?;
             match kw {
                 Keyword::SELECT => {
@@ -11274,6 +11275,51 @@ impl<'a> Parser<'a> {
                         aggregate_functions,
                         value_column,
                         value_source,
+                        alias,
+                    });
+                }
+                Keyword::UNPIVOT => {
+                    // Parse UNPIVOT(value_column FOR name_column IN (column1, column2, ...)) [alias]
+                    self.expect_token(&Token::LParen)?;
+                    
+                    // Parse value_column
+                    let value_column = self.parse_identifier()?;
+                    
+                    // Parse FOR keyword
+                    self.expect_keyword(Keyword::FOR)?;
+                    
+                    // Parse name_column
+                    let name_column = self.parse_identifier()?;
+                    
+                    // Parse IN keyword
+                    self.expect_keyword(Keyword::IN)?;
+                    
+                    // Parse (column1, column2, ...)
+                    self.expect_token(&Token::LParen)?;
+                    let unpivot_columns = self.parse_comma_separated(Parser::parse_identifier)?;
+                    self.expect_token(&Token::RParen)?;
+                    
+                    self.expect_token(&Token::RParen)?;
+
+                    // Parse optional alias (with or without AS keyword)
+                    let alias = if self.parse_keyword(Keyword::AS) {
+                        Some(self.parse_identifier()?)
+                    } else {
+                        // Check if the next token is an identifier (implicit alias)
+                        let checkpoint = self.index;
+                        match self.parse_identifier() {
+                            Ok(ident) => Some(ident),
+                            Err(_) => {
+                                self.index = checkpoint; // Rewind on failure
+                                None
+                            }
+                        }
+                    };
+
+                    pipe_operators.push(PipeOperator::Unpivot {
+                        value_column,
+                        name_column,
+                        unpivot_columns,
                         alias,
                     });
                 }

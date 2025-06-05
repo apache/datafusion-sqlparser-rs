@@ -2734,6 +2734,20 @@ pub enum PipeOperator {
         value_source: PivotValueSource,
         alias: Option<Ident>,
     },
+    /// The `UNPIVOT` pipe operator transforms columns into rows.
+    ///
+    /// Syntax:
+    /// ```sql
+    /// |> UNPIVOT(value_column FOR name_column IN (column1, column2, ...)) [alias]
+    /// ```
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#unpivot_pipe_operator>
+    Unpivot {
+        value_column: Ident,
+        name_column: Ident,
+        unpivot_columns: Vec<Ident>,
+        alias: Option<Ident>,
+    },
 }
 
 impl fmt::Display for PipeOperator {
@@ -2877,6 +2891,24 @@ impl fmt::Display for PipeOperator {
                     display_comma_separated(aggregate_functions),
                     Expr::CompoundIdentifier(value_column.to_vec()),
                     value_source
+                )?;
+                if let Some(alias) = alias {
+                    write!(f, " AS {}", alias)?;
+                }
+                Ok(())
+            }
+            PipeOperator::Unpivot {
+                value_column,
+                name_column,
+                unpivot_columns,
+                alias,
+            } => {
+                write!(
+                    f,
+                    "UNPIVOT({} FOR {} IN ({}))",
+                    value_column,
+                    name_column,
+                    display_comma_separated(unpivot_columns)
                 )?;
                 if let Some(alias) = alias {
                     write!(f, " AS {}", alias)?;

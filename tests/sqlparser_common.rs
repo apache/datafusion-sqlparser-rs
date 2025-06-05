@@ -15297,6 +15297,33 @@ fn parse_pipeline_operator() {
         "SELECT * FROM data |> PIVOT(AVG(price) FOR category IN ('A', 'B', 'C')) AS avg_by_category",
     );
 
+    // unpivot pipe operator basic usage
+    dialects.verified_stmt("SELECT * FROM sales |> UNPIVOT(revenue FOR quarter IN (Q1, Q2, Q3, Q4))");
+    dialects.verified_stmt("SELECT * FROM data |> UNPIVOT(value FOR category IN (A, B, C))");
+    dialects.verified_stmt("SELECT * FROM metrics |> UNPIVOT(measurement FOR metric_type IN (cpu, memory, disk))");
+    
+    // unpivot pipe operator with multiple columns
+    dialects.verified_stmt("SELECT * FROM quarterly_sales |> UNPIVOT(amount FOR period IN (jan, feb, mar, apr, may, jun))");
+    dialects.verified_stmt("SELECT * FROM report |> UNPIVOT(score FOR subject IN (math, science, english, history))");
+    
+    // unpivot pipe operator mixed with other pipe operators
+    dialects.verified_stmt("SELECT * FROM sales_data |> WHERE year = 2023 |> UNPIVOT(revenue FOR quarter IN (Q1, Q2, Q3, Q4))");
+    
+    // unpivot pipe operator with aliases
+    dialects.verified_stmt("SELECT * FROM quarterly_sales |> UNPIVOT(amount FOR period IN (Q1, Q2)) AS unpivoted_sales");
+    dialects.verified_stmt("SELECT * FROM data |> UNPIVOT(value FOR category IN (A, B, C)) AS transformed_data");
+    dialects.verified_stmt("SELECT * FROM metrics |> UNPIVOT(measurement FOR metric_type IN (cpu, memory)) AS metric_measurements");
+    
+    // unpivot pipe operator with implicit aliases (without AS keyword)
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM quarterly_sales |> UNPIVOT(amount FOR period IN (Q1, Q2)) unpivoted_sales",
+        "SELECT * FROM quarterly_sales |> UNPIVOT(amount FOR period IN (Q1, Q2)) AS unpivoted_sales",
+    );
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM data |> UNPIVOT(value FOR category IN (A, B, C)) transformed_data",
+        "SELECT * FROM data |> UNPIVOT(value FOR category IN (A, B, C)) AS transformed_data",
+    );
+
     // many pipes
     dialects.verified_stmt(
         "SELECT * FROM CustomerOrders |> AGGREGATE SUM(cost) AS total_cost GROUP BY customer_id, state, item_type |> EXTEND COUNT(*) OVER (PARTITION BY customer_id) AS num_orders |> WHERE num_orders > 1 |> AGGREGATE AVG(total_cost) AS average GROUP BY state DESC, item_type ASC",
@@ -15403,6 +15430,48 @@ fn parse_pipeline_operator_negative_tests() {
     // Test that PIVOT with invalid alias syntax fails
     assert!(
         dialects.parse_sql_statements("SELECT * FROM users |> PIVOT(SUM(amount) FOR month IN ('Jan')) AS").is_err()
+    );
+
+    // Test UNPIVOT negative cases
+    
+    // Test that UNPIVOT without parentheses fails
+    assert!(
+        dialects.parse_sql_statements("SELECT * FROM users |> UNPIVOT value FOR name IN col1, col2").is_err()
+    );
+
+    // Test that UNPIVOT without FOR keyword fails
+    assert!(
+        dialects.parse_sql_statements("SELECT * FROM users |> UNPIVOT(value name IN (col1, col2))").is_err()
+    );
+
+    // Test that UNPIVOT without IN keyword fails
+    assert!(
+        dialects.parse_sql_statements("SELECT * FROM users |> UNPIVOT(value FOR name (col1, col2))").is_err()
+    );
+
+    // Test that UNPIVOT with missing value column fails
+    assert!(
+        dialects.parse_sql_statements("SELECT * FROM users |> UNPIVOT(FOR name IN (col1, col2))").is_err()
+    );
+
+    // Test that UNPIVOT with missing name column fails
+    assert!(
+        dialects.parse_sql_statements("SELECT * FROM users |> UNPIVOT(value FOR IN (col1, col2))").is_err()
+    );
+
+    // Test that UNPIVOT with empty IN list fails
+    assert!(
+        dialects.parse_sql_statements("SELECT * FROM users |> UNPIVOT(value FOR name IN ())").is_err()
+    );
+
+    // Test that UNPIVOT with invalid alias syntax fails
+    assert!(
+        dialects.parse_sql_statements("SELECT * FROM users |> UNPIVOT(value FOR name IN (col1, col2)) AS").is_err()
+    );
+
+    // Test that UNPIVOT with missing closing parenthesis fails
+    assert!(
+        dialects.parse_sql_statements("SELECT * FROM users |> UNPIVOT(value FOR name IN (col1, col2)").is_err()
     );
 }
 

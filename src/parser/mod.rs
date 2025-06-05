@@ -11084,6 +11084,7 @@ impl<'a> Parser<'a> {
                 Keyword::ORDER,
                 Keyword::TABLESAMPLE,
                 Keyword::RENAME,
+                Keyword::UNION,
             ])?;
             match kw {
                 Keyword::SELECT => {
@@ -11153,6 +11154,19 @@ impl<'a> Parser<'a> {
                 Keyword::RENAME => {
                     let mappings = self.parse_comma_separated(Parser::parse_identifier_with_optional_alias)?;
                     pipe_operators.push(PipeOperator::Rename { mappings });
+                }
+                Keyword::UNION => {
+                    // Reuse existing set quantifier parser for consistent BY NAME support
+                    let set_quantifier = self.parse_set_quantifier(&Some(SetOperator::Union));
+                    // BigQuery UNION pipe operator requires parentheses around queries
+                    // Parse comma-separated list of parenthesized queries
+                    let queries = self.parse_comma_separated(|parser| {
+                        parser.expect_token(&Token::LParen)?;
+                        let query = parser.parse_query()?;
+                        parser.expect_token(&Token::RParen)?;
+                        Ok(query)
+                    })?;
+                    pipe_operators.push(PipeOperator::Union { set_quantifier, queries });
                 }
                 unhandled => {
                     return Err(ParserError::ParserError(format!(

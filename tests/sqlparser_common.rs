@@ -15201,6 +15201,24 @@ fn parse_pipeline_operator() {
         "SELECT * FROM users |> RENAME id AS user_id",
     );
 
+    // union pipe operator
+    dialects.verified_stmt("SELECT * FROM users |> UNION ALL (SELECT * FROM admins)");
+    dialects.verified_stmt("SELECT * FROM users |> UNION DISTINCT (SELECT * FROM admins)");
+    dialects.verified_stmt("SELECT * FROM users |> UNION (SELECT * FROM admins)");
+    
+    // union pipe operator with multiple queries
+    dialects.verified_stmt("SELECT * FROM users |> UNION ALL (SELECT * FROM admins), (SELECT * FROM guests)");
+    dialects.verified_stmt("SELECT * FROM users |> UNION DISTINCT (SELECT * FROM admins), (SELECT * FROM guests), (SELECT * FROM employees)");
+    dialects.verified_stmt("SELECT * FROM users |> UNION (SELECT * FROM admins), (SELECT * FROM guests)");
+    
+    // union pipe operator with BY NAME modifier
+    dialects.verified_stmt("SELECT * FROM users |> UNION BY NAME (SELECT * FROM admins)");
+    dialects.verified_stmt("SELECT * FROM users |> UNION ALL BY NAME (SELECT * FROM admins)");
+    dialects.verified_stmt("SELECT * FROM users |> UNION DISTINCT BY NAME (SELECT * FROM admins)");
+    
+    // union pipe operator with BY NAME and multiple queries
+    dialects.verified_stmt("SELECT * FROM users |> UNION BY NAME (SELECT * FROM admins), (SELECT * FROM guests)");
+
     // many pipes
     dialects.verified_stmt(
         "SELECT * FROM CustomerOrders |> AGGREGATE SUM(cost) AS total_cost GROUP BY customer_id, state, item_type |> EXTEND COUNT(*) OVER (PARTITION BY customer_id) AS num_orders |> WHERE num_orders > 1 |> AGGREGATE AVG(total_cost) AS average GROUP BY state DESC, item_type ASC",

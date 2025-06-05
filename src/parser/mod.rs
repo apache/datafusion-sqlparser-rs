@@ -9947,11 +9947,39 @@ impl<'a> Parser<'a> {
         Ok(IdentWithAlias { ident, alias })
     }
 
+    /// Parse `identifier [AS] identifier` where the AS keyword is optional
     pub fn parse_identifier_with_optional_alias(&mut self) -> Result<IdentWithAlias, ParserError> {
         let ident = self.parse_identifier()?;
         let _after_as = self.parse_keyword(Keyword::AS);
         let alias = self.parse_identifier()?;
         Ok(IdentWithAlias { ident, alias })
+    }
+
+    /// Parse comma-separated list of parenthesized queries for pipe operators
+    fn parse_pipe_operator_queries(&mut self) -> Result<Vec<Box<Query>>, ParserError> {
+        self.parse_comma_separated(|parser| {
+            parser.expect_token(&Token::LParen)?;
+            let query = parser.parse_query()?;
+            parser.expect_token(&Token::RParen)?;
+            Ok(query)
+        })
+    }
+
+    /// Parse optional alias (with or without AS keyword) for pipe operators
+    fn parse_optional_pipe_alias(&mut self) -> Result<Option<Ident>, ParserError> {
+        if self.parse_keyword(Keyword::AS) {
+            Some(self.parse_identifier()).transpose()
+        } else {
+            // Check if the next token is an identifier (implicit alias)
+            let checkpoint = self.index;
+            match self.parse_identifier() {
+                Ok(ident) => Ok(Some(ident)),
+                Err(_) => {
+                    self.index = checkpoint; // Rewind on failure
+                    Ok(None)
+                }
+            }
+        }
     }
 
     /// Optionally parses an alias for a select list item
@@ -11164,14 +11192,7 @@ impl<'a> Parser<'a> {
                 Keyword::UNION => {
                     // Reuse existing set quantifier parser for consistent BY NAME support
                     let set_quantifier = self.parse_set_quantifier(&Some(SetOperator::Union));
-                    // BigQuery UNION pipe operator requires parentheses around queries
-                    // Parse comma-separated list of parenthesized queries
-                    let queries = self.parse_comma_separated(|parser| {
-                        parser.expect_token(&Token::LParen)?;
-                        let query = parser.parse_query()?;
-                        parser.expect_token(&Token::RParen)?;
-                        Ok(query)
-                    })?;
+                    let queries = self.parse_pipe_operator_queries()?;
                     pipe_operators.push(PipeOperator::Union {
                         set_quantifier,
                         queries,
@@ -11189,14 +11210,7 @@ impl<'a> Parser<'a> {
                                 "INTERSECT pipe operator requires DISTINCT modifier".to_string(),
                             ));
                         };
-                    // BigQuery INTERSECT pipe operator requires parentheses around queries
-                    // Parse comma-separated list of parenthesized queries
-                    let queries = self.parse_comma_separated(|parser| {
-                        parser.expect_token(&Token::LParen)?;
-                        let query = parser.parse_query()?;
-                        parser.expect_token(&Token::RParen)?;
-                        Ok(query)
-                    })?;
+                    let queries = self.parse_pipe_operator_queries()?;
                     pipe_operators.push(PipeOperator::Intersect {
                         set_quantifier,
                         queries,
@@ -11214,14 +11228,7 @@ impl<'a> Parser<'a> {
                                 "EXCEPT pipe operator requires DISTINCT modifier".to_string(),
                             ));
                         };
-                    // BigQuery EXCEPT pipe operator requires parentheses around queries
-                    // Parse comma-separated list of parenthesized queries
-                    let queries = self.parse_comma_separated(|parser| {
-                        parser.expect_token(&Token::LParen)?;
-                        let query = parser.parse_query()?;
-                        parser.expect_token(&Token::RParen)?;
-                        Ok(query)
-                    })?;
+                    let queries = self.parse_pipe_operator_queries()?;
                     pipe_operators.push(PipeOperator::Except {
                         set_quantifier,
                         queries,
@@ -11271,20 +11278,7 @@ impl<'a> Parser<'a> {
                     self.expect_token(&Token::RParen)?;
                     self.expect_token(&Token::RParen)?;
 
-                    // Parse optional alias (with or without AS keyword)
-                    let alias = if self.parse_keyword(Keyword::AS) {
-                        Some(self.parse_identifier()?)
-                    } else {
-                        // Check if the next token is an identifier (implicit alias)
-                        let checkpoint = self.index;
-                        match self.parse_identifier() {
-                            Ok(ident) => Some(ident),
-                            Err(_) => {
-                                self.index = checkpoint; // Rewind on failure
-                                None
-                            }
-                        }
-                    };
+                    let alias = self.parse_optional_pipe_alias()?;
 
                     pipe_operators.push(PipeOperator::Pivot {
                         aggregate_functions,
@@ -11316,20 +11310,7 @@ impl<'a> Parser<'a> {
 
                     self.expect_token(&Token::RParen)?;
 
-                    // Parse optional alias (with or without AS keyword)
-                    let alias = if self.parse_keyword(Keyword::AS) {
-                        Some(self.parse_identifier()?)
-                    } else {
-                        // Check if the next token is an identifier (implicit alias)
-                        let checkpoint = self.index;
-                        match self.parse_identifier() {
-                            Ok(ident) => Some(ident),
-                            Err(_) => {
-                                self.index = checkpoint; // Rewind on failure
-                                None
-                            }
-                        }
-                    };
+                    let alias = self.parse_optional_pipe_alias()?;
 
                     pipe_operators.push(PipeOperator::Unpivot {
                         value_column,

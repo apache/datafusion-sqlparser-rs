@@ -2812,69 +2812,15 @@ impl fmt::Display for PipeOperator {
             PipeOperator::Union {
                 set_quantifier,
                 queries,
-            } => {
-                write!(f, "UNION")?;
-                match set_quantifier {
-                    SetQuantifier::All => write!(f, " ALL")?,
-                    SetQuantifier::Distinct => write!(f, " DISTINCT")?,
-                    SetQuantifier::None => {}
-                    _ => {
-                        write!(f, " {}", set_quantifier)?;
-                    }
-                }
-                write!(f, " ")?;
-                for (i, query) in queries.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "({})", query)?;
-                }
-                Ok(())
-            }
+            } => Self::fmt_set_operation(f, "UNION", set_quantifier, queries),
             PipeOperator::Intersect {
                 set_quantifier,
                 queries,
-            } => {
-                write!(f, "INTERSECT")?;
-                match set_quantifier {
-                    SetQuantifier::All => write!(f, " ALL")?,
-                    SetQuantifier::Distinct => write!(f, " DISTINCT")?,
-                    SetQuantifier::None => {}
-                    _ => {
-                        write!(f, " {}", set_quantifier)?;
-                    }
-                }
-                write!(f, " ")?;
-                for (i, query) in queries.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "({})", query)?;
-                }
-                Ok(())
-            }
+            } => Self::fmt_set_operation(f, "INTERSECT", set_quantifier, queries),
             PipeOperator::Except {
                 set_quantifier,
                 queries,
-            } => {
-                write!(f, "EXCEPT")?;
-                match set_quantifier {
-                    SetQuantifier::All => write!(f, " ALL")?,
-                    SetQuantifier::Distinct => write!(f, " DISTINCT")?,
-                    SetQuantifier::None => {}
-                    _ => {
-                        write!(f, " {}", set_quantifier)?;
-                    }
-                }
-                write!(f, " ")?;
-                for (i, query) in queries.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "({})", query)?;
-                }
-                Ok(())
-            }
+            } => Self::fmt_set_operation(f, "EXCEPT", set_quantifier, queries),
             PipeOperator::Call { function, alias } => {
                 write!(f, "CALL {}", function)?;
                 if let Some(alias) = alias {
@@ -2919,6 +2865,34 @@ impl fmt::Display for PipeOperator {
                 Ok(())
             }
         }
+    }
+}
+
+impl PipeOperator {
+    /// Helper function to format set operations (UNION, INTERSECT, EXCEPT) with queries
+    fn fmt_set_operation(
+        f: &mut fmt::Formatter<'_>,
+        operation: &str,
+        set_quantifier: &SetQuantifier,
+        queries: &[Box<Query>],
+    ) -> fmt::Result {
+        write!(f, "{}", operation)?;
+        match set_quantifier {
+            SetQuantifier::All => write!(f, " ALL")?,
+            SetQuantifier::Distinct => write!(f, " DISTINCT")?,
+            SetQuantifier::None => {}
+            _ => {
+                write!(f, " {}", set_quantifier)?;
+            }
+        }
+        write!(f, " ")?;
+        for (i, query) in queries.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "({})", query)?;
+        }
+        Ok(())
     }
 }
 

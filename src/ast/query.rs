@@ -2723,6 +2723,17 @@ pub enum PipeOperator {
     ///
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#call_pipe_operator>
     Call { function: Function, alias: Option<Ident> },
+    /// Pivots data from rows to columns.
+    ///
+    /// Syntax: `|> PIVOT(aggregate_function(column) FOR pivot_column IN (value1, value2, ...)) [AS alias]`
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#pivot_pipe_operator>
+    Pivot {
+        aggregate_functions: Vec<ExprWithAlias>,
+        value_column: Vec<Ident>,
+        value_source: PivotValueSource,
+        alias: Option<Ident>,
+    },
 }
 
 impl fmt::Display for PipeOperator {
@@ -2849,6 +2860,24 @@ impl fmt::Display for PipeOperator {
             }
             PipeOperator::Call { function, alias } => {
                 write!(f, "CALL {}", function)?;
+                if let Some(alias) = alias {
+                    write!(f, " AS {}", alias)?;
+                }
+                Ok(())
+            }
+            PipeOperator::Pivot {
+                aggregate_functions,
+                value_column,
+                value_source,
+                alias,
+            } => {
+                write!(
+                    f,
+                    "PIVOT({} FOR {} IN ({}))",
+                    display_comma_separated(aggregate_functions),
+                    Expr::CompoundIdentifier(value_column.to_vec()),
+                    value_source
+                )?;
                 if let Some(alias) = alias {
                     write!(f, " AS {}", alias)?;
                 }

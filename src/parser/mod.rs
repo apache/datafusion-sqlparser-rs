@@ -11088,6 +11088,7 @@ impl<'a> Parser<'a> {
                 Keyword::INTERSECT,
                 Keyword::EXCEPT,
                 Keyword::CALL,
+                Keyword::PIVOT,
             ])?;
             match kw {
                 Keyword::SELECT => {
@@ -11230,6 +11231,51 @@ impl<'a> Parser<'a> {
                             "Expected function call after CALL".to_string()
                         ));
                     }
+                }
+                Keyword::PIVOT => {
+                    self.expect_token(&Token::LParen)?;
+                    let aggregate_functions = self.parse_comma_separated(Self::parse_aliased_function_call)?;
+                    self.expect_keyword_is(Keyword::FOR)?;
+                    let value_column = self.parse_period_separated(|p| p.parse_identifier())?;
+                    self.expect_keyword_is(Keyword::IN)?;
+
+                    self.expect_token(&Token::LParen)?;
+                    let value_source = if self.parse_keyword(Keyword::ANY) {
+                        let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+                            self.parse_comma_separated(Parser::parse_order_by_expr)?
+                        } else {
+                            vec![]
+                        };
+                        PivotValueSource::Any(order_by)
+                    } else if self.peek_sub_query() {
+                        PivotValueSource::Subquery(self.parse_query()?)
+                    } else {
+                        PivotValueSource::List(self.parse_comma_separated(Self::parse_expr_with_alias)?)
+                    };
+                    self.expect_token(&Token::RParen)?;
+                    self.expect_token(&Token::RParen)?;
+
+                    // Parse optional alias (with or without AS keyword)
+                    let alias = if self.parse_keyword(Keyword::AS) {
+                        Some(self.parse_identifier()?)
+                    } else {
+                        // Check if the next token is an identifier (implicit alias)
+                        let checkpoint = self.index;
+                        match self.parse_identifier() {
+                            Ok(ident) => Some(ident),
+                            Err(_) => {
+                                self.index = checkpoint; // Rewind on failure
+                                None
+                            }
+                        }
+                    };
+
+                    pipe_operators.push(PipeOperator::Pivot {
+                        aggregate_functions,
+                        value_column,
+                        value_source,
+                        alias,
+                    });
                 }
                 unhandled => {
                     return Err(ParserError::ParserError(format!(

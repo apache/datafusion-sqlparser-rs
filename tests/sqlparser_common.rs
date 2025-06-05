@@ -15269,6 +15269,34 @@ fn parse_pipeline_operator() {
     dialects.verified_stmt("SELECT * FROM users |> CALL transform() |> WHERE status = 'active' |> CALL process(param)");
     dialects.verified_stmt("SELECT * FROM data |> CALL preprocess() AS clean |> SELECT col1, col2 |> CALL validate()");
 
+    // pivot pipe operator
+    dialects.verified_stmt("SELECT * FROM monthly_sales |> PIVOT(SUM(amount) FOR quarter IN ('Q1', 'Q2', 'Q3', 'Q4'))");
+    dialects.verified_stmt("SELECT * FROM sales_data |> PIVOT(AVG(revenue) FOR region IN ('North', 'South', 'East', 'West'))");
+    
+    // pivot pipe operator with multiple aggregate functions
+    dialects.verified_stmt("SELECT * FROM data |> PIVOT(SUM(sales) AS total_sales, COUNT(*) AS num_transactions FOR month IN ('Jan', 'Feb', 'Mar'))");
+    
+    // pivot pipe operator with compound column names
+    dialects.verified_stmt("SELECT * FROM sales |> PIVOT(SUM(amount) FOR product.category IN ('Electronics', 'Clothing'))");
+    
+    // pivot pipe operator mixed with other pipe operators
+    dialects.verified_stmt("SELECT * FROM sales_data |> WHERE year = 2023 |> PIVOT(SUM(revenue) FOR quarter IN ('Q1', 'Q2', 'Q3', 'Q4'))");
+    
+    // pivot pipe operator with aliases
+    dialects.verified_stmt("SELECT * FROM monthly_sales |> PIVOT(SUM(sales) FOR quarter IN ('Q1', 'Q2')) AS quarterly_sales");
+    dialects.verified_stmt("SELECT * FROM data |> PIVOT(AVG(price) FOR category IN ('A', 'B', 'C')) AS avg_by_category");
+    dialects.verified_stmt("SELECT * FROM sales |> PIVOT(COUNT(*) AS transactions, SUM(amount) AS total FOR region IN ('North', 'South')) AS regional_summary");
+    
+    // pivot pipe operator with implicit aliases (without AS keyword)
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM monthly_sales |> PIVOT(SUM(sales) FOR quarter IN ('Q1', 'Q2')) quarterly_sales",
+        "SELECT * FROM monthly_sales |> PIVOT(SUM(sales) FOR quarter IN ('Q1', 'Q2')) AS quarterly_sales",
+    );
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM data |> PIVOT(AVG(price) FOR category IN ('A', 'B', 'C')) avg_by_category",
+        "SELECT * FROM data |> PIVOT(AVG(price) FOR category IN ('A', 'B', 'C')) AS avg_by_category",
+    );
+
     // many pipes
     dialects.verified_stmt(
         "SELECT * FROM CustomerOrders |> AGGREGATE SUM(cost) AS total_cost GROUP BY customer_id, state, item_type |> EXTEND COUNT(*) OVER (PARTITION BY customer_id) AS num_orders |> WHERE num_orders > 1 |> AGGREGATE AVG(total_cost) AS average GROUP BY state DESC, item_type ASC",
@@ -15350,6 +15378,31 @@ fn parse_pipeline_operator_negative_tests() {
     // Test that CALL with invalid alias syntax fails
     assert!(
         dialects.parse_sql_statements("SELECT * FROM users |> CALL my_function() AS").is_err()
+    );
+
+    // Test that PIVOT without parentheses fails
+    assert!(
+        dialects.parse_sql_statements("SELECT * FROM users |> PIVOT SUM(amount) FOR month IN ('Jan')").is_err()
+    );
+
+    // Test that PIVOT without FOR keyword fails
+    assert!(
+        dialects.parse_sql_statements("SELECT * FROM users |> PIVOT(SUM(amount) month IN ('Jan'))").is_err()
+    );
+
+    // Test that PIVOT without IN keyword fails
+    assert!(
+        dialects.parse_sql_statements("SELECT * FROM users |> PIVOT(SUM(amount) FOR month ('Jan'))").is_err()
+    );
+
+    // Test that PIVOT with empty IN list fails
+    assert!(
+        dialects.parse_sql_statements("SELECT * FROM users |> PIVOT(SUM(amount) FOR month IN ())").is_err()
+    );
+
+    // Test that PIVOT with invalid alias syntax fails
+    assert!(
+        dialects.parse_sql_statements("SELECT * FROM users |> PIVOT(SUM(amount) FOR month IN ('Jan')) AS").is_err()
     );
 }
 

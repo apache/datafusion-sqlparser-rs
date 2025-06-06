@@ -2469,4 +2469,16 @@ pub mod tests {
 
         assert_eq!(test.get_source(body_span), "SELECT cte.* FROM cte");
     }
+
+    #[test]
+    fn test_case_expr_span() {
+        let dialect = &GenericDialect;
+        let mut test = SpanTest::new(dialect, "CASE 1 WHEN 2 THEN 3 ELSE 4 END");
+        let expr = test.0.parse_expr().unwrap();
+        let expr_span = expr.span();
+        assert_eq!(
+            test.get_source(expr_span),
+            "CASE 1 WHEN 2 THEN 3 ELSE 4 END"
+        );
+    }
 }

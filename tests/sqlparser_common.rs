@@ -14469,16 +14469,6 @@ fn test_case_statement_span() {
 }
 
 #[test]
-fn test_case_expr_span() {
-    let sql = "CASE 1 WHEN 2 THEN 3 ELSE 4 END";
-    let mut parser = Parser::new(&GenericDialect {}).try_with_sql(sql).unwrap();
-    assert_eq!(
-        parser.parse_expr().unwrap().span(),
-        Span::new(Location::new(1, 1), Location::new(1, sql.len() as u64 + 1))
-    );
-}
-
-#[test]
 fn parse_if_statement() {
     let dialects = all_dialects_except(|d| d.is::<MsSqlDialect>());
 

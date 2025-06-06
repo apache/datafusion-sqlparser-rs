@@ -967,6 +967,8 @@ pub enum Expr {
     /// not `< 0` nor `1, 2, 3` as allowed in a `<simple when clause>` per
     /// <https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#simple-when-clause>
     Case {
+        case_token: AttachedToken,
+        end_token: AttachedToken,
         operand: Option<Box<Expr>>,
         conditions: Vec<CaseWhen>,
         else_result: Option<Box<Expr>>,
@@ -1675,6 +1677,8 @@ impl fmt::Display for Expr {
             }
             Expr::Function(fun) => fun.fmt(f),
             Expr::Case {
+                case_token: _,
+                end_token: _,
                 operand,
                 conditions,
                 else_result,

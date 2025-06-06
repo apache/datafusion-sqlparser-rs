@@ -6869,6 +6869,8 @@ fn parse_searched_case_expr() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Case {
+            case_token: AttachedToken::empty(),
+            end_token: AttachedToken::empty(),
             operand: None,
             conditions: vec![
                 CaseWhen {
@@ -6908,6 +6910,8 @@ fn parse_simple_case_expr() {
     use self::Expr::{Case, Identifier};
     assert_eq!(
         &Case {
+            case_token: AttachedToken::empty(),
+            end_token: AttachedToken::empty(),
             operand: Some(Box::new(Identifier(Ident::new("foo")))),
             conditions: vec![CaseWhen {
                 condition: Expr::value(number("1")),
@@ -14650,6 +14654,8 @@ fn test_lambdas() {
                 Expr::Lambda(LambdaFunction {
                     params: OneOrManyWithParens::Many(vec![Ident::new("p1"), Ident::new("p2")]),
                     body: Box::new(Expr::Case {
+                        case_token: AttachedToken::empty(),
+                        end_token: AttachedToken::empty(),
                         operand: None,
                         conditions: vec![
                             CaseWhen {

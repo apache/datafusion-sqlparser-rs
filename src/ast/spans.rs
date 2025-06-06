@@ -1567,18 +1567,24 @@ impl Spanned for Expr {
             ),
             Expr::Prefixed { value, .. } => value.span(),
             Expr::Case {
+                case_token,
+                end_token,
                 operand,
                 conditions,
                 else_result,
             } => union_spans(
-                operand
-                    .as_ref()
-                    .map(|i| i.span())
-                    .into_iter()
-                    .chain(conditions.iter().flat_map(|case_when| {
-                        [case_when.condition.span(), case_when.result.span()]
-                    }))
-                    .chain(else_result.as_ref().map(|i| i.span())),
+                iter::once(case_token.0.span)
+                    .chain(
+                        operand
+                            .as_ref()
+                            .map(|i| i.span())
+                            .into_iter()
+                            .chain(conditions.iter().flat_map(|case_when| {
+                                [case_when.condition.span(), case_when.result.span()]
+                            }))
+                            .chain(else_result.as_ref().map(|i| i.span())),
+                    )
+                    .chain(iter::once(end_token.0.span)),
             ),
             Expr::Exists { subquery, .. } => subquery.span(),
             Expr::Subquery(query) => query.span(),
@@ -2463,5 +2469,17 @@ pub mod tests {
         );
 
         assert_eq!(test.get_source(body_span), "SELECT cte.* FROM cte");
+    }
+
+    #[test]
+    fn test_case_expr_span() {
+        let dialect = &GenericDialect;
+        let mut test = SpanTest::new(dialect, "CASE 1 WHEN 2 THEN 3 ELSE 4 END");
+        let expr = test.0.parse_expr().unwrap();
+        let expr_span = expr.span();
+        assert_eq!(
+            test.get_source(expr_span),
+            "CASE 1 WHEN 2 THEN 3 ELSE 4 END"
+        );
     }
 }

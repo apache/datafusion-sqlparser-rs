@@ -195,9 +195,6 @@ const EOF_TOKEN: TokenWithSpan = TokenWithSpan {
     },
 };
 
-// Error message constant for pipe operators that require DISTINCT
-const EXPECTED_FUNCTION_CALL_MSG: &str = "Expected function call after CALL";
-
 /// Composite types declarations using angle brackets syntax can be arbitrary
 /// nested such that the following declaration is possible:
 ///      `ARRAY<ARRAY<INT>>`
@@ -9969,15 +9966,19 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse set quantifier for pipe operators that require DISTINCT (INTERSECT, EXCEPT)
-    fn parse_distinct_required_set_quantifier(&mut self, operator_name: &str) -> Result<SetQuantifier, ParserError> {
+    fn parse_distinct_required_set_quantifier(
+        &mut self,
+        operator_name: &str,
+    ) -> Result<SetQuantifier, ParserError> {
         if self.parse_keywords(&[Keyword::DISTINCT, Keyword::BY, Keyword::NAME]) {
             Ok(SetQuantifier::DistinctByName)
         } else if self.parse_keyword(Keyword::DISTINCT) {
             Ok(SetQuantifier::Distinct)
         } else {
-            Err(ParserError::ParserError(
-                format!("{} pipe operator requires DISTINCT modifier", operator_name),
-            ))
+            Err(ParserError::ParserError(format!(
+                "{} pipe operator requires DISTINCT modifier",
+                operator_name
+            )))
         }
     }
 
@@ -11215,7 +11216,8 @@ impl<'a> Parser<'a> {
                     });
                 }
                 Keyword::INTERSECT => {
-                    let set_quantifier = self.parse_distinct_required_set_quantifier("INTERSECT")?;
+                    let set_quantifier =
+                        self.parse_distinct_required_set_quantifier("INTERSECT")?;
                     let queries = self.parse_pipe_operator_queries()?;
                     pipe_operators.push(PipeOperator::Intersect {
                         set_quantifier,
@@ -11239,7 +11241,7 @@ impl<'a> Parser<'a> {
                         pipe_operators.push(PipeOperator::Call { function, alias });
                     } else {
                         return Err(ParserError::ParserError(
-                            EXPECTED_FUNCTION_CALL_MSG.to_string(),
+                            "Expected function call after CALL".to_string(),
                         ));
                     }
                 }

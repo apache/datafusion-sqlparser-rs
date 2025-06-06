@@ -3989,6 +3989,13 @@ fn parse_straight_join() {
 }
 
 #[test]
+fn mysql_foreign_key_with_index_name() {
+    mysql().verified_stmt(
+        "CREATE TABLE orders (customer_id INT, INDEX idx_customer (customer_id), CONSTRAINT fk_customer FOREIGN KEY idx_customer (customer_id) REFERENCES customers(id))",
+    );
+}
+
+#[test]
 fn parse_drop_index() {
     let sql = "DROP INDEX idx_name ON table_name";
     match mysql().verified_stmt(sql) {

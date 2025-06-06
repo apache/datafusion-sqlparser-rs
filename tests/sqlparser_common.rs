@@ -3791,6 +3791,7 @@ fn parse_create_table() {
                 vec![
                     TableConstraint::ForeignKey {
                         name: Some("fkey".into()),
+                        index_name: None,
                         columns: vec!["lat".into()],
                         foreign_table: ObjectName::from(vec!["othertable3".into()]),
                         referred_columns: vec!["lat".into()],
@@ -3800,6 +3801,7 @@ fn parse_create_table() {
                     },
                     TableConstraint::ForeignKey {
                         name: Some("fkey2".into()),
+                        index_name: None,
                         columns: vec!["lat".into()],
                         foreign_table: ObjectName::from(vec!["othertable4".into()]),
                         referred_columns: vec!["lat".into()],
@@ -3809,6 +3811,7 @@ fn parse_create_table() {
                     },
                     TableConstraint::ForeignKey {
                         name: None,
+                        index_name: None,
                         columns: vec!["lat".into()],
                         foreign_table: ObjectName::from(vec!["othertable4".into()]),
                         referred_columns: vec!["lat".into()],
@@ -3818,6 +3821,7 @@ fn parse_create_table() {
                     },
                     TableConstraint::ForeignKey {
                         name: None,
+                        index_name: None,
                         columns: vec!["lng".into()],
                         foreign_table: ObjectName::from(vec!["othertable4".into()]),
                         referred_columns: vec!["longitude".into()],
@@ -3914,6 +3918,7 @@ fn parse_create_table_with_constraint_characteristics() {
                 vec![
                     TableConstraint::ForeignKey {
                         name: Some("fkey".into()),
+                        index_name: None,
                         columns: vec!["lat".into()],
                         foreign_table: ObjectName::from(vec!["othertable3".into()]),
                         referred_columns: vec!["lat".into()],
@@ -3927,6 +3932,7 @@ fn parse_create_table_with_constraint_characteristics() {
                     },
                     TableConstraint::ForeignKey {
                         name: Some("fkey2".into()),
+                        index_name: None,
                         columns: vec!["lat".into()],
                         foreign_table: ObjectName::from(vec!["othertable4".into()]),
                         referred_columns: vec!["lat".into()],
@@ -3940,6 +3946,7 @@ fn parse_create_table_with_constraint_characteristics() {
                     },
                     TableConstraint::ForeignKey {
                         name: None,
+                        index_name: None,
                         columns: vec!["lat".into()],
                         foreign_table: ObjectName::from(vec!["othertable4".into()]),
                         referred_columns: vec!["lat".into()],
@@ -3953,6 +3960,7 @@ fn parse_create_table_with_constraint_characteristics() {
                     },
                     TableConstraint::ForeignKey {
                         name: None,
+                        index_name: None,
                         columns: vec!["lng".into()],
                         foreign_table: ObjectName::from(vec!["othertable4".into()]),
                         referred_columns: vec!["longitude".into()],

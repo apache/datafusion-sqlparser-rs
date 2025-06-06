@@ -960,12 +960,13 @@ impl<'a> Parser<'a> {
 
     pub fn parse_truncate(&mut self) -> Result<Statement, ParserError> {
         let table = self.parse_keyword(Keyword::TABLE);
-        let only = self.parse_keyword(Keyword::ONLY);
 
         let table_names = self
-            .parse_comma_separated(|p| p.parse_object_name(false))?
+            .parse_comma_separated(|p| {
+                Ok((p.parse_keyword(Keyword::ONLY), p.parse_object_name(false)?))
+            })?
             .into_iter()
-            .map(|n| TruncateTableTarget { name: n })
+            .map(|(only, name)| TruncateTableTarget { name, only })
             .collect();
 
         let mut partitions = None;
@@ -996,7 +997,6 @@ impl<'a> Parser<'a> {
             table_names,
             partitions,
             table,
-            only,
             identity,
             cascade,
             on_cluster,

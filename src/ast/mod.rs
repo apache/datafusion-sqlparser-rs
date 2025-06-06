@@ -3014,9 +3014,6 @@ pub enum Statement {
         /// TABLE - optional keyword;
         table: bool,
         /// Postgres-specific option
-        /// [ TRUNCATE TABLE ONLY ]
-        only: bool,
-        /// Postgres-specific option
         /// [ RESTART IDENTITY | CONTINUE IDENTITY ]
         identity: Option<TruncateIdentityOption>,
         /// Postgres-specific option
@@ -4425,17 +4422,15 @@ impl fmt::Display for Statement {
                 table_names,
                 partitions,
                 table,
-                only,
                 identity,
                 cascade,
                 on_cluster,
             } => {
                 let table = if *table { "TABLE " } else { "" };
-                let only = if *only { "ONLY " } else { "" };
 
                 write!(
                     f,
-                    "TRUNCATE {table}{only}{table_names}",
+                    "TRUNCATE {table}{table_names}",
                     table_names = display_comma_separated(table_names)
                 )?;
 
@@ -6106,10 +6101,17 @@ pub struct TruncateTableTarget {
     /// name of the table being truncated
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     pub name: ObjectName,
+    /// Postgres-specific option
+    /// [ TRUNCATE TABLE ONLY ]
+    /// <https://www.postgresql.org/docs/current/sql-truncate.html>
+    pub only: bool,
 }
 
 impl fmt::Display for TruncateTableTarget {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.only {
+            write!(f, "ONLY ")?;
+        };
         write!(f, "{}", self.name)
     }
 }

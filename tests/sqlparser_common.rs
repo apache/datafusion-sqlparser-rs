@@ -15302,3 +15302,31 @@ fn test_open() {
         })
     );
 }
+
+#[test]
+fn parse_truncate_only() {
+    let truncate = all_dialects().verified_stmt("TRUNCATE TABLE employee, ONLY dept");
+
+    let table_names = vec![
+        TruncateTableTarget {
+            name: ObjectName::from(vec![Ident::new("employee")]),
+            only: false,
+        },
+        TruncateTableTarget {
+            name: ObjectName::from(vec![Ident::new("dept")]),
+            only: true,
+        },
+    ];
+
+    assert_eq!(
+        Statement::Truncate {
+            table_names,
+            partitions: None,
+            table: true,
+            identity: None,
+            cascade: None,
+            on_cluster: None,
+        },
+        truncate
+    );
+}

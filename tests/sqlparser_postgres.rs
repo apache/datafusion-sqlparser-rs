@@ -4788,13 +4788,13 @@ fn parse_truncate() {
     let table_name = ObjectName::from(vec![Ident::new("db"), Ident::new("table_name")]);
     let table_names = vec![TruncateTableTarget {
         name: table_name.clone(),
+        only: false,
     }];
     assert_eq!(
         Statement::Truncate {
             table_names,
             partitions: None,
             table: false,
-            only: false,
             identity: None,
             cascade: None,
             on_cluster: None,
@@ -4811,6 +4811,7 @@ fn parse_truncate_with_options() {
     let table_name = ObjectName::from(vec![Ident::new("db"), Ident::new("table_name")]);
     let table_names = vec![TruncateTableTarget {
         name: table_name.clone(),
+        only: true,
     }];
 
     assert_eq!(
@@ -4818,7 +4819,6 @@ fn parse_truncate_with_options() {
             table_names,
             partitions: None,
             table: true,
-            only: true,
             identity: Some(TruncateIdentityOption::Restart),
             cascade: Some(CascadeOption::Cascade),
             on_cluster: None,
@@ -4839,9 +4839,11 @@ fn parse_truncate_with_table_list() {
     let table_names = vec![
         TruncateTableTarget {
             name: table_name_a.clone(),
+            only: false,
         },
         TruncateTableTarget {
             name: table_name_b.clone(),
+            only: false,
         },
     ];
 
@@ -4850,7 +4852,6 @@ fn parse_truncate_with_table_list() {
             table_names,
             partitions: None,
             table: true,
-            only: false,
             identity: Some(TruncateIdentityOption::Restart),
             cascade: Some(CascadeOption::Cascade),
             on_cluster: None,

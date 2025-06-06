@@ -9965,7 +9965,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse set quantifier for pipe operators that require DISTINCT (INTERSECT, EXCEPT)
+    /// Parse set quantifier for pipe operators that require DISTINCT. E.g. INTERSECT and EXCEPT
     fn parse_distinct_required_set_quantifier(
         &mut self,
         operator_name: &str,

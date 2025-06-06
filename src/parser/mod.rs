@@ -9988,14 +9988,7 @@ impl<'a> Parser<'a> {
             Some(self.parse_identifier()).transpose()
         } else {
             // Check if the next token is an identifier (implicit alias)
-            let checkpoint = self.index;
-            match self.parse_identifier() {
-                Ok(ident) => Ok(Some(ident)),
-                Err(_) => {
-                    self.index = checkpoint; // Rewind on failure
-                    Ok(None)
-                }
-            }
+            self.maybe_parse(|parser| parser.parse_identifier())
         }
     }
 

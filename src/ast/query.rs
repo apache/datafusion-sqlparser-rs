@@ -2697,7 +2697,7 @@ pub enum PipeOperator {
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#union_pipe_operator>
     Union {
         set_quantifier: SetQuantifier,
-        queries: Vec<Box<Query>>,
+        queries: Vec<Query>,
     },
     /// Returns only the rows that are present in both the input table and the specified tables.
     ///
@@ -2706,7 +2706,7 @@ pub enum PipeOperator {
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#intersect_pipe_operator>
     Intersect {
         set_quantifier: SetQuantifier,
-        queries: Vec<Box<Query>>,
+        queries: Vec<Query>,
     },
     /// Returns only the rows that are present in the input table but not in the specified tables.
     ///
@@ -2715,7 +2715,7 @@ pub enum PipeOperator {
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#except_pipe_operator>
     Except {
         set_quantifier: SetQuantifier,
-        queries: Vec<Box<Query>>,
+        queries: Vec<Query>,
     },
     /// Calls a table function or procedure that returns a table.
     ///
@@ -2873,7 +2873,7 @@ impl PipeOperator {
         f: &mut fmt::Formatter<'_>,
         operation: &str,
         set_quantifier: &SetQuantifier,
-        queries: &[Box<Query>],
+        queries: &[Query],
     ) -> fmt::Result {
         write!(f, "{}", operation)?;
         match set_quantifier {

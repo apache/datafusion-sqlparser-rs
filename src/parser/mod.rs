@@ -9956,12 +9956,12 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse comma-separated list of parenthesized queries for pipe operators
-    fn parse_pipe_operator_queries(&mut self) -> Result<Vec<Box<Query>>, ParserError> {
+    fn parse_pipe_operator_queries(&mut self) -> Result<Vec<Query>, ParserError> {
         self.parse_comma_separated(|parser| {
             parser.expect_token(&Token::LParen)?;
             let query = parser.parse_query()?;
             parser.expect_token(&Token::RParen)?;
-            Ok(query)
+            Ok(*query)
         })
     }
 

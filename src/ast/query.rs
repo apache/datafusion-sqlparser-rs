@@ -2877,8 +2877,6 @@ impl PipeOperator {
     ) -> fmt::Result {
         write!(f, "{}", operation)?;
         match set_quantifier {
-            SetQuantifier::All => write!(f, " ALL")?,
-            SetQuantifier::Distinct => write!(f, " DISTINCT")?,
             SetQuantifier::None => {}
             _ => {
                 write!(f, " {}", set_quantifier)?;

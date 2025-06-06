@@ -2823,10 +2823,7 @@ impl fmt::Display for PipeOperator {
             } => Self::fmt_set_operation(f, "EXCEPT", set_quantifier, queries),
             PipeOperator::Call { function, alias } => {
                 write!(f, "CALL {}", function)?;
-                if let Some(alias) = alias {
-                    write!(f, " AS {}", alias)?;
-                }
-                Ok(())
+                Self::fmt_optional_alias(f, alias)
             }
             PipeOperator::Pivot {
                 aggregate_functions,
@@ -2841,10 +2838,7 @@ impl fmt::Display for PipeOperator {
                     Expr::CompoundIdentifier(value_column.to_vec()),
                     value_source
                 )?;
-                if let Some(alias) = alias {
-                    write!(f, " AS {}", alias)?;
-                }
-                Ok(())
+                Self::fmt_optional_alias(f, alias)
             }
             PipeOperator::Unpivot {
                 value_column,
@@ -2859,16 +2853,21 @@ impl fmt::Display for PipeOperator {
                     name_column,
                     display_comma_separated(unpivot_columns)
                 )?;
-                if let Some(alias) = alias {
-                    write!(f, " AS {}", alias)?;
-                }
-                Ok(())
+                Self::fmt_optional_alias(f, alias)
             }
         }
     }
 }
 
 impl PipeOperator {
+    /// Helper function to format optional alias for pipe operators
+    fn fmt_optional_alias(f: &mut fmt::Formatter<'_>, alias: &Option<Ident>) -> fmt::Result {
+        if let Some(alias) = alias {
+            write!(f, " AS {}", alias)?;
+        }
+        Ok(())
+    }
+
     /// Helper function to format set operations (UNION, INTERSECT, EXCEPT) with queries
     fn fmt_set_operation(
         f: &mut fmt::Formatter<'_>,

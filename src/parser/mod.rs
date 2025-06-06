@@ -195,6 +195,9 @@ const EOF_TOKEN: TokenWithSpan = TokenWithSpan {
     },
 };
 
+// Error message constant for pipe operators that require DISTINCT
+const EXPECTED_FUNCTION_CALL_MSG: &str = "Expected function call after CALL";
+
 /// Composite types declarations using angle brackets syntax can be arbitrary
 /// nested such that the following declaration is possible:
 ///      `ARRAY<ARRAY<INT>>`
@@ -9965,6 +9968,19 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse set quantifier for pipe operators that require DISTINCT (INTERSECT, EXCEPT)
+    fn parse_distinct_required_set_quantifier(&mut self, operator_name: &str) -> Result<SetQuantifier, ParserError> {
+        if self.parse_keywords(&[Keyword::DISTINCT, Keyword::BY, Keyword::NAME]) {
+            Ok(SetQuantifier::DistinctByName)
+        } else if self.parse_keyword(Keyword::DISTINCT) {
+            Ok(SetQuantifier::Distinct)
+        } else {
+            Err(ParserError::ParserError(
+                format!("{} pipe operator requires DISTINCT modifier", operator_name),
+            ))
+        }
+    }
+
     /// Parse optional alias (with or without AS keyword) for pipe operators
     fn parse_optional_pipe_alias(&mut self) -> Result<Option<Ident>, ParserError> {
         if self.parse_keyword(Keyword::AS) {
@@ -11199,17 +11215,7 @@ impl<'a> Parser<'a> {
                     });
                 }
                 Keyword::INTERSECT => {
-                    // BigQuery INTERSECT pipe operator requires DISTINCT modifier
-                    let set_quantifier =
-                        if self.parse_keywords(&[Keyword::DISTINCT, Keyword::BY, Keyword::NAME]) {
-                            SetQuantifier::DistinctByName
-                        } else if self.parse_keyword(Keyword::DISTINCT) {
-                            SetQuantifier::Distinct
-                        } else {
-                            return Err(ParserError::ParserError(
-                                "INTERSECT pipe operator requires DISTINCT modifier".to_string(),
-                            ));
-                        };
+                    let set_quantifier = self.parse_distinct_required_set_quantifier("INTERSECT")?;
                     let queries = self.parse_pipe_operator_queries()?;
                     pipe_operators.push(PipeOperator::Intersect {
                         set_quantifier,
@@ -11217,17 +11223,7 @@ impl<'a> Parser<'a> {
                     });
                 }
                 Keyword::EXCEPT => {
-                    // BigQuery EXCEPT pipe operator requires DISTINCT modifier
-                    let set_quantifier =
-                        if self.parse_keywords(&[Keyword::DISTINCT, Keyword::BY, Keyword::NAME]) {
-                            SetQuantifier::DistinctByName
-                        } else if self.parse_keyword(Keyword::DISTINCT) {
-                            SetQuantifier::Distinct
-                        } else {
-                            return Err(ParserError::ParserError(
-                                "EXCEPT pipe operator requires DISTINCT modifier".to_string(),
-                            ));
-                        };
+                    let set_quantifier = self.parse_distinct_required_set_quantifier("EXCEPT")?;
                     let queries = self.parse_pipe_operator_queries()?;
                     pipe_operators.push(PipeOperator::Except {
                         set_quantifier,
@@ -11239,16 +11235,11 @@ impl<'a> Parser<'a> {
                     let function_expr = self.parse_function(function_name)?;
                     // Extract Function from Expr::Function
                     if let Expr::Function(function) = function_expr {
-                        // Parse optional alias
-                        let alias = if self.parse_keyword(Keyword::AS) {
-                            Some(self.parse_identifier()?)
-                        } else {
-                            None
-                        };
+                        let alias = self.parse_optional_pipe_alias()?;
                         pipe_operators.push(PipeOperator::Call { function, alias });
                     } else {
                         return Err(ParserError::ParserError(
-                            "Expected function call after CALL".to_string(),
+                            EXPECTED_FUNCTION_CALL_MSG.to_string(),
                         ));
                     }
                 }

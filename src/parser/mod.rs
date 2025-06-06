@@ -11272,22 +11272,12 @@ impl<'a> Parser<'a> {
                     });
                 }
                 Keyword::UNPIVOT => {
-                    // Parse UNPIVOT(value_column FOR name_column IN (column1, column2, ...)) [alias]
                     self.expect_token(&Token::LParen)?;
-
-                    // Parse value_column
                     let value_column = self.parse_identifier()?;
-
-                    // Parse FOR keyword
                     self.expect_keyword(Keyword::FOR)?;
-
-                    // Parse name_column
                     let name_column = self.parse_identifier()?;
-
-                    // Parse IN keyword
                     self.expect_keyword(Keyword::IN)?;
 
-                    // Parse (column1, column2, ...)
                     self.expect_token(&Token::LParen)?;
                     let unpivot_columns = self.parse_comma_separated(Parser::parse_identifier)?;
                     self.expect_token(&Token::RParen)?;

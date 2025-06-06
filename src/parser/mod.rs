@@ -11591,7 +11591,7 @@ impl<'a> Parser<'a> {
         };
 
         let sort_by = if self.parse_keywords(&[Keyword::SORT, Keyword::BY]) {
-            self.parse_comma_separated(Parser::parse_expr)?
+            self.parse_comma_separated(Parser::parse_order_by_expr)?
         } else {
             vec![]
         };

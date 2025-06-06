@@ -341,6 +341,9 @@ fn lateral_view() {
 fn sort_by() {
     let sort_by = "SELECT * FROM db.table SORT BY a";
     hive().verified_stmt(sort_by);
+
+    let sort_by_with_direction = "SELECT * FROM db.table SORT BY a, b DESC";
+    hive().verified_stmt(sort_by_with_direction);
 }
 
 #[test]

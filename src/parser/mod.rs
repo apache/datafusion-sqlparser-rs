@@ -11207,7 +11207,6 @@ impl<'a> Parser<'a> {
                     pipe_operators.push(PipeOperator::Rename { mappings });
                 }
                 Keyword::UNION => {
-                    // Reuse existing set quantifier parser for consistent BY NAME support
                     let set_quantifier = self.parse_set_quantifier(&Some(SetOperator::Union));
                     let queries = self.parse_pipe_operator_queries()?;
                     pipe_operators.push(PipeOperator::Union {
@@ -11235,7 +11234,6 @@ impl<'a> Parser<'a> {
                 Keyword::CALL => {
                     let function_name = self.parse_object_name(false)?;
                     let function_expr = self.parse_function(function_name)?;
-                    // Extract Function from Expr::Function
                     if let Expr::Function(function) = function_expr {
                         let alias = self.parse_optional_pipe_alias()?;
                         pipe_operators.push(PipeOperator::Call { function, alias });

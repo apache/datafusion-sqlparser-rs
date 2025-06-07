@@ -8139,7 +8139,20 @@ impl<'a> Parser<'a> {
                 self.expect_token(&Token::LParen)?;
                 let expr = Box::new(self.parse_expr()?);
                 self.expect_token(&Token::RParen)?;
-                Ok(Some(TableConstraint::Check { name, expr }))
+
+                let enforced = if self.parse_keyword(Keyword::ENFORCED) {
+                    Some(true)
+                } else if self.parse_keywords(&[Keyword::NOT, Keyword::ENFORCED]) {
+                    Some(false)
+                } else {
+                    None
+                };
+
+                Ok(Some(TableConstraint::Check {
+                    name,
+                    expr,
+                    enforced,
+                }))
             }
             Token::Word(w)
                 if (w.keyword == Keyword::INDEX || w.keyword == Keyword::KEY)

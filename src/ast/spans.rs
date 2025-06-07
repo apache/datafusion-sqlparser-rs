@@ -687,9 +687,11 @@ impl Spanned for TableConstraint {
                     .chain(on_update.iter().map(|i| i.span()))
                     .chain(characteristics.iter().map(|i| i.span())),
             ),
-            TableConstraint::Check { name, expr } => {
-                expr.span().union_opt(&name.as_ref().map(|i| i.span))
-            }
+            TableConstraint::Check {
+                name,
+                expr,
+                enforced: _,
+            } => expr.span().union_opt(&name.as_ref().map(|i| i.span)),
             TableConstraint::Index {
                 display_as_key: _,
                 name,

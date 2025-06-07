@@ -5378,6 +5378,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            enforced: None,
         }],
     });
 
@@ -5396,6 +5397,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            enforced: None,
         }],
     });
 
@@ -5414,6 +5416,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            enforced: None,
         }],
     });
 
@@ -5432,6 +5435,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            enforced: None,
         }],
     });
 
@@ -5450,6 +5454,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            enforced: None,
         }],
     });
 

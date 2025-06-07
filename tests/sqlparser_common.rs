@@ -15336,3 +15336,10 @@ fn parse_truncate_only() {
         truncate
     );
 }
+
+#[test]
+fn check_enforced() {
+    all_dialects().verified_stmt(
+        "CREATE TABLE t (a INT, b INT, c INT, CHECK (a > 0) NOT ENFORCED, CHECK (b > 0) ENFORCED, CHECK (c > 0))",
+    );
+}

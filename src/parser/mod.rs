@@ -8140,11 +8140,12 @@ impl<'a> Parser<'a> {
                 let expr = Box::new(self.parse_expr()?);
                 self.expect_token(&Token::RParen)?;
 
-                let enforced = match dialect_of!(self is GenericDialect | MySqlDialect) {
-                    true if self.parse_keywords(&[Keyword::NOT, Keyword::ENFORCED]) => Some(false),
-                    true if self.parse_keyword(Keyword::ENFORCED) => Some(true),
-                    // not MySQL, or is MySQL but not specified
-                    _ => None,
+                let enforced = if self.parse_keyword(Keyword::ENFORCED) {
+                    Some(true)
+                } else if self.parse_keywords(&[Keyword::NOT, Keyword::ENFORCED]) {
+                    Some(false)
+                } else {
+                    None
                 };
 
                 Ok(Some(TableConstraint::Check {

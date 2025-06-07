@@ -4025,3 +4025,13 @@ fn parse_drop_index() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn parse_alter_table_drop_index() {
+    assert_matches!(
+        alter_table_op(
+            mysql_and_generic().verified_stmt("ALTER TABLE tab DROP INDEX idx_index")
+        ),
+        AlterTableOperation::DropIndex { name } if name.value == "idx_index"
+    );
+}

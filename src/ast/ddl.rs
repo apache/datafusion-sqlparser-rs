@@ -189,8 +189,6 @@ pub enum AlterTableOperation {
     },
     /// `DROP INDEX <index_name>`
     ///
-    /// Note: this is a [MySQL]-specific operation.
-    ///
     /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
     DropIndex {
         name: Ident,

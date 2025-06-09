@@ -88,11 +88,8 @@ jobs:
       uses: ./.github/actions/setup-builder
       with:
         rust-version: ${{ matrix.rust }}
+    - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
     - name: Install Tarpaulin
-      uses: actions-rs/install@v0.1
-      with:
-        crate: cargo-tarpaulin
-        version: 0.14.2
-        use-tool-cache: true
+      run: cargo install cargo-tarpaulin
     - name: Test
       run: cargo test --all-features

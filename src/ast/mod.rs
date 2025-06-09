@@ -3725,6 +3725,14 @@ pub enum Statement {
         /// `<schema name> | AUTHORIZATION <schema authorization identifier>  | <schema name>  AUTHORIZATION <schema authorization identifier>`
         schema_name: SchemaName,
         if_not_exists: bool,
+        /// Schema properties.
+        ///
+        /// ```sql
+        /// CREATE SCHEMA myschema WITH (key1='value1');
+        /// ```
+        ///
+        /// [Trino](https://trino.io/docs/current/sql/create-schema.html)
+        with: Option<Vec<SqlOption>>,
         /// Schema options.
         ///
         /// ```sql
@@ -5585,6 +5593,7 @@ impl fmt::Display for Statement {
             Statement::CreateSchema {
                 schema_name,
                 if_not_exists,
+                with,
                 options,
                 default_collate_spec,
             } => {
@@ -5597,6 +5606,10 @@ impl fmt::Display for Statement {
 
                 if let Some(collate) = default_collate_spec {
                     write!(f, " DEFAULT COLLATE {collate}")?;
+                }
+
+                if let Some(with) = with {
+                    write!(f, " WITH ({})", display_comma_separated(with))?;
                 }
 
                 if let Some(options) = options {

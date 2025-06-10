@@ -11128,6 +11128,12 @@ impl<'a> Parser<'a> {
                 Keyword::CALL,
                 Keyword::PIVOT,
                 Keyword::UNPIVOT,
+                Keyword::JOIN,
+                Keyword::INNER,
+                Keyword::LEFT,
+                Keyword::RIGHT,
+                Keyword::FULL,
+                Keyword::CROSS,
             ])?;
             match kw {
                 Keyword::SELECT => {
@@ -11292,6 +11298,110 @@ impl<'a> Parser<'a> {
                         unpivot_columns,
                         alias,
                     });
+                }
+                Keyword::JOIN => {
+                    let relation = self.parse_table_factor()?;
+                    let constraint = self.parse_join_constraint(false)?;
+                    if matches!(constraint, JoinConstraint::None) {
+                        return Err(ParserError::ParserError(
+                            "JOIN in pipe syntax requires ON or USING clause".to_string(),
+                        ));
+                    }
+                    let join_operator = JoinOperator::Join(constraint);
+                    pipe_operators.push(PipeOperator::Join(Join {
+                        relation,
+                        global: false,
+                        join_operator,
+                    }))
+                }
+                Keyword::INNER => {
+                    self.expect_keyword(Keyword::JOIN)?;
+                    let relation = self.parse_table_factor()?;
+                    let constraint = self.parse_join_constraint(false)?;
+                    if matches!(constraint, JoinConstraint::None) {
+                        return Err(ParserError::ParserError(
+                            "INNER JOIN in pipe syntax requires ON or USING clause".to_string(),
+                        ));
+                    }
+                    let join_operator = JoinOperator::Inner(constraint);
+                    pipe_operators.push(PipeOperator::Join(Join {
+                        relation,
+                        global: false,
+                        join_operator,
+                    }))
+                }
+                Keyword::LEFT => {
+                    let outer = self.parse_keyword(Keyword::OUTER);
+                    self.expect_keyword(Keyword::JOIN)?;
+                    let relation = self.parse_table_factor()?;
+                    let constraint = self.parse_join_constraint(false)?;
+                    if matches!(constraint, JoinConstraint::None) {
+                        let join_type = if outer { "LEFT OUTER JOIN" } else { "LEFT JOIN" };
+                        return Err(ParserError::ParserError(format!(
+                            "{} in pipe syntax requires ON or USING clause",
+                            join_type
+                        )));
+                    }
+                    let join_operator = if outer {
+                        JoinOperator::LeftOuter(constraint)
+                    } else {
+                        JoinOperator::Left(constraint)
+                    };
+                    pipe_operators.push(PipeOperator::Join(Join {
+                        relation,
+                        global: false,
+                        join_operator,
+                    }))
+                }
+                Keyword::RIGHT => {
+                    let outer = self.parse_keyword(Keyword::OUTER);
+                    self.expect_keyword(Keyword::JOIN)?;
+                    let relation = self.parse_table_factor()?;
+                    let constraint = self.parse_join_constraint(false)?;
+                    if matches!(constraint, JoinConstraint::None) {
+                        let join_type = if outer { "RIGHT OUTER JOIN" } else { "RIGHT JOIN" };
+                        return Err(ParserError::ParserError(format!(
+                            "{} in pipe syntax requires ON or USING clause",
+                            join_type
+                        )));
+                    }
+                    let join_operator = if outer {
+                        JoinOperator::RightOuter(constraint)
+                    } else {
+                        JoinOperator::Right(constraint)
+                    };
+                    pipe_operators.push(PipeOperator::Join(Join {
+                        relation,
+                        global: false,
+                        join_operator,
+                    }))
+                }
+                Keyword::FULL => {
+                    let _outer = self.parse_keyword(Keyword::OUTER);
+                    self.expect_keyword(Keyword::JOIN)?;
+                    let relation = self.parse_table_factor()?;
+                    let constraint = self.parse_join_constraint(false)?;
+                    if matches!(constraint, JoinConstraint::None) {
+                        return Err(ParserError::ParserError(
+                            "FULL JOIN in pipe syntax requires ON or USING clause".to_string(),
+                        ));
+                    }
+                    let join_operator = JoinOperator::FullOuter(constraint);
+                    pipe_operators.push(PipeOperator::Join(Join {
+                        relation,
+                        global: false,
+                        join_operator,
+                    }))
+                }
+                Keyword::CROSS => {
+                    self.expect_keyword(Keyword::JOIN)?;
+                    let relation = self.parse_table_factor()?;
+                    let join_operator = JoinOperator::CrossJoin;
+                    pipe_operators.push(PipeOperator::Join(Join {
+                        relation,
+                        global: false,
+                        join_operator,
+                    }))
                 }
                 unhandled => {
                     return Err(ParserError::ParserError(format!(

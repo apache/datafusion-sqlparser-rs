@@ -2751,6 +2751,12 @@ pub enum PipeOperator {
         unpivot_columns: Vec<Ident>,
         alias: Option<Ident>,
     },
+    /// Joins the input table with another table.
+    ///
+    /// Syntax: `|> [JOIN_TYPE] JOIN <table> [alias] ON <condition>` or `|> [JOIN_TYPE] JOIN <table> [alias] USING (<columns>)`
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#join_pipe_operator>
+    Join(Join),
 }
 
 impl fmt::Display for PipeOperator {
@@ -2855,6 +2861,7 @@ impl fmt::Display for PipeOperator {
                 )?;
                 Self::fmt_optional_alias(f, alias)
             }
+            PipeOperator::Join(join) => write!(f, "{}", join)
         }
     }
 }

@@ -8636,6 +8636,9 @@ impl<'a> Parser<'a> {
             } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::KEY]) {
                 let name = self.parse_identifier()?;
                 AlterTableOperation::DropForeignKey { name }
+            } else if self.parse_keyword(Keyword::INDEX) {
+                let name = self.parse_identifier()?;
+                AlterTableOperation::DropIndex { name }
             } else if self.parse_keyword(Keyword::PROJECTION)
                 && dialect_of!(self is ClickHouseDialect|GenericDialect)
             {

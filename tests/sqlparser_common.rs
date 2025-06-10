@@ -15364,25 +15364,29 @@ fn parse_pipeline_operator() {
     // join pipe operator - INNER JOIN
     dialects.verified_stmt("SELECT * FROM users |> JOIN orders ON users.id = orders.user_id");
     dialects.verified_stmt("SELECT * FROM users |> INNER JOIN orders ON users.id = orders.user_id");
-    
+
     // join pipe operator - LEFT JOIN
     dialects.verified_stmt("SELECT * FROM users |> LEFT JOIN orders ON users.id = orders.user_id");
-    dialects.verified_stmt("SELECT * FROM users |> LEFT OUTER JOIN orders ON users.id = orders.user_id");
-    
+    dialects.verified_stmt(
+        "SELECT * FROM users |> LEFT OUTER JOIN orders ON users.id = orders.user_id",
+    );
+
     // join pipe operator - RIGHT JOIN
     dialects.verified_stmt("SELECT * FROM users |> RIGHT JOIN orders ON users.id = orders.user_id");
-    dialects.verified_stmt("SELECT * FROM users |> RIGHT OUTER JOIN orders ON users.id = orders.user_id");
-    
+    dialects.verified_stmt(
+        "SELECT * FROM users |> RIGHT OUTER JOIN orders ON users.id = orders.user_id",
+    );
+
     // join pipe operator - FULL JOIN
     dialects.verified_stmt("SELECT * FROM users |> FULL JOIN orders ON users.id = orders.user_id");
     dialects.verified_query_with_canonical(
         "SELECT * FROM users |> FULL OUTER JOIN orders ON users.id = orders.user_id",
         "SELECT * FROM users |> FULL JOIN orders ON users.id = orders.user_id",
     );
-    
+
     // join pipe operator - CROSS JOIN
     dialects.verified_stmt("SELECT * FROM users |> CROSS JOIN orders");
-    
+
     // join pipe operator with USING
     dialects.verified_query_with_canonical(
         "SELECT * FROM users |> JOIN orders USING (user_id)",
@@ -15392,22 +15396,22 @@ fn parse_pipeline_operator() {
         "SELECT * FROM users |> LEFT JOIN orders USING (user_id, order_date)",
         "SELECT * FROM users |> LEFT JOIN orders USING(user_id, order_date)",
     );
-    
+
     // join pipe operator with alias
     dialects.verified_query_with_canonical(
         "SELECT * FROM users |> JOIN orders o ON users.id = o.user_id",
         "SELECT * FROM users |> JOIN orders AS o ON users.id = o.user_id",
     );
     dialects.verified_stmt("SELECT * FROM users |> LEFT JOIN orders AS o ON users.id = o.user_id");
-    
+
     // join pipe operator with complex ON condition
     dialects.verified_stmt("SELECT * FROM users |> JOIN orders ON users.id = orders.user_id AND orders.status = 'active'");
     dialects.verified_stmt("SELECT * FROM users |> LEFT JOIN orders ON users.id = orders.user_id AND orders.amount > 100");
-    
+
     // multiple join pipe operators
     dialects.verified_stmt("SELECT * FROM users |> JOIN orders ON users.id = orders.user_id |> JOIN products ON orders.product_id = products.id");
     dialects.verified_stmt("SELECT * FROM users |> LEFT JOIN orders ON users.id = orders.user_id |> RIGHT JOIN products ON orders.product_id = products.id");
-    
+
     // join pipe operator with other pipe operators
     dialects.verified_stmt("SELECT * FROM users |> JOIN orders ON users.id = orders.user_id |> WHERE orders.amount > 100");
     dialects.verified_stmt("SELECT * FROM users |> WHERE users.active = true |> LEFT JOIN orders ON users.id = orders.user_id");
@@ -15590,7 +15594,9 @@ fn parse_pipeline_operator_negative_tests() {
 
     // Test that CROSS JOIN with ON condition fails
     assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> CROSS JOIN orders ON users.id = orders.user_id")
+        .parse_sql_statements(
+            "SELECT * FROM users |> CROSS JOIN orders ON users.id = orders.user_id"
+        )
         .is_err());
 
     // Test that CROSS JOIN with USING condition fails

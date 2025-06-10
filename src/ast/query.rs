@@ -2861,7 +2861,7 @@ impl fmt::Display for PipeOperator {
                 )?;
                 Self::fmt_optional_alias(f, alias)
             }
-            PipeOperator::Join(join) => write!(f, "{}", join)
+            PipeOperator::Join(join) => write!(f, "{}", join),
         }
     }
 }

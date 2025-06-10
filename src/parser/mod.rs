@@ -11336,7 +11336,11 @@ impl<'a> Parser<'a> {
                     let relation = self.parse_table_factor()?;
                     let constraint = self.parse_join_constraint(false)?;
                     if matches!(constraint, JoinConstraint::None) {
-                        let join_type = if outer { "LEFT OUTER JOIN" } else { "LEFT JOIN" };
+                        let join_type = if outer {
+                            "LEFT OUTER JOIN"
+                        } else {
+                            "LEFT JOIN"
+                        };
                         return Err(ParserError::ParserError(format!(
                             "{} in pipe syntax requires ON or USING clause",
                             join_type
@@ -11359,7 +11363,11 @@ impl<'a> Parser<'a> {
                     let relation = self.parse_table_factor()?;
                     let constraint = self.parse_join_constraint(false)?;
                     if matches!(constraint, JoinConstraint::None) {
-                        let join_type = if outer { "RIGHT OUTER JOIN" } else { "RIGHT JOIN" };
+                        let join_type = if outer {
+                            "RIGHT OUTER JOIN"
+                        } else {
+                            "RIGHT JOIN"
+                        };
                         return Err(ParserError::ParserError(format!(
                             "{} in pipe syntax requires ON or USING clause",
                             join_type

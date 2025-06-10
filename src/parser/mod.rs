@@ -4866,6 +4866,12 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let with = if self.peek_keyword(Keyword::WITH) {
+            Some(self.parse_options(Keyword::WITH)?)
+        } else {
+            None
+        };
+
         let options = if self.peek_keyword(Keyword::OPTIONS) {
             Some(self.parse_options(Keyword::OPTIONS)?)
         } else {
@@ -4875,6 +4881,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::CreateSchema {
             schema_name,
             if_not_exists,
+            with,
             options,
             default_collate_spec,
         })

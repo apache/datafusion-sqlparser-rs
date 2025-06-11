@@ -401,11 +401,6 @@ pub fn parse_create_table(
     let if_not_exists = parser.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
     let table_name = parser.parse_object_name(false)?;
 
-    // Snowflake allows `IF NOT EXIST` both before and after the table name so if we haven't
-    // already seen that before the table name, try to parse it again.
-    let if_not_exists =
-        if_not_exists || parser.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-
     let mut builder = CreateTableBuilder::new(table_name)
         .or_replace(or_replace)
         .if_not_exists(if_not_exists)
@@ -564,6 +559,9 @@ pub fn parse_create_table(
 
                     builder.storage_serialization_policy =
                         Some(parse_storage_serialization_policy(parser)?);
+                }
+                Keyword::IF if parser.parse_keywords(&[Keyword::NOT, Keyword::EXISTS]) => {
+                    builder = builder.if_not_exists(true);
                 }
                 _ => {
                     return parser.expected("end of statement", next_token);

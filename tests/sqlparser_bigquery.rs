@@ -2377,3 +2377,14 @@ fn test_any_type() {
 fn test_any_type_dont_break_custom_type() {
     bigquery_and_generic().verified_stmt("CREATE TABLE foo (x ANY)");
 }
+
+#[test]
+fn test_select_distinct_as_struct_or_value() {
+    for sql in [
+        "SELECT DISTINCT AS STRUCT a, ABS(b) FROM UNNEST(c) AS T",
+        "SELECT DISTINCT AS VALUE a, ABS(b) FROM UNNEST(c) AS T",
+        "SELECT ARRAY(SELECT DISTINCT AS STRUCT a, b, ABS(c) AS c, ABS(d) AS d FROM UNNEST(e) AS T)",
+    ] {
+        bigquery().verified_stmt(sql);
+    }
+}

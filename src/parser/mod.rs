@@ -11505,12 +11505,22 @@ impl<'a> Parser<'a> {
         }
 
         let select_token = self.expect_keyword(Keyword::SELECT)?;
+        let distinct_pre_as = self.parse_all_or_distinct()?;
+
         let value_table_mode =
             if dialect_of!(self is BigQueryDialect) && self.parse_keyword(Keyword::AS) {
                 if self.parse_keyword(Keyword::VALUE) {
-                    Some(ValueTableMode::AsValue)
+                    if distinct_pre_as.is_some() {
+                        Some(ValueTableMode::DistinctAsValue)
+                    } else {
+                        Some(ValueTableMode::AsValue)
+                    }
                 } else if self.parse_keyword(Keyword::STRUCT) {
-                    Some(ValueTableMode::AsStruct)
+                    if distinct_pre_as.is_some() {
+                        Some(ValueTableMode::DistinctAsStruct)
+                    } else {
+                        Some(ValueTableMode::AsStruct)
+                    }
                 } else {
                     self.expected("VALUE or STRUCT", self.peek_token())?
                 }
@@ -11524,7 +11534,17 @@ impl<'a> Parser<'a> {
             top = Some(self.parse_top()?);
             top_before_distinct = true;
         }
-        let distinct = self.parse_all_or_distinct()?;
+
+        // If we parsed a `DISTINCT` value before checking `ValueTableMode` and it is set to some,
+        // but we didn't have an `AS`, this is the initial `DISTINCT` value in the `SELECT` and
+        // should be re-used.
+        // If we don't have a `DISTINCT` parsed or if it was consumed for the `ValueTableMode` we
+        // look for `DISTINCT` again.
+        let distinct = if value_table_mode.is_none() && distinct_pre_as.is_some() {
+            distinct_pre_as
+        } else {
+            self.parse_all_or_distinct()?
+        };
         if !self.dialect.supports_top_before_distinct() && self.parse_keyword(Keyword::TOP) {
             top = Some(self.parse_top()?);
         }

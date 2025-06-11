@@ -270,8 +270,8 @@ fn test_snowflake_create_table_with_tag() {
             assert_eq!("my_table", name.to_string());
             assert_eq!(
                 Some(vec![
-                    Tag::new("A".into(), "TAG A".to_string()),
-                    Tag::new("B".into(), "TAG B".to_string())
+                    Tag::new(ObjectName::from(vec![Ident::new("A")]), "TAG A".to_string()),
+                    Tag::new(ObjectName::from(vec![Ident::new("B")]), "TAG B".to_string())
                 ]),
                 with_tags
             );
@@ -291,8 +291,8 @@ fn test_snowflake_create_table_with_tag() {
             assert_eq!("my_table", name.to_string());
             assert_eq!(
                 Some(vec![
-                    Tag::new("A".into(), "TAG A".to_string()),
-                    Tag::new("B".into(), "TAG B".to_string())
+                    Tag::new(ObjectName::from(vec![Ident::new("A")]), "TAG A".to_string()),
+                    Tag::new(ObjectName::from(vec![Ident::new("B")]), "TAG B".to_string())
                 ]),
                 with_tags
             );
@@ -802,8 +802,14 @@ fn test_snowflake_create_table_with_columns_tags() {
                             option: ColumnOption::Tags(TagsColumnOption {
                                 with,
                                 tags: vec![
-                                    Tag::new("A".into(), "TAG A".into()),
-                                    Tag::new("B".into(), "TAG B".into()),
+                                    Tag::new(
+                                        ObjectName::from(vec![Ident::new("A")]),
+                                        "TAG A".into()
+                                    ),
+                                    Tag::new(
+                                        ObjectName::from(vec![Ident::new("B")]),
+                                        "TAG B".into()
+                                    ),
                                 ]
                             }),
                         }],
@@ -856,8 +862,14 @@ fn test_snowflake_create_table_with_several_column_options() {
                                 option: ColumnOption::Tags(TagsColumnOption {
                                     with: true,
                                     tags: vec![
-                                        Tag::new("A".into(), "TAG A".into()),
-                                        Tag::new("B".into(), "TAG B".into()),
+                                        Tag::new(
+                                            ObjectName::from(vec![Ident::new("A")]),
+                                            "TAG A".into()
+                                        ),
+                                        Tag::new(
+                                            ObjectName::from(vec![Ident::new("B")]),
+                                            "TAG B".into()
+                                        ),
                                     ]
                                 }),
                             }
@@ -888,8 +900,14 @@ fn test_snowflake_create_table_with_several_column_options() {
                                 option: ColumnOption::Tags(TagsColumnOption {
                                     with: false,
                                     tags: vec![
-                                        Tag::new("C".into(), "TAG C".into()),
-                                        Tag::new("D".into(), "TAG D".into()),
+                                        Tag::new(
+                                            ObjectName::from(vec![Ident::new("C")]),
+                                            "TAG C".into()
+                                        ),
+                                        Tag::new(
+                                            ObjectName::from(vec![Ident::new("D")]),
+                                            "TAG D".into()
+                                        ),
                                     ]
                                 }),
                             }
@@ -942,8 +960,8 @@ fn test_snowflake_create_iceberg_table_all_options() {
                 with_aggregation_policy.map(|name| name.to_string())
             );
             assert_eq!(Some(vec![
-                                        Tag::new("A".into(), "TAG A".into()),
-                                        Tag::new("B".into(), "TAG B".into()),
+                                        Tag::new(ObjectName::from(vec![Ident::new("A")]), "TAG A".into()),
+                                        Tag::new(ObjectName::from(vec![Ident::new("B")]), "TAG B".into()),
                                     ]), with_tags);
 
         }

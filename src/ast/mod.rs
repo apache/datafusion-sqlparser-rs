@@ -9206,12 +9206,12 @@ impl Display for RowAccessPolicy {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Tag {
-    pub key: Ident,
+    pub key: ObjectName,
     pub value: String,
 }
 
 impl Tag {
-    pub fn new(key: Ident, value: String) -> Self {
+    pub fn new(key: ObjectName, value: String) -> Self {
         Self { key, value }
     }
 }

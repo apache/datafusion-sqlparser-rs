@@ -446,6 +446,18 @@ fn test_snowflake_create_table_if_not_exists() {
         }
         _ => unreachable!(),
     }
+
+    for sql in [
+        r#"CREATE TABLE IF NOT EXISTS "A"."B"."C" (v VARIANT)"#,
+        r#"CREATE TABLE "A"."B"."C" IF NOT EXISTS (v VARIANT)"#,
+        r#"CREATE TRANSIENT TABLE IF NOT EXISTS "A"."B"."C" (v VARIANT)"#,
+        r#"CREATE TRANSIENT TABLE "A"."B"."C" IF NOT EXISTS (v VARIANT)"#,
+    ] {
+        // We don't use `verified_stmt` here because the parser won't produce a 1:1 result of the
+        // query. We will always put the `IF NOT EXIST` before the column name when displaying the
+        // query.
+        assert!(snowflake().parse_sql_statements(sql).is_ok());
+    }
 }
 
 #[test]

@@ -11514,7 +11514,9 @@ impl<'a> Parser<'a> {
                 } else {
                     self.expected("VALUE or STRUCT", self.peek_token())?
                 }
-            } else if self.parse_keyword(Keyword::AS) {
+            } else if self.parse_keyword(Keyword::AS)
+                || self.parse_keywords(&[Keyword::ALL, Keyword::AS])
+            {
                 if self.parse_keyword(Keyword::VALUE) {
                     Some(ValueTableMode::AsValue)
                 } else if self.parse_keyword(Keyword::STRUCT) {

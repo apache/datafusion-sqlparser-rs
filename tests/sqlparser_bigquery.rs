@@ -2379,12 +2379,19 @@ fn test_any_type_dont_break_custom_type() {
 }
 
 #[test]
-fn test_select_distinct_as_struct_or_value() {
+fn test_select_distinct_or_all_as_struct_or_value() {
     for sql in [
         "SELECT DISTINCT AS STRUCT a, ABS(b) FROM UNNEST(c) AS T",
         "SELECT DISTINCT AS VALUE a, ABS(b) FROM UNNEST(c) AS T",
         "SELECT ARRAY(SELECT DISTINCT AS STRUCT a, b, ABS(c) AS c, ABS(d) AS d FROM UNNEST(e) AS T)",
     ] {
         bigquery().verified_stmt(sql);
+    }
+
+    for sql in [
+        "SELECT ALL AS STRUCT a, ABS(b) FROM UNNEST(c) AS T",
+        "SELECT ALL AS VALUE a, ABS(b) FROM UNNEST(c) AS T",
+    ] {
+        assert!(bigquery().parse_sql_statements(sql).is_ok());
     }
 }

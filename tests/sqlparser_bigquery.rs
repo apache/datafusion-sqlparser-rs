@@ -2313,16 +2313,46 @@ fn bigquery_select_expr_star() {
 
 #[test]
 fn test_select_as_struct() {
-    bigquery().verified_only_select("SELECT * FROM (SELECT AS VALUE STRUCT(123 AS a, false AS b))");
+    for (sql, parse_to) in [
+        (
+            "SELECT * FROM (SELECT AS STRUCT STRUCT(123 AS a, false AS b))",
+            "SELECT * FROM (SELECT AS STRUCT STRUCT(123 AS a, false AS b))",
+        ),
+        (
+            "SELECT * FROM (SELECT DISTINCT AS STRUCT STRUCT(123 AS a, false AS b))",
+            "SELECT * FROM (SELECT DISTINCT AS STRUCT STRUCT(123 AS a, false AS b))",
+        ),
+        (
+            "SELECT * FROM (SELECT ALL AS STRUCT STRUCT(123 AS a, false AS b))",
+            "SELECT * FROM (SELECT AS STRUCT STRUCT(123 AS a, false AS b))",
+        ),
+    ] {
+        bigquery().one_statement_parses_to(sql, parse_to);
+    }
+
     let select = bigquery().verified_only_select("SELECT AS STRUCT 1 AS a, 2 AS b");
     assert_eq!(Some(ValueTableMode::AsStruct), select.value_table_mode);
 }
 
 #[test]
 fn test_select_as_value() {
-    bigquery().verified_only_select(
-        "SELECT * FROM (SELECT AS VALUE STRUCT(5 AS star_rating, false AS up_down_rating))",
-    );
+    for (sql, parse_to) in [
+        (
+            "SELECT * FROM (SELECT AS VALUE STRUCT(5 AS star_rating, false AS up_down_rating))",
+            "SELECT * FROM (SELECT AS VALUE STRUCT(5 AS star_rating, false AS up_down_rating))",
+        ),
+        (
+            "SELECT * FROM (SELECT DISTINCT AS VALUE STRUCT(5 AS star_rating, false AS up_down_rating))",
+            "SELECT * FROM (SELECT DISTINCT AS VALUE STRUCT(5 AS star_rating, false AS up_down_rating))",
+        ),
+        (
+            "SELECT * FROM (SELECT ALL AS VALUE STRUCT(5 AS star_rating, false AS up_down_rating))",
+            "SELECT * FROM (SELECT AS VALUE STRUCT(5 AS star_rating, false AS up_down_rating))",
+        ),
+    ] {
+        bigquery().one_statement_parses_to(sql, parse_to);
+    }
+
     let select = bigquery().verified_only_select("SELECT AS VALUE STRUCT(1 AS a, 2 AS b) AS xyz");
     assert_eq!(Some(ValueTableMode::AsValue), select.value_table_mode);
 }
@@ -2376,28 +2406,4 @@ fn test_any_type() {
 #[test]
 fn test_any_type_dont_break_custom_type() {
     bigquery_and_generic().verified_stmt("CREATE TABLE foo (x ANY)");
-}
-
-#[test]
-fn test_select_distinct_or_all_as_struct_or_value() {
-    for sql in [
-        "SELECT DISTINCT AS STRUCT a, ABS(b) FROM UNNEST(c) AS T",
-        "SELECT DISTINCT AS VALUE a, ABS(b) FROM UNNEST(c) AS T",
-        "SELECT ARRAY(SELECT DISTINCT AS STRUCT a, b, ABS(c) AS c, ABS(d) AS d FROM UNNEST(e) AS T)",
-    ] {
-        bigquery().verified_stmt(sql);
-    }
-
-    for (sql, parse_to) in [
-        (
-            "SELECT ALL AS STRUCT a, ABS(b) FROM UNNEST(c) AS T",
-            "SELECT AS STRUCT a, ABS(b) FROM UNNEST(c) AS T",
-        ),
-        (
-            "SELECT ALL AS VALUE a, ABS(b) FROM UNNEST(c) AS T",
-            "SELECT AS VALUE a, ABS(b) FROM UNNEST(c) AS T",
-        ),
-    ] {
-        bigquery().one_statement_parses_to(sql, parse_to);
-    }
 }

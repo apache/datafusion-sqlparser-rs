@@ -11505,31 +11505,7 @@ impl<'a> Parser<'a> {
         }
 
         let select_token = self.expect_keyword(Keyword::SELECT)?;
-        let value_table_mode = if dialect_of!(self is BigQueryDialect) {
-            if self.parse_keywords(&[Keyword::DISTINCT, Keyword::AS]) {
-                if self.parse_keyword(Keyword::VALUE) {
-                    Some(ValueTableMode::DistinctAsValue)
-                } else if self.parse_keyword(Keyword::STRUCT) {
-                    Some(ValueTableMode::DistinctAsStruct)
-                } else {
-                    self.expected("VALUE or STRUCT", self.peek_token())?
-                }
-            } else if self.parse_keyword(Keyword::AS)
-                || self.parse_keywords(&[Keyword::ALL, Keyword::AS])
-            {
-                if self.parse_keyword(Keyword::VALUE) {
-                    Some(ValueTableMode::AsValue)
-                } else if self.parse_keyword(Keyword::STRUCT) {
-                    Some(ValueTableMode::AsStruct)
-                } else {
-                    self.expected("VALUE or STRUCT", self.peek_token())?
-                }
-            } else {
-                None
-            }
-        } else {
-            None
-        };
+        let value_table_mode = self.parse_value_table_mode()?;
 
         let mut top_before_distinct = false;
         let mut top = None;
@@ -11703,6 +11679,32 @@ impl<'a> Parser<'a> {
                 SelectFlavor::Standard
             },
         })
+    }
+
+    fn parse_value_table_mode(&mut self) -> Result<Option<ValueTableMode>, ParserError> {
+        if !dialect_of!(self is BigQueryDialect) {
+            return Ok(None);
+        }
+
+        let mode = if self.parse_keywords(&[Keyword::DISTINCT, Keyword::AS, Keyword::VALUE]) {
+            Some(ValueTableMode::DistinctAsValue)
+        } else if self.parse_keywords(&[Keyword::DISTINCT, Keyword::AS, Keyword::STRUCT]) {
+            Some(ValueTableMode::DistinctAsStruct)
+        } else if self.parse_keywords(&[Keyword::AS, Keyword::VALUE])
+            || self.parse_keywords(&[Keyword::ALL, Keyword::AS, Keyword::VALUE])
+        {
+            Some(ValueTableMode::AsValue)
+        } else if self.parse_keywords(&[Keyword::AS, Keyword::STRUCT])
+            || self.parse_keywords(&[Keyword::ALL, Keyword::AS, Keyword::STRUCT])
+        {
+            Some(ValueTableMode::AsStruct)
+        } else if self.parse_keyword(Keyword::AS) {
+            self.expected("VALUE or STRUCT", self.peek_token())?
+        } else {
+            None
+        };
+
+        Ok(mode)
     }
 
     /// Invoke `f` after first setting the parser's `ParserState` to `state`.

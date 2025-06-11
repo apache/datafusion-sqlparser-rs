@@ -3338,11 +3338,8 @@ impl fmt::Display for OpenJsonTableColumn {
 }
 
 /// BigQuery supports ValueTables which have 2 modes:
-/// `SELECT AS STRUCT`
-/// `SELECT AS VALUE`
-///
-/// They can be combined with `[ { ALL | DISTINCT } ]`, e.g.
-/// `SELECT DISTINCT AS STRUCT`
+/// `SELECT [ALL | DISTINCT] AS STRUCT`
+/// `SELECT [ALL | DISTINCT] AS VALUE`
 ///
 /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#value_tables>
 /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#select_list>

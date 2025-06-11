@@ -3338,15 +3338,19 @@ impl fmt::Display for OpenJsonTableColumn {
 }
 
 /// BigQuery supports ValueTables which have 2 modes:
-/// `SELECT AS STRUCT`
-/// `SELECT AS VALUE`
+/// `SELECT [ALL | DISTINCT] AS STRUCT`
+/// `SELECT [ALL | DISTINCT] AS VALUE`
+///
 /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#value_tables>
+/// <https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#select_list>
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ValueTableMode {
     AsStruct,
     AsValue,
+    DistinctAsStruct,
+    DistinctAsValue,
 }
 
 impl fmt::Display for ValueTableMode {
@@ -3354,6 +3358,8 @@ impl fmt::Display for ValueTableMode {
         match self {
             ValueTableMode::AsStruct => write!(f, "AS STRUCT"),
             ValueTableMode::AsValue => write!(f, "AS VALUE"),
+            ValueTableMode::DistinctAsStruct => write!(f, "DISTINCT AS STRUCT"),
+            ValueTableMode::DistinctAsValue => write!(f, "DISTINCT AS VALUE"),
         }
     }
 }

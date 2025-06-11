@@ -2388,10 +2388,16 @@ fn test_select_distinct_or_all_as_struct_or_value() {
         bigquery().verified_stmt(sql);
     }
 
-    for sql in [
-        "SELECT ALL AS STRUCT a, ABS(b) FROM UNNEST(c) AS T",
-        "SELECT ALL AS VALUE a, ABS(b) FROM UNNEST(c) AS T",
+    for (sql, parse_to) in [
+        (
+            "SELECT ALL AS STRUCT a, ABS(b) FROM UNNEST(c) AS T",
+            "SELECT AS STRUCT a, ABS(b) FROM UNNEST(c) AS T",
+        ),
+        (
+            "SELECT ALL AS VALUE a, ABS(b) FROM UNNEST(c) AS T",
+            "SELECT AS VALUE a, ABS(b) FROM UNNEST(c) AS T",
+        ),
     ] {
-        assert!(bigquery().parse_sql_statements(sql).is_ok());
+        bigquery().one_statement_parses_to(sql, parse_to);
     }
 }

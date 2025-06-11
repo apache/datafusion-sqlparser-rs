@@ -982,6 +982,7 @@ impl Spanned for ViewColumnDef {
             name,
             data_type: _, // todo, DataType
             options,
+            options_comma_separated: _,
         } = self;
 
         union_spans(

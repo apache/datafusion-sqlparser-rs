@@ -3087,7 +3087,7 @@ fn view_comment_option_should_be_after_column_list() {
         "CREATE OR REPLACE VIEW v (a COMMENT 'a comment', b, c COMMENT 'c comment') COMMENT = 'Comment' AS SELECT a FROM t",
         "CREATE OR REPLACE VIEW v (a COMMENT 'a comment', b, c COMMENT 'c comment') WITH (foo = bar) COMMENT = 'Comment' AS SELECT a FROM t",
     ] {
-        snowflake_and_generic()
+        snowflake()
             .verified_stmt(sql);
     }
 }
@@ -3096,7 +3096,7 @@ fn view_comment_option_should_be_after_column_list() {
 fn parse_view_column_descriptions() {
     let sql = "CREATE OR REPLACE VIEW v (a COMMENT 'Comment', b) AS SELECT a, b FROM table1";
 
-    match snowflake_and_generic().verified_stmt(sql) {
+    match snowflake().verified_stmt(sql) {
         Statement::CreateView { name, columns, .. } => {
             assert_eq!(name.to_string(), "v");
             assert_eq!(
@@ -3106,11 +3106,13 @@ fn parse_view_column_descriptions() {
                         name: Ident::new("a"),
                         data_type: None,
                         options: Some(vec![ColumnOption::Comment("Comment".to_string())]),
+                        options_comma_separated: false,
                     },
                     ViewColumnDef {
                         name: Ident::new("b"),
                         data_type: None,
                         options: None,
+                        options_comma_separated: false,
                     }
                 ]
             );
@@ -4044,4 +4046,16 @@ fn parse_connect_by_root_operator() {
         res.unwrap_err().to_string(),
         "sql parser error: Expected an expression, found: FROM"
     );
+}
+
+#[test]
+fn test_snowflake_create_view_with_tag() {
+    let create_view_with_tag = r#"CREATE VIEW X (COL WITH TAG (pii='email')) AS SELECT * FROM Y"#;
+    snowflake().verified_stmt(create_view_with_tag);
+}
+
+#[test]
+fn test_snowflake_create_view_with_tag_and_comment() {
+    let create_view_with_tag_and_comment = r#"CREATE VIEW X (COL WITH TAG (pii='email') COMMENT 'foobar') AS SELECT * FROM Y"#;
+    snowflake().verified_stmt(create_view_with_tag_and_comment);
 }

@@ -22,6 +22,7 @@ use alloc::{
 };
 use core::{
     fmt::{self, Display},
+    ops::Not,
     str::FromStr,
 };
 use helpers::attached_token::AttachedToken;
@@ -10566,17 +10567,7 @@ impl<'a> Parser<'a> {
     /// Parses a column definition within a view.
     fn parse_view_column(&mut self) -> Result<ViewColumnDef, ParserError> {
         let name = self.parse_identifier()?;
-        let options = if (dialect_of!(self is BigQueryDialect | GenericDialect)
-            && self.parse_keyword(Keyword::OPTIONS))
-            || (dialect_of!(self is SnowflakeDialect | GenericDialect)
-                && self.parse_keyword(Keyword::COMMENT))
-        {
-            self.prev_token();
-            self.parse_optional_column_option()?
-                .map(|option| vec![option])
-        } else {
-            None
-        };
+        let options = self.parse_view_column_options()?;
         let data_type = if dialect_of!(self is ClickHouseDialect) {
             Some(self.parse_data_type()?)
         } else {
@@ -10586,7 +10577,21 @@ impl<'a> Parser<'a> {
             name,
             data_type,
             options,
+            options_comma_separated: !dialect_of!(self is SnowflakeDialect),
         })
+    }
+
+    fn parse_view_column_options(&mut self) -> Result<Option<Vec<ColumnOption>>, ParserError> {
+        let mut options = Vec::new();
+        loop {
+            let option = self.parse_optional_column_option()?;
+            if let Some(option) = option {
+                options.push(option);
+            } else {
+                break;
+            }
+        }
+        Ok(options.is_empty().not().then_some(options))
     }
 
     /// Parses a parenthesized comma-separated list of unqualified, possibly quoted identifiers.

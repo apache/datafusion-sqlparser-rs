@@ -446,6 +446,27 @@ fn test_snowflake_create_table_if_not_exists() {
         }
         _ => unreachable!(),
     }
+
+    for (sql, parse_to) in [
+        (
+            r#"CREATE TABLE IF NOT EXISTS "A"."B"."C" (v VARIANT)"#,
+            r#"CREATE TABLE IF NOT EXISTS "A"."B"."C" (v VARIANT)"#,
+        ),
+        (
+            r#"CREATE TABLE "A"."B"."C" IF NOT EXISTS (v VARIANT)"#,
+            r#"CREATE TABLE IF NOT EXISTS "A"."B"."C" (v VARIANT)"#,
+        ),
+        (
+            r#"CREATE TRANSIENT TABLE IF NOT EXISTS "A"."B"."C" (v VARIANT)"#,
+            r#"CREATE TRANSIENT TABLE IF NOT EXISTS "A"."B"."C" (v VARIANT)"#,
+        ),
+        (
+            r#"CREATE TRANSIENT TABLE "A"."B"."C" IF NOT EXISTS (v VARIANT)"#,
+            r#"CREATE TRANSIENT TABLE IF NOT EXISTS "A"."B"."C" (v VARIANT)"#,
+        ),
+    ] {
+        snowflake().one_statement_parses_to(sql, parse_to);
+    }
 }
 
 #[test]

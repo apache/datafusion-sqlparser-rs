@@ -2313,16 +2313,46 @@ fn bigquery_select_expr_star() {
 
 #[test]
 fn test_select_as_struct() {
-    bigquery().verified_only_select("SELECT * FROM (SELECT AS VALUE STRUCT(123 AS a, false AS b))");
+    for (sql, parse_to) in [
+        (
+            "SELECT * FROM (SELECT AS STRUCT STRUCT(123 AS a, false AS b))",
+            "SELECT * FROM (SELECT AS STRUCT STRUCT(123 AS a, false AS b))",
+        ),
+        (
+            "SELECT * FROM (SELECT DISTINCT AS STRUCT STRUCT(123 AS a, false AS b))",
+            "SELECT * FROM (SELECT DISTINCT AS STRUCT STRUCT(123 AS a, false AS b))",
+        ),
+        (
+            "SELECT * FROM (SELECT ALL AS STRUCT STRUCT(123 AS a, false AS b))",
+            "SELECT * FROM (SELECT AS STRUCT STRUCT(123 AS a, false AS b))",
+        ),
+    ] {
+        bigquery().one_statement_parses_to(sql, parse_to);
+    }
+
     let select = bigquery().verified_only_select("SELECT AS STRUCT 1 AS a, 2 AS b");
     assert_eq!(Some(ValueTableMode::AsStruct), select.value_table_mode);
 }
 
 #[test]
 fn test_select_as_value() {
-    bigquery().verified_only_select(
-        "SELECT * FROM (SELECT AS VALUE STRUCT(5 AS star_rating, false AS up_down_rating))",
-    );
+    for (sql, parse_to) in [
+        (
+            "SELECT * FROM (SELECT AS VALUE STRUCT(5 AS star_rating, false AS up_down_rating))",
+            "SELECT * FROM (SELECT AS VALUE STRUCT(5 AS star_rating, false AS up_down_rating))",
+        ),
+        (
+            "SELECT * FROM (SELECT DISTINCT AS VALUE STRUCT(5 AS star_rating, false AS up_down_rating))",
+            "SELECT * FROM (SELECT DISTINCT AS VALUE STRUCT(5 AS star_rating, false AS up_down_rating))",
+        ),
+        (
+            "SELECT * FROM (SELECT ALL AS VALUE STRUCT(5 AS star_rating, false AS up_down_rating))",
+            "SELECT * FROM (SELECT AS VALUE STRUCT(5 AS star_rating, false AS up_down_rating))",
+        ),
+    ] {
+        bigquery().one_statement_parses_to(sql, parse_to);
+    }
+
     let select = bigquery().verified_only_select("SELECT AS VALUE STRUCT(1 AS a, 2 AS b) AS xyz");
     assert_eq!(Some(ValueTableMode::AsValue), select.value_table_mode);
 }

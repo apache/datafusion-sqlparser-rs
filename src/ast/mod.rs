@@ -33,6 +33,7 @@ use core::{
     fmt::{self, Display},
     hash,
 };
+use std::cmp::Ordering;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -172,7 +173,7 @@ fn format_statement_list(f: &mut fmt::Formatter, statements: &[Statement]) -> fm
 }
 
 /// An identifier, decomposed into its value or character data and the quote style.
-#[derive(Debug, Clone, PartialOrd, Ord)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Ident {
@@ -213,6 +214,34 @@ impl core::hash::Hash for Ident {
 }
 
 impl Eq for Ident {}
+
+impl PartialOrd for Ident {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Ident {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let Ident {
+            value,
+            quote_style,
+            // exhaustiveness check; we ignore spans in ordering
+            span: _,
+        } = self;
+
+        let Ident {
+            value: other_value,
+            quote_style: other_quote_style,
+            // exhaustiveness check; we ignore spans in ordering
+            span: _,
+        } = other;
+
+        // First compare by value, then by quote_style
+        value.cmp(other_value)
+            .then_with(|| quote_style.cmp(other_quote_style))
+    }
+}
 
 impl Ident {
     /// Create a new identifier with the given value and no quotes and an empty span.
@@ -4181,7 +4210,7 @@ pub enum Statement {
     /// ```sql
     /// NOTIFY channel [ , payload ]
     /// ```
-    /// send a notification event together with an optional “payload” string to channel
+    /// send a notification event together with an optional "payload" string to channel
     ///
     /// See Postgres <https://www.postgresql.org/docs/current/sql-notify.html>
     NOTIFY {

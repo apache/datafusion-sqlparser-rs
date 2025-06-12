@@ -2982,6 +2982,63 @@ impl From<Set> for Statement {
     }
 }
 
+/// An exception representing exception handling with the `EXCEPTION` keyword.
+///
+/// Snowflake: <https://docs.snowflake.com/en/sql-reference/snowflake-scripting/exception>
+/// BigQuery: <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#beginexceptionend>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Exception {
+    pub when: Vec<ExceptionWhen>,
+    pub raises: Option<Box<Statement>>,
+}
+
+impl Display for Exception {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, " EXCEPTION")?;
+        for w in &self.when {
+            write!(f, "{w}")?;
+        }
+
+        if let Some(raises) = &self.raises {
+            write!(f, " {raises};")?;
+        }
+
+        Ok(())
+    }
+}
+
+/// A representation of a `WHEN` arm with all the identifiers catched and the statements to execute
+/// for the arm.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ExceptionWhen {
+    pub idents: Vec<Ident>,
+    pub statements: Vec<Statement>,
+}
+
+impl Display for ExceptionWhen {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let idents = self
+            .idents
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(" OR ");
+
+        write!(f, " WHEN {idents} THEN", idents = idents)?;
+
+        if !self.statements.is_empty() {
+            write!(f, " ")?;
+            format_statement_list(f, &self.statements)?;
+        }
+
+        Ok(())
+    }
+}
+
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -3670,17 +3727,24 @@ pub enum Statement {
         /// END;
         /// ```
         statements: Vec<Statement>,
-        /// Statements of an exception clause.
+        /// Exception handling with exception clauses and raises.
         /// Example:
         /// ```sql
         /// BEGIN
         ///     SELECT 1;
-        /// EXCEPTION WHEN ERROR THEN
-        ///     SELECT 2;
-        ///     SELECT 3;
+        /// EXCEPTION
+        ///     WHEN EXCEPTION_1 THEN
+        ///         select 2;
+        ///     WHEN EXCEPTION_2 OR EXCEPTION_3 THEN
+        ///         select 3;
+        ///     WHEN OTHER THEN
+        ///         SELECT 4;
+        /// RAISE;
         /// END;
+        /// ```
         /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#beginexceptionend>
-        exception_statements: Option<Vec<Statement>>,
+        /// <https://docs.snowflake.com/en/sql-reference/snowflake-scripting/exception>
+        exception: Option<Exception>,
         /// TRUE if the statement has an `END` keyword.
         has_end_keyword: bool,
     },
@@ -5525,7 +5589,7 @@ impl fmt::Display for Statement {
                 transaction,
                 modifier,
                 statements,
-                exception_statements,
+                exception,
                 has_end_keyword,
             } => {
                 if *syntax_begin {
@@ -5547,12 +5611,8 @@ impl fmt::Display for Statement {
                     write!(f, " ")?;
                     format_statement_list(f, statements)?;
                 }
-                if let Some(exception_statements) = exception_statements {
-                    write!(f, " EXCEPTION WHEN ERROR THEN")?;
-                    if !exception_statements.is_empty() {
-                        write!(f, " ")?;
-                        format_statement_list(f, exception_statements)?;
-                    }
+                if let Some(exception) = exception {
+                    write!(f, "{exception}")?;
                 }
                 if *has_end_keyword {
                     write!(f, " END")?;

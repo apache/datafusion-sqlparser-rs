@@ -8593,7 +8593,7 @@ fn lateral_function() {
 fn parse_start_transaction() {
     let dialects = all_dialects_except(|d|
         // BigQuery does not support this syntax
-        d.is::<BigQueryDialect>());
+        d.is::<BigQueryDialect>() || d.is::<SnowflakeDialect>());
     match dialects
         .verified_stmt("START TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE")
     {

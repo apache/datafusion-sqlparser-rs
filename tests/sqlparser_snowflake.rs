@@ -731,7 +731,7 @@ fn test_snowflake_create_table_with_columns_masking_policy() {
                             option: ColumnOption::Policy(ColumnPolicy::MaskingPolicy(
                                 ColumnPolicyProperty {
                                     with,
-                                    policy_name: "p".into(),
+                                    policy_name: ObjectName::from(vec![Ident::new("p")]),
                                     using_columns,
                                 }
                             ))
@@ -765,7 +765,7 @@ fn test_snowflake_create_table_with_columns_projection_policy() {
                             option: ColumnOption::Policy(ColumnPolicy::ProjectionPolicy(
                                 ColumnPolicyProperty {
                                     with,
-                                    policy_name: "p".into(),
+                                    policy_name: ObjectName::from(vec![Ident::new("p")]),
                                     using_columns: None,
                                 }
                             ))
@@ -852,7 +852,7 @@ fn test_snowflake_create_table_with_several_column_options() {
                                 option: ColumnOption::Policy(ColumnPolicy::MaskingPolicy(
                                     ColumnPolicyProperty {
                                         with: true,
-                                        policy_name: "p1".into(),
+                                        policy_name: ObjectName::from(vec![Ident::new("p1")]),
                                         using_columns: Some(vec!["a".into(), "b".into()]),
                                     }
                                 )),
@@ -890,7 +890,7 @@ fn test_snowflake_create_table_with_several_column_options() {
                                 option: ColumnOption::Policy(ColumnPolicy::ProjectionPolicy(
                                     ColumnPolicyProperty {
                                         with: false,
-                                        policy_name: "p2".into(),
+                                        policy_name: ObjectName::from(vec![Ident::new("p2")]),
                                         using_columns: None,
                                     }
                                 )),

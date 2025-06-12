@@ -536,8 +536,8 @@ fn parse_create_table_with_options() {
                 (
                     Some(Box::new(Expr::Identifier(Ident::new("_PARTITIONDATE")))),
                     Some(WrappedCollection::NoWrapping(vec![
-                        Ident::new("userid"),
-                        Ident::new("age"),
+                        Expr::Identifier(Ident::new("userid")),
+                        Expr::Identifier(Ident::new("age")),
                     ])),
                     CreateTableOptions::Options(vec![
                         SqlOption::KeyValue {

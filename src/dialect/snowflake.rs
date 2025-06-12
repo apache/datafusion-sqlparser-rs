@@ -453,7 +453,7 @@ pub fn parse_create_table(
                     parser.expect_keyword_is(Keyword::BY)?;
                     parser.expect_token(&Token::LParen)?;
                     let cluster_by = Some(WrappedCollection::Parentheses(
-                        parser.parse_comma_separated(|p| p.parse_identifier())?,
+                        parser.parse_comma_separated(|p| p.parse_expr())?,
                     ));
                     parser.expect_token(&Token::RParen)?;
 

@@ -3734,9 +3734,9 @@ pub enum Statement {
         ///     SELECT 1;
         /// EXCEPTION
         ///     WHEN EXCEPTION_1 THEN
-        ///         select 2;
+        ///         SELECT 2;
         ///     WHEN EXCEPTION_2 OR EXCEPTION_3 THEN
-        ///         select 3;
+        ///         SELECT 3;
         ///     WHEN OTHER THEN
         ///         SELECT 4;
         /// RAISE;

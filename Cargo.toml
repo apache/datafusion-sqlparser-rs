@@ -18,7 +18,7 @@
 [package]
 name = "sqlparser"
 description = "Extensible SQL Lexer and Parser with support for ANSI SQL:2011"
-version = "0.56.0"
+version = "0.57.0"
 authors = ["Apache DataFusion <dev@datafusion.apache.org>"]
 homepage = "https://github.com/apache/datafusion-sqlparser-rs"
 documentation = "https://docs.rs/sqlparser/"

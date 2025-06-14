@@ -646,6 +646,7 @@ define_keywords!(
     ORDER,
     ORDINALITY,
     ORGANIZATION,
+    OTHER,
     OUT,
     OUTER,
     OUTPUT,

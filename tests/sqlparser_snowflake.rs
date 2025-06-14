@@ -4066,3 +4066,67 @@ fn parse_connect_by_root_operator() {
         "sql parser error: Expected an expression, found: FROM"
     );
 }
+
+#[test]
+fn test_begin_exception_end() {
+    for sql in [
+        "BEGIN SELECT 1; EXCEPTION WHEN OTHER THEN SELECT 2; RAISE; END",
+        "BEGIN SELECT 1; EXCEPTION WHEN OTHER THEN SELECT 2; RAISE EX_1; END",
+        "BEGIN SELECT 1; EXCEPTION WHEN FOO THEN SELECT 2; WHEN OTHER THEN SELECT 3; RAISE; END",
+        "BEGIN BEGIN SELECT 1; EXCEPTION WHEN OTHER THEN SELECT 2; RAISE; END; END",
+    ] {
+        snowflake().verified_stmt(sql);
+    }
+
+    let sql = r#"
+DECLARE
+  EXCEPTION_1 EXCEPTION (-20001, 'I caught the expected exception.');
+  EXCEPTION_2 EXCEPTION (-20002, 'Not the expected exception!');
+  EXCEPTION_3 EXCEPTION (-20003, 'The worst exception...');
+BEGIN
+    BEGIN
+        SELECT 1;
+    EXCEPTION
+        WHEN EXCEPTION_1 THEN
+            SELECT 1;
+        WHEN EXCEPTION_2 OR EXCEPTION_3 THEN
+            SELECT 2;
+            SELECT 3;
+        WHEN OTHER THEN
+            SELECT 4;
+    RAISE;
+    END;
+END
+"#;
+
+    // Outer `BEGIN` of the two nested `BEGIN` statements.
+    let Statement::StartTransaction { mut statements, .. } = snowflake()
+        .parse_sql_statements(sql)
+        .unwrap()
+        .pop()
+        .unwrap()
+    else {
+        unreachable!();
+    };
+
+    // Inner `BEGIN` of the two nested `BEGIN` statements.
+    let Statement::StartTransaction {
+        statements,
+        exception,
+        has_end_keyword,
+        ..
+    } = statements.pop().unwrap()
+    else {
+        unreachable!();
+    };
+
+    assert_eq!(1, statements.len());
+    assert!(has_end_keyword);
+
+    let exception = exception.unwrap();
+    assert_eq!(3, exception.when.len());
+    assert_eq!(1, exception.when[0].idents.len());
+    assert_eq!(1, exception.when[0].statements.len());
+    assert_eq!(2, exception.when[1].idents.len());
+    assert_eq!(2, exception.when[1].statements.len());
+}

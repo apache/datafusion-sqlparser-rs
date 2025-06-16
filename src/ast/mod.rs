@@ -2989,12 +2989,23 @@ impl From<Set> for Statement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct Exception {
+pub struct ExceptionClause {
+    /// When represents each `WHEN` case
     pub when: Vec<ExceptionWhen>,
+    /// The exception that is being raised or the current exception being handled if `None`.
+    ///
+    /// Example
+    /// RAISE;
+    /// RAISE MY_EXCEPTION;
+    /// RAISE USING MESSAGE = "Some error";
+    ///
+    /// BigQuery: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#raise
+    /// Snowflake: <https://docs.snowflake.com/en/sql-reference/snowflake-scripting/raise>
+    // pub raises: Option<Option<Ident>>,
     pub raises: Option<Box<Statement>>,
 }
 
-impl Display for Exception {
+impl Display for ExceptionClause {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, " EXCEPTION")?;
         for w in &self.when {
@@ -3011,6 +3022,9 @@ impl Display for Exception {
 
 /// A representation of a `WHEN` arm with all the identifiers catched and the statements to execute
 /// for the arm.
+///
+/// Snowflake: <https://docs.snowflake.com/en/sql-reference/snowflake-scripting/exception>
+/// BigQuery: <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#beginexceptionend>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -3021,14 +3035,11 @@ pub struct ExceptionWhen {
 
 impl Display for ExceptionWhen {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let idents = self
-            .idents
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(" OR ");
-
-        write!(f, " WHEN {idents} THEN", idents = idents)?;
+        write!(
+            f,
+            " WHEN {idents} THEN",
+            idents = display_separated(&self.idents, " OR ")
+        )?;
 
         if !self.statements.is_empty() {
             write!(f, " ")?;
@@ -3744,7 +3755,7 @@ pub enum Statement {
         /// ```
         /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#beginexceptionend>
         /// <https://docs.snowflake.com/en/sql-reference/snowflake-scripting/exception>
-        exception: Option<Exception>,
+        exception: Option<ExceptionClause>,
         /// TRUE if the statement has an `END` keyword.
         has_end_keyword: bool,
     },

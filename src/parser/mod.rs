@@ -15177,7 +15177,7 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            Some(Exception { when, raises })
+            Some(ExceptionClause { when, raises })
         } else {
             None
         };

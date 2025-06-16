@@ -2890,13 +2890,7 @@ impl PipeOperator {
             }
         }
         write!(f, " ")?;
-        for (i, query) in queries.iter().enumerate() {
-            if i > 0 {
-                write!(f, ", ")?;
-            }
-            write!(f, "({})", query)?;
-        }
-        Ok(())
+        write!(f, "{}", display_comma_separated(queries))
     }
 }
 

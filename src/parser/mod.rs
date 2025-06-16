@@ -9980,8 +9980,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse optional alias (with or without AS keyword) for pipe operators
-    fn parse_optional_pipe_alias(&mut self) -> Result<Option<Ident>, ParserError> {
+    /// Parse optional identifier alias (with or without AS keyword)
+    fn parse_identifier_optional_alias(&mut self) -> Result<Option<Ident>, ParserError> {
         if self.parse_keyword(Keyword::AS) {
             Ok(Some(self.parse_identifier()?))
         } else {
@@ -11232,7 +11232,7 @@ impl<'a> Parser<'a> {
                     let function_name = self.parse_object_name(false)?;
                     let function_expr = self.parse_function(function_name)?;
                     if let Expr::Function(function) = function_expr {
-                        let alias = self.parse_optional_pipe_alias()?;
+                        let alias = self.parse_identifier_optional_alias()?;
                         pipe_operators.push(PipeOperator::Call { function, alias });
                     } else {
                         return Err(ParserError::ParserError(
@@ -11266,7 +11266,7 @@ impl<'a> Parser<'a> {
                     self.expect_token(&Token::RParen)?;
                     self.expect_token(&Token::RParen)?;
 
-                    let alias = self.parse_optional_pipe_alias()?;
+                    let alias = self.parse_identifier_optional_alias()?;
 
                     pipe_operators.push(PipeOperator::Pivot {
                         aggregate_functions,
@@ -11288,7 +11288,7 @@ impl<'a> Parser<'a> {
 
                     self.expect_token(&Token::RParen)?;
 
-                    let alias = self.parse_optional_pipe_alias()?;
+                    let alias = self.parse_identifier_optional_alias()?;
 
                     pipe_operators.push(PipeOperator::Unpivot {
                         value_column,

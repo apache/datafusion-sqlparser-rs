@@ -2999,7 +2999,7 @@ pub struct ExceptionClause {
     /// RAISE MY_EXCEPTION;
     /// RAISE USING MESSAGE = "Some error";
     ///
-    /// BigQuery: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#raise
+    /// BigQuery: <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#raise>
     /// Snowflake: <https://docs.snowflake.com/en/sql-reference/snowflake-scripting/raise>
     // pub raises: Option<Option<Ident>>,
     pub raises: Option<Box<Statement>>,

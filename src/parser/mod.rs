@@ -9948,7 +9948,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse `identifier [AS] identifier` where the AS keyword is optional
-    pub fn parse_identifier_with_optional_alias(&mut self) -> Result<IdentWithAlias, ParserError> {
+    fn parse_identifier_with_optional_alias(&mut self) -> Result<IdentWithAlias, ParserError> {
         let ident = self.parse_identifier()?;
         let _after_as = self.parse_keyword(Keyword::AS);
         let alias = self.parse_identifier()?;

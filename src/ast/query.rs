@@ -2890,7 +2890,9 @@ impl PipeOperator {
             }
         }
         write!(f, " ")?;
-        write!(f, "{}", display_comma_separated(queries))
+        let parenthesized_queries: Vec<String> =
+            queries.iter().map(|query| format!("({})", query)).collect();
+        write!(f, "{}", display_comma_separated(&parenthesized_queries))
     }
 }
 

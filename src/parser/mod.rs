@@ -15102,10 +15102,6 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_begin(&mut self) -> Result<Statement, ParserError> {
-        if dialect_of!(self is SnowflakeDialect | BigQueryDialect) {
-            return self.parse_begin_exception_end();
-        }
-
         let modifier = if !self.dialect.supports_start_transaction_modifier() {
             None
         } else if self.parse_keyword(Keyword::DEFERRED) {

@@ -9970,15 +9970,13 @@ impl<'a> Parser<'a> {
         &mut self,
         operator_name: &str,
     ) -> Result<SetQuantifier, ParserError> {
-        if self.parse_keywords(&[Keyword::DISTINCT, Keyword::BY, Keyword::NAME]) {
-            Ok(SetQuantifier::DistinctByName)
-        } else if self.parse_keyword(Keyword::DISTINCT) {
-            Ok(SetQuantifier::Distinct)
-        } else {
-            Err(ParserError::ParserError(format!(
+        let quantifier = self.parse_set_quantifier(&Some(SetOperator::Intersect));
+        match quantifier {
+            SetQuantifier::Distinct | SetQuantifier::DistinctByName => Ok(quantifier),
+            _ => Err(ParserError::ParserError(format!(
                 "{} pipe operator requires DISTINCT modifier",
                 operator_name
-            )))
+            ))),
         }
     }
 

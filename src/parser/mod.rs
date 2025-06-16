@@ -9985,7 +9985,7 @@ impl<'a> Parser<'a> {
     /// Parse optional alias (with or without AS keyword) for pipe operators
     fn parse_optional_pipe_alias(&mut self) -> Result<Option<Ident>, ParserError> {
         if self.parse_keyword(Keyword::AS) {
-            Some(self.parse_identifier()).transpose()
+            Ok(Some(self.parse_identifier()?))
         } else {
             // Check if the next token is an identifier (implicit alias)
             self.maybe_parse(|parser| parser.parse_identifier())

@@ -1,1 +1,2 @@
-rat.txt
+./rat.txt
+./rat_exclude_files.txt

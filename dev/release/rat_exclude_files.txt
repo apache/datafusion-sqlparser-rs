@@ -1,4 +1,4 @@
-./.tool-versions
+.tool-versions
 target/*
 **.gitignore
 rat.txt

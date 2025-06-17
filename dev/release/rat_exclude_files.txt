@@ -1,7 +1,8 @@
-# Files to exclude from the Apache Rat (license) check
-.gitignore
 .tool-versions
+target/*
+**.gitignore
+rat.txt
 dev/release/rat_exclude_files.txt
-fuzz/.gitignore
 sqlparser_bench/img/flamegraph.svg
-
+**Cargo.lock
+filtered_rat.txt

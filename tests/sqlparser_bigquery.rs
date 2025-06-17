@@ -2461,7 +2461,7 @@ fn test_any_type_dont_break_custom_type() {
 }
 
 #[test]
-fn test_allow_options_in_struct_field() {
+fn test_struct_field_options() {
     bigquery().verified_stmt(concat!(
         "CREATE TABLE my_table (",
         "f0 STRUCT<a STRING, b INT64>, ",

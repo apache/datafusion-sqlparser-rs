@@ -261,7 +261,7 @@ fn parse_at_at_identifier() {
 
 #[test]
 fn parse_begin() {
-    let sql = r#"BEGIN SELECT 1; EXCEPTION WHEN ERROR THEN SELECT 2; END"#;
+    let sql = r#"BEGIN SELECT 1; EXCEPTION WHEN ERROR THEN SELECT 2; RAISE USING MESSAGE = FORMAT('ERR: %s', 'Bad'); END"#;
     let Statement::StartTransaction {
         statements,
         exception,
@@ -275,7 +275,7 @@ fn parse_begin() {
     assert!(exception.is_some());
 
     let exception = exception.unwrap();
-    assert_eq!(1, exception.when.len());
+    assert_eq!(1, exception.len());
     assert!(has_end_keyword);
 
     bigquery().verified_stmt(

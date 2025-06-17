@@ -4124,9 +4124,9 @@ END
     assert!(has_end_keyword);
 
     let exception = exception.unwrap();
-    assert_eq!(3, exception.when.len());
-    assert_eq!(1, exception.when[0].idents.len());
-    assert_eq!(1, exception.when[0].statements.len());
-    assert_eq!(2, exception.when[1].idents.len());
-    assert_eq!(2, exception.when[1].statements.len());
+    assert_eq!(3, exception.len());
+    assert_eq!(1, exception[0].idents.len());
+    assert_eq!(1, exception[0].statements.len());
+    assert_eq!(2, exception[1].idents.len());
+    assert_eq!(2, exception[1].statements.len());
 }

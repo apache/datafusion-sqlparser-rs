@@ -2982,44 +2982,6 @@ impl From<Set> for Statement {
     }
 }
 
-/// An exception representing exception handling with the `EXCEPTION` keyword.
-///
-/// Snowflake: <https://docs.snowflake.com/en/sql-reference/snowflake-scripting/exception>
-/// BigQuery: <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#beginexceptionend>
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct ExceptionClause {
-    /// When represents each `WHEN` case
-    pub when: Vec<ExceptionWhen>,
-    /// The exception that is being raised or the current exception being handled if `None`.
-    ///
-    /// Example
-    /// RAISE;
-    /// RAISE MY_EXCEPTION;
-    /// RAISE USING MESSAGE = "Some error";
-    ///
-    /// BigQuery: <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#raise>
-    /// Snowflake: <https://docs.snowflake.com/en/sql-reference/snowflake-scripting/raise>
-    // pub raises: Option<Option<Ident>>,
-    pub raises: Option<Box<Statement>>,
-}
-
-impl Display for ExceptionClause {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, " EXCEPTION")?;
-        for w in &self.when {
-            write!(f, "{w}")?;
-        }
-
-        if let Some(raises) = &self.raises {
-            write!(f, " {raises};")?;
-        }
-
-        Ok(())
-    }
-}
-
 /// A representation of a `WHEN` arm with all the identifiers catched and the statements to execute
 /// for the arm.
 ///
@@ -3037,7 +2999,7 @@ impl Display for ExceptionWhen {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            " WHEN {idents} THEN",
+            "WHEN {idents} THEN",
             idents = display_separated(&self.idents, " OR ")
         )?;
 
@@ -3738,11 +3700,9 @@ pub enum Statement {
         /// END;
         /// ```
         statements: Vec<Statement>,
-        /// Exception handling with exception clauses and raises.
+        /// Exception handling with exception clauses.
         /// Example:
         /// ```sql
-        /// BEGIN
-        ///     SELECT 1;
         /// EXCEPTION
         ///     WHEN EXCEPTION_1 THEN
         ///         SELECT 2;
@@ -3750,12 +3710,10 @@ pub enum Statement {
         ///         SELECT 3;
         ///     WHEN OTHER THEN
         ///         SELECT 4;
-        /// RAISE;
-        /// END;
         /// ```
         /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#beginexceptionend>
         /// <https://docs.snowflake.com/en/sql-reference/snowflake-scripting/exception>
-        exception: Option<ExceptionClause>,
+        exception: Option<Vec<ExceptionWhen>>,
         /// TRUE if the statement has an `END` keyword.
         has_end_keyword: bool,
     },
@@ -5600,7 +5558,7 @@ impl fmt::Display for Statement {
                 transaction,
                 modifier,
                 statements,
-                exception,
+                exception: exception_handling,
                 has_end_keyword,
             } => {
                 if *syntax_begin {
@@ -5622,8 +5580,11 @@ impl fmt::Display for Statement {
                     write!(f, " ")?;
                     format_statement_list(f, statements)?;
                 }
-                if let Some(exception) = exception {
-                    write!(f, "{exception}")?;
+                if let Some(exception_when) = exception_handling {
+                    write!(f, " EXCEPTION")?;
+                    for when in exception_when {
+                        write!(f, " {when}")?;
+                    }
                 }
                 if *has_end_keyword {
                     write!(f, " END")?;

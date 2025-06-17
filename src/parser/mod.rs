@@ -15136,15 +15136,11 @@ impl<'a> Parser<'a> {
     pub fn parse_begin_exception_end(&mut self) -> Result<Statement, ParserError> {
         let statements = self.parse_statement_list(&[Keyword::EXCEPTION, Keyword::END])?;
 
-        let exception = if self.parse_keyword(Keyword::EXCEPTION) {
+        let exception_handling = if self.parse_keyword(Keyword::EXCEPTION) {
             let mut when = Vec::new();
 
-            // We can have multiple `WHEN` arms so we consume all cases until `END` or an exception
-            // is `RAISE`ed.
-            while self
-                .peek_one_of_keywords(&[Keyword::END, Keyword::RAISE])
-                .is_none()
-            {
+            // We can have multiple `WHEN` arms so we consume all cases until `END`
+            while !self.peek_keyword(Keyword::END) {
                 self.expect_keyword(Keyword::WHEN)?;
 
                 // Each `WHEN` case can have one or more conditions, e.g.
@@ -15159,21 +15155,12 @@ impl<'a> Parser<'a> {
                     self.maybe_parse(|p| p.expect_keyword(Keyword::OR))?;
                 }
 
-                let statements =
-                    self.parse_statement_list(&[Keyword::WHEN, Keyword::RAISE, Keyword::END])?;
+                let statements = self.parse_statement_list(&[Keyword::WHEN, Keyword::END])?;
 
                 when.push(ExceptionWhen { idents, statements });
             }
 
-            let raises = if self.peek_keyword(Keyword::RAISE) {
-                let raises = Some(Box::new(self.parse_raise_stmt()?));
-                self.expect_token(&Token::SemiColon)?;
-                raises
-            } else {
-                None
-            };
-
-            Some(ExceptionClause { when, raises })
+            Some(when)
         } else {
             None
         };
@@ -15183,7 +15170,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::StartTransaction {
             begin: true,
             statements,
-            exception,
+            exception: exception_handling,
             has_end_keyword: true,
             transaction: None,
             modifier: None,

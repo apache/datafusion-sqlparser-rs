@@ -5558,7 +5558,7 @@ impl fmt::Display for Statement {
                 transaction,
                 modifier,
                 statements,
-                exception: exception_handling,
+                exception,
                 has_end_keyword,
             } => {
                 if *syntax_begin {
@@ -5580,7 +5580,7 @@ impl fmt::Display for Statement {
                     write!(f, " ")?;
                     format_statement_list(f, statements)?;
                 }
-                if let Some(exception_when) = exception_handling {
+                if let Some(exception_when) = exception {
                     write!(f, " EXCEPTION")?;
                     for when in exception_when {
                         write!(f, " {when}")?;

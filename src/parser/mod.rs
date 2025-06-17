@@ -15136,7 +15136,7 @@ impl<'a> Parser<'a> {
     pub fn parse_begin_exception_end(&mut self) -> Result<Statement, ParserError> {
         let statements = self.parse_statement_list(&[Keyword::EXCEPTION, Keyword::END])?;
 
-        let exception_handling = if self.parse_keyword(Keyword::EXCEPTION) {
+        let exception = if self.parse_keyword(Keyword::EXCEPTION) {
             let mut when = Vec::new();
 
             // We can have multiple `WHEN` arms so we consume all cases until `END`
@@ -15170,7 +15170,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::StartTransaction {
             begin: true,
             statements,
-            exception: exception_handling,
+            exception,
             has_end_keyword: true,
             transaction: None,
             modifier: None,

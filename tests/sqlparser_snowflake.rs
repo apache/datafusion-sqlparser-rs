@@ -4056,6 +4056,7 @@ fn test_snowflake_create_view_with_tag() {
 
 #[test]
 fn test_snowflake_create_view_with_tag_and_comment() {
-    let create_view_with_tag_and_comment = r#"CREATE VIEW X (COL WITH TAG (pii='email') COMMENT 'foobar') AS SELECT * FROM Y"#;
+    let create_view_with_tag_and_comment =
+        r#"CREATE VIEW X (COL WITH TAG (pii='email') COMMENT 'foobar') AS SELECT * FROM Y"#;
     snowflake().verified_stmt(create_view_with_tag_and_comment);
 }

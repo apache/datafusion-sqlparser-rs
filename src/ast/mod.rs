@@ -429,7 +429,7 @@ pub struct StructField {
     pub field_name: Option<Ident>,
     pub field_type: DataType,
     /// Struct field options.
-    /// see [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#column_name_and_column_schema
+    /// See [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#column_name_and_column_schema)
     pub options: Option<Vec<SqlOption>>,
 }
 

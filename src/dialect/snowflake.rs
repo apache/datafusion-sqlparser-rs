@@ -453,7 +453,7 @@ pub fn parse_create_table(
                     parser.expect_keyword_is(Keyword::BY)?;
                     parser.expect_token(&Token::LParen)?;
                     let cluster_by = Some(WrappedCollection::Parentheses(
-                        parser.parse_comma_separated(|p| p.parse_identifier())?,
+                        parser.parse_comma_separated(|p| p.parse_expr())?,
                     ));
                     parser.expect_token(&Token::RParen)?;
 
@@ -559,6 +559,9 @@ pub fn parse_create_table(
 
                     builder.storage_serialization_policy =
                         Some(parse_storage_serialization_policy(parser)?);
+                }
+                Keyword::IF if parser.parse_keywords(&[Keyword::NOT, Keyword::EXISTS]) => {
+                    builder = builder.if_not_exists(true);
                 }
                 _ => {
                     return parser.expected("end of statement", next_token);

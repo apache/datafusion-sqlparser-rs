@@ -446,19 +446,56 @@ fn test_snowflake_create_table_if_not_exists() {
         }
         _ => unreachable!(),
     }
+
+    for (sql, parse_to) in [
+        (
+            r#"CREATE TABLE IF NOT EXISTS "A"."B"."C" (v VARIANT)"#,
+            r#"CREATE TABLE IF NOT EXISTS "A"."B"."C" (v VARIANT)"#,
+        ),
+        (
+            r#"CREATE TABLE "A"."B"."C" IF NOT EXISTS (v VARIANT)"#,
+            r#"CREATE TABLE IF NOT EXISTS "A"."B"."C" (v VARIANT)"#,
+        ),
+        (
+            r#"CREATE TRANSIENT TABLE IF NOT EXISTS "A"."B"."C" (v VARIANT)"#,
+            r#"CREATE TRANSIENT TABLE IF NOT EXISTS "A"."B"."C" (v VARIANT)"#,
+        ),
+        (
+            r#"CREATE TRANSIENT TABLE "A"."B"."C" IF NOT EXISTS (v VARIANT)"#,
+            r#"CREATE TRANSIENT TABLE IF NOT EXISTS "A"."B"."C" (v VARIANT)"#,
+        ),
+    ] {
+        snowflake().one_statement_parses_to(sql, parse_to);
+    }
 }
 
 #[test]
 fn test_snowflake_create_table_cluster_by() {
-    match snowflake().verified_stmt("CREATE TABLE my_table (a INT) CLUSTER BY (a, b)") {
+    match snowflake().verified_stmt("CREATE TABLE my_table (a INT) CLUSTER BY (a, b, my_func(c))") {
         Statement::CreateTable(CreateTable {
             name, cluster_by, ..
         }) => {
             assert_eq!("my_table", name.to_string());
             assert_eq!(
                 Some(WrappedCollection::Parentheses(vec![
-                    Ident::new("a"),
-                    Ident::new("b"),
+                    Expr::Identifier(Ident::new("a")),
+                    Expr::Identifier(Ident::new("b")),
+                    Expr::Function(Function {
+                        name: ObjectName::from(vec![Ident::new("my_func")]),
+                        uses_odbc_syntax: false,
+                        parameters: FunctionArguments::None,
+                        args: FunctionArguments::List(FunctionArgumentList {
+                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                Expr::Identifier(Ident::new("c"))
+                            ))],
+                            duplicate_treatment: None,
+                            clauses: vec![],
+                        }),
+                        filter: None,
+                        null_treatment: None,
+                        over: None,
+                        within_group: vec![],
+                    }),
                 ])),
                 cluster_by
             )
@@ -882,8 +919,8 @@ fn test_snowflake_create_iceberg_table_all_options() {
             assert_eq!("my_table", name.to_string());
             assert_eq!(
                 Some(WrappedCollection::Parentheses(vec![
-                    Ident::new("a"),
-                    Ident::new("b"),
+                    Expr::Identifier(Ident::new("a")),
+                    Expr::Identifier(Ident::new("b")),
                 ])),
                 cluster_by
             );

@@ -44,10 +44,12 @@ fn test_struct() {
             StructField {
                 field_name: Some(Ident::new("v")),
                 field_type: DataType::Varchar(None),
+                options: None,
             },
             StructField {
                 field_name: Some(Ident::new("i")),
                 field_type: DataType::Integer(None),
+                options: None,
             },
         ],
         StructBracketKind::Parentheses,
@@ -84,6 +86,7 @@ fn test_struct() {
             StructField {
                 field_name: Some(Ident::new("v")),
                 field_type: DataType::Varchar(None),
+                options: None,
             },
             StructField {
                 field_name: Some(Ident::new("s")),
@@ -92,14 +95,17 @@ fn test_struct() {
                         StructField {
                             field_name: Some(Ident::new("a1")),
                             field_type: DataType::Integer(None),
+                            options: None,
                         },
                         StructField {
                             field_name: Some(Ident::new("a2")),
                             field_type: DataType::Varchar(None),
+                            options: None,
                         },
                     ],
                     StructBracketKind::Parentheses,
                 ),
+                options: None,
             },
         ],
         StructBracketKind::Parentheses,

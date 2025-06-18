@@ -175,7 +175,9 @@ pub struct CreateTable {
     pub partition_by: Option<Box<Expr>>,
     /// BigQuery: Table clustering column list.
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
-    pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
+    /// Snowflake: Table clustering list which contains base column, expressions on base columns.
+    /// <https://docs.snowflake.com/en/user-guide/tables-clustering-keys#defining-a-clustering-key-for-a-table>
+    pub cluster_by: Option<WrappedCollection<Vec<Expr>>>,
     /// Hive: Table clustering column list.
     /// <https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable>
     pub clustered_by: Option<ClusteredBy>,

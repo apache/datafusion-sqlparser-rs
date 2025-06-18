@@ -669,11 +669,13 @@ fn parse_create_table_with_nested_data_types() {
                             DataType::Tuple(vec![
                                 StructField {
                                     field_name: None,
-                                    field_type: DataType::FixedString(128)
+                                    field_type: DataType::FixedString(128),
+                                    options: None,
                                 },
                                 StructField {
                                     field_name: None,
-                                    field_type: DataType::Int128
+                                    field_type: DataType::Int128,
+                                    options: None,
                                 }
                             ])
                         ))),
@@ -685,12 +687,14 @@ fn parse_create_table_with_nested_data_types() {
                             StructField {
                                 field_name: Some("a".into()),
                                 field_type: DataType::Datetime64(9, None),
+                                options: None,
                             },
                             StructField {
                                 field_name: Some("b".into()),
                                 field_type: DataType::Array(ArrayElemTypeDef::Parenthesis(
                                     Box::new(DataType::Uuid)
-                                ))
+                                )),
+                                options: None,
                             },
                         ]),
                         options: vec![],

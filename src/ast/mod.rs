@@ -428,14 +428,22 @@ impl fmt::Display for Interval {
 pub struct StructField {
     pub field_name: Option<Ident>,
     pub field_type: DataType,
+    /// Struct field options.
+    /// See [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#column_name_and_column_schema)
+    pub options: Option<Vec<SqlOption>>,
 }
 
 impl fmt::Display for StructField {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(name) = &self.field_name {
-            write!(f, "{name} {}", self.field_type)
+            write!(f, "{name} {}", self.field_type)?;
         } else {
-            write!(f, "{}", self.field_type)
+            write!(f, "{}", self.field_type)?;
+        }
+        if let Some(options) = &self.options {
+            write!(f, " OPTIONS({})", display_separated(options, ", "))
+        } else {
+            Ok(())
         }
     }
 }

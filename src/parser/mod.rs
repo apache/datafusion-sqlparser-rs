@@ -9978,6 +9978,51 @@ impl<'a> Parser<'a> {
         Ok(IdentWithAlias { ident, alias })
     }
 
+    /// Parse `identifier [AS] identifier` where the AS keyword is optional
+    pub fn parse_identifier_with_optional_alias(&mut self) -> Result<IdentWithAlias, ParserError> {
+        let ident = self.parse_identifier()?;
+        let _after_as = self.parse_keyword(Keyword::AS);
+        let alias = self.parse_identifier()?;
+        Ok(IdentWithAlias { ident, alias })
+    }
+
+    /// Parse comma-separated list of parenthesized queries for pipe operators
+    fn parse_pipe_operator_queries(&mut self) -> Result<Vec<Query>, ParserError> {
+        self.parse_comma_separated(|parser| {
+            parser.expect_token(&Token::LParen)?;
+            let query = parser.parse_query()?;
+            parser.expect_token(&Token::RParen)?;
+            Ok(*query)
+        })
+    }
+
+    /// Parse set quantifier for pipe operators that require DISTINCT. E.g. INTERSECT and EXCEPT
+    fn parse_distinct_required_set_quantifier(
+        &mut self,
+        operator_name: &str,
+    ) -> Result<SetQuantifier, ParserError> {
+        if self.parse_keywords(&[Keyword::DISTINCT, Keyword::BY, Keyword::NAME]) {
+            Ok(SetQuantifier::DistinctByName)
+        } else if self.parse_keyword(Keyword::DISTINCT) {
+            Ok(SetQuantifier::Distinct)
+        } else {
+            Err(ParserError::ParserError(format!(
+                "{} pipe operator requires DISTINCT modifier",
+                operator_name
+            )))
+        }
+    }
+
+    /// Parse optional alias (with or without AS keyword) for pipe operators
+    fn parse_optional_pipe_alias(&mut self) -> Result<Option<Ident>, ParserError> {
+        if self.parse_keyword(Keyword::AS) {
+            Some(self.parse_identifier()).transpose()
+        } else {
+            // Check if the next token is an identifier (implicit alias)
+            self.maybe_parse(|parser| parser.parse_identifier())
+        }
+    }
+
     /// Optionally parses an alias for a select list item
     fn maybe_parse_select_item_alias(&mut self) -> Result<Option<Ident>, ParserError> {
         fn validator(explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
@@ -11107,6 +11152,19 @@ impl<'a> Parser<'a> {
                 Keyword::AGGREGATE,
                 Keyword::ORDER,
                 Keyword::TABLESAMPLE,
+                Keyword::RENAME,
+                Keyword::UNION,
+                Keyword::INTERSECT,
+                Keyword::EXCEPT,
+                Keyword::CALL,
+                Keyword::PIVOT,
+                Keyword::UNPIVOT,
+                Keyword::JOIN,
+                Keyword::INNER,
+                Keyword::LEFT,
+                Keyword::RIGHT,
+                Keyword::FULL,
+                Keyword::CROSS,
             ])?;
             match kw {
                 Keyword::SELECT => {
@@ -11172,6 +11230,217 @@ impl<'a> Parser<'a> {
                 Keyword::TABLESAMPLE => {
                     let sample = self.parse_table_sample(TableSampleModifier::TableSample)?;
                     pipe_operators.push(PipeOperator::TableSample { sample });
+                }
+                Keyword::RENAME => {
+                    let mappings =
+                        self.parse_comma_separated(Parser::parse_identifier_with_optional_alias)?;
+                    pipe_operators.push(PipeOperator::Rename { mappings });
+                }
+                Keyword::UNION => {
+                    let set_quantifier = self.parse_set_quantifier(&Some(SetOperator::Union));
+                    let queries = self.parse_pipe_operator_queries()?;
+                    pipe_operators.push(PipeOperator::Union {
+                        set_quantifier,
+                        queries,
+                    });
+                }
+                Keyword::INTERSECT => {
+                    let set_quantifier =
+                        self.parse_distinct_required_set_quantifier("INTERSECT")?;
+                    let queries = self.parse_pipe_operator_queries()?;
+                    pipe_operators.push(PipeOperator::Intersect {
+                        set_quantifier,
+                        queries,
+                    });
+                }
+                Keyword::EXCEPT => {
+                    let set_quantifier = self.parse_distinct_required_set_quantifier("EXCEPT")?;
+                    let queries = self.parse_pipe_operator_queries()?;
+                    pipe_operators.push(PipeOperator::Except {
+                        set_quantifier,
+                        queries,
+                    });
+                }
+                Keyword::CALL => {
+                    let function_name = self.parse_object_name(false)?;
+                    let function_expr = self.parse_function(function_name)?;
+                    if let Expr::Function(function) = function_expr {
+                        let alias = self.parse_optional_pipe_alias()?;
+                        pipe_operators.push(PipeOperator::Call { function, alias });
+                    } else {
+                        return Err(ParserError::ParserError(
+                            "Expected function call after CALL".to_string(),
+                        ));
+                    }
+                }
+                Keyword::PIVOT => {
+                    self.expect_token(&Token::LParen)?;
+                    let aggregate_functions =
+                        self.parse_comma_separated(Self::parse_aliased_function_call)?;
+                    self.expect_keyword_is(Keyword::FOR)?;
+                    let value_column = self.parse_period_separated(|p| p.parse_identifier())?;
+                    self.expect_keyword_is(Keyword::IN)?;
+
+                    self.expect_token(&Token::LParen)?;
+                    let value_source = if self.parse_keyword(Keyword::ANY) {
+                        let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+                            self.parse_comma_separated(Parser::parse_order_by_expr)?
+                        } else {
+                            vec![]
+                        };
+                        PivotValueSource::Any(order_by)
+                    } else if self.peek_sub_query() {
+                        PivotValueSource::Subquery(self.parse_query()?)
+                    } else {
+                        PivotValueSource::List(
+                            self.parse_comma_separated(Self::parse_expr_with_alias)?,
+                        )
+                    };
+                    self.expect_token(&Token::RParen)?;
+                    self.expect_token(&Token::RParen)?;
+
+                    let alias = self.parse_optional_pipe_alias()?;
+
+                    pipe_operators.push(PipeOperator::Pivot {
+                        aggregate_functions,
+                        value_column,
+                        value_source,
+                        alias,
+                    });
+                }
+                Keyword::UNPIVOT => {
+                    self.expect_token(&Token::LParen)?;
+                    let value_column = self.parse_identifier()?;
+                    self.expect_keyword(Keyword::FOR)?;
+                    let name_column = self.parse_identifier()?;
+                    self.expect_keyword(Keyword::IN)?;
+
+                    self.expect_token(&Token::LParen)?;
+                    let unpivot_columns = self.parse_comma_separated(Parser::parse_identifier)?;
+                    self.expect_token(&Token::RParen)?;
+
+                    self.expect_token(&Token::RParen)?;
+
+                    let alias = self.parse_optional_pipe_alias()?;
+
+                    pipe_operators.push(PipeOperator::Unpivot {
+                        value_column,
+                        name_column,
+                        unpivot_columns,
+                        alias,
+                    });
+                }
+                Keyword::JOIN => {
+                    let relation = self.parse_table_factor()?;
+                    let constraint = self.parse_join_constraint(false)?;
+                    if matches!(constraint, JoinConstraint::None) {
+                        return Err(ParserError::ParserError(
+                            "JOIN in pipe syntax requires ON or USING clause".to_string(),
+                        ));
+                    }
+                    let join_operator = JoinOperator::Join(constraint);
+                    pipe_operators.push(PipeOperator::Join(Join {
+                        relation,
+                        global: false,
+                        join_operator,
+                    }))
+                }
+                Keyword::INNER => {
+                    self.expect_keyword(Keyword::JOIN)?;
+                    let relation = self.parse_table_factor()?;
+                    let constraint = self.parse_join_constraint(false)?;
+                    if matches!(constraint, JoinConstraint::None) {
+                        return Err(ParserError::ParserError(
+                            "INNER JOIN in pipe syntax requires ON or USING clause".to_string(),
+                        ));
+                    }
+                    let join_operator = JoinOperator::Inner(constraint);
+                    pipe_operators.push(PipeOperator::Join(Join {
+                        relation,
+                        global: false,
+                        join_operator,
+                    }))
+                }
+                Keyword::LEFT => {
+                    let outer = self.parse_keyword(Keyword::OUTER);
+                    self.expect_keyword(Keyword::JOIN)?;
+                    let relation = self.parse_table_factor()?;
+                    let constraint = self.parse_join_constraint(false)?;
+                    if matches!(constraint, JoinConstraint::None) {
+                        let join_type = if outer {
+                            "LEFT OUTER JOIN"
+                        } else {
+                            "LEFT JOIN"
+                        };
+                        return Err(ParserError::ParserError(format!(
+                            "{} in pipe syntax requires ON or USING clause",
+                            join_type
+                        )));
+                    }
+                    let join_operator = if outer {
+                        JoinOperator::LeftOuter(constraint)
+                    } else {
+                        JoinOperator::Left(constraint)
+                    };
+                    pipe_operators.push(PipeOperator::Join(Join {
+                        relation,
+                        global: false,
+                        join_operator,
+                    }))
+                }
+                Keyword::RIGHT => {
+                    let outer = self.parse_keyword(Keyword::OUTER);
+                    self.expect_keyword(Keyword::JOIN)?;
+                    let relation = self.parse_table_factor()?;
+                    let constraint = self.parse_join_constraint(false)?;
+                    if matches!(constraint, JoinConstraint::None) {
+                        let join_type = if outer {
+                            "RIGHT OUTER JOIN"
+                        } else {
+                            "RIGHT JOIN"
+                        };
+                        return Err(ParserError::ParserError(format!(
+                            "{} in pipe syntax requires ON or USING clause",
+                            join_type
+                        )));
+                    }
+                    let join_operator = if outer {
+                        JoinOperator::RightOuter(constraint)
+                    } else {
+                        JoinOperator::Right(constraint)
+                    };
+                    pipe_operators.push(PipeOperator::Join(Join {
+                        relation,
+                        global: false,
+                        join_operator,
+                    }))
+                }
+                Keyword::FULL => {
+                    let _outer = self.parse_keyword(Keyword::OUTER);
+                    self.expect_keyword(Keyword::JOIN)?;
+                    let relation = self.parse_table_factor()?;
+                    let constraint = self.parse_join_constraint(false)?;
+                    if matches!(constraint, JoinConstraint::None) {
+                        return Err(ParserError::ParserError(
+                            "FULL JOIN in pipe syntax requires ON or USING clause".to_string(),
+                        ));
+                    }
+                    let join_operator = JoinOperator::FullOuter(constraint);
+                    pipe_operators.push(PipeOperator::Join(Join {
+                        relation,
+                        global: false,
+                        join_operator,
+                    }))
+                }
+                Keyword::CROSS => {
+                    self.expect_keyword(Keyword::JOIN)?;
+                    let relation = self.parse_table_factor()?;
+                    let join_operator = JoinOperator::CrossJoin;
+                    pipe_operators.push(PipeOperator::Join(Join {
+                        relation,
+                        global: false,
+                        join_operator,
+                    }))
                 }
                 unhandled => {
                     return Err(ParserError::ParserError(format!(

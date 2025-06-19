@@ -4146,3 +4146,36 @@ END
     assert_eq!(2, exception[1].idents.len());
     assert_eq!(2, exception[1].statements.len());
 }
+
+#[test]
+fn test_snowflake_fetch_clause_syntax() {
+    let canonical = "SELECT c1 FROM fetch_test FETCH FIRST 2 ROWS ONLY";
+    snowflake().verified_only_select_with_canonical("SELECT c1 FROM fetch_test FETCH 2", canonical);
+
+    snowflake()
+        .verified_only_select_with_canonical("SELECT c1 FROM fetch_test FETCH FIRST 2", canonical);
+    snowflake()
+        .verified_only_select_with_canonical("SELECT c1 FROM fetch_test FETCH NEXT 2", canonical);
+
+    snowflake()
+        .verified_only_select_with_canonical("SELECT c1 FROM fetch_test FETCH 2 ROW", canonical);
+
+    snowflake().verified_only_select_with_canonical(
+        "SELECT c1 FROM fetch_test FETCH FIRST 2 ROWS",
+        canonical,
+    );
+
+    snowflake()
+        .verified_only_select_with_canonical("SELECT c1 FROM fetch_test FETCH 2 ONLY", canonical);
+    let res = snowflake().parse_sql_statements("SELECT c1 FROM fetch_test FETCH 2 PERCENT");
+    assert_eq!(
+        res.unwrap_err().to_string(),
+        "sql parser error: Expected: end of statement, found: PERCENT"
+    );
+    let res =
+        snowflake().parse_sql_statements("SELECT c1 FROM fetch_test FETCH FIRST 2 ROWS WITH TIES");
+    assert_eq!(
+        res.unwrap_err().to_string(),
+        "sql parser error: Expected: end of statement, found: WITH"
+    );
+}

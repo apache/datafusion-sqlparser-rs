@@ -8367,16 +8367,18 @@ fn parse_offset() {
 
 #[test]
 fn parse_fetch() {
+    let dialects = all_dialects_except(|d| d.is::<SnowflakeDialect>());
+
     let fetch_first_two_rows_only = Some(Fetch {
         with_ties: false,
         percent: false,
         quantity: Some(Expr::value(number("2"))),
     });
-    let ast = verified_query("SELECT foo FROM bar FETCH FIRST 2 ROWS ONLY");
+    let ast = dialects.verified_query("SELECT foo FROM bar FETCH FIRST 2 ROWS ONLY");
     assert_eq!(ast.fetch, fetch_first_two_rows_only);
-    let ast = verified_query("SELECT 'foo' FETCH FIRST 2 ROWS ONLY");
+    let ast = dialects.verified_query("SELECT 'foo' FETCH FIRST 2 ROWS ONLY");
     assert_eq!(ast.fetch, fetch_first_two_rows_only);
-    let ast = verified_query("SELECT foo FROM bar FETCH FIRST ROWS ONLY");
+    let ast = dialects.verified_query("SELECT foo FROM bar FETCH FIRST ROWS ONLY");
     assert_eq!(
         ast.fetch,
         Some(Fetch {
@@ -8385,11 +8387,11 @@ fn parse_fetch() {
             quantity: None,
         })
     );
-    let ast = verified_query("SELECT foo FROM bar WHERE foo = 4 FETCH FIRST 2 ROWS ONLY");
+    let ast = dialects.verified_query("SELECT foo FROM bar WHERE foo = 4 FETCH FIRST 2 ROWS ONLY");
     assert_eq!(ast.fetch, fetch_first_two_rows_only);
-    let ast = verified_query("SELECT foo FROM bar ORDER BY baz FETCH FIRST 2 ROWS ONLY");
+    let ast = dialects.verified_query("SELECT foo FROM bar ORDER BY baz FETCH FIRST 2 ROWS ONLY");
     assert_eq!(ast.fetch, fetch_first_two_rows_only);
-    let ast = verified_query(
+    let ast = dialects.verified_query(
         "SELECT foo FROM bar WHERE foo = 4 ORDER BY baz FETCH FIRST 2 ROWS WITH TIES",
     );
     assert_eq!(
@@ -8400,7 +8402,7 @@ fn parse_fetch() {
             quantity: Some(Expr::value(number("2"))),
         })
     );
-    let ast = verified_query("SELECT foo FROM bar FETCH FIRST 50 PERCENT ROWS ONLY");
+    let ast = dialects.verified_query("SELECT foo FROM bar FETCH FIRST 50 PERCENT ROWS ONLY");
     assert_eq!(
         ast.fetch,
         Some(Fetch {
@@ -8409,7 +8411,7 @@ fn parse_fetch() {
             quantity: Some(Expr::value(number("50"))),
         })
     );
-    let ast = verified_query(
+    let ast = dialects.verified_query(
         "SELECT foo FROM bar WHERE foo = 4 ORDER BY baz OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY",
     );
     let expected_limit_clause = Some(LimitClause::LimitOffset {
@@ -8422,7 +8424,7 @@ fn parse_fetch() {
     });
     assert_eq!(ast.limit_clause, expected_limit_clause);
     assert_eq!(ast.fetch, fetch_first_two_rows_only);
-    let ast = verified_query(
+    let ast = dialects.verified_query(
         "SELECT foo FROM (SELECT * FROM bar FETCH FIRST 2 ROWS ONLY) FETCH FIRST 2 ROWS ONLY",
     );
     assert_eq!(ast.fetch, fetch_first_two_rows_only);
@@ -8435,7 +8437,7 @@ fn parse_fetch() {
         },
         _ => panic!("Test broke"),
     }
-    let ast = verified_query("SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY) OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY");
+    let ast = dialects.verified_query("SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY) OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY");
     let expected_limit_clause = &Some(LimitClause::LimitOffset {
         limit: None,
         offset: Some(Offset {
@@ -8460,23 +8462,24 @@ fn parse_fetch() {
 
 #[test]
 fn parse_fetch_variations() {
-    one_statement_parses_to(
+    let dialects = all_dialects_except(|d| d.is::<SnowflakeDialect>());
+    dialects.one_statement_parses_to(
         "SELECT foo FROM bar FETCH FIRST 10 ROW ONLY",
         "SELECT foo FROM bar FETCH FIRST 10 ROWS ONLY",
     );
-    one_statement_parses_to(
+    dialects.one_statement_parses_to(
         "SELECT foo FROM bar FETCH NEXT 10 ROW ONLY",
         "SELECT foo FROM bar FETCH FIRST 10 ROWS ONLY",
     );
-    one_statement_parses_to(
+    dialects.one_statement_parses_to(
         "SELECT foo FROM bar FETCH NEXT 10 ROWS WITH TIES",
         "SELECT foo FROM bar FETCH FIRST 10 ROWS WITH TIES",
     );
-    one_statement_parses_to(
+    dialects.one_statement_parses_to(
         "SELECT foo FROM bar FETCH NEXT ROWS WITH TIES",
         "SELECT foo FROM bar FETCH FIRST ROWS WITH TIES",
     );
-    one_statement_parses_to(
+    dialects.one_statement_parses_to(
         "SELECT foo FROM bar FETCH FIRST ROWS ONLY",
         "SELECT foo FROM bar FETCH FIRST ROWS ONLY",
     );

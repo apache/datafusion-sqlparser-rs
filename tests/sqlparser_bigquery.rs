@@ -636,35 +636,6 @@ fn parse_nested_data_types() {
 }
 
 #[test]
-fn parse_invalid_brackets() {
-    let sql = "SELECT STRUCT<INT64>>(NULL)";
-    assert_eq!(
-        bigquery_and_generic()
-            .parse_sql_statements(sql)
-            .unwrap_err(),
-        ParserError::ParserError("unmatched > in STRUCT literal".to_string())
-    );
-
-    let sql = "SELECT STRUCT<STRUCT<INT64>>>(NULL)";
-    assert_eq!(
-        bigquery_and_generic()
-            .parse_sql_statements(sql)
-            .unwrap_err(),
-        ParserError::ParserError("Expected: (, found: >".to_string())
-    );
-
-    let sql = "CREATE TABLE table (x STRUCT<STRUCT<INT64>>>)";
-    assert_eq!(
-        bigquery_and_generic()
-            .parse_sql_statements(sql)
-            .unwrap_err(),
-        ParserError::ParserError(
-            "Expected: ',' or ')' after column definition, found: >".to_string()
-        )
-    );
-}
-
-#[test]
 fn parse_tuple_struct_literal() {
     // tuple syntax: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#tuple_syntax
     // syntax: (expr1, expr2 [, ... ])
@@ -2471,4 +2442,79 @@ fn test_struct_field_options() {
         "> OPTIONS(description = 'This is a struct field')",
         ")",
     ));
+}
+
+#[test]
+fn test_struct_trailing_and_nested_bracket() {
+    bigquery().verified_stmt(concat!(
+        "CREATE TABLE my_table (",
+        "f0 STRING, ",
+        "f1 STRUCT<a STRING, b STRUCT<c INT64, d STRING>>, ",
+        "f2 STRING",
+        ")",
+    ));
+
+    // More complex nested structs
+    bigquery().verified_stmt(concat!(
+        "CREATE TABLE my_table (",
+        "f0 STRING, ",
+        "f1 STRUCT<a STRING, b STRUCT<c INT64, d STRUCT<e STRING>>>, ",
+        "f2 STRUCT<h STRING, i STRUCT<j INT64, k STRUCT<l STRUCT<m STRING>>>>, ",
+        "f3 STRUCT<e STRING, f STRUCT<c INT64>>",
+        ")",
+    ));
+
+    // Bad case with missing closing bracket
+    assert_eq!(
+        ParserError::ParserError("Expected: >, found: )".to_owned()),
+        bigquery()
+            .parse_sql_statements("CREATE TABLE my_table(f1 STRUCT<a STRING, b INT64)")
+            .unwrap_err()
+    );
+
+    // Bad case with redundant closing bracket
+    assert_eq!(
+        ParserError::ParserError(
+            "unmatched > after parsing data type STRUCT<a STRING, b INT64>)".to_owned()
+        ),
+        bigquery()
+            .parse_sql_statements("CREATE TABLE my_table(f1 STRUCT<a STRING, b INT64>>)")
+            .unwrap_err()
+    );
+
+    // Base case with redundant closing bracket in nested struct
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected: ',' or ')' after column definition, found: >".to_owned()
+        ),
+        bigquery()
+            .parse_sql_statements("CREATE TABLE my_table(f1 STRUCT<a STRUCT<b INT>>>, c INT64)")
+            .unwrap_err()
+    );
+
+    let sql = "SELECT STRUCT<INT64>>(NULL)";
+    assert_eq!(
+        bigquery_and_generic()
+            .parse_sql_statements(sql)
+            .unwrap_err(),
+        ParserError::ParserError("unmatched > in STRUCT literal".to_string())
+    );
+
+    let sql = "SELECT STRUCT<STRUCT<INT64>>>(NULL)";
+    assert_eq!(
+        bigquery_and_generic()
+            .parse_sql_statements(sql)
+            .unwrap_err(),
+        ParserError::ParserError("Expected: (, found: >".to_string())
+    );
+
+    let sql = "CREATE TABLE table (x STRUCT<STRUCT<INT64>>>)";
+    assert_eq!(
+        bigquery_and_generic()
+            .parse_sql_statements(sql)
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: ',' or ')' after column definition, found: >".to_string()
+        )
+    );
 }

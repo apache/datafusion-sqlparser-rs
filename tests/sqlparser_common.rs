@@ -2225,7 +2225,7 @@ fn parse_in_subquery() {
     assert_eq!(
         Expr::InSubquery {
             expr: Box::new(Expr::Identifier(Ident::new("segment"))),
-            subquery: verified_query("SELECT segm FROM bar").body,
+            subquery: Box::new(verified_query("SELECT segm FROM bar")),
             negated: false,
         },
         select.selection.unwrap()
@@ -2239,7 +2239,9 @@ fn parse_in_union() {
     assert_eq!(
         Expr::InSubquery {
             expr: Box::new(Expr::Identifier(Ident::new("segment"))),
-            subquery: verified_query("(SELECT segm FROM bar) UNION (SELECT segm FROM bar2)").body,
+            subquery: Box::new(verified_query(
+                "(SELECT segm FROM bar) UNION (SELECT segm FROM bar2)"
+            )),
             negated: false,
         },
         select.selection.unwrap()
@@ -15298,6 +15300,11 @@ fn parse_return() {
     assert_eq!(stmt, Statement::Return(ReturnStatement { value: None }));
 
     let _ = all_dialects().verified_stmt("RETURN 1");
+}
+
+#[test]
+fn parse_subquery_limit() {
+    let _ = all_dialects().verified_stmt("SELECT t1_id, t1_name FROM t1 WHERE t1_id IN (SELECT t2_id FROM t2 WHERE t1_name = t2_name LIMIT 10)");
 }
 
 #[test]

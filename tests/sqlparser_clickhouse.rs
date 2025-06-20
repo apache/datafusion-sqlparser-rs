@@ -974,7 +974,7 @@ fn parse_settings_in_query() {
         }
     }
 
-    for (sql, expected_settings) in vec![
+    for (sql, expected_settings) in [
         (
             r#"SELECT * FROM t SETTINGS max_threads = 1, max_block_size = 10000"#,
             vec![

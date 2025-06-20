@@ -670,6 +670,20 @@ fn table_constraint_unique_primary_ctor(
     characteristics: Option<ConstraintCharacteristics>,
     unique_index_type_display: Option<KeyOrIndexDisplay>,
 ) -> TableConstraint {
+    let columns = columns
+        .into_iter()
+        .map(|ident| IndexColumn {
+            column: OrderByExpr {
+                expr: Expr::Identifier(ident),
+                options: OrderByOptions {
+                    asc: None,
+                    nulls_first: None,
+                },
+                with_fill: None,
+            },
+            operator_class: None,
+        })
+        .collect();
     match unique_index_type_display {
         Some(index_type_display) => TableConstraint::Unique {
             name,
@@ -793,6 +807,67 @@ fn parse_create_table_primary_and_unique_key_with_index_options() {
 
         mysql_and_generic().verified_stmt(sql);
     }
+}
+
+#[test]
+fn parse_prefix_key_part() {
+    let expected = vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::value(
+        number("10"),
+    )))];
+    for sql in [
+        "CREATE INDEX idx_index ON t(textcol(10))",
+        "ALTER TABLE tab ADD INDEX idx_index (textcol(10))",
+        "ALTER TABLE tab ADD PRIMARY KEY (textcol(10))",
+        "ALTER TABLE tab ADD UNIQUE KEY (textcol(10))",
+        "ALTER TABLE tab ADD UNIQUE KEY (textcol(10))",
+        "ALTER TABLE tab ADD FULLTEXT INDEX (textcol(10))",
+        "CREATE TABLE t (textcol TEXT, INDEX idx_index (textcol(10)))",
+    ] {
+        match index_column(mysql_and_generic().verified_stmt(sql)) {
+            Expr::Function(Function {
+                name,
+                args: FunctionArguments::List(FunctionArgumentList { args, .. }),
+                ..
+            }) => {
+                assert_eq!(name.to_string(), "textcol");
+                assert_eq!(args, expected);
+            }
+            expr => panic!("unexpected expression {expr} for {sql}"),
+        }
+    }
+}
+
+#[test]
+fn test_functional_key_part() {
+    assert_eq!(
+        index_column(
+            mysql_and_generic()
+                .verified_stmt("CREATE INDEX idx_index ON t((col COLLATE utf8mb4_bin) DESC)")
+        ),
+        Expr::Nested(Box::new(Expr::Collate {
+            expr: Box::new(Expr::Identifier("col".into())),
+            collation: ObjectName(vec![sqlparser::ast::ObjectNamePart::Identifier(
+                Ident::new("utf8mb4_bin")
+            )]),
+        }))
+    );
+    assert_eq!(
+        index_column(mysql_and_generic().verified_stmt(
+            r#"CREATE TABLE t (jsoncol JSON, PRIMARY KEY ((CAST(col ->> '$.id' AS UNSIGNED)) ASC))"#
+        )),
+        Expr::Nested(Box::new(Expr::Cast {
+            kind: CastKind::Cast,
+            expr: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("col"))),
+                op: BinaryOperator::LongArrow,
+                right: Box::new(Expr::Value(
+                    Value::SingleQuotedString("$.id".to_string()).with_empty_span()
+                )),
+            }),
+            data_type: DataType::Unsigned,
+            format: None,
+        })),
+    );
 }
 
 #[test]

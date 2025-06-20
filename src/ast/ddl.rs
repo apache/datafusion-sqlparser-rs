@@ -32,9 +32,9 @@ use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
     display_comma_separated, display_separated, CommentDef, CreateFunctionBody,
     CreateFunctionUsing, DataType, Expr, FunctionBehavior, FunctionCalledOnNull,
-    FunctionDeterminismSpecifier, FunctionParallel, Ident, MySQLColumnPosition, ObjectName,
-    OperateFunctionArg, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Tag, Value,
-    ValueWithSpan,
+    FunctionDeterminismSpecifier, FunctionParallel, Ident, IndexColumn, MySQLColumnPosition,
+    ObjectName, OperateFunctionArg, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Tag,
+    Value, ValueWithSpan,
 };
 use crate::keywords::Keyword;
 use crate::tokenizer::Token;
@@ -979,7 +979,7 @@ pub enum TableConstraint {
         /// [1]: IndexType
         index_type: Option<IndexType>,
         /// Identifiers of the columns that are unique.
-        columns: Vec<Ident>,
+        columns: Vec<IndexColumn>,
         index_options: Vec<IndexOption>,
         characteristics: Option<ConstraintCharacteristics>,
         /// Optional Postgres nulls handling: `[ NULLS [ NOT ] DISTINCT ]`
@@ -1015,7 +1015,7 @@ pub enum TableConstraint {
         /// [1]: IndexType
         index_type: Option<IndexType>,
         /// Identifiers of the columns that form the primary key.
-        columns: Vec<Ident>,
+        columns: Vec<IndexColumn>,
         index_options: Vec<IndexOption>,
         characteristics: Option<ConstraintCharacteristics>,
     },
@@ -1060,7 +1060,7 @@ pub enum TableConstraint {
         /// [1]: IndexType
         index_type: Option<IndexType>,
         /// Referred column identifier list.
-        columns: Vec<Ident>,
+        columns: Vec<IndexColumn>,
     },
     /// MySQLs [fulltext][1] definition. Since the [`SPATIAL`][2] definition is exactly the same,
     /// and MySQL displays both the same way, it is part of this definition as well.
@@ -1083,7 +1083,7 @@ pub enum TableConstraint {
         /// Optional index name.
         opt_index_name: Option<Ident>,
         /// Referred column identifier list.
-        columns: Vec<Ident>,
+        columns: Vec<IndexColumn>,
     },
 }
 

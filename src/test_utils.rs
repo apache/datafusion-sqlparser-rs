@@ -366,6 +366,11 @@ pub fn number(n: &str) -> Value {
     Value::Number(n.parse().unwrap(), false)
 }
 
+/// Creates a `Value::SingleQuotedString`
+pub fn single_quoted_string(s: &str) -> Value {
+    Value::SingleQuotedString(s.to_string())
+}
+
 pub fn table_alias(name: impl Into<String>) -> Option<TableAlias> {
     Some(TableAlias {
         name: Ident::new(name),

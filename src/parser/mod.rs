@@ -3034,7 +3034,6 @@ impl<'a> Parser<'a> {
     where
         F: FnMut(&mut Parser<'a>) -> Result<(StructField, MatchedTrailingBracket), ParserError>,
     {
-        let start_token = self.peek_token();
         self.expect_keyword_is(Keyword::STRUCT)?;
 
         // Nothing to do if we have no type information.
@@ -3047,15 +3046,9 @@ impl<'a> Parser<'a> {
         let trailing_bracket = loop {
             let (def, trailing_bracket) = elem_parser(self)?;
             field_defs.push(def);
-            if !self.consume_token(&Token::Comma) {
+            // The struct field definition is finished if it occurs `>>` or comma.
+            if trailing_bracket.0 || !self.consume_token(&Token::Comma) {
                 break trailing_bracket;
-            }
-
-            // Angle brackets are balanced so we only expect the trailing `>>` after
-            // we've matched all field types for the current struct.
-            // e.g. this is invalid syntax `STRUCT<STRUCT<INT>>>, INT>(NULL)`
-            if trailing_bracket.0 {
-                return parser_err!("unmatched > in STRUCT definition", start_token.span.start);
             }
         };
 

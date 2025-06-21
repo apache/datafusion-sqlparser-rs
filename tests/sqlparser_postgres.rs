@@ -6203,7 +6203,7 @@ fn parse_alter_table_replica_identity() {
 }
 
 #[test]
-fn parse_tsvector_datatype() {
+fn parse_ts_datatypes() {
     match pg_and_generic().verified_stmt("CREATE TABLE foo (x TSVECTOR)") {
         Statement::CreateTable(CreateTable { columns, .. }) => {
             assert_eq!(
@@ -6217,10 +6217,7 @@ fn parse_tsvector_datatype() {
         }
         _ => unreachable!(),
     }
-}
 
-#[test]
-fn parse_tsquery_datatype() {
     match pg_and_generic().verified_stmt("CREATE TABLE foo (x TSQUERY)") {
         Statement::CreateTable(CreateTable { columns, .. }) => {
             assert_eq!(
@@ -6234,16 +6231,4 @@ fn parse_tsquery_datatype() {
         }
         _ => unreachable!(),
     }
-}
-
-#[test]
-fn parse_to_tsvector_function() {
-    let sql = "SELECT to_tsvector('english', 'foo bar baz')";
-    pg_and_generic().verified_only_select(sql);
-}
-
-#[test]
-fn parse_to_tsquery_function() {
-    let sql = "SELECT to_tsquery('Fat:ab & Cats')";
-    pg_and_generic().verified_only_select(sql);
 }

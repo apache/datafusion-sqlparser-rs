@@ -1651,7 +1651,7 @@ pub struct ColumnPolicyProperty {
     /// ```
     /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
     pub with: bool,
-    pub policy_name: Ident,
+    pub policy_name: ObjectName,
     pub using_columns: Option<Vec<Ident>>,
 }
 

@@ -9909,6 +9909,12 @@ impl<'a> Parser<'a> {
                         Ok(DataType::Unsigned)
                     }
                 }
+                Keyword::TSVECTOR if dialect_is!(dialect is PostgreSqlDialect | GenericDialect) => {
+                    Ok(DataType::TsVector)
+                }
+                Keyword::TSQUERY if dialect_is!(dialect is PostgreSqlDialect | GenericDialect) => {
+                    Ok(DataType::TsQuery)
+                }
                 _ => {
                     self.prev_token();
                     let type_name = self.parse_object_name(false)?;

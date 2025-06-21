@@ -6201,3 +6201,34 @@ fn parse_alter_table_replica_identity() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn parse_ts_datatypes() {
+    match pg_and_generic().verified_stmt("CREATE TABLE foo (x TSVECTOR)") {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(
+                columns,
+                vec![ColumnDef {
+                    name: "x".into(),
+                    data_type: DataType::TsVector,
+                    options: vec![],
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match pg_and_generic().verified_stmt("CREATE TABLE foo (x TSQUERY)") {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(
+                columns,
+                vec![ColumnDef {
+                    name: "x".into(),
+                    data_type: DataType::TsQuery,
+                    options: vec![],
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+}

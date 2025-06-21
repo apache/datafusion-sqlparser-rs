@@ -1047,7 +1047,7 @@ impl fmt::Display for ConnectBy {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Setting {
     pub key: Ident,
-    pub value: Value,
+    pub value: Expr,
 }
 
 impl fmt::Display for Setting {

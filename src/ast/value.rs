@@ -116,7 +116,6 @@ impl From<ValueWithSpan> for Value {
     derive(Visit, VisitMut),
     visit(with = "visit_value")
 )]
-
 pub enum Value {
     /// Numeric literal
     #[cfg(not(feature = "bigdecimal"))]

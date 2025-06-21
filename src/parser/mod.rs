@@ -15092,7 +15092,7 @@ impl<'a> Parser<'a> {
             transaction: Some(BeginTransactionKind::Transaction),
             modifier: None,
             statements: vec![],
-            exception_statements: None,
+            exception: None,
             has_end_keyword: false,
         })
     }
@@ -15124,8 +15124,53 @@ impl<'a> Parser<'a> {
             transaction,
             modifier,
             statements: vec![],
-            exception_statements: None,
+            exception: None,
             has_end_keyword: false,
+        })
+    }
+
+    pub fn parse_begin_exception_end(&mut self) -> Result<Statement, ParserError> {
+        let statements = self.parse_statement_list(&[Keyword::EXCEPTION, Keyword::END])?;
+
+        let exception = if self.parse_keyword(Keyword::EXCEPTION) {
+            let mut when = Vec::new();
+
+            // We can have multiple `WHEN` arms so we consume all cases until `END`
+            while !self.peek_keyword(Keyword::END) {
+                self.expect_keyword(Keyword::WHEN)?;
+
+                // Each `WHEN` case can have one or more conditions, e.g.
+                // WHEN EXCEPTION_1 [OR EXCEPTION_2] THEN
+                // So we parse identifiers until the `THEN` keyword.
+                let mut idents = Vec::new();
+
+                while !self.parse_keyword(Keyword::THEN) {
+                    let ident = self.parse_identifier()?;
+                    idents.push(ident);
+
+                    self.maybe_parse(|p| p.expect_keyword(Keyword::OR))?;
+                }
+
+                let statements = self.parse_statement_list(&[Keyword::WHEN, Keyword::END])?;
+
+                when.push(ExceptionWhen { idents, statements });
+            }
+
+            Some(when)
+        } else {
+            None
+        };
+
+        self.expect_keyword(Keyword::END)?;
+
+        Ok(Statement::StartTransaction {
+            begin: true,
+            statements,
+            exception,
+            has_end_keyword: true,
+            transaction: None,
+            modifier: None,
+            modes: Default::default(),
         })
     }
 

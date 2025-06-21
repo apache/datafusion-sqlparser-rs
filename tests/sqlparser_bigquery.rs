@@ -348,6 +348,7 @@ fn parse_create_view_with_options() {
                         name: Ident::new("name"),
                         data_type: None,
                         options: None,
+                        options_comma_separated: true,
                     },
                     ViewColumnDef {
                         name: Ident::new("age"),
@@ -360,6 +361,7 @@ fn parse_create_view_with_options() {
                                 )
                             ),
                         }])]),
+                        options_comma_separated: true,
                     },
                 ],
                 columns

@@ -1422,6 +1422,7 @@ pub struct ViewColumnDef {
     pub name: Ident,
     pub data_type: Option<DataType>,
     pub options: Option<Vec<ColumnOption>>,
+    pub options_comma_separated: bool,
 }
 
 impl fmt::Display for ViewColumnDef {
@@ -1431,7 +1432,11 @@ impl fmt::Display for ViewColumnDef {
             write!(f, " {}", data_type)?;
         }
         if let Some(options) = self.options.as_ref() {
-            write!(f, " {}", display_comma_separated(options.as_slice()))?;
+            if self.options_comma_separated {
+                write!(f, " {}", display_comma_separated(options.as_slice()))?;
+            } else {
+                write!(f, " {}", display_separated(options.as_slice(), " "))?;
+            }
         }
         Ok(())
     }

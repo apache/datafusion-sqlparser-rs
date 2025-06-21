@@ -914,7 +914,8 @@ fn parse_create_view_with_fields_data_types() {
                             }]),
                             vec![]
                         )),
-                        options: None
+                        options: None,
+                        options_comma_separated: true,
                     },
                     ViewColumnDef {
                         name: "f".into(),
@@ -926,7 +927,8 @@ fn parse_create_view_with_fields_data_types() {
                             }]),
                             vec![]
                         )),
-                        options: None
+                        options: None,
+                        options_comma_separated: true,
                     },
                 ]
             );

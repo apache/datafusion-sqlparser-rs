@@ -7960,52 +7960,64 @@ fn parse_create_view_with_options() {
 #[test]
 fn parse_create_view_with_columns() {
     let sql = "CREATE VIEW v (has, cols) AS SELECT 1, 2";
+    fn assert_stmt_as_expected(stmt: Statement, options_comma_separated: bool) {
+        match stmt {
+            Statement::CreateView {
+                or_alter,
+                name,
+                columns,
+                or_replace,
+                options,
+                query,
+                materialized,
+                cluster_by,
+                comment,
+                with_no_schema_binding: late_binding,
+                if_not_exists,
+                temporary,
+                to,
+                params,
+            } => {
+                assert_eq!(or_alter, false);
+                assert_eq!("v", name.to_string());
+                assert_eq!(
+                    columns,
+                    vec![Ident::new("has"), Ident::new("cols"),]
+                        .into_iter()
+                        .map(|name| ViewColumnDef {
+                            name,
+                            data_type: None,
+                            options: None,
+                            options_comma_separated,
+                        })
+                        .collect::<Vec<_>>()
+                );
+                assert_eq!(options, CreateTableOptions::None);
+                assert_eq!("SELECT 1, 2", query.to_string());
+                assert!(!materialized);
+                assert!(!or_replace);
+                assert_eq!(cluster_by, vec![]);
+                assert!(comment.is_none());
+                assert!(!late_binding);
+                assert!(!if_not_exists);
+                assert!(!temporary);
+                assert!(to.is_none());
+                assert!(params.is_none());
+            }
+            _ => unreachable!(),
+        }
+    }
     // TODO: why does this fail for ClickHouseDialect? (#1449)
     // match all_dialects().verified_stmt(sql) {
-    match all_dialects_except(|d| d.is::<ClickHouseDialect>()).verified_stmt(sql) {
-        Statement::CreateView {
-            or_alter,
-            name,
-            columns,
-            or_replace,
-            options,
-            query,
-            materialized,
-            cluster_by,
-            comment,
-            with_no_schema_binding: late_binding,
-            if_not_exists,
-            temporary,
-            to,
-            params,
-        } => {
-            assert_eq!(or_alter, false);
-            assert_eq!("v", name.to_string());
-            assert_eq!(
-                columns,
-                vec![Ident::new("has"), Ident::new("cols"),]
-                    .into_iter()
-                    .map(|name| ViewColumnDef {
-                        name,
-                        data_type: None,
-                        options: None
-                    })
-                    .collect::<Vec<_>>()
-            );
-            assert_eq!(options, CreateTableOptions::None);
-            assert_eq!("SELECT 1, 2", query.to_string());
-            assert!(!materialized);
-            assert!(!or_replace);
-            assert_eq!(cluster_by, vec![]);
-            assert!(comment.is_none());
-            assert!(!late_binding);
-            assert!(!if_not_exists);
-            assert!(!temporary);
-            assert!(to.is_none());
-            assert!(params.is_none());
-        }
-        _ => unreachable!(),
-    }
+    assert_stmt_as_expected(
+        all_dialects_where(|d| !d.is::<ClickHouseDialect>() && !d.is::<SnowflakeDialect>())
+            .verified_stmt(sql),
+        true,
+    );
+    assert_stmt_as_expected(
+        all_dialects_where(|d| d.is::<SnowflakeDialect>()).verified_stmt(sql),
+        false,
+    );
 }
 
 #[test]

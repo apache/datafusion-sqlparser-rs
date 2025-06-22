@@ -171,7 +171,8 @@ fn parse_create_procedure() {
                 value: "test".into(),
                 quote_style: None,
                 span: Span::empty(),
-            }])
+            }]),
+            language: None,
         }
     )
 }

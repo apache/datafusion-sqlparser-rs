@@ -30,11 +30,7 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
-    display_comma_separated, display_separated, CommentDef, CreateFunctionBody,
-    CreateFunctionUsing, DataType, Expr, FunctionBehavior, FunctionCalledOnNull,
-    FunctionDeterminismSpecifier, FunctionParallel, Ident, MySQLColumnPosition, ObjectName,
-    OperateFunctionArg, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Tag, Value,
-    ValueWithSpan,
+    display_comma_separated, display_separated, ArgMode, CommentDef, CreateFunctionBody, CreateFunctionUsing, DataType, Expr, FunctionBehavior, FunctionCalledOnNull, FunctionDeterminismSpecifier, FunctionParallel, Ident, MySQLColumnPosition, ObjectName, OperateFunctionArg, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Tag, Value, ValueWithSpan
 };
 use crate::keywords::Keyword;
 use crate::tokenizer::Token;
@@ -1367,6 +1363,7 @@ impl fmt::Display for NullsDistinctOption {
 pub struct ProcedureParam {
     pub name: Ident,
     pub data_type: DataType,
+    pub mode: Option<ArgMode>,
 }
 
 impl fmt::Display for ProcedureParam {

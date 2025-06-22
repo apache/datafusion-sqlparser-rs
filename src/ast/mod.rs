@@ -3914,6 +3914,7 @@ pub enum Statement {
         or_alter: bool,
         name: ObjectName,
         params: Option<Vec<ProcedureParam>>,
+        language: Option<Ident>,
         body: ConditionalStatements,
     },
     /// ```sql
@@ -4817,6 +4818,7 @@ impl fmt::Display for Statement {
                 name,
                 or_alter,
                 params,
+                language,
                 body,
             } => {
                 write!(
@@ -4830,6 +4832,10 @@ impl fmt::Display for Statement {
                     if !p.is_empty() {
                         write!(f, " ({})", display_comma_separated(p))?;
                     }
+                }
+
+                if let Some(language) = language {
+                    write!(f, " LANGUAGE {language}")?;
                 }
 
                 write!(f, " AS {body}")

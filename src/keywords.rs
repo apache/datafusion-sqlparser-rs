@@ -935,6 +935,8 @@ define_keywords!(
     TRY,
     TRY_CAST,
     TRY_CONVERT,
+    TSQUERY,
+    TSVECTOR,
     TUPLE,
     TYPE,
     UBIGINT,

@@ -7637,7 +7637,11 @@ impl<'a> Parser<'a> {
         };
         let name = self.parse_identifier()?;
         let data_type = self.parse_data_type()?;
-        Ok(ProcedureParam { name, data_type, mode })
+        Ok(ProcedureParam {
+            name,
+            data_type,
+            mode,
+        })
     }
 
     pub fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {

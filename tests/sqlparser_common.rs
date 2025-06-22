@@ -15349,3 +15349,65 @@ fn check_enforced() {
         "CREATE TABLE t (a INT, b INT, c INT, CHECK (a > 0) NOT ENFORCED, CHECK (b > 0) ENFORCED, CHECK (c > 0))",
     );
 }
+
+#[test]
+fn parse_create_procedure_with_parameter_modes() {
+    let sql = r#"CREATE PROCEDURE test_proc (IN a INTEGER, OUT b TEXT, INOUT c TIMESTAMP, d BOOL) AS BEGIN SELECT 1; END"#;
+    match verified_stmt(sql) {
+        Statement::CreateProcedure {
+            or_alter,
+            name,
+            params,
+            ..
+        } => {
+            assert_eq!(or_alter, false);
+            assert_eq!(name.to_string(), "test_proc");
+            let fake_span = Span {
+                start: Location { line: 0, column: 0 },
+                end: Location { line: 0, column: 0 },
+            };
+            assert_eq!(
+                params,
+                Some(vec![
+                    ProcedureParam {
+                        name: Ident {
+                            value: "a".into(),
+                            quote_style: None,
+                            span: fake_span,
+                        },
+                        data_type: DataType::Integer(None),
+                        mode: Some(ArgMode::In)
+                    },
+                    ProcedureParam {
+                        name: Ident {
+                            value: "b".into(),
+                            quote_style: None,
+                            span: fake_span,
+                        },
+                        data_type: DataType::Text,
+                        mode: Some(ArgMode::Out)
+                    },
+                    ProcedureParam {
+                        name: Ident {
+                            value: "c".into(),
+                            quote_style: None,
+                            span: fake_span,
+                        },
+                        data_type: DataType::Timestamp(None, TimezoneInfo::None),
+                        mode: Some(ArgMode::InOut)
+                    },
+                    ProcedureParam {
+                        name: Ident {
+                            value: "d".into(),
+                            quote_style: None,
+                            span: fake_span,
+                        },
+                        data_type: DataType::Bool,
+                        mode: None
+                    },
+                ])
+            );
+        }
+        _ => unreachable!(),
+    }
+}

@@ -729,7 +729,7 @@ pub enum Expr {
     /// `[ NOT ] IN (SELECT ...)`
     InSubquery {
         expr: Box<Expr>,
-        subquery: Box<SetExpr>,
+        subquery: Box<Query>,
         negated: bool,
     },
     /// `[ NOT ] IN UNNEST(array_expression)`

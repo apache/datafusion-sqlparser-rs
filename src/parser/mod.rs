@@ -2771,7 +2771,7 @@ impl<'a> Parser<'a> {
 
         if self.dialect.supports_dictionary_syntax() {
             self.prev_token(); // Put back the '{'
-            return self.parse_duckdb_and_clickhouse_struct_literal();
+            return self.parse_dictionary();
         }
 
         self.expected("an expression", token)
@@ -3157,13 +3157,10 @@ impl<'a> Parser<'a> {
     ///
     /// [dictionary]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
     /// [map]: https://clickhouse.com/docs/operations/settings/settings#additional_table_filters
-    fn parse_duckdb_and_clickhouse_struct_literal(&mut self) -> Result<Expr, ParserError> {
+    fn parse_dictionary(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LBrace)?;
 
-        let fields = self.parse_comma_separated0(
-            Self::parse_duckdb_and_clickhouse_struct_field,
-            Token::RBrace,
-        )?;
+        let fields = self.parse_comma_separated0(Self::parse_dictionary_field, Token::RBrace)?;
 
         self.expect_token(&Token::RBrace)?;
 
@@ -3180,7 +3177,7 @@ impl<'a> Parser<'a> {
     ///
     /// [dictionary]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
     /// [map]: https://clickhouse.com/docs/operations/settings/settings#additional_table_filters
-    fn parse_duckdb_and_clickhouse_struct_field(&mut self) -> Result<DictionaryField, ParserError> {
+    fn parse_dictionary_field(&mut self) -> Result<DictionaryField, ParserError> {
         let key = self.parse_identifier()?;
 
         self.expect_token(&Token::Colon)?;
@@ -11194,12 +11191,7 @@ impl<'a> Parser<'a> {
             let key_values = self.parse_comma_separated(|p| {
                 let key = p.parse_identifier()?;
                 p.expect_token(&Token::Eq)?;
-
-                let value = if p.peek_token_ref().token == Token::LBrace {
-                    p.parse_duckdb_and_clickhouse_struct_literal()?
-                } else {
-                    Expr::Value(p.parse_value()?)
-                };
+                let value = p.parse_expr()?;
                 Ok(Setting { key, value })
             })?;
             Some(key_values)

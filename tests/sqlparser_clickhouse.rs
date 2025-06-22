@@ -1019,16 +1019,12 @@ fn parse_settings_in_query() {
         ("SELECT * FROM t SETTINGS a", "Expected: =, found: EOF"),
         (
             "SELECT * FROM t SETTINGS a=",
-            "Expected: a value, found: EOF",
+            "Expected: an expression, found: EOF",
         ),
         ("SELECT * FROM t SETTINGS a=1, b", "Expected: =, found: EOF"),
         (
             "SELECT * FROM t SETTINGS a=1, b=",
-            "Expected: a value, found: EOF",
-        ),
-        (
-            "SELECT * FROM t SETTINGS a=1, b=c",
-            "Expected: a concrete value, found: c",
+            "Expected: an expression, found: EOF",
         ),
         (
             "SELECT * FROM t SETTINGS a = {",
@@ -1658,7 +1654,6 @@ fn parse_select_table_function_settings() {
         "SELECT * FROM t(SETTINGS a=)",
         "SELECT * FROM t(SETTINGS a=1, b)",
         "SELECT * FROM t(SETTINGS a=1, b=)",
-        "SELECT * FROM t(SETTINGS a=1, b=c)",
     ];
     for sql in invalid_cases {
         clickhouse_and_generic()

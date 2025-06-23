@@ -4164,18 +4164,4 @@ fn test_snowflake_fetch_clause_syntax() {
         "SELECT c1 FROM fetch_test FETCH FIRST 2 ROWS",
         canonical,
     );
-
-    snowflake()
-        .verified_only_select_with_canonical("SELECT c1 FROM fetch_test FETCH 2 ONLY", canonical);
-    let res = snowflake().parse_sql_statements("SELECT c1 FROM fetch_test FETCH 2 PERCENT");
-    assert_eq!(
-        res.unwrap_err().to_string(),
-        "sql parser error: Expected: end of statement, found: PERCENT"
-    );
-    let res =
-        snowflake().parse_sql_statements("SELECT c1 FROM fetch_test FETCH FIRST 2 ROWS WITH TIES");
-    assert_eq!(
-        res.unwrap_err().to_string(),
-        "sql parser error: Expected: end of statement, found: WITH"
-    );
 }

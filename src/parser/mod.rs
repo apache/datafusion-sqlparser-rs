@@ -12467,7 +12467,7 @@ impl<'a> Parser<'a> {
                 };
                 let mut relation = self.parse_table_factor()?;
 
-                if self.peek_parens_less_nested_join() {
+                if dialect_of!(self is SnowflakeDialect) && self.peek_parens_less_nested_join() {
                     let joins = self.parse_joins()?;
                     relation = TableFactor::NestedJoin {
                         table_with_joins: Box::new(TableWithJoins { relation, joins }),

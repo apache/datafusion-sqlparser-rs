@@ -15356,3 +15356,25 @@ fn check_enforced() {
         "CREATE TABLE t (a INT, b INT, c INT, CHECK (a > 0) NOT ENFORCED, CHECK (b > 0) ENFORCED, CHECK (c > 0))",
     );
 }
+
+#[test]
+fn join_precedence() {
+    all_dialects_except(|d| d.is::<SnowflakeDialect>()).verified_query_with_canonical(
+        "SELECT *
+         FROM t1
+         NATURAL JOIN t5
+         INNER JOIN t0 ON (t0.v1 + t5.v0) > 0
+         WHERE t0.v1 = t1.v0",
+        // canonical string without parentheses
+        "SELECT * FROM t1 NATURAL JOIN t5 INNER JOIN t0 ON (t0.v1 + t5.v0) > 0 WHERE t0.v1 = t1.v0",
+    );
+    TestedDialects::new(vec![Box::new(SnowflakeDialect {})]).verified_query_with_canonical(
+        "SELECT *
+         FROM t1
+         NATURAL JOIN t5
+         INNER JOIN t0 ON (t0.v1 + t5.v0) > 0
+         WHERE t0.v1 = t1.v0",
+        // canonical string with parentheses
+        "SELECT * FROM t1 NATURAL JOIN (t5 INNER JOIN t0 ON (t0.v1 + t5.v0) > 0) WHERE t0.v1 = t1.v0",
+    );
+}

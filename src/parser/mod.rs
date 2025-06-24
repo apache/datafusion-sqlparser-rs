@@ -10580,11 +10580,10 @@ impl<'a> Parser<'a> {
             name,
             data_type,
             options,
-            options_comma_separated: !dialect_of!(self is SnowflakeDialect),
         })
     }
 
-    fn parse_view_column_options(&mut self) -> Result<Option<Vec<ColumnOption>>, ParserError> {
+    fn parse_view_column_options(&mut self) -> Result<Option<ColumnOptions>, ParserError> {
         let mut options = Vec::new();
         loop {
             let option = self.parse_optional_column_option()?;
@@ -10594,7 +10593,14 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
-        Ok(options.is_empty().not().then_some(options))
+        Ok(options
+            .is_empty()
+            .not()
+            .then_some(if dialect_of!(self is SnowflakeDialect) {
+                ColumnOptions::SpaceSeparated(options)
+            } else {
+                ColumnOptions::CommaSeparated(options)
+            }))
     }
 
     /// Parses a parenthesized comma-separated list of unqualified, possibly quoted identifiers.

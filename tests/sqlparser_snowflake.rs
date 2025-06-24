@@ -3142,14 +3142,14 @@ fn parse_view_column_descriptions() {
                     ViewColumnDef {
                         name: Ident::new("a"),
                         data_type: None,
-                        options: Some(vec![ColumnOption::Comment("Comment".to_string())]),
-                        options_comma_separated: false,
+                        options: Some(ColumnOptions::SpaceSeparated(vec![ColumnOption::Comment(
+                            "Comment".to_string()
+                        )])),
                     },
                     ViewColumnDef {
                         name: Ident::new("b"),
                         data_type: None,
                         options: None,
-                        options_comma_separated: false,
                     }
                 ]
             );
@@ -4087,13 +4087,7 @@ fn parse_connect_by_root_operator() {
 
 #[test]
 fn test_snowflake_create_view_with_tag() {
-    let create_view_with_tag = r#"CREATE VIEW X (COL WITH TAG (pii='email')) AS SELECT * FROM Y"#;
-    snowflake().verified_stmt(create_view_with_tag);
-}
-
-#[test]
-fn test_snowflake_create_view_with_tag_and_comment() {
-    let create_view_with_tag_and_comment =
+    let create_view_with_tag =
         r#"CREATE VIEW X (COL WITH TAG (pii='email') COMMENT 'foobar') AS SELECT * FROM Y"#;
-    snowflake().verified_stmt(create_view_with_tag_and_comment);
+    snowflake().verified_stmt(create_view_with_tag);
 }

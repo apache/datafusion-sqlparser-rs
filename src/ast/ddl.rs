@@ -1421,8 +1421,24 @@ impl fmt::Display for ColumnDef {
 pub struct ViewColumnDef {
     pub name: Ident,
     pub data_type: Option<DataType>,
-    pub options: Option<Vec<ColumnOption>>,
-    pub options_comma_separated: bool,
+    pub options: Option<ColumnOptions>,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ColumnOptions {
+    CommaSeparated(Vec<ColumnOption>),
+    SpaceSeparated(Vec<ColumnOption>),
+}
+
+impl ColumnOptions {
+    pub fn as_slice(&self) -> &[ColumnOption] {
+        match self {
+            ColumnOptions::CommaSeparated(options) => options.as_slice(),
+            ColumnOptions::SpaceSeparated(options) => options.as_slice(),
+        }
+    }
 }
 
 impl fmt::Display for ViewColumnDef {
@@ -1432,10 +1448,10 @@ impl fmt::Display for ViewColumnDef {
             write!(f, " {}", data_type)?;
         }
         if let Some(options) = self.options.as_ref() {
-            if self.options_comma_separated {
+            if matches!(options, ColumnOptions::CommaSeparated(_)) {
                 write!(f, " {}", display_comma_separated(options.as_slice()))?;
             } else {
-                write!(f, " {}", display_separated(options.as_slice(), " "))?;
+                write!(f, " {}", display_separated(options.as_slice(), " "))?
             }
         }
         Ok(())

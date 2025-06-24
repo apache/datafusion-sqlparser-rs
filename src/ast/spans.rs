@@ -982,12 +982,14 @@ impl Spanned for ViewColumnDef {
             name,
             data_type: _, // todo, DataType
             options,
-            options_comma_separated: _,
         } = self;
 
         union_spans(
-            core::iter::once(name.span)
-                .chain(options.iter().flat_map(|i| i.iter().map(|k| k.span()))),
+            core::iter::once(name.span).chain(
+                options
+                    .iter()
+                    .flat_map(|i| i.as_slice().iter().map(|k| k.span())),
+            ),
         )
     }
 }
@@ -1049,7 +1051,9 @@ impl Spanned for CreateTableOptions {
         match self {
             CreateTableOptions::None => Span::empty(),
             CreateTableOptions::With(vec) => union_spans(vec.iter().map(|i| i.span())),
-            CreateTableOptions::Options(vec) => union_spans(vec.iter().map(|i| i.span())),
+            CreateTableOptions::Options(vec) => {
+                union_spans(vec.as_slice().iter().map(|i| i.span()))
+            }
             CreateTableOptions::Plain(vec) => union_spans(vec.iter().map(|i| i.span())),
             CreateTableOptions::TableProperties(vec) => union_spans(vec.iter().map(|i| i.span())),
         }

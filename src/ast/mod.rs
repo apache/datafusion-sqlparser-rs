@@ -238,7 +238,8 @@ impl Ord for Ident {
         } = other;
 
         // First compare by value, then by quote_style
-        value.cmp(other_value)
+        value
+            .cmp(other_value)
             .then_with(|| quote_style.cmp(other_quote_style))
     }
 }
@@ -9768,6 +9769,8 @@ impl fmt::Display for NullInclusion {
 
 #[cfg(test)]
 mod tests {
+    use crate::tokenizer::Location;
+
     use super::*;
 
     #[test]
@@ -10062,5 +10065,17 @@ mod tests {
         test_steps(OneOrManyWithParens::One(1), once(1), 3);
         test_steps(OneOrManyWithParens::Many(vec![2]), vec![2], 3);
         test_steps(OneOrManyWithParens::Many(vec![3, 4]), vec![3, 4], 4);
+    }
+
+    // Tests that the position in the code of an `Ident` does not affect its
+    // ordering.
+    #[test]
+    fn test_ident_ord() {
+        let mut a = Ident::with_span(Span::new(Location::new(1, 1), Location::new(1, 1)), "a");
+        let mut b = Ident::with_span(Span::new(Location::new(2, 2), Location::new(2, 2)), "b");
+
+        assert!(a < b);
+        std::mem::swap(&mut a.span, &mut b.span);
+        assert!(a < b);
     }
 }

@@ -15023,7 +15023,8 @@ impl<'a> Parser<'a> {
 
     /// Parse a FETCH clause
     pub fn parse_fetch(&mut self) -> Result<Fetch, ParserError> {
-        self.expect_one_of_keywords(&[Keyword::FIRST, Keyword::NEXT])?;
+        let _ = self.parse_one_of_keywords(&[Keyword::FIRST, Keyword::NEXT]);
+
         let (quantity, percent) = if self
             .parse_one_of_keywords(&[Keyword::ROW, Keyword::ROWS])
             .is_some()
@@ -15032,16 +15033,16 @@ impl<'a> Parser<'a> {
         } else {
             let quantity = Expr::Value(self.parse_value()?);
             let percent = self.parse_keyword(Keyword::PERCENT);
-            self.expect_one_of_keywords(&[Keyword::ROW, Keyword::ROWS])?;
+            let _ = self.parse_one_of_keywords(&[Keyword::ROW, Keyword::ROWS]);
             (Some(quantity), percent)
         };
+
         let with_ties = if self.parse_keyword(Keyword::ONLY) {
             false
-        } else if self.parse_keywords(&[Keyword::WITH, Keyword::TIES]) {
-            true
         } else {
-            return self.expected("one of ONLY or WITH TIES", self.peek_token());
+            self.parse_keywords(&[Keyword::WITH, Keyword::TIES])
         };
+
         Ok(Fetch {
             with_ties,
             percent,

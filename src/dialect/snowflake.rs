@@ -131,6 +131,10 @@ impl Dialect for SnowflakeDialect {
     }
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
+        if parser.parse_keyword(Keyword::BEGIN) {
+            return Some(parser.parse_begin_exception_end());
+        }
+
         if parser.parse_keywords(&[Keyword::ALTER, Keyword::SESSION]) {
             // ALTER SESSION
             let set = match parser.parse_one_of_keywords(&[Keyword::SET, Keyword::UNSET]) {

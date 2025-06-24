@@ -446,6 +446,14 @@ pub enum DataType {
     ///
     /// [PostgreSQL]: https://www.postgresql.org/docs/9.5/functions-geometry.html
     GeometricType(GeometricTypeKind),
+    /// PostgreSQL text search vectors, see [PostgreSQL].
+    ///
+    /// [PostgreSQL]: https://www.postgresql.org/docs/17/datatype-textsearch.html
+    TsVector,
+    /// PostgreSQL text search query, see [PostgreSQL].
+    ///
+    /// [PostgreSQL]: https://www.postgresql.org/docs/17/datatype-textsearch.html
+    TsQuery,
 }
 
 impl fmt::Display for DataType {
@@ -738,6 +746,8 @@ impl fmt::Display for DataType {
                 write!(f, "{} TABLE ({})", name, display_comma_separated(columns))
             }
             DataType::GeometricType(kind) => write!(f, "{}", kind),
+            DataType::TsVector => write!(f, "TSVECTOR"),
+            DataType::TsQuery => write!(f, "TSQUERY"),
         }
     }
 }

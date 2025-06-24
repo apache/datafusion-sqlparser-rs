@@ -261,10 +261,10 @@ fn parse_at_at_identifier() {
 
 #[test]
 fn parse_begin() {
-    let sql = r#"BEGIN SELECT 1; EXCEPTION WHEN ERROR THEN SELECT 2; END"#;
+    let sql = r#"BEGIN SELECT 1; EXCEPTION WHEN ERROR THEN SELECT 2; RAISE USING MESSAGE = FORMAT('ERR: %s', 'Bad'); END"#;
     let Statement::StartTransaction {
         statements,
-        exception_statements,
+        exception,
         has_end_keyword,
         ..
     } = bigquery().verified_stmt(sql)
@@ -272,7 +272,10 @@ fn parse_begin() {
         unreachable!();
     };
     assert_eq!(1, statements.len());
-    assert_eq!(1, exception_statements.unwrap().len());
+    assert!(exception.is_some());
+
+    let exception = exception.unwrap();
+    assert_eq!(1, exception.len());
     assert!(has_end_keyword);
 
     bigquery().verified_stmt(
@@ -635,35 +638,6 @@ fn parse_nested_data_types() {
         }
         _ => unreachable!(),
     }
-}
-
-#[test]
-fn parse_invalid_brackets() {
-    let sql = "SELECT STRUCT<INT64>>(NULL)";
-    assert_eq!(
-        bigquery_and_generic()
-            .parse_sql_statements(sql)
-            .unwrap_err(),
-        ParserError::ParserError("unmatched > in STRUCT literal".to_string())
-    );
-
-    let sql = "SELECT STRUCT<STRUCT<INT64>>>(NULL)";
-    assert_eq!(
-        bigquery_and_generic()
-            .parse_sql_statements(sql)
-            .unwrap_err(),
-        ParserError::ParserError("Expected: (, found: >".to_string())
-    );
-
-    let sql = "CREATE TABLE table (x STRUCT<STRUCT<INT64>>>)";
-    assert_eq!(
-        bigquery_and_generic()
-            .parse_sql_statements(sql)
-            .unwrap_err(),
-        ParserError::ParserError(
-            "Expected: ',' or ')' after column definition, found: >".to_string()
-        )
-    );
 }
 
 #[test]
@@ -2473,4 +2447,79 @@ fn test_struct_field_options() {
         "> OPTIONS(description = 'This is a struct field')",
         ")",
     ));
+}
+
+#[test]
+fn test_struct_trailing_and_nested_bracket() {
+    bigquery().verified_stmt(concat!(
+        "CREATE TABLE my_table (",
+        "f0 STRING, ",
+        "f1 STRUCT<a STRING, b STRUCT<c INT64, d STRING>>, ",
+        "f2 STRING",
+        ")",
+    ));
+
+    // More complex nested structs
+    bigquery().verified_stmt(concat!(
+        "CREATE TABLE my_table (",
+        "f0 STRING, ",
+        "f1 STRUCT<a STRING, b STRUCT<c INT64, d STRUCT<e STRING>>>, ",
+        "f2 STRUCT<h STRING, i STRUCT<j INT64, k STRUCT<l STRUCT<m STRING>>>>, ",
+        "f3 STRUCT<e STRING, f STRUCT<c INT64>>",
+        ")",
+    ));
+
+    // Bad case with missing closing bracket
+    assert_eq!(
+        ParserError::ParserError("Expected: >, found: )".to_owned()),
+        bigquery()
+            .parse_sql_statements("CREATE TABLE my_table(f1 STRUCT<a STRING, b INT64)")
+            .unwrap_err()
+    );
+
+    // Bad case with redundant closing bracket
+    assert_eq!(
+        ParserError::ParserError(
+            "unmatched > after parsing data type STRUCT<a STRING, b INT64>)".to_owned()
+        ),
+        bigquery()
+            .parse_sql_statements("CREATE TABLE my_table(f1 STRUCT<a STRING, b INT64>>)")
+            .unwrap_err()
+    );
+
+    // Base case with redundant closing bracket in nested struct
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected: ',' or ')' after column definition, found: >".to_owned()
+        ),
+        bigquery()
+            .parse_sql_statements("CREATE TABLE my_table(f1 STRUCT<a STRUCT<b INT>>>, c INT64)")
+            .unwrap_err()
+    );
+
+    let sql = "SELECT STRUCT<INT64>>(NULL)";
+    assert_eq!(
+        bigquery_and_generic()
+            .parse_sql_statements(sql)
+            .unwrap_err(),
+        ParserError::ParserError("unmatched > in STRUCT literal".to_string())
+    );
+
+    let sql = "SELECT STRUCT<STRUCT<INT64>>>(NULL)";
+    assert_eq!(
+        bigquery_and_generic()
+            .parse_sql_statements(sql)
+            .unwrap_err(),
+        ParserError::ParserError("Expected: (, found: >".to_string())
+    );
+
+    let sql = "CREATE TABLE table (x STRUCT<STRUCT<INT64>>>)";
+    assert_eq!(
+        bigquery_and_generic()
+            .parse_sql_statements(sql)
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: ',' or ')' after column definition, found: >".to_string()
+        )
+    );
 }

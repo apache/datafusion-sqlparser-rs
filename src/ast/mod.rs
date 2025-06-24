@@ -749,7 +749,7 @@ pub enum Expr {
     /// `[ NOT ] IN (SELECT ...)`
     InSubquery {
         expr: Box<Expr>,
-        subquery: Box<SetExpr>,
+        subquery: Box<Query>,
         negated: bool,
     },
     /// `[ NOT ] IN UNNEST(array_expression)`
@@ -2991,6 +2991,36 @@ impl From<Set> for Statement {
     }
 }
 
+/// A representation of a `WHEN` arm with all the identifiers catched and the statements to execute
+/// for the arm.
+///
+/// Snowflake: <https://docs.snowflake.com/en/sql-reference/snowflake-scripting/exception>
+/// BigQuery: <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#beginexceptionend>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ExceptionWhen {
+    pub idents: Vec<Ident>,
+    pub statements: Vec<Statement>,
+}
+
+impl Display for ExceptionWhen {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "WHEN {idents} THEN",
+            idents = display_separated(&self.idents, " OR ")
+        )?;
+
+        if !self.statements.is_empty() {
+            write!(f, " ")?;
+            format_statement_list(f, &self.statements)?;
+        }
+
+        Ok(())
+    }
+}
+
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -3679,17 +3709,20 @@ pub enum Statement {
         /// END;
         /// ```
         statements: Vec<Statement>,
-        /// Statements of an exception clause.
+        /// Exception handling with exception clauses.
         /// Example:
         /// ```sql
-        /// BEGIN
-        ///     SELECT 1;
-        /// EXCEPTION WHEN ERROR THEN
-        ///     SELECT 2;
-        ///     SELECT 3;
-        /// END;
+        /// EXCEPTION
+        ///     WHEN EXCEPTION_1 THEN
+        ///         SELECT 2;
+        ///     WHEN EXCEPTION_2 OR EXCEPTION_3 THEN
+        ///         SELECT 3;
+        ///     WHEN OTHER THEN
+        ///         SELECT 4;
+        /// ```
         /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#beginexceptionend>
-        exception_statements: Option<Vec<Statement>>,
+        /// <https://docs.snowflake.com/en/sql-reference/snowflake-scripting/exception>
+        exception: Option<Vec<ExceptionWhen>>,
         /// TRUE if the statement has an `END` keyword.
         has_end_keyword: bool,
     },
@@ -5534,7 +5567,7 @@ impl fmt::Display for Statement {
                 transaction,
                 modifier,
                 statements,
-                exception_statements,
+                exception,
                 has_end_keyword,
             } => {
                 if *syntax_begin {
@@ -5556,11 +5589,10 @@ impl fmt::Display for Statement {
                     write!(f, " ")?;
                     format_statement_list(f, statements)?;
                 }
-                if let Some(exception_statements) = exception_statements {
-                    write!(f, " EXCEPTION WHEN ERROR THEN")?;
-                    if !exception_statements.is_empty() {
-                        write!(f, " ")?;
-                        format_statement_list(f, exception_statements)?;
+                if let Some(exception_when) = exception {
+                    write!(f, " EXCEPTION")?;
+                    for when in exception_when {
+                        write!(f, " {when}")?;
                     }
                 }
                 if *has_end_keyword {

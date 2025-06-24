@@ -28,16 +28,17 @@ use super::{
     ConstraintCharacteristics, CopySource, CreateIndex, CreateTable, CreateTableOptions, Cte,
     Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, FromTable,
     Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
-    FunctionArguments, GroupByExpr, HavingBound, IfStatement, IlikeSelectItem, Insert, Interpolate,
-    InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView,
-    LimitClause, MatchRecognizePattern, Measure, NamedParenthesizedList, NamedWindowDefinition,
-    ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction, OnInsert, OpenStatement,
-    OrderBy, OrderByExpr, OrderByKind, Partition, PivotValueSource, ProjectionSelect, Query,
-    RaiseStatement, RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
-    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
-    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
-    TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use, Value, Values, ViewColumnDef,
-    WhileStatement, WildcardAdditionalOptions, With, WithFill,
+    FunctionArguments, GroupByExpr, HavingBound, IfStatement, IlikeSelectItem, IndexColumn, Insert,
+    Interpolate, InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem,
+    LateralView, LimitClause, MatchRecognizePattern, Measure, NamedParenthesizedList,
+    NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
+    OnInsert, OpenStatement, OrderBy, OrderByExpr, OrderByKind, Partition, PivotValueSource,
+    ProjectionSelect, Query, RaiseStatement, RaiseStatementValue, ReferentialAction,
+    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
+    SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
+    TableConstraint, TableFactor, TableObject, TableOptionsClustered, TableWithJoins,
+    UpdateTableFromKind, Use, Value, Values, ViewColumnDef, WhileStatement,
+    WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -650,7 +651,7 @@ impl Spanned for TableConstraint {
                 name.iter()
                     .map(|i| i.span)
                     .chain(index_name.iter().map(|i| i.span))
-                    .chain(columns.iter().map(|i| i.span))
+                    .chain(columns.iter().map(|i| i.span()))
                     .chain(characteristics.iter().map(|i| i.span())),
             ),
             TableConstraint::PrimaryKey {
@@ -664,7 +665,7 @@ impl Spanned for TableConstraint {
                 name.iter()
                     .map(|i| i.span)
                     .chain(index_name.iter().map(|i| i.span))
-                    .chain(columns.iter().map(|i| i.span))
+                    .chain(columns.iter().map(|i| i.span()))
                     .chain(characteristics.iter().map(|i| i.span())),
             ),
             TableConstraint::ForeignKey {
@@ -700,7 +701,7 @@ impl Spanned for TableConstraint {
             } => union_spans(
                 name.iter()
                     .map(|i| i.span)
-                    .chain(columns.iter().map(|i| i.span)),
+                    .chain(columns.iter().map(|i| i.span())),
             ),
             TableConstraint::FulltextOrSpatial {
                 fulltext: _,
@@ -711,7 +712,7 @@ impl Spanned for TableConstraint {
                 opt_index_name
                     .iter()
                     .map(|i| i.span)
-                    .chain(columns.iter().map(|i| i.span)),
+                    .chain(columns.iter().map(|i| i.span())),
             ),
         }
     }
@@ -742,6 +743,12 @@ impl Spanned for CreateIndex {
                 .chain(with.iter().map(|i| i.span()))
                 .chain(predicate.iter().map(|i| i.span())),
         )
+    }
+}
+
+impl Spanned for IndexColumn {
+    fn span(&self) -> Span {
+        self.column.span()
     }
 }
 

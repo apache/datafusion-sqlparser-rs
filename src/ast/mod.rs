@@ -28,12 +28,12 @@ use helpers::{
     stmt_data_loading::{FileStagingCommand, StageLoadSelectItemKind},
 };
 
+use core::cmp::Ordering;
 use core::ops::Deref;
 use core::{
     fmt::{self, Display},
     hash,
 };
-use std::cmp::Ordering;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};

@@ -30,7 +30,7 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
-    display_comma_separated, display_separated, CommentDef, CreateFunctionBody,
+    display_comma_separated, display_separated, ArgMode, CommentDef, CreateFunctionBody,
     CreateFunctionUsing, DataType, Expr, FunctionBehavior, FunctionCalledOnNull,
     FunctionDeterminismSpecifier, FunctionParallel, Ident, IndexColumn, MySQLColumnPosition,
     ObjectName, OperateFunctionArg, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Tag,
@@ -1367,11 +1367,16 @@ impl fmt::Display for NullsDistinctOption {
 pub struct ProcedureParam {
     pub name: Ident,
     pub data_type: DataType,
+    pub mode: Option<ArgMode>,
 }
 
 impl fmt::Display for ProcedureParam {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {}", self.name, self.data_type)
+        if let Some(mode) = &self.mode {
+            write!(f, "{mode} {} {}", self.name, self.data_type)
+        } else {
+            write!(f, "{} {}", self.name, self.data_type)
+        }
     }
 }
 

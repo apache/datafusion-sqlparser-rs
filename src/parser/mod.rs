@@ -6868,9 +6868,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        self.expect_token(&Token::LParen)?;
-        let columns = self.parse_comma_separated(Parser::parse_create_index_expr)?;
-        self.expect_token(&Token::RParen)?;
+        let columns = self.parse_parenthesized_index_column_list()?;
 
         let include = if self.parse_keyword(Keyword::INCLUDE) {
             self.expect_token(&Token::LParen)?;
@@ -7626,9 +7624,22 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_procedure_param(&mut self) -> Result<ProcedureParam, ParserError> {
+        let mode = if self.parse_keyword(Keyword::IN) {
+            Some(ArgMode::In)
+        } else if self.parse_keyword(Keyword::OUT) {
+            Some(ArgMode::Out)
+        } else if self.parse_keyword(Keyword::INOUT) {
+            Some(ArgMode::InOut)
+        } else {
+            None
+        };
         let name = self.parse_identifier()?;
         let data_type = self.parse_data_type()?;
-        Ok(ProcedureParam { name, data_type })
+        Ok(ProcedureParam {
+            name,
+            data_type,
+            mode,
+        })
     }
 
     pub fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
@@ -8070,7 +8081,7 @@ impl<'a> Parser<'a> {
                 let index_name = self.parse_optional_ident()?;
                 let index_type = self.parse_optional_using_then_index_type()?;
 
-                let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
+                let columns = self.parse_parenthesized_index_column_list()?;
                 let index_options = self.parse_index_options()?;
                 let characteristics = self.parse_constraint_characteristics()?;
                 Ok(Some(TableConstraint::Unique {
@@ -8092,7 +8103,7 @@ impl<'a> Parser<'a> {
                 let index_name = self.parse_optional_ident()?;
                 let index_type = self.parse_optional_using_then_index_type()?;
 
-                let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
+                let columns = self.parse_parenthesized_index_column_list()?;
                 let index_options = self.parse_index_options()?;
                 let characteristics = self.parse_constraint_characteristics()?;
                 Ok(Some(TableConstraint::PrimaryKey {
@@ -8170,7 +8181,7 @@ impl<'a> Parser<'a> {
                 };
 
                 let index_type = self.parse_optional_using_then_index_type()?;
-                let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
+                let columns = self.parse_parenthesized_index_column_list()?;
 
                 Ok(Some(TableConstraint::Index {
                     display_as_key,
@@ -8199,7 +8210,7 @@ impl<'a> Parser<'a> {
 
                 let opt_index_name = self.parse_optional_ident()?;
 
-                let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
+                let columns = self.parse_parenthesized_index_column_list()?;
 
                 Ok(Some(TableConstraint::FulltextOrSpatial {
                     fulltext,
@@ -10599,6 +10610,14 @@ impl<'a> Parser<'a> {
         allow_empty: bool,
     ) -> Result<Vec<Ident>, ParserError> {
         self.parse_parenthesized_column_list_inner(optional, allow_empty, |p| p.parse_identifier())
+    }
+
+    /// Parses a parenthesized comma-separated list of index columns, which can be arbitrary
+    /// expressions with ordering information (and an opclass in some dialects).
+    fn parse_parenthesized_index_column_list(&mut self) -> Result<Vec<IndexColumn>, ParserError> {
+        self.parse_parenthesized_column_list_inner(Mandatory, false, |p| {
+            p.parse_create_index_expr()
+        })
     }
 
     /// Parses a parenthesized comma-separated list of qualified, possibly quoted identifiers.
@@ -15017,7 +15036,8 @@ impl<'a> Parser<'a> {
 
     /// Parse a FETCH clause
     pub fn parse_fetch(&mut self) -> Result<Fetch, ParserError> {
-        self.expect_one_of_keywords(&[Keyword::FIRST, Keyword::NEXT])?;
+        let _ = self.parse_one_of_keywords(&[Keyword::FIRST, Keyword::NEXT]);
+
         let (quantity, percent) = if self
             .parse_one_of_keywords(&[Keyword::ROW, Keyword::ROWS])
             .is_some()
@@ -15026,16 +15046,16 @@ impl<'a> Parser<'a> {
         } else {
             let quantity = Expr::Value(self.parse_value()?);
             let percent = self.parse_keyword(Keyword::PERCENT);
-            self.expect_one_of_keywords(&[Keyword::ROW, Keyword::ROWS])?;
+            let _ = self.parse_one_of_keywords(&[Keyword::ROW, Keyword::ROWS]);
             (Some(quantity), percent)
         };
+
         let with_ties = if self.parse_keyword(Keyword::ONLY) {
             false
-        } else if self.parse_keywords(&[Keyword::WITH, Keyword::TIES]) {
-            true
         } else {
-            return self.expected("one of ONLY or WITH TIES", self.peek_token());
+            self.parse_keywords(&[Keyword::WITH, Keyword::TIES])
         };
+
         Ok(Fetch {
             with_ties,
             percent,
@@ -16527,6 +16547,20 @@ mod tests {
             }};
         }
 
+        fn mk_expected_col(name: &str) -> IndexColumn {
+            IndexColumn {
+                column: OrderByExpr {
+                    expr: Expr::Identifier(name.into()),
+                    options: OrderByOptions {
+                        asc: None,
+                        nulls_first: None,
+                    },
+                    with_fill: None,
+                },
+                operator_class: None,
+            }
+        }
+
         let dialect =
             TestedDialects::new(vec![Box::new(GenericDialect {}), Box::new(MySqlDialect {})]);
 
@@ -16537,7 +16571,7 @@ mod tests {
                 display_as_key: false,
                 name: None,
                 index_type: None,
-                columns: vec![Ident::new("c1")],
+                columns: vec![mk_expected_col("c1")],
             }
         );
 
@@ -16548,7 +16582,7 @@ mod tests {
                 display_as_key: true,
                 name: None,
                 index_type: None,
-                columns: vec![Ident::new("c1")],
+                columns: vec![mk_expected_col("c1")],
             }
         );
 
@@ -16559,7 +16593,7 @@ mod tests {
                 display_as_key: false,
                 name: Some(Ident::with_quote('\'', "index")),
                 index_type: None,
-                columns: vec![Ident::new("c1"), Ident::new("c2")],
+                columns: vec![mk_expected_col("c1"), mk_expected_col("c2")],
             }
         );
 
@@ -16570,7 +16604,7 @@ mod tests {
                 display_as_key: false,
                 name: None,
                 index_type: Some(IndexType::BTree),
-                columns: vec![Ident::new("c1")],
+                columns: vec![mk_expected_col("c1")],
             }
         );
 
@@ -16581,7 +16615,7 @@ mod tests {
                 display_as_key: false,
                 name: None,
                 index_type: Some(IndexType::Hash),
-                columns: vec![Ident::new("c1")],
+                columns: vec![mk_expected_col("c1")],
             }
         );
 
@@ -16592,7 +16626,7 @@ mod tests {
                 display_as_key: false,
                 name: Some(Ident::new("idx_name")),
                 index_type: Some(IndexType::BTree),
-                columns: vec![Ident::new("c1")],
+                columns: vec![mk_expected_col("c1")],
             }
         );
 
@@ -16603,7 +16637,7 @@ mod tests {
                 display_as_key: false,
                 name: Some(Ident::new("idx_name")),
                 index_type: Some(IndexType::Hash),
-                columns: vec![Ident::new("c1")],
+                columns: vec![mk_expected_col("c1")],
             }
         );
     }

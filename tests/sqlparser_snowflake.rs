@@ -4146,3 +4146,22 @@ END
     assert_eq!(2, exception[1].idents.len());
     assert_eq!(2, exception[1].statements.len());
 }
+
+#[test]
+fn test_snowflake_fetch_clause_syntax() {
+    let canonical = "SELECT c1 FROM fetch_test FETCH FIRST 2 ROWS ONLY";
+    snowflake().verified_only_select_with_canonical("SELECT c1 FROM fetch_test FETCH 2", canonical);
+
+    snowflake()
+        .verified_only_select_with_canonical("SELECT c1 FROM fetch_test FETCH FIRST 2", canonical);
+    snowflake()
+        .verified_only_select_with_canonical("SELECT c1 FROM fetch_test FETCH NEXT 2", canonical);
+
+    snowflake()
+        .verified_only_select_with_canonical("SELECT c1 FROM fetch_test FETCH 2 ROW", canonical);
+
+    snowflake().verified_only_select_with_canonical(
+        "SELECT c1 FROM fetch_test FETCH FIRST 2 ROWS",
+        canonical,
+    );
+}

@@ -6885,6 +6885,12 @@ pub enum GrantObjects {
     AllSequencesInSchema { schemas: Vec<ObjectName> },
     /// Grant privileges on `ALL TABLES IN SCHEMA <schema_name> [, ...]`
     AllTablesInSchema { schemas: Vec<ObjectName> },
+    /// Grant privileges on `FUTURE SCHEMAS IN DATABASE <database_name> [, ...]`
+    FutureSchemasInDatabase { databases: Vec<ObjectName> },
+    /// Grant privileges on `FUTURE TABLES IN SCHEMA <schema_name> [, ...]`
+    FutureTablesInSchema { schemas: Vec<ObjectName> },
+    /// Grant privileges on `FUTURE VIEWS IN SCHEMA <schema_name> [, ...]`
+    FutureViewsInSchema { schemas: Vec<ObjectName> },
     /// Grant privileges on specific databases
     Databases(Vec<ObjectName>),
     /// Grant privileges on specific schemas
@@ -6950,6 +6956,27 @@ impl fmt::Display for GrantObjects {
                 write!(
                     f,
                     "ALL TABLES IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
+            GrantObjects::FutureSchemasInDatabase { databases } => {
+                write!(
+                    f,
+                    "FUTURE SCHEMAS IN DATABASE {}",
+                    display_comma_separated(databases)
+                )
+            }
+            GrantObjects::FutureTablesInSchema { schemas } => {
+                write!(
+                    f,
+                    "FUTURE TABLES IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
+            GrantObjects::FutureViewsInSchema { schemas } => {
+                write!(
+                    f,
+                    "FUTURE VIEWS IN SCHEMA {}",
                     display_comma_separated(schemas)
                 )
             }

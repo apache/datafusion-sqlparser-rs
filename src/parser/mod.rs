@@ -13684,6 +13684,33 @@ impl<'a> Parser<'a> {
                     schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
                 })
             } else if self.parse_keywords(&[
+                Keyword::FUTURE,
+                Keyword::SCHEMAS,
+                Keyword::IN,
+                Keyword::DATABASE,
+            ]) {
+                Some(GrantObjects::FutureSchemasInDatabase {
+                    databases: self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                })
+            } else if self.parse_keywords(&[
+                Keyword::FUTURE,
+                Keyword::TABLES,
+                Keyword::IN,
+                Keyword::SCHEMA,
+            ]) {
+                Some(GrantObjects::FutureTablesInSchema {
+                    schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                })
+            } else if self.parse_keywords(&[
+                Keyword::FUTURE,
+                Keyword::VIEWS,
+                Keyword::IN,
+                Keyword::SCHEMA,
+            ]) {
+                Some(GrantObjects::FutureViewsInSchema {
+                    schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                })
+            } else if self.parse_keywords(&[
                 Keyword::ALL,
                 Keyword::SEQUENCES,
                 Keyword::IN,

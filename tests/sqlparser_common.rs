@@ -9386,9 +9386,11 @@ fn parse_grant() {
     verified_stmt("GRANT SELECT ON VIEW view1 TO ROLE role1");
     verified_stmt("GRANT EXEC ON my_sp TO runner");
     verified_stmt("GRANT UPDATE ON my_table TO updater_role AS dbo");
-
     all_dialects_where(|d| d.identifier_quote_style("none") == Some('['))
         .verified_stmt("GRANT SELECT ON [my_table] TO [public]");
+    verified_stmt("GRANT SELECT ON FUTURE SCHEMAS IN DATABASE db1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON FUTURE TABLES IN SCHEMA db1.sc1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON FUTURE VIEWS IN SCHEMA db1.sc1 TO ROLE role1");
 }
 
 #[test]

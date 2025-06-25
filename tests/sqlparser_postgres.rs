@@ -6259,3 +6259,16 @@ fn parse_alter_table_constraint_not_valid() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn parse_alter_table_validate_constraint() {
+    match pg().verified_stmt("ALTER TABLE foo VALIDATE CONSTRAINT bar") {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::ValidateConstraint { name: "bar".into() }]
+            );
+        }
+        _ => unreachable!(),
+    }
+}

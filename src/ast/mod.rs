@@ -28,6 +28,7 @@ use helpers::{
     stmt_data_loading::{FileStagingCommand, StageLoadSelectItemKind},
 };
 
+use core::cmp::Ordering;
 use core::ops::Deref;
 use core::{
     fmt::{self, Display},
@@ -172,7 +173,7 @@ fn format_statement_list(f: &mut fmt::Formatter, statements: &[Statement]) -> fm
 }
 
 /// An identifier, decomposed into its value or character data and the quote style.
-#[derive(Debug, Clone, PartialOrd, Ord)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Ident {
@@ -213,6 +214,35 @@ impl core::hash::Hash for Ident {
 }
 
 impl Eq for Ident {}
+
+impl PartialOrd for Ident {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Ident {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let Ident {
+            value,
+            quote_style,
+            // exhaustiveness check; we ignore spans in ordering
+            span: _,
+        } = self;
+
+        let Ident {
+            value: other_value,
+            quote_style: other_quote_style,
+            // exhaustiveness check; we ignore spans in ordering
+            span: _,
+        } = other;
+
+        // First compare by value, then by quote_style
+        value
+            .cmp(other_value)
+            .then_with(|| quote_style.cmp(other_quote_style))
+    }
+}
 
 impl Ident {
     /// Create a new identifier with the given value and no quotes and an empty span.
@@ -4214,7 +4244,7 @@ pub enum Statement {
     /// ```sql
     /// NOTIFY channel [ , payload ]
     /// ```
-    /// send a notification event together with an optional “payload” string to channel
+    /// send a notification event together with an optional "payload" string to channel
     ///
     /// See Postgres <https://www.postgresql.org/docs/current/sql-notify.html>
     NOTIFY {
@@ -9771,6 +9801,8 @@ impl fmt::Display for NullInclusion {
 
 #[cfg(test)]
 mod tests {
+    use crate::tokenizer::Location;
+
     use super::*;
 
     #[test]
@@ -10065,5 +10097,17 @@ mod tests {
         test_steps(OneOrManyWithParens::One(1), once(1), 3);
         test_steps(OneOrManyWithParens::Many(vec![2]), vec![2], 3);
         test_steps(OneOrManyWithParens::Many(vec![3, 4]), vec![3, 4], 4);
+    }
+
+    // Tests that the position in the code of an `Ident` does not affect its
+    // ordering.
+    #[test]
+    fn test_ident_ord() {
+        let mut a = Ident::with_span(Span::new(Location::new(1, 1), Location::new(1, 1)), "a");
+        let mut b = Ident::with_span(Span::new(Location::new(2, 2), Location::new(2, 2)), "b");
+
+        assert!(a < b);
+        std::mem::swap(&mut a.span, &mut b.span);
+        assert!(a < b);
     }
 }

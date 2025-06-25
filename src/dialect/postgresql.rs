@@ -258,4 +258,12 @@ impl Dialect for PostgreSqlDialect {
     fn supports_set_names(&self) -> bool {
         true
     }
+
+    fn supports_constraint_not_validation(&self) -> bool {
+        true
+    }
+
+    fn supports_validate_constraint(&self) -> bool {
+        true
+    }
 }

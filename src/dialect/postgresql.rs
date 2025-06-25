@@ -259,7 +259,7 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
-    fn supports_constraint_not_validation(&self) -> bool {
+    fn supports_constraint_not_valid(&self) -> bool {
         true
     }
 

@@ -67,8 +67,11 @@ impl fmt::Display for ReplicaIdentity {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AlterTableOperation {
-    /// `ADD <table_constraint>`
-    AddConstraint(TableConstraint),
+    /// `ADD <table_constraint> [NOT VALID]`
+    AddConstraint {
+        constraint: TableConstraint,
+        not_valid: bool,
+    },
     /// `ADD [COLUMN] [IF NOT EXISTS] <column_def>`
     AddColumn {
         /// `[COLUMN]`.
@@ -494,7 +497,16 @@ impl fmt::Display for AlterTableOperation {
                 display_separated(new_partitions, " "),
                 ine = if *if_not_exists { " IF NOT EXISTS" } else { "" }
             ),
-            AlterTableOperation::AddConstraint(c) => write!(f, "ADD {c}"),
+            AlterTableOperation::AddConstraint {
+                not_valid,
+                constraint,
+            } => {
+                write!(f, "ADD {constraint}")?;
+                if *not_valid {
+                    write!(f, " NOT VALID")?;
+                }
+                Ok(())
+            }
             AlterTableOperation::AddColumn {
                 column_keyword,
                 if_not_exists,

@@ -8477,7 +8477,11 @@ impl<'a> Parser<'a> {
     pub fn parse_alter_table_operation(&mut self) -> Result<AlterTableOperation, ParserError> {
         let operation = if self.parse_keyword(Keyword::ADD) {
             if let Some(constraint) = self.parse_optional_table_constraint()? {
-                AlterTableOperation::AddConstraint(constraint)
+                let not_valid = self.parse_keywords(&[Keyword::NOT, Keyword::VALID]);
+                AlterTableOperation::AddConstraint {
+                    constraint,
+                    not_valid,
+                }
             } else if dialect_of!(self is ClickHouseDialect|GenericDialect)
                 && self.parse_keyword(Keyword::PROJECTION)
             {

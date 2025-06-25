@@ -8899,6 +8899,11 @@ impl<'a> Parser<'a> {
             };
 
             AlterTableOperation::ReplicaIdentity { identity }
+        } else if self.parse_keywords(&[Keyword::VALIDATE, Keyword::CONSTRAINT])
+            && self.dialect.supports_validate_constraint()
+        {
+            let name = self.parse_identifier()?;
+            AlterTableOperation::ValidateConstraint { name }
         } else {
             let options: Vec<SqlOption> =
                 self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;

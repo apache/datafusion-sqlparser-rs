@@ -347,6 +347,10 @@ pub enum AlterTableOperation {
         equals: bool,
         value: ValueWithSpan,
     },
+    /// `VALIDATE CONSTRAINT <name>`
+    ValidateConstraint {
+        name: Ident,
+    },
 }
 
 /// An `ALTER Policy` (`Statement::AlterPolicy`) operation
@@ -783,6 +787,9 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::ReplicaIdentity { identity } => {
                 write!(f, "REPLICA IDENTITY {identity}")
+            }
+            AlterTableOperation::ValidateConstraint { name } => {
+                write!(f, "VALIDATE CONSTRAINT {name}")
             }
         }
     }

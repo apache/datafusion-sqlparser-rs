@@ -1028,6 +1028,10 @@ pub trait Dialect: Debug + Any {
     fn supports_set_names(&self) -> bool {
         false
     }
+
+    fn supports_space_separated_column_options(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

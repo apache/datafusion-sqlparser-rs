@@ -10579,17 +10579,7 @@ impl<'a> Parser<'a> {
     /// Parses a column definition within a view.
     fn parse_view_column(&mut self) -> Result<ViewColumnDef, ParserError> {
         let name = self.parse_identifier()?;
-        let options = if (dialect_of!(self is BigQueryDialect | GenericDialect)
-            && self.parse_keyword(Keyword::OPTIONS))
-            || (dialect_of!(self is SnowflakeDialect | GenericDialect)
-                && self.parse_keyword(Keyword::COMMENT))
-        {
-            self.prev_token();
-            self.parse_optional_column_option()?
-                .map(|option| vec![option])
-        } else {
-            None
-        };
+        let options = self.parse_view_column_options()?;
         let data_type = if dialect_of!(self is ClickHouseDialect) {
             Some(self.parse_data_type()?)
         } else {
@@ -10600,6 +10590,25 @@ impl<'a> Parser<'a> {
             data_type,
             options,
         })
+    }
+
+    fn parse_view_column_options(&mut self) -> Result<Option<ColumnOptions>, ParserError> {
+        let mut options = Vec::new();
+        loop {
+            let option = self.parse_optional_column_option()?;
+            if let Some(option) = option {
+                options.push(option);
+            } else {
+                break;
+            }
+        }
+        if options.is_empty() {
+            Ok(None)
+        } else if self.dialect.supports_space_separated_column_options() {
+            Ok(Some(ColumnOptions::SpaceSeparated(options)))
+        } else {
+            Ok(Some(ColumnOptions::CommaSeparated(options)))
+        }
     }
 
     /// Parses a parenthesized comma-separated list of unqualified, possibly quoted identifiers.

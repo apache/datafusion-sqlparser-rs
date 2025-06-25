@@ -606,9 +606,10 @@ fn parse_alter_table_constraints_unique_nulls_distinct() {
         .verified_stmt("ALTER TABLE t ADD CONSTRAINT b UNIQUE NULLS NOT DISTINCT (c)")
     {
         Statement::AlterTable { operations, .. } => match &operations[0] {
-            AlterTableOperation::AddConstraint(TableConstraint::Unique {
-                nulls_distinct, ..
-            }) => {
+            AlterTableOperation::AddConstraint {
+                constraint: TableConstraint::Unique { nulls_distinct, .. },
+                ..
+            } => {
                 assert_eq!(nulls_distinct, &NullsDistinctOption::NotDistinct)
             }
             _ => unreachable!(),
@@ -6225,6 +6226,33 @@ fn parse_ts_datatypes() {
                     name: "x".into(),
                     data_type: DataType::TsQuery,
                     options: vec![],
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_table_constraint_not_valid() {
+    match pg_and_generic().verified_stmt(
+        "ALTER TABLE foo ADD CONSTRAINT bar FOREIGN KEY (baz) REFERENCES other(ref) NOT VALID",
+    ) {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::AddConstraint {
+                    constraint: TableConstraint::ForeignKey {
+                        name: Some("bar".into()),
+                        index_name: None,
+                        columns: vec!["baz".into()],
+                        foreign_table: ObjectName::from(vec!["other".into()]),
+                        referred_columns: vec!["ref".into()],
+                        on_delete: None,
+                        on_update: None,
+                        characteristics: None,
+                    },
+                    not_valid: true,
                 }]
             );
         }

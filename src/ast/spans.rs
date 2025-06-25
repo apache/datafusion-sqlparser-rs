@@ -1198,6 +1198,7 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::AutoIncrement { value, .. } => value.span(),
             AlterTableOperation::Lock { .. } => Span::empty(),
             AlterTableOperation::ReplicaIdentity { .. } => Span::empty(),
+            AlterTableOperation::ValidateConstraint { name } => name.span,
         }
     }
 }

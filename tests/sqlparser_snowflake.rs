@@ -4169,7 +4169,7 @@ fn test_snowflake_fetch_clause_syntax() {
 }
 
 #[test]
-fn test_snowflake_create_view_with_tag() {
+fn test_snowflake_create_view_with_multiple_column_options() {
     let create_view_with_tag =
         r#"CREATE VIEW X (COL WITH TAG (pii='email') COMMENT 'foobar') AS SELECT * FROM Y"#;
     snowflake().verified_stmt(create_view_with_tag);

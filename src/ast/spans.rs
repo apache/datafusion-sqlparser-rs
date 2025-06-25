@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::ast::query::SelectItemQualifiedWildcardKind;
+use crate::ast::{query::SelectItemQualifiedWildcardKind, ColumnOptions};
 use core::iter;
 
 use crate::tokenizer::Span;
@@ -991,13 +991,13 @@ impl Spanned for ViewColumnDef {
             options,
         } = self;
 
-        union_spans(
-            core::iter::once(name.span).chain(
-                options
-                    .iter()
-                    .flat_map(|i| i.as_slice().iter().map(|k| k.span())),
-            ),
-        )
+        name.span.union_opt(&options.as_ref().map(|o| o.span()))
+    }
+}
+
+impl Spanned for ColumnOptions {
+    fn span(&self) -> Span {
+        union_spans(self.as_slice().iter().map(|i| i.span()))
     }
 }
 

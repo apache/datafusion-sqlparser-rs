@@ -1453,10 +1453,13 @@ impl fmt::Display for ViewColumnDef {
             write!(f, " {}", data_type)?;
         }
         if let Some(options) = self.options.as_ref() {
-            if matches!(options, ColumnOptions::CommaSeparated(_)) {
-                write!(f, " {}", display_comma_separated(options.as_slice()))?;
-            } else {
-                write!(f, " {}", display_separated(options.as_slice(), " "))?
+            match options {
+                ColumnOptions::CommaSeparated(column_options) => {
+                    write!(f, " {}", display_comma_separated(column_options.as_slice()))?;
+                }
+                ColumnOptions::SpaceSeparated(column_options) => {
+                    write!(f, " {}", display_separated(column_options.as_slice(), " "))?
+                }
             }
         }
         Ok(())

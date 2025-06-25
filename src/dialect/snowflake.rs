@@ -356,6 +356,10 @@ impl Dialect for SnowflakeDialect {
     fn get_reserved_keywords_for_select_item_operator(&self) -> &[Keyword] {
         &RESERVED_KEYWORDS_FOR_SELECT_ITEM_OPERATOR
     }
+
+    fn supports_space_separated_column_options(&self) -> bool {
+        true
+    }
 }
 
 fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statement, ParserError> {

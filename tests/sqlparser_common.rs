@@ -7964,7 +7964,7 @@ fn parse_create_view_with_columns() {
     let sql = "CREATE VIEW v (has, cols) AS SELECT 1, 2";
     // TODO: why does this fail for ClickHouseDialect? (#1449)
     // match all_dialects().verified_stmt(sql) {
-    match all_dialects_where(|d| !d.is::<ClickHouseDialect>()).verified_stmt(sql) {
+    match all_dialects_except(|d| d.is::<ClickHouseDialect>()).verified_stmt(sql) {
         Statement::CreateView {
             or_alter,
             name,

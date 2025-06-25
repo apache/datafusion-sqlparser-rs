@@ -22,7 +22,6 @@ use alloc::{
 };
 use core::{
     fmt::{self, Display},
-    ops::Not,
     str::FromStr,
 };
 use helpers::attached_token::AttachedToken;
@@ -10603,14 +10602,13 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
-        Ok(options
-            .is_empty()
-            .not()
-            .then_some(if dialect_of!(self is SnowflakeDialect) {
-                ColumnOptions::SpaceSeparated(options)
-            } else {
-                ColumnOptions::CommaSeparated(options)
-            }))
+        if options.is_empty() {
+            Ok(None)
+        } else if self.dialect.supports_space_separated_column_options() {
+            Ok(Some(ColumnOptions::SpaceSeparated(options)))
+        } else {
+            Ok(Some(ColumnOptions::CommaSeparated(options)))
+        }
     }
 
     /// Parses a parenthesized comma-separated list of unqualified, possibly quoted identifiers.

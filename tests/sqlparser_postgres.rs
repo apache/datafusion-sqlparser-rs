@@ -6235,7 +6235,7 @@ fn parse_ts_datatypes() {
 
 #[test]
 fn parse_alter_table_constraint_not_valid() {
-    match pg_and_generic().verified_stmt(
+    match pg().verified_stmt(
         "ALTER TABLE foo ADD CONSTRAINT bar FOREIGN KEY (baz) REFERENCES other(ref) NOT VALID",
     ) {
         Statement::AlterTable { operations, .. } => {

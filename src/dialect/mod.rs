@@ -1064,7 +1064,7 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports `ADD <table_constraint> [NOT VALID]` in `ALTER TABLE` statements.
     ///
     /// -[PostgreSQL](https://www.postgresql.org/docs/17/sql-altertable.html)
-    fn supports_constraint_not_validation(&self) -> bool {
+    fn supports_constraint_not_valid(&self) -> bool {
         false
     }
 

@@ -395,6 +395,7 @@ define_keywords!(
     FUNCTION,
     FUNCTIONS,
     FUSION,
+    FUTURE,
     GENERAL,
     GENERATE,
     GENERATED,

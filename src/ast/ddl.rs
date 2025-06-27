@@ -57,7 +57,7 @@ impl fmt::Display for ReplicaIdentity {
             ReplicaIdentity::None => f.write_str("NONE"),
             ReplicaIdentity::Full => f.write_str("FULL"),
             ReplicaIdentity::Default => f.write_str("DEFAULT"),
-            ReplicaIdentity::Index(idx) => write!(f, "USING INDEX {}", idx),
+            ReplicaIdentity::Index(idx) => write!(f, "USING INDEX {idx}"),
         }
     }
 }
@@ -450,7 +450,7 @@ pub enum Owner {
 impl fmt::Display for Owner {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Owner::Ident(ident) => write!(f, "{}", ident),
+            Owner::Ident(ident) => write!(f, "{ident}"),
             Owner::CurrentRole => write!(f, "CURRENT_ROLE"),
             Owner::CurrentUser => write!(f, "CURRENT_USER"),
             Owner::SessionUser => write!(f, "SESSION_USER"),
@@ -525,7 +525,7 @@ impl fmt::Display for AlterTableOperation {
                 if *if_not_exists {
                     write!(f, " IF NOT EXISTS")?;
                 }
-                write!(f, " {} ({})", name, query)
+                write!(f, " {name} ({query})")
             }
             AlterTableOperation::Algorithm { equals, algorithm } => {
                 write!(
@@ -540,7 +540,7 @@ impl fmt::Display for AlterTableOperation {
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }
-                write!(f, " {}", name)
+                write!(f, " {name}")
             }
             AlterTableOperation::MaterializeProjection {
                 if_exists,
@@ -551,9 +551,9 @@ impl fmt::Display for AlterTableOperation {
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }
-                write!(f, " {}", name)?;
+                write!(f, " {name}")?;
                 if let Some(partition) = partition {
-                    write!(f, " IN PARTITION {}", partition)?;
+                    write!(f, " IN PARTITION {partition}")?;
                 }
                 Ok(())
             }
@@ -566,9 +566,9 @@ impl fmt::Display for AlterTableOperation {
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }
-                write!(f, " {}", name)?;
+                write!(f, " {name}")?;
                 if let Some(partition) = partition {
-                    write!(f, " IN PARTITION {}", partition)?;
+                    write!(f, " IN PARTITION {partition}")?;
                 }
                 Ok(())
             }
@@ -1168,7 +1168,7 @@ impl fmt::Display for TableConstraint {
                     write!(f, " ON UPDATE {action}")?;
                 }
                 if let Some(characteristics) = characteristics {
-                    write!(f, " {}", characteristics)?;
+                    write!(f, " {characteristics}")?;
                 }
                 Ok(())
             }
@@ -1308,7 +1308,7 @@ impl fmt::Display for IndexType {
             Self::SPGiST => write!(f, "SPGIST"),
             Self::BRIN => write!(f, "BRIN"),
             Self::Bloom => write!(f, "BLOOM"),
-            Self::Custom(name) => write!(f, "{}", name),
+            Self::Custom(name) => write!(f, "{name}"),
         }
     }
 }
@@ -1450,7 +1450,7 @@ impl fmt::Display for ViewColumnDef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.name)?;
         if let Some(data_type) = self.data_type.as_ref() {
-            write!(f, " {}", data_type)?;
+            write!(f, " {data_type}")?;
         }
         if let Some(options) = self.options.as_ref() {
             match options {
@@ -1845,7 +1845,7 @@ impl fmt::Display for ColumnOption {
             } => {
                 write!(f, "{}", if *is_primary { "PRIMARY KEY" } else { "UNIQUE" })?;
                 if let Some(characteristics) = characteristics {
-                    write!(f, " {}", characteristics)?;
+                    write!(f, " {characteristics}")?;
                 }
                 Ok(())
             }
@@ -1867,7 +1867,7 @@ impl fmt::Display for ColumnOption {
                     write!(f, " ON UPDATE {action}")?;
                 }
                 if let Some(characteristics) = characteristics {
-                    write!(f, " {}", characteristics)?;
+                    write!(f, " {characteristics}")?;
                 }
                 Ok(())
             }
@@ -1927,7 +1927,7 @@ impl fmt::Display for ColumnOption {
                 write!(f, "{parameters}")
             }
             OnConflict(keyword) => {
-                write!(f, "ON CONFLICT {:?}", keyword)?;
+                write!(f, "ON CONFLICT {keyword:?}")?;
                 Ok(())
             }
             Policy(parameters) => {

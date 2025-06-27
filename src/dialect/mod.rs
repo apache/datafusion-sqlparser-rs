@@ -587,7 +587,7 @@ pub trait Dialect: Debug + Any {
         }
 
         let token = parser.peek_token();
-        debug!("get_next_precedence_full() {:?}", token);
+        debug!("get_next_precedence_full() {token:?}");
         match token.token {
             Token::Word(w) if w.keyword == Keyword::OR => Ok(p!(Or)),
             Token::Word(w) if w.keyword == Keyword::AND => Ok(p!(And)),

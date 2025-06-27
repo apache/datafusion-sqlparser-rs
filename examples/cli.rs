@@ -63,7 +63,7 @@ $ cargo run --example cli - [--dialectname]
     };
 
     let contents = if filename == "-" {
-        println!("Parsing from stdin using {:?}", dialect);
+        println!("Parsing from stdin using {dialect:?}");
         let mut buf = Vec::new();
         stdin()
             .read_to_end(&mut buf)

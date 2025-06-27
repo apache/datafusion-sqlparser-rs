@@ -436,7 +436,7 @@ impl<'a> Parser<'a> {
     ///
     /// See example on [`Parser::new()`] for an example
     pub fn try_with_sql(self, sql: &str) -> Result<Self, ParserError> {
-        debug!("Parsing sql '{}'...", sql);
+        debug!("Parsing sql '{sql}'...");
         let tokens = Tokenizer::new(self.dialect, sql)
             .with_unescape(self.options.unescape)
             .tokenize_with_location()?;
@@ -1226,10 +1226,10 @@ impl<'a> Parser<'a> {
 
         expr = self.parse_compound_expr(expr, vec![])?;
 
-        debug!("prefix: {:?}", expr);
+        debug!("prefix: {expr:?}");
         loop {
             let next_precedence = self.get_next_precedence()?;
-            debug!("next precedence: {:?}", next_precedence);
+            debug!("next precedence: {next_precedence:?}");
 
             if precedence >= next_precedence {
                 break;
@@ -1631,8 +1631,7 @@ impl<'a> Parser<'a> {
                     Token::QuestionPipe => UnaryOperator::QuestionPipe,
                     _ => {
                         return Err(ParserError::ParserError(format!(
-                            "Unexpected token in unary operator parsing: {:?}",
-                            tok
+                            "Unexpected token in unary operator parsing: {tok:?}"
                         )))
                     }
                 };
@@ -13655,7 +13654,7 @@ impl<'a> Parser<'a> {
                     let ident = self.parse_identifier()?;
                     if let GranteeName::ObjectName(namespace) = name {
                         name = GranteeName::ObjectName(ObjectName::from(vec![Ident::new(
-                            format!("{}:{}", namespace, ident),
+                            format!("{namespace}:{ident}"),
                         )]));
                     };
                 }
@@ -14625,7 +14624,7 @@ impl<'a> Parser<'a> {
                 self.dialect
                     .get_reserved_keywords_for_select_item_operator(),
             )
-            .map(|keyword| Ident::new(format!("{:?}", keyword)));
+            .map(|keyword| Ident::new(format!("{keyword:?}")));
 
         match self.parse_wildcard_expr()? {
             Expr::QualifiedWildcard(prefix, token) => Ok(SelectItem::QualifiedWildcard(

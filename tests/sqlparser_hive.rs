@@ -524,7 +524,7 @@ fn parse_use() {
     for object_name in &valid_object_names {
         // Test single identifier without quotes
         assert_eq!(
-            hive().verified_stmt(&format!("USE {}", object_name)),
+            hive().verified_stmt(&format!("USE {object_name}")),
             Statement::Use(Use::Object(ObjectName::from(vec![Ident::new(
                 object_name.to_string()
             )])))
@@ -532,7 +532,7 @@ fn parse_use() {
         for &quote in &quote_styles {
             // Test single identifier with different type of quotes
             assert_eq!(
-                hive().verified_stmt(&format!("USE {}{}{}", quote, object_name, quote)),
+                hive().verified_stmt(&format!("USE {quote}{object_name}{quote}")),
                 Statement::Use(Use::Object(ObjectName::from(vec![Ident::with_quote(
                     quote,
                     object_name.to_string(),

@@ -324,7 +324,7 @@ fn parse_create_table_on_conflict_col() {
         Keyword::IGNORE,
         Keyword::REPLACE,
     ] {
-        let sql = format!("CREATE TABLE t1 (a INT, b INT ON CONFLICT {:?})", keyword);
+        let sql = format!("CREATE TABLE t1 (a INT, b INT ON CONFLICT {keyword:?})");
         match sqlite_and_generic().verified_stmt(&sql) {
             Statement::CreateTable(CreateTable { columns, .. }) => {
                 assert_eq!(
@@ -410,7 +410,7 @@ fn parse_window_function_with_filter() {
         "count",
         "user_defined_function",
     ] {
-        let sql = format!("SELECT {}(x) FILTER (WHERE y) OVER () FROM t", func_name);
+        let sql = format!("SELECT {func_name}(x) FILTER (WHERE y) OVER () FROM t");
         let select = sqlite().verified_only_select(&sql);
         assert_eq!(select.to_string(), sql);
         assert_eq!(
@@ -444,7 +444,7 @@ fn parse_window_function_with_filter() {
 fn parse_attach_database() {
     let sql = "ATTACH DATABASE 'test.db' AS test";
     let verified_stmt = sqlite().verified_stmt(sql);
-    assert_eq!(sql, format!("{}", verified_stmt));
+    assert_eq!(sql, format!("{verified_stmt}"));
     match verified_stmt {
         Statement::AttachDatabase {
             schema_name,

@@ -2225,7 +2225,7 @@ fn parse_in_subquery() {
     assert_eq!(
         Expr::InSubquery {
             expr: Box::new(Expr::Identifier(Ident::new("segment"))),
-            subquery: verified_query("SELECT segm FROM bar").body,
+            subquery: Box::new(verified_query("SELECT segm FROM bar")),
             negated: false,
         },
         select.selection.unwrap()
@@ -2239,7 +2239,9 @@ fn parse_in_union() {
     assert_eq!(
         Expr::InSubquery {
             expr: Box::new(Expr::Identifier(Ident::new("segment"))),
-            subquery: verified_query("(SELECT segm FROM bar) UNION (SELECT segm FROM bar2)").body,
+            subquery: Box::new(verified_query(
+                "(SELECT segm FROM bar) UNION (SELECT segm FROM bar2)"
+            )),
             negated: false,
         },
         select.selection.unwrap()
@@ -7988,7 +7990,7 @@ fn parse_create_view_with_columns() {
                     .map(|name| ViewColumnDef {
                         name,
                         data_type: None,
-                        options: None
+                        options: None,
                     })
                     .collect::<Vec<_>>()
             );
@@ -8592,8 +8594,11 @@ fn lateral_function() {
 #[test]
 fn parse_start_transaction() {
     let dialects = all_dialects_except(|d|
-        // BigQuery does not support this syntax
-        d.is::<BigQueryDialect>());
+        // BigQuery and Snowflake does not support this syntax
+        //
+        // BigQuery: <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#begin_transaction>
+        // Snowflake: <https://docs.snowflake.com/en/sql-reference/sql/begin>
+        d.is::<BigQueryDialect>() || d.is::<SnowflakeDialect>());
     match dialects
         .verified_stmt("START TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE")
     {
@@ -15301,6 +15306,11 @@ fn parse_return() {
 }
 
 #[test]
+fn parse_subquery_limit() {
+    let _ = all_dialects().verified_stmt("SELECT t1_id, t1_name FROM t1 WHERE t1_id IN (SELECT t2_id FROM t2 WHERE t1_name = t2_name LIMIT 10)");
+}
+
+#[test]
 fn test_open() {
     let open_cursor = "OPEN Employee_Cursor";
     let stmt = all_dialects().verified_stmt(open_cursor);
@@ -15345,4 +15355,96 @@ fn check_enforced() {
     all_dialects().verified_stmt(
         "CREATE TABLE t (a INT, b INT, c INT, CHECK (a > 0) NOT ENFORCED, CHECK (b > 0) ENFORCED, CHECK (c > 0))",
     );
+}
+
+#[test]
+fn parse_create_procedure_with_language() {
+    let sql = r#"CREATE PROCEDURE test_proc LANGUAGE sql AS BEGIN SELECT 1; END"#;
+    match verified_stmt(sql) {
+        Statement::CreateProcedure {
+            or_alter,
+            name,
+            params,
+            language,
+            ..
+        } => {
+            assert_eq!(or_alter, false);
+            assert_eq!(name.to_string(), "test_proc");
+            assert_eq!(params, Some(vec![]));
+            assert_eq!(
+                language,
+                Some(Ident {
+                    value: "sql".into(),
+                    quote_style: None,
+                    span: Span {
+                        start: Location::empty(),
+                        end: Location::empty()
+                    }
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_procedure_with_parameter_modes() {
+    let sql = r#"CREATE PROCEDURE test_proc (IN a INTEGER, OUT b TEXT, INOUT c TIMESTAMP, d BOOL) AS BEGIN SELECT 1; END"#;
+    match verified_stmt(sql) {
+        Statement::CreateProcedure {
+            or_alter,
+            name,
+            params,
+            ..
+        } => {
+            assert_eq!(or_alter, false);
+            assert_eq!(name.to_string(), "test_proc");
+            let fake_span = Span {
+                start: Location { line: 0, column: 0 },
+                end: Location { line: 0, column: 0 },
+            };
+            assert_eq!(
+                params,
+                Some(vec![
+                    ProcedureParam {
+                        name: Ident {
+                            value: "a".into(),
+                            quote_style: None,
+                            span: fake_span,
+                        },
+                        data_type: DataType::Integer(None),
+                        mode: Some(ArgMode::In)
+                    },
+                    ProcedureParam {
+                        name: Ident {
+                            value: "b".into(),
+                            quote_style: None,
+                            span: fake_span,
+                        },
+                        data_type: DataType::Text,
+                        mode: Some(ArgMode::Out)
+                    },
+                    ProcedureParam {
+                        name: Ident {
+                            value: "c".into(),
+                            quote_style: None,
+                            span: fake_span,
+                        },
+                        data_type: DataType::Timestamp(None, TimezoneInfo::None),
+                        mode: Some(ArgMode::InOut)
+                    },
+                    ProcedureParam {
+                        name: Ident {
+                            value: "d".into(),
+                            quote_style: None,
+                            span: fake_span,
+                        },
+                        data_type: DataType::Bool,
+                        mode: None
+                    },
+                ])
+            );
+        }
+        _ => unreachable!(),
+    }
 }

@@ -153,7 +153,8 @@ fn parse_create_procedure() {
                         quote_style: None,
                         span: Span::empty(),
                     },
-                    data_type: DataType::Int(None)
+                    data_type: DataType::Int(None),
+                    mode: None,
                 },
                 ProcedureParam {
                     name: Ident {
@@ -164,14 +165,16 @@ fn parse_create_procedure() {
                     data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
                         length: 256,
                         unit: None
-                    }))
+                    })),
+                    mode: None,
                 }
             ]),
             name: ObjectName::from(vec![Ident {
                 value: "test".into(),
                 quote_style: None,
                 span: Span::empty(),
-            }])
+            }]),
+            language: None,
         }
     )
 }

@@ -453,3 +453,47 @@ pub fn call(function: &str, args: impl IntoIterator<Item = Expr>) -> Expr {
         within_group: vec![],
     })
 }
+
+/// Gets the first index column (mysql calls it a key part) of the first index found in a
+/// [`Statement::CreateIndex`], [`Statement::CreateTable`], or [`Statement::AlterTable`].
+pub fn index_column(stmt: Statement) -> Expr {
+    match stmt {
+        Statement::CreateIndex(CreateIndex { columns, .. }) => {
+            columns.first().unwrap().column.expr.clone()
+        }
+        Statement::CreateTable(CreateTable { constraints, .. }) => {
+            match constraints.first().unwrap() {
+                TableConstraint::Index { columns, .. } => {
+                    columns.first().unwrap().column.expr.clone()
+                }
+                TableConstraint::Unique { columns, .. } => {
+                    columns.first().unwrap().column.expr.clone()
+                }
+                TableConstraint::PrimaryKey { columns, .. } => {
+                    columns.first().unwrap().column.expr.clone()
+                }
+                TableConstraint::FulltextOrSpatial { columns, .. } => {
+                    columns.first().unwrap().column.expr.clone()
+                }
+                _ => panic!("Expected an index, unique, primary, full text, or spatial constraint (foreign key does not support general key part expressions)"),
+            }
+        }
+        Statement::AlterTable { operations, .. } => match operations.first().unwrap() {
+            AlterTableOperation::AddConstraint(TableConstraint::Index { columns, .. }) => {
+                columns.first().unwrap().column.expr.clone()
+            }
+            AlterTableOperation::AddConstraint(TableConstraint::Unique { columns, .. }) => {
+                columns.first().unwrap().column.expr.clone()
+            }
+            AlterTableOperation::AddConstraint(TableConstraint::PrimaryKey { columns, .. }) => {
+                columns.first().unwrap().column.expr.clone()
+            }
+            AlterTableOperation::AddConstraint(TableConstraint::FulltextOrSpatial {
+                columns,
+                ..
+            }) => columns.first().unwrap().column.expr.clone(),
+            _ => panic!("Expected an index, unique, primary, full text, or spatial constraint (foreign key does not support general key part expressions)"),
+        },
+        _ => panic!("Expected CREATE INDEX, ALTER TABLE, or CREATE TABLE, got: {stmt:?}"),
+    }
+}

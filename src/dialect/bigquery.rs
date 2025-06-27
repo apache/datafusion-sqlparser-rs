@@ -46,7 +46,11 @@ pub struct BigQueryDialect;
 
 impl Dialect for BigQueryDialect {
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
-        self.maybe_parse_statement(parser)
+        if parser.parse_keyword(Keyword::BEGIN) {
+            return Some(parser.parse_begin_exception_end());
+        }
+
+        None
     }
 
     /// See <https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#identifiers>
@@ -139,50 +143,5 @@ impl Dialect for BigQueryDialect {
 
     fn supports_pipe_operator(&self) -> bool {
         true
-    }
-}
-
-impl BigQueryDialect {
-    fn maybe_parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
-        if parser.peek_keyword(Keyword::BEGIN) {
-            return Some(self.parse_begin(parser));
-        }
-        None
-    }
-
-    /// Parse a `BEGIN` statement.
-    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#beginexceptionend>
-    fn parse_begin(&self, parser: &mut Parser) -> Result<Statement, ParserError> {
-        parser.expect_keyword(Keyword::BEGIN)?;
-
-        let statements = parser.parse_statement_list(&[Keyword::EXCEPTION, Keyword::END])?;
-
-        let has_exception_when_clause = parser.parse_keywords(&[
-            Keyword::EXCEPTION,
-            Keyword::WHEN,
-            Keyword::ERROR,
-            Keyword::THEN,
-        ]);
-        let exception_statements = if has_exception_when_clause {
-            if !parser.peek_keyword(Keyword::END) {
-                Some(parser.parse_statement_list(&[Keyword::END])?)
-            } else {
-                Some(Default::default())
-            }
-        } else {
-            None
-        };
-
-        parser.expect_keyword(Keyword::END)?;
-
-        Ok(Statement::StartTransaction {
-            begin: true,
-            statements,
-            exception_statements,
-            has_end_keyword: true,
-            transaction: None,
-            modifier: None,
-            modes: Default::default(),
-        })
     }
 }

@@ -3124,7 +3124,7 @@ fn view_comment_option_should_be_after_column_list() {
         "CREATE OR REPLACE VIEW v (a COMMENT 'a comment', b, c COMMENT 'c comment') COMMENT = 'Comment' AS SELECT a FROM t",
         "CREATE OR REPLACE VIEW v (a COMMENT 'a comment', b, c COMMENT 'c comment') WITH (foo = bar) COMMENT = 'Comment' AS SELECT a FROM t",
     ] {
-        snowflake_and_generic()
+        snowflake()
             .verified_stmt(sql);
     }
 }
@@ -3133,7 +3133,7 @@ fn view_comment_option_should_be_after_column_list() {
 fn parse_view_column_descriptions() {
     let sql = "CREATE OR REPLACE VIEW v (a COMMENT 'Comment', b) AS SELECT a, b FROM table1";
 
-    match snowflake_and_generic().verified_stmt(sql) {
+    match snowflake().verified_stmt(sql) {
         Statement::CreateView { name, columns, .. } => {
             assert_eq!(name.to_string(), "v");
             assert_eq!(
@@ -3142,7 +3142,9 @@ fn parse_view_column_descriptions() {
                     ViewColumnDef {
                         name: Ident::new("a"),
                         data_type: None,
-                        options: Some(vec![ColumnOption::Comment("Comment".to_string())]),
+                        options: Some(ColumnOptions::SpaceSeparated(vec![ColumnOption::Comment(
+                            "Comment".to_string()
+                        )])),
                     },
                     ViewColumnDef {
                         name: Ident::new("b"),
@@ -4081,4 +4083,94 @@ fn parse_connect_by_root_operator() {
         res.unwrap_err().to_string(),
         "sql parser error: Expected an expression, found: FROM"
     );
+}
+
+#[test]
+fn test_begin_exception_end() {
+    for sql in [
+        "BEGIN SELECT 1; EXCEPTION WHEN OTHER THEN SELECT 2; RAISE; END",
+        "BEGIN SELECT 1; EXCEPTION WHEN OTHER THEN SELECT 2; RAISE EX_1; END",
+        "BEGIN SELECT 1; EXCEPTION WHEN FOO THEN SELECT 2; WHEN OTHER THEN SELECT 3; RAISE; END",
+        "BEGIN BEGIN SELECT 1; EXCEPTION WHEN OTHER THEN SELECT 2; RAISE; END; END",
+    ] {
+        snowflake().verified_stmt(sql);
+    }
+
+    let sql = r#"
+DECLARE
+  EXCEPTION_1 EXCEPTION (-20001, 'I caught the expected exception.');
+  EXCEPTION_2 EXCEPTION (-20002, 'Not the expected exception!');
+  EXCEPTION_3 EXCEPTION (-20003, 'The worst exception...');
+BEGIN
+    BEGIN
+        SELECT 1;
+    EXCEPTION
+        WHEN EXCEPTION_1 THEN
+            SELECT 1;
+        WHEN EXCEPTION_2 OR EXCEPTION_3 THEN
+            SELECT 2;
+            SELECT 3;
+        WHEN OTHER THEN
+            SELECT 4;
+    RAISE;
+    END;
+END
+"#;
+
+    // Outer `BEGIN` of the two nested `BEGIN` statements.
+    let Statement::StartTransaction { mut statements, .. } = snowflake()
+        .parse_sql_statements(sql)
+        .unwrap()
+        .pop()
+        .unwrap()
+    else {
+        unreachable!();
+    };
+
+    // Inner `BEGIN` of the two nested `BEGIN` statements.
+    let Statement::StartTransaction {
+        statements,
+        exception,
+        has_end_keyword,
+        ..
+    } = statements.pop().unwrap()
+    else {
+        unreachable!();
+    };
+
+    assert_eq!(1, statements.len());
+    assert!(has_end_keyword);
+
+    let exception = exception.unwrap();
+    assert_eq!(3, exception.len());
+    assert_eq!(1, exception[0].idents.len());
+    assert_eq!(1, exception[0].statements.len());
+    assert_eq!(2, exception[1].idents.len());
+    assert_eq!(2, exception[1].statements.len());
+}
+
+#[test]
+fn test_snowflake_fetch_clause_syntax() {
+    let canonical = "SELECT c1 FROM fetch_test FETCH FIRST 2 ROWS ONLY";
+    snowflake().verified_only_select_with_canonical("SELECT c1 FROM fetch_test FETCH 2", canonical);
+
+    snowflake()
+        .verified_only_select_with_canonical("SELECT c1 FROM fetch_test FETCH FIRST 2", canonical);
+    snowflake()
+        .verified_only_select_with_canonical("SELECT c1 FROM fetch_test FETCH NEXT 2", canonical);
+
+    snowflake()
+        .verified_only_select_with_canonical("SELECT c1 FROM fetch_test FETCH 2 ROW", canonical);
+
+    snowflake().verified_only_select_with_canonical(
+        "SELECT c1 FROM fetch_test FETCH FIRST 2 ROWS",
+        canonical,
+    );
+}
+
+#[test]
+fn test_snowflake_create_view_with_multiple_column_options() {
+    let create_view_with_tag =
+        r#"CREATE VIEW X (COL WITH TAG (pii='email') COMMENT 'foobar') AS SELECT * FROM Y"#;
+    snowflake().verified_stmt(create_view_with_tag);
 }

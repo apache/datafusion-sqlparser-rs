@@ -28,6 +28,7 @@ use helpers::{
     stmt_data_loading::{FileStagingCommand, StageLoadSelectItemKind},
 };
 
+use core::cmp::Ordering;
 use core::ops::Deref;
 use core::{
     fmt::{self, Display},
@@ -60,13 +61,14 @@ pub use self::ddl::{
     AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterPolicyOperation,
     AlterTableAlgorithm, AlterTableLock, AlterTableOperation, AlterType, AlterTypeAddValue,
     AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
-    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnPolicy, ColumnPolicyProperty,
-    ConstraintCharacteristics, CreateConnector, CreateDomain, CreateFunction, Deduplicate,
-    DeferrableInitial, DropBehavior, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
-    IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
-    IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition,
-    ProcedureParam, ReferentialAction, ReplicaIdentity, TableConstraint, TagsColumnOption,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
+    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy,
+    ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain, CreateFunction,
+    Deduplicate, DeferrableInitial, DropBehavior, GeneratedAs, GeneratedExpressionMode,
+    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
+    IdentityPropertyOrder, IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner,
+    Partition, ProcedureParam, ReferentialAction, ReplicaIdentity, TableConstraint,
+    TagsColumnOption, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
+    ViewColumnDef,
 };
 pub use self::dml::{CreateIndex, CreateTable, Delete, IndexColumn, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -172,7 +174,7 @@ fn format_statement_list(f: &mut fmt::Formatter, statements: &[Statement]) -> fm
 }
 
 /// An identifier, decomposed into its value or character data and the quote style.
-#[derive(Debug, Clone, PartialOrd, Ord)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Ident {
@@ -213,6 +215,35 @@ impl core::hash::Hash for Ident {
 }
 
 impl Eq for Ident {}
+
+impl PartialOrd for Ident {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Ident {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let Ident {
+            value,
+            quote_style,
+            // exhaustiveness check; we ignore spans in ordering
+            span: _,
+        } = self;
+
+        let Ident {
+            value: other_value,
+            quote_style: other_quote_style,
+            // exhaustiveness check; we ignore spans in ordering
+            span: _,
+        } = other;
+
+        // First compare by value, then by quote_style
+        value
+            .cmp(other_value)
+            .then_with(|| quote_style.cmp(other_quote_style))
+    }
+}
 
 impl Ident {
     /// Create a new identifier with the given value and no quotes and an empty span.
@@ -748,7 +779,7 @@ pub enum Expr {
     /// `[ NOT ] IN (SELECT ...)`
     InSubquery {
         expr: Box<Expr>,
-        subquery: Box<SetExpr>,
+        subquery: Box<Query>,
         negated: bool,
     },
     /// `[ NOT ] IN UNNEST(array_expression)`
@@ -2990,6 +3021,36 @@ impl From<Set> for Statement {
     }
 }
 
+/// A representation of a `WHEN` arm with all the identifiers catched and the statements to execute
+/// for the arm.
+///
+/// Snowflake: <https://docs.snowflake.com/en/sql-reference/snowflake-scripting/exception>
+/// BigQuery: <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#beginexceptionend>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ExceptionWhen {
+    pub idents: Vec<Ident>,
+    pub statements: Vec<Statement>,
+}
+
+impl Display for ExceptionWhen {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "WHEN {idents} THEN",
+            idents = display_separated(&self.idents, " OR ")
+        )?;
+
+        if !self.statements.is_empty() {
+            write!(f, " ")?;
+            format_statement_list(f, &self.statements)?;
+        }
+
+        Ok(())
+    }
+}
+
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -3678,17 +3739,20 @@ pub enum Statement {
         /// END;
         /// ```
         statements: Vec<Statement>,
-        /// Statements of an exception clause.
+        /// Exception handling with exception clauses.
         /// Example:
         /// ```sql
-        /// BEGIN
-        ///     SELECT 1;
-        /// EXCEPTION WHEN ERROR THEN
-        ///     SELECT 2;
-        ///     SELECT 3;
-        /// END;
+        /// EXCEPTION
+        ///     WHEN EXCEPTION_1 THEN
+        ///         SELECT 2;
+        ///     WHEN EXCEPTION_2 OR EXCEPTION_3 THEN
+        ///         SELECT 3;
+        ///     WHEN OTHER THEN
+        ///         SELECT 4;
+        /// ```
         /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#beginexceptionend>
-        exception_statements: Option<Vec<Statement>>,
+        /// <https://docs.snowflake.com/en/sql-reference/snowflake-scripting/exception>
+        exception: Option<Vec<ExceptionWhen>>,
         /// TRUE if the statement has an `END` keyword.
         has_end_keyword: bool,
     },
@@ -3881,6 +3945,7 @@ pub enum Statement {
         or_alter: bool,
         name: ObjectName,
         params: Option<Vec<ProcedureParam>>,
+        language: Option<Ident>,
         body: ConditionalStatements,
     },
     /// ```sql
@@ -4181,7 +4246,7 @@ pub enum Statement {
     /// ```sql
     /// NOTIFY channel [ , payload ]
     /// ```
-    /// send a notification event together with an optional “payload” string to channel
+    /// send a notification event together with an optional "payload" string to channel
     ///
     /// See Postgres <https://www.postgresql.org/docs/current/sql-notify.html>
     NOTIFY {
@@ -4784,6 +4849,7 @@ impl fmt::Display for Statement {
                 name,
                 or_alter,
                 params,
+                language,
                 body,
             } => {
                 write!(
@@ -4797,6 +4863,10 @@ impl fmt::Display for Statement {
                     if !p.is_empty() {
                         write!(f, " ({})", display_comma_separated(p))?;
                     }
+                }
+
+                if let Some(language) = language {
+                    write!(f, " LANGUAGE {language}")?;
                 }
 
                 write!(f, " AS {body}")
@@ -5533,7 +5603,7 @@ impl fmt::Display for Statement {
                 transaction,
                 modifier,
                 statements,
-                exception_statements,
+                exception,
                 has_end_keyword,
             } => {
                 if *syntax_begin {
@@ -5555,11 +5625,10 @@ impl fmt::Display for Statement {
                     write!(f, " ")?;
                     format_statement_list(f, statements)?;
                 }
-                if let Some(exception_statements) = exception_statements {
-                    write!(f, " EXCEPTION WHEN ERROR THEN")?;
-                    if !exception_statements.is_empty() {
-                        write!(f, " ")?;
-                        format_statement_list(f, exception_statements)?;
+                if let Some(exception_when) = exception {
+                    write!(f, " EXCEPTION")?;
+                    for when in exception_when {
+                        write!(f, " {when}")?;
                     }
                 }
                 if *has_end_keyword {
@@ -9739,6 +9808,8 @@ impl fmt::Display for NullInclusion {
 
 #[cfg(test)]
 mod tests {
+    use crate::tokenizer::Location;
+
     use super::*;
 
     #[test]
@@ -10033,5 +10104,17 @@ mod tests {
         test_steps(OneOrManyWithParens::One(1), once(1), 3);
         test_steps(OneOrManyWithParens::Many(vec![2]), vec![2], 3);
         test_steps(OneOrManyWithParens::Many(vec![3, 4]), vec![3, 4], 4);
+    }
+
+    // Tests that the position in the code of an `Ident` does not affect its
+    // ordering.
+    #[test]
+    fn test_ident_ord() {
+        let mut a = Ident::with_span(Span::new(Location::new(1, 1), Location::new(1, 1)), "a");
+        let mut b = Ident::with_span(Span::new(Location::new(2, 2), Location::new(2, 2)), "b");
+
+        assert!(a < b);
+        std::mem::swap(&mut a.span, &mut b.span);
+        assert!(a < b);
     }
 }

@@ -15358,6 +15358,36 @@ fn check_enforced() {
 }
 
 #[test]
+fn parse_create_procedure_with_language() {
+    let sql = r#"CREATE PROCEDURE test_proc LANGUAGE sql AS BEGIN SELECT 1; END"#;
+    match verified_stmt(sql) {
+        Statement::CreateProcedure {
+            or_alter,
+            name,
+            params,
+            language,
+            ..
+        } => {
+            assert_eq!(or_alter, false);
+            assert_eq!(name.to_string(), "test_proc");
+            assert_eq!(params, Some(vec![]));
+            assert_eq!(
+                language,
+                Some(Ident {
+                    value: "sql".into(),
+                    quote_style: None,
+                    span: Span {
+                        start: Location::empty(),
+                        end: Location::empty()
+                    }
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_procedure_with_parameter_modes() {
     let sql = r#"CREATE PROCEDURE test_proc (IN a INTEGER, OUT b TEXT, INOUT c TIMESTAMP, d BOOL) AS BEGIN SELECT 1; END"#;
     match verified_stmt(sql) {

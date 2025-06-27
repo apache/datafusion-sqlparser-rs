@@ -15802,6 +15802,13 @@ impl<'a> Parser<'a> {
     pub fn parse_create_procedure(&mut self, or_alter: bool) -> Result<Statement, ParserError> {
         let name = self.parse_object_name(false)?;
         let params = self.parse_optional_procedure_parameters()?;
+
+        let language = if self.parse_keyword(Keyword::LANGUAGE) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+
         self.expect_keyword_is(Keyword::AS)?;
 
         let body = self.parse_conditional_statements(&[Keyword::END])?;
@@ -15810,6 +15817,7 @@ impl<'a> Parser<'a> {
             name,
             or_alter,
             params,
+            language,
             body,
         })
     }

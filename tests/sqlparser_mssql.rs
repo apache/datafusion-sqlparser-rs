@@ -1673,7 +1673,7 @@ fn parse_use() {
     for object_name in &valid_object_names {
         // Test single identifier without quotes
         assert_eq!(
-            ms().verified_stmt(&format!("USE {}", object_name)),
+            ms().verified_stmt(&format!("USE {object_name}")),
             Statement::Use(Use::Object(ObjectName::from(vec![Ident::new(
                 object_name.to_string()
             )])))
@@ -1681,7 +1681,7 @@ fn parse_use() {
         for &quote in &quote_styles {
             // Test single identifier with different type of quotes
             assert_eq!(
-                ms().verified_stmt(&format!("USE {}{}{}", quote, object_name, quote)),
+                ms().verified_stmt(&format!("USE {quote}{object_name}{quote}")),
                 Statement::Use(Use::Object(ObjectName::from(vec![Ident::with_quote(
                     quote,
                     object_name.to_string(),
@@ -2187,7 +2187,7 @@ fn parse_mssql_if_else() {
                 "IF 1 = 1 BEGIN SET @A = 1; END ELSE SET @A = 2;"
             );
         }
-        _ => panic!("Unexpected statements: {:?}", stmts),
+        _ => panic!("Unexpected statements: {stmts:?}"),
     }
 }
 
@@ -2237,7 +2237,7 @@ fn test_mssql_if_statements_span() {
                 Span::new(Location::new(1, 21), Location::new(1, 36))
             );
         }
-        stmt => panic!("Unexpected statement: {:?}", stmt),
+        stmt => panic!("Unexpected statement: {stmt:?}"),
     }
 
     // Blocks
@@ -2258,7 +2258,7 @@ fn test_mssql_if_statements_span() {
                 Span::new(Location::new(1, 32), Location::new(1, 57))
             );
         }
-        stmt => panic!("Unexpected statement: {:?}", stmt),
+        stmt => panic!("Unexpected statement: {stmt:?}"),
     }
 }
 

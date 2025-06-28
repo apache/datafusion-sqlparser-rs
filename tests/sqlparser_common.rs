@@ -3563,7 +3563,7 @@ fn test_double_value() {
     for (input, expected) in test_cases {
         for (i, expr) in input.iter().enumerate() {
             if let Statement::Query(query) =
-                dialects.one_statement_parses_to(&format!("SELECT {}", expr), "")
+                dialects.one_statement_parses_to(&format!("SELECT {expr}"), "")
             {
                 if let SetExpr::Select(select) = *query.body {
                     assert_eq!(expected[i], select.projection[0]);
@@ -4023,13 +4023,13 @@ fn parse_create_table_column_constraint_characteristics() {
             syntax
         };
 
-        let sql = format!("CREATE TABLE t (a int UNIQUE {})", syntax);
+        let sql = format!("CREATE TABLE t (a int UNIQUE {syntax})");
         let expected_clause = if syntax.is_empty() {
             String::new()
         } else {
             format!(" {syntax}")
         };
-        let expected = format!("CREATE TABLE t (a INT UNIQUE{})", expected_clause);
+        let expected = format!("CREATE TABLE t (a INT UNIQUE{expected_clause})");
         let ast = one_statement_parses_to(&sql, &expected);
 
         let expected_value = if deferrable.is_some() || initially.is_some() || enforced.is_some() {
@@ -7499,7 +7499,7 @@ fn parse_cte_in_data_modification_statements() {
             assert_eq!(query.with.unwrap().to_string(), "WITH x AS (SELECT 1)");
             assert!(matches!(*query.body, SetExpr::Update(_)));
         }
-        other => panic!("Expected: UPDATE, got: {:?}", other),
+        other => panic!("Expected: UPDATE, got: {other:?}"),
     }
 
     match verified_stmt("WITH t (x) AS (SELECT 9) DELETE FROM q WHERE id IN (SELECT x FROM t)") {
@@ -7507,7 +7507,7 @@ fn parse_cte_in_data_modification_statements() {
             assert_eq!(query.with.unwrap().to_string(), "WITH t (x) AS (SELECT 9)");
             assert!(matches!(*query.body, SetExpr::Delete(_)));
         }
-        other => panic!("Expected: DELETE, got: {:?}", other),
+        other => panic!("Expected: DELETE, got: {other:?}"),
     }
 
     match verified_stmt("WITH x AS (SELECT 42) INSERT INTO t SELECT foo FROM x") {
@@ -7515,7 +7515,7 @@ fn parse_cte_in_data_modification_statements() {
             assert_eq!(query.with.unwrap().to_string(), "WITH x AS (SELECT 42)");
             assert!(matches!(*query.body, SetExpr::Insert(_)));
         }
-        other => panic!("Expected: INSERT, got: {:?}", other),
+        other => panic!("Expected: INSERT, got: {other:?}"),
     }
 }
 
@@ -9386,9 +9386,11 @@ fn parse_grant() {
     verified_stmt("GRANT SELECT ON VIEW view1 TO ROLE role1");
     verified_stmt("GRANT EXEC ON my_sp TO runner");
     verified_stmt("GRANT UPDATE ON my_table TO updater_role AS dbo");
-
     all_dialects_where(|d| d.identifier_quote_style("none") == Some('['))
         .verified_stmt("GRANT SELECT ON [my_table] TO [public]");
+    verified_stmt("GRANT SELECT ON FUTURE SCHEMAS IN DATABASE db1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON FUTURE TABLES IN SCHEMA db1.sc1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON FUTURE VIEWS IN SCHEMA db1.sc1 TO ROLE role1");
 }
 
 #[test]
@@ -10043,7 +10045,7 @@ fn parse_offset_and_limit() {
 #[test]
 fn parse_time_functions() {
     fn test_time_function(func_name: &'static str) {
-        let sql = format!("SELECT {}()", func_name);
+        let sql = format!("SELECT {func_name}()");
         let select = verified_only_select(&sql);
         let select_localtime_func_call_ast = Function {
             name: ObjectName::from(vec![Ident::new(func_name)]),
@@ -10065,7 +10067,7 @@ fn parse_time_functions() {
         );
 
         // Validating Parenthesis
-        let sql_without_parens = format!("SELECT {}", func_name);
+        let sql_without_parens = format!("SELECT {func_name}");
         let mut ast_without_parens = select_localtime_func_call_ast;
         ast_without_parens.args = FunctionArguments::None;
         assert_eq!(
@@ -14306,7 +14308,7 @@ fn overflow() {
     let expr = std::iter::repeat_n("1", 1000)
         .collect::<Vec<_>>()
         .join(" + ");
-    let sql = format!("SELECT {}", expr);
+    let sql = format!("SELECT {expr}");
 
     let mut statements = Parser::parse_sql(&GenericDialect {}, sql.as_str()).unwrap();
     let statement = statements.pop().unwrap();
@@ -14606,7 +14608,7 @@ fn test_conditional_statement_span() {
                 else_block.unwrap().span()
             );
         }
-        stmt => panic!("Unexpected statement: {:?}", stmt),
+        stmt => panic!("Unexpected statement: {stmt:?}"),
     }
 }
 

@@ -550,16 +550,16 @@ impl fmt::Display for EscapeUnicodeStringLiteral<'_> {
                     write!(f, r#"\\"#)?;
                 }
                 x if x.is_ascii() => {
-                    write!(f, "{}", c)?;
+                    write!(f, "{c}")?;
                 }
                 _ => {
                     let codepoint = c as u32;
                     // if the character fits in 32 bits, we can use the \XXXX format
                     // otherwise, we need to use the \+XXXXXX format
                     if codepoint <= 0xFFFF {
-                        write!(f, "\\{:04X}", codepoint)?;
+                        write!(f, "\\{codepoint:04X}")?;
                     } else {
-                        write!(f, "\\+{:06X}", codepoint)?;
+                        write!(f, "\\+{codepoint:06X}")?;
                     }
                 }
             }

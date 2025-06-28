@@ -593,7 +593,7 @@ fn parse_use() {
     for object_name in &valid_object_names {
         // Test single identifier without quotes
         assert_eq!(
-            mysql_and_generic().verified_stmt(&format!("USE {}", object_name)),
+            mysql_and_generic().verified_stmt(&format!("USE {object_name}")),
             Statement::Use(Use::Object(ObjectName::from(vec![Ident::new(
                 object_name.to_string()
             )])))
@@ -601,8 +601,7 @@ fn parse_use() {
         for &quote in &quote_styles {
             // Test single identifier with different type of quotes
             assert_eq!(
-                mysql_and_generic()
-                    .verified_stmt(&format!("USE {}{}{}", quote, object_name, quote)),
+                mysql_and_generic().verified_stmt(&format!("USE {quote}{object_name}{quote}")),
                 Statement::Use(Use::Object(ObjectName::from(vec![Ident::with_quote(
                     quote,
                     object_name.to_string(),
@@ -2263,11 +2262,11 @@ fn parse_qualified_identifiers_with_numeric_prefix() {
                 Some(SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts))) => {
                     assert_eq!(&[Ident::new("t"), Ident::new("15to29")], &parts[..]);
                 }
-                proj => panic!("Unexpected projection: {:?}", proj),
+                proj => panic!("Unexpected projection: {proj:?}"),
             },
-            body => panic!("Unexpected statement body: {:?}", body),
+            body => panic!("Unexpected statement body: {body:?}"),
         },
-        stmt => panic!("Unexpected statement: {:?}", stmt),
+        stmt => panic!("Unexpected statement: {stmt:?}"),
     }
 
     // Case 2: Qualified column name that starts with digits and on its own represents a number.
@@ -2277,11 +2276,11 @@ fn parse_qualified_identifiers_with_numeric_prefix() {
                 Some(SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts))) => {
                     assert_eq!(&[Ident::new("t"), Ident::new("15e29")], &parts[..]);
                 }
-                proj => panic!("Unexpected projection: {:?}", proj),
+                proj => panic!("Unexpected projection: {proj:?}"),
             },
-            body => panic!("Unexpected statement body: {:?}", body),
+            body => panic!("Unexpected statement body: {body:?}"),
         },
-        stmt => panic!("Unexpected statement: {:?}", stmt),
+        stmt => panic!("Unexpected statement: {stmt:?}"),
     }
 
     // Case 3: Unqualified, the same token is parsed as a number.
@@ -2295,11 +2294,11 @@ fn parse_qualified_identifiers_with_numeric_prefix() {
                 Some(SelectItem::UnnamedExpr(Expr::Value(ValueWithSpan { value, .. }))) => {
                     assert_eq!(&number("15e29"), value);
                 }
-                proj => panic!("Unexpected projection: {:?}", proj),
+                proj => panic!("Unexpected projection: {proj:?}"),
             },
-            body => panic!("Unexpected statement body: {:?}", body),
+            body => panic!("Unexpected statement body: {body:?}"),
         },
-        stmt => panic!("Unexpected statement: {:?}", stmt),
+        stmt => panic!("Unexpected statement: {stmt:?}"),
     }
 
     // Case 4: Quoted simple identifier.
@@ -2309,11 +2308,11 @@ fn parse_qualified_identifiers_with_numeric_prefix() {
                 Some(SelectItem::UnnamedExpr(Expr::Identifier(name))) => {
                     assert_eq!(&Ident::with_quote('`', "15e29"), name);
                 }
-                proj => panic!("Unexpected projection: {:?}", proj),
+                proj => panic!("Unexpected projection: {proj:?}"),
             },
-            body => panic!("Unexpected statement body: {:?}", body),
+            body => panic!("Unexpected statement body: {body:?}"),
         },
-        stmt => panic!("Unexpected statement: {:?}", stmt),
+        stmt => panic!("Unexpected statement: {stmt:?}"),
     }
 
     // Case 5: Quoted compound identifier.
@@ -2326,11 +2325,11 @@ fn parse_qualified_identifiers_with_numeric_prefix() {
                         &parts[..]
                     );
                 }
-                proj => panic!("Unexpected projection: {:?}", proj),
+                proj => panic!("Unexpected projection: {proj:?}"),
             },
-            body => panic!("Unexpected statement body: {:?}", body),
+            body => panic!("Unexpected statement body: {body:?}"),
         },
-        stmt => panic!("Unexpected statement: {:?}", stmt),
+        stmt => panic!("Unexpected statement: {stmt:?}"),
     }
 
     // Case 6: Multi-level compound identifiers.
@@ -2347,11 +2346,11 @@ fn parse_qualified_identifiers_with_numeric_prefix() {
                         &parts[..]
                     );
                 }
-                proj => panic!("Unexpected projection: {:?}", proj),
+                proj => panic!("Unexpected projection: {proj:?}"),
             },
-            body => panic!("Unexpected statement body: {:?}", body),
+            body => panic!("Unexpected statement body: {body:?}"),
         },
-        stmt => panic!("Unexpected statement: {:?}", stmt),
+        stmt => panic!("Unexpected statement: {stmt:?}"),
     }
 
     // Case 7: Multi-level compound quoted identifiers.
@@ -2368,11 +2367,11 @@ fn parse_qualified_identifiers_with_numeric_prefix() {
                         &parts[..]
                     );
                 }
-                proj => panic!("Unexpected projection: {:?}", proj),
+                proj => panic!("Unexpected projection: {proj:?}"),
             },
-            body => panic!("Unexpected statement body: {:?}", body),
+            body => panic!("Unexpected statement body: {body:?}"),
         },
-        stmt => panic!("Unexpected statement: {:?}", stmt),
+        stmt => panic!("Unexpected statement: {stmt:?}"),
     }
 }
 

@@ -1410,7 +1410,7 @@ fn parse_use() {
     for object_name in &valid_object_names {
         // Test single identifier without quotes
         assert_eq!(
-            clickhouse().verified_stmt(&format!("USE {}", object_name)),
+            clickhouse().verified_stmt(&format!("USE {object_name}")),
             Statement::Use(Use::Object(ObjectName::from(vec![Ident::new(
                 object_name.to_string()
             )])))
@@ -1418,7 +1418,7 @@ fn parse_use() {
         for &quote in &quote_styles {
             // Test single identifier with different type of quotes
             assert_eq!(
-                clickhouse().verified_stmt(&format!("USE {0}{1}{0}", quote, object_name)),
+                clickhouse().verified_stmt(&format!("USE {quote}{object_name}{quote}")),
                 Statement::Use(Use::Object(ObjectName::from(vec![Ident::with_quote(
                     quote,
                     object_name.to_string(),
@@ -1432,7 +1432,7 @@ fn parse_use() {
 fn test_query_with_format_clause() {
     let format_options = vec!["TabSeparated", "JSONCompact", "NULL"];
     for format in &format_options {
-        let sql = format!("SELECT * FROM t FORMAT {}", format);
+        let sql = format!("SELECT * FROM t FORMAT {format}");
         match clickhouse_and_generic().verified_stmt(&sql) {
             Statement::Query(query) => {
                 if *format == "NULL" {

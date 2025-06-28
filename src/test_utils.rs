@@ -270,7 +270,7 @@ impl TestedDialects {
                 tokenizer = tokenizer.with_unescape(options.unescape);
             }
             let tokens = tokenizer.tokenize().unwrap();
-            assert_eq!(expected, tokens, "Tokenized differently for {:?}", dialect);
+            assert_eq!(expected, tokens, "Tokenized differently for {dialect:?}");
         });
     }
 }

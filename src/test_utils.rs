@@ -479,20 +479,25 @@ pub fn index_column(stmt: Statement) -> Expr {
             }
         }
         Statement::AlterTable { operations, .. } => match operations.first().unwrap() {
-            AlterTableOperation::AddConstraint(TableConstraint::Index { columns, .. }) => {
-                columns.first().unwrap().column.expr.clone()
+            AlterTableOperation::AddConstraint { constraint, .. } => {
+                match constraint {
+                    TableConstraint::Index { columns, .. } => {
+                        columns.first().unwrap().column.expr.clone()
+                    }
+                    TableConstraint::Unique { columns, .. } => {
+                        columns.first().unwrap().column.expr.clone()
+                    }
+                    TableConstraint::PrimaryKey { columns, .. } => {
+                        columns.first().unwrap().column.expr.clone()
+                    }
+                    TableConstraint::FulltextOrSpatial {
+                        columns,
+                        ..
+                    } => columns.first().unwrap().column.expr.clone(),
+                    _ => panic!("Expected an index, unique, primary, full text, or spatial constraint (foreign key does not support general key part expressions)"),
+                }
             }
-            AlterTableOperation::AddConstraint(TableConstraint::Unique { columns, .. }) => {
-                columns.first().unwrap().column.expr.clone()
-            }
-            AlterTableOperation::AddConstraint(TableConstraint::PrimaryKey { columns, .. }) => {
-                columns.first().unwrap().column.expr.clone()
-            }
-            AlterTableOperation::AddConstraint(TableConstraint::FulltextOrSpatial {
-                columns,
-                ..
-            }) => columns.first().unwrap().column.expr.clone(),
-            _ => panic!("Expected an index, unique, primary, full text, or spatial constraint (foreign key does not support general key part expressions)"),
+            _ => panic!("Expected a constraint"),
         },
         _ => panic!("Expected CREATE INDEX, ALTER TABLE, or CREATE TABLE, got: {stmt:?}"),
     }

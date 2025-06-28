@@ -278,6 +278,34 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Indicates whether the dialect supports left-associative join parsing
+    /// by default when parentheses are omitted in nested joins.
+    ///
+    /// Most dialects (like MySQL or Postgres) assume **left-associative** precedence,
+    /// so a query like:
+    ///
+    /// ```sql
+    /// SELECT * FROM t1 NATURAL JOIN t5 INNER JOIN t0 ON ...
+    /// ```
+    /// is interpreted as:
+    /// ```sql
+    /// ((t1 NATURAL JOIN t5) INNER JOIN t0 ON ...)
+    /// ```
+    /// and internally represented as a **flat list** of joins.
+    ///
+    /// In contrast, some dialects (e.g. **Snowflake**) assume **right-associative**
+    /// precedence and interpret the same query as:
+    /// ```sql
+    /// (t1 NATURAL JOIN (t5 INNER JOIN t0 ON ...))
+    /// ```
+    /// which results in a **nested join** structure in the AST.
+    ///
+    /// If this method returns `false`, the parser must build nested join trees
+    /// even in the absence of parentheses to reflect the correct associativity
+    fn supports_left_associative_joins_without_parens(&self) -> bool {
+        true
+    }
+
     /// Returns true if the dialect supports the `(+)` syntax for OUTER JOIN.
     fn supports_outer_join_operator(&self) -> bool {
         false

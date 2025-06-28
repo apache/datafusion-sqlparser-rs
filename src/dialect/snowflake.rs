@@ -283,6 +283,10 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    fn supports_left_associative_joins_without_parens(&self) -> bool {
+        false
+    }
+
     fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {
         // Unreserve some keywords that Snowflake accepts as identifiers
         // See: https://docs.snowflake.com/en/sql-reference/reserved-keywords

@@ -12495,7 +12495,11 @@ impl<'a> Parser<'a> {
                 };
                 let mut relation = self.parse_table_factor()?;
 
-                if self.peek_parens_less_nested_join() {
+                if !self
+                    .dialect
+                    .supports_left_associative_joins_without_parens()
+                    && self.peek_parens_less_nested_join()
+                {
                     let joins = self.parse_joins()?;
                     relation = TableFactor::NestedJoin {
                         table_with_joins: Box::new(TableWithJoins { relation, joins }),

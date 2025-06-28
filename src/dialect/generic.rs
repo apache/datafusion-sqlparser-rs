@@ -52,6 +52,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_left_associative_joins_without_parens(&self) -> bool {
+        true
+    }
+
     fn supports_connect_by(&self) -> bool {
         true
     }

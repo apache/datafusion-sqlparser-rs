@@ -270,7 +270,7 @@ impl TestedDialects {
                 tokenizer = tokenizer.with_unescape(options.unescape);
             }
             let tokens = tokenizer.tokenize().unwrap();
-            assert_eq!(expected, tokens, "Tokenized differently for {:?}", dialect);
+            assert_eq!(expected, tokens, "Tokenized differently for {dialect:?}");
         });
     }
 }
@@ -364,6 +364,11 @@ pub fn alter_table_op(stmt: Statement) -> AlterTableOperation {
 /// Creates a `Value::Number`, panic'ing if n is not a number
 pub fn number(n: &str) -> Value {
     Value::Number(n.parse().unwrap(), false)
+}
+
+/// Creates a [Value::SingleQuotedString]
+pub fn single_quoted_string(s: impl Into<String>) -> Value {
+    Value::SingleQuotedString(s.into())
 }
 
 pub fn table_alias(name: impl Into<String>) -> Option<TableAlias> {

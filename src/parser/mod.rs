@@ -436,7 +436,7 @@ impl<'a> Parser<'a> {
     ///
     /// See example on [`Parser::new()`] for an example
     pub fn try_with_sql(self, sql: &str) -> Result<Self, ParserError> {
-        debug!("Parsing sql '{}'...", sql);
+        debug!("Parsing sql '{sql}'...");
         let tokens = Tokenizer::new(self.dialect, sql)
             .with_unescape(self.options.unescape)
             .tokenize_with_location()?;
@@ -1226,10 +1226,10 @@ impl<'a> Parser<'a> {
 
         expr = self.parse_compound_expr(expr, vec![])?;
 
-        debug!("prefix: {:?}", expr);
+        debug!("prefix: {expr:?}");
         loop {
             let next_precedence = self.get_next_precedence()?;
-            debug!("next precedence: {:?}", next_precedence);
+            debug!("next precedence: {next_precedence:?}");
 
             if precedence >= next_precedence {
                 break;
@@ -1631,8 +1631,7 @@ impl<'a> Parser<'a> {
                     Token::QuestionPipe => UnaryOperator::QuestionPipe,
                     _ => {
                         return Err(ParserError::ParserError(format!(
-                            "Unexpected token in unary operator parsing: {:?}",
-                            tok
+                            "Unexpected token in unary operator parsing: {tok:?}"
                         )))
                     }
                 };
@@ -2771,7 +2770,7 @@ impl<'a> Parser<'a> {
 
         if self.dialect.supports_dictionary_syntax() {
             self.prev_token(); // Put back the '{'
-            return self.parse_duckdb_struct_literal();
+            return self.parse_dictionary();
         }
 
         self.expected("an expression", token)
@@ -3140,7 +3139,7 @@ impl<'a> Parser<'a> {
         Ok(fields)
     }
 
-    /// DuckDB specific: Parse a duckdb [dictionary]
+    /// DuckDB and ClickHouse specific: Parse a duckdb [dictionary] or a clickhouse [map] setting
     ///
     /// Syntax:
     ///
@@ -3149,18 +3148,18 @@ impl<'a> Parser<'a> {
     /// ```
     ///
     /// [dictionary]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
-    fn parse_duckdb_struct_literal(&mut self) -> Result<Expr, ParserError> {
+    /// [map]: https://clickhouse.com/docs/operations/settings/settings#additional_table_filters
+    fn parse_dictionary(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LBrace)?;
 
-        let fields =
-            self.parse_comma_separated0(Self::parse_duckdb_dictionary_field, Token::RBrace)?;
+        let fields = self.parse_comma_separated0(Self::parse_dictionary_field, Token::RBrace)?;
 
         self.expect_token(&Token::RBrace)?;
 
         Ok(Expr::Dictionary(fields))
     }
 
-    /// Parse a field for a duckdb [dictionary]
+    /// Parse a field for a duckdb [dictionary] or a clickhouse [map] setting
     ///
     /// Syntax
     ///
@@ -3169,7 +3168,8 @@ impl<'a> Parser<'a> {
     /// ```
     ///
     /// [dictionary]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
-    fn parse_duckdb_dictionary_field(&mut self) -> Result<DictionaryField, ParserError> {
+    /// [map]: https://clickhouse.com/docs/operations/settings/settings#additional_table_filters
+    fn parse_dictionary_field(&mut self) -> Result<DictionaryField, ParserError> {
         let key = self.parse_identifier()?;
 
         self.expect_token(&Token::Colon)?;
@@ -10579,17 +10579,7 @@ impl<'a> Parser<'a> {
     /// Parses a column definition within a view.
     fn parse_view_column(&mut self) -> Result<ViewColumnDef, ParserError> {
         let name = self.parse_identifier()?;
-        let options = if (dialect_of!(self is BigQueryDialect | GenericDialect)
-            && self.parse_keyword(Keyword::OPTIONS))
-            || (dialect_of!(self is SnowflakeDialect | GenericDialect)
-                && self.parse_keyword(Keyword::COMMENT))
-        {
-            self.prev_token();
-            self.parse_optional_column_option()?
-                .map(|option| vec![option])
-        } else {
-            None
-        };
+        let options = self.parse_view_column_options()?;
         let data_type = if dialect_of!(self is ClickHouseDialect) {
             Some(self.parse_data_type()?)
         } else {
@@ -10600,6 +10590,25 @@ impl<'a> Parser<'a> {
             data_type,
             options,
         })
+    }
+
+    fn parse_view_column_options(&mut self) -> Result<Option<ColumnOptions>, ParserError> {
+        let mut options = Vec::new();
+        loop {
+            let option = self.parse_optional_column_option()?;
+            if let Some(option) = option {
+                options.push(option);
+            } else {
+                break;
+            }
+        }
+        if options.is_empty() {
+            Ok(None)
+        } else if self.dialect.supports_space_separated_column_options() {
+            Ok(Some(ColumnOptions::SpaceSeparated(options)))
+        } else {
+            Ok(Some(ColumnOptions::CommaSeparated(options)))
+        }
     }
 
     /// Parses a parenthesized comma-separated list of unqualified, possibly quoted identifiers.
@@ -11208,7 +11217,7 @@ impl<'a> Parser<'a> {
             let key_values = self.parse_comma_separated(|p| {
                 let key = p.parse_identifier()?;
                 p.expect_token(&Token::Eq)?;
-                let value = p.parse_value()?.value;
+                let value = p.parse_expr()?;
                 Ok(Setting { key, value })
             })?;
             Some(key_values)
@@ -13650,7 +13659,7 @@ impl<'a> Parser<'a> {
                     let ident = self.parse_identifier()?;
                     if let GranteeName::ObjectName(namespace) = name {
                         name = GranteeName::ObjectName(ObjectName::from(vec![Ident::new(
-                            format!("{}:{}", namespace, ident),
+                            format!("{namespace}:{ident}"),
                         )]));
                     };
                 }
@@ -13685,6 +13694,33 @@ impl<'a> Parser<'a> {
         let objects = if self.parse_keyword(Keyword::ON) {
             if self.parse_keywords(&[Keyword::ALL, Keyword::TABLES, Keyword::IN, Keyword::SCHEMA]) {
                 Some(GrantObjects::AllTablesInSchema {
+                    schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                })
+            } else if self.parse_keywords(&[
+                Keyword::FUTURE,
+                Keyword::SCHEMAS,
+                Keyword::IN,
+                Keyword::DATABASE,
+            ]) {
+                Some(GrantObjects::FutureSchemasInDatabase {
+                    databases: self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                })
+            } else if self.parse_keywords(&[
+                Keyword::FUTURE,
+                Keyword::TABLES,
+                Keyword::IN,
+                Keyword::SCHEMA,
+            ]) {
+                Some(GrantObjects::FutureTablesInSchema {
+                    schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                })
+            } else if self.parse_keywords(&[
+                Keyword::FUTURE,
+                Keyword::VIEWS,
+                Keyword::IN,
+                Keyword::SCHEMA,
+            ]) {
+                Some(GrantObjects::FutureViewsInSchema {
                     schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
                 })
             } else if self.parse_keywords(&[
@@ -14620,7 +14656,7 @@ impl<'a> Parser<'a> {
                 self.dialect
                     .get_reserved_keywords_for_select_item_operator(),
             )
-            .map(|keyword| Ident::new(format!("{:?}", keyword)));
+            .map(|keyword| Ident::new(format!("{keyword:?}")));
 
         match self.parse_wildcard_expr()? {
             Expr::QualifiedWildcard(prefix, token) => Ok(SelectItem::QualifiedWildcard(
@@ -15797,6 +15833,13 @@ impl<'a> Parser<'a> {
     pub fn parse_create_procedure(&mut self, or_alter: bool) -> Result<Statement, ParserError> {
         let name = self.parse_object_name(false)?;
         let params = self.parse_optional_procedure_parameters()?;
+
+        let language = if self.parse_keyword(Keyword::LANGUAGE) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+
         self.expect_keyword_is(Keyword::AS)?;
 
         let body = self.parse_conditional_statements(&[Keyword::END])?;
@@ -15805,6 +15848,7 @@ impl<'a> Parser<'a> {
             name,
             or_alter,
             params,
+            language,
             body,
         })
     }

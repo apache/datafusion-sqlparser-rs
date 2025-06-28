@@ -355,14 +355,16 @@ fn parse_create_view_with_options() {
                     ViewColumnDef {
                         name: Ident::new("age"),
                         data_type: None,
-                        options: Some(vec![ColumnOption::Options(vec![SqlOption::KeyValue {
-                            key: Ident::new("description"),
-                            value: Expr::Value(
-                                Value::DoubleQuotedString("field age".to_string()).with_span(
-                                    Span::new(Location::new(1, 42), Location::new(1, 52))
-                                )
-                            ),
-                        }])]),
+                        options: Some(ColumnOptions::CommaSeparated(vec![ColumnOption::Options(
+                            vec![SqlOption::KeyValue {
+                                key: Ident::new("description"),
+                                value: Expr::Value(
+                                    Value::DoubleQuotedString("field age".to_string()).with_span(
+                                        Span::new(Location::new(1, 42), Location::new(1, 52))
+                                    )
+                                ),
+                            }]
+                        )])),
                     },
                 ],
                 columns

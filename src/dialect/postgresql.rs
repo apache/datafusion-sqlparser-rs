@@ -104,7 +104,7 @@ impl Dialect for PostgreSqlDialect {
 
     fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
         let token = parser.peek_token();
-        debug!("get_next_precedence() {:?}", token);
+        debug!("get_next_precedence() {token:?}");
 
         // we only return some custom value here when the behaviour (not merely the numeric value) differs
         // from the default implementation

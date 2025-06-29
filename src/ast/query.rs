@@ -2828,7 +2828,7 @@ impl fmt::Display for PipeOperator {
                 queries,
             } => Self::fmt_set_operation(f, "EXCEPT", set_quantifier, queries),
             PipeOperator::Call { function, alias } => {
-                write!(f, "CALL {}", function)?;
+                write!(f, "CALL {function}")?;
                 Self::fmt_optional_alias(f, alias)
             }
             PipeOperator::Pivot {
@@ -2861,7 +2861,7 @@ impl fmt::Display for PipeOperator {
                 )?;
                 Self::fmt_optional_alias(f, alias)
             }
-            PipeOperator::Join(join) => write!(f, "{}", join),
+            PipeOperator::Join(join) => write!(f, "{join}"),
         }
     }
 }
@@ -2870,7 +2870,7 @@ impl PipeOperator {
     /// Helper function to format optional alias for pipe operators
     fn fmt_optional_alias(f: &mut fmt::Formatter<'_>, alias: &Option<Ident>) -> fmt::Result {
         if let Some(alias) = alias {
-            write!(f, " AS {}", alias)?;
+            write!(f, " AS {alias}")?;
         }
         Ok(())
     }
@@ -2882,16 +2882,16 @@ impl PipeOperator {
         set_quantifier: &SetQuantifier,
         queries: &[Query],
     ) -> fmt::Result {
-        write!(f, "{}", operation)?;
+        write!(f, "{operation}")?;
         match set_quantifier {
             SetQuantifier::None => {}
             _ => {
-                write!(f, " {}", set_quantifier)?;
+                write!(f, " {set_quantifier}")?;
             }
         }
         write!(f, " ")?;
         let parenthesized_queries: Vec<String> =
-            queries.iter().map(|query| format!("({})", query)).collect();
+            queries.iter().map(|query| format!("({query})")).collect();
         write!(f, "{}", display_comma_separated(&parenthesized_queries))
     }
 }

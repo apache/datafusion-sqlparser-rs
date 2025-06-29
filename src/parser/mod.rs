@@ -10015,8 +10015,7 @@ impl<'a> Parser<'a> {
         match quantifier {
             SetQuantifier::Distinct | SetQuantifier::DistinctByName => Ok(quantifier),
             _ => Err(ParserError::ParserError(format!(
-                "{} pipe operator requires DISTINCT modifier",
-                operator_name
+                "{operator_name} pipe operator requires DISTINCT modifier",
             ))),
         }
     }

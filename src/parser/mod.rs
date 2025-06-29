@@ -8734,16 +8734,10 @@ impl<'a> Parser<'a> {
                 }
             } else if self.parse_keywords(&[Keyword::DROP, Keyword::DEFAULT]) {
                 AlterColumnOperation::DropDefault {}
-            } else if self.parse_keywords(&[Keyword::SET, Keyword::DATA, Keyword::TYPE])
-                || (is_postgresql && self.parse_keyword(Keyword::TYPE))
-            {
-                let data_type = self.parse_data_type()?;
-                let using = if is_postgresql && self.parse_keyword(Keyword::USING) {
-                    Some(self.parse_expr()?)
-                } else {
-                    None
-                };
-                AlterColumnOperation::SetDataType { data_type, using }
+            } else if self.parse_keywords(&[Keyword::SET, Keyword::DATA, Keyword::TYPE]) {
+                self.parse_set_data_type(true)?
+            } else if self.parse_keyword(Keyword::TYPE) {
+                self.parse_set_data_type(false)?
             } else if self.parse_keywords(&[Keyword::ADD, Keyword::GENERATED]) {
                 let generated_as = if self.parse_keyword(Keyword::ALWAYS) {
                     Some(GeneratedAs::Always)
@@ -8907,6 +8901,20 @@ impl<'a> Parser<'a> {
             }
         };
         Ok(operation)
+    }
+
+    fn parse_set_data_type(&mut self, had_set: bool) -> Result<AlterColumnOperation, ParserError> {
+        let data_type = self.parse_data_type()?;
+        let using = if self.parse_keyword(Keyword::USING) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+        Ok(AlterColumnOperation::SetDataType {
+            data_type,
+            using,
+            had_set,
+        })
     }
 
     fn parse_part_or_partition(&mut self) -> Result<Partition, ParserError> {

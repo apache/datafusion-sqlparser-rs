@@ -809,7 +809,7 @@ pub enum Expr {
         any: bool,
         expr: Box<Expr>,
         pattern: Box<Expr>,
-        escape_char: Option<String>,
+        escape_char: Option<Value>,
     },
     /// `ILIKE` (case-insensitive `LIKE`)
     ILike {
@@ -819,14 +819,14 @@ pub enum Expr {
         any: bool,
         expr: Box<Expr>,
         pattern: Box<Expr>,
-        escape_char: Option<String>,
+        escape_char: Option<Value>,
     },
     /// SIMILAR TO regex
     SimilarTo {
         negated: bool,
         expr: Box<Expr>,
         pattern: Box<Expr>,
-        escape_char: Option<String>,
+        escape_char: Option<Value>,
     },
     /// MySQL: RLIKE regex or REGEXP regex
     RLike {
@@ -1486,7 +1486,7 @@ impl fmt::Display for Expr {
             } => match escape_char {
                 Some(ch) => write!(
                     f,
-                    "{} {}LIKE {}{} ESCAPE '{}'",
+                    "{} {}LIKE {}{} ESCAPE {}",
                     expr,
                     if *negated { "NOT " } else { "" },
                     if *any { "ANY " } else { "" },
@@ -1511,7 +1511,7 @@ impl fmt::Display for Expr {
             } => match escape_char {
                 Some(ch) => write!(
                     f,
-                    "{} {}ILIKE {}{} ESCAPE '{}'",
+                    "{} {}ILIKE {}{} ESCAPE {}",
                     expr,
                     if *negated { "NOT " } else { "" },
                     if *any { "ANY" } else { "" },
@@ -1566,7 +1566,7 @@ impl fmt::Display for Expr {
             } => match escape_char {
                 Some(ch) => write!(
                     f,
-                    "{} {}SIMILAR TO {} ESCAPE '{}'",
+                    "{} {}SIMILAR TO {} ESCAPE {}",
                     expr,
                     if *negated { "NOT " } else { "" },
                     pattern,

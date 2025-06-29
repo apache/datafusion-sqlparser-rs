@@ -764,10 +764,7 @@ fn parse_drop_extension() {
 
 #[test]
 fn parse_alter_table_alter_column() {
-    pg().one_statement_parses_to(
-        "ALTER TABLE tab ALTER COLUMN is_active TYPE TEXT USING 'text'",
-        "ALTER TABLE tab ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'",
-    );
+    pg().verified_stmt("ALTER TABLE tab ALTER COLUMN is_active TYPE TEXT USING 'text'");
 
     match alter_table_op(
         pg().verified_stmt(
@@ -783,6 +780,7 @@ fn parse_alter_table_alter_column() {
                 AlterColumnOperation::SetDataType {
                     data_type: DataType::Text,
                     using: Some(using_expr),
+                    had_set: true,
                 }
             );
         }

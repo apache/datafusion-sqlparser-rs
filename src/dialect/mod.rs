@@ -1060,6 +1060,22 @@ pub trait Dialect: Debug + Any {
     fn supports_space_separated_column_options(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect supports `ALTER TABLE tbl ALTER COLUMN col TYPE <type>`
+    /// without specifying `SET DATA` before `TYPE`.
+    ///
+    /// - [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_ALTER_TABLE.html#r_ALTER_TABLE-synopsis)
+    /// - [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
+    fn supports_alter_column_type_without_set(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports `ALTER TABLE tbl ALTER COLUMN col SET DATA TYPE <type> USING <exp>`
+    ///
+    /// - [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
+    fn supports_alter_column_type_using(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

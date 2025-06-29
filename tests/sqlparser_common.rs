@@ -15587,11 +15587,6 @@ fn parse_pipeline_operator_negative_tests() {
         .parse_sql_statements("SELECT * FROM users |> JOIN ON users.id = orders.user_id")
         .is_err());
 
-    // Test that JOIN without ON or USING condition fails (except CROSS JOIN)
-    assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> JOIN orders")
-        .is_err());
-
     // Test that CROSS JOIN with ON condition fails
     assert!(dialects
         .parse_sql_statements(

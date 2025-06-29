@@ -30,11 +30,11 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
-    display_comma_separated, display_separated, CommentDef, CreateFunctionBody,
+    display_comma_separated, display_separated, ArgMode, CommentDef, CreateFunctionBody,
     CreateFunctionUsing, DataType, Expr, FunctionBehavior, FunctionCalledOnNull,
-    FunctionDeterminismSpecifier, FunctionParallel, Ident, MySQLColumnPosition, ObjectName,
-    OperateFunctionArg, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Tag, Value,
-    ValueWithSpan,
+    FunctionDeterminismSpecifier, FunctionParallel, Ident, IndexColumn, MySQLColumnPosition,
+    ObjectName, OperateFunctionArg, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Tag,
+    Value, ValueWithSpan,
 };
 use crate::keywords::Keyword;
 use crate::tokenizer::Token;
@@ -57,7 +57,7 @@ impl fmt::Display for ReplicaIdentity {
             ReplicaIdentity::None => f.write_str("NONE"),
             ReplicaIdentity::Full => f.write_str("FULL"),
             ReplicaIdentity::Default => f.write_str("DEFAULT"),
-            ReplicaIdentity::Index(idx) => write!(f, "USING INDEX {}", idx),
+            ReplicaIdentity::Index(idx) => write!(f, "USING INDEX {idx}"),
         }
     }
 }
@@ -185,6 +185,12 @@ pub enum AlterTableOperation {
     ///
     /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
     DropForeignKey {
+        name: Ident,
+    },
+    /// `DROP INDEX <index_name>`
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
+    DropIndex {
         name: Ident,
     },
     /// `ENABLE ALWAYS RULE rewrite_rule_name`
@@ -444,7 +450,7 @@ pub enum Owner {
 impl fmt::Display for Owner {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Owner::Ident(ident) => write!(f, "{}", ident),
+            Owner::Ident(ident) => write!(f, "{ident}"),
             Owner::CurrentRole => write!(f, "CURRENT_ROLE"),
             Owner::CurrentUser => write!(f, "CURRENT_USER"),
             Owner::SessionUser => write!(f, "SESSION_USER"),
@@ -519,7 +525,7 @@ impl fmt::Display for AlterTableOperation {
                 if *if_not_exists {
                     write!(f, " IF NOT EXISTS")?;
                 }
-                write!(f, " {} ({})", name, query)
+                write!(f, " {name} ({query})")
             }
             AlterTableOperation::Algorithm { equals, algorithm } => {
                 write!(
@@ -534,7 +540,7 @@ impl fmt::Display for AlterTableOperation {
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }
-                write!(f, " {}", name)
+                write!(f, " {name}")
             }
             AlterTableOperation::MaterializeProjection {
                 if_exists,
@@ -545,9 +551,9 @@ impl fmt::Display for AlterTableOperation {
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }
-                write!(f, " {}", name)?;
+                write!(f, " {name}")?;
                 if let Some(partition) = partition {
-                    write!(f, " IN PARTITION {}", partition)?;
+                    write!(f, " IN PARTITION {partition}")?;
                 }
                 Ok(())
             }
@@ -560,9 +566,9 @@ impl fmt::Display for AlterTableOperation {
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }
-                write!(f, " {}", name)?;
+                write!(f, " {name}")?;
                 if let Some(partition) = partition {
-                    write!(f, " IN PARTITION {}", partition)?;
+                    write!(f, " IN PARTITION {partition}")?;
                 }
                 Ok(())
             }
@@ -606,6 +612,7 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::DropPrimaryKey => write!(f, "DROP PRIMARY KEY"),
             AlterTableOperation::DropForeignKey { name } => write!(f, "DROP FOREIGN KEY {name}"),
+            AlterTableOperation::DropIndex { name } => write!(f, "DROP INDEX {name}"),
             AlterTableOperation::DropColumn {
                 has_column_keyword,
                 column_name,
@@ -972,7 +979,7 @@ pub enum TableConstraint {
         /// [1]: IndexType
         index_type: Option<IndexType>,
         /// Identifiers of the columns that are unique.
-        columns: Vec<Ident>,
+        columns: Vec<IndexColumn>,
         index_options: Vec<IndexOption>,
         characteristics: Option<ConstraintCharacteristics>,
         /// Optional Postgres nulls handling: `[ NULLS [ NOT ] DISTINCT ]`
@@ -1008,7 +1015,7 @@ pub enum TableConstraint {
         /// [1]: IndexType
         index_type: Option<IndexType>,
         /// Identifiers of the columns that form the primary key.
-        columns: Vec<Ident>,
+        columns: Vec<IndexColumn>,
         index_options: Vec<IndexOption>,
         characteristics: Option<ConstraintCharacteristics>,
     },
@@ -1019,6 +1026,9 @@ pub enum TableConstraint {
     /// }`).
     ForeignKey {
         name: Option<Ident>,
+        /// MySQL-specific field
+        /// <https://dev.mysql.com/doc/refman/8.4/en/create-table-foreign-keys.html>
+        index_name: Option<Ident>,
         columns: Vec<Ident>,
         foreign_table: ObjectName,
         referred_columns: Vec<Ident>,
@@ -1026,10 +1036,13 @@ pub enum TableConstraint {
         on_update: Option<ReferentialAction>,
         characteristics: Option<ConstraintCharacteristics>,
     },
-    /// `[ CONSTRAINT <name> ] CHECK (<expr>)`
+    /// `[ CONSTRAINT <name> ] CHECK (<expr>) [[NOT] ENFORCED]`
     Check {
         name: Option<Ident>,
         expr: Box<Expr>,
+        /// MySQL-specific syntax
+        /// <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
+        enforced: Option<bool>,
     },
     /// MySQLs [index definition][1] for index creation. Not present on ANSI so, for now, the usage
     /// is restricted to MySQL, as no other dialects that support this syntax were found.
@@ -1047,7 +1060,7 @@ pub enum TableConstraint {
         /// [1]: IndexType
         index_type: Option<IndexType>,
         /// Referred column identifier list.
-        columns: Vec<Ident>,
+        columns: Vec<IndexColumn>,
     },
     /// MySQLs [fulltext][1] definition. Since the [`SPATIAL`][2] definition is exactly the same,
     /// and MySQL displays both the same way, it is part of this definition as well.
@@ -1070,7 +1083,7 @@ pub enum TableConstraint {
         /// Optional index name.
         opt_index_name: Option<Ident>,
         /// Referred column identifier list.
-        columns: Vec<Ident>,
+        columns: Vec<IndexColumn>,
     },
 }
 
@@ -1129,6 +1142,7 @@ impl fmt::Display for TableConstraint {
             }
             TableConstraint::ForeignKey {
                 name,
+                index_name,
                 columns,
                 foreign_table,
                 referred_columns,
@@ -1138,8 +1152,9 @@ impl fmt::Display for TableConstraint {
             } => {
                 write!(
                     f,
-                    "{}FOREIGN KEY ({}) REFERENCES {}",
+                    "{}FOREIGN KEY{} ({}) REFERENCES {}",
                     display_constraint_name(name),
+                    display_option_spaced(index_name),
                     display_comma_separated(columns),
                     foreign_table,
                 )?;
@@ -1153,12 +1168,21 @@ impl fmt::Display for TableConstraint {
                     write!(f, " ON UPDATE {action}")?;
                 }
                 if let Some(characteristics) = characteristics {
-                    write!(f, " {}", characteristics)?;
+                    write!(f, " {characteristics}")?;
                 }
                 Ok(())
             }
-            TableConstraint::Check { name, expr } => {
-                write!(f, "{}CHECK ({})", display_constraint_name(name), expr)
+            TableConstraint::Check {
+                name,
+                expr,
+                enforced,
+            } => {
+                write!(f, "{}CHECK ({})", display_constraint_name(name), expr)?;
+                if let Some(b) = enforced {
+                    write!(f, " {}", if *b { "ENFORCED" } else { "NOT ENFORCED" })
+                } else {
+                    Ok(())
+                }
             }
             TableConstraint::Index {
                 display_as_key,
@@ -1284,7 +1308,7 @@ impl fmt::Display for IndexType {
             Self::SPGiST => write!(f, "SPGIST"),
             Self::BRIN => write!(f, "BRIN"),
             Self::Bloom => write!(f, "BLOOM"),
-            Self::Custom(name) => write!(f, "{}", name),
+            Self::Custom(name) => write!(f, "{name}"),
         }
     }
 }
@@ -1343,11 +1367,16 @@ impl fmt::Display for NullsDistinctOption {
 pub struct ProcedureParam {
     pub name: Ident,
     pub data_type: DataType,
+    pub mode: Option<ArgMode>,
 }
 
 impl fmt::Display for ProcedureParam {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {}", self.name, self.data_type)
+        if let Some(mode) = &self.mode {
+            write!(f, "{mode} {} {}", self.name, self.data_type)
+        } else {
+            write!(f, "{} {}", self.name, self.data_type)
+        }
     }
 }
 
@@ -1397,17 +1426,41 @@ impl fmt::Display for ColumnDef {
 pub struct ViewColumnDef {
     pub name: Ident,
     pub data_type: Option<DataType>,
-    pub options: Option<Vec<ColumnOption>>,
+    pub options: Option<ColumnOptions>,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ColumnOptions {
+    CommaSeparated(Vec<ColumnOption>),
+    SpaceSeparated(Vec<ColumnOption>),
+}
+
+impl ColumnOptions {
+    pub fn as_slice(&self) -> &[ColumnOption] {
+        match self {
+            ColumnOptions::CommaSeparated(options) => options.as_slice(),
+            ColumnOptions::SpaceSeparated(options) => options.as_slice(),
+        }
+    }
 }
 
 impl fmt::Display for ViewColumnDef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.name)?;
         if let Some(data_type) = self.data_type.as_ref() {
-            write!(f, " {}", data_type)?;
+            write!(f, " {data_type}")?;
         }
         if let Some(options) = self.options.as_ref() {
-            write!(f, " {}", display_comma_separated(options.as_slice()))?;
+            match options {
+                ColumnOptions::CommaSeparated(column_options) => {
+                    write!(f, " {}", display_comma_separated(column_options.as_slice()))?;
+                }
+                ColumnOptions::SpaceSeparated(column_options) => {
+                    write!(f, " {}", display_separated(column_options.as_slice(), " "))?
+                }
+            }
         }
         Ok(())
     }
@@ -1792,7 +1845,7 @@ impl fmt::Display for ColumnOption {
             } => {
                 write!(f, "{}", if *is_primary { "PRIMARY KEY" } else { "UNIQUE" })?;
                 if let Some(characteristics) = characteristics {
-                    write!(f, " {}", characteristics)?;
+                    write!(f, " {characteristics}")?;
                 }
                 Ok(())
             }
@@ -1814,7 +1867,7 @@ impl fmt::Display for ColumnOption {
                     write!(f, " ON UPDATE {action}")?;
                 }
                 if let Some(characteristics) = characteristics {
-                    write!(f, " {}", characteristics)?;
+                    write!(f, " {characteristics}")?;
                 }
                 Ok(())
             }
@@ -1874,7 +1927,7 @@ impl fmt::Display for ColumnOption {
                 write!(f, "{parameters}")
             }
             OnConflict(keyword) => {
-                write!(f, "ON CONFLICT {:?}", keyword)?;
+                write!(f, "ON CONFLICT {keyword:?}")?;
                 Ok(())
             }
             Policy(parameters) => {

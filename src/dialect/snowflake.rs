@@ -131,6 +131,10 @@ impl Dialect for SnowflakeDialect {
     }
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
+        if parser.parse_keyword(Keyword::BEGIN) {
+            return Some(parser.parse_begin_exception_end());
+        }
+
         if parser.parse_keywords(&[Keyword::ALTER, Keyword::SESSION]) {
             // ALTER SESSION
             let set = match parser.parse_one_of_keywords(&[Keyword::SET, Keyword::UNSET]) {
@@ -279,6 +283,10 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    fn supports_left_associative_joins_without_parens(&self) -> bool {
+        false
+    }
+
     fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {
         // Unreserve some keywords that Snowflake accepts as identifiers
         // See: https://docs.snowflake.com/en/sql-reference/reserved-keywords
@@ -351,6 +359,10 @@ impl Dialect for SnowflakeDialect {
     /// See: <https://docs.snowflake.com/en/sql-reference/constructs/connect-by>
     fn get_reserved_keywords_for_select_item_operator(&self) -> &[Keyword] {
         &RESERVED_KEYWORDS_FOR_SELECT_ITEM_OPERATOR
+    }
+
+    fn supports_space_separated_column_options(&self) -> bool {
+        true
     }
 }
 
@@ -453,7 +465,7 @@ pub fn parse_create_table(
                     parser.expect_keyword_is(Keyword::BY)?;
                     parser.expect_token(&Token::LParen)?;
                     let cluster_by = Some(WrappedCollection::Parentheses(
-                        parser.parse_comma_separated(|p| p.parse_identifier())?,
+                        parser.parse_comma_separated(|p| p.parse_expr())?,
                     ));
                     parser.expect_token(&Token::RParen)?;
 
@@ -559,6 +571,9 @@ pub fn parse_create_table(
 
                     builder.storage_serialization_policy =
                         Some(parse_storage_serialization_policy(parser)?);
+                }
+                Keyword::IF if parser.parse_keywords(&[Keyword::NOT, Keyword::EXISTS]) => {
+                    builder = builder.if_not_exists(true);
                 }
                 _ => {
                     return parser.expected("end of statement", next_token);

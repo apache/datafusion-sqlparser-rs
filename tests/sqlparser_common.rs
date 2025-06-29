@@ -2225,7 +2225,7 @@ fn parse_in_subquery() {
     assert_eq!(
         Expr::InSubquery {
             expr: Box::new(Expr::Identifier(Ident::new("segment"))),
-            subquery: verified_query("SELECT segm FROM bar").body,
+            subquery: Box::new(verified_query("SELECT segm FROM bar")),
             negated: false,
         },
         select.selection.unwrap()
@@ -2239,7 +2239,9 @@ fn parse_in_union() {
     assert_eq!(
         Expr::InSubquery {
             expr: Box::new(Expr::Identifier(Ident::new("segment"))),
-            subquery: verified_query("(SELECT segm FROM bar) UNION (SELECT segm FROM bar2)").body,
+            subquery: Box::new(verified_query(
+                "(SELECT segm FROM bar) UNION (SELECT segm FROM bar2)"
+            )),
             negated: false,
         },
         select.selection.unwrap()
@@ -3561,7 +3563,7 @@ fn test_double_value() {
     for (input, expected) in test_cases {
         for (i, expr) in input.iter().enumerate() {
             if let Statement::Query(query) =
-                dialects.one_statement_parses_to(&format!("SELECT {}", expr), "")
+                dialects.one_statement_parses_to(&format!("SELECT {expr}"), "")
             {
                 if let SetExpr::Select(select) = *query.body {
                     assert_eq!(expected[i], select.projection[0]);
@@ -3791,6 +3793,7 @@ fn parse_create_table() {
                 vec![
                     TableConstraint::ForeignKey {
                         name: Some("fkey".into()),
+                        index_name: None,
                         columns: vec!["lat".into()],
                         foreign_table: ObjectName::from(vec!["othertable3".into()]),
                         referred_columns: vec!["lat".into()],
@@ -3800,6 +3803,7 @@ fn parse_create_table() {
                     },
                     TableConstraint::ForeignKey {
                         name: Some("fkey2".into()),
+                        index_name: None,
                         columns: vec!["lat".into()],
                         foreign_table: ObjectName::from(vec!["othertable4".into()]),
                         referred_columns: vec!["lat".into()],
@@ -3809,6 +3813,7 @@ fn parse_create_table() {
                     },
                     TableConstraint::ForeignKey {
                         name: None,
+                        index_name: None,
                         columns: vec!["lat".into()],
                         foreign_table: ObjectName::from(vec!["othertable4".into()]),
                         referred_columns: vec!["lat".into()],
@@ -3818,6 +3823,7 @@ fn parse_create_table() {
                     },
                     TableConstraint::ForeignKey {
                         name: None,
+                        index_name: None,
                         columns: vec!["lng".into()],
                         foreign_table: ObjectName::from(vec!["othertable4".into()]),
                         referred_columns: vec!["longitude".into()],
@@ -3914,6 +3920,7 @@ fn parse_create_table_with_constraint_characteristics() {
                 vec![
                     TableConstraint::ForeignKey {
                         name: Some("fkey".into()),
+                        index_name: None,
                         columns: vec!["lat".into()],
                         foreign_table: ObjectName::from(vec!["othertable3".into()]),
                         referred_columns: vec!["lat".into()],
@@ -3927,6 +3934,7 @@ fn parse_create_table_with_constraint_characteristics() {
                     },
                     TableConstraint::ForeignKey {
                         name: Some("fkey2".into()),
+                        index_name: None,
                         columns: vec!["lat".into()],
                         foreign_table: ObjectName::from(vec!["othertable4".into()]),
                         referred_columns: vec!["lat".into()],
@@ -3940,6 +3948,7 @@ fn parse_create_table_with_constraint_characteristics() {
                     },
                     TableConstraint::ForeignKey {
                         name: None,
+                        index_name: None,
                         columns: vec!["lat".into()],
                         foreign_table: ObjectName::from(vec!["othertable4".into()]),
                         referred_columns: vec!["lat".into()],
@@ -3953,6 +3962,7 @@ fn parse_create_table_with_constraint_characteristics() {
                     },
                     TableConstraint::ForeignKey {
                         name: None,
+                        index_name: None,
                         columns: vec!["lng".into()],
                         foreign_table: ObjectName::from(vec!["othertable4".into()]),
                         referred_columns: vec!["longitude".into()],
@@ -4013,13 +4023,13 @@ fn parse_create_table_column_constraint_characteristics() {
             syntax
         };
 
-        let sql = format!("CREATE TABLE t (a int UNIQUE {})", syntax);
+        let sql = format!("CREATE TABLE t (a int UNIQUE {syntax})");
         let expected_clause = if syntax.is_empty() {
             String::new()
         } else {
             format!(" {syntax}")
         };
-        let expected = format!("CREATE TABLE t (a INT UNIQUE{})", expected_clause);
+        let expected = format!("CREATE TABLE t (a INT UNIQUE{expected_clause})");
         let ast = one_statement_parses_to(&sql, &expected);
 
         let expected_value = if deferrable.is_some() || initially.is_some() || enforced.is_some() {
@@ -4260,6 +4270,9 @@ fn parse_create_schema() {
     verified_stmt(r#"CREATE SCHEMA IF NOT EXISTS a OPTIONS(key1 = 'value1')"#);
     verified_stmt(r#"CREATE SCHEMA IF NOT EXISTS a OPTIONS()"#);
     verified_stmt(r#"CREATE SCHEMA IF NOT EXISTS a DEFAULT COLLATE 'und:ci' OPTIONS()"#);
+    verified_stmt(r#"CREATE SCHEMA a.b.c WITH (key1 = 'value1', key2 = 'value2')"#);
+    verified_stmt(r#"CREATE SCHEMA IF NOT EXISTS a WITH (key1 = 'value1')"#);
+    verified_stmt(r#"CREATE SCHEMA IF NOT EXISTS a WITH ()"#);
 }
 
 #[test]
@@ -6861,6 +6874,8 @@ fn parse_searched_case_expr() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Case {
+            case_token: AttachedToken::empty(),
+            end_token: AttachedToken::empty(),
             operand: None,
             conditions: vec![
                 CaseWhen {
@@ -6900,6 +6915,8 @@ fn parse_simple_case_expr() {
     use self::Expr::{Case, Identifier};
     assert_eq!(
         &Case {
+            case_token: AttachedToken::empty(),
+            end_token: AttachedToken::empty(),
             operand: Some(Box::new(Identifier(Ident::new("foo")))),
             conditions: vec![CaseWhen {
                 condition: Expr::value(number("1")),
@@ -7482,7 +7499,7 @@ fn parse_cte_in_data_modification_statements() {
             assert_eq!(query.with.unwrap().to_string(), "WITH x AS (SELECT 1)");
             assert!(matches!(*query.body, SetExpr::Update(_)));
         }
-        other => panic!("Expected: UPDATE, got: {:?}", other),
+        other => panic!("Expected: UPDATE, got: {other:?}"),
     }
 
     match verified_stmt("WITH t (x) AS (SELECT 9) DELETE FROM q WHERE id IN (SELECT x FROM t)") {
@@ -7490,7 +7507,7 @@ fn parse_cte_in_data_modification_statements() {
             assert_eq!(query.with.unwrap().to_string(), "WITH t (x) AS (SELECT 9)");
             assert!(matches!(*query.body, SetExpr::Delete(_)));
         }
-        other => panic!("Expected: DELETE, got: {:?}", other),
+        other => panic!("Expected: DELETE, got: {other:?}"),
     }
 
     match verified_stmt("WITH x AS (SELECT 42) INSERT INTO t SELECT foo FROM x") {
@@ -7498,7 +7515,7 @@ fn parse_cte_in_data_modification_statements() {
             assert_eq!(query.with.unwrap().to_string(), "WITH x AS (SELECT 42)");
             assert!(matches!(*query.body, SetExpr::Insert(_)));
         }
-        other => panic!("Expected: INSERT, got: {:?}", other),
+        other => panic!("Expected: INSERT, got: {other:?}"),
     }
 }
 
@@ -7973,7 +7990,7 @@ fn parse_create_view_with_columns() {
                     .map(|name| ViewColumnDef {
                         name,
                         data_type: None,
-                        options: None
+                        options: None,
                     })
                     .collect::<Vec<_>>()
             );
@@ -8577,8 +8594,11 @@ fn lateral_function() {
 #[test]
 fn parse_start_transaction() {
     let dialects = all_dialects_except(|d|
-        // BigQuery does not support this syntax
-        d.is::<BigQueryDialect>());
+        // BigQuery and Snowflake does not support this syntax
+        //
+        // BigQuery: <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#begin_transaction>
+        // Snowflake: <https://docs.snowflake.com/en/sql-reference/sql/begin>
+        d.is::<BigQueryDialect>() || d.is::<SnowflakeDialect>());
     match dialects
         .verified_stmt("START TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE")
     {
@@ -9366,9 +9386,11 @@ fn parse_grant() {
     verified_stmt("GRANT SELECT ON VIEW view1 TO ROLE role1");
     verified_stmt("GRANT EXEC ON my_sp TO runner");
     verified_stmt("GRANT UPDATE ON my_table TO updater_role AS dbo");
-
     all_dialects_where(|d| d.identifier_quote_style("none") == Some('['))
         .verified_stmt("GRANT SELECT ON [my_table] TO [public]");
+    verified_stmt("GRANT SELECT ON FUTURE SCHEMAS IN DATABASE db1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON FUTURE TABLES IN SCHEMA db1.sc1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON FUTURE VIEWS IN SCHEMA db1.sc1 TO ROLE role1");
 }
 
 #[test]
@@ -10023,7 +10045,7 @@ fn parse_offset_and_limit() {
 #[test]
 fn parse_time_functions() {
     fn test_time_function(func_name: &'static str) {
-        let sql = format!("SELECT {}()", func_name);
+        let sql = format!("SELECT {func_name}()");
         let select = verified_only_select(&sql);
         let select_localtime_func_call_ast = Function {
             name: ObjectName::from(vec![Ident::new(func_name)]),
@@ -10045,7 +10067,7 @@ fn parse_time_functions() {
         );
 
         // Validating Parenthesis
-        let sql_without_parens = format!("SELECT {}", func_name);
+        let sql_without_parens = format!("SELECT {func_name}");
         let mut ast_without_parens = select_localtime_func_call_ast;
         ast_without_parens.args = FunctionArguments::None;
         assert_eq!(
@@ -14286,7 +14308,7 @@ fn overflow() {
     let expr = std::iter::repeat_n("1", 1000)
         .collect::<Vec<_>>()
         .join(" + ");
-    let sql = format!("SELECT {}", expr);
+    let sql = format!("SELECT {expr}");
 
     let mut statements = Parser::parse_sql(&GenericDialect {}, sql.as_str()).unwrap();
     let statement = statements.pop().unwrap();
@@ -14586,7 +14608,7 @@ fn test_conditional_statement_span() {
                 else_block.unwrap().span()
             );
         }
-        stmt => panic!("Unexpected statement: {:?}", stmt),
+        stmt => panic!("Unexpected statement: {stmt:?}"),
     }
 }
 
@@ -14642,6 +14664,8 @@ fn test_lambdas() {
                 Expr::Lambda(LambdaFunction {
                     params: OneOrManyWithParens::Many(vec![Ident::new("p1"), Ident::new("p2")]),
                     body: Box::new(Expr::Case {
+                        case_token: AttachedToken::empty(),
+                        end_token: AttachedToken::empty(),
                         operand: None,
                         conditions: vec![
                             CaseWhen {
@@ -15700,6 +15724,11 @@ fn parse_return() {
 }
 
 #[test]
+fn parse_subquery_limit() {
+    let _ = all_dialects().verified_stmt("SELECT t1_id, t1_name FROM t1 WHERE t1_id IN (SELECT t2_id FROM t2 WHERE t1_name = t2_name LIMIT 10)");
+}
+
+#[test]
 fn test_open() {
     let open_cursor = "OPEN Employee_Cursor";
     let stmt = all_dialects().verified_stmt(open_cursor);
@@ -15709,4 +15738,154 @@ fn test_open() {
             cursor_name: Ident::new("Employee_Cursor"),
         })
     );
+}
+
+#[test]
+fn parse_truncate_only() {
+    let truncate = all_dialects().verified_stmt("TRUNCATE TABLE employee, ONLY dept");
+
+    let table_names = vec![
+        TruncateTableTarget {
+            name: ObjectName::from(vec![Ident::new("employee")]),
+            only: false,
+        },
+        TruncateTableTarget {
+            name: ObjectName::from(vec![Ident::new("dept")]),
+            only: true,
+        },
+    ];
+
+    assert_eq!(
+        Statement::Truncate {
+            table_names,
+            partitions: None,
+            table: true,
+            identity: None,
+            cascade: None,
+            on_cluster: None,
+        },
+        truncate
+    );
+}
+
+#[test]
+fn check_enforced() {
+    all_dialects().verified_stmt(
+        "CREATE TABLE t (a INT, b INT, c INT, CHECK (a > 0) NOT ENFORCED, CHECK (b > 0) ENFORCED, CHECK (c > 0))",
+    );
+}
+
+#[test]
+fn join_precedence() {
+    all_dialects_except(|d| !d.supports_left_associative_joins_without_parens())
+        .verified_query_with_canonical(
+        "SELECT *
+         FROM t1
+         NATURAL JOIN t5
+         INNER JOIN t0 ON (t0.v1 + t5.v0) > 0
+         WHERE t0.v1 = t1.v0",
+        // canonical string without parentheses
+        "SELECT * FROM t1 NATURAL JOIN t5 INNER JOIN t0 ON (t0.v1 + t5.v0) > 0 WHERE t0.v1 = t1.v0",
+    );
+    all_dialects_except(|d| d.supports_left_associative_joins_without_parens()).verified_query_with_canonical(
+        "SELECT *
+         FROM t1
+         NATURAL JOIN t5
+         INNER JOIN t0 ON (t0.v1 + t5.v0) > 0
+         WHERE t0.v1 = t1.v0",
+        // canonical string with parentheses
+        "SELECT * FROM t1 NATURAL JOIN (t5 INNER JOIN t0 ON (t0.v1 + t5.v0) > 0) WHERE t0.v1 = t1.v0",
+    );
+}
+
+#[test]
+fn parse_create_procedure_with_language() {
+    let sql = r#"CREATE PROCEDURE test_proc LANGUAGE sql AS BEGIN SELECT 1; END"#;
+    match verified_stmt(sql) {
+        Statement::CreateProcedure {
+            or_alter,
+            name,
+            params,
+            language,
+            ..
+        } => {
+            assert_eq!(or_alter, false);
+            assert_eq!(name.to_string(), "test_proc");
+            assert_eq!(params, Some(vec![]));
+            assert_eq!(
+                language,
+                Some(Ident {
+                    value: "sql".into(),
+                    quote_style: None,
+                    span: Span {
+                        start: Location::empty(),
+                        end: Location::empty()
+                    }
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_procedure_with_parameter_modes() {
+    let sql = r#"CREATE PROCEDURE test_proc (IN a INTEGER, OUT b TEXT, INOUT c TIMESTAMP, d BOOL) AS BEGIN SELECT 1; END"#;
+    match verified_stmt(sql) {
+        Statement::CreateProcedure {
+            or_alter,
+            name,
+            params,
+            ..
+        } => {
+            assert_eq!(or_alter, false);
+            assert_eq!(name.to_string(), "test_proc");
+            let fake_span = Span {
+                start: Location { line: 0, column: 0 },
+                end: Location { line: 0, column: 0 },
+            };
+            assert_eq!(
+                params,
+                Some(vec![
+                    ProcedureParam {
+                        name: Ident {
+                            value: "a".into(),
+                            quote_style: None,
+                            span: fake_span,
+                        },
+                        data_type: DataType::Integer(None),
+                        mode: Some(ArgMode::In)
+                    },
+                    ProcedureParam {
+                        name: Ident {
+                            value: "b".into(),
+                            quote_style: None,
+                            span: fake_span,
+                        },
+                        data_type: DataType::Text,
+                        mode: Some(ArgMode::Out)
+                    },
+                    ProcedureParam {
+                        name: Ident {
+                            value: "c".into(),
+                            quote_style: None,
+                            span: fake_span,
+                        },
+                        data_type: DataType::Timestamp(None, TimezoneInfo::None),
+                        mode: Some(ArgMode::InOut)
+                    },
+                    ProcedureParam {
+                        name: Ident {
+                            value: "d".into(),
+                            quote_style: None,
+                            span: fake_span,
+                        },
+                        data_type: DataType::Bool,
+                        mode: None
+                    },
+                ])
+            );
+        }
+        _ => unreachable!(),
+    }
 }

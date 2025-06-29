@@ -55,7 +55,7 @@ impl Display for IndexColumn {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.column)?;
         if let Some(operator_class) = &self.operator_class {
-            write!(f, " {}", operator_class)?;
+            write!(f, " {operator_class}")?;
         }
         Ok(())
     }
@@ -175,7 +175,9 @@ pub struct CreateTable {
     pub partition_by: Option<Box<Expr>>,
     /// BigQuery: Table clustering column list.
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
-    pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
+    /// Snowflake: Table clustering list which contains base column, expressions on base columns.
+    /// <https://docs.snowflake.com/en/user-guide/tables-clustering-keys#defining-a-clustering-key-for-a-table>
+    pub cluster_by: Option<WrappedCollection<Vec<Expr>>>,
     /// Hive: Table clustering column list.
     /// <https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable>
     pub clustered_by: Option<ClusteredBy>,
@@ -264,7 +266,7 @@ impl Display for CreateTable {
             name = self.name,
         )?;
         if let Some(on_cluster) = &self.on_cluster {
-            write!(f, " ON CLUSTER {}", on_cluster)?;
+            write!(f, " ON CLUSTER {on_cluster}")?;
         }
         if !self.columns.is_empty() || !self.constraints.is_empty() {
             f.write_str(" (")?;
@@ -381,15 +383,15 @@ impl Display for CreateTable {
         match &self.table_options {
             options @ CreateTableOptions::With(_)
             | options @ CreateTableOptions::Plain(_)
-            | options @ CreateTableOptions::TableProperties(_) => write!(f, " {}", options)?,
+            | options @ CreateTableOptions::TableProperties(_) => write!(f, " {options}")?,
             _ => (),
         }
 
         if let Some(primary_key) = &self.primary_key {
-            write!(f, " PRIMARY KEY {}", primary_key)?;
+            write!(f, " PRIMARY KEY {primary_key}")?;
         }
         if let Some(order_by) = &self.order_by {
-            write!(f, " ORDER BY {}", order_by)?;
+            write!(f, " ORDER BY {order_by}")?;
         }
         if let Some(inherits) = &self.inherits {
             write!(f, " INHERITS ({})", display_comma_separated(inherits))?;
@@ -401,7 +403,7 @@ impl Display for CreateTable {
             write!(f, " CLUSTER BY {cluster_by}")?;
         }
         if let options @ CreateTableOptions::Options(_) = &self.table_options {
-            write!(f, " {}", options)?;
+            write!(f, " {options}")?;
         }
         if let Some(external_volume) = self.external_volume.as_ref() {
             write!(f, " EXTERNAL_VOLUME = '{external_volume}'")?;

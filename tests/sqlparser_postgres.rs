@@ -2535,12 +2535,12 @@ fn parse_create_indices_with_operator_classes() {
         for expected_operator_class in &operator_classes {
             let single_column_sql_statement = format!(
                 "CREATE INDEX the_index_name ON users USING {expected_index_type} (concat_users_name(first_name, last_name){})",
-                expected_operator_class.as_ref().map(|oc| format!(" {}", oc))
+                expected_operator_class.as_ref().map(|oc| format!(" {oc}"))
                     .unwrap_or_default()
             );
             let multi_column_sql_statement = format!(
                 "CREATE INDEX the_index_name ON users USING {expected_index_type} (column_name,concat_users_name(first_name, last_name){})",
-                expected_operator_class.as_ref().map(|oc| format!(" {}", oc))
+                expected_operator_class.as_ref().map(|oc| format!(" {oc}"))
                     .unwrap_or_default()
             );
 
@@ -3273,7 +3273,7 @@ fn test_fn_arg_with_value_operator() {
             assert!(matches!(
                 &args[..],
                 &[FunctionArg::ExprNamed { operator: FunctionArgOperator::Value, .. }]
-            ), "Invalid function argument: {:?}", args);
+            ), "Invalid function argument: {args:?}");
         }
         other => panic!("Expected: JSON_OBJECT('name' VALUE 'value') to be parsed as a function, but got {other:?}"),
     }
@@ -4788,13 +4788,13 @@ fn parse_truncate() {
     let table_name = ObjectName::from(vec![Ident::new("db"), Ident::new("table_name")]);
     let table_names = vec![TruncateTableTarget {
         name: table_name.clone(),
+        only: false,
     }];
     assert_eq!(
         Statement::Truncate {
             table_names,
             partitions: None,
             table: false,
-            only: false,
             identity: None,
             cascade: None,
             on_cluster: None,
@@ -4811,6 +4811,7 @@ fn parse_truncate_with_options() {
     let table_name = ObjectName::from(vec![Ident::new("db"), Ident::new("table_name")]);
     let table_names = vec![TruncateTableTarget {
         name: table_name.clone(),
+        only: true,
     }];
 
     assert_eq!(
@@ -4818,7 +4819,6 @@ fn parse_truncate_with_options() {
             table_names,
             partitions: None,
             table: true,
-            only: true,
             identity: Some(TruncateIdentityOption::Restart),
             cascade: Some(CascadeOption::Cascade),
             on_cluster: None,
@@ -4839,9 +4839,11 @@ fn parse_truncate_with_table_list() {
     let table_names = vec![
         TruncateTableTarget {
             name: table_name_a.clone(),
+            only: false,
         },
         TruncateTableTarget {
             name: table_name_b.clone(),
+            only: false,
         },
     ];
 
@@ -4850,7 +4852,6 @@ fn parse_truncate_with_table_list() {
             table_names,
             partitions: None,
             table: true,
-            only: false,
             identity: Some(TruncateIdentityOption::Restart),
             cascade: Some(CascadeOption::Cascade),
             on_cluster: None,
@@ -5377,6 +5378,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            enforced: None,
         }],
     });
 
@@ -5395,6 +5397,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            enforced: None,
         }],
     });
 
@@ -5413,6 +5416,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            enforced: None,
         }],
     });
 
@@ -5431,6 +5435,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            enforced: None,
         }],
     });
 
@@ -5449,6 +5454,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            enforced: None,
         }],
     });
 
@@ -5673,7 +5679,7 @@ fn parse_drop_trigger() {
                 "DROP TRIGGER{} check_update ON table_name{}",
                 if if_exists { " IF EXISTS" } else { "" },
                 option
-                    .map(|o| format!(" {}", o))
+                    .map(|o| format!(" {o}"))
                     .unwrap_or_else(|| "".to_string())
             );
             assert_eq!(
@@ -5767,8 +5773,7 @@ fn parse_trigger_related_functions() {
     // Now we parse the statements and check if they are parsed correctly.
     let mut statements = pg()
         .parse_sql_statements(&format!(
-            "{}{}{}{}",
-            sql_table_creation, sql_create_function, sql_create_trigger, sql_drop_trigger
+            "{sql_table_creation}{sql_create_function}{sql_create_trigger}{sql_drop_trigger}"
         ))
         .unwrap();
 
@@ -6189,6 +6194,37 @@ fn parse_alter_table_replica_identity() {
                 operations,
                 vec![AlterTableOperation::ReplicaIdentity {
                     identity: ReplicaIdentity::Index("foo_idx".into())
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_ts_datatypes() {
+    match pg_and_generic().verified_stmt("CREATE TABLE foo (x TSVECTOR)") {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(
+                columns,
+                vec![ColumnDef {
+                    name: "x".into(),
+                    data_type: DataType::TsVector,
+                    options: vec![],
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match pg_and_generic().verified_stmt("CREATE TABLE foo (x TSQUERY)") {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(
+                columns,
+                vec![ColumnDef {
+                    name: "x".into(),
+                    data_type: DataType::TsQuery,
+                    options: vec![],
                 }]
             );
         }

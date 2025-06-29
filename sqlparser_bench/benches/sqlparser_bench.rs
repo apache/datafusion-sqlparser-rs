@@ -45,25 +45,24 @@ fn basic_queries(c: &mut Criterion) {
 
     let large_statement = {
         let expressions = (0..1000)
-            .map(|n| format!("FN_{}(COL_{})", n, n))
+            .map(|n| format!("FN_{n}(COL_{n})"))
             .collect::<Vec<_>>()
             .join(", ");
         let tables = (0..1000)
-            .map(|n| format!("TABLE_{}", n))
+            .map(|n| format!("TABLE_{n}"))
             .collect::<Vec<_>>()
             .join(" JOIN ");
         let where_condition = (0..1000)
-            .map(|n| format!("COL_{} = {}", n, n))
+            .map(|n| format!("COL_{n} = {n}"))
             .collect::<Vec<_>>()
             .join(" OR ");
         let order_condition = (0..1000)
-            .map(|n| format!("COL_{} DESC", n))
+            .map(|n| format!("COL_{n} DESC"))
             .collect::<Vec<_>>()
             .join(", ");
 
         format!(
-            "SELECT {} FROM {} WHERE {} ORDER BY {}",
-            expressions, tables, where_condition, order_condition
+            "SELECT {expressions} FROM {tables} WHERE {where_condition} ORDER BY {order_condition}"
         )
     };
 

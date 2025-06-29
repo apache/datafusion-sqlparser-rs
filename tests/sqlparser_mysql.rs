@@ -593,7 +593,7 @@ fn parse_use() {
     for object_name in &valid_object_names {
         // Test single identifier without quotes
         assert_eq!(
-            mysql_and_generic().verified_stmt(&format!("USE {}", object_name)),
+            mysql_and_generic().verified_stmt(&format!("USE {object_name}")),
             Statement::Use(Use::Object(ObjectName::from(vec![Ident::new(
                 object_name.to_string()
             )])))
@@ -601,8 +601,7 @@ fn parse_use() {
         for &quote in &quote_styles {
             // Test single identifier with different type of quotes
             assert_eq!(
-                mysql_and_generic()
-                    .verified_stmt(&format!("USE {}{}{}", quote, object_name, quote)),
+                mysql_and_generic().verified_stmt(&format!("USE {quote}{object_name}{quote}")),
                 Statement::Use(Use::Object(ObjectName::from(vec![Ident::with_quote(
                     quote,
                     object_name.to_string(),
@@ -670,6 +669,20 @@ fn table_constraint_unique_primary_ctor(
     characteristics: Option<ConstraintCharacteristics>,
     unique_index_type_display: Option<KeyOrIndexDisplay>,
 ) -> TableConstraint {
+    let columns = columns
+        .into_iter()
+        .map(|ident| IndexColumn {
+            column: OrderByExpr {
+                expr: Expr::Identifier(ident),
+                options: OrderByOptions {
+                    asc: None,
+                    nulls_first: None,
+                },
+                with_fill: None,
+            },
+            operator_class: None,
+        })
+        .collect();
     match unique_index_type_display {
         Some(index_type_display) => TableConstraint::Unique {
             name,
@@ -793,6 +806,67 @@ fn parse_create_table_primary_and_unique_key_with_index_options() {
 
         mysql_and_generic().verified_stmt(sql);
     }
+}
+
+#[test]
+fn parse_prefix_key_part() {
+    let expected = vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::value(
+        number("10"),
+    )))];
+    for sql in [
+        "CREATE INDEX idx_index ON t(textcol(10))",
+        "ALTER TABLE tab ADD INDEX idx_index (textcol(10))",
+        "ALTER TABLE tab ADD PRIMARY KEY (textcol(10))",
+        "ALTER TABLE tab ADD UNIQUE KEY (textcol(10))",
+        "ALTER TABLE tab ADD UNIQUE KEY (textcol(10))",
+        "ALTER TABLE tab ADD FULLTEXT INDEX (textcol(10))",
+        "CREATE TABLE t (textcol TEXT, INDEX idx_index (textcol(10)))",
+    ] {
+        match index_column(mysql_and_generic().verified_stmt(sql)) {
+            Expr::Function(Function {
+                name,
+                args: FunctionArguments::List(FunctionArgumentList { args, .. }),
+                ..
+            }) => {
+                assert_eq!(name.to_string(), "textcol");
+                assert_eq!(args, expected);
+            }
+            expr => panic!("unexpected expression {expr} for {sql}"),
+        }
+    }
+}
+
+#[test]
+fn test_functional_key_part() {
+    assert_eq!(
+        index_column(
+            mysql_and_generic()
+                .verified_stmt("CREATE INDEX idx_index ON t((col COLLATE utf8mb4_bin) DESC)")
+        ),
+        Expr::Nested(Box::new(Expr::Collate {
+            expr: Box::new(Expr::Identifier("col".into())),
+            collation: ObjectName(vec![sqlparser::ast::ObjectNamePart::Identifier(
+                Ident::new("utf8mb4_bin")
+            )]),
+        }))
+    );
+    assert_eq!(
+        index_column(mysql_and_generic().verified_stmt(
+            r#"CREATE TABLE t (jsoncol JSON, PRIMARY KEY ((CAST(col ->> '$.id' AS UNSIGNED)) ASC))"#
+        )),
+        Expr::Nested(Box::new(Expr::Cast {
+            kind: CastKind::Cast,
+            expr: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("col"))),
+                op: BinaryOperator::LongArrow,
+                right: Box::new(Expr::Value(
+                    Value::SingleQuotedString("$.id".to_string()).with_empty_span()
+                )),
+            }),
+            data_type: DataType::Unsigned,
+            format: None,
+        })),
+    );
 }
 
 #[test]
@@ -2188,11 +2262,11 @@ fn parse_qualified_identifiers_with_numeric_prefix() {
                 Some(SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts))) => {
                     assert_eq!(&[Ident::new("t"), Ident::new("15to29")], &parts[..]);
                 }
-                proj => panic!("Unexpected projection: {:?}", proj),
+                proj => panic!("Unexpected projection: {proj:?}"),
             },
-            body => panic!("Unexpected statement body: {:?}", body),
+            body => panic!("Unexpected statement body: {body:?}"),
         },
-        stmt => panic!("Unexpected statement: {:?}", stmt),
+        stmt => panic!("Unexpected statement: {stmt:?}"),
     }
 
     // Case 2: Qualified column name that starts with digits and on its own represents a number.
@@ -2202,11 +2276,11 @@ fn parse_qualified_identifiers_with_numeric_prefix() {
                 Some(SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts))) => {
                     assert_eq!(&[Ident::new("t"), Ident::new("15e29")], &parts[..]);
                 }
-                proj => panic!("Unexpected projection: {:?}", proj),
+                proj => panic!("Unexpected projection: {proj:?}"),
             },
-            body => panic!("Unexpected statement body: {:?}", body),
+            body => panic!("Unexpected statement body: {body:?}"),
         },
-        stmt => panic!("Unexpected statement: {:?}", stmt),
+        stmt => panic!("Unexpected statement: {stmt:?}"),
     }
 
     // Case 3: Unqualified, the same token is parsed as a number.
@@ -2220,11 +2294,11 @@ fn parse_qualified_identifiers_with_numeric_prefix() {
                 Some(SelectItem::UnnamedExpr(Expr::Value(ValueWithSpan { value, .. }))) => {
                     assert_eq!(&number("15e29"), value);
                 }
-                proj => panic!("Unexpected projection: {:?}", proj),
+                proj => panic!("Unexpected projection: {proj:?}"),
             },
-            body => panic!("Unexpected statement body: {:?}", body),
+            body => panic!("Unexpected statement body: {body:?}"),
         },
-        stmt => panic!("Unexpected statement: {:?}", stmt),
+        stmt => panic!("Unexpected statement: {stmt:?}"),
     }
 
     // Case 4: Quoted simple identifier.
@@ -2234,11 +2308,11 @@ fn parse_qualified_identifiers_with_numeric_prefix() {
                 Some(SelectItem::UnnamedExpr(Expr::Identifier(name))) => {
                     assert_eq!(&Ident::with_quote('`', "15e29"), name);
                 }
-                proj => panic!("Unexpected projection: {:?}", proj),
+                proj => panic!("Unexpected projection: {proj:?}"),
             },
-            body => panic!("Unexpected statement body: {:?}", body),
+            body => panic!("Unexpected statement body: {body:?}"),
         },
-        stmt => panic!("Unexpected statement: {:?}", stmt),
+        stmt => panic!("Unexpected statement: {stmt:?}"),
     }
 
     // Case 5: Quoted compound identifier.
@@ -2251,11 +2325,11 @@ fn parse_qualified_identifiers_with_numeric_prefix() {
                         &parts[..]
                     );
                 }
-                proj => panic!("Unexpected projection: {:?}", proj),
+                proj => panic!("Unexpected projection: {proj:?}"),
             },
-            body => panic!("Unexpected statement body: {:?}", body),
+            body => panic!("Unexpected statement body: {body:?}"),
         },
-        stmt => panic!("Unexpected statement: {:?}", stmt),
+        stmt => panic!("Unexpected statement: {stmt:?}"),
     }
 
     // Case 6: Multi-level compound identifiers.
@@ -2272,11 +2346,11 @@ fn parse_qualified_identifiers_with_numeric_prefix() {
                         &parts[..]
                     );
                 }
-                proj => panic!("Unexpected projection: {:?}", proj),
+                proj => panic!("Unexpected projection: {proj:?}"),
             },
-            body => panic!("Unexpected statement body: {:?}", body),
+            body => panic!("Unexpected statement body: {body:?}"),
         },
-        stmt => panic!("Unexpected statement: {:?}", stmt),
+        stmt => panic!("Unexpected statement: {stmt:?}"),
     }
 
     // Case 7: Multi-level compound quoted identifiers.
@@ -2293,11 +2367,11 @@ fn parse_qualified_identifiers_with_numeric_prefix() {
                         &parts[..]
                     );
                 }
-                proj => panic!("Unexpected projection: {:?}", proj),
+                proj => panic!("Unexpected projection: {proj:?}"),
             },
-            body => panic!("Unexpected statement body: {:?}", body),
+            body => panic!("Unexpected statement body: {body:?}"),
         },
-        stmt => panic!("Unexpected statement: {:?}", stmt),
+        stmt => panic!("Unexpected statement: {stmt:?}"),
     }
 }
 
@@ -3989,6 +4063,13 @@ fn parse_straight_join() {
 }
 
 #[test]
+fn mysql_foreign_key_with_index_name() {
+    mysql().verified_stmt(
+        "CREATE TABLE orders (customer_id INT, INDEX idx_customer (customer_id), CONSTRAINT fk_customer FOREIGN KEY idx_customer (customer_id) REFERENCES customers(id))",
+    );
+}
+
+#[test]
 fn parse_drop_index() {
     let sql = "DROP INDEX idx_name ON table_name";
     match mysql().verified_stmt(sql) {
@@ -4017,4 +4098,14 @@ fn parse_drop_index() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_alter_table_drop_index() {
+    assert_matches!(
+        alter_table_op(
+            mysql_and_generic().verified_stmt("ALTER TABLE tab DROP INDEX idx_index")
+        ),
+        AlterTableOperation::DropIndex { name } if name.value == "idx_index"
+    );
 }

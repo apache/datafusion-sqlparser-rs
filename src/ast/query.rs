@@ -2684,6 +2684,79 @@ pub enum PipeOperator {
     /// Syntax: `|> TABLESAMPLE SYSTEM (10 PERCENT)
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#tablesample_pipe_operator>
     TableSample { sample: Box<TableSample> },
+    /// Renames columns in the input table.
+    ///
+    /// Syntax: `|> RENAME old_name AS new_name, ...`
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#rename_pipe_operator>
+    Rename { mappings: Vec<IdentWithAlias> },
+    /// Combines the input table with one or more tables using UNION.
+    ///
+    /// Syntax: `|> UNION [ALL|DISTINCT] (<query>), (<query>), ...`
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#union_pipe_operator>
+    Union {
+        set_quantifier: SetQuantifier,
+        queries: Vec<Query>,
+    },
+    /// Returns only the rows that are present in both the input table and the specified tables.
+    ///
+    /// Syntax: `|> INTERSECT [DISTINCT] (<query>), (<query>), ...`
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#intersect_pipe_operator>
+    Intersect {
+        set_quantifier: SetQuantifier,
+        queries: Vec<Query>,
+    },
+    /// Returns only the rows that are present in the input table but not in the specified tables.
+    ///
+    /// Syntax: `|> EXCEPT DISTINCT (<query>), (<query>), ...`
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#except_pipe_operator>
+    Except {
+        set_quantifier: SetQuantifier,
+        queries: Vec<Query>,
+    },
+    /// Calls a table function or procedure that returns a table.
+    ///
+    /// Syntax: `|> CALL function_name(args) [AS alias]`
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#call_pipe_operator>
+    Call {
+        function: Function,
+        alias: Option<Ident>,
+    },
+    /// Pivots data from rows to columns.
+    ///
+    /// Syntax: `|> PIVOT(aggregate_function(column) FOR pivot_column IN (value1, value2, ...)) [AS alias]`
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#pivot_pipe_operator>
+    Pivot {
+        aggregate_functions: Vec<ExprWithAlias>,
+        value_column: Vec<Ident>,
+        value_source: PivotValueSource,
+        alias: Option<Ident>,
+    },
+    /// The `UNPIVOT` pipe operator transforms columns into rows.
+    ///
+    /// Syntax:
+    /// ```sql
+    /// |> UNPIVOT(value_column FOR name_column IN (column1, column2, ...)) [alias]
+    /// ```
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#unpivot_pipe_operator>
+    Unpivot {
+        value_column: Ident,
+        name_column: Ident,
+        unpivot_columns: Vec<Ident>,
+        alias: Option<Ident>,
+    },
+    /// Joins the input table with another table.
+    ///
+    /// Syntax: `|> [JOIN_TYPE] JOIN <table> [alias] ON <condition>` or `|> [JOIN_TYPE] JOIN <table> [alias] USING (<columns>)`
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#join_pipe_operator>
+    Join(Join),
 }
 
 impl fmt::Display for PipeOperator {
@@ -2739,7 +2812,87 @@ impl fmt::Display for PipeOperator {
             PipeOperator::TableSample { sample } => {
                 write!(f, "{sample}")
             }
+            PipeOperator::Rename { mappings } => {
+                write!(f, "RENAME {}", display_comma_separated(mappings))
+            }
+            PipeOperator::Union {
+                set_quantifier,
+                queries,
+            } => Self::fmt_set_operation(f, "UNION", set_quantifier, queries),
+            PipeOperator::Intersect {
+                set_quantifier,
+                queries,
+            } => Self::fmt_set_operation(f, "INTERSECT", set_quantifier, queries),
+            PipeOperator::Except {
+                set_quantifier,
+                queries,
+            } => Self::fmt_set_operation(f, "EXCEPT", set_quantifier, queries),
+            PipeOperator::Call { function, alias } => {
+                write!(f, "CALL {function}")?;
+                Self::fmt_optional_alias(f, alias)
+            }
+            PipeOperator::Pivot {
+                aggregate_functions,
+                value_column,
+                value_source,
+                alias,
+            } => {
+                write!(
+                    f,
+                    "PIVOT({} FOR {} IN ({}))",
+                    display_comma_separated(aggregate_functions),
+                    Expr::CompoundIdentifier(value_column.to_vec()),
+                    value_source
+                )?;
+                Self::fmt_optional_alias(f, alias)
+            }
+            PipeOperator::Unpivot {
+                value_column,
+                name_column,
+                unpivot_columns,
+                alias,
+            } => {
+                write!(
+                    f,
+                    "UNPIVOT({} FOR {} IN ({}))",
+                    value_column,
+                    name_column,
+                    display_comma_separated(unpivot_columns)
+                )?;
+                Self::fmt_optional_alias(f, alias)
+            }
+            PipeOperator::Join(join) => write!(f, "{join}"),
         }
+    }
+}
+
+impl PipeOperator {
+    /// Helper function to format optional alias for pipe operators
+    fn fmt_optional_alias(f: &mut fmt::Formatter<'_>, alias: &Option<Ident>) -> fmt::Result {
+        if let Some(alias) = alias {
+            write!(f, " AS {alias}")?;
+        }
+        Ok(())
+    }
+
+    /// Helper function to format set operations (UNION, INTERSECT, EXCEPT) with queries
+    fn fmt_set_operation(
+        f: &mut fmt::Formatter<'_>,
+        operation: &str,
+        set_quantifier: &SetQuantifier,
+        queries: &[Query],
+    ) -> fmt::Result {
+        write!(f, "{operation}")?;
+        match set_quantifier {
+            SetQuantifier::None => {}
+            _ => {
+                write!(f, " {set_quantifier}")?;
+            }
+        }
+        write!(f, " ")?;
+        let parenthesized_queries: Vec<String> =
+            queries.iter().map(|query| format!("({query})")).collect();
+        write!(f, "{}", display_comma_separated(&parenthesized_queries))
     }
 }
 

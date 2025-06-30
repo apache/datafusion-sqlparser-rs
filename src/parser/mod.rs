@@ -15833,10 +15833,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        self.expect_keyword_is(Keyword::FOREIGN)?;
-        self.expect_keyword_is(Keyword::DATA)?;
-        self.expect_keyword_is(Keyword::WRAPPER)?;
-
+        self.expect_keywords(&[Keyword::FOREIGN, Keyword::DATA, Keyword::WRAPPER])?;
         let fdw_name = self.parse_object_name(false)?;
 
         let mut options = None;

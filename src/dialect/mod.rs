@@ -1060,20 +1060,6 @@ pub trait Dialect: Debug + Any {
     fn supports_space_separated_column_options(&self) -> bool {
         false
     }
-
-    /// Returns true if the dialect supports `ADD <table_constraint> [NOT VALID]` in `ALTER TABLE` statements.
-    ///
-    /// - [PostgreSQL](https://www.postgresql.org/docs/17/sql-altertable.html)
-    fn supports_constraint_not_valid(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialect supports `VALIDATE CONSTRAINT <constraint_name>` in `ALTER TABLE` statements.
-    ///
-    /// - [PostgreSQL](https://www.postgresql.org/docs/17/sql-altertable.html)
-    fn supports_validate_constraint(&self) -> bool {
-        false
-    }
 }
 
 /// This represents the operators for which precedence must be defined

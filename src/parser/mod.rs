@@ -8477,10 +8477,7 @@ impl<'a> Parser<'a> {
     pub fn parse_alter_table_operation(&mut self) -> Result<AlterTableOperation, ParserError> {
         let operation = if self.parse_keyword(Keyword::ADD) {
             if let Some(constraint) = self.parse_optional_table_constraint()? {
-                let mut not_valid = false;
-                if self.dialect.supports_constraint_not_valid() {
-                    not_valid = self.parse_keywords(&[Keyword::NOT, Keyword::VALID]);
-                }
+                let not_valid = self.parse_keywords(&[Keyword::NOT, Keyword::VALID]);
                 AlterTableOperation::AddConstraint {
                     constraint,
                     not_valid,
@@ -8899,9 +8896,7 @@ impl<'a> Parser<'a> {
             };
 
             AlterTableOperation::ReplicaIdentity { identity }
-        } else if self.parse_keywords(&[Keyword::VALIDATE, Keyword::CONSTRAINT])
-            && self.dialect.supports_validate_constraint()
-        {
+        } else if self.parse_keywords(&[Keyword::VALIDATE, Keyword::CONSTRAINT]) {
             let name = self.parse_identifier()?;
             AlterTableOperation::ValidateConstraint { name }
         } else {

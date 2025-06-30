@@ -11362,7 +11362,11 @@ impl<'a> Parser<'a> {
                 | Keyword::CROSS => {
                     self.prev_token();
                     let mut joins = self.parse_joins()?;
-                    // Take first
+                    if joins.len() != 1 {
+                        return Err(ParserError::ParserError(
+                            "Join pipe operator must have a single join".to_string(),
+                        ));
+                    }
                     let join = joins.swap_remove(0);
                     pipe_operators.push(PipeOperator::Join(join))
                 }

@@ -4662,7 +4662,9 @@ impl<'a> Parser<'a> {
             self.parse_create_procedure(or_alter)
         } else if self.parse_keyword(Keyword::CONNECTOR) {
             self.parse_create_connector()
-        } else if self.parse_keyword(Keyword::SERVER) && dialect_of!(self is PostgreSqlDialect | GenericDialect) {
+        } else if self.parse_keyword(Keyword::SERVER)
+            && dialect_of!(self is PostgreSqlDialect | GenericDialect)
+        {
             self.parse_pg_create_server()
         } else {
             self.expected("an object type after CREATE", self.peek_token())

@@ -5193,24 +5193,24 @@ impl fmt::Display for Statement {
                 server_type,
                 version,
                 fdw_name,
-                options
+                options,
             } => {
                 write!(
                     f,
                     "CREATE SERVER {if_not_exists}{name} ",
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                 )?;
-                
+
                 if let Some(st) = server_type {
                     write!(f, "TYPE {st} ")?;
                 }
-                
+
                 if let Some(v) = version {
                     write!(f, "VERSION {v} ")?;
                 }
-                
+
                 write!(f, "FOREIGN DATA WRAPPER {fdw_name}")?;
-                
+
                 if let Some(o) = options {
                     write!(f, " OPTIONS ({o})", o = display_comma_separated(o))?;
                 }

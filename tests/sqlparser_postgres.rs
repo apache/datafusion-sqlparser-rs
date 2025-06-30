@@ -6231,3 +6231,75 @@ fn parse_ts_datatypes() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn parse_create_server() {
+    assert_eq!(
+        pg_and_generic().verified_stmt("CREATE SERVER myserver FOREIGN DATA WRAPPER postgres_fdw"),
+        Statement::CreateServer {
+            name: ObjectName::from(vec!["myserver".into()]),
+            if_not_exists: false,
+            server_type: None,
+            version: None,
+            fdw_name: ObjectName::from(vec!["postgres_fdw".into()]),
+            options: None,
+        }
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("CREATE SERVER IF NOT EXISTS myserver TYPE 'server_type' VERSION 'server_version' FOREIGN DATA WRAPPER postgres_fdw"),
+        Statement::CreateServer {
+            name: ObjectName::from(vec!["myserver".into()]),
+            if_not_exists: true,
+            server_type: Some(Ident {
+                value: "server_type".to_string(),
+                quote_style: Some('\''),
+                span: Span::empty(),
+            }),
+            version: Some(Ident {
+                value: "server_version".to_string(),
+                quote_style: Some('\''),
+                span: Span::empty(),
+            }),
+            fdw_name: ObjectName::from(vec!["postgres_fdw".into()]),
+            options: None,
+        }
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("CREATE SERVER myserver2 FOREIGN DATA WRAPPER postgres_fdw OPTIONS (host 'foo', dbname 'foodb', port '5432')"),
+        Statement::CreateServer {
+            name: ObjectName::from(vec!["myserver2".into()]),
+            if_not_exists: false,
+            server_type: None,
+            version: None,
+            fdw_name: ObjectName::from(vec!["postgres_fdw".into()]),
+            options: Some(vec![
+                ServerOption {
+                    key: "host".into(),
+                    value: Ident {
+                        value: "foo".to_string(),
+                        quote_style: Some('\''),
+                        span: Span::empty(),
+                    },
+                },
+                ServerOption {
+                    key: "dbname".into(),
+                    value: Ident {
+                        value: "foodb".to_string(),
+                        quote_style: Some('\''),
+                        span: Span::empty(),
+                    },
+                },
+                ServerOption {
+                    key: "port".into(),
+                    value: Ident {
+                        value: "5432".to_string(),
+                        quote_style: Some('\''),
+                        span: Span::empty(),
+                    },
+                },
+            ]),
+        }
+    )
+}

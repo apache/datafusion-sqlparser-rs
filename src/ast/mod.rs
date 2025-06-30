@@ -3316,6 +3316,18 @@ pub enum Statement {
         options: Vec<SecretOption>,
     },
     /// ```sql
+    /// CREATE SERVER
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createserver.html)
+    CreateServer {
+        name: ObjectName,
+        if_not_exists: bool,
+        server_type: Option<Ident>,
+        version: Option<Ident>,
+        fdw_name: ObjectName,
+        options: Option<Vec<ServerOption>>,
+    },
+    /// ```sql
     /// CREATE POLICY
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)
@@ -5173,6 +5185,36 @@ impl fmt::Display for Statement {
                     write!(f, ", {o}", o = display_comma_separated(options))?;
                 }
                 write!(f, " )")?;
+                Ok(())
+            }
+            Statement::CreateServer {
+                name,
+                if_not_exists,
+                server_type,
+                version,
+                fdw_name,
+                options
+            } => {
+                write!(
+                    f,
+                    "CREATE SERVER {if_not_exists}{name} ",
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                )?;
+                
+                if let Some(st) = server_type {
+                    write!(f, "TYPE {st} ")?;
+                }
+                
+                if let Some(v) = version {
+                    write!(f, "VERSION {v} ")?;
+                }
+                
+                write!(f, "FOREIGN DATA WRAPPER {fdw_name}")?;
+                
+                if let Some(o) = options {
+                    write!(f, " OPTIONS ({o})", o = display_comma_separated(o))?;
+                }
+
                 Ok(())
             }
             Statement::CreatePolicy {
@@ -7968,6 +8010,20 @@ pub struct SecretOption {
 }
 
 impl fmt::Display for SecretOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {}", self.key, self.value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ServerOption {
+    pub key: Ident,
+    pub value: Ident,
+}
+
+impl fmt::Display for ServerOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} {}", self.key, self.value)
     }

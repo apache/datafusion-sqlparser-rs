@@ -259,10 +259,6 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
-    fn supports_alter_column_type_without_set(&self) -> bool {
-        true
-    }
-
     fn supports_alter_column_type_using(&self) -> bool {
         true
     }

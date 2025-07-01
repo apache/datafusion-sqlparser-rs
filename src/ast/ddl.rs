@@ -893,7 +893,7 @@ pub enum AlterColumnOperation {
         data_type: DataType,
         /// PostgreSQL specific
         using: Option<Expr>,
-        /// Whether the statement included the optional `SET DATA` keywords
+        /// Set to true if the statement includes the `SET DATA TYPE` keywords
         had_set: bool,
     },
 

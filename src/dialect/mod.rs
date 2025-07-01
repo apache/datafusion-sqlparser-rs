@@ -1061,18 +1061,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if the dialect supports `ALTER TABLE tbl ALTER COLUMN col TYPE <type>`
-    /// without specifying `SET DATA` before `TYPE`.
-    ///
-    /// - [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_ALTER_TABLE.html#r_ALTER_TABLE-synopsis)
-    /// - [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
-    fn supports_alter_column_type_without_set(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialect supports `ALTER TABLE tbl ALTER COLUMN col SET DATA TYPE <type> USING <exp>`
-    ///
-    /// - [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
+    /// Returns true if the dialect supports the `USING` clause in an `ALTER COLUMN` statement.
+    /// Example:
+    ///  ```sql
+    ///  ALTER TABLE tbl ALTER COLUMN col SET DATA TYPE <type> USING <exp>`
+    /// ```
     fn supports_alter_column_type_using(&self) -> bool {
         false
     }

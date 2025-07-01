@@ -8736,9 +8736,7 @@ impl<'a> Parser<'a> {
                 AlterColumnOperation::DropDefault {}
             } else if self.parse_keywords(&[Keyword::SET, Keyword::DATA, Keyword::TYPE]) {
                 self.parse_set_data_type(true)?
-            } else if self.dialect.supports_alter_column_type_without_set()
-                && self.parse_keyword(Keyword::TYPE)
-            {
+            } else if self.parse_keyword(Keyword::TYPE) {
                 self.parse_set_data_type(false)?
             } else if self.parse_keywords(&[Keyword::ADD, Keyword::GENERATED]) {
                 let generated_as = if self.parse_keyword(Keyword::ALWAYS) {

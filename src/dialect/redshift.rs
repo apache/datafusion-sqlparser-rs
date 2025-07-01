@@ -129,8 +129,4 @@ impl Dialect for RedshiftSqlDialect {
     fn supports_string_literal_backslash_escape(&self) -> bool {
         true
     }
-
-    fn supports_alter_column_type_without_set(&self) -> bool {
-        true
-    }
 }

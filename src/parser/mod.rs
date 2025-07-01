@@ -3611,12 +3611,12 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::MEMBER => {
                     if self.parse_keyword(Keyword::OF) {
-                        let _ = self.expect_token(&Token::LParen);
-                        let expr2 = self.parse_expr()?;
-                        let _ = self.expect_token(&Token::RParen);
+                        self.expect_token(&Token::LParen)?;
+                        let array = self.parse_expr()?;
+                        self.expect_token(&Token::RParen)?;
                         Ok(Expr::MemberOf(MemberOf {
                             value: Box::new(expr),
-                            array: Box::new(expr2),
+                            array: Box::new(array),
                         }))
                     } else {
                         self.expected("OF after MEMBER", self.peek_token())

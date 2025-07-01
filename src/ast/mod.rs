@@ -1920,7 +1920,7 @@ impl fmt::Display for Expr {
             }
             Expr::Prior(expr) => write!(f, "PRIOR {expr}"),
             Expr::Lambda(lambda) => write!(f, "{lambda}"),
-            Expr::MemberOf(value, array) => write!(f, "{} MEMBER OF({})", value, array),
+            Expr::MemberOf(value, array) => write!(f, "{value} MEMBER OF({array})"),
         }
     }
 }

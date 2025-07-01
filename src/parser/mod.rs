@@ -3609,6 +3609,16 @@ impl<'a> Parser<'a> {
                         self.expected("IN or BETWEEN after NOT", self.peek_token())
                     }
                 }
+                Keyword::MEMBER => {
+                    if self.parse_keyword(Keyword::OF) {
+                        let _ = self.expect_token(&Token::LParen);
+                        let expr2 = self.parse_expr()?;
+                        let _ = self.expect_token(&Token::RParen);
+                        Ok(Expr::MemberOf(Box::new(expr), Box::new(expr2)))
+                    } else {
+                        self.expected("OF after MEMBER", self.peek_token())
+                    }
+                }
                 // Can only happen if `get_next_precedence` got out of sync with this function
                 _ => parser_err!(
                     format!("No infix parser for token {:?}", tok.token),

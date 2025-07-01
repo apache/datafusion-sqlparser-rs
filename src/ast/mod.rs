@@ -1124,6 +1124,14 @@ pub enum Expr {
     /// [Databricks](https://docs.databricks.com/en/sql/language-manual/sql-ref-lambda-functions.html)
     /// [DuckDb](https://duckdb.org/docs/sql/functions/lambda.html)
     Lambda(LambdaFunction),
+    /// Checks membership of a value in a JSON array
+    ///
+    /// Syntax:
+    /// ```sql
+    /// <value> MEMBER OF(<array>)
+    /// ```
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/json-search-functions.html#operator_member-of)
+    MemberOf(Box<Expr>, Box<Expr>),
 }
 
 impl Expr {
@@ -1912,6 +1920,7 @@ impl fmt::Display for Expr {
             }
             Expr::Prior(expr) => write!(f, "PRIOR {expr}"),
             Expr::Lambda(lambda) => write!(f, "{lambda}"),
+            Expr::MemberOf(value, array) => write!(f, "{} MEMBER OF({})", value, array),
         }
     }
 }

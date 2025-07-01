@@ -4109,3 +4109,9 @@ fn parse_alter_table_drop_index() {
         AlterTableOperation::DropIndex { name } if name.value == "idx_index"
     );
 }
+
+#[test]
+fn parse_json_member_of() {
+    mysql().verified_stmt(r#"SELECT 17 MEMBER OF('[23, "abc", 17, "ab", 10]')"#);
+    mysql().verified_stmt(r#"SELECT 'ab' MEMBER OF('[23, "abc", 17, "ab", 10]')"#);
+}

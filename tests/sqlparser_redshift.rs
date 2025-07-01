@@ -402,3 +402,8 @@ fn parse_extract_single_quotes() {
 fn parse_string_literal_backslash_escape() {
     redshift().one_statement_parses_to(r#"SELECT 'l\'auto'"#, "SELECT 'l''auto'");
 }
+
+#[test]
+fn parse_utf8_multibyte_idents() {
+    redshift().verified_stmt("SELECT 🚀.city AS 🎸 FROM customers AS 🚀");
+}

@@ -11068,10 +11068,17 @@ fn parse_non_latin_identifiers() {
         Box::new(RedshiftSqlDialect {}),
         Box::new(MySqlDialect {}),
     ]);
-
     supported_dialects.verified_stmt("SELECT a.説明 FROM test.public.inter01 AS a");
     supported_dialects.verified_stmt("SELECT a.説明 FROM inter01 AS a, inter01_transactions AS b WHERE a.説明 = b.取引 GROUP BY a.説明");
     supported_dialects.verified_stmt("SELECT 説明, hühnervögel, garçon, Москва, 東京 FROM inter01");
+
+    let supported_dialects = TestedDialects::new(vec![
+        Box::new(GenericDialect {}),
+        Box::new(DuckDbDialect {}),
+        Box::new(PostgreSqlDialect {}),
+        Box::new(MsSqlDialect {}),
+        Box::new(MySqlDialect {}),
+    ]);
     assert!(supported_dialects
         .parse_sql_statements("SELECT 💝 FROM table1")
         .is_err());

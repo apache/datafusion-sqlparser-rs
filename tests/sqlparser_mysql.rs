@@ -4113,5 +4113,24 @@ fn parse_alter_table_drop_index() {
 #[test]
 fn parse_json_member_of() {
     mysql().verified_stmt(r#"SELECT 17 MEMBER OF('[23, "abc", 17, "ab", 10]')"#);
-    mysql().verified_stmt(r#"SELECT 'ab' MEMBER OF('[23, "abc", 17, "ab", 10]')"#);
+    let sql = r#"SELECT 'ab' MEMBER OF('[23, "abc", 17, "ab", 10]')"#;
+    let stmt = mysql().verified_stmt(sql);
+    match stmt {
+        Statement::Query(query) => {
+            let select = query.body.as_select().unwrap();
+            assert_eq!(
+                select.projection,
+                vec![SelectItem::UnnamedExpr(Expr::MemberOf(MemberOf {
+                    value: Box::new(Expr::Value(
+                        Value::SingleQuotedString("ab".to_string()).into()
+                    )),
+                    array: Box::new(Expr::Value(
+                        Value::SingleQuotedString(r#"[23, "abc", 17, "ab", 10]"#.to_string())
+                            .into()
+                    )),
+                }))]
+            );
+        }
+        _ => panic!("Unexpected statement {stmt}"),
+    }
 }

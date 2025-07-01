@@ -3614,7 +3614,10 @@ impl<'a> Parser<'a> {
                         let _ = self.expect_token(&Token::LParen);
                         let expr2 = self.parse_expr()?;
                         let _ = self.expect_token(&Token::RParen);
-                        Ok(Expr::MemberOf(Box::new(expr), Box::new(expr2)))
+                        Ok(Expr::MemberOf(MemberOf {
+                            value: Box::new(expr),
+                            array: Box::new(expr2),
+                        }))
                     } else {
                         self.expected("OF after MEMBER", self.peek_token())
                     }

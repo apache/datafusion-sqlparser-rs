@@ -1619,7 +1619,7 @@ impl Spanned for Expr {
             Expr::OuterJoin(expr) => expr.span(),
             Expr::Prior(expr) => expr.span(),
             Expr::Lambda(_) => Span::empty(),
-            Expr::MemberOf(value, array) => value.span().union(&array.span()),
+            Expr::MemberOf(member_of) => member_of.value.span().union(&member_of.array.span()),
         }
     }
 }

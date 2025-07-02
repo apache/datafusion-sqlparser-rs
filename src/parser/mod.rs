@@ -8673,11 +8673,15 @@ impl<'a> Parser<'a> {
             } else {
                 let has_column_keyword = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
                 let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-                let column_name = self.parse_identifier()?;
+                let column_names = if self.dialect.supports_comma_separated_drop_column_list() {
+                    self.parse_comma_separated(Parser::parse_identifier)?
+                } else {
+                    vec![self.parse_identifier()?]
+                };
                 let drop_behavior = self.parse_optional_drop_behavior();
                 AlterTableOperation::DropColumn {
                     has_column_keyword,
-                    column_name,
+                    column_names,
                     if_exists,
                     drop_behavior,
                 }

@@ -364,6 +364,10 @@ impl Dialect for SnowflakeDialect {
     fn supports_space_separated_column_options(&self) -> bool {
         true
     }
+
+    fn supports_comma_separated_drop_column_list(&self) -> bool {
+        true
+    }
 }
 
 fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statement, ParserError> {

@@ -4979,15 +4979,18 @@ fn parse_alter_table_drop_column() {
         "ALTER TABLE tab DROP is_active CASCADE",
     );
 
+    let dialects = all_dialects_where(|d| d.supports_comma_separated_drop_column_list());
+    dialects.verified_stmt("ALTER TABLE tbl DROP COLUMN c1, c2, c3");
+
     fn check_one(constraint_text: &str) {
         match alter_table_op(verified_stmt(&format!("ALTER TABLE tab {constraint_text}"))) {
             AlterTableOperation::DropColumn {
                 has_column_keyword: true,
-                column_name,
+                column_names,
                 if_exists,
                 drop_behavior,
             } => {
-                assert_eq!("is_active", column_name.to_string());
+                assert_eq!("is_active", column_names.first().unwrap().to_string());
                 assert!(if_exists);
                 match drop_behavior {
                     None => assert!(constraint_text.ends_with(" is_active")),

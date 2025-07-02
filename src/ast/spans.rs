@@ -1111,10 +1111,10 @@ impl Spanned for AlterTableOperation {
             } => name.span,
             AlterTableOperation::DropColumn {
                 has_column_keyword: _,
-                column_name,
+                column_names,
                 if_exists: _,
                 drop_behavior: _,
-            } => column_name.span,
+            } => union_spans(column_names.iter().map(|i| i.span)),
             AlterTableOperation::AttachPartition { partition } => partition.span(),
             AlterTableOperation::DetachPartition { partition } => partition.span(),
             AlterTableOperation::FreezePartition {

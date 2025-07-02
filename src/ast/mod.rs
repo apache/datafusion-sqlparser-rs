@@ -996,7 +996,7 @@ pub enum Expr {
         data_type: DataType,
         /// The value of the constant.
         /// Hint: you can unwrap the string value using `value.into_string()`.
-        value: Value,
+        value: ValueWithSpan,
     },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),

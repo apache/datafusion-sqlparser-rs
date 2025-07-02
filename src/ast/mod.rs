@@ -34,6 +34,7 @@ use core::{
     fmt::{self, Display},
     hash,
 };
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 

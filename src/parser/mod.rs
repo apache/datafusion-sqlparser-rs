@@ -15808,13 +15808,9 @@ impl<'a> Parser<'a> {
         Ok(sequence_options)
     }
 
-    /// ```sql
-    ///     CREATE SERVER [ IF NOT EXISTS ] server_name [ TYPE 'server_type' ] [ VERSION 'server_version' ]
-    ///     FOREIGN DATA WRAPPER fdw_name
-    ///     [ OPTIONS ( option 'value' [, ... ] ) ]
-    /// ```
+    ///   Parse a `CREATE SERVER` statement.
     ///
-    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createserver.html)
+    ///  See [Statement::CreateServer]
     pub fn parse_pg_create_server(&mut self) -> Result<Statement, ParserError> {
         let ine = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let name = self.parse_object_name(false)?;

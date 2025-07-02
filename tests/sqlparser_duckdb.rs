@@ -24,6 +24,7 @@ use test_utils::*;
 
 use sqlparser::ast::*;
 use sqlparser::dialect::{DuckDbDialect, GenericDialect};
+use sqlparser::parser::ParserError;
 
 fn duckdb() -> TestedDialects {
     TestedDialects::new(vec![Box::new(DuckDbDialect {})])
@@ -828,5 +829,34 @@ fn parse_use() {
             Ident::new("mydb"),
             Ident::new("my_schema")
         ])))
+    );
+}
+
+#[test]
+fn test_duckdb_trim() {
+    let real_sql = r#"SELECT customer_id, TRIM(item_price_id, '"', "a") AS item_price_id FROM models_staging.subscriptions"#;
+    assert_eq!(duckdb().verified_stmt(real_sql).to_string(), real_sql);
+
+    let sql_only_select = "SELECT TRIM('xyz', 'a')";
+    let select = duckdb().verified_only_select(sql_only_select);
+    assert_eq!(
+        &Expr::Trim {
+            expr: Box::new(Expr::Value(
+                Value::SingleQuotedString("xyz".to_owned()).with_empty_span()
+            )),
+            trim_where: None,
+            trim_what: None,
+            trim_characters: Some(vec![Expr::Value(
+                Value::SingleQuotedString("a".to_owned()).with_empty_span()
+            )]),
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    // missing comma separation
+    let error_sql = "SELECT TRIM('xyz' 'a')";
+    assert_eq!(
+        ParserError::ParserError("Expected: ), found: 'a'".to_owned()),
+        duckdb().parse_sql_statements(error_sql).unwrap_err()
     );
 }

@@ -7762,7 +7762,6 @@ fn parse_trim() {
         Box::new(MySqlDialect {}),
         //Box::new(BigQueryDialect {}),
         Box::new(SQLiteDialect {}),
-        Box::new(DuckDbDialect {}),
     ]);
 
     assert_eq!(

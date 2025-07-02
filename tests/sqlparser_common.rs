@@ -11125,15 +11125,8 @@ fn parse_trailing_comma() {
     );
     trailing_commas.verified_stmt(r#"SELECT "from" FROM "from""#);
 
-    // doesn't allow any trailing commas
+    // doesn't allow all trailing commas
     let trailing_commas = TestedDialects::new(vec![Box::new(GenericDialect {})]);
-
-    assert_eq!(
-        trailing_commas
-            .parse_sql_statements("SELECT name, age, from employees;")
-            .unwrap_err(),
-        ParserError::ParserError("Expected an expression, found: from".to_string())
-    );
 
     assert_eq!(
         trailing_commas

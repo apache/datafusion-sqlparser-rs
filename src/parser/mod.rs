@@ -15840,19 +15840,19 @@ impl<'a> Parser<'a> {
             options = Some(self.parse_comma_separated(|p| {
                 let key = p.parse_identifier()?;
                 let value = p.parse_identifier()?;
-                Ok(ServerOption { key, value })
+                Ok(CreateServerOption { key, value })
             })?);
             self.expect_token(&Token::RParen)?;
         }
 
-        Ok(CreateServer {
+        Ok(CreateServer(CreateServerStatement {
             name,
             if_not_exists: ine,
             server_type,
             version,
             foreign_data_wrapper,
             options,
-        })
+        }))
     }
 
     /// The index of the first unprocessed token.

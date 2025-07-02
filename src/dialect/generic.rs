@@ -116,6 +116,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_projection_trailing_commas(&self) -> bool {
+        true
+    }
+
     fn supports_asc_desc_in_column_definition(&self) -> bool {
         true
     }

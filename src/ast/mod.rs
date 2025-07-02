@@ -7980,13 +7980,6 @@ impl fmt::Display for SecretOption {
 
 /// A `CREATE SERVER` statement.
 ///
-/// Examples:
-/// ```sql
-///     CREATE SERVER [ IF NOT EXISTS ] server_name [ TYPE 'server_type' ] [ VERSION 'server_version' ]
-///     FOREIGN DATA WRAPPER fdw_name
-///     [ OPTIONS ( option 'value' [, ... ] ) ]
-/// ```
-///
 /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createserver.html)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

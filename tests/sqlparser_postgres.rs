@@ -6241,7 +6241,7 @@ fn parse_create_server() {
             if_not_exists: false,
             server_type: None,
             version: None,
-            fdw_name: ObjectName::from(vec!["postgres_fdw".into()]),
+            foreign_data_wrapper: ObjectName::from(vec!["postgres_fdw".into()]),
             options: None,
         }
     );
@@ -6261,7 +6261,7 @@ fn parse_create_server() {
                 quote_style: Some('\''),
                 span: Span::empty(),
             }),
-            fdw_name: ObjectName::from(vec!["postgres_fdw".into()]),
+            foreign_data_wrapper: ObjectName::from(vec!["postgres_fdw".into()]),
             options: None,
         }
     );
@@ -6273,7 +6273,7 @@ fn parse_create_server() {
             if_not_exists: false,
             server_type: None,
             version: None,
-            fdw_name: ObjectName::from(vec!["postgres_fdw".into()]),
+            foreign_data_wrapper: ObjectName::from(vec!["postgres_fdw".into()]),
             options: Some(vec![
                 ServerOption {
                     key: "host".into(),

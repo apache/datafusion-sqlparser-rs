@@ -4662,8 +4662,7 @@ impl<'a> Parser<'a> {
             self.parse_create_procedure(or_alter)
         } else if self.parse_keyword(Keyword::CONNECTOR) {
             self.parse_create_connector()
-        } else if self.parse_keyword(Keyword::SERVER)
-        {
+        } else if self.parse_keyword(Keyword::SERVER) {
             self.parse_pg_create_server()
         } else {
             self.expected("an object type after CREATE", self.peek_token())
@@ -15833,7 +15832,7 @@ impl<'a> Parser<'a> {
         };
 
         self.expect_keywords(&[Keyword::FOREIGN, Keyword::DATA, Keyword::WRAPPER])?;
-        let fdw_name = self.parse_object_name(false)?;
+        let foreign_data_wrapper = self.parse_object_name(false)?;
 
         let mut options = None;
         if self.parse_keyword(Keyword::OPTIONS) {
@@ -15851,7 +15850,7 @@ impl<'a> Parser<'a> {
             if_not_exists: ine,
             server_type,
             version,
-            fdw_name,
+            foreign_data_wrapper,
             options,
         })
     }

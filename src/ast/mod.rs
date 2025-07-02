@@ -3324,7 +3324,7 @@ pub enum Statement {
         if_not_exists: bool,
         server_type: Option<Ident>,
         version: Option<Ident>,
-        fdw_name: ObjectName,
+        foreign_data_wrapper: ObjectName,
         options: Option<Vec<ServerOption>>,
     },
     /// ```sql
@@ -5192,7 +5192,7 @@ impl fmt::Display for Statement {
                 if_not_exists,
                 server_type,
                 version,
-                fdw_name,
+                foreign_data_wrapper,
                 options,
             } => {
                 write!(
@@ -5209,7 +5209,7 @@ impl fmt::Display for Statement {
                     write!(f, "VERSION {v} ")?;
                 }
 
-                write!(f, "FOREIGN DATA WRAPPER {fdw_name}")?;
+                write!(f, "FOREIGN DATA WRAPPER {foreign_data_wrapper}")?;
 
                 if let Some(o) = options {
                     write!(f, " OPTIONS ({o})", o = display_comma_separated(o))?;

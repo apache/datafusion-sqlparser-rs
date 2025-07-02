@@ -4663,7 +4663,6 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::CONNECTOR) {
             self.parse_create_connector()
         } else if self.parse_keyword(Keyword::SERVER)
-            && dialect_of!(self is PostgreSqlDialect | GenericDialect)
         {
             self.parse_pg_create_server()
         } else {

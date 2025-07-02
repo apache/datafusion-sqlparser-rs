@@ -29,7 +29,6 @@ use helpers::{
 };
 
 use core::cmp::Ordering;
-use core::fmt::Formatter;
 use core::ops::Deref;
 use core::{
     fmt::{self, Display},
@@ -7994,7 +7993,7 @@ pub struct CreateServerStatement {
 }
 
 impl fmt::Display for CreateServerStatement {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let CreateServerStatement {
             name,
             if_not_exists,

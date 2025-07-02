@@ -33,7 +33,7 @@ use IsLateral::*;
 use IsOptional::*;
 
 use crate::ast::helpers::stmt_create_table::{CreateTableBuilder, CreateTableConfiguration};
-use crate::ast::Statement::{CreatePolicy, CreateServer};
+use crate::ast::Statement::CreatePolicy;
 use crate::ast::*;
 use crate::dialect::*;
 use crate::keywords::{Keyword, ALL_KEYWORDS};
@@ -15841,7 +15841,7 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
         }
 
-        Ok(CreateServer(CreateServerStatement {
+        Ok(Statement::CreateServer(CreateServerStatement {
             name,
             if_not_exists: ine,
             server_type,

@@ -5852,7 +5852,10 @@ fn parse_literal_date() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::Date,
-            value: Value::SingleQuotedString("1999-01-01".into()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("1999-01-01".into()),
+                span: Span::empty(),
+            }
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5865,7 +5868,10 @@ fn parse_literal_time() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::Time(None, TimezoneInfo::None),
-            value: Value::SingleQuotedString("01:23:34".into()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("01:23:34".into()),
+                span: Span::empty(),
+            },
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5878,7 +5884,10 @@ fn parse_literal_datetime() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::Datetime(None),
-            value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into()),
+                span: Span::empty(),
+            },
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5891,7 +5900,10 @@ fn parse_literal_timestamp_without_time_zone() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::Timestamp(None, TimezoneInfo::None),
-            value: Value::SingleQuotedString("1999-01-01 01:23:34".into()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("1999-01-01 01:23:34".into()),
+                span: Span::empty(),
+            },
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5906,7 +5918,10 @@ fn parse_literal_timestamp_with_time_zone() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::Timestamp(None, TimezoneInfo::Tz),
-            value: Value::SingleQuotedString("1999-01-01 01:23:34Z".into()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("1999-01-01 01:23:34Z".into()),
+                span: Span::empty(),
+            },
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -6478,8 +6493,9 @@ fn parse_json_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::JSON,
-            value: Value::SingleQuotedString(
-                r#"{
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString(
+                    r#"{
   "id": 10,
   "type": "fruit",
   "name": "apple",
@@ -6499,8 +6515,10 @@ fn parse_json_keyword() {
       ]
     }
 }"#
-                .to_string()
-            )
+                    .to_string()
+                ),
+                span: Span::empty(),
+            }
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -6512,7 +6530,10 @@ fn parse_typed_strings() {
     assert_eq!(
         Expr::TypedString {
             data_type: DataType::JSON,
-            value: Value::SingleQuotedString(r#"{"foo":"bar"}"#.into())
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString(r#"{"foo":"bar"}"#.into()),
+                span: Span::empty(),
+            }
         },
         expr
     );
@@ -6530,7 +6551,10 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: Value::SingleQuotedString(r#"0"#.into())
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString(r#"0"#.into()),
+                span: Span::empty(),
+            }
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -6541,7 +6565,10 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: Value::SingleQuotedString(r#"123456"#.into())
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString(r#"123456"#.into()),
+                span: Span::empty(),
+            }
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -6552,7 +6579,10 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: Value::SingleQuotedString(r#"-3.14"#.into())
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString(r#"-3.14"#.into()),
+                span: Span::empty(),
+            }
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -6563,7 +6593,10 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: Value::SingleQuotedString(r#"-0.54321"#.into())
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString(r#"-0.54321"#.into()),
+                span: Span::empty(),
+            }
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -6574,7 +6607,10 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: Value::SingleQuotedString(r#"1.23456e05"#.into())
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString(r#"1.23456e05"#.into()),
+                span: Span::empty(),
+            }
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -6585,7 +6621,10 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: Value::SingleQuotedString(r#"-9.876e-3"#.into())
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString(r#"-9.876e-3"#.into()),
+                span: Span::empty(),
+            }
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -14834,7 +14873,10 @@ fn test_geometry_type() {
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
         Expr::TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Point),
-            value: Value::SingleQuotedString("1,2".to_string()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("1,2".to_string()),
+                span: Span::empty(),
+            },
         }
     );
 
@@ -14843,7 +14885,10 @@ fn test_geometry_type() {
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
         Expr::TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Line),
-            value: Value::SingleQuotedString("1,2,3,4".to_string()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("1,2,3,4".to_string()),
+                span: Span::empty(),
+            },
         }
     );
 
@@ -14852,7 +14897,10 @@ fn test_geometry_type() {
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
         Expr::TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::GeometricPath),
-            value: Value::SingleQuotedString("1,2,3,4".to_string()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("1,2,3,4".to_string()),
+                span: Span::empty(),
+            },
         }
     );
     let sql = "box '1,2,3,4'";
@@ -14860,7 +14908,10 @@ fn test_geometry_type() {
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
         Expr::TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::GeometricBox),
-            value: Value::SingleQuotedString("1,2,3,4".to_string()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("1,2,3,4".to_string()),
+                span: Span::empty(),
+            },
         }
     );
 
@@ -14869,7 +14920,10 @@ fn test_geometry_type() {
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
         Expr::TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Circle),
-            value: Value::SingleQuotedString("1,2,3".to_string()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("1,2,3".to_string()),
+                span: Span::empty(),
+            },
         }
     );
 
@@ -14878,7 +14932,10 @@ fn test_geometry_type() {
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
         Expr::TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Polygon),
-            value: Value::SingleQuotedString("1,2,3,4".to_string()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("1,2,3,4".to_string()),
+                span: Span::empty(),
+            },
         }
     );
     let sql = "lseg '1,2,3,4'";
@@ -14886,7 +14943,10 @@ fn test_geometry_type() {
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
         Expr::TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::LineSegment),
-            value: Value::SingleQuotedString("1,2,3,4".to_string()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("1,2,3,4".to_string()),
+                span: Span::empty(),
+            },
         }
     );
 }

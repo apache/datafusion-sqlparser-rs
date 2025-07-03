@@ -1124,6 +1124,8 @@ pub enum Expr {
     /// [Databricks](https://docs.databricks.com/en/sql/language-manual/sql-ref-lambda-functions.html)
     /// [DuckDb](https://duckdb.org/docs/sql/functions/lambda.html)
     Lambda(LambdaFunction),
+    /// Checks membership of a value in a JSON array
+    MemberOf(MemberOf),
 }
 
 impl Expr {
@@ -1912,6 +1914,7 @@ impl fmt::Display for Expr {
             }
             Expr::Prior(expr) => write!(f, "PRIOR {expr}"),
             Expr::Lambda(lambda) => write!(f, "{lambda}"),
+            Expr::MemberOf(member_of) => write!(f, "{member_of}"),
         }
     }
 }
@@ -9828,6 +9831,27 @@ impl fmt::Display for NullInclusion {
             NullInclusion::IncludeNulls => write!(f, "INCLUDE NULLS"),
             NullInclusion::ExcludeNulls => write!(f, "EXCLUDE NULLS"),
         }
+    }
+}
+
+/// Checks membership of a value in a JSON array
+///
+/// Syntax:
+/// ```sql
+/// <value> MEMBER OF(<array>)
+/// ```
+/// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/json-search-functions.html#operator_member-of)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct MemberOf {
+    pub value: Box<Expr>,
+    pub array: Box<Expr>,
+}
+
+impl fmt::Display for MemberOf {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} MEMBER OF({})", self.value, self.array)
     }
 }
 

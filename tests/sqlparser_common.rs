@@ -5057,22 +5057,21 @@ fn parse_alter_table_alter_column_type() {
                 AlterColumnOperation::SetDataType {
                     data_type: DataType::Text,
                     using: None,
+                    had_set: true,
                 }
             );
         }
         _ => unreachable!(),
     }
+    verified_stmt(&format!("{alter_stmt} ALTER COLUMN is_active TYPE TEXT"));
 
-    let dialect = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+    let dialects = all_dialects_where(|d| d.supports_alter_column_type_using());
+    dialects.verified_stmt(&format!(
+        "{alter_stmt} ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'"
+    ));
 
-    let res =
-        dialect.parse_sql_statements(&format!("{alter_stmt} ALTER COLUMN is_active TYPE TEXT"));
-    assert_eq!(
-        ParserError::ParserError("Expected: SET/DROP NOT NULL, SET DEFAULT, or SET DATA TYPE after ALTER COLUMN, found: TYPE".to_string()),
-        res.unwrap_err()
-    );
-
-    let res = dialect.parse_sql_statements(&format!(
+    let dialects = all_dialects_except(|d| d.supports_alter_column_type_using());
+    let res = dialects.parse_sql_statements(&format!(
         "{alter_stmt} ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'"
     ));
     assert_eq!(

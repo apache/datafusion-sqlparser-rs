@@ -924,6 +924,7 @@ impl Spanned for AlterColumnOperation {
             AlterColumnOperation::SetDataType {
                 data_type: _,
                 using,
+                had_set: _,
             } => using.as_ref().map_or(Span::empty(), |u| u.span()),
             AlterColumnOperation::AddGenerated { .. } => Span::empty(),
         }

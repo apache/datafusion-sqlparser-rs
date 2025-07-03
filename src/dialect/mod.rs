@@ -1060,6 +1060,15 @@ pub trait Dialect: Debug + Any {
     fn supports_space_separated_column_options(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect supports the `USING` clause in an `ALTER COLUMN` statement.
+    /// Example:
+    ///  ```sql
+    ///  ALTER TABLE tbl ALTER COLUMN col SET DATA TYPE <type> USING <exp>`
+    /// ```
+    fn supports_alter_column_type_using(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

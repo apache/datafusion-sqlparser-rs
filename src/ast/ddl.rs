@@ -893,7 +893,10 @@ pub enum AlterColumnOperation {
         data_type: DataType,
         /// PostgreSQL specific
         using: Option<Expr>,
+        /// Set to true if the statement includes the `SET DATA TYPE` keywords
+        had_set: bool,
     },
+
     /// `ADD GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY [ ( sequence_options ) ]`
     ///
     /// Note: this is a PostgreSQL-specific operation.
@@ -914,12 +917,19 @@ impl fmt::Display for AlterColumnOperation {
             AlterColumnOperation::DropDefault => {
                 write!(f, "DROP DEFAULT")
             }
-            AlterColumnOperation::SetDataType { data_type, using } => {
-                if let Some(expr) = using {
-                    write!(f, "SET DATA TYPE {data_type} USING {expr}")
-                } else {
-                    write!(f, "SET DATA TYPE {data_type}")
+            AlterColumnOperation::SetDataType {
+                data_type,
+                using,
+                had_set,
+            } => {
+                if *had_set {
+                    write!(f, "SET DATA ")?;
                 }
+                write!(f, "TYPE {data_type}")?;
+                if let Some(expr) = using {
+                    write!(f, " USING {expr}")?;
+                }
+                Ok(())
             }
             AlterColumnOperation::AddGenerated {
                 generated_as,

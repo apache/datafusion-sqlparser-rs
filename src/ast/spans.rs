@@ -1075,7 +1075,10 @@ impl Spanned for CreateTableOptions {
 impl Spanned for AlterTableOperation {
     fn span(&self) -> Span {
         match self {
-            AlterTableOperation::AddConstraint(table_constraint) => table_constraint.span(),
+            AlterTableOperation::AddConstraint {
+                constraint,
+                not_valid: _,
+            } => constraint.span(),
             AlterTableOperation::AddColumn {
                 column_keyword: _,
                 if_not_exists: _,
@@ -1196,6 +1199,7 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::AutoIncrement { value, .. } => value.span(),
             AlterTableOperation::Lock { .. } => Span::empty(),
             AlterTableOperation::ReplicaIdentity { .. } => Span::empty(),
+            AlterTableOperation::ValidateConstraint { name } => name.span,
         }
     }
 }

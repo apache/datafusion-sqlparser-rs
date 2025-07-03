@@ -4956,7 +4956,7 @@ fn parse_alter_table_constraints() {
         match alter_table_op(verified_stmt(&format!(
             "ALTER TABLE tab ADD {constraint_text}"
         ))) {
-            AlterTableOperation::AddConstraint(constraint) => {
+            AlterTableOperation::AddConstraint { constraint, .. } => {
                 assert_eq!(constraint_text, constraint.to_string());
             }
             _ => unreachable!(),

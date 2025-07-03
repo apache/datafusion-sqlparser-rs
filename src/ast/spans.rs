@@ -1415,7 +1415,6 @@ impl Spanned for AssignmentTarget {
 /// f.e. `IS NULL <expr>` reports as `<expr>::span`.
 ///
 /// Missing spans:
-/// - [Expr::TypedString] # missing span for data_type
 /// - [Expr::MatchAgainst] # MySQL specific
 /// - [Expr::RLike] # MySQL specific
 /// - [Expr::Struct] # BigQuery specific

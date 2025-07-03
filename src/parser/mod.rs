@@ -1521,7 +1521,7 @@ impl<'a> Parser<'a> {
                 DataType::Custom(..) => parser_err!("dummy", loc),
                 data_type => Ok(Expr::TypedString {
                     data_type,
-                    value: parser.parse_value()?.value,
+                    value: parser.parse_value()?,
                 }),
             }
         })?;
@@ -1708,10 +1708,9 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_geometric_type(&mut self, kind: GeometricTypeKind) -> Result<Expr, ParserError> {
-        let value: Value = self.parse_value()?.value;
         Ok(Expr::TypedString {
             data_type: DataType::GeometricType(kind),
-            value,
+            value: self.parse_value()?,
         })
     }
 

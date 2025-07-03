@@ -19,6 +19,7 @@ use sqlparser::ast::helpers::attached_token::AttachedToken;
 use sqlparser::ast::*;
 use sqlparser::dialect::{DatabricksDialect, GenericDialect};
 use sqlparser::parser::ParserError;
+use sqlparser::tokenizer::Span;
 use test_utils::*;
 
 #[macro_use]
@@ -328,7 +329,10 @@ fn data_type_timestamp_ntz() {
         databricks().verified_expr("TIMESTAMP_NTZ '2025-03-29T18:52:00'"),
         Expr::TypedString {
             data_type: DataType::TimestampNtz,
-            value: Value::SingleQuotedString("2025-03-29T18:52:00".to_owned())
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("2025-03-29T18:52:00".to_owned()),
+                span: Span::empty(),
+            }
         }
     );
 

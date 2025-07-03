@@ -5257,7 +5257,10 @@ fn parse_at_time_zone() {
         left: Box::new(Expr::AtTimeZone {
             timestamp: Box::new(Expr::TypedString {
                 data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                value: Value::SingleQuotedString("2001-09-28 01:00".to_string()),
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString("2001-09-28 01:00".to_string()),
+                    span: Span::empty(),
+                },
             }),
             time_zone: Box::new(Expr::Cast {
                 kind: CastKind::DoubleColon,

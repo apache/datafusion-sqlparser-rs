@@ -13898,6 +13898,15 @@ impl<'a> Parser<'a> {
                     schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
                 })
             } else if self.parse_keywords(&[
+                Keyword::ALL,
+                Keyword::VIEWS,
+                Keyword::IN,
+                Keyword::SCHEMA,
+            ]) {
+                Some(GrantObjects::AllViewsInSchema {
+                    schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                })
+            } else if self.parse_keywords(&[
                 Keyword::FUTURE,
                 Keyword::SCHEMAS,
                 Keyword::IN,

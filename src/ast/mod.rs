@@ -3318,6 +3318,8 @@ pub enum Statement {
         secret_type: Ident,
         options: Vec<SecretOption>,
     },
+    /// A `CREATE SERVER` statement.
+    CreateServer(CreateServerStatement),
     /// ```sql
     /// CREATE POLICY
     /// ```
@@ -5177,6 +5179,9 @@ impl fmt::Display for Statement {
                 }
                 write!(f, " )")?;
                 Ok(())
+            }
+            Statement::CreateServer(stmt) => {
+                write!(f, "{stmt}")
             }
             Statement::CreatePolicy {
                 name,
@@ -7971,6 +7976,70 @@ pub struct SecretOption {
 }
 
 impl fmt::Display for SecretOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {}", self.key, self.value)
+    }
+}
+
+/// A `CREATE SERVER` statement.
+///
+/// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createserver.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateServerStatement {
+    pub name: ObjectName,
+    pub if_not_exists: bool,
+    pub server_type: Option<Ident>,
+    pub version: Option<Ident>,
+    pub foreign_data_wrapper: ObjectName,
+    pub options: Option<Vec<CreateServerOption>>,
+}
+
+impl fmt::Display for CreateServerStatement {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let CreateServerStatement {
+            name,
+            if_not_exists,
+            server_type,
+            version,
+            foreign_data_wrapper,
+            options,
+        } = self;
+
+        write!(
+            f,
+            "CREATE SERVER {if_not_exists}{name} ",
+            if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+        )?;
+
+        if let Some(st) = server_type {
+            write!(f, "TYPE {st} ")?;
+        }
+
+        if let Some(v) = version {
+            write!(f, "VERSION {v} ")?;
+        }
+
+        write!(f, "FOREIGN DATA WRAPPER {foreign_data_wrapper}")?;
+
+        if let Some(o) = options {
+            write!(f, " OPTIONS ({o})", o = display_comma_separated(o))?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateServerOption {
+    pub key: Ident,
+    pub value: Ident,
+}
+
+impl fmt::Display for CreateServerOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} {}", self.key, self.value)
     }

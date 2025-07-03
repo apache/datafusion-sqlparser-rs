@@ -4674,6 +4674,8 @@ impl<'a> Parser<'a> {
             self.parse_create_procedure(or_alter)
         } else if self.parse_keyword(Keyword::CONNECTOR) {
             self.parse_create_connector()
+        } else if self.parse_keyword(Keyword::SERVER) {
+            self.parse_pg_create_server()
         } else {
             self.expected("an object type after CREATE", self.peek_token())
         }
@@ -16007,6 +16009,49 @@ impl<'a> Parser<'a> {
         }
 
         Ok(sequence_options)
+    }
+
+    ///   Parse a `CREATE SERVER` statement.
+    ///
+    ///  See [Statement::CreateServer]
+    pub fn parse_pg_create_server(&mut self) -> Result<Statement, ParserError> {
+        let ine = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let name = self.parse_object_name(false)?;
+
+        let server_type = if self.parse_keyword(Keyword::TYPE) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+
+        let version = if self.parse_keyword(Keyword::VERSION) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+
+        self.expect_keywords(&[Keyword::FOREIGN, Keyword::DATA, Keyword::WRAPPER])?;
+        let foreign_data_wrapper = self.parse_object_name(false)?;
+
+        let mut options = None;
+        if self.parse_keyword(Keyword::OPTIONS) {
+            self.expect_token(&Token::LParen)?;
+            options = Some(self.parse_comma_separated(|p| {
+                let key = p.parse_identifier()?;
+                let value = p.parse_identifier()?;
+                Ok(CreateServerOption { key, value })
+            })?);
+            self.expect_token(&Token::RParen)?;
+        }
+
+        Ok(Statement::CreateServer(CreateServerStatement {
+            name,
+            if_not_exists: ine,
+            server_type,
+            version,
+            foreign_data_wrapper,
+            options,
+        }))
     }
 
     /// The index of the first unprocessed token.

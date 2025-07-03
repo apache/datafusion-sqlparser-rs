@@ -6273,3 +6273,82 @@ fn parse_alter_table_validate_constraint() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn parse_create_server() {
+    let test_cases = vec![
+        (
+            "CREATE SERVER myserver FOREIGN DATA WRAPPER postgres_fdw",
+            CreateServerStatement {
+                name: ObjectName::from(vec!["myserver".into()]),
+                if_not_exists: false,
+                server_type: None,
+                version: None,
+                foreign_data_wrapper: ObjectName::from(vec!["postgres_fdw".into()]),
+                options: None,
+            },
+        ),
+        (
+            "CREATE SERVER IF NOT EXISTS myserver TYPE 'server_type' VERSION 'server_version' FOREIGN DATA WRAPPER postgres_fdw",
+            CreateServerStatement {
+            name: ObjectName::from(vec!["myserver".into()]),
+            if_not_exists: true,
+            server_type: Some(Ident {
+                value: "server_type".to_string(),
+                quote_style: Some('\''),
+                span: Span::empty(),
+            }),
+            version: Some(Ident {
+                value: "server_version".to_string(),
+                quote_style: Some('\''),
+                span: Span::empty(),
+            }),
+            foreign_data_wrapper: ObjectName::from(vec!["postgres_fdw".into()]),
+            options: None,
+        }
+        ),
+        (
+            "CREATE SERVER myserver2 FOREIGN DATA WRAPPER postgres_fdw OPTIONS (host 'foo', dbname 'foodb', port '5432')",
+            CreateServerStatement {
+                name: ObjectName::from(vec!["myserver2".into()]),
+                if_not_exists: false,
+                server_type: None,
+                version: None,
+                foreign_data_wrapper: ObjectName::from(vec!["postgres_fdw".into()]),
+                options: Some(vec![
+                    CreateServerOption {
+                        key: "host".into(),
+                        value: Ident {
+                            value: "foo".to_string(),
+                            quote_style: Some('\''),
+                            span: Span::empty(),
+                        },
+                    },
+                    CreateServerOption {
+                        key: "dbname".into(),
+                        value: Ident {
+                            value: "foodb".to_string(),
+                            quote_style: Some('\''),
+                            span: Span::empty(),
+                        },
+                    },
+                    CreateServerOption {
+                        key: "port".into(),
+                        value: Ident {
+                            value: "5432".to_string(),
+                            quote_style: Some('\''),
+                            span: Span::empty(),
+                        },
+                    },
+                ]),
+            }
+        )
+    ];
+
+    for (sql, expected) in test_cases {
+        let Statement::CreateServer(stmt) = pg_and_generic().verified_stmt(sql) else {
+            unreachable!()
+        };
+        assert_eq!(stmt, expected);
+    }
+}

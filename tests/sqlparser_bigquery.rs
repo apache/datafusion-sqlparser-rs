@@ -906,7 +906,10 @@ fn parse_typed_struct_syntax_bigquery() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::Datetime(None),
-                value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into())
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into()),
+                    span: Span::empty(),
+                },
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -965,9 +968,12 @@ fn parse_typed_struct_syntax_bigquery() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::JSON,
-                value: Value::SingleQuotedString(
-                    r#"{"class" : {"students" : [{"name" : "Jane"}]}}"#.into()
-                )
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString(
+                        r#"{"class" : {"students" : [{"name" : "Jane"}]}}"#.into()
+                    ),
+                    span: Span::empty(),
+                }
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -998,7 +1004,12 @@ fn parse_typed_struct_syntax_bigquery() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                value: Value::SingleQuotedString("2008-12-25 15:30:00 America/Los_Angeles".into())
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString(
+                        "2008-12-25 15:30:00 America/Los_Angeles".into()
+                    ),
+                    span: Span::empty(),
+                },
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -1013,7 +1024,10 @@ fn parse_typed_struct_syntax_bigquery() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::Time(None, TimezoneInfo::None),
-                value: Value::SingleQuotedString("15:30:00".into())
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString("15:30:00".into()),
+                    span: Span::empty(),
+                }
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -1031,7 +1045,10 @@ fn parse_typed_struct_syntax_bigquery() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::Numeric(ExactNumberInfo::None),
-                value: Value::SingleQuotedString("1".into())
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString("1".into()),
+                    span: Span::empty(),
+                }
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -1045,7 +1062,10 @@ fn parse_typed_struct_syntax_bigquery() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::BigNumeric(ExactNumberInfo::None),
-                value: Value::SingleQuotedString("1".into())
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString("1".into()),
+                    span: Span::empty(),
+                }
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -1219,7 +1239,10 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::Datetime(None),
-                value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into())
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into()),
+                    span: Span::empty(),
+                }
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -1278,9 +1301,12 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::JSON,
-                value: Value::SingleQuotedString(
-                    r#"{"class" : {"students" : [{"name" : "Jane"}]}}"#.into()
-                )
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString(
+                        r#"{"class" : {"students" : [{"name" : "Jane"}]}}"#.into()
+                    ),
+                    span: Span::empty(),
+                }
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -1311,7 +1337,12 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                value: Value::SingleQuotedString("2008-12-25 15:30:00 America/Los_Angeles".into())
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString(
+                        "2008-12-25 15:30:00 America/Los_Angeles".into()
+                    ),
+                    span: Span::empty(),
+                }
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -1326,7 +1357,10 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::Time(None, TimezoneInfo::None),
-                value: Value::SingleQuotedString("15:30:00".into())
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString("15:30:00".into()),
+                    span: Span::empty(),
+                }
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -1344,7 +1378,10 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::Numeric(ExactNumberInfo::None),
-                value: Value::SingleQuotedString("1".into())
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString("1".into()),
+                    span: Span::empty(),
+                }
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -1358,7 +1395,10 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::BigNumeric(ExactNumberInfo::None),
-                value: Value::SingleQuotedString("1".into())
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString("1".into()),
+                    span: Span::empty(),
+                }
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -2393,7 +2433,10 @@ fn test_triple_quote_typed_strings() {
     assert_eq!(
         Expr::TypedString {
             data_type: DataType::JSON,
-            value: Value::TripleDoubleQuotedString(r#"{"foo":"bar's"}"#.into())
+            value: ValueWithSpan {
+                value: Value::TripleDoubleQuotedString(r#"{"foo":"bar's"}"#.into()),
+                span: Span::empty(),
+            }
         },
         expr
     );

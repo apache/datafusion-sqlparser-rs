@@ -925,6 +925,7 @@ impl Spanned for AlterColumnOperation {
             AlterColumnOperation::SetDataType {
                 data_type: _,
                 using,
+                had_set: _,
             } => using.as_ref().map_or(Span::empty(), |u| u.span()),
             AlterColumnOperation::AddGenerated { .. } => Span::empty(),
         }
@@ -1075,7 +1076,10 @@ impl Spanned for CreateTableOptions {
 impl Spanned for AlterTableOperation {
     fn span(&self) -> Span {
         match self {
-            AlterTableOperation::AddConstraint(table_constraint) => table_constraint.span(),
+            AlterTableOperation::AddConstraint {
+                constraint,
+                not_valid: _,
+            } => constraint.span(),
             AlterTableOperation::AddColumn {
                 column_keyword: _,
                 if_not_exists: _,
@@ -1196,6 +1200,7 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::AutoIncrement { value, .. } => value.span(),
             AlterTableOperation::Lock { .. } => Span::empty(),
             AlterTableOperation::ReplicaIdentity { .. } => Span::empty(),
+            AlterTableOperation::ValidateConstraint { name } => name.span,
         }
     }
 }
@@ -1411,7 +1416,6 @@ impl Spanned for AssignmentTarget {
 /// f.e. `IS NULL <expr>` reports as `<expr>::span`.
 ///
 /// Missing spans:
-/// - [Expr::TypedString] # missing span for data_type
 /// - [Expr::MatchAgainst] # MySQL specific
 /// - [Expr::RLike] # MySQL specific
 /// - [Expr::Struct] # BigQuery specific
@@ -1620,6 +1624,7 @@ impl Spanned for Expr {
             Expr::OuterJoin(expr) => expr.span(),
             Expr::Prior(expr) => expr.span(),
             Expr::Lambda(_) => Span::empty(),
+            Expr::MemberOf(member_of) => member_of.value.span().union(&member_of.array.span()),
         }
     }
 }

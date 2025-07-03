@@ -982,6 +982,7 @@ define_keywords!(
     UUID,
     VACUUM,
     VALID,
+    VALIDATE,
     VALIDATION_MODE,
     VALUE,
     VALUES,

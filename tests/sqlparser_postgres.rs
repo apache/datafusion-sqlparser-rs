@@ -606,9 +606,10 @@ fn parse_alter_table_constraints_unique_nulls_distinct() {
         .verified_stmt("ALTER TABLE t ADD CONSTRAINT b UNIQUE NULLS NOT DISTINCT (c)")
     {
         Statement::AlterTable { operations, .. } => match &operations[0] {
-            AlterTableOperation::AddConstraint(TableConstraint::Unique {
-                nulls_distinct, ..
-            }) => {
+            AlterTableOperation::AddConstraint {
+                constraint: TableConstraint::Unique { nulls_distinct, .. },
+                ..
+            } => {
                 assert_eq!(nulls_distinct, &NullsDistinctOption::NotDistinct)
             }
             _ => unreachable!(),
@@ -764,10 +765,7 @@ fn parse_drop_extension() {
 
 #[test]
 fn parse_alter_table_alter_column() {
-    pg().one_statement_parses_to(
-        "ALTER TABLE tab ALTER COLUMN is_active TYPE TEXT USING 'text'",
-        "ALTER TABLE tab ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'",
-    );
+    pg().verified_stmt("ALTER TABLE tab ALTER COLUMN is_active TYPE TEXT USING 'text'");
 
     match alter_table_op(
         pg().verified_stmt(
@@ -783,6 +781,7 @@ fn parse_alter_table_alter_column() {
                 AlterColumnOperation::SetDataType {
                     data_type: DataType::Text,
                     using: Some(using_expr),
+                    had_set: true,
                 }
             );
         }
@@ -5258,7 +5257,10 @@ fn parse_at_time_zone() {
         left: Box::new(Expr::AtTimeZone {
             timestamp: Box::new(Expr::TypedString {
                 data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                value: Value::SingleQuotedString("2001-09-28 01:00".to_string()),
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString("2001-09-28 01:00".to_string()),
+                    span: Span::empty(),
+                },
             }),
             time_zone: Box::new(Expr::Cast {
                 kind: CastKind::DoubleColon,
@@ -6226,6 +6228,46 @@ fn parse_ts_datatypes() {
                     data_type: DataType::TsQuery,
                     options: vec![],
                 }]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_table_constraint_not_valid() {
+    match pg_and_generic().verified_stmt(
+        "ALTER TABLE foo ADD CONSTRAINT bar FOREIGN KEY (baz) REFERENCES other(ref) NOT VALID",
+    ) {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::AddConstraint {
+                    constraint: TableConstraint::ForeignKey {
+                        name: Some("bar".into()),
+                        index_name: None,
+                        columns: vec!["baz".into()],
+                        foreign_table: ObjectName::from(vec!["other".into()]),
+                        referred_columns: vec!["ref".into()],
+                        on_delete: None,
+                        on_update: None,
+                        characteristics: None,
+                    },
+                    not_valid: true,
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_table_validate_constraint() {
+    match pg_and_generic().verified_stmt("ALTER TABLE foo VALIDATE CONSTRAINT bar") {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::ValidateConstraint { name: "bar".into() }]
             );
         }
         _ => unreachable!(),

@@ -1189,7 +1189,7 @@ fn parse_column_policy_property(
     parser: &mut Parser,
     with: bool,
 ) -> Result<ColumnPolicyProperty, ParserError> {
-    let policy_name = parser.parse_identifier()?;
+    let policy_name = parser.parse_object_name(false)?;
     let using_columns = if parser.parse_keyword(Keyword::USING) {
         parser.expect_token(&Token::LParen)?;
         let columns = parser.parse_comma_separated(|p| p.parse_identifier())?;

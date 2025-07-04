@@ -6930,12 +6930,22 @@ pub enum GrantObjects {
     AllTablesInSchema { schemas: Vec<ObjectName> },
     /// Grant privileges on `ALL VIEWS IN SCHEMA <schema_name> [, ...]`
     AllViewsInSchema { schemas: Vec<ObjectName> },
+    /// Grant privileges on `ALL MATERIALIZED VIEWS IN SCHEMA <schema_name> [, ...]`
+    AllMaterializedViewsInSchema { schemas: Vec<ObjectName> },
+    /// Grant privileges on `ALL EXTERNAL TABLES IN SCHEMA <schema_name> [, ...]`
+    AllExternalTablesInSchema { schemas: Vec<ObjectName> },
     /// Grant privileges on `FUTURE SCHEMAS IN DATABASE <database_name> [, ...]`
     FutureSchemasInDatabase { databases: Vec<ObjectName> },
     /// Grant privileges on `FUTURE TABLES IN SCHEMA <schema_name> [, ...]`
     FutureTablesInSchema { schemas: Vec<ObjectName> },
     /// Grant privileges on `FUTURE VIEWS IN SCHEMA <schema_name> [, ...]`
     FutureViewsInSchema { schemas: Vec<ObjectName> },
+    /// Grant privileges on `FUTURE EXTERNAL TABLES IN SCHEMA <schema_name> [, ...]`
+    FutureExternalTablesInSchema { schemas: Vec<ObjectName> },
+    /// Grant privileges on `FUTURE MATERIALIZED VIEWS IN SCHEMA <schema_name> [, ...]`
+    FutureMaterializedViewsInSchema { schemas: Vec<ObjectName> },
+    /// Grant privileges on `FUTURE SEQUENCES IN SCHEMA <schema_name> [, ...]`
+    FutureSequencesInSchema { schemas: Vec<ObjectName> },
     /// Grant privileges on specific databases
     Databases(Vec<ObjectName>),
     /// Grant privileges on specific schemas
@@ -7004,10 +7014,24 @@ impl fmt::Display for GrantObjects {
                     display_comma_separated(schemas)
                 )
             }
+            GrantObjects::AllExternalTablesInSchema { schemas } => {
+                write!(
+                    f,
+                    "ALL EXTERNAL TABLES IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
             GrantObjects::AllViewsInSchema { schemas } => {
                 write!(
                     f,
                     "ALL VIEWS IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
+            GrantObjects::AllMaterializedViewsInSchema { schemas } => {
+                write!(
+                    f,
+                    "ALL MATERIALIZED VIEWS IN SCHEMA {}",
                     display_comma_separated(schemas)
                 )
             }
@@ -7025,10 +7049,31 @@ impl fmt::Display for GrantObjects {
                     display_comma_separated(schemas)
                 )
             }
+            GrantObjects::FutureExternalTablesInSchema { schemas } => {
+                write!(
+                    f,
+                    "FUTURE EXTERNAL TABLES IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
             GrantObjects::FutureViewsInSchema { schemas } => {
                 write!(
                     f,
                     "FUTURE VIEWS IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
+            GrantObjects::FutureMaterializedViewsInSchema { schemas } => {
+                write!(
+                    f,
+                    "FUTURE MATERIALIZED VIEWS IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
+            GrantObjects::FutureSequencesInSchema { schemas } => {
+                write!(
+                    f,
+                    "FUTURE SEQUENCES IN SCHEMA {}",
                     display_comma_separated(schemas)
                 )
             }

@@ -9415,6 +9415,8 @@ fn parse_grant() {
     verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO APPLICATION ROLE role1");
     verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO SHARE share1");
     verified_stmt("GRANT SELECT ON ALL VIEWS IN SCHEMA db1.sc1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON ALL MATERIALIZED VIEWS IN SCHEMA db1.sc1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON ALL EXTERNAL TABLES IN SCHEMA db1.sc1 TO ROLE role1");
     verified_stmt("GRANT USAGE ON SCHEMA sc1 TO a:b");
     verified_stmt("GRANT USAGE ON SCHEMA sc1 TO GROUP group1");
     verified_stmt("GRANT OWNERSHIP ON ALL TABLES IN SCHEMA DEV_STAS_ROGOZHIN TO ROLE ANALYST");
@@ -9428,7 +9430,10 @@ fn parse_grant() {
         .verified_stmt("GRANT SELECT ON [my_table] TO [public]");
     verified_stmt("GRANT SELECT ON FUTURE SCHEMAS IN DATABASE db1 TO ROLE role1");
     verified_stmt("GRANT SELECT ON FUTURE TABLES IN SCHEMA db1.sc1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON FUTURE EXTERNAL TABLES IN SCHEMA db1.sc1 TO ROLE role1");
     verified_stmt("GRANT SELECT ON FUTURE VIEWS IN SCHEMA db1.sc1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON FUTURE MATERIALIZED VIEWS IN SCHEMA db1.sc1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON FUTURE SEQUENCES IN SCHEMA db1.sc1 TO ROLE role1");
 }
 
 #[test]

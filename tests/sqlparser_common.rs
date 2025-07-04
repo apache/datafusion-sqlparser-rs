@@ -2040,7 +2040,7 @@ fn parse_ilike() {
                 pattern: Box::new(Expr::Value(
                     (Value::SingleQuotedString("%a".to_string())).with_empty_span()
                 )),
-                escape_char: Some('^'.to_string()),
+                escape_char: Some(Value::SingleQuotedString('^'.to_string())),
                 any: false,
             },
             select.selection.unwrap()
@@ -2104,7 +2104,7 @@ fn parse_like() {
                 pattern: Box::new(Expr::Value(
                     (Value::SingleQuotedString("%a".to_string())).with_empty_span()
                 )),
-                escape_char: Some('^'.to_string()),
+                escape_char: Some(Value::SingleQuotedString('^'.to_string())),
                 any: false,
             },
             select.selection.unwrap()
@@ -2167,7 +2167,24 @@ fn parse_similar_to() {
                 pattern: Box::new(Expr::Value(
                     (Value::SingleQuotedString("%a".to_string())).with_empty_span()
                 )),
-                escape_char: Some('^'.to_string()),
+                escape_char: Some(Value::SingleQuotedString('^'.to_string())),
+            },
+            select.selection.unwrap()
+        );
+
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE NULL",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            Expr::SimilarTo {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(
+                    (Value::SingleQuotedString("%a".to_string())).with_empty_span()
+                )),
+                escape_char: Some(Value::Null),
             },
             select.selection.unwrap()
         );
@@ -2185,7 +2202,7 @@ fn parse_similar_to() {
                 pattern: Box::new(Expr::Value(
                     (Value::SingleQuotedString("%a".to_string())).with_empty_span()
                 )),
-                escape_char: Some('^'.to_string()),
+                escape_char: Some(Value::SingleQuotedString('^'.to_string())),
             })),
             select.selection.unwrap()
         );

@@ -30,11 +30,11 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
-    display_comma_separated, display_separated, CommentDef, CreateFunctionBody,
+    display_comma_separated, display_separated, ArgMode, CommentDef, CreateFunctionBody,
     CreateFunctionUsing, DataType, Expr, FunctionBehavior, FunctionCalledOnNull,
-    FunctionDeterminismSpecifier, FunctionParallel, Ident, MySQLColumnPosition, ObjectName,
-    OperateFunctionArg, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Tag, Value,
-    ValueWithSpan,
+    FunctionDeterminismSpecifier, FunctionParallel, Ident, IndexColumn, MySQLColumnPosition,
+    ObjectName, OperateFunctionArg, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Tag,
+    Value, ValueWithSpan,
 };
 use crate::keywords::Keyword;
 use crate::tokenizer::Token;
@@ -57,7 +57,7 @@ impl fmt::Display for ReplicaIdentity {
             ReplicaIdentity::None => f.write_str("NONE"),
             ReplicaIdentity::Full => f.write_str("FULL"),
             ReplicaIdentity::Default => f.write_str("DEFAULT"),
-            ReplicaIdentity::Index(idx) => write!(f, "USING INDEX {}", idx),
+            ReplicaIdentity::Index(idx) => write!(f, "USING INDEX {idx}"),
         }
     }
 }
@@ -67,8 +67,11 @@ impl fmt::Display for ReplicaIdentity {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AlterTableOperation {
-    /// `ADD <table_constraint>`
-    AddConstraint(TableConstraint),
+    /// `ADD <table_constraint> [NOT VALID]`
+    AddConstraint {
+        constraint: TableConstraint,
+        not_valid: bool,
+    },
     /// `ADD [COLUMN] [IF NOT EXISTS] <column_def>`
     AddColumn {
         /// `[COLUMN]`.
@@ -344,6 +347,10 @@ pub enum AlterTableOperation {
         equals: bool,
         value: ValueWithSpan,
     },
+    /// `VALIDATE CONSTRAINT <name>`
+    ValidateConstraint {
+        name: Ident,
+    },
 }
 
 /// An `ALTER Policy` (`Statement::AlterPolicy`) operation
@@ -450,7 +457,7 @@ pub enum Owner {
 impl fmt::Display for Owner {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Owner::Ident(ident) => write!(f, "{}", ident),
+            Owner::Ident(ident) => write!(f, "{ident}"),
             Owner::CurrentRole => write!(f, "CURRENT_ROLE"),
             Owner::CurrentUser => write!(f, "CURRENT_USER"),
             Owner::SessionUser => write!(f, "SESSION_USER"),
@@ -494,7 +501,16 @@ impl fmt::Display for AlterTableOperation {
                 display_separated(new_partitions, " "),
                 ine = if *if_not_exists { " IF NOT EXISTS" } else { "" }
             ),
-            AlterTableOperation::AddConstraint(c) => write!(f, "ADD {c}"),
+            AlterTableOperation::AddConstraint {
+                not_valid,
+                constraint,
+            } => {
+                write!(f, "ADD {constraint}")?;
+                if *not_valid {
+                    write!(f, " NOT VALID")?;
+                }
+                Ok(())
+            }
             AlterTableOperation::AddColumn {
                 column_keyword,
                 if_not_exists,
@@ -525,7 +541,7 @@ impl fmt::Display for AlterTableOperation {
                 if *if_not_exists {
                     write!(f, " IF NOT EXISTS")?;
                 }
-                write!(f, " {} ({})", name, query)
+                write!(f, " {name} ({query})")
             }
             AlterTableOperation::Algorithm { equals, algorithm } => {
                 write!(
@@ -540,7 +556,7 @@ impl fmt::Display for AlterTableOperation {
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }
-                write!(f, " {}", name)
+                write!(f, " {name}")
             }
             AlterTableOperation::MaterializeProjection {
                 if_exists,
@@ -551,9 +567,9 @@ impl fmt::Display for AlterTableOperation {
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }
-                write!(f, " {}", name)?;
+                write!(f, " {name}")?;
                 if let Some(partition) = partition {
-                    write!(f, " IN PARTITION {}", partition)?;
+                    write!(f, " IN PARTITION {partition}")?;
                 }
                 Ok(())
             }
@@ -566,9 +582,9 @@ impl fmt::Display for AlterTableOperation {
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }
-                write!(f, " {}", name)?;
+                write!(f, " {name}")?;
                 if let Some(partition) = partition {
-                    write!(f, " IN PARTITION {}", partition)?;
+                    write!(f, " IN PARTITION {partition}")?;
                 }
                 Ok(())
             }
@@ -772,6 +788,9 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::ReplicaIdentity { identity } => {
                 write!(f, "REPLICA IDENTITY {identity}")
             }
+            AlterTableOperation::ValidateConstraint { name } => {
+                write!(f, "VALIDATE CONSTRAINT {name}")
+            }
         }
     }
 }
@@ -893,7 +912,10 @@ pub enum AlterColumnOperation {
         data_type: DataType,
         /// PostgreSQL specific
         using: Option<Expr>,
+        /// Set to true if the statement includes the `SET DATA TYPE` keywords
+        had_set: bool,
     },
+
     /// `ADD GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY [ ( sequence_options ) ]`
     ///
     /// Note: this is a PostgreSQL-specific operation.
@@ -914,12 +936,19 @@ impl fmt::Display for AlterColumnOperation {
             AlterColumnOperation::DropDefault => {
                 write!(f, "DROP DEFAULT")
             }
-            AlterColumnOperation::SetDataType { data_type, using } => {
-                if let Some(expr) = using {
-                    write!(f, "SET DATA TYPE {data_type} USING {expr}")
-                } else {
-                    write!(f, "SET DATA TYPE {data_type}")
+            AlterColumnOperation::SetDataType {
+                data_type,
+                using,
+                had_set,
+            } => {
+                if *had_set {
+                    write!(f, "SET DATA ")?;
                 }
+                write!(f, "TYPE {data_type}")?;
+                if let Some(expr) = using {
+                    write!(f, " USING {expr}")?;
+                }
+                Ok(())
             }
             AlterColumnOperation::AddGenerated {
                 generated_as,
@@ -979,7 +1008,7 @@ pub enum TableConstraint {
         /// [1]: IndexType
         index_type: Option<IndexType>,
         /// Identifiers of the columns that are unique.
-        columns: Vec<Ident>,
+        columns: Vec<IndexColumn>,
         index_options: Vec<IndexOption>,
         characteristics: Option<ConstraintCharacteristics>,
         /// Optional Postgres nulls handling: `[ NULLS [ NOT ] DISTINCT ]`
@@ -1015,7 +1044,7 @@ pub enum TableConstraint {
         /// [1]: IndexType
         index_type: Option<IndexType>,
         /// Identifiers of the columns that form the primary key.
-        columns: Vec<Ident>,
+        columns: Vec<IndexColumn>,
         index_options: Vec<IndexOption>,
         characteristics: Option<ConstraintCharacteristics>,
     },
@@ -1060,7 +1089,7 @@ pub enum TableConstraint {
         /// [1]: IndexType
         index_type: Option<IndexType>,
         /// Referred column identifier list.
-        columns: Vec<Ident>,
+        columns: Vec<IndexColumn>,
     },
     /// MySQLs [fulltext][1] definition. Since the [`SPATIAL`][2] definition is exactly the same,
     /// and MySQL displays both the same way, it is part of this definition as well.
@@ -1083,7 +1112,7 @@ pub enum TableConstraint {
         /// Optional index name.
         opt_index_name: Option<Ident>,
         /// Referred column identifier list.
-        columns: Vec<Ident>,
+        columns: Vec<IndexColumn>,
     },
 }
 
@@ -1168,7 +1197,7 @@ impl fmt::Display for TableConstraint {
                     write!(f, " ON UPDATE {action}")?;
                 }
                 if let Some(characteristics) = characteristics {
-                    write!(f, " {}", characteristics)?;
+                    write!(f, " {characteristics}")?;
                 }
                 Ok(())
             }
@@ -1308,7 +1337,7 @@ impl fmt::Display for IndexType {
             Self::SPGiST => write!(f, "SPGIST"),
             Self::BRIN => write!(f, "BRIN"),
             Self::Bloom => write!(f, "BLOOM"),
-            Self::Custom(name) => write!(f, "{}", name),
+            Self::Custom(name) => write!(f, "{name}"),
         }
     }
 }
@@ -1367,11 +1396,16 @@ impl fmt::Display for NullsDistinctOption {
 pub struct ProcedureParam {
     pub name: Ident,
     pub data_type: DataType,
+    pub mode: Option<ArgMode>,
 }
 
 impl fmt::Display for ProcedureParam {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {}", self.name, self.data_type)
+        if let Some(mode) = &self.mode {
+            write!(f, "{mode} {} {}", self.name, self.data_type)
+        } else {
+            write!(f, "{} {}", self.name, self.data_type)
+        }
     }
 }
 
@@ -1421,17 +1455,41 @@ impl fmt::Display for ColumnDef {
 pub struct ViewColumnDef {
     pub name: Ident,
     pub data_type: Option<DataType>,
-    pub options: Option<Vec<ColumnOption>>,
+    pub options: Option<ColumnOptions>,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ColumnOptions {
+    CommaSeparated(Vec<ColumnOption>),
+    SpaceSeparated(Vec<ColumnOption>),
+}
+
+impl ColumnOptions {
+    pub fn as_slice(&self) -> &[ColumnOption] {
+        match self {
+            ColumnOptions::CommaSeparated(options) => options.as_slice(),
+            ColumnOptions::SpaceSeparated(options) => options.as_slice(),
+        }
+    }
 }
 
 impl fmt::Display for ViewColumnDef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.name)?;
         if let Some(data_type) = self.data_type.as_ref() {
-            write!(f, " {}", data_type)?;
+            write!(f, " {data_type}")?;
         }
         if let Some(options) = self.options.as_ref() {
-            write!(f, " {}", display_comma_separated(options.as_slice()))?;
+            match options {
+                ColumnOptions::CommaSeparated(column_options) => {
+                    write!(f, " {}", display_comma_separated(column_options.as_slice()))?;
+                }
+                ColumnOptions::SpaceSeparated(column_options) => {
+                    write!(f, " {}", display_separated(column_options.as_slice(), " "))?
+                }
+            }
         }
         Ok(())
     }
@@ -1816,7 +1874,7 @@ impl fmt::Display for ColumnOption {
             } => {
                 write!(f, "{}", if *is_primary { "PRIMARY KEY" } else { "UNIQUE" })?;
                 if let Some(characteristics) = characteristics {
-                    write!(f, " {}", characteristics)?;
+                    write!(f, " {characteristics}")?;
                 }
                 Ok(())
             }
@@ -1838,7 +1896,7 @@ impl fmt::Display for ColumnOption {
                     write!(f, " ON UPDATE {action}")?;
                 }
                 if let Some(characteristics) = characteristics {
-                    write!(f, " {}", characteristics)?;
+                    write!(f, " {characteristics}")?;
                 }
                 Ok(())
             }
@@ -1898,7 +1956,7 @@ impl fmt::Display for ColumnOption {
                 write!(f, "{parameters}")
             }
             OnConflict(keyword) => {
-                write!(f, "ON CONFLICT {:?}", keyword)?;
+                write!(f, "ON CONFLICT {keyword:?}")?;
                 Ok(())
             }
             Policy(parameters) => {

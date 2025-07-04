@@ -28,6 +28,7 @@ use helpers::{
     stmt_data_loading::{FileStagingCommand, StageLoadSelectItemKind},
 };
 
+use core::cmp::Ordering;
 use core::ops::Deref;
 use core::{
     fmt::{self, Display},
@@ -60,13 +61,14 @@ pub use self::ddl::{
     AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterPolicyOperation,
     AlterTableAlgorithm, AlterTableLock, AlterTableOperation, AlterType, AlterTypeAddValue,
     AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
-    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnPolicy, ColumnPolicyProperty,
-    ConstraintCharacteristics, CreateConnector, CreateDomain, CreateFunction, Deduplicate,
-    DeferrableInitial, DropBehavior, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
-    IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
-    IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition,
-    ProcedureParam, ReferentialAction, ReplicaIdentity, TableConstraint, TagsColumnOption,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
+    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy,
+    ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain, CreateFunction,
+    Deduplicate, DeferrableInitial, DropBehavior, GeneratedAs, GeneratedExpressionMode,
+    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
+    IdentityPropertyOrder, IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner,
+    Partition, ProcedureParam, ReferentialAction, ReplicaIdentity, TableConstraint,
+    TagsColumnOption, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
+    ViewColumnDef,
 };
 pub use self::dml::{CreateIndex, CreateTable, Delete, IndexColumn, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -172,7 +174,7 @@ fn format_statement_list(f: &mut fmt::Formatter, statements: &[Statement]) -> fm
 }
 
 /// An identifier, decomposed into its value or character data and the quote style.
-#[derive(Debug, Clone, PartialOrd, Ord)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Ident {
@@ -213,6 +215,35 @@ impl core::hash::Hash for Ident {
 }
 
 impl Eq for Ident {}
+
+impl PartialOrd for Ident {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Ident {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let Ident {
+            value,
+            quote_style,
+            // exhaustiveness check; we ignore spans in ordering
+            span: _,
+        } = self;
+
+        let Ident {
+            value: other_value,
+            quote_style: other_quote_style,
+            // exhaustiveness check; we ignore spans in ordering
+            span: _,
+        } = other;
+
+        // First compare by value, then by quote_style
+        value
+            .cmp(other_value)
+            .then_with(|| quote_style.cmp(other_quote_style))
+    }
+}
 
 impl Ident {
     /// Create a new identifier with the given value and no quotes and an empty span.
@@ -326,7 +357,7 @@ impl ObjectNamePart {
 impl fmt::Display for ObjectNamePart {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ObjectNamePart::Identifier(ident) => write!(f, "{}", ident),
+            ObjectNamePart::Identifier(ident) => write!(f, "{ident}"),
         }
     }
 }
@@ -748,7 +779,7 @@ pub enum Expr {
     /// `[ NOT ] IN (SELECT ...)`
     InSubquery {
         expr: Box<Expr>,
-        subquery: Box<SetExpr>,
+        subquery: Box<Query>,
         negated: bool,
     },
     /// `[ NOT ] IN UNNEST(array_expression)`
@@ -965,7 +996,7 @@ pub enum Expr {
         data_type: DataType,
         /// The value of the constant.
         /// Hint: you can unwrap the string value using `value.into_string()`.
-        value: Value,
+        value: ValueWithSpan,
     },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
@@ -1093,6 +1124,8 @@ pub enum Expr {
     /// [Databricks](https://docs.databricks.com/en/sql/language-manual/sql-ref-lambda-functions.html)
     /// [DuckDb](https://duckdb.org/docs/sql/functions/lambda.html)
     Lambda(LambdaFunction),
+    /// Checks membership of a value in a JSON array
+    MemberOf(MemberOf),
 }
 
 impl Expr {
@@ -1179,8 +1212,8 @@ pub enum AccessExpr {
 impl fmt::Display for AccessExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AccessExpr::Dot(expr) => write!(f, ".{}", expr),
-            AccessExpr::Subscript(subscript) => write!(f, "[{}]", subscript),
+            AccessExpr::Dot(expr) => write!(f, ".{expr}"),
+            AccessExpr::Subscript(subscript) => write!(f, "[{subscript}]"),
         }
     }
 }
@@ -1382,12 +1415,12 @@ impl fmt::Display for Expr {
         match self {
             Expr::Identifier(s) => write!(f, "{s}"),
             Expr::Wildcard(_) => f.write_str("*"),
-            Expr::QualifiedWildcard(prefix, _) => write!(f, "{}.*", prefix),
+            Expr::QualifiedWildcard(prefix, _) => write!(f, "{prefix}.*"),
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
             Expr::CompoundFieldAccess { root, access_chain } => {
-                write!(f, "{}", root)?;
+                write!(f, "{root}")?;
                 for field in access_chain {
-                    write!(f, "{}", field)?;
+                    write!(f, "{field}")?;
                 }
                 Ok(())
             }
@@ -1516,7 +1549,7 @@ impl fmt::Display for Expr {
             } => {
                 let not_ = if *negated { "NOT " } else { "" };
                 if form.is_none() {
-                    write!(f, "{} IS {}NORMALIZED", expr, not_)
+                    write!(f, "{expr} IS {not_}NORMALIZED")
                 } else {
                     write!(
                         f,
@@ -1838,7 +1871,7 @@ impl fmt::Display for Expr {
                 }
             }
             Expr::Named { expr, name } => {
-                write!(f, "{} AS {}", expr, name)
+                write!(f, "{expr} AS {name}")
             }
             Expr::Dictionary(fields) => {
                 write!(f, "{{{}}}", display_comma_separated(fields))
@@ -1881,6 +1914,7 @@ impl fmt::Display for Expr {
             }
             Expr::Prior(expr) => write!(f, "PRIOR {expr}"),
             Expr::Lambda(lambda) => write!(f, "{lambda}"),
+            Expr::MemberOf(member_of) => write!(f, "{member_of}"),
         }
     }
 }
@@ -2394,7 +2428,7 @@ impl fmt::Display for ConditionalStatements {
                 }
                 Ok(())
             }
-            ConditionalStatements::BeginEnd(bes) => write!(f, "{}", bes),
+            ConditionalStatements::BeginEnd(bes) => write!(f, "{bes}"),
         }
     }
 }
@@ -2914,9 +2948,7 @@ impl Display for Set {
                 write!(
                     f,
                     "SET {modifier}ROLE {role_name}",
-                    modifier = context_modifier
-                        .map(|m| format!("{}", m))
-                        .unwrap_or_default()
+                    modifier = context_modifier.map(|m| format!("{m}")).unwrap_or_default()
                 )
             }
             Self::SetSessionParam(kind) => write!(f, "SET {kind}"),
@@ -2949,7 +2981,7 @@ impl Display for Set {
                 charset_name,
                 collation_name,
             } => {
-                write!(f, "SET NAMES {}", charset_name)?;
+                write!(f, "SET NAMES {charset_name}")?;
 
                 if let Some(collation) = collation_name {
                     f.write_str(" COLLATE ")?;
@@ -2972,7 +3004,7 @@ impl Display for Set {
                 write!(
                     f,
                     "SET {}{}{} = {}",
-                    scope.map(|s| format!("{}", s)).unwrap_or_default(),
+                    scope.map(|s| format!("{s}")).unwrap_or_default(),
                     if *hivevar { "HIVEVAR:" } else { "" },
                     variable,
                     display_comma_separated(values)
@@ -2987,6 +3019,36 @@ impl Display for Set {
 impl From<Set> for Statement {
     fn from(set: Set) -> Self {
         Statement::Set(set)
+    }
+}
+
+/// A representation of a `WHEN` arm with all the identifiers catched and the statements to execute
+/// for the arm.
+///
+/// Snowflake: <https://docs.snowflake.com/en/sql-reference/snowflake-scripting/exception>
+/// BigQuery: <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#beginexceptionend>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ExceptionWhen {
+    pub idents: Vec<Ident>,
+    pub statements: Vec<Statement>,
+}
+
+impl Display for ExceptionWhen {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "WHEN {idents} THEN",
+            idents = display_separated(&self.idents, " OR ")
+        )?;
+
+        if !self.statements.is_empty() {
+            write!(f, " ")?;
+            format_statement_list(f, &self.statements)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -3256,6 +3318,8 @@ pub enum Statement {
         secret_type: Ident,
         options: Vec<SecretOption>,
     },
+    /// A `CREATE SERVER` statement.
+    CreateServer(CreateServerStatement),
     /// ```sql
     /// CREATE POLICY
     /// ```
@@ -3678,17 +3742,20 @@ pub enum Statement {
         /// END;
         /// ```
         statements: Vec<Statement>,
-        /// Statements of an exception clause.
+        /// Exception handling with exception clauses.
         /// Example:
         /// ```sql
-        /// BEGIN
-        ///     SELECT 1;
-        /// EXCEPTION WHEN ERROR THEN
-        ///     SELECT 2;
-        ///     SELECT 3;
-        /// END;
+        /// EXCEPTION
+        ///     WHEN EXCEPTION_1 THEN
+        ///         SELECT 2;
+        ///     WHEN EXCEPTION_2 OR EXCEPTION_3 THEN
+        ///         SELECT 3;
+        ///     WHEN OTHER THEN
+        ///         SELECT 4;
+        /// ```
         /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#beginexceptionend>
-        exception_statements: Option<Vec<Statement>>,
+        /// <https://docs.snowflake.com/en/sql-reference/snowflake-scripting/exception>
+        exception: Option<Vec<ExceptionWhen>>,
         /// TRUE if the statement has an `END` keyword.
         has_end_keyword: bool,
     },
@@ -3881,6 +3948,7 @@ pub enum Statement {
         or_alter: bool,
         name: ObjectName,
         params: Option<Vec<ProcedureParam>>,
+        language: Option<Ident>,
         body: ConditionalStatements,
     },
     /// ```sql
@@ -4181,7 +4249,7 @@ pub enum Statement {
     /// ```sql
     /// NOTIFY channel [ , payload ]
     /// ```
-    /// send a notification event together with an optional “payload” string to channel
+    /// send a notification event together with an optional "payload" string to channel
     ///
     /// See Postgres <https://www.postgresql.org/docs/current/sql-notify.html>
     NOTIFY {
@@ -4340,7 +4408,7 @@ impl fmt::Display for Statement {
                 write!(f, "{describe_alias} ")?;
 
                 if let Some(format) = hive_format {
-                    write!(f, "{} ", format)?;
+                    write!(f, "{format} ")?;
                 }
                 if *has_table_keyword {
                     write!(f, "TABLE ")?;
@@ -4784,6 +4852,7 @@ impl fmt::Display for Statement {
                 name,
                 or_alter,
                 params,
+                language,
                 body,
             } => {
                 write!(
@@ -4797,6 +4866,10 @@ impl fmt::Display for Statement {
                     if !p.is_empty() {
                         write!(f, " ({})", display_comma_separated(p))?;
                     }
+                }
+
+                if let Some(language) = language {
+                    write!(f, " LANGUAGE {language}")?;
                 }
 
                 write!(f, " AS {body}")
@@ -5107,6 +5180,9 @@ impl fmt::Display for Statement {
                 write!(f, " )")?;
                 Ok(())
             }
+            Statement::CreateServer(stmt) => {
+                write!(f, "{stmt}")
+            }
             Statement::CreatePolicy {
                 name,
                 table_name,
@@ -5171,7 +5247,7 @@ impl fmt::Display for Statement {
                 if *only {
                     write!(f, "ONLY ")?;
                 }
-                write!(f, "{name} ", name = name)?;
+                write!(f, "{name} ")?;
                 if let Some(cluster) = on_cluster {
                     write!(f, "ON CLUSTER {cluster} ")?;
                 }
@@ -5249,7 +5325,7 @@ impl fmt::Display for Statement {
                 )?;
                 if !session_params.options.is_empty() {
                     if *set {
-                        write!(f, " {}", session_params)?;
+                        write!(f, " {session_params}")?;
                     } else {
                         let options = session_params
                             .options
@@ -5283,7 +5359,7 @@ impl fmt::Display for Statement {
                     if *purge { " PURGE" } else { "" },
                 )?;
                 if let Some(table_name) = table.as_ref() {
-                    write!(f, " ON {}", table_name)?;
+                    write!(f, " ON {table_name}")?;
                 };
                 Ok(())
             }
@@ -5533,12 +5609,12 @@ impl fmt::Display for Statement {
                 transaction,
                 modifier,
                 statements,
-                exception_statements,
+                exception,
                 has_end_keyword,
             } => {
                 if *syntax_begin {
                     if let Some(modifier) = *modifier {
-                        write!(f, "BEGIN {}", modifier)?;
+                        write!(f, "BEGIN {modifier}")?;
                     } else {
                         write!(f, "BEGIN")?;
                     }
@@ -5555,11 +5631,10 @@ impl fmt::Display for Statement {
                     write!(f, " ")?;
                     format_statement_list(f, statements)?;
                 }
-                if let Some(exception_statements) = exception_statements {
-                    write!(f, " EXCEPTION WHEN ERROR THEN")?;
-                    if !exception_statements.is_empty() {
-                        write!(f, " ")?;
-                        format_statement_list(f, exception_statements)?;
+                if let Some(exception_when) = exception {
+                    write!(f, " EXCEPTION")?;
+                    for when in exception_when {
+                        write!(f, " {when}")?;
                     }
                 }
                 if *has_end_keyword {
@@ -5575,7 +5650,7 @@ impl fmt::Display for Statement {
                 if *end_syntax {
                     write!(f, "END")?;
                     if let Some(modifier) = *modifier {
-                        write!(f, " {}", modifier)?;
+                        write!(f, " {modifier}")?;
                     }
                     if *chain {
                         write!(f, " AND CHAIN")?;
@@ -5674,7 +5749,7 @@ impl fmt::Display for Statement {
                     write!(f, " GRANTED BY {grantor}")?;
                 }
                 if let Some(cascade) = cascade {
-                    write!(f, " {}", cascade)?;
+                    write!(f, " {cascade}")?;
                 }
                 Ok(())
             }
@@ -5853,13 +5928,13 @@ impl fmt::Display for Statement {
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                 )?;
                 if !directory_table_params.options.is_empty() {
-                    write!(f, " DIRECTORY=({})", directory_table_params)?;
+                    write!(f, " DIRECTORY=({directory_table_params})")?;
                 }
                 if !file_format.options.is_empty() {
-                    write!(f, " FILE_FORMAT=({})", file_format)?;
+                    write!(f, " FILE_FORMAT=({file_format})")?;
                 }
                 if !copy_options.options.is_empty() {
-                    write!(f, " COPY_OPTIONS=({})", copy_options)?;
+                    write!(f, " COPY_OPTIONS=({copy_options})")?;
                 }
                 if comment.is_some() {
                     write!(f, " COMMENT='{}'", comment.as_ref().unwrap())?;
@@ -5882,7 +5957,7 @@ impl fmt::Display for Statement {
                 validation_mode,
                 partition,
             } => {
-                write!(f, "COPY INTO {}", into)?;
+                write!(f, "COPY INTO {into}")?;
                 if let Some(into_columns) = into_columns {
                     write!(f, " ({})", display_comma_separated(into_columns))?;
                 }
@@ -5898,12 +5973,12 @@ impl fmt::Display for Statement {
                         )?;
                     }
                     if let Some(from_obj_alias) = from_obj_alias {
-                        write!(f, " AS {}", from_obj_alias)?;
+                        write!(f, " AS {from_obj_alias}")?;
                     }
                     write!(f, ")")?;
                 } else if let Some(from_obj) = from_obj {
                     // Standard data load
-                    write!(f, " FROM {}{}", from_obj, stage_params)?;
+                    write!(f, " FROM {from_obj}{stage_params}")?;
                     if let Some(from_obj_alias) = from_obj_alias {
                         write!(f, " AS {from_obj_alias}")?;
                     }
@@ -5916,24 +5991,24 @@ impl fmt::Display for Statement {
                     write!(f, " FILES = ('{}')", display_separated(files, "', '"))?;
                 }
                 if let Some(pattern) = pattern {
-                    write!(f, " PATTERN = '{}'", pattern)?;
+                    write!(f, " PATTERN = '{pattern}'")?;
                 }
                 if let Some(partition) = partition {
                     write!(f, " PARTITION BY {partition}")?;
                 }
                 if !file_format.options.is_empty() {
-                    write!(f, " FILE_FORMAT=({})", file_format)?;
+                    write!(f, " FILE_FORMAT=({file_format})")?;
                 }
                 if !copy_options.options.is_empty() {
                     match kind {
                         CopyIntoSnowflakeKind::Table => {
-                            write!(f, " COPY_OPTIONS=({})", copy_options)?
+                            write!(f, " COPY_OPTIONS=({copy_options})")?
                         }
                         CopyIntoSnowflakeKind::Location => write!(f, " {copy_options}")?,
                     }
                 }
                 if let Some(validation_mode) = validation_mode {
-                    write!(f, " VALIDATION_MODE = {}", validation_mode)?;
+                    write!(f, " VALIDATION_MODE = {validation_mode}")?;
                 }
                 Ok(())
             }
@@ -5979,10 +6054,10 @@ impl fmt::Display for Statement {
             } => {
                 write!(f, "OPTIMIZE TABLE {name}")?;
                 if let Some(on_cluster) = on_cluster {
-                    write!(f, " ON CLUSTER {on_cluster}", on_cluster = on_cluster)?;
+                    write!(f, " ON CLUSTER {on_cluster}")?;
                 }
                 if let Some(partition) = partition {
-                    write!(f, " {partition}", partition = partition)?;
+                    write!(f, " {partition}")?;
                 }
                 if *include_final {
                     write!(f, " FINAL")?;
@@ -6109,7 +6184,7 @@ impl fmt::Display for SetAssignment {
         write!(
             f,
             "{}{} = {}",
-            self.scope.map(|s| format!("{}", s)).unwrap_or_default(),
+            self.scope.map(|s| format!("{s}")).unwrap_or_default(),
             self.name,
             self.value
         )
@@ -6838,7 +6913,7 @@ impl fmt::Display for GranteeName {
         match self {
             GranteeName::ObjectName(name) => name.fmt(f),
             GranteeName::UserHost { user, host } => {
-                write!(f, "{}@{}", user, host)
+                write!(f, "{user}@{host}")
             }
         }
     }
@@ -6853,6 +6928,12 @@ pub enum GrantObjects {
     AllSequencesInSchema { schemas: Vec<ObjectName> },
     /// Grant privileges on `ALL TABLES IN SCHEMA <schema_name> [, ...]`
     AllTablesInSchema { schemas: Vec<ObjectName> },
+    /// Grant privileges on `FUTURE SCHEMAS IN DATABASE <database_name> [, ...]`
+    FutureSchemasInDatabase { databases: Vec<ObjectName> },
+    /// Grant privileges on `FUTURE TABLES IN SCHEMA <schema_name> [, ...]`
+    FutureTablesInSchema { schemas: Vec<ObjectName> },
+    /// Grant privileges on `FUTURE VIEWS IN SCHEMA <schema_name> [, ...]`
+    FutureViewsInSchema { schemas: Vec<ObjectName> },
     /// Grant privileges on specific databases
     Databases(Vec<ObjectName>),
     /// Grant privileges on specific schemas
@@ -6918,6 +6999,27 @@ impl fmt::Display for GrantObjects {
                 write!(
                     f,
                     "ALL TABLES IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
+            GrantObjects::FutureSchemasInDatabase { databases } => {
+                write!(
+                    f,
+                    "FUTURE SCHEMAS IN DATABASE {}",
+                    display_comma_separated(databases)
+                )
+            }
+            GrantObjects::FutureTablesInSchema { schemas } => {
+                write!(
+                    f,
+                    "FUTURE TABLES IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
+            GrantObjects::FutureViewsInSchema { schemas } => {
+                write!(
+                    f,
+                    "FUTURE VIEWS IN SCHEMA {}",
                     display_comma_separated(schemas)
                 )
             }
@@ -7008,7 +7110,7 @@ pub enum AssignmentTarget {
 impl fmt::Display for AssignmentTarget {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            AssignmentTarget::ColumnName(column) => write!(f, "{}", column),
+            AssignmentTarget::ColumnName(column) => write!(f, "{column}"),
             AssignmentTarget::Tuple(columns) => write!(f, "({})", display_comma_separated(columns)),
         }
     }
@@ -7253,8 +7355,8 @@ impl fmt::Display for FunctionArguments {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             FunctionArguments::None => Ok(()),
-            FunctionArguments::Subquery(query) => write!(f, "({})", query),
-            FunctionArguments::List(args) => write!(f, "({})", args),
+            FunctionArguments::Subquery(query) => write!(f, "({query})"),
+            FunctionArguments::List(args) => write!(f, "({args})"),
         }
     }
 }
@@ -7275,7 +7377,7 @@ pub struct FunctionArgumentList {
 impl fmt::Display for FunctionArgumentList {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(duplicate_treatment) = self.duplicate_treatment {
-            write!(f, "{} ", duplicate_treatment)?;
+            write!(f, "{duplicate_treatment} ")?;
         }
         write!(f, "{}", display_comma_separated(&self.args))?;
         if !self.clauses.is_empty() {
@@ -7335,7 +7437,7 @@ impl fmt::Display for FunctionArgumentClause {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             FunctionArgumentClause::IgnoreOrRespectNulls(null_treatment) => {
-                write!(f, "{}", null_treatment)
+                write!(f, "{null_treatment}")
             }
             FunctionArgumentClause::OrderBy(order_by) => {
                 write!(f, "ORDER BY {}", display_comma_separated(order_by))
@@ -7791,12 +7893,12 @@ pub enum SqlOption {
 impl fmt::Display for SqlOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            SqlOption::Clustered(c) => write!(f, "{}", c),
+            SqlOption::Clustered(c) => write!(f, "{c}"),
             SqlOption::Ident(ident) => {
-                write!(f, "{}", ident)
+                write!(f, "{ident}")
             }
             SqlOption::KeyValue { key: name, value } => {
-                write!(f, "{} = {}", name, value)
+                write!(f, "{name} = {value}")
             }
             SqlOption::Partition {
                 column_name,
@@ -7836,7 +7938,7 @@ impl fmt::Display for SqlOption {
             SqlOption::NamedParenthesizedList(value) => {
                 write!(f, "{} = ", value.key)?;
                 if let Some(key) = &value.name {
-                    write!(f, "{}", key)?;
+                    write!(f, "{key}")?;
                 }
                 if !value.values.is_empty() {
                     write!(f, "({})", display_comma_separated(&value.values))?
@@ -7879,6 +7981,70 @@ impl fmt::Display for SecretOption {
     }
 }
 
+/// A `CREATE SERVER` statement.
+///
+/// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createserver.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateServerStatement {
+    pub name: ObjectName,
+    pub if_not_exists: bool,
+    pub server_type: Option<Ident>,
+    pub version: Option<Ident>,
+    pub foreign_data_wrapper: ObjectName,
+    pub options: Option<Vec<CreateServerOption>>,
+}
+
+impl fmt::Display for CreateServerStatement {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let CreateServerStatement {
+            name,
+            if_not_exists,
+            server_type,
+            version,
+            foreign_data_wrapper,
+            options,
+        } = self;
+
+        write!(
+            f,
+            "CREATE SERVER {if_not_exists}{name} ",
+            if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+        )?;
+
+        if let Some(st) = server_type {
+            write!(f, "TYPE {st} ")?;
+        }
+
+        if let Some(v) = version {
+            write!(f, "VERSION {v} ")?;
+        }
+
+        write!(f, "FOREIGN DATA WRAPPER {foreign_data_wrapper}")?;
+
+        if let Some(o) = options {
+            write!(f, " OPTIONS ({o})", o = display_comma_separated(o))?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateServerOption {
+    pub key: Ident,
+    pub value: Ident,
+}
+
+impl fmt::Display for CreateServerOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {}", self.key, self.value)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -7893,7 +8059,7 @@ impl fmt::Display for AttachDuckDBDatabaseOption {
             AttachDuckDBDatabaseOption::ReadOnly(Some(true)) => write!(f, "READ_ONLY true"),
             AttachDuckDBDatabaseOption::ReadOnly(Some(false)) => write!(f, "READ_ONLY false"),
             AttachDuckDBDatabaseOption::ReadOnly(None) => write!(f, "READ_ONLY"),
-            AttachDuckDBDatabaseOption::Type(t) => write!(f, "TYPE {}", t),
+            AttachDuckDBDatabaseOption::Type(t) => write!(f, "TYPE {t}"),
         }
     }
 }
@@ -9416,10 +9582,10 @@ impl fmt::Display for ShowStatementIn {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.clause)?;
         if let Some(parent_type) = &self.parent_type {
-            write!(f, " {}", parent_type)?;
+            write!(f, " {parent_type}")?;
         }
         if let Some(parent_name) = &self.parent_name {
-            write!(f, " {}", parent_name)?;
+            write!(f, " {parent_name}")?;
         }
         Ok(())
     }
@@ -9500,7 +9666,7 @@ impl fmt::Display for TableObject {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::TableName(table_name) => write!(f, "{table_name}"),
-            Self::TableFunction(func) => write!(f, "FUNCTION {}", func),
+            Self::TableFunction(func) => write!(f, "FUNCTION {func}"),
         }
     }
 }
@@ -9688,7 +9854,7 @@ pub struct ReturnStatement {
 impl fmt::Display for ReturnStatement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.value {
-            Some(ReturnStatementValue::Expr(expr)) => write!(f, "RETURN {}", expr),
+            Some(ReturnStatementValue::Expr(expr)) => write!(f, "RETURN {expr}"),
             None => write!(f, "RETURN"),
         }
     }
@@ -9737,8 +9903,31 @@ impl fmt::Display for NullInclusion {
     }
 }
 
+/// Checks membership of a value in a JSON array
+///
+/// Syntax:
+/// ```sql
+/// <value> MEMBER OF(<array>)
+/// ```
+/// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/json-search-functions.html#operator_member-of)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct MemberOf {
+    pub value: Box<Expr>,
+    pub array: Box<Expr>,
+}
+
+impl fmt::Display for MemberOf {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} MEMBER OF({})", self.value, self.array)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::tokenizer::Location;
+
     use super::*;
 
     #[test]
@@ -10033,5 +10222,17 @@ mod tests {
         test_steps(OneOrManyWithParens::One(1), once(1), 3);
         test_steps(OneOrManyWithParens::Many(vec![2]), vec![2], 3);
         test_steps(OneOrManyWithParens::Many(vec![3, 4]), vec![3, 4], 4);
+    }
+
+    // Tests that the position in the code of an `Ident` does not affect its
+    // ordering.
+    #[test]
+    fn test_ident_ord() {
+        let mut a = Ident::with_span(Span::new(Location::new(1, 1), Location::new(1, 1)), "a");
+        let mut b = Ident::with_span(Span::new(Location::new(2, 2), Location::new(2, 2)), "b");
+
+        assert!(a < b);
+        std::mem::swap(&mut a.span, &mut b.span);
+        assert!(a < b);
     }
 }

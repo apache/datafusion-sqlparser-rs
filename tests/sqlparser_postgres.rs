@@ -606,9 +606,10 @@ fn parse_alter_table_constraints_unique_nulls_distinct() {
         .verified_stmt("ALTER TABLE t ADD CONSTRAINT b UNIQUE NULLS NOT DISTINCT (c)")
     {
         Statement::AlterTable { operations, .. } => match &operations[0] {
-            AlterTableOperation::AddConstraint(TableConstraint::Unique {
-                nulls_distinct, ..
-            }) => {
+            AlterTableOperation::AddConstraint {
+                constraint: TableConstraint::Unique { nulls_distinct, .. },
+                ..
+            } => {
                 assert_eq!(nulls_distinct, &NullsDistinctOption::NotDistinct)
             }
             _ => unreachable!(),
@@ -764,10 +765,7 @@ fn parse_drop_extension() {
 
 #[test]
 fn parse_alter_table_alter_column() {
-    pg().one_statement_parses_to(
-        "ALTER TABLE tab ALTER COLUMN is_active TYPE TEXT USING 'text'",
-        "ALTER TABLE tab ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'",
-    );
+    pg().verified_stmt("ALTER TABLE tab ALTER COLUMN is_active TYPE TEXT USING 'text'");
 
     match alter_table_op(
         pg().verified_stmt(
@@ -783,6 +781,7 @@ fn parse_alter_table_alter_column() {
                 AlterColumnOperation::SetDataType {
                     data_type: DataType::Text,
                     using: Some(using_expr),
+                    had_set: true,
                 }
             );
         }
@@ -2535,12 +2534,12 @@ fn parse_create_indices_with_operator_classes() {
         for expected_operator_class in &operator_classes {
             let single_column_sql_statement = format!(
                 "CREATE INDEX the_index_name ON users USING {expected_index_type} (concat_users_name(first_name, last_name){})",
-                expected_operator_class.as_ref().map(|oc| format!(" {}", oc))
+                expected_operator_class.as_ref().map(|oc| format!(" {oc}"))
                     .unwrap_or_default()
             );
             let multi_column_sql_statement = format!(
                 "CREATE INDEX the_index_name ON users USING {expected_index_type} (column_name,concat_users_name(first_name, last_name){})",
-                expected_operator_class.as_ref().map(|oc| format!(" {}", oc))
+                expected_operator_class.as_ref().map(|oc| format!(" {oc}"))
                     .unwrap_or_default()
             );
 
@@ -3273,7 +3272,7 @@ fn test_fn_arg_with_value_operator() {
             assert!(matches!(
                 &args[..],
                 &[FunctionArg::ExprNamed { operator: FunctionArgOperator::Value, .. }]
-            ), "Invalid function argument: {:?}", args);
+            ), "Invalid function argument: {args:?}");
         }
         other => panic!("Expected: JSON_OBJECT('name' VALUE 'value') to be parsed as a function, but got {other:?}"),
     }
@@ -5258,7 +5257,10 @@ fn parse_at_time_zone() {
         left: Box::new(Expr::AtTimeZone {
             timestamp: Box::new(Expr::TypedString {
                 data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                value: Value::SingleQuotedString("2001-09-28 01:00".to_string()),
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString("2001-09-28 01:00".to_string()),
+                    span: Span::empty(),
+                },
             }),
             time_zone: Box::new(Expr::Cast {
                 kind: CastKind::DoubleColon,
@@ -5679,7 +5681,7 @@ fn parse_drop_trigger() {
                 "DROP TRIGGER{} check_update ON table_name{}",
                 if if_exists { " IF EXISTS" } else { "" },
                 option
-                    .map(|o| format!(" {}", o))
+                    .map(|o| format!(" {o}"))
                     .unwrap_or_else(|| "".to_string())
             );
             assert_eq!(
@@ -5773,8 +5775,7 @@ fn parse_trigger_related_functions() {
     // Now we parse the statements and check if they are parsed correctly.
     let mut statements = pg()
         .parse_sql_statements(&format!(
-            "{}{}{}{}",
-            sql_table_creation, sql_create_function, sql_create_trigger, sql_drop_trigger
+            "{sql_table_creation}{sql_create_function}{sql_create_trigger}{sql_drop_trigger}"
         ))
         .unwrap();
 
@@ -6199,5 +6200,155 @@ fn parse_alter_table_replica_identity() {
             );
         }
         _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_ts_datatypes() {
+    match pg_and_generic().verified_stmt("CREATE TABLE foo (x TSVECTOR)") {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(
+                columns,
+                vec![ColumnDef {
+                    name: "x".into(),
+                    data_type: DataType::TsVector,
+                    options: vec![],
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match pg_and_generic().verified_stmt("CREATE TABLE foo (x TSQUERY)") {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(
+                columns,
+                vec![ColumnDef {
+                    name: "x".into(),
+                    data_type: DataType::TsQuery,
+                    options: vec![],
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_table_constraint_not_valid() {
+    match pg_and_generic().verified_stmt(
+        "ALTER TABLE foo ADD CONSTRAINT bar FOREIGN KEY (baz) REFERENCES other(ref) NOT VALID",
+    ) {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::AddConstraint {
+                    constraint: TableConstraint::ForeignKey {
+                        name: Some("bar".into()),
+                        index_name: None,
+                        columns: vec!["baz".into()],
+                        foreign_table: ObjectName::from(vec!["other".into()]),
+                        referred_columns: vec!["ref".into()],
+                        on_delete: None,
+                        on_update: None,
+                        characteristics: None,
+                    },
+                    not_valid: true,
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_table_validate_constraint() {
+    match pg_and_generic().verified_stmt("ALTER TABLE foo VALIDATE CONSTRAINT bar") {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::ValidateConstraint { name: "bar".into() }]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_server() {
+    let test_cases = vec![
+        (
+            "CREATE SERVER myserver FOREIGN DATA WRAPPER postgres_fdw",
+            CreateServerStatement {
+                name: ObjectName::from(vec!["myserver".into()]),
+                if_not_exists: false,
+                server_type: None,
+                version: None,
+                foreign_data_wrapper: ObjectName::from(vec!["postgres_fdw".into()]),
+                options: None,
+            },
+        ),
+        (
+            "CREATE SERVER IF NOT EXISTS myserver TYPE 'server_type' VERSION 'server_version' FOREIGN DATA WRAPPER postgres_fdw",
+            CreateServerStatement {
+            name: ObjectName::from(vec!["myserver".into()]),
+            if_not_exists: true,
+            server_type: Some(Ident {
+                value: "server_type".to_string(),
+                quote_style: Some('\''),
+                span: Span::empty(),
+            }),
+            version: Some(Ident {
+                value: "server_version".to_string(),
+                quote_style: Some('\''),
+                span: Span::empty(),
+            }),
+            foreign_data_wrapper: ObjectName::from(vec!["postgres_fdw".into()]),
+            options: None,
+        }
+        ),
+        (
+            "CREATE SERVER myserver2 FOREIGN DATA WRAPPER postgres_fdw OPTIONS (host 'foo', dbname 'foodb', port '5432')",
+            CreateServerStatement {
+                name: ObjectName::from(vec!["myserver2".into()]),
+                if_not_exists: false,
+                server_type: None,
+                version: None,
+                foreign_data_wrapper: ObjectName::from(vec!["postgres_fdw".into()]),
+                options: Some(vec![
+                    CreateServerOption {
+                        key: "host".into(),
+                        value: Ident {
+                            value: "foo".to_string(),
+                            quote_style: Some('\''),
+                            span: Span::empty(),
+                        },
+                    },
+                    CreateServerOption {
+                        key: "dbname".into(),
+                        value: Ident {
+                            value: "foodb".to_string(),
+                            quote_style: Some('\''),
+                            span: Span::empty(),
+                        },
+                    },
+                    CreateServerOption {
+                        key: "port".into(),
+                        value: Ident {
+                            value: "5432".to_string(),
+                            quote_style: Some('\''),
+                            span: Span::empty(),
+                        },
+                    },
+                ]),
+            }
+        )
+    ];
+
+    for (sql, expected) in test_cases {
+        let Statement::CreateServer(stmt) = pg_and_generic().verified_stmt(sql) else {
+            unreachable!()
+        };
+        assert_eq!(stmt, expected);
     }
 }

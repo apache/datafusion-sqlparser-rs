@@ -67,7 +67,7 @@ impl fmt::Display for KeyValueOptions {
                 } else {
                     f.write_str(" ")?;
                 }
-                write!(f, "{}", option)?;
+                write!(f, "{option}")?;
             }
         }
         Ok(())

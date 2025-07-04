@@ -2528,10 +2528,7 @@ fn test_snowflake_stage_object_names_into_location() {
         .zip(allowed_object_names.iter_mut())
     {
         let (formatted_name, object_name) = it;
-        let sql = format!(
-            "COPY INTO {} FROM 'gcs://mybucket/./../a.csv'",
-            formatted_name
-        );
+        let sql = format!("COPY INTO {formatted_name} FROM 'gcs://mybucket/./../a.csv'");
         match snowflake().verified_stmt(&sql) {
             Statement::CopyIntoSnowflake { into, .. } => {
                 assert_eq!(into.0, object_name.0)
@@ -2554,10 +2551,7 @@ fn test_snowflake_stage_object_names_into_table() {
         .zip(allowed_object_names.iter_mut())
     {
         let (formatted_name, object_name) = it;
-        let sql = format!(
-            "COPY INTO {} FROM 'gcs://mybucket/./../a.csv'",
-            formatted_name
-        );
+        let sql = format!("COPY INTO {formatted_name} FROM 'gcs://mybucket/./../a.csv'");
         match snowflake().verified_stmt(&sql) {
             Statement::CopyIntoSnowflake { into, .. } => {
                 assert_eq!(into.0, object_name.0)
@@ -3038,7 +3032,7 @@ fn parse_use() {
     for object_name in &valid_object_names {
         // Test single identifier without quotes
         assert_eq!(
-            snowflake().verified_stmt(&format!("USE {}", object_name)),
+            snowflake().verified_stmt(&format!("USE {object_name}")),
             Statement::Use(Use::Object(ObjectName::from(vec![Ident::new(
                 object_name.to_string()
             )])))
@@ -3046,7 +3040,7 @@ fn parse_use() {
         for &quote in &quote_styles {
             // Test single identifier with different type of quotes
             assert_eq!(
-                snowflake().verified_stmt(&format!("USE {}{}{}", quote, object_name, quote)),
+                snowflake().verified_stmt(&format!("USE {quote}{object_name}{quote}")),
                 Statement::Use(Use::Object(ObjectName::from(vec![Ident::with_quote(
                     quote,
                     object_name.to_string(),
@@ -3058,7 +3052,9 @@ fn parse_use() {
     for &quote in &quote_styles {
         // Test double identifier with different type of quotes
         assert_eq!(
-            snowflake().verified_stmt(&format!("USE {0}CATALOG{0}.{0}my_schema{0}", quote)),
+            snowflake().verified_stmt(&format!(
+                "USE {quote}CATALOG{quote}.{quote}my_schema{quote}"
+            )),
             Statement::Use(Use::Object(ObjectName::from(vec![
                 Ident::with_quote(quote, "CATALOG"),
                 Ident::with_quote(quote, "my_schema")
@@ -3077,35 +3073,37 @@ fn parse_use() {
     for &quote in &quote_styles {
         // Test single and double identifier with keyword and different type of quotes
         assert_eq!(
-            snowflake().verified_stmt(&format!("USE DATABASE {0}my_database{0}", quote)),
+            snowflake().verified_stmt(&format!("USE DATABASE {quote}my_database{quote}")),
             Statement::Use(Use::Database(ObjectName::from(vec![Ident::with_quote(
                 quote,
                 "my_database".to_string(),
             )])))
         );
         assert_eq!(
-            snowflake().verified_stmt(&format!("USE SCHEMA {0}my_schema{0}", quote)),
+            snowflake().verified_stmt(&format!("USE SCHEMA {quote}my_schema{quote}")),
             Statement::Use(Use::Schema(ObjectName::from(vec![Ident::with_quote(
                 quote,
                 "my_schema".to_string(),
             )])))
         );
         assert_eq!(
-            snowflake().verified_stmt(&format!("USE SCHEMA {0}CATALOG{0}.{0}my_schema{0}", quote)),
+            snowflake().verified_stmt(&format!(
+                "USE SCHEMA {quote}CATALOG{quote}.{quote}my_schema{quote}"
+            )),
             Statement::Use(Use::Schema(ObjectName::from(vec![
                 Ident::with_quote(quote, "CATALOG"),
                 Ident::with_quote(quote, "my_schema")
             ])))
         );
         assert_eq!(
-            snowflake().verified_stmt(&format!("USE ROLE {0}my_role{0}", quote)),
+            snowflake().verified_stmt(&format!("USE ROLE {quote}my_role{quote}")),
             Statement::Use(Use::Role(ObjectName::from(vec![Ident::with_quote(
                 quote,
                 "my_role".to_string(),
             )])))
         );
         assert_eq!(
-            snowflake().verified_stmt(&format!("USE WAREHOUSE {0}my_wh{0}", quote)),
+            snowflake().verified_stmt(&format!("USE WAREHOUSE {quote}my_wh{quote}")),
             Statement::Use(Use::Warehouse(ObjectName::from(vec![Ident::with_quote(
                 quote,
                 "my_wh".to_string(),
@@ -3142,7 +3140,7 @@ fn view_comment_option_should_be_after_column_list() {
         "CREATE OR REPLACE VIEW v (a COMMENT 'a comment', b, c COMMENT 'c comment') COMMENT = 'Comment' AS SELECT a FROM t",
         "CREATE OR REPLACE VIEW v (a COMMENT 'a comment', b, c COMMENT 'c comment') WITH (foo = bar) COMMENT = 'Comment' AS SELECT a FROM t",
     ] {
-        snowflake_and_generic()
+        snowflake()
             .verified_stmt(sql);
     }
 }
@@ -3151,7 +3149,7 @@ fn view_comment_option_should_be_after_column_list() {
 fn parse_view_column_descriptions() {
     let sql = "CREATE OR REPLACE VIEW v (a COMMENT 'Comment', b) AS SELECT a, b FROM table1";
 
-    match snowflake_and_generic().verified_stmt(sql) {
+    match snowflake().verified_stmt(sql) {
         Statement::CreateView { name, columns, .. } => {
             assert_eq!(name.to_string(), "v");
             assert_eq!(
@@ -3160,7 +3158,9 @@ fn parse_view_column_descriptions() {
                     ViewColumnDef {
                         name: Ident::new("a"),
                         data_type: None,
-                        options: Some(vec![ColumnOption::Comment("Comment".to_string())]),
+                        options: Some(ColumnOptions::SpaceSeparated(vec![ColumnOption::Comment(
+                            "Comment".to_string()
+                        )])),
                     },
                     ViewColumnDef {
                         name: Ident::new("b"),
@@ -3645,7 +3645,7 @@ fn test_alter_session_followed_by_statement() {
         .unwrap();
     match stmts[..] {
         [Statement::AlterSession { .. }, Statement::Query { .. }] => {}
-        _ => panic!("Unexpected statements: {:?}", stmts),
+        _ => panic!("Unexpected statements: {stmts:?}"),
     }
 }
 
@@ -4099,6 +4099,96 @@ fn parse_connect_by_root_operator() {
         res.unwrap_err().to_string(),
         "sql parser error: Expected an expression, found: FROM"
     );
+}
+
+#[test]
+fn test_begin_exception_end() {
+    for sql in [
+        "BEGIN SELECT 1; EXCEPTION WHEN OTHER THEN SELECT 2; RAISE; END",
+        "BEGIN SELECT 1; EXCEPTION WHEN OTHER THEN SELECT 2; RAISE EX_1; END",
+        "BEGIN SELECT 1; EXCEPTION WHEN FOO THEN SELECT 2; WHEN OTHER THEN SELECT 3; RAISE; END",
+        "BEGIN BEGIN SELECT 1; EXCEPTION WHEN OTHER THEN SELECT 2; RAISE; END; END",
+    ] {
+        snowflake().verified_stmt(sql);
+    }
+
+    let sql = r#"
+DECLARE
+  EXCEPTION_1 EXCEPTION (-20001, 'I caught the expected exception.');
+  EXCEPTION_2 EXCEPTION (-20002, 'Not the expected exception!');
+  EXCEPTION_3 EXCEPTION (-20003, 'The worst exception...');
+BEGIN
+    BEGIN
+        SELECT 1;
+    EXCEPTION
+        WHEN EXCEPTION_1 THEN
+            SELECT 1;
+        WHEN EXCEPTION_2 OR EXCEPTION_3 THEN
+            SELECT 2;
+            SELECT 3;
+        WHEN OTHER THEN
+            SELECT 4;
+    RAISE;
+    END;
+END
+"#;
+
+    // Outer `BEGIN` of the two nested `BEGIN` statements.
+    let Statement::StartTransaction { mut statements, .. } = snowflake()
+        .parse_sql_statements(sql)
+        .unwrap()
+        .pop()
+        .unwrap()
+    else {
+        unreachable!();
+    };
+
+    // Inner `BEGIN` of the two nested `BEGIN` statements.
+    let Statement::StartTransaction {
+        statements,
+        exception,
+        has_end_keyword,
+        ..
+    } = statements.pop().unwrap()
+    else {
+        unreachable!();
+    };
+
+    assert_eq!(1, statements.len());
+    assert!(has_end_keyword);
+
+    let exception = exception.unwrap();
+    assert_eq!(3, exception.len());
+    assert_eq!(1, exception[0].idents.len());
+    assert_eq!(1, exception[0].statements.len());
+    assert_eq!(2, exception[1].idents.len());
+    assert_eq!(2, exception[1].statements.len());
+}
+
+#[test]
+fn test_snowflake_fetch_clause_syntax() {
+    let canonical = "SELECT c1 FROM fetch_test FETCH FIRST 2 ROWS ONLY";
+    snowflake().verified_only_select_with_canonical("SELECT c1 FROM fetch_test FETCH 2", canonical);
+
+    snowflake()
+        .verified_only_select_with_canonical("SELECT c1 FROM fetch_test FETCH FIRST 2", canonical);
+    snowflake()
+        .verified_only_select_with_canonical("SELECT c1 FROM fetch_test FETCH NEXT 2", canonical);
+
+    snowflake()
+        .verified_only_select_with_canonical("SELECT c1 FROM fetch_test FETCH 2 ROW", canonical);
+
+    snowflake().verified_only_select_with_canonical(
+        "SELECT c1 FROM fetch_test FETCH FIRST 2 ROWS",
+        canonical,
+    );
+}
+
+#[test]
+fn test_snowflake_create_view_with_multiple_column_options() {
+    let create_view_with_tag =
+        r#"CREATE VIEW X (COL WITH TAG (pii='email') COMMENT 'foobar') AS SELECT * FROM Y"#;
+    snowflake().verified_stmt(create_view_with_tag);
 }
 
 #[test]

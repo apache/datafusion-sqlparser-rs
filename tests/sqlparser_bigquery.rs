@@ -261,10 +261,10 @@ fn parse_at_at_identifier() {
 
 #[test]
 fn parse_begin() {
-    let sql = r#"BEGIN SELECT 1; EXCEPTION WHEN ERROR THEN SELECT 2; END"#;
+    let sql = r#"BEGIN SELECT 1; EXCEPTION WHEN ERROR THEN SELECT 2; RAISE USING MESSAGE = FORMAT('ERR: %s', 'Bad'); END"#;
     let Statement::StartTransaction {
         statements,
-        exception_statements,
+        exception,
         has_end_keyword,
         ..
     } = bigquery().verified_stmt(sql)
@@ -272,7 +272,10 @@ fn parse_begin() {
         unreachable!();
     };
     assert_eq!(1, statements.len());
-    assert_eq!(1, exception_statements.unwrap().len());
+    assert!(exception.is_some());
+
+    let exception = exception.unwrap();
+    assert_eq!(1, exception.len());
     assert!(has_end_keyword);
 
     bigquery().verified_stmt(
@@ -352,14 +355,16 @@ fn parse_create_view_with_options() {
                     ViewColumnDef {
                         name: Ident::new("age"),
                         data_type: None,
-                        options: Some(vec![ColumnOption::Options(vec![SqlOption::KeyValue {
-                            key: Ident::new("description"),
-                            value: Expr::Value(
-                                Value::DoubleQuotedString("field age".to_string()).with_span(
-                                    Span::new(Location::new(1, 42), Location::new(1, 52))
-                                )
-                            ),
-                        }])]),
+                        options: Some(ColumnOptions::CommaSeparated(vec![ColumnOption::Options(
+                            vec![SqlOption::KeyValue {
+                                key: Ident::new("description"),
+                                value: Expr::Value(
+                                    Value::DoubleQuotedString("field age".to_string()).with_span(
+                                        Span::new(Location::new(1, 42), Location::new(1, 52))
+                                    )
+                                ),
+                            }]
+                        )])),
                     },
                 ],
                 columns
@@ -636,35 +641,6 @@ fn parse_nested_data_types() {
 }
 
 #[test]
-fn parse_invalid_brackets() {
-    let sql = "SELECT STRUCT<INT64>>(NULL)";
-    assert_eq!(
-        bigquery_and_generic()
-            .parse_sql_statements(sql)
-            .unwrap_err(),
-        ParserError::ParserError("unmatched > in STRUCT literal".to_string())
-    );
-
-    let sql = "SELECT STRUCT<STRUCT<INT64>>>(NULL)";
-    assert_eq!(
-        bigquery_and_generic()
-            .parse_sql_statements(sql)
-            .unwrap_err(),
-        ParserError::ParserError("Expected: (, found: >".to_string())
-    );
-
-    let sql = "CREATE TABLE table (x STRUCT<STRUCT<INT64>>>)";
-    assert_eq!(
-        bigquery_and_generic()
-            .parse_sql_statements(sql)
-            .unwrap_err(),
-        ParserError::ParserError(
-            "Expected: ',' or ')' after column definition, found: >".to_string()
-        )
-    );
-}
-
-#[test]
 fn parse_tuple_struct_literal() {
     // tuple syntax: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#tuple_syntax
     // syntax: (expr1, expr2 [, ... ])
@@ -930,7 +906,10 @@ fn parse_typed_struct_syntax_bigquery() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::Datetime(None),
-                value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into())
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into()),
+                    span: Span::empty(),
+                },
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -989,9 +968,12 @@ fn parse_typed_struct_syntax_bigquery() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::JSON,
-                value: Value::SingleQuotedString(
-                    r#"{"class" : {"students" : [{"name" : "Jane"}]}}"#.into()
-                )
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString(
+                        r#"{"class" : {"students" : [{"name" : "Jane"}]}}"#.into()
+                    ),
+                    span: Span::empty(),
+                }
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -1022,7 +1004,12 @@ fn parse_typed_struct_syntax_bigquery() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                value: Value::SingleQuotedString("2008-12-25 15:30:00 America/Los_Angeles".into())
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString(
+                        "2008-12-25 15:30:00 America/Los_Angeles".into()
+                    ),
+                    span: Span::empty(),
+                },
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -1037,7 +1024,10 @@ fn parse_typed_struct_syntax_bigquery() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::Time(None, TimezoneInfo::None),
-                value: Value::SingleQuotedString("15:30:00".into())
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString("15:30:00".into()),
+                    span: Span::empty(),
+                }
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -1055,7 +1045,10 @@ fn parse_typed_struct_syntax_bigquery() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::Numeric(ExactNumberInfo::None),
-                value: Value::SingleQuotedString("1".into())
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString("1".into()),
+                    span: Span::empty(),
+                }
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -1069,7 +1062,10 @@ fn parse_typed_struct_syntax_bigquery() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::BigNumeric(ExactNumberInfo::None),
-                value: Value::SingleQuotedString("1".into())
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString("1".into()),
+                    span: Span::empty(),
+                }
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -1243,7 +1239,10 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::Datetime(None),
-                value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into())
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into()),
+                    span: Span::empty(),
+                }
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -1302,9 +1301,12 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::JSON,
-                value: Value::SingleQuotedString(
-                    r#"{"class" : {"students" : [{"name" : "Jane"}]}}"#.into()
-                )
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString(
+                        r#"{"class" : {"students" : [{"name" : "Jane"}]}}"#.into()
+                    ),
+                    span: Span::empty(),
+                }
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -1335,7 +1337,12 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                value: Value::SingleQuotedString("2008-12-25 15:30:00 America/Los_Angeles".into())
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString(
+                        "2008-12-25 15:30:00 America/Los_Angeles".into()
+                    ),
+                    span: Span::empty(),
+                }
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -1350,7 +1357,10 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::Time(None, TimezoneInfo::None),
-                value: Value::SingleQuotedString("15:30:00".into())
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString("15:30:00".into()),
+                    span: Span::empty(),
+                }
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -1368,7 +1378,10 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::Numeric(ExactNumberInfo::None),
-                value: Value::SingleQuotedString("1".into())
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString("1".into()),
+                    span: Span::empty(),
+                }
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -1382,7 +1395,10 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::BigNumeric(ExactNumberInfo::None),
-                value: Value::SingleQuotedString("1".into())
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString("1".into()),
+                    span: Span::empty(),
+                }
             }],
             fields: vec![StructField {
                 field_name: None,
@@ -2417,7 +2433,10 @@ fn test_triple_quote_typed_strings() {
     assert_eq!(
         Expr::TypedString {
             data_type: DataType::JSON,
-            value: Value::TripleDoubleQuotedString(r#"{"foo":"bar's"}"#.into())
+            value: ValueWithSpan {
+                value: Value::TripleDoubleQuotedString(r#"{"foo":"bar's"}"#.into()),
+                span: Span::empty(),
+            }
         },
         expr
     );
@@ -2471,4 +2490,79 @@ fn test_struct_field_options() {
         "> OPTIONS(description = 'This is a struct field')",
         ")",
     ));
+}
+
+#[test]
+fn test_struct_trailing_and_nested_bracket() {
+    bigquery().verified_stmt(concat!(
+        "CREATE TABLE my_table (",
+        "f0 STRING, ",
+        "f1 STRUCT<a STRING, b STRUCT<c INT64, d STRING>>, ",
+        "f2 STRING",
+        ")",
+    ));
+
+    // More complex nested structs
+    bigquery().verified_stmt(concat!(
+        "CREATE TABLE my_table (",
+        "f0 STRING, ",
+        "f1 STRUCT<a STRING, b STRUCT<c INT64, d STRUCT<e STRING>>>, ",
+        "f2 STRUCT<h STRING, i STRUCT<j INT64, k STRUCT<l STRUCT<m STRING>>>>, ",
+        "f3 STRUCT<e STRING, f STRUCT<c INT64>>",
+        ")",
+    ));
+
+    // Bad case with missing closing bracket
+    assert_eq!(
+        ParserError::ParserError("Expected: >, found: )".to_owned()),
+        bigquery()
+            .parse_sql_statements("CREATE TABLE my_table(f1 STRUCT<a STRING, b INT64)")
+            .unwrap_err()
+    );
+
+    // Bad case with redundant closing bracket
+    assert_eq!(
+        ParserError::ParserError(
+            "unmatched > after parsing data type STRUCT<a STRING, b INT64>)".to_owned()
+        ),
+        bigquery()
+            .parse_sql_statements("CREATE TABLE my_table(f1 STRUCT<a STRING, b INT64>>)")
+            .unwrap_err()
+    );
+
+    // Base case with redundant closing bracket in nested struct
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected: ',' or ')' after column definition, found: >".to_owned()
+        ),
+        bigquery()
+            .parse_sql_statements("CREATE TABLE my_table(f1 STRUCT<a STRUCT<b INT>>>, c INT64)")
+            .unwrap_err()
+    );
+
+    let sql = "SELECT STRUCT<INT64>>(NULL)";
+    assert_eq!(
+        bigquery_and_generic()
+            .parse_sql_statements(sql)
+            .unwrap_err(),
+        ParserError::ParserError("unmatched > in STRUCT literal".to_string())
+    );
+
+    let sql = "SELECT STRUCT<STRUCT<INT64>>>(NULL)";
+    assert_eq!(
+        bigquery_and_generic()
+            .parse_sql_statements(sql)
+            .unwrap_err(),
+        ParserError::ParserError("Expected: (, found: >".to_string())
+    );
+
+    let sql = "CREATE TABLE table (x STRUCT<STRUCT<INT64>>>)";
+    assert_eq!(
+        bigquery_and_generic()
+            .parse_sql_statements(sql)
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: ',' or ')' after column definition, found: >".to_string()
+        )
+    );
 }

@@ -24,6 +24,7 @@ use test_utils::*;
 
 use sqlparser::ast::*;
 use sqlparser::dialect::{DuckDbDialect, GenericDialect};
+use sqlparser::parser::ParserError;
 
 fn duckdb() -> TestedDialects {
     TestedDialects::new(vec![Box::new(DuckDbDialect {})])
@@ -368,7 +369,7 @@ fn test_duckdb_specific_int_types() {
         ("HUGEINT", DataType::HugeInt),
     ];
     for (dtype_string, data_type) in duckdb_dtypes {
-        let sql = format!("SELECT 123::{}", dtype_string);
+        let sql = format!("SELECT 123::{dtype_string}");
         let select = duckdb().verified_only_select(&sql);
         assert_eq!(
             &Expr::Cast {
@@ -792,7 +793,7 @@ fn parse_use() {
     for object_name in &valid_object_names {
         // Test single identifier without quotes
         assert_eq!(
-            duckdb().verified_stmt(&format!("USE {}", object_name)),
+            duckdb().verified_stmt(&format!("USE {object_name}")),
             Statement::Use(Use::Object(ObjectName::from(vec![Ident::new(
                 object_name.to_string()
             )])))
@@ -800,7 +801,7 @@ fn parse_use() {
         for &quote in &quote_styles {
             // Test single identifier with different type of quotes
             assert_eq!(
-                duckdb().verified_stmt(&format!("USE {0}{1}{0}", quote, object_name)),
+                duckdb().verified_stmt(&format!("USE {quote}{object_name}{quote}")),
                 Statement::Use(Use::Object(ObjectName::from(vec![Ident::with_quote(
                     quote,
                     object_name.to_string(),
@@ -812,7 +813,9 @@ fn parse_use() {
     for &quote in &quote_styles {
         // Test double identifier with different type of quotes
         assert_eq!(
-            duckdb().verified_stmt(&format!("USE {0}CATALOG{0}.{0}my_schema{0}", quote)),
+            duckdb().verified_stmt(&format!(
+                "USE {quote}CATALOG{quote}.{quote}my_schema{quote}"
+            )),
             Statement::Use(Use::Object(ObjectName::from(vec![
                 Ident::with_quote(quote, "CATALOG"),
                 Ident::with_quote(quote, "my_schema")
@@ -826,5 +829,34 @@ fn parse_use() {
             Ident::new("mydb"),
             Ident::new("my_schema")
         ])))
+    );
+}
+
+#[test]
+fn test_duckdb_trim() {
+    let real_sql = r#"SELECT customer_id, TRIM(item_price_id, '"', "a") AS item_price_id FROM models_staging.subscriptions"#;
+    assert_eq!(duckdb().verified_stmt(real_sql).to_string(), real_sql);
+
+    let sql_only_select = "SELECT TRIM('xyz', 'a')";
+    let select = duckdb().verified_only_select(sql_only_select);
+    assert_eq!(
+        &Expr::Trim {
+            expr: Box::new(Expr::Value(
+                Value::SingleQuotedString("xyz".to_owned()).with_empty_span()
+            )),
+            trim_where: None,
+            trim_what: None,
+            trim_characters: Some(vec![Expr::Value(
+                Value::SingleQuotedString("a".to_owned()).with_empty_span()
+            )]),
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    // missing comma separation
+    let error_sql = "SELECT TRIM('xyz' 'a')";
+    assert_eq!(
+        ParserError::ParserError("Expected: ), found: 'a'".to_owned()),
+        duckdb().parse_sql_statements(error_sql).unwrap_err()
     );
 }

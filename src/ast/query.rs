@@ -1047,7 +1047,7 @@ impl fmt::Display for ConnectBy {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Setting {
     pub key: Ident,
-    pub value: Value,
+    pub value: Expr,
 }
 
 impl fmt::Display for Setting {
@@ -1183,7 +1183,7 @@ impl fmt::Display for TableIndexHints {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} {} ", self.hint_type, self.index_type)?;
         if let Some(for_clause) = &self.for_clause {
-            write!(f, "FOR {} ", for_clause)?;
+            write!(f, "FOR {for_clause} ")?;
         }
         write!(f, "({})", display_comma_separated(&self.index_names))
     }
@@ -1459,7 +1459,7 @@ impl fmt::Display for TableSampleQuantity {
         }
         write!(f, "{}", self.value)?;
         if let Some(unit) = &self.unit {
-            write!(f, " {}", unit)?;
+            write!(f, " {unit}")?;
         }
         if self.parenthesized {
             write!(f, ")")?;
@@ -1552,7 +1552,7 @@ impl fmt::Display for TableSampleBucket {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "BUCKET {} OUT OF {}", self.bucket, self.total)?;
         if let Some(on) = &self.on {
-            write!(f, " ON {}", on)?;
+            write!(f, " ON {on}")?;
         }
         Ok(())
     }
@@ -1561,19 +1561,19 @@ impl fmt::Display for TableSample {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.modifier)?;
         if let Some(name) = &self.name {
-            write!(f, " {}", name)?;
+            write!(f, " {name}")?;
         }
         if let Some(quantity) = &self.quantity {
-            write!(f, " {}", quantity)?;
+            write!(f, " {quantity}")?;
         }
         if let Some(seed) = &self.seed {
-            write!(f, " {}", seed)?;
+            write!(f, " {seed}")?;
         }
         if let Some(bucket) = &self.bucket {
-            write!(f, " ({})", bucket)?;
+            write!(f, " ({bucket})")?;
         }
         if let Some(offset) = &self.offset {
-            write!(f, " OFFSET {}", offset)?;
+            write!(f, " OFFSET {offset}")?;
         }
         Ok(())
     }
@@ -1651,7 +1651,7 @@ impl fmt::Display for RowsPerMatch {
             RowsPerMatch::AllRows(mode) => {
                 write!(f, "ALL ROWS PER MATCH")?;
                 if let Some(mode) = mode {
-                    write!(f, " {}", mode)?;
+                    write!(f, " {mode}")?;
                 }
                 Ok(())
             }
@@ -1777,7 +1777,7 @@ impl fmt::Display for MatchRecognizePattern {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use MatchRecognizePattern::*;
         match self {
-            Symbol(symbol) => write!(f, "{}", symbol),
+            Symbol(symbol) => write!(f, "{symbol}"),
             Exclude(symbol) => write!(f, "{{- {symbol} -}}"),
             Permute(symbols) => write!(f, "PERMUTE({})", display_comma_separated(symbols)),
             Concat(patterns) => write!(f, "{}", display_separated(patterns, " ")),
@@ -2148,7 +2148,7 @@ impl fmt::Display for TableAliasColumnDef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.name)?;
         if let Some(ref data_type) = self.data_type {
-            write!(f, " {}", data_type)?;
+            write!(f, " {data_type}")?;
         }
         Ok(())
     }
@@ -2398,7 +2398,7 @@ impl fmt::Display for OrderBy {
                 write!(f, " {}", display_comma_separated(exprs))?;
             }
             OrderByKind::All(all) => {
-                write!(f, " ALL{}", all)?;
+                write!(f, " ALL{all}")?;
             }
         }
 
@@ -2429,7 +2429,7 @@ impl fmt::Display for OrderByExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}{}", self.expr, self.options)?;
         if let Some(ref with_fill) = self.with_fill {
-            write!(f, " {}", with_fill)?
+            write!(f, " {with_fill}")?
         }
         Ok(())
     }
@@ -2452,13 +2452,13 @@ impl fmt::Display for WithFill {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "WITH FILL")?;
         if let Some(ref from) = self.from {
-            write!(f, " FROM {}", from)?;
+            write!(f, " FROM {from}")?;
         }
         if let Some(ref to) = self.to {
-            write!(f, " TO {}", to)?;
+            write!(f, " TO {to}")?;
         }
         if let Some(ref step) = self.step {
-            write!(f, " STEP {}", step)?;
+            write!(f, " STEP {step}")?;
         }
         Ok(())
     }
@@ -2487,7 +2487,7 @@ impl fmt::Display for InterpolateExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.column)?;
         if let Some(ref expr) = self.expr {
-            write!(f, " AS {}", expr)?;
+            write!(f, " AS {expr}")?;
         }
         Ok(())
     }
@@ -2565,7 +2565,7 @@ impl fmt::Display for LimitClause {
                 Ok(())
             }
             LimitClause::OffsetCommaLimit { offset, limit } => {
-                write!(f, " LIMIT {}, {}", offset, limit)
+                write!(f, " LIMIT {offset}, {limit}")
             }
         }
     }
@@ -2684,6 +2684,79 @@ pub enum PipeOperator {
     /// Syntax: `|> TABLESAMPLE SYSTEM (10 PERCENT)
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#tablesample_pipe_operator>
     TableSample { sample: Box<TableSample> },
+    /// Renames columns in the input table.
+    ///
+    /// Syntax: `|> RENAME old_name AS new_name, ...`
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#rename_pipe_operator>
+    Rename { mappings: Vec<IdentWithAlias> },
+    /// Combines the input table with one or more tables using UNION.
+    ///
+    /// Syntax: `|> UNION [ALL|DISTINCT] (<query>), (<query>), ...`
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#union_pipe_operator>
+    Union {
+        set_quantifier: SetQuantifier,
+        queries: Vec<Query>,
+    },
+    /// Returns only the rows that are present in both the input table and the specified tables.
+    ///
+    /// Syntax: `|> INTERSECT [DISTINCT] (<query>), (<query>), ...`
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#intersect_pipe_operator>
+    Intersect {
+        set_quantifier: SetQuantifier,
+        queries: Vec<Query>,
+    },
+    /// Returns only the rows that are present in the input table but not in the specified tables.
+    ///
+    /// Syntax: `|> EXCEPT DISTINCT (<query>), (<query>), ...`
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#except_pipe_operator>
+    Except {
+        set_quantifier: SetQuantifier,
+        queries: Vec<Query>,
+    },
+    /// Calls a table function or procedure that returns a table.
+    ///
+    /// Syntax: `|> CALL function_name(args) [AS alias]`
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#call_pipe_operator>
+    Call {
+        function: Function,
+        alias: Option<Ident>,
+    },
+    /// Pivots data from rows to columns.
+    ///
+    /// Syntax: `|> PIVOT(aggregate_function(column) FOR pivot_column IN (value1, value2, ...)) [AS alias]`
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#pivot_pipe_operator>
+    Pivot {
+        aggregate_functions: Vec<ExprWithAlias>,
+        value_column: Vec<Ident>,
+        value_source: PivotValueSource,
+        alias: Option<Ident>,
+    },
+    /// The `UNPIVOT` pipe operator transforms columns into rows.
+    ///
+    /// Syntax:
+    /// ```sql
+    /// |> UNPIVOT(value_column FOR name_column IN (column1, column2, ...)) [alias]
+    /// ```
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#unpivot_pipe_operator>
+    Unpivot {
+        value_column: Ident,
+        name_column: Ident,
+        unpivot_columns: Vec<Ident>,
+        alias: Option<Ident>,
+    },
+    /// Joins the input table with another table.
+    ///
+    /// Syntax: `|> [JOIN_TYPE] JOIN <table> [alias] ON <condition>` or `|> [JOIN_TYPE] JOIN <table> [alias] USING (<columns>)`
+    ///
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#join_pipe_operator>
+    Join(Join),
 }
 
 impl fmt::Display for PipeOperator {
@@ -2702,12 +2775,12 @@ impl fmt::Display for PipeOperator {
                 write!(f, "DROP {}", display_comma_separated(columns.as_slice()))
             }
             PipeOperator::As { alias } => {
-                write!(f, "AS {}", alias)
+                write!(f, "AS {alias}")
             }
             PipeOperator::Limit { expr, offset } => {
-                write!(f, "LIMIT {}", expr)?;
+                write!(f, "LIMIT {expr}")?;
                 if let Some(offset) = offset {
-                    write!(f, " OFFSET {}", offset)?;
+                    write!(f, " OFFSET {offset}")?;
                 }
                 Ok(())
             }
@@ -2730,16 +2803,96 @@ impl fmt::Display for PipeOperator {
             }
 
             PipeOperator::Where { expr } => {
-                write!(f, "WHERE {}", expr)
+                write!(f, "WHERE {expr}")
             }
             PipeOperator::OrderBy { exprs } => {
                 write!(f, "ORDER BY {}", display_comma_separated(exprs.as_slice()))
             }
 
             PipeOperator::TableSample { sample } => {
-                write!(f, "{}", sample)
+                write!(f, "{sample}")
+            }
+            PipeOperator::Rename { mappings } => {
+                write!(f, "RENAME {}", display_comma_separated(mappings))
+            }
+            PipeOperator::Union {
+                set_quantifier,
+                queries,
+            } => Self::fmt_set_operation(f, "UNION", set_quantifier, queries),
+            PipeOperator::Intersect {
+                set_quantifier,
+                queries,
+            } => Self::fmt_set_operation(f, "INTERSECT", set_quantifier, queries),
+            PipeOperator::Except {
+                set_quantifier,
+                queries,
+            } => Self::fmt_set_operation(f, "EXCEPT", set_quantifier, queries),
+            PipeOperator::Call { function, alias } => {
+                write!(f, "CALL {function}")?;
+                Self::fmt_optional_alias(f, alias)
+            }
+            PipeOperator::Pivot {
+                aggregate_functions,
+                value_column,
+                value_source,
+                alias,
+            } => {
+                write!(
+                    f,
+                    "PIVOT({} FOR {} IN ({}))",
+                    display_comma_separated(aggregate_functions),
+                    Expr::CompoundIdentifier(value_column.to_vec()),
+                    value_source
+                )?;
+                Self::fmt_optional_alias(f, alias)
+            }
+            PipeOperator::Unpivot {
+                value_column,
+                name_column,
+                unpivot_columns,
+                alias,
+            } => {
+                write!(
+                    f,
+                    "UNPIVOT({} FOR {} IN ({}))",
+                    value_column,
+                    name_column,
+                    display_comma_separated(unpivot_columns)
+                )?;
+                Self::fmt_optional_alias(f, alias)
+            }
+            PipeOperator::Join(join) => write!(f, "{join}"),
+        }
+    }
+}
+
+impl PipeOperator {
+    /// Helper function to format optional alias for pipe operators
+    fn fmt_optional_alias(f: &mut fmt::Formatter<'_>, alias: &Option<Ident>) -> fmt::Result {
+        if let Some(alias) = alias {
+            write!(f, " AS {alias}")?;
+        }
+        Ok(())
+    }
+
+    /// Helper function to format set operations (UNION, INTERSECT, EXCEPT) with queries
+    fn fmt_set_operation(
+        f: &mut fmt::Formatter<'_>,
+        operation: &str,
+        set_quantifier: &SetQuantifier,
+        queries: &[Query],
+    ) -> fmt::Result {
+        write!(f, "{operation}")?;
+        match set_quantifier {
+            SetQuantifier::None => {}
+            _ => {
+                write!(f, " {set_quantifier}")?;
             }
         }
+        write!(f, " ")?;
+        let parenthesized_queries: Vec<String> =
+            queries.iter().map(|query| format!("({query})")).collect();
+        write!(f, "{}", display_comma_separated(&parenthesized_queries))
     }
 }
 
@@ -3016,7 +3169,7 @@ pub enum FormatClause {
 impl fmt::Display for FormatClause {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            FormatClause::Identifier(ident) => write!(f, "FORMAT {}", ident),
+            FormatClause::Identifier(ident) => write!(f, "FORMAT {ident}"),
             FormatClause::Null => write!(f, "FORMAT NULL"),
         }
     }
@@ -3078,9 +3231,9 @@ impl fmt::Display for ForClause {
                 without_array_wrapper,
             } => {
                 write!(f, "FOR JSON ")?;
-                write!(f, "{}", for_json)?;
+                write!(f, "{for_json}")?;
                 if let Some(root) = root {
-                    write!(f, ", ROOT('{}')", root)?;
+                    write!(f, ", ROOT('{root}')")?;
                 }
                 if *include_null_values {
                     write!(f, ", INCLUDE_NULL_VALUES")?;
@@ -3098,7 +3251,7 @@ impl fmt::Display for ForClause {
                 r#type,
             } => {
                 write!(f, "FOR XML ")?;
-                write!(f, "{}", for_xml)?;
+                write!(f, "{for_xml}")?;
                 if *binary_base64 {
                     write!(f, ", BINARY BASE64")?;
                 }
@@ -3106,7 +3259,7 @@ impl fmt::Display for ForClause {
                     write!(f, ", TYPE")?;
                 }
                 if let Some(root) = root {
-                    write!(f, ", ROOT('{}')", root)?;
+                    write!(f, ", ROOT('{root}')")?;
                 }
                 if *elements {
                     write!(f, ", ELEMENTS")?;
@@ -3133,7 +3286,7 @@ impl fmt::Display for ForXml {
             ForXml::Raw(root) => {
                 write!(f, "RAW")?;
                 if let Some(root) = root {
-                    write!(f, "('{}')", root)?;
+                    write!(f, "('{root}')")?;
                 }
                 Ok(())
             }
@@ -3142,7 +3295,7 @@ impl fmt::Display for ForXml {
             ForXml::Path(root) => {
                 write!(f, "PATH")?;
                 if let Some(root) = root {
-                    write!(f, "('{}')", root)?;
+                    write!(f, "('{root}')")?;
                 }
                 Ok(())
             }
@@ -3205,7 +3358,7 @@ impl fmt::Display for JsonTableColumn {
             JsonTableColumn::Named(json_table_named_column) => {
                 write!(f, "{json_table_named_column}")
             }
-            JsonTableColumn::ForOrdinality(ident) => write!(f, "{} FOR ORDINALITY", ident),
+            JsonTableColumn::ForOrdinality(ident) => write!(f, "{ident} FOR ORDINALITY"),
             JsonTableColumn::Nested(json_table_nested_column) => {
                 write!(f, "{json_table_nested_column}")
             }
@@ -3271,10 +3424,10 @@ impl fmt::Display for JsonTableNamedColumn {
             self.path
         )?;
         if let Some(on_empty) = &self.on_empty {
-            write!(f, " {} ON EMPTY", on_empty)?;
+            write!(f, " {on_empty} ON EMPTY")?;
         }
         if let Some(on_error) = &self.on_error {
-            write!(f, " {} ON ERROR", on_error)?;
+            write!(f, " {on_error} ON ERROR")?;
         }
         Ok(())
     }
@@ -3296,7 +3449,7 @@ impl fmt::Display for JsonTableColumnErrorHandling {
         match self {
             JsonTableColumnErrorHandling::Null => write!(f, "NULL"),
             JsonTableColumnErrorHandling::Default(json_string) => {
-                write!(f, "DEFAULT {}", json_string)
+                write!(f, "DEFAULT {json_string}")
             }
             JsonTableColumnErrorHandling::Error => write!(f, "ERROR"),
         }
@@ -3429,12 +3582,12 @@ impl fmt::Display for XmlTableColumn {
                 default,
                 nullable,
             } => {
-                write!(f, " {}", r#type)?;
+                write!(f, " {type}")?;
                 if let Some(p) = path {
-                    write!(f, " PATH {}", p)?;
+                    write!(f, " PATH {p}")?;
                 }
                 if let Some(d) = default {
-                    write!(f, " DEFAULT {}", d)?;
+                    write!(f, " DEFAULT {d}")?;
                 }
                 if !*nullable {
                     write!(f, " NOT NULL")?;
@@ -3465,7 +3618,7 @@ impl fmt::Display for XmlPassingArgument {
         }
         write!(f, "{}", self.expr)?;
         if let Some(alias) = &self.alias {
-            write!(f, " AS {}", alias)?;
+            write!(f, " AS {alias}")?;
         }
         Ok(())
     }

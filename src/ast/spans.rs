@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::ast::query::SelectItemQualifiedWildcardKind;
+use crate::ast::{query::SelectItemQualifiedWildcardKind, ColumnOptions};
 use core::iter;
 
 use crate::tokenizer::Span;
@@ -28,16 +28,17 @@ use super::{
     ConstraintCharacteristics, CopySource, CreateIndex, CreateTable, CreateTableOptions, Cte,
     Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, FromTable,
     Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
-    FunctionArguments, GroupByExpr, HavingBound, IfStatement, IlikeSelectItem, Insert, Interpolate,
-    InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView,
-    LimitClause, MatchRecognizePattern, Measure, NamedParenthesizedList, NamedWindowDefinition,
-    ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction, OnInsert, OpenStatement,
-    OrderBy, OrderByExpr, OrderByKind, Partition, PivotValueSource, ProjectionSelect, Query,
-    RaiseStatement, RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
-    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
-    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
-    TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use, Value, Values, ViewColumnDef,
-    WhileStatement, WildcardAdditionalOptions, With, WithFill,
+    FunctionArguments, GroupByExpr, HavingBound, IfStatement, IlikeSelectItem, IndexColumn, Insert,
+    Interpolate, InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem,
+    LateralView, LimitClause, MatchRecognizePattern, Measure, NamedParenthesizedList,
+    NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
+    OnInsert, OpenStatement, OrderBy, OrderByExpr, OrderByKind, Partition, PivotValueSource,
+    ProjectionSelect, Query, RaiseStatement, RaiseStatementValue, ReferentialAction,
+    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
+    SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
+    TableConstraint, TableFactor, TableObject, TableOptionsClustered, TableWithJoins,
+    UpdateTableFromKind, Use, Value, Values, ViewColumnDef, WhileStatement,
+    WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -422,6 +423,7 @@ impl Spanned for Statement {
             Statement::CreateIndex(create_index) => create_index.span(),
             Statement::CreateRole { .. } => Span::empty(),
             Statement::CreateSecret { .. } => Span::empty(),
+            Statement::CreateServer { .. } => Span::empty(),
             Statement::CreateConnector { .. } => Span::empty(),
             Statement::AlterTable {
                 name,
@@ -650,7 +652,7 @@ impl Spanned for TableConstraint {
                 name.iter()
                     .map(|i| i.span)
                     .chain(index_name.iter().map(|i| i.span))
-                    .chain(columns.iter().map(|i| i.span))
+                    .chain(columns.iter().map(|i| i.span()))
                     .chain(characteristics.iter().map(|i| i.span())),
             ),
             TableConstraint::PrimaryKey {
@@ -664,7 +666,7 @@ impl Spanned for TableConstraint {
                 name.iter()
                     .map(|i| i.span)
                     .chain(index_name.iter().map(|i| i.span))
-                    .chain(columns.iter().map(|i| i.span))
+                    .chain(columns.iter().map(|i| i.span()))
                     .chain(characteristics.iter().map(|i| i.span())),
             ),
             TableConstraint::ForeignKey {
@@ -700,7 +702,7 @@ impl Spanned for TableConstraint {
             } => union_spans(
                 name.iter()
                     .map(|i| i.span)
-                    .chain(columns.iter().map(|i| i.span)),
+                    .chain(columns.iter().map(|i| i.span())),
             ),
             TableConstraint::FulltextOrSpatial {
                 fulltext: _,
@@ -711,7 +713,7 @@ impl Spanned for TableConstraint {
                 opt_index_name
                     .iter()
                     .map(|i| i.span)
-                    .chain(columns.iter().map(|i| i.span)),
+                    .chain(columns.iter().map(|i| i.span())),
             ),
         }
     }
@@ -742,6 +744,12 @@ impl Spanned for CreateIndex {
                 .chain(with.iter().map(|i| i.span()))
                 .chain(predicate.iter().map(|i| i.span())),
         )
+    }
+}
+
+impl Spanned for IndexColumn {
+    fn span(&self) -> Span {
+        self.column.span()
     }
 }
 
@@ -917,6 +925,7 @@ impl Spanned for AlterColumnOperation {
             AlterColumnOperation::SetDataType {
                 data_type: _,
                 using,
+                had_set: _,
             } => using.as_ref().map_or(Span::empty(), |u| u.span()),
             AlterColumnOperation::AddGenerated { .. } => Span::empty(),
         }
@@ -984,10 +993,13 @@ impl Spanned for ViewColumnDef {
             options,
         } = self;
 
-        union_spans(
-            core::iter::once(name.span)
-                .chain(options.iter().flat_map(|i| i.iter().map(|k| k.span()))),
-        )
+        name.span.union_opt(&options.as_ref().map(|o| o.span()))
+    }
+}
+
+impl Spanned for ColumnOptions {
+    fn span(&self) -> Span {
+        union_spans(self.as_slice().iter().map(|i| i.span()))
     }
 }
 
@@ -1048,7 +1060,9 @@ impl Spanned for CreateTableOptions {
         match self {
             CreateTableOptions::None => Span::empty(),
             CreateTableOptions::With(vec) => union_spans(vec.iter().map(|i| i.span())),
-            CreateTableOptions::Options(vec) => union_spans(vec.iter().map(|i| i.span())),
+            CreateTableOptions::Options(vec) => {
+                union_spans(vec.as_slice().iter().map(|i| i.span()))
+            }
             CreateTableOptions::Plain(vec) => union_spans(vec.iter().map(|i| i.span())),
             CreateTableOptions::TableProperties(vec) => union_spans(vec.iter().map(|i| i.span())),
         }
@@ -1062,7 +1076,10 @@ impl Spanned for CreateTableOptions {
 impl Spanned for AlterTableOperation {
     fn span(&self) -> Span {
         match self {
-            AlterTableOperation::AddConstraint(table_constraint) => table_constraint.span(),
+            AlterTableOperation::AddConstraint {
+                constraint,
+                not_valid: _,
+            } => constraint.span(),
             AlterTableOperation::AddColumn {
                 column_keyword: _,
                 if_not_exists: _,
@@ -1183,6 +1200,7 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::AutoIncrement { value, .. } => value.span(),
             AlterTableOperation::Lock { .. } => Span::empty(),
             AlterTableOperation::ReplicaIdentity { .. } => Span::empty(),
+            AlterTableOperation::ValidateConstraint { name } => name.span,
         }
     }
 }
@@ -1398,7 +1416,6 @@ impl Spanned for AssignmentTarget {
 /// f.e. `IS NULL <expr>` reports as `<expr>::span`.
 ///
 /// Missing spans:
-/// - [Expr::TypedString] # missing span for data_type
 /// - [Expr::MatchAgainst] # MySQL specific
 /// - [Expr::RLike] # MySQL specific
 /// - [Expr::Struct] # BigQuery specific
@@ -1607,6 +1624,7 @@ impl Spanned for Expr {
             Expr::OuterJoin(expr) => expr.span(),
             Expr::Prior(expr) => expr.span(),
             Expr::Lambda(_) => Span::empty(),
+            Expr::MemberOf(member_of) => member_of.value.span().union(&member_of.array.span()),
         }
     }
 }

@@ -2225,7 +2225,7 @@ fn parse_in_subquery() {
     assert_eq!(
         Expr::InSubquery {
             expr: Box::new(Expr::Identifier(Ident::new("segment"))),
-            subquery: verified_query("SELECT segm FROM bar").body,
+            subquery: Box::new(verified_query("SELECT segm FROM bar")),
             negated: false,
         },
         select.selection.unwrap()
@@ -2239,7 +2239,9 @@ fn parse_in_union() {
     assert_eq!(
         Expr::InSubquery {
             expr: Box::new(Expr::Identifier(Ident::new("segment"))),
-            subquery: verified_query("(SELECT segm FROM bar) UNION (SELECT segm FROM bar2)").body,
+            subquery: Box::new(verified_query(
+                "(SELECT segm FROM bar) UNION (SELECT segm FROM bar2)"
+            )),
             negated: false,
         },
         select.selection.unwrap()
@@ -3561,7 +3563,7 @@ fn test_double_value() {
     for (input, expected) in test_cases {
         for (i, expr) in input.iter().enumerate() {
             if let Statement::Query(query) =
-                dialects.one_statement_parses_to(&format!("SELECT {}", expr), "")
+                dialects.one_statement_parses_to(&format!("SELECT {expr}"), "")
             {
                 if let SetExpr::Select(select) = *query.body {
                     assert_eq!(expected[i], select.projection[0]);
@@ -4021,13 +4023,13 @@ fn parse_create_table_column_constraint_characteristics() {
             syntax
         };
 
-        let sql = format!("CREATE TABLE t (a int UNIQUE {})", syntax);
+        let sql = format!("CREATE TABLE t (a int UNIQUE {syntax})");
         let expected_clause = if syntax.is_empty() {
             String::new()
         } else {
             format!(" {syntax}")
         };
-        let expected = format!("CREATE TABLE t (a INT UNIQUE{})", expected_clause);
+        let expected = format!("CREATE TABLE t (a INT UNIQUE{expected_clause})");
         let ast = one_statement_parses_to(&sql, &expected);
 
         let expected_value = if deferrable.is_some() || initially.is_some() || enforced.is_some() {
@@ -4954,7 +4956,7 @@ fn parse_alter_table_constraints() {
         match alter_table_op(verified_stmt(&format!(
             "ALTER TABLE tab ADD {constraint_text}"
         ))) {
-            AlterTableOperation::AddConstraint(constraint) => {
+            AlterTableOperation::AddConstraint { constraint, .. } => {
                 assert_eq!(constraint_text, constraint.to_string());
             }
             _ => unreachable!(),
@@ -5055,22 +5057,21 @@ fn parse_alter_table_alter_column_type() {
                 AlterColumnOperation::SetDataType {
                     data_type: DataType::Text,
                     using: None,
+                    had_set: true,
                 }
             );
         }
         _ => unreachable!(),
     }
+    verified_stmt(&format!("{alter_stmt} ALTER COLUMN is_active TYPE TEXT"));
 
-    let dialect = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+    let dialects = all_dialects_where(|d| d.supports_alter_column_type_using());
+    dialects.verified_stmt(&format!(
+        "{alter_stmt} ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'"
+    ));
 
-    let res =
-        dialect.parse_sql_statements(&format!("{alter_stmt} ALTER COLUMN is_active TYPE TEXT"));
-    assert_eq!(
-        ParserError::ParserError("Expected: SET/DROP NOT NULL, SET DEFAULT, or SET DATA TYPE after ALTER COLUMN, found: TYPE".to_string()),
-        res.unwrap_err()
-    );
-
-    let res = dialect.parse_sql_statements(&format!(
+    let dialects = all_dialects_except(|d| d.supports_alter_column_type_using());
+    let res = dialects.parse_sql_statements(&format!(
         "{alter_stmt} ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'"
     ));
     assert_eq!(
@@ -5850,7 +5851,10 @@ fn parse_literal_date() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::Date,
-            value: Value::SingleQuotedString("1999-01-01".into()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("1999-01-01".into()),
+                span: Span::empty(),
+            }
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5863,7 +5867,10 @@ fn parse_literal_time() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::Time(None, TimezoneInfo::None),
-            value: Value::SingleQuotedString("01:23:34".into()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("01:23:34".into()),
+                span: Span::empty(),
+            },
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5876,7 +5883,10 @@ fn parse_literal_datetime() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::Datetime(None),
-            value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into()),
+                span: Span::empty(),
+            },
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5889,7 +5899,10 @@ fn parse_literal_timestamp_without_time_zone() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::Timestamp(None, TimezoneInfo::None),
-            value: Value::SingleQuotedString("1999-01-01 01:23:34".into()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("1999-01-01 01:23:34".into()),
+                span: Span::empty(),
+            },
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5904,7 +5917,10 @@ fn parse_literal_timestamp_with_time_zone() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::Timestamp(None, TimezoneInfo::Tz),
-            value: Value::SingleQuotedString("1999-01-01 01:23:34Z".into()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("1999-01-01 01:23:34Z".into()),
+                span: Span::empty(),
+            },
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -6476,8 +6492,9 @@ fn parse_json_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::JSON,
-            value: Value::SingleQuotedString(
-                r#"{
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString(
+                    r#"{
   "id": 10,
   "type": "fruit",
   "name": "apple",
@@ -6497,8 +6514,10 @@ fn parse_json_keyword() {
       ]
     }
 }"#
-                .to_string()
-            )
+                    .to_string()
+                ),
+                span: Span::empty(),
+            }
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -6510,7 +6529,10 @@ fn parse_typed_strings() {
     assert_eq!(
         Expr::TypedString {
             data_type: DataType::JSON,
-            value: Value::SingleQuotedString(r#"{"foo":"bar"}"#.into())
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString(r#"{"foo":"bar"}"#.into()),
+                span: Span::empty(),
+            }
         },
         expr
     );
@@ -6528,7 +6550,10 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: Value::SingleQuotedString(r#"0"#.into())
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString(r#"0"#.into()),
+                span: Span::empty(),
+            }
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -6539,7 +6564,10 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: Value::SingleQuotedString(r#"123456"#.into())
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString(r#"123456"#.into()),
+                span: Span::empty(),
+            }
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -6550,7 +6578,10 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: Value::SingleQuotedString(r#"-3.14"#.into())
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString(r#"-3.14"#.into()),
+                span: Span::empty(),
+            }
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -6561,7 +6592,10 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: Value::SingleQuotedString(r#"-0.54321"#.into())
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString(r#"-0.54321"#.into()),
+                span: Span::empty(),
+            }
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -6572,7 +6606,10 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: Value::SingleQuotedString(r#"1.23456e05"#.into())
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString(r#"1.23456e05"#.into()),
+                span: Span::empty(),
+            }
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -6583,7 +6620,10 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: Value::SingleQuotedString(r#"-9.876e-3"#.into())
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString(r#"-9.876e-3"#.into()),
+                span: Span::empty(),
+            }
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -7497,7 +7537,7 @@ fn parse_cte_in_data_modification_statements() {
             assert_eq!(query.with.unwrap().to_string(), "WITH x AS (SELECT 1)");
             assert!(matches!(*query.body, SetExpr::Update(_)));
         }
-        other => panic!("Expected: UPDATE, got: {:?}", other),
+        other => panic!("Expected: UPDATE, got: {other:?}"),
     }
 
     match verified_stmt("WITH t (x) AS (SELECT 9) DELETE FROM q WHERE id IN (SELECT x FROM t)") {
@@ -7505,7 +7545,7 @@ fn parse_cte_in_data_modification_statements() {
             assert_eq!(query.with.unwrap().to_string(), "WITH t (x) AS (SELECT 9)");
             assert!(matches!(*query.body, SetExpr::Delete(_)));
         }
-        other => panic!("Expected: DELETE, got: {:?}", other),
+        other => panic!("Expected: DELETE, got: {other:?}"),
     }
 
     match verified_stmt("WITH x AS (SELECT 42) INSERT INTO t SELECT foo FROM x") {
@@ -7513,7 +7553,7 @@ fn parse_cte_in_data_modification_statements() {
             assert_eq!(query.with.unwrap().to_string(), "WITH x AS (SELECT 42)");
             assert!(matches!(*query.body, SetExpr::Insert(_)));
         }
-        other => panic!("Expected: INSERT, got: {:?}", other),
+        other => panic!("Expected: INSERT, got: {other:?}"),
     }
 }
 
@@ -7760,7 +7800,6 @@ fn parse_trim() {
         Box::new(MySqlDialect {}),
         //Box::new(BigQueryDialect {}),
         Box::new(SQLiteDialect {}),
-        Box::new(DuckDbDialect {}),
     ]);
 
     assert_eq!(
@@ -7988,7 +8027,7 @@ fn parse_create_view_with_columns() {
                     .map(|name| ViewColumnDef {
                         name,
                         data_type: None,
-                        options: None
+                        options: None,
                     })
                     .collect::<Vec<_>>()
             );
@@ -8592,8 +8631,11 @@ fn lateral_function() {
 #[test]
 fn parse_start_transaction() {
     let dialects = all_dialects_except(|d|
-        // BigQuery does not support this syntax
-        d.is::<BigQueryDialect>());
+        // BigQuery and Snowflake does not support this syntax
+        //
+        // BigQuery: <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#begin_transaction>
+        // Snowflake: <https://docs.snowflake.com/en/sql-reference/sql/begin>
+        d.is::<BigQueryDialect>() || d.is::<SnowflakeDialect>());
     match dialects
         .verified_stmt("START TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE")
     {
@@ -9381,9 +9423,11 @@ fn parse_grant() {
     verified_stmt("GRANT SELECT ON VIEW view1 TO ROLE role1");
     verified_stmt("GRANT EXEC ON my_sp TO runner");
     verified_stmt("GRANT UPDATE ON my_table TO updater_role AS dbo");
-
     all_dialects_where(|d| d.identifier_quote_style("none") == Some('['))
         .verified_stmt("GRANT SELECT ON [my_table] TO [public]");
+    verified_stmt("GRANT SELECT ON FUTURE SCHEMAS IN DATABASE db1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON FUTURE TABLES IN SCHEMA db1.sc1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON FUTURE VIEWS IN SCHEMA db1.sc1 TO ROLE role1");
 }
 
 #[test]
@@ -10038,7 +10082,7 @@ fn parse_offset_and_limit() {
 #[test]
 fn parse_time_functions() {
     fn test_time_function(func_name: &'static str) {
-        let sql = format!("SELECT {}()", func_name);
+        let sql = format!("SELECT {func_name}()");
         let select = verified_only_select(&sql);
         let select_localtime_func_call_ast = Function {
             name: ObjectName::from(vec![Ident::new(func_name)]),
@@ -10060,7 +10104,7 @@ fn parse_time_functions() {
         );
 
         // Validating Parenthesis
-        let sql_without_parens = format!("SELECT {}", func_name);
+        let sql_without_parens = format!("SELECT {func_name}");
         let mut ast_without_parens = select_localtime_func_call_ast;
         ast_without_parens.args = FunctionArguments::None;
         assert_eq!(
@@ -11061,10 +11105,17 @@ fn parse_non_latin_identifiers() {
         Box::new(RedshiftSqlDialect {}),
         Box::new(MySqlDialect {}),
     ]);
-
     supported_dialects.verified_stmt("SELECT a.説明 FROM test.public.inter01 AS a");
     supported_dialects.verified_stmt("SELECT a.説明 FROM inter01 AS a, inter01_transactions AS b WHERE a.説明 = b.取引 GROUP BY a.説明");
     supported_dialects.verified_stmt("SELECT 説明, hühnervögel, garçon, Москва, 東京 FROM inter01");
+
+    let supported_dialects = TestedDialects::new(vec![
+        Box::new(GenericDialect {}),
+        Box::new(DuckDbDialect {}),
+        Box::new(PostgreSqlDialect {}),
+        Box::new(MsSqlDialect {}),
+        Box::new(MySqlDialect {}),
+    ]);
     assert!(supported_dialects
         .parse_sql_statements("SELECT 💝 FROM table1")
         .is_err());
@@ -14301,7 +14352,7 @@ fn overflow() {
     let expr = std::iter::repeat_n("1", 1000)
         .collect::<Vec<_>>()
         .join(" + ");
-    let sql = format!("SELECT {}", expr);
+    let sql = format!("SELECT {expr}");
 
     let mut statements = Parser::parse_sql(&GenericDialect {}, sql.as_str()).unwrap();
     let statement = statements.pop().unwrap();
@@ -14601,7 +14652,7 @@ fn test_conditional_statement_span() {
                 else_block.unwrap().span()
             );
         }
-        stmt => panic!("Unexpected statement: {:?}", stmt),
+        stmt => panic!("Unexpected statement: {stmt:?}"),
     }
 }
 
@@ -14821,7 +14872,10 @@ fn test_geometry_type() {
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
         Expr::TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Point),
-            value: Value::SingleQuotedString("1,2".to_string()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("1,2".to_string()),
+                span: Span::empty(),
+            },
         }
     );
 
@@ -14830,7 +14884,10 @@ fn test_geometry_type() {
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
         Expr::TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Line),
-            value: Value::SingleQuotedString("1,2,3,4".to_string()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("1,2,3,4".to_string()),
+                span: Span::empty(),
+            },
         }
     );
 
@@ -14839,7 +14896,10 @@ fn test_geometry_type() {
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
         Expr::TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::GeometricPath),
-            value: Value::SingleQuotedString("1,2,3,4".to_string()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("1,2,3,4".to_string()),
+                span: Span::empty(),
+            },
         }
     );
     let sql = "box '1,2,3,4'";
@@ -14847,7 +14907,10 @@ fn test_geometry_type() {
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
         Expr::TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::GeometricBox),
-            value: Value::SingleQuotedString("1,2,3,4".to_string()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("1,2,3,4".to_string()),
+                span: Span::empty(),
+            },
         }
     );
 
@@ -14856,7 +14919,10 @@ fn test_geometry_type() {
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
         Expr::TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Circle),
-            value: Value::SingleQuotedString("1,2,3".to_string()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("1,2,3".to_string()),
+                span: Span::empty(),
+            },
         }
     );
 
@@ -14865,7 +14931,10 @@ fn test_geometry_type() {
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
         Expr::TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Polygon),
-            value: Value::SingleQuotedString("1,2,3,4".to_string()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("1,2,3,4".to_string()),
+                span: Span::empty(),
+            },
         }
     );
     let sql = "lseg '1,2,3,4'";
@@ -14873,7 +14942,10 @@ fn test_geometry_type() {
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
         Expr::TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::LineSegment),
-            value: Value::SingleQuotedString("1,2,3,4".to_string()),
+            value: ValueWithSpan {
+                value: Value::SingleQuotedString("1,2,3,4".to_string()),
+                span: Span::empty(),
+            },
         }
     );
 }
@@ -15210,10 +15282,426 @@ fn parse_pipeline_operator() {
     dialects.verified_stmt("SELECT * FROM tbl |> TABLESAMPLE SYSTEM (50 PERCENT)");
     dialects.verified_stmt("SELECT * FROM tbl |> TABLESAMPLE SYSTEM (50) REPEATABLE (10)");
 
+    // rename pipe operator
+    dialects.verified_stmt("SELECT * FROM users |> RENAME old_name AS new_name");
+    dialects.verified_stmt("SELECT * FROM users |> RENAME id AS user_id, name AS user_name");
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM users |> RENAME id user_id",
+        "SELECT * FROM users |> RENAME id AS user_id",
+    );
+
+    // union pipe operator
+    dialects.verified_stmt("SELECT * FROM users |> UNION ALL (SELECT * FROM admins)");
+    dialects.verified_stmt("SELECT * FROM users |> UNION DISTINCT (SELECT * FROM admins)");
+    dialects.verified_stmt("SELECT * FROM users |> UNION (SELECT * FROM admins)");
+
+    // union pipe operator with multiple queries
+    dialects.verified_stmt(
+        "SELECT * FROM users |> UNION ALL (SELECT * FROM admins), (SELECT * FROM guests)",
+    );
+    dialects.verified_stmt("SELECT * FROM users |> UNION DISTINCT (SELECT * FROM admins), (SELECT * FROM guests), (SELECT * FROM employees)");
+    dialects.verified_stmt(
+        "SELECT * FROM users |> UNION (SELECT * FROM admins), (SELECT * FROM guests)",
+    );
+
+    // union pipe operator with BY NAME modifier
+    dialects.verified_stmt("SELECT * FROM users |> UNION BY NAME (SELECT * FROM admins)");
+    dialects.verified_stmt("SELECT * FROM users |> UNION ALL BY NAME (SELECT * FROM admins)");
+    dialects.verified_stmt("SELECT * FROM users |> UNION DISTINCT BY NAME (SELECT * FROM admins)");
+
+    // union pipe operator with BY NAME and multiple queries
+    dialects.verified_stmt(
+        "SELECT * FROM users |> UNION BY NAME (SELECT * FROM admins), (SELECT * FROM guests)",
+    );
+
+    // intersect pipe operator (BigQuery requires DISTINCT modifier for INTERSECT)
+    dialects.verified_stmt("SELECT * FROM users |> INTERSECT DISTINCT (SELECT * FROM admins)");
+
+    // intersect pipe operator with BY NAME modifier
+    dialects
+        .verified_stmt("SELECT * FROM users |> INTERSECT DISTINCT BY NAME (SELECT * FROM admins)");
+
+    // intersect pipe operator with multiple queries
+    dialects.verified_stmt(
+        "SELECT * FROM users |> INTERSECT DISTINCT (SELECT * FROM admins), (SELECT * FROM guests)",
+    );
+
+    // intersect pipe operator with BY NAME and multiple queries
+    dialects.verified_stmt("SELECT * FROM users |> INTERSECT DISTINCT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)");
+
+    // except pipe operator (BigQuery requires DISTINCT modifier for EXCEPT)
+    dialects.verified_stmt("SELECT * FROM users |> EXCEPT DISTINCT (SELECT * FROM admins)");
+
+    // except pipe operator with BY NAME modifier
+    dialects.verified_stmt("SELECT * FROM users |> EXCEPT DISTINCT BY NAME (SELECT * FROM admins)");
+
+    // except pipe operator with multiple queries
+    dialects.verified_stmt(
+        "SELECT * FROM users |> EXCEPT DISTINCT (SELECT * FROM admins), (SELECT * FROM guests)",
+    );
+
+    // except pipe operator with BY NAME and multiple queries
+    dialects.verified_stmt("SELECT * FROM users |> EXCEPT DISTINCT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)");
+
+    // call pipe operator
+    dialects.verified_stmt("SELECT * FROM users |> CALL my_function()");
+    dialects.verified_stmt("SELECT * FROM users |> CALL process_data(5, 'test')");
+    dialects.verified_stmt(
+        "SELECT * FROM users |> CALL namespace.function_name(col1, col2, 'literal')",
+    );
+
+    // call pipe operator with complex arguments
+    dialects.verified_stmt("SELECT * FROM users |> CALL transform_data(col1 + col2)");
+    dialects.verified_stmt("SELECT * FROM users |> CALL analyze_data('param1', 100, true)");
+
+    // call pipe operator with aliases
+    dialects.verified_stmt("SELECT * FROM input_table |> CALL tvf1(arg1) AS al");
+    dialects.verified_stmt("SELECT * FROM users |> CALL process_data(5) AS result_table");
+    dialects.verified_stmt("SELECT * FROM users |> CALL namespace.func() AS my_alias");
+
+    // multiple call pipe operators in sequence
+    dialects.verified_stmt("SELECT * FROM input_table |> CALL tvf1(arg1) |> CALL tvf2(arg2, arg3)");
+    dialects.verified_stmt(
+        "SELECT * FROM data |> CALL transform(col1) |> CALL validate() |> CALL process(param)",
+    );
+
+    // multiple call pipe operators with aliases
+    dialects.verified_stmt(
+        "SELECT * FROM input_table |> CALL tvf1(arg1) AS step1 |> CALL tvf2(arg2) AS step2",
+    );
+    dialects.verified_stmt(
+        "SELECT * FROM data |> CALL preprocess() AS clean_data |> CALL analyze(mode) AS results",
+    );
+
+    // call pipe operators mixed with other pipe operators
+    dialects.verified_stmt(
+        "SELECT * FROM users |> CALL transform() |> WHERE status = 'active' |> CALL process(param)",
+    );
+    dialects.verified_stmt(
+        "SELECT * FROM data |> CALL preprocess() AS clean |> SELECT col1, col2 |> CALL validate()",
+    );
+
+    // pivot pipe operator
+    dialects.verified_stmt(
+        "SELECT * FROM monthly_sales |> PIVOT(SUM(amount) FOR quarter IN ('Q1', 'Q2', 'Q3', 'Q4'))",
+    );
+    dialects.verified_stmt("SELECT * FROM sales_data |> PIVOT(AVG(revenue) FOR region IN ('North', 'South', 'East', 'West'))");
+
+    // pivot pipe operator with multiple aggregate functions
+    dialects.verified_stmt("SELECT * FROM data |> PIVOT(SUM(sales) AS total_sales, COUNT(*) AS num_transactions FOR month IN ('Jan', 'Feb', 'Mar'))");
+
+    // pivot pipe operator with compound column names
+    dialects.verified_stmt("SELECT * FROM sales |> PIVOT(SUM(amount) FOR product.category IN ('Electronics', 'Clothing'))");
+
+    // pivot pipe operator mixed with other pipe operators
+    dialects.verified_stmt("SELECT * FROM sales_data |> WHERE year = 2023 |> PIVOT(SUM(revenue) FOR quarter IN ('Q1', 'Q2', 'Q3', 'Q4'))");
+
+    // pivot pipe operator with aliases
+    dialects.verified_stmt("SELECT * FROM monthly_sales |> PIVOT(SUM(sales) FOR quarter IN ('Q1', 'Q2')) AS quarterly_sales");
+    dialects.verified_stmt("SELECT * FROM data |> PIVOT(AVG(price) FOR category IN ('A', 'B', 'C')) AS avg_by_category");
+    dialects.verified_stmt("SELECT * FROM sales |> PIVOT(COUNT(*) AS transactions, SUM(amount) AS total FOR region IN ('North', 'South')) AS regional_summary");
+
+    // pivot pipe operator with implicit aliases (without AS keyword)
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM monthly_sales |> PIVOT(SUM(sales) FOR quarter IN ('Q1', 'Q2')) quarterly_sales",
+        "SELECT * FROM monthly_sales |> PIVOT(SUM(sales) FOR quarter IN ('Q1', 'Q2')) AS quarterly_sales",
+    );
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM data |> PIVOT(AVG(price) FOR category IN ('A', 'B', 'C')) avg_by_category",
+        "SELECT * FROM data |> PIVOT(AVG(price) FOR category IN ('A', 'B', 'C')) AS avg_by_category",
+    );
+
+    // unpivot pipe operator basic usage
+    dialects
+        .verified_stmt("SELECT * FROM sales |> UNPIVOT(revenue FOR quarter IN (Q1, Q2, Q3, Q4))");
+    dialects.verified_stmt("SELECT * FROM data |> UNPIVOT(value FOR category IN (A, B, C))");
+    dialects.verified_stmt(
+        "SELECT * FROM metrics |> UNPIVOT(measurement FOR metric_type IN (cpu, memory, disk))",
+    );
+
+    // unpivot pipe operator with multiple columns
+    dialects.verified_stmt("SELECT * FROM quarterly_sales |> UNPIVOT(amount FOR period IN (jan, feb, mar, apr, may, jun))");
+    dialects.verified_stmt(
+        "SELECT * FROM report |> UNPIVOT(score FOR subject IN (math, science, english, history))",
+    );
+
+    // unpivot pipe operator mixed with other pipe operators
+    dialects.verified_stmt("SELECT * FROM sales_data |> WHERE year = 2023 |> UNPIVOT(revenue FOR quarter IN (Q1, Q2, Q3, Q4))");
+
+    // unpivot pipe operator with aliases
+    dialects.verified_stmt("SELECT * FROM quarterly_sales |> UNPIVOT(amount FOR period IN (Q1, Q2)) AS unpivoted_sales");
+    dialects.verified_stmt(
+        "SELECT * FROM data |> UNPIVOT(value FOR category IN (A, B, C)) AS transformed_data",
+    );
+    dialects.verified_stmt("SELECT * FROM metrics |> UNPIVOT(measurement FOR metric_type IN (cpu, memory)) AS metric_measurements");
+
+    // unpivot pipe operator with implicit aliases (without AS keyword)
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM quarterly_sales |> UNPIVOT(amount FOR period IN (Q1, Q2)) unpivoted_sales",
+        "SELECT * FROM quarterly_sales |> UNPIVOT(amount FOR period IN (Q1, Q2)) AS unpivoted_sales",
+    );
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM data |> UNPIVOT(value FOR category IN (A, B, C)) transformed_data",
+        "SELECT * FROM data |> UNPIVOT(value FOR category IN (A, B, C)) AS transformed_data",
+    );
+
     // many pipes
     dialects.verified_stmt(
         "SELECT * FROM CustomerOrders |> AGGREGATE SUM(cost) AS total_cost GROUP BY customer_id, state, item_type |> EXTEND COUNT(*) OVER (PARTITION BY customer_id) AS num_orders |> WHERE num_orders > 1 |> AGGREGATE AVG(total_cost) AS average GROUP BY state DESC, item_type ASC",
     );
+
+    // join pipe operator - INNER JOIN
+    dialects.verified_stmt("SELECT * FROM users |> JOIN orders ON users.id = orders.user_id");
+    dialects.verified_stmt("SELECT * FROM users |> INNER JOIN orders ON users.id = orders.user_id");
+
+    // join pipe operator - LEFT JOIN
+    dialects.verified_stmt("SELECT * FROM users |> LEFT JOIN orders ON users.id = orders.user_id");
+    dialects.verified_stmt(
+        "SELECT * FROM users |> LEFT OUTER JOIN orders ON users.id = orders.user_id",
+    );
+
+    // join pipe operator - RIGHT JOIN
+    dialects.verified_stmt("SELECT * FROM users |> RIGHT JOIN orders ON users.id = orders.user_id");
+    dialects.verified_stmt(
+        "SELECT * FROM users |> RIGHT OUTER JOIN orders ON users.id = orders.user_id",
+    );
+
+    // join pipe operator - FULL JOIN
+    dialects.verified_stmt("SELECT * FROM users |> FULL JOIN orders ON users.id = orders.user_id");
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM users |> FULL OUTER JOIN orders ON users.id = orders.user_id",
+        "SELECT * FROM users |> FULL JOIN orders ON users.id = orders.user_id",
+    );
+
+    // join pipe operator - CROSS JOIN
+    dialects.verified_stmt("SELECT * FROM users |> CROSS JOIN orders");
+
+    // join pipe operator with USING
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM users |> JOIN orders USING (user_id)",
+        "SELECT * FROM users |> JOIN orders USING(user_id)",
+    );
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM users |> LEFT JOIN orders USING (user_id, order_date)",
+        "SELECT * FROM users |> LEFT JOIN orders USING(user_id, order_date)",
+    );
+
+    // join pipe operator with alias
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM users |> JOIN orders o ON users.id = o.user_id",
+        "SELECT * FROM users |> JOIN orders AS o ON users.id = o.user_id",
+    );
+    dialects.verified_stmt("SELECT * FROM users |> LEFT JOIN orders AS o ON users.id = o.user_id");
+
+    // join pipe operator with complex ON condition
+    dialects.verified_stmt("SELECT * FROM users |> JOIN orders ON users.id = orders.user_id AND orders.status = 'active'");
+    dialects.verified_stmt("SELECT * FROM users |> LEFT JOIN orders ON users.id = orders.user_id AND orders.amount > 100");
+
+    // multiple join pipe operators
+    dialects.verified_stmt("SELECT * FROM users |> JOIN orders ON users.id = orders.user_id |> JOIN products ON orders.product_id = products.id");
+    dialects.verified_stmt("SELECT * FROM users |> LEFT JOIN orders ON users.id = orders.user_id |> RIGHT JOIN products ON orders.product_id = products.id");
+
+    // join pipe operator with other pipe operators
+    dialects.verified_stmt("SELECT * FROM users |> JOIN orders ON users.id = orders.user_id |> WHERE orders.amount > 100");
+    dialects.verified_stmt("SELECT * FROM users |> WHERE users.active = true |> LEFT JOIN orders ON users.id = orders.user_id");
+    dialects.verified_stmt("SELECT * FROM users |> JOIN orders ON users.id = orders.user_id |> SELECT users.name, orders.amount");
+}
+
+#[test]
+fn parse_pipeline_operator_negative_tests() {
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+
+    // Test that plain EXCEPT without DISTINCT fails
+    assert_eq!(
+        ParserError::ParserError("EXCEPT pipe operator requires DISTINCT modifier".to_string()),
+        dialects
+            .parse_sql_statements("SELECT * FROM users |> EXCEPT (SELECT * FROM admins)")
+            .unwrap_err()
+    );
+
+    // Test that EXCEPT ALL fails
+    assert_eq!(
+        ParserError::ParserError("EXCEPT pipe operator requires DISTINCT modifier".to_string()),
+        dialects
+            .parse_sql_statements("SELECT * FROM users |> EXCEPT ALL (SELECT * FROM admins)")
+            .unwrap_err()
+    );
+
+    // Test that EXCEPT BY NAME without DISTINCT fails
+    assert_eq!(
+        ParserError::ParserError("EXCEPT pipe operator requires DISTINCT modifier".to_string()),
+        dialects
+            .parse_sql_statements("SELECT * FROM users |> EXCEPT BY NAME (SELECT * FROM admins)")
+            .unwrap_err()
+    );
+
+    // Test that EXCEPT ALL BY NAME fails
+    assert_eq!(
+        ParserError::ParserError("EXCEPT pipe operator requires DISTINCT modifier".to_string()),
+        dialects
+            .parse_sql_statements(
+                "SELECT * FROM users |> EXCEPT ALL BY NAME (SELECT * FROM admins)"
+            )
+            .unwrap_err()
+    );
+
+    // Test that plain INTERSECT without DISTINCT fails
+    assert_eq!(
+        ParserError::ParserError("INTERSECT pipe operator requires DISTINCT modifier".to_string()),
+        dialects
+            .parse_sql_statements("SELECT * FROM users |> INTERSECT (SELECT * FROM admins)")
+            .unwrap_err()
+    );
+
+    // Test that INTERSECT ALL fails
+    assert_eq!(
+        ParserError::ParserError("INTERSECT pipe operator requires DISTINCT modifier".to_string()),
+        dialects
+            .parse_sql_statements("SELECT * FROM users |> INTERSECT ALL (SELECT * FROM admins)")
+            .unwrap_err()
+    );
+
+    // Test that INTERSECT BY NAME without DISTINCT fails
+    assert_eq!(
+        ParserError::ParserError("INTERSECT pipe operator requires DISTINCT modifier".to_string()),
+        dialects
+            .parse_sql_statements("SELECT * FROM users |> INTERSECT BY NAME (SELECT * FROM admins)")
+            .unwrap_err()
+    );
+
+    // Test that INTERSECT ALL BY NAME fails
+    assert_eq!(
+        ParserError::ParserError("INTERSECT pipe operator requires DISTINCT modifier".to_string()),
+        dialects
+            .parse_sql_statements(
+                "SELECT * FROM users |> INTERSECT ALL BY NAME (SELECT * FROM admins)"
+            )
+            .unwrap_err()
+    );
+
+    // Test that CALL without function name fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> CALL")
+        .is_err());
+
+    // Test that CALL without parentheses fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> CALL my_function")
+        .is_err());
+
+    // Test that CALL with invalid function syntax fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> CALL 123invalid")
+        .is_err());
+
+    // Test that CALL with malformed arguments fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> CALL my_function(,)")
+        .is_err());
+
+    // Test that CALL with invalid alias syntax fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> CALL my_function() AS")
+        .is_err());
+
+    // Test that PIVOT without parentheses fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> PIVOT SUM(amount) FOR month IN ('Jan')")
+        .is_err());
+
+    // Test that PIVOT without FOR keyword fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> PIVOT(SUM(amount) month IN ('Jan'))")
+        .is_err());
+
+    // Test that PIVOT without IN keyword fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> PIVOT(SUM(amount) FOR month ('Jan'))")
+        .is_err());
+
+    // Test that PIVOT with empty IN list fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> PIVOT(SUM(amount) FOR month IN ())")
+        .is_err());
+
+    // Test that PIVOT with invalid alias syntax fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> PIVOT(SUM(amount) FOR month IN ('Jan')) AS")
+        .is_err());
+
+    // Test UNPIVOT negative cases
+
+    // Test that UNPIVOT without parentheses fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> UNPIVOT value FOR name IN col1, col2")
+        .is_err());
+
+    // Test that UNPIVOT without FOR keyword fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> UNPIVOT(value name IN (col1, col2))")
+        .is_err());
+
+    // Test that UNPIVOT without IN keyword fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> UNPIVOT(value FOR name (col1, col2))")
+        .is_err());
+
+    // Test that UNPIVOT with missing value column fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> UNPIVOT(FOR name IN (col1, col2))")
+        .is_err());
+
+    // Test that UNPIVOT with missing name column fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> UNPIVOT(value FOR IN (col1, col2))")
+        .is_err());
+
+    // Test that UNPIVOT with empty IN list fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> UNPIVOT(value FOR name IN ())")
+        .is_err());
+
+    // Test that UNPIVOT with invalid alias syntax fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> UNPIVOT(value FOR name IN (col1, col2)) AS")
+        .is_err());
+
+    // Test that UNPIVOT with missing closing parenthesis fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> UNPIVOT(value FOR name IN (col1, col2)")
+        .is_err());
+
+    // Test that JOIN without table name fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> JOIN ON users.id = orders.user_id")
+        .is_err());
+
+    // Test that CROSS JOIN with ON condition fails
+    assert!(dialects
+        .parse_sql_statements(
+            "SELECT * FROM users |> CROSS JOIN orders ON users.id = orders.user_id"
+        )
+        .is_err());
+
+    // Test that CROSS JOIN with USING condition fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> CROSS JOIN orders USING (user_id)")
+        .is_err());
+
+    // Test that JOIN with empty USING list fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> JOIN orders USING ()")
+        .is_err());
+
+    // Test that JOIN with malformed ON condition fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> JOIN orders ON")
+        .is_err());
+
+    // Test that JOIN with invalid USING syntax fails
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM users |> JOIN orders USING user_id")
+        .is_err());
 }
 
 #[test]
@@ -15301,6 +15789,11 @@ fn parse_return() {
 }
 
 #[test]
+fn parse_subquery_limit() {
+    let _ = all_dialects().verified_stmt("SELECT t1_id, t1_name FROM t1 WHERE t1_id IN (SELECT t2_id FROM t2 WHERE t1_name = t2_name LIMIT 10)");
+}
+
+#[test]
 fn test_open() {
     let open_cursor = "OPEN Employee_Cursor";
     let stmt = all_dialects().verified_stmt(open_cursor);
@@ -15345,4 +15838,119 @@ fn check_enforced() {
     all_dialects().verified_stmt(
         "CREATE TABLE t (a INT, b INT, c INT, CHECK (a > 0) NOT ENFORCED, CHECK (b > 0) ENFORCED, CHECK (c > 0))",
     );
+}
+
+#[test]
+fn join_precedence() {
+    all_dialects_except(|d| !d.supports_left_associative_joins_without_parens())
+        .verified_query_with_canonical(
+        "SELECT *
+         FROM t1
+         NATURAL JOIN t5
+         INNER JOIN t0 ON (t0.v1 + t5.v0) > 0
+         WHERE t0.v1 = t1.v0",
+        // canonical string without parentheses
+        "SELECT * FROM t1 NATURAL JOIN t5 INNER JOIN t0 ON (t0.v1 + t5.v0) > 0 WHERE t0.v1 = t1.v0",
+    );
+    all_dialects_except(|d| d.supports_left_associative_joins_without_parens()).verified_query_with_canonical(
+        "SELECT *
+         FROM t1
+         NATURAL JOIN t5
+         INNER JOIN t0 ON (t0.v1 + t5.v0) > 0
+         WHERE t0.v1 = t1.v0",
+        // canonical string with parentheses
+        "SELECT * FROM t1 NATURAL JOIN (t5 INNER JOIN t0 ON (t0.v1 + t5.v0) > 0) WHERE t0.v1 = t1.v0",
+    );
+}
+
+#[test]
+fn parse_create_procedure_with_language() {
+    let sql = r#"CREATE PROCEDURE test_proc LANGUAGE sql AS BEGIN SELECT 1; END"#;
+    match verified_stmt(sql) {
+        Statement::CreateProcedure {
+            or_alter,
+            name,
+            params,
+            language,
+            ..
+        } => {
+            assert_eq!(or_alter, false);
+            assert_eq!(name.to_string(), "test_proc");
+            assert_eq!(params, Some(vec![]));
+            assert_eq!(
+                language,
+                Some(Ident {
+                    value: "sql".into(),
+                    quote_style: None,
+                    span: Span {
+                        start: Location::empty(),
+                        end: Location::empty()
+                    }
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_procedure_with_parameter_modes() {
+    let sql = r#"CREATE PROCEDURE test_proc (IN a INTEGER, OUT b TEXT, INOUT c TIMESTAMP, d BOOL) AS BEGIN SELECT 1; END"#;
+    match verified_stmt(sql) {
+        Statement::CreateProcedure {
+            or_alter,
+            name,
+            params,
+            ..
+        } => {
+            assert_eq!(or_alter, false);
+            assert_eq!(name.to_string(), "test_proc");
+            let fake_span = Span {
+                start: Location { line: 0, column: 0 },
+                end: Location { line: 0, column: 0 },
+            };
+            assert_eq!(
+                params,
+                Some(vec![
+                    ProcedureParam {
+                        name: Ident {
+                            value: "a".into(),
+                            quote_style: None,
+                            span: fake_span,
+                        },
+                        data_type: DataType::Integer(None),
+                        mode: Some(ArgMode::In)
+                    },
+                    ProcedureParam {
+                        name: Ident {
+                            value: "b".into(),
+                            quote_style: None,
+                            span: fake_span,
+                        },
+                        data_type: DataType::Text,
+                        mode: Some(ArgMode::Out)
+                    },
+                    ProcedureParam {
+                        name: Ident {
+                            value: "c".into(),
+                            quote_style: None,
+                            span: fake_span,
+                        },
+                        data_type: DataType::Timestamp(None, TimezoneInfo::None),
+                        mode: Some(ArgMode::InOut)
+                    },
+                    ProcedureParam {
+                        name: Ident {
+                            value: "d".into(),
+                            quote_style: None,
+                            span: fake_span,
+                        },
+                        data_type: DataType::Bool,
+                        mode: None
+                    },
+                ])
+            );
+        }
+        _ => unreachable!(),
+    }
 }

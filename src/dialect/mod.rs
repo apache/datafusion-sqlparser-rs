@@ -278,6 +278,34 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Indicates whether the dialect supports left-associative join parsing
+    /// by default when parentheses are omitted in nested joins.
+    ///
+    /// Most dialects (like MySQL or Postgres) assume **left-associative** precedence,
+    /// so a query like:
+    ///
+    /// ```sql
+    /// SELECT * FROM t1 NATURAL JOIN t5 INNER JOIN t0 ON ...
+    /// ```
+    /// is interpreted as:
+    /// ```sql
+    /// ((t1 NATURAL JOIN t5) INNER JOIN t0 ON ...)
+    /// ```
+    /// and internally represented as a **flat list** of joins.
+    ///
+    /// In contrast, some dialects (e.g. **Snowflake**) assume **right-associative**
+    /// precedence and interpret the same query as:
+    /// ```sql
+    /// (t1 NATURAL JOIN (t5 INNER JOIN t0 ON ...))
+    /// ```
+    /// which results in a **nested join** structure in the AST.
+    ///
+    /// If this method returns `false`, the parser must build nested join trees
+    /// even in the absence of parentheses to reflect the correct associativity
+    fn supports_left_associative_joins_without_parens(&self) -> bool {
+        true
+    }
+
     /// Returns true if the dialect supports the `(+)` syntax for OUTER JOIN.
     fn supports_outer_join_operator(&self) -> bool {
         false
@@ -587,7 +615,7 @@ pub trait Dialect: Debug + Any {
         }
 
         let token = parser.peek_token();
-        debug!("get_next_precedence_full() {:?}", token);
+        debug!("get_next_precedence_full() {token:?}");
         match token.token {
             Token::Word(w) if w.keyword == Keyword::OR => Ok(p!(Or)),
             Token::Word(w) if w.keyword == Keyword::AND => Ok(p!(And)),
@@ -621,6 +649,7 @@ pub trait Dialect: Debug + Any {
                 Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(p!(Like)),
                 Token::Word(w) if w.keyword == Keyword::MATCH => Ok(p!(Like)),
                 Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
+                Token::Word(w) if w.keyword == Keyword::MEMBER => Ok(p!(Like)),
                 _ => Ok(self.prec_unknown()),
             },
             Token::Word(w) if w.keyword == Keyword::IS => Ok(p!(Is)),
@@ -633,6 +662,7 @@ pub trait Dialect: Debug + Any {
             Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(p!(Like)),
             Token::Word(w) if w.keyword == Keyword::MATCH => Ok(p!(Like)),
             Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
+            Token::Word(w) if w.keyword == Keyword::MEMBER => Ok(p!(Like)),
             Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(p!(Between)),
             Token::Word(w) if w.keyword == Keyword::DIV => Ok(p!(MulDivModOp)),
             Token::Period => Ok(p!(Period)),
@@ -1026,6 +1056,19 @@ pub trait Dialect: Debug + Any {
     ///
     /// Note: Postgres doesn't support the `COLLATE` clause, but we permissively parse it anyway.
     fn supports_set_names(&self) -> bool {
+        false
+    }
+
+    fn supports_space_separated_column_options(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports the `USING` clause in an `ALTER COLUMN` statement.
+    /// Example:
+    ///  ```sql
+    ///  ALTER TABLE tbl ALTER COLUMN col SET DATA TYPE <type> USING <exp>`
+    /// ```
+    fn supports_alter_column_type_using(&self) -> bool {
         false
     }
 }

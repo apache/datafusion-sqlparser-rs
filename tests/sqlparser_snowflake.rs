@@ -4100,3 +4100,17 @@ fn parse_connect_by_root_operator() {
         "sql parser error: Expected an expression, found: FROM"
     );
 }
+
+#[test]
+fn test_snowflake_create_view_with_composite_tag() {
+    let create_view_with_tag =
+        r#"CREATE VIEW X (COL WITH TAG (foo.bar.baz.pii='email')) AS SELECT * FROM Y"#;
+    snowflake().verified_stmt(create_view_with_tag);
+}
+
+#[test]
+fn test_snowflake_create_view_with_composite_policy_name() {
+    let create_view_with_tag =
+        r#"CREATE VIEW X (COL WITH MASKING POLICY foo.bar.baz) AS SELECT * FROM Y"#;
+    snowflake().verified_stmt(create_view_with_tag);
+}

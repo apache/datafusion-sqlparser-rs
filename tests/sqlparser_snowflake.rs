@@ -3416,9 +3416,37 @@ fn parse_ls_and_rm() {
 }
 
 #[test]
+fn test_sql_keywords_as_select_item_ident() {
+    // Some keywords that should be parsed as an alias
+    let unreserved_kws = vec!["CLUSTER", "FETCH", "RETURNING", "LIMIT", "EXCEPT", "SORT"];
+    for kw in unreserved_kws {
+        snowflake().verified_stmt(&format!("SELECT 1, {kw}"));
+    }
+
+    // Some keywords that should not be parsed as an alias
+    let reserved_kws = vec![
+        "FROM",
+        "GROUP",
+        "HAVING",
+        "INTERSECT",
+        "INTO",
+        "ORDER",
+        "SELECT",
+        "UNION",
+        "WHERE",
+        "WITH",
+    ];
+    for kw in reserved_kws {
+        assert!(snowflake()
+            .parse_sql_statements(&format!("SELECT 1, {kw}"))
+            .is_err());
+    }
+}
+
+#[test]
 fn test_sql_keywords_as_select_item_aliases() {
     // Some keywords that should be parsed as an alias
-    let unreserved_kws = vec!["CLUSTER", "FETCH", "RETURNING", "LIMIT", "EXCEPT"];
+    let unreserved_kws = vec!["CLUSTER", "FETCH", "RETURNING", "LIMIT", "EXCEPT", "SORT"];
     for kw in unreserved_kws {
         snowflake()
             .one_statement_parses_to(&format!("SELECT 1 {kw}"), &format!("SELECT 1 AS {kw}"));

@@ -262,4 +262,8 @@ impl Dialect for PostgreSqlDialect {
     fn supports_alter_column_type_using(&self) -> bool {
         true
     }
+
+    fn supports_notnull(&self) -> bool {
+        true
+    }
 }

@@ -1437,6 +1437,7 @@ impl Spanned for Expr {
             Expr::IsNotTrue(expr) => expr.span(),
             Expr::IsNull(expr) => expr.span(),
             Expr::IsNotNull(expr) => expr.span(),
+            Expr::NotNull { expr, .. } => expr.span(),
             Expr::IsUnknown(expr) => expr.span(),
             Expr::IsNotUnknown(expr) => expr.span(),
             Expr::IsDistinctFrom(lhs, rhs) => lhs.span().union(&rhs.span()),

@@ -3562,6 +3562,7 @@ impl<'a> Parser<'a> {
                     let negated = self.parse_keyword(Keyword::NOT);
                     let regexp = self.parse_keyword(Keyword::REGEXP);
                     let rlike = self.parse_keyword(Keyword::RLIKE);
+                    let null = self.parse_keyword(Keyword::NULL);
                     if regexp || rlike {
                         Ok(Expr::RLike {
                             negated,
@@ -3570,6 +3571,11 @@ impl<'a> Parser<'a> {
                                 self.parse_subexpr(self.dialect.prec_value(Precedence::Like))?,
                             ),
                             regexp,
+                        })
+                    } else if dialect.supports_not_null() && negated && null {
+                        Ok(Expr::NotNull {
+                            expr: Box::new(expr),
+                            one_word: false,
                         })
                     } else if self.parse_keyword(Keyword::IN) {
                         self.parse_in(expr, negated)
@@ -3608,6 +3614,10 @@ impl<'a> Parser<'a> {
                         self.expected("IN or BETWEEN after NOT", self.peek_token())
                     }
                 }
+                Keyword::NOTNULL if dialect.supports_notnull() => Ok(Expr::NotNull {
+                    expr: Box::new(expr),
+                    one_word: true,
+                }),
                 Keyword::MEMBER => {
                     if self.parse_keyword(Keyword::OF) {
                         self.expect_token(&Token::LParen)?;

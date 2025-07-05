@@ -110,4 +110,12 @@ impl Dialect for SQLiteDialect {
     fn supports_dollar_placeholder(&self) -> bool {
         true
     }
+
+    fn supports_not_null(&self) -> bool {
+        true
+    }
+
+    fn supports_notnull(&self) -> bool {
+        true
+    }
 }

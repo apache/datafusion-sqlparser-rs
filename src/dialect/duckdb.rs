@@ -94,4 +94,12 @@ impl Dialect for DuckDbDialect {
     fn supports_order_by_all(&self) -> bool {
         true
     }
+
+    fn supports_not_null(&self) -> bool {
+        true
+    }
+
+    fn supports_notnull(&self) -> bool {
+        true
+    }
 }

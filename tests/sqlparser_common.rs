@@ -11184,7 +11184,7 @@ fn parse_trailing_comma() {
     trailing_commas.verified_stmt(r#"SELECT "from" FROM "from""#);
 
     // doesn't allow any trailing commas
-    let trailing_commas = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+    let trailing_commas = TestedDialects::new(vec![Box::new(PostgreSqlDialect {})]);
 
     assert_eq!(
         trailing_commas

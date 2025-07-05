@@ -3996,6 +3996,7 @@ pub enum Statement {
         with_grant_option: bool,
         as_grantor: Option<Ident>,
         granted_by: Option<Ident>,
+        current_grants: Option<CurrentGrantsKind>,
     },
     /// ```sql
     /// DENY privileges ON object TO grantees
@@ -4310,6 +4311,28 @@ pub enum Statement {
     ///
     /// See [ReturnStatement]
     Return(ReturnStatement),
+}
+
+/// ```sql
+/// {COPY | REVOKE} CURRENT GRANTS
+/// ```
+/// 
+/// - [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/grant-ownership#optional-parameters)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CurrentGrantsKind {
+    CopyCurrentGrants,
+    RevokeCurrentGrants,
+}
+
+impl fmt::Display for CurrentGrantsKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CurrentGrantsKind::CopyCurrentGrants => write!(f, "COPY CURRENT GRANTS"),
+            CurrentGrantsKind::RevokeCurrentGrants => write!(f, "REVOKE CURRENT GRANTS"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -5715,6 +5738,7 @@ impl fmt::Display for Statement {
                 with_grant_option,
                 as_grantor,
                 granted_by,
+                current_grants,
             } => {
                 write!(f, "GRANT {privileges} ")?;
                 if let Some(objects) = objects {
@@ -5723,6 +5747,9 @@ impl fmt::Display for Statement {
                 write!(f, "TO {}", display_comma_separated(grantees))?;
                 if *with_grant_option {
                     write!(f, " WITH GRANT OPTION")?;
+                }
+                if let Some(current_grants) = current_grants {
+                    write!(f, " {current_grants}")?;
                 }
                 if let Some(grantor) = as_grantor {
                     write!(f, " AS {grantor}")?;

@@ -270,8 +270,8 @@ fn test_snowflake_create_table_with_tag() {
             assert_eq!("my_table", name.to_string());
             assert_eq!(
                 Some(vec![
-                    Tag::new("A".into(), "TAG A".to_string()),
-                    Tag::new("B".into(), "TAG B".to_string())
+                    Tag::new(ObjectName::from(vec![Ident::new("A")]), "TAG A".to_string()),
+                    Tag::new(ObjectName::from(vec![Ident::new("B")]), "TAG B".to_string())
                 ]),
                 with_tags
             );
@@ -291,8 +291,8 @@ fn test_snowflake_create_table_with_tag() {
             assert_eq!("my_table", name.to_string());
             assert_eq!(
                 Some(vec![
-                    Tag::new("A".into(), "TAG A".to_string()),
-                    Tag::new("B".into(), "TAG B".to_string())
+                    Tag::new(ObjectName::from(vec![Ident::new("A")]), "TAG A".to_string()),
+                    Tag::new(ObjectName::from(vec![Ident::new("B")]), "TAG B".to_string())
                 ]),
                 with_tags
             );
@@ -731,7 +731,7 @@ fn test_snowflake_create_table_with_columns_masking_policy() {
                             option: ColumnOption::Policy(ColumnPolicy::MaskingPolicy(
                                 ColumnPolicyProperty {
                                     with,
-                                    policy_name: "p".into(),
+                                    policy_name: ObjectName::from(vec![Ident::new("p")]),
                                     using_columns,
                                 }
                             ))
@@ -765,7 +765,7 @@ fn test_snowflake_create_table_with_columns_projection_policy() {
                             option: ColumnOption::Policy(ColumnPolicy::ProjectionPolicy(
                                 ColumnPolicyProperty {
                                     with,
-                                    policy_name: "p".into(),
+                                    policy_name: ObjectName::from(vec![Ident::new("p")]),
                                     using_columns: None,
                                 }
                             ))
@@ -802,8 +802,14 @@ fn test_snowflake_create_table_with_columns_tags() {
                             option: ColumnOption::Tags(TagsColumnOption {
                                 with,
                                 tags: vec![
-                                    Tag::new("A".into(), "TAG A".into()),
-                                    Tag::new("B".into(), "TAG B".into()),
+                                    Tag::new(
+                                        ObjectName::from(vec![Ident::new("A")]),
+                                        "TAG A".into()
+                                    ),
+                                    Tag::new(
+                                        ObjectName::from(vec![Ident::new("B")]),
+                                        "TAG B".into()
+                                    ),
                                 ]
                             }),
                         }],
@@ -846,7 +852,7 @@ fn test_snowflake_create_table_with_several_column_options() {
                                 option: ColumnOption::Policy(ColumnPolicy::MaskingPolicy(
                                     ColumnPolicyProperty {
                                         with: true,
-                                        policy_name: "p1".into(),
+                                        policy_name: ObjectName::from(vec![Ident::new("p1")]),
                                         using_columns: Some(vec!["a".into(), "b".into()]),
                                     }
                                 )),
@@ -856,8 +862,14 @@ fn test_snowflake_create_table_with_several_column_options() {
                                 option: ColumnOption::Tags(TagsColumnOption {
                                     with: true,
                                     tags: vec![
-                                        Tag::new("A".into(), "TAG A".into()),
-                                        Tag::new("B".into(), "TAG B".into()),
+                                        Tag::new(
+                                            ObjectName::from(vec![Ident::new("A")]),
+                                            "TAG A".into()
+                                        ),
+                                        Tag::new(
+                                            ObjectName::from(vec![Ident::new("B")]),
+                                            "TAG B".into()
+                                        ),
                                     ]
                                 }),
                             }
@@ -878,7 +890,7 @@ fn test_snowflake_create_table_with_several_column_options() {
                                 option: ColumnOption::Policy(ColumnPolicy::ProjectionPolicy(
                                     ColumnPolicyProperty {
                                         with: false,
-                                        policy_name: "p2".into(),
+                                        policy_name: ObjectName::from(vec![Ident::new("p2")]),
                                         using_columns: None,
                                     }
                                 )),
@@ -888,8 +900,14 @@ fn test_snowflake_create_table_with_several_column_options() {
                                 option: ColumnOption::Tags(TagsColumnOption {
                                     with: false,
                                     tags: vec![
-                                        Tag::new("C".into(), "TAG C".into()),
-                                        Tag::new("D".into(), "TAG D".into()),
+                                        Tag::new(
+                                            ObjectName::from(vec![Ident::new("C")]),
+                                            "TAG C".into()
+                                        ),
+                                        Tag::new(
+                                            ObjectName::from(vec![Ident::new("D")]),
+                                            "TAG D".into()
+                                        ),
                                     ]
                                 }),
                             }
@@ -942,8 +960,8 @@ fn test_snowflake_create_iceberg_table_all_options() {
                 with_aggregation_policy.map(|name| name.to_string())
             );
             assert_eq!(Some(vec![
-                                        Tag::new("A".into(), "TAG A".into()),
-                                        Tag::new("B".into(), "TAG B".into()),
+                                        Tag::new(ObjectName::from(vec![Ident::new("A")]), "TAG A".into()),
+                                        Tag::new(ObjectName::from(vec![Ident::new("B")]), "TAG B".into()),
                                     ]), with_tags);
 
         }
@@ -4170,5 +4188,19 @@ fn test_snowflake_fetch_clause_syntax() {
 fn test_snowflake_create_view_with_multiple_column_options() {
     let create_view_with_tag =
         r#"CREATE VIEW X (COL WITH TAG (pii='email') COMMENT 'foobar') AS SELECT * FROM Y"#;
+    snowflake().verified_stmt(create_view_with_tag);
+}
+
+#[test]
+fn test_snowflake_create_view_with_composite_tag() {
+    let create_view_with_tag =
+        r#"CREATE VIEW X (COL WITH TAG (foo.bar.baz.pii='email')) AS SELECT * FROM Y"#;
+    snowflake().verified_stmt(create_view_with_tag);
+}
+
+#[test]
+fn test_snowflake_create_view_with_composite_policy_name() {
+    let create_view_with_tag =
+        r#"CREATE VIEW X (COL WITH MASKING POLICY foo.bar.baz) AS SELECT * FROM Y"#;
     snowflake().verified_stmt(create_view_with_tag);
 }

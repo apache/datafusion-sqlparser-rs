@@ -3654,9 +3654,9 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse the `ESCAPE CHAR` portion of `LIKE`, `ILIKE`, and `SIMILAR TO`
-    pub fn parse_escape_char(&mut self) -> Result<Option<String>, ParserError> {
+    pub fn parse_escape_char(&mut self) -> Result<Option<Value>, ParserError> {
         if self.parse_keyword(Keyword::ESCAPE) {
-            Ok(Some(self.parse_literal_string()?))
+            Ok(Some(self.parse_value()?.into()))
         } else {
             Ok(None)
         }
@@ -7884,7 +7884,7 @@ impl<'a> Parser<'a> {
     }
 
     pub(crate) fn parse_tag(&mut self) -> Result<Tag, ParserError> {
-        let name = self.parse_identifier()?;
+        let name = self.parse_object_name(false)?;
         self.expect_token(&Token::Eq)?;
         let value = self.parse_literal_string()?;
 

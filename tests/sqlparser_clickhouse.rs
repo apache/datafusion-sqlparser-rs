@@ -224,6 +224,10 @@ fn parse_create_table() {
     clickhouse().verified_stmt(
         r#"CREATE TABLE "x" ("a" "int") ENGINE = MergeTree ORDER BY "x" AS SELECT * FROM "t" WHERE true"#,
     );
+    clickhouse().one_statement_parses_to(
+        "CREATE TABLE x (a int) ENGINE = MergeTree() ORDER BY a",
+        "CREATE TABLE x (a INT) ENGINE = MergeTree ORDER BY a",
+    );
 }
 
 #[test]

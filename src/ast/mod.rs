@@ -4316,7 +4316,7 @@ pub enum Statement {
 /// ```sql
 /// {COPY | REVOKE} CURRENT GRANTS
 /// ```
-/// 
+///
 /// - [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/grant-ownership#optional-parameters)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

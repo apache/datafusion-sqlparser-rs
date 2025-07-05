@@ -16191,9 +16191,9 @@ impl<'a> Parser<'a> {
 
     fn parse_parenthesized_identifiers(&mut self) -> Result<Vec<Ident>, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let partitions = self.parse_comma_separated(|p| p.parse_identifier())?;
+        let idents = self.parse_comma_separated0(|p| p.parse_identifier(), Token::RParen)?;
         self.expect_token(&Token::RParen)?;
-        Ok(partitions)
+        Ok(idents)
     }
 
     fn parse_column_position(&mut self) -> Result<Option<MySQLColumnPosition>, ParserError> {

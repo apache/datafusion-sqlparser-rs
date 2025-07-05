@@ -1071,6 +1071,11 @@ pub trait Dialect: Debug + Any {
     fn supports_alter_column_type_using(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect supports `ALTER TABLE tbl DROP COLUMN c1, ..., cn`
+    fn supports_comma_separated_drop_column_list(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

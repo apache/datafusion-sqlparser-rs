@@ -2189,7 +2189,7 @@ fn parse_pg_regex_match_ops() {
                 op: op.clone(),
                 right: Box::new(Expr::Value(single_quoted_string("^a").with_empty_span(),)),
             }),
-            select.projection[0],
+            select.projection[0]
         );
 
         // Binary operator with ANY operator
@@ -2208,7 +2208,7 @@ fn parse_pg_regex_match_ops() {
                 })),
                 is_some: false,
             }),
-            select.projection[0],
+            select.projection[0]
         )
     }
 }
@@ -2231,7 +2231,7 @@ fn parse_pg_like_match_ops() {
                 op: op.clone(),
                 right: Box::new(Expr::Value(single_quoted_string("a_c%").with_empty_span(),)),
             }),
-            select.projection[0],
+            select.projection[0]
         );
 
         // Binary operator with ALL operator
@@ -2246,7 +2246,7 @@ fn parse_pg_like_match_ops() {
                     named: true,
                 })),
             }),
-            select.projection[0],
+            select.projection[0]
         )
     }
 }

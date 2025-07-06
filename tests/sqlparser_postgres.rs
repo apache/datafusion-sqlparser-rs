@@ -2181,7 +2181,7 @@ fn parse_pg_regex_match_ops() {
     ];
 
     for (str_op, op) in pg_regex_match_ops {
-        // Basic binary operation usage
+        // Basic binary operator usage
         let select = pg().verified_only_select(&format!("SELECT 'abc' {str_op} '^a'"));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::BinaryOp {
@@ -2223,7 +2223,7 @@ fn parse_pg_like_match_ops() {
     ];
 
     for (str_op, op) in pg_like_match_ops {
-        // Basic binary operation usage
+        // Basic binary operator usage
         let select = pg().verified_only_select(&format!("SELECT 'abc' {str_op} 'a_c%'"));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::BinaryOp {

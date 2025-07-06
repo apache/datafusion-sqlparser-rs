@@ -10353,49 +10353,14 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a possibly qualified, possibly quoted identifier, optionally allowing for wildcards,
-    /// e.g. *, *.*, `foo`.*, or "foo"."bar"
-    fn parse_object_name_with_wildcards(
-        &mut self,
-        in_table_clause: bool,
-        allow_wildcards: bool,
-    ) -> Result<ObjectName, ParserError> {
-        let mut idents = vec![];
-
-        if dialect_of!(self is BigQueryDialect) && in_table_clause {
-            loop {
-                let (ident, end_with_period) = self.parse_unquoted_hyphenated_identifier()?;
-                idents.push(ident);
-                if !self.consume_token(&Token::Period) && !end_with_period {
-                    break;
-                }
-            }
-        } else {
-            loop {
-                let ident = if allow_wildcards && self.peek_token().token == Token::Mul {
-                    let span = self.next_token().span;
-                    Ident {
-                        value: Token::Mul.to_string(),
-                        quote_style: None,
-                        span,
-                    }
-                } else {
-                    if self.dialect.supports_object_name_double_dot_notation()
-                        && idents.len() == 1
-                        && self.consume_token(&Token::Period)
-                    {
-                        // Empty string here means default schema
-                        idents.push(Ident::new(""));
-                    }
-                    self.parse_identifier()?
-                };
-                idents.push(ident);
-                if !self.consume_token(&Token::Period) {
-                    break;
-                }
-            }
-        }
-        Ok(ObjectName::from(idents))
+    /// Parse a possibly qualified, possibly quoted identifier, e.g.
+    /// `foo` or `myschema."table"
+    ///
+    /// The `in_table_clause` parameter indicates whether the object name is a table in a FROM, JOIN,
+    /// or similar table clause. Currently, this is used only to support unquoted hyphenated identifiers
+    /// in this context on BigQuery.
+    pub fn parse_object_name(&mut self, in_table_clause: bool) -> Result<ObjectName, ParserError> {
+        self.parse_object_name_inner(in_table_clause, false)
     }
 
     /// Parse a possibly qualified, possibly quoted identifier, e.g.
@@ -10404,19 +10369,68 @@ impl<'a> Parser<'a> {
     /// The `in_table_clause` parameter indicates whether the object name is a table in a FROM, JOIN,
     /// or similar table clause. Currently, this is used only to support unquoted hyphenated identifiers
     /// in this context on BigQuery.
-    pub fn parse_object_name(&mut self, in_table_clause: bool) -> Result<ObjectName, ParserError> {
-        let ObjectName(mut idents) =
-            self.parse_object_name_with_wildcards(in_table_clause, false)?;
+    ///
+    /// The `allow_wildcards` parameter indicates whether to allow for wildcards in the object name
+    /// e.g. *, *.*, `foo`.*, or "foo"."bar"
+    fn parse_object_name_inner(
+        &mut self,
+        in_table_clause: bool,
+        allow_wildcards: bool,
+    ) -> Result<ObjectName, ParserError> {
+        let mut parts = vec![];
+        if dialect_of!(self is BigQueryDialect) && in_table_clause {
+            loop {
+                let (ident, end_with_period) = self.parse_unquoted_hyphenated_identifier()?;
+                parts.push(ObjectNamePart::Identifier(ident));
+                if !self.consume_token(&Token::Period) && !end_with_period {
+                    break;
+                }
+            }
+        } else {
+            loop {
+                if allow_wildcards && self.peek_token().token == Token::Mul {
+                    let span = self.next_token().span;
+                    parts.push(ObjectNamePart::Identifier(Ident {
+                        value: Token::Mul.to_string(),
+                        quote_style: None,
+                        span,
+                    }));
+                } else if let Some(func_part) =
+                    self.maybe_parse(|parser| parser.parse_object_name_function_part())?
+                {
+                    parts.push(ObjectNamePart::Function(func_part));
+                } else if dialect_of!(self is BigQueryDialect) && in_table_clause {
+                    let (ident, end_with_period) = self.parse_unquoted_hyphenated_identifier()?;
+                    parts.push(ObjectNamePart::Identifier(ident));
+                    if !self.consume_token(&Token::Period) && !end_with_period {
+                        break;
+                    }
+                } else if self.dialect.supports_object_name_double_dot_notation()
+                    && parts.len() == 1
+                    && matches!(self.peek_token().token, Token::Period)
+                {
+                    // Empty string here means default schema
+                    parts.push(ObjectNamePart::Identifier(Ident::new("")));
+                } else {
+                    let ident = self.parse_identifier()?;
+                    parts.push(ObjectNamePart::Identifier(ident));
+                }
+
+                if !self.consume_token(&Token::Period) {
+                    break;
+                }
+            }
+        }
 
         // BigQuery accepts any number of quoted identifiers of a table name.
         // https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_identifiers
         if dialect_of!(self is BigQueryDialect)
-            && idents.iter().any(|part| {
+            && parts.iter().any(|part| {
                 part.as_ident()
                     .is_some_and(|ident| ident.value.contains('.'))
             })
         {
-            idents = idents
+            parts = parts
                 .into_iter()
                 .flat_map(|part| match part.as_ident() {
                     Some(ident) => ident
@@ -10435,7 +10449,23 @@ impl<'a> Parser<'a> {
                 .collect()
         }
 
-        Ok(ObjectName(idents))
+        Ok(ObjectName(parts))
+    }
+
+    fn parse_object_name_function_part(&mut self) -> Result<ObjectNamePartFunction, ParserError> {
+        let name = self.parse_identifier()?;
+        if self.dialect.is_identifier_generating_function_name(&name) {
+            self.expect_token(&Token::LParen)?;
+            let args: Vec<FunctionArg> =
+                self.parse_comma_separated0(Self::parse_function_args, Token::RParen)?;
+            self.expect_token(&Token::RParen)?;
+            Ok(ObjectNamePartFunction { name, args })
+        } else {
+            self.expected(
+                "dialect specific identifier-generating function",
+                self.peek_token(),
+            )
+        }
     }
 
     /// Parse identifiers
@@ -13938,25 +13968,25 @@ impl<'a> Parser<'a> {
                     schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
                 })
             } else if self.parse_keywords(&[Keyword::RESOURCE, Keyword::MONITOR]) {
-                Some(GrantObjects::ResourceMonitors(self.parse_comma_separated(
-                    |p| p.parse_object_name_with_wildcards(false, true),
-                )?))
+                Some(GrantObjects::ResourceMonitors(
+                    self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                ))
             } else if self.parse_keywords(&[Keyword::COMPUTE, Keyword::POOL]) {
-                Some(GrantObjects::ComputePools(self.parse_comma_separated(
-                    |p| p.parse_object_name_with_wildcards(false, true),
-                )?))
+                Some(GrantObjects::ComputePools(
+                    self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                ))
             } else if self.parse_keywords(&[Keyword::FAILOVER, Keyword::GROUP]) {
-                Some(GrantObjects::FailoverGroup(self.parse_comma_separated(
-                    |p| p.parse_object_name_with_wildcards(false, true),
-                )?))
+                Some(GrantObjects::FailoverGroup(
+                    self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                ))
             } else if self.parse_keywords(&[Keyword::REPLICATION, Keyword::GROUP]) {
-                Some(GrantObjects::ReplicationGroup(self.parse_comma_separated(
-                    |p| p.parse_object_name_with_wildcards(false, true),
-                )?))
+                Some(GrantObjects::ReplicationGroup(
+                    self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                ))
             } else if self.parse_keywords(&[Keyword::EXTERNAL, Keyword::VOLUME]) {
-                Some(GrantObjects::ExternalVolumes(self.parse_comma_separated(
-                    |p| p.parse_object_name_with_wildcards(false, true),
-                )?))
+                Some(GrantObjects::ExternalVolumes(
+                    self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                ))
             } else {
                 let object_type = self.parse_one_of_keywords(&[
                     Keyword::SEQUENCE,
@@ -13973,7 +14003,7 @@ impl<'a> Parser<'a> {
                     Keyword::CONNECTION,
                 ]);
                 let objects =
-                    self.parse_comma_separated(|p| p.parse_object_name_with_wildcards(false, true));
+                    self.parse_comma_separated(|p| p.parse_object_name_inner(false, true));
                 match object_type {
                     Some(Keyword::DATABASE) => Some(GrantObjects::Databases(objects?)),
                     Some(Keyword::SCHEMA) => Some(GrantObjects::Schemas(objects?)),

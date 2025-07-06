@@ -1671,6 +1671,10 @@ impl Spanned for ObjectNamePart {
     fn span(&self) -> Span {
         match self {
             ObjectNamePart::Identifier(ident) => ident.span,
+            ObjectNamePart::Function(func) => func
+                .name
+                .span
+                .union(&union_spans(func.args.iter().map(|i| i.span()))),
         }
     }
 }

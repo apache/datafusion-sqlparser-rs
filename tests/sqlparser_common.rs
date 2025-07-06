@@ -1232,7 +1232,6 @@ fn parse_select_expr_star() {
         "SELECT 2. * 3 FROM T",
     );
     dialects.verified_only_select("SELECT myfunc().* FROM T");
-    dialects.verified_only_select("SELECT myfunc().* EXCEPT (foo) FROM T");
 
     // Invalid
     let res = dialects.parse_sql_statements("SELECT foo.*.* FROM T");
@@ -1240,6 +1239,11 @@ fn parse_select_expr_star() {
         ParserError::ParserError("Expected: end of statement, found: .".to_string()),
         res.unwrap_err()
     );
+
+    let dialects = all_dialects_where(|d| {
+        d.supports_select_expr_star() && d.supports_select_wildcard_except()
+    });
+    dialects.verified_only_select("SELECT myfunc().* EXCEPT (foo) FROM T");
 }
 
 #[test]

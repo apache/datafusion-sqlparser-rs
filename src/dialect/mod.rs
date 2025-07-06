@@ -49,7 +49,7 @@ pub use self::postgresql::PostgreSqlDialect;
 pub use self::redshift::RedshiftSqlDialect;
 pub use self::snowflake::SnowflakeDialect;
 pub use self::sqlite::SQLiteDialect;
-use crate::ast::{ColumnOption, Expr, GranteesType, Statement};
+use crate::ast::{ColumnOption, Expr, GranteesType, Ident, Statement};
 pub use crate::keywords;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -1074,6 +1074,15 @@ pub trait Dialect: Debug + Any {
 
     /// Returns true if the dialect supports `ALTER TABLE tbl DROP COLUMN c1, ..., cn`
     fn supports_comma_separated_drop_column_list(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect considers the specified ident as a function
+    /// that returns an identifier. Typically used to generate identifiers
+    /// programmatically.
+    ///
+    /// - [Snowflake](https://docs.snowflake.com/en/sql-reference/identifier-literal)
+    fn is_identifier_generating_function_name(&self, _ident: &Ident) -> bool {
         false
     }
 }

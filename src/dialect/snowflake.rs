@@ -367,6 +367,15 @@ impl Dialect for SnowflakeDialect {
     fn supports_comma_separated_drop_column_list(&self) -> bool {
         true
     }
+
+    fn is_identifier_generating_function_name(&self, ident: &Ident) -> bool {
+        ident.quote_style.is_none() && ident.value.to_lowercase() == "identifier"
+    }
+
+    // For example: `SELECT IDENTIFIER('alias1').* FROM tbl AS alias1`
+    fn supports_select_expr_star(&self) -> bool {
+        true
+    }
 }
 
 fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statement, ParserError> {

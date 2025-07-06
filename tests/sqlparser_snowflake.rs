@@ -4232,3 +4232,122 @@ fn test_snowflake_create_view_with_composite_policy_name() {
         r#"CREATE VIEW X (COL WITH MASKING POLICY foo.bar.baz) AS SELECT * FROM Y"#;
     snowflake().verified_stmt(create_view_with_tag);
 }
+
+#[test]
+fn test_snowflake_identifier_function() {
+    // Using IDENTIFIER to reference a column
+    match &snowflake()
+        .verified_only_select("SELECT identifier('email') FROM customers")
+        .projection[0]
+    {
+        SelectItem::UnnamedExpr(Expr::Function(Function { name, args, .. })) => {
+            assert_eq!(*name, ObjectName::from(vec![Ident::new("identifier")]));
+            assert_eq!(
+                *args,
+                FunctionArguments::List(FunctionArgumentList {
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        Value::SingleQuotedString("email".to_string()).into()
+                    )))],
+                    clauses: vec![],
+                    duplicate_treatment: None
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // Using IDENTIFIER to reference a case-sensitive column
+    match &snowflake()
+        .verified_only_select(r#"SELECT identifier('"Email"') FROM customers"#)
+        .projection[0]
+    {
+        SelectItem::UnnamedExpr(Expr::Function(Function { name, args, .. })) => {
+            assert_eq!(*name, ObjectName::from(vec![Ident::new("identifier")]));
+            assert_eq!(
+                *args,
+                FunctionArguments::List(FunctionArgumentList {
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        Value::SingleQuotedString("\"Email\"".to_string()).into()
+                    )))],
+                    clauses: vec![],
+                    duplicate_treatment: None
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // Using IDENTIFIER to reference an alias of a table
+    match &snowflake()
+        .verified_only_select("SELECT identifier('alias1').* FROM tbl AS alias1")
+        .projection[0]
+    {
+        SelectItem::QualifiedWildcard(
+            SelectItemQualifiedWildcardKind::Expr(Expr::Function(Function { name, args, .. })),
+            _,
+        ) => {
+            assert_eq!(*name, ObjectName::from(vec![Ident::new("identifier")]));
+            assert_eq!(
+                *args,
+                FunctionArguments::List(FunctionArgumentList {
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        Value::SingleQuotedString("alias1".to_string()).into()
+                    )))],
+                    clauses: vec![],
+                    duplicate_treatment: None
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // Using IDENTIFIER to reference a database
+    match snowflake().verified_stmt("CREATE DATABASE IDENTIFIER('tbl')") {
+        Statement::CreateDatabase { db_name, .. } => {
+            assert_eq!(
+                db_name,
+                ObjectName(vec![ObjectNamePart::Function(ObjectNamePartFunction {
+                    name: Ident::new("IDENTIFIER"),
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        Value::SingleQuotedString("tbl".to_string()).into()
+                    )))]
+                })])
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // Using IDENTIFIER to reference a schema
+    match snowflake().verified_stmt("CREATE SCHEMA IDENTIFIER('db1.sc1')") {
+        Statement::CreateSchema { schema_name, .. } => {
+            assert_eq!(
+                schema_name,
+                SchemaName::Simple(ObjectName(vec![ObjectNamePart::Function(
+                    ObjectNamePartFunction {
+                        name: Ident::new("IDENTIFIER"),
+                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                            Value::SingleQuotedString("db1.sc1".to_string()).into()
+                        )))]
+                    }
+                )]))
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // Using IDENTIFIER to reference a table
+    match snowflake().verified_stmt("CREATE TABLE IDENTIFIER('tbl') (id INT)") {
+        Statement::CreateTable(CreateTable { name, .. }) => {
+            assert_eq!(
+                name,
+                ObjectName(vec![ObjectNamePart::Function(ObjectNamePartFunction {
+                    name: Ident::new("IDENTIFIER"),
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        Value::SingleQuotedString("tbl".to_string()).into()
+                    )))]
+                })])
+            );
+        }
+        _ => unreachable!(),
+    }
+}

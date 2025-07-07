@@ -32,8 +32,8 @@ use sqlparser::ast::TableFactor::{Pivot, Unpivot};
 use sqlparser::ast::*;
 use sqlparser::dialect::{
     AnsiDialect, BigQueryDialect, ClickHouseDialect, DatabricksDialect, Dialect, DuckDbDialect,
-    GenericDialect, HiveDialect, MsSqlDialect, MySqlDialect, PostgreSqlDialect, RedshiftSqlDialect,
-    SQLiteDialect, SnowflakeDialect,
+    GenericDialect, HiveDialect, IsNotNullAlias, MsSqlDialect, MySqlDialect, PostgreSqlDialect,
+    RedshiftSqlDialect, SQLiteDialect, SnowflakeDialect,
 };
 use sqlparser::keywords::{Keyword, ALL_KEYWORDS};
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
@@ -15994,7 +15994,8 @@ fn parse_not_null_unsupported() {
     // Only DuckDB and SQLite support `x NOT NULL` as an expression
     // All other dialects fail to parse.
     let sql = r#"WITH t AS (SELECT NULL AS x) SELECT x NOT NULL FROM t"#;
-    let dialects = all_dialects_except(|d| d.supports_not_null());
+    let dialects =
+        all_dialects_except(|d| d.supports_is_not_null_alias(IsNotNullAlias::NotSpaceNull));
     let res = dialects.parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError("Expected: end of statement, found: NULL".to_string()),
@@ -16006,7 +16007,8 @@ fn parse_not_null_unsupported() {
 fn parse_not_null_supported() {
     // DuckDB and SQLite support `x NOT NULL` as an expression
     let sql = r#"WITH t AS (SELECT NULL AS x) SELECT x NOT NULL FROM t"#;
-    let dialects = all_dialects_where(|d| d.supports_not_null());
+    let dialects =
+        all_dialects_where(|d| d.supports_is_not_null_alias(IsNotNullAlias::NotSpaceNull));
     let stmt = dialects.one_statement_parses_to(sql, sql);
     match stmt {
         Statement::Query(qry) => match *qry.body {
@@ -16026,7 +16028,7 @@ fn parse_not_null_supported() {
                                     quote_style: None,
                                     span: fake_span,
                                 })),
-                                one_word: false,
+                                with_space: true,
                             },
                         );
                     }
@@ -16046,7 +16048,7 @@ fn parse_notnull_unsupported() {
     // consider `NOTNULL` an alias for x.
     let sql = r#"WITH t AS (SELECT NULL AS x) SELECT x NOTNULL FROM t"#;
     let canonical = r#"WITH t AS (SELECT NULL AS x) SELECT x AS NOTNULL FROM t"#;
-    let dialects = all_dialects_except(|d| d.supports_notnull());
+    let dialects = all_dialects_except(|d| d.supports_is_not_null_alias(IsNotNullAlias::NotNull));
     let stmt = dialects.one_statement_parses_to(sql, canonical);
     match stmt {
         Statement::Query(qry) => match *qry.body {
@@ -16088,7 +16090,7 @@ fn parse_notnull_unsupported() {
 fn parse_notnull_supported() {
     // DuckDB and SQLite support `x NOT NULL` as an expression
     let sql = r#"WITH t AS (SELECT NULL AS x) SELECT x NOTNULL FROM t"#;
-    let dialects = all_dialects_where(|d| d.supports_notnull());
+    let dialects = all_dialects_where(|d| d.supports_is_not_null_alias(IsNotNullAlias::NotNull));
     let stmt = dialects.one_statement_parses_to(sql, "");
     match stmt {
         Statement::Query(qry) => match *qry.body {
@@ -16108,7 +16110,7 @@ fn parse_notnull_supported() {
                                     quote_style: None,
                                     span: fake_span,
                                 })),
-                                one_word: true,
+                                with_space: false,
                             },
                         );
                     }

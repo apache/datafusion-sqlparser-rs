@@ -28,7 +28,7 @@
 // limitations under the License.
 use log::debug;
 
-use crate::dialect::{Dialect, Precedence};
+use crate::dialect::{Dialect, IsNotNullAlias, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
@@ -263,7 +263,12 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
-    fn supports_notnull(&self) -> bool {
-        true
+    /// Postgres supports `NOTNULL` as an alias for `IS NOT NULL`
+    /// but does not support `NOT NULL`.  See: <https://www.postgresql.org/docs/17/functions-comparison.html>
+    fn supports_is_not_null_alias(&self, alias: IsNotNullAlias) -> bool {
+        match alias {
+            IsNotNullAlias::NotNull => true,
+            IsNotNullAlias::NotSpaceNull => false,
+        }
     }
 }

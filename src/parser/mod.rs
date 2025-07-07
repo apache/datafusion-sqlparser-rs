@@ -35,6 +35,7 @@ use IsOptional::*;
 use crate::ast::helpers::stmt_create_table::{CreateTableBuilder, CreateTableConfiguration};
 use crate::ast::Statement::CreatePolicy;
 use crate::ast::*;
+use crate::dialect::IsNotNullAlias::{NotNull, NotSpaceNull};
 use crate::dialect::*;
 use crate::keywords::{Keyword, ALL_KEYWORDS};
 use crate::tokenizer::*;
@@ -3572,10 +3573,10 @@ impl<'a> Parser<'a> {
                             ),
                             regexp,
                         })
-                    } else if dialect.supports_not_null() && negated && null {
+                    } else if dialect.supports_is_not_null_alias(NotSpaceNull) && negated && null {
                         Ok(Expr::NotNull {
                             expr: Box::new(expr),
-                            one_word: false,
+                            with_space: true,
                         })
                     } else if self.parse_keyword(Keyword::IN) {
                         self.parse_in(expr, negated)
@@ -3614,10 +3615,12 @@ impl<'a> Parser<'a> {
                         self.expected("IN or BETWEEN after NOT", self.peek_token())
                     }
                 }
-                Keyword::NOTNULL if dialect.supports_notnull() => Ok(Expr::NotNull {
-                    expr: Box::new(expr),
-                    one_word: true,
-                }),
+                Keyword::NOTNULL if dialect.supports_is_not_null_alias(NotNull) => {
+                    Ok(Expr::NotNull {
+                        expr: Box::new(expr),
+                        with_space: false,
+                    })
+                }
                 Keyword::MEMBER => {
                     if self.parse_keyword(Keyword::OF) {
                         self.expect_token(&Token::LParen)?;

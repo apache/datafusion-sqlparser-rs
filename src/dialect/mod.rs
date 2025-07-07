@@ -55,6 +55,7 @@ use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
 
+use crate::dialect::IsNotNullAlias::{NotNull, NotSpaceNull};
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
 
@@ -650,12 +651,17 @@ pub trait Dialect: Debug + Any {
                 Token::Word(w) if w.keyword == Keyword::MATCH => Ok(p!(Like)),
                 Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
                 Token::Word(w) if w.keyword == Keyword::MEMBER => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::NULL && self.supports_not_null() => {
+                Token::Word(w)
+                    if w.keyword == Keyword::NULL
+                        && self.supports_is_not_null_alias(NotSpaceNull) =>
+                {
                     Ok(p!(Is))
                 }
                 _ => Ok(self.prec_unknown()),
             },
-            Token::Word(w) if w.keyword == Keyword::NOTNULL && self.supports_notnull() => {
+            Token::Word(w)
+                if w.keyword == Keyword::NOTNULL && self.supports_is_not_null_alias(NotNull) =>
+            {
                 Ok(p!(Is))
             }
             Token::Word(w) if w.keyword == Keyword::IS => Ok(p!(Is)),
@@ -1096,14 +1102,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if the dialect supports `NOTNULL` in expressions.
-    fn supports_notnull(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialect supports `NOT NULL` in expressions.
-    fn supports_not_null(&self) -> bool {
-        false
+    /// Returns true if the dialect supports the passed in alias.
+    /// See [IsNotNullAlias].
+    fn supports_is_not_null_alias(&self, alias: IsNotNullAlias) -> bool {
+        match alias {
+            NotNull => false,
+            NotSpaceNull => false,
+        }
     }
 }
 
@@ -1129,6 +1134,13 @@ pub enum Precedence {
     UnaryNot,
     And,
     Or,
+}
+
+/// Possible aliases for `IS NOT NULL` supported
+/// by some non-standard dialects.
+pub enum IsNotNullAlias {
+    NotNull,
+    NotSpaceNull,
 }
 
 impl dyn Dialect {

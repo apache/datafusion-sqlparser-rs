@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::dialect::Dialect;
+use crate::dialect::{Dialect, IsNotNullAlias};
 
 /// A [`Dialect`] for [DuckDB](https://duckdb.org/)
 #[derive(Debug, Default)]
@@ -95,11 +95,12 @@ impl Dialect for DuckDbDialect {
         true
     }
 
-    fn supports_not_null(&self) -> bool {
-        true
-    }
-
-    fn supports_notnull(&self) -> bool {
-        true
+    /// DuckDB supports `NOT NULL` and `NOTNULL` as aliases
+    /// for `IS NOT NULL`, see DuckDB Comparisons <https://duckdb.org/docs/stable/sql/expressions/comparison_operators#between-and-is-not-null>
+    fn supports_is_not_null_alias(&self, alias: IsNotNullAlias) -> bool {
+        match alias {
+            IsNotNullAlias::NotNull => true,
+            IsNotNullAlias::NotSpaceNull => true,
+        }
     }
 }

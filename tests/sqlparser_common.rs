@@ -9273,6 +9273,7 @@ fn test_create_index_with_using_function() {
             nulls_distinct: None,
             with,
             predicate: None,
+            index_options,
         }) => {
             assert_eq!("idx_name", name.to_string());
             assert_eq!("test", table_name.to_string());
@@ -9283,6 +9284,7 @@ fn test_create_index_with_using_function() {
             assert!(if_not_exists);
             assert!(include.is_empty());
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -9324,6 +9326,7 @@ fn test_create_index_with_with_clause() {
             nulls_distinct: None,
             with,
             predicate: None,
+            index_options,
         }) => {
             pretty_assertions::assert_eq!("title_idx", name.to_string());
             pretty_assertions::assert_eq!("films", table_name.to_string());
@@ -9333,6 +9336,7 @@ fn test_create_index_with_with_clause() {
             assert!(!if_not_exists);
             assert!(include.is_empty());
             pretty_assertions::assert_eq!(with_parameters, with);
+            assert!(index_options.is_empty());
         }
         _ => unreachable!(),
     }

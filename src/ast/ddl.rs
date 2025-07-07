@@ -2335,6 +2335,7 @@ pub struct CreateIndex {
     /// WITH clause: <https://www.postgresql.org/docs/current/sql-createindex.html>
     pub with: Vec<Expr>,
     pub predicate: Option<Expr>,
+    pub index_options: Vec<IndexOption>,
 }
 
 impl fmt::Display for CreateIndex {
@@ -2377,6 +2378,9 @@ impl fmt::Display for CreateIndex {
         }
         if let Some(predicate) = &self.predicate {
             write!(f, " WHERE {predicate}")?;
+        }
+        if !self.index_options.is_empty() {
+            write!(f, " {}", display_separated(&self.index_options, " "))?;
         }
         Ok(())
     }

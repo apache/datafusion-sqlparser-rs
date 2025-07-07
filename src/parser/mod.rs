@@ -7077,6 +7077,13 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // MySQL options (including the modern style of `USING` after the column list instead of
+        // before, which is deprecated) shouldn't conflict with other preceding options (e.g. `WITH
+        // PARSER` won't be caught by the above `WITH` clause parsing because MySQL doesn't set that
+        // support flag). This is probably invalid syntax for other dialects, but it is simpler to
+        // parse it anyway (as we do inside `ALTER TABLE` and `CREATE TABLE` parsing).
+        let index_options = self.parse_index_options()?;
+
         Ok(Statement::CreateIndex(CreateIndex {
             name: index_name,
             table_name,
@@ -7089,6 +7096,7 @@ impl<'a> Parser<'a> {
             nulls_distinct,
             with,
             predicate,
+            index_options,
         }))
     }
 

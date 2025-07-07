@@ -2500,6 +2500,7 @@ fn parse_create_index() {
             include,
             with,
             predicate: None,
+            index_options,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -2510,6 +2511,7 @@ fn parse_create_index() {
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2531,6 +2533,7 @@ fn parse_create_anonymous_index() {
             nulls_distinct: None,
             with,
             predicate: None,
+            index_options,
         }) => {
             assert_eq!(None, name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -2541,6 +2544,7 @@ fn parse_create_anonymous_index() {
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2639,6 +2643,7 @@ fn parse_create_indices_with_operator_classes() {
                     nulls_distinct: None,
                     with,
                     predicate: None,
+                    index_options,
                 }) => {
                     assert_eq_vec(&["the_index_name"], &name);
                     assert_eq_vec(&["users"], &table_name);
@@ -2646,6 +2651,7 @@ fn parse_create_indices_with_operator_classes() {
                     assert_eq!(expected_function_column, columns[0],);
                     assert!(include.is_empty());
                     assert!(with.is_empty());
+                    assert!(index_options.is_empty());
                 }
                 _ => unreachable!(),
             }
@@ -2663,6 +2669,7 @@ fn parse_create_indices_with_operator_classes() {
                     nulls_distinct: None,
                     with,
                     predicate: None,
+                    index_options,
                 }) => {
                     assert_eq_vec(&["the_index_name"], &name);
                     assert_eq_vec(&["users"], &table_name);
@@ -2688,6 +2695,7 @@ fn parse_create_indices_with_operator_classes() {
                     assert_eq!(expected_function_column, columns[1],);
                     assert!(include.is_empty());
                     assert!(with.is_empty());
+                    assert!(index_options.is_empty());
                 }
                 _ => unreachable!(),
             }
@@ -2712,6 +2720,7 @@ fn parse_create_bloom() {
             nulls_distinct: None,
             with,
             predicate: None,
+            index_options,
         }) => {
             assert_eq_vec(&["bloomidx"], &name);
             assert_eq_vec(&["tbloom"], &table_name);
@@ -2743,6 +2752,7 @@ fn parse_create_bloom() {
                 ],
                 with
             );
+            assert!(index_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2764,6 +2774,7 @@ fn parse_create_brin() {
             nulls_distinct: None,
             with,
             predicate: None,
+            index_options,
         }) => {
             assert_eq_vec(&["brin_sensor_data_recorded_at"], &name);
             assert_eq_vec(&["sensor_data"], &table_name);
@@ -2771,6 +2782,7 @@ fn parse_create_brin() {
             assert_eq_vec(&["recorded_at"], &columns);
             assert!(include.is_empty());
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2827,6 +2839,7 @@ fn parse_create_index_concurrently() {
             nulls_distinct: None,
             with,
             predicate: None,
+            index_options,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -2837,6 +2850,7 @@ fn parse_create_index_concurrently() {
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2858,6 +2872,7 @@ fn parse_create_index_with_predicate() {
             nulls_distinct: None,
             with,
             predicate: Some(_),
+            index_options,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -2868,6 +2883,7 @@ fn parse_create_index_with_predicate() {
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2889,6 +2905,7 @@ fn parse_create_index_with_include() {
             nulls_distinct: None,
             with,
             predicate: None,
+            index_options,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -2899,6 +2916,7 @@ fn parse_create_index_with_include() {
             assert_eq_vec(&["col1", "col2"], &columns);
             assert_eq_vec(&["col3", "col4"], &include);
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2920,6 +2938,7 @@ fn parse_create_index_with_nulls_distinct() {
             nulls_distinct: Some(nulls_distinct),
             with,
             predicate: None,
+            index_options,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -2931,6 +2950,7 @@ fn parse_create_index_with_nulls_distinct() {
             assert!(include.is_empty());
             assert!(!nulls_distinct);
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2949,6 +2969,7 @@ fn parse_create_index_with_nulls_distinct() {
             nulls_distinct: Some(nulls_distinct),
             with,
             predicate: None,
+            index_options,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -2960,6 +2981,7 @@ fn parse_create_index_with_nulls_distinct() {
             assert!(include.is_empty());
             assert!(nulls_distinct);
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
         }
         _ => unreachable!(),
     }

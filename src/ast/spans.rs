@@ -747,6 +747,7 @@ impl Spanned for CreateIndex {
             nulls_distinct: _, // bool
             with,
             predicate,
+            index_options: _,
         } = self;
 
         union_spans(

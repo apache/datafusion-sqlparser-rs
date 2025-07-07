@@ -106,9 +106,9 @@ impl Display for CreateIndex {
         if let Some(value) = &self.using {
             write!(f, " USING {value} ")?;
         }
-        write!(f, "({})", display_separated(&self.columns, ","))?;
+        write!(f, "({})", display_comma_separated(&self.columns))?;
         if !self.include.is_empty() {
-            write!(f, " INCLUDE ({})", display_separated(&self.include, ","))?;
+            write!(f, " INCLUDE ({})", display_comma_separated(&self.include))?;
         }
         if let Some(value) = self.nulls_distinct {
             if value {

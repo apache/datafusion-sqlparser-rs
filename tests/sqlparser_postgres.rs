@@ -2486,7 +2486,7 @@ fn parse_array_multi_subscript() {
 
 #[test]
 fn parse_create_index() {
-    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2)";
+    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1, col2)";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
@@ -2517,7 +2517,7 @@ fn parse_create_index() {
 
 #[test]
 fn parse_create_anonymous_index() {
-    let sql = "CREATE INDEX ON my_table(col1,col2)";
+    let sql = "CREATE INDEX ON my_table(col1, col2)";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name,
@@ -2577,7 +2577,7 @@ fn parse_create_indices_with_operator_classes() {
                     .unwrap_or_default()
             );
             let multi_column_sql_statement = format!(
-                "CREATE INDEX the_index_name ON users USING {expected_index_type} (column_name,concat_users_name(first_name, last_name){})",
+                "CREATE INDEX the_index_name ON users USING {expected_index_type} (column_name, concat_users_name(first_name, last_name){})",
                 expected_operator_class.as_ref().map(|oc| format!(" {oc}"))
                     .unwrap_or_default()
             );
@@ -2698,7 +2698,7 @@ fn parse_create_indices_with_operator_classes() {
 #[test]
 fn parse_create_bloom() {
     let sql =
-        "CREATE INDEX bloomidx ON tbloom USING BLOOM (i1,i2,i3) WITH (length = 80, col1 = 2, col2 = 2, col3 = 4)";
+        "CREATE INDEX bloomidx ON tbloom USING BLOOM (i1, i2, i3) WITH (length = 80, col1 = 2, col2 = 2, col3 = 4)";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
@@ -2813,7 +2813,7 @@ fn parse_create_table_with_empty_inherits_fails() {
 
 #[test]
 fn parse_create_index_concurrently() {
-    let sql = "CREATE INDEX CONCURRENTLY IF NOT EXISTS my_index ON my_table(col1,col2)";
+    let sql = "CREATE INDEX CONCURRENTLY IF NOT EXISTS my_index ON my_table(col1, col2)";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
@@ -2844,7 +2844,7 @@ fn parse_create_index_concurrently() {
 
 #[test]
 fn parse_create_index_with_predicate() {
-    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2) WHERE col3 IS NULL";
+    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1, col2) WHERE col3 IS NULL";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
@@ -2875,7 +2875,7 @@ fn parse_create_index_with_predicate() {
 
 #[test]
 fn parse_create_index_with_include() {
-    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2) INCLUDE (col3)";
+    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1, col2) INCLUDE (col3, col4)";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
@@ -2897,7 +2897,7 @@ fn parse_create_index_with_include() {
             assert!(!concurrently);
             assert!(if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
-            assert_eq_vec(&["col3"], &include);
+            assert_eq_vec(&["col3", "col4"], &include);
             assert!(with.is_empty());
         }
         _ => unreachable!(),
@@ -2906,7 +2906,7 @@ fn parse_create_index_with_include() {
 
 #[test]
 fn parse_create_index_with_nulls_distinct() {
-    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2) NULLS NOT DISTINCT";
+    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1, col2) NULLS NOT DISTINCT";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
@@ -2935,7 +2935,7 @@ fn parse_create_index_with_nulls_distinct() {
         _ => unreachable!(),
     }
 
-    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2) NULLS DISTINCT";
+    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1, col2) NULLS DISTINCT";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),

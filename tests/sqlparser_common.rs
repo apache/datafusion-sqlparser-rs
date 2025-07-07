@@ -9175,7 +9175,7 @@ fn ensure_multiple_dialects_are_tested() {
 
 #[test]
 fn parse_create_index() {
-    let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test(name,age DESC)";
+    let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test(name, age DESC)";
     let indexed_columns: Vec<IndexColumn> = vec![
         IndexColumn {
             operator_class: None,
@@ -9221,7 +9221,7 @@ fn parse_create_index() {
 
 #[test]
 fn test_create_index_with_using_function() {
-    let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test USING BTREE (name,age DESC)";
+    let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test USING BTREE (name, age DESC)";
     let indexed_columns: Vec<IndexColumn> = vec![
         IndexColumn {
             operator_class: None,

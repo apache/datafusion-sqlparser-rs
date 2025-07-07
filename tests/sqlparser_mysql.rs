@@ -3616,6 +3616,7 @@ fn parse_grant() {
         with_grant_option,
         as_grantor: _,
         granted_by,
+        current_grants: _,
     } = stmt
     {
         assert_eq!(

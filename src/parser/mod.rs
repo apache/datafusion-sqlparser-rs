@@ -13794,6 +13794,15 @@ impl<'a> Parser<'a> {
         let with_grant_option =
             self.parse_keywords(&[Keyword::WITH, Keyword::GRANT, Keyword::OPTION]);
 
+        let current_grants =
+            if self.parse_keywords(&[Keyword::COPY, Keyword::CURRENT, Keyword::GRANTS]) {
+                Some(CurrentGrantsKind::CopyCurrentGrants)
+            } else if self.parse_keywords(&[Keyword::REVOKE, Keyword::CURRENT, Keyword::GRANTS]) {
+                Some(CurrentGrantsKind::RevokeCurrentGrants)
+            } else {
+                None
+            };
+
         let as_grantor = if self.parse_keywords(&[Keyword::AS]) {
             Some(self.parse_identifier()?)
         } else {
@@ -13813,6 +13822,7 @@ impl<'a> Parser<'a> {
             with_grant_option,
             as_grantor,
             granted_by,
+            current_grants,
         })
     }
 

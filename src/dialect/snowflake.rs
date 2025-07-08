@@ -559,12 +559,10 @@ pub fn parse_create_table(
                 Keyword::CLONE => {
                     let clone = parser.parse_object_name(false).ok();
                     builder = builder.clone_clause(clone);
-                    break;
                 }
                 Keyword::LIKE => {
                     let like = parser.parse_object_name(false).ok();
                     builder = builder.like(like);
-                    break;
                 }
                 Keyword::CLUSTER => {
                     parser.expect_keyword_is(Keyword::BY)?;
@@ -690,7 +688,7 @@ pub fn parse_create_table(
                 builder = builder.columns(columns).constraints(constraints);
             }
             Token::EOF => {
-                if builder.columns.is_empty() && builder.query.is_none() {
+                if !builder.has_schema_info() {
                     return Err(ParserError::ParserError(
                         "unexpected end of input".to_string(),
                     ));
@@ -699,7 +697,7 @@ pub fn parse_create_table(
                 break;
             }
             Token::SemiColon => {
-                if builder.columns.is_empty() && builder.query.is_none() {
+                if !builder.has_schema_info() {
                     return Err(ParserError::ParserError(
                         "unexpected end of input".to_string(),
                     ));

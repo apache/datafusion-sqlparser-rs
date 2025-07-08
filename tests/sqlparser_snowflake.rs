@@ -996,12 +996,17 @@ fn test_snowflake_create_iceberg_table_without_location() {
 }
 
 #[test]
-fn test_snowflake_create_table_as() {
-    // Test additional options after AS (query)
+fn test_snowflake_create_table_trailing_options() {
     snowflake()
         .parse_sql_statements(
             "CREATE TEMP TABLE dst AS (SELECT * FROM src) ON COMMIT PRESERVE ROWS",
         )
+        .unwrap();
+    snowflake()
+        .parse_sql_statements("CREATE TEMP TABLE tbl LIKE customers ON COMMIT PRESERVE ROWS;")
+        .unwrap();
+    snowflake()
+        .parse_sql_statements("CREATE TEMP TABLE tbl CLONE customers ON COMMIT PRESERVE ROWS;")
         .unwrap();
 }
 

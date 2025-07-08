@@ -10395,10 +10395,6 @@ impl<'a> Parser<'a> {
                         quote_style: None,
                         span,
                     }));
-                } else if let Some(func_part) =
-                    self.maybe_parse(|parser| parser.parse_object_name_function_part())?
-                {
-                    parts.push(ObjectNamePart::Function(func_part));
                 } else if dialect_of!(self is BigQueryDialect) && in_table_clause {
                     let (ident, end_with_period) = self.parse_unquoted_hyphenated_identifier()?;
                     parts.push(ObjectNamePart::Identifier(ident));
@@ -10413,7 +10409,16 @@ impl<'a> Parser<'a> {
                     parts.push(ObjectNamePart::Identifier(Ident::new("")));
                 } else {
                     let ident = self.parse_identifier()?;
-                    parts.push(ObjectNamePart::Identifier(ident));
+                    let part = if self.dialect.is_identifier_generating_function_name(&ident) {
+                        self.expect_token(&Token::LParen)?;
+                        let args: Vec<FunctionArg> =
+                            self.parse_comma_separated0(Self::parse_function_args, Token::RParen)?;
+                        self.expect_token(&Token::RParen)?;
+                        ObjectNamePart::Function(ObjectNamePartFunction { name: ident, args })
+                    } else {
+                        ObjectNamePart::Identifier(ident)
+                    };
+                    parts.push(part);
                 }
 
                 if !self.consume_token(&Token::Period) {
@@ -10450,22 +10455,6 @@ impl<'a> Parser<'a> {
         }
 
         Ok(ObjectName(parts))
-    }
-
-    fn parse_object_name_function_part(&mut self) -> Result<ObjectNamePartFunction, ParserError> {
-        let name = self.parse_identifier()?;
-        if self.dialect.is_identifier_generating_function_name(&name) {
-            self.expect_token(&Token::LParen)?;
-            let args: Vec<FunctionArg> =
-                self.parse_comma_separated0(Self::parse_function_args, Token::RParen)?;
-            self.expect_token(&Token::RParen)?;
-            Ok(ObjectNamePartFunction { name, args })
-        } else {
-            self.expected(
-                "dialect specific identifier-generating function",
-                self.peek_token(),
-            )
-        }
     }
 
     /// Parse identifiers

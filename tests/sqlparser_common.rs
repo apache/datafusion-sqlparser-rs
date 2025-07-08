@@ -16007,6 +16007,27 @@ fn parse_not_null_supported() {
 }
 
 #[test]
+fn test_not_null_precedence() {
+    // For dialects which support it, `NOT NULL NOT NULL` should
+    // parse as `(NOT (NULL IS NOT NULL))`
+    let supported_dialects =
+        all_dialects_where(|d| d.supports_is_not_null_alias(IsNotNullAlias::NotSpaceNull));
+    let unsuported_dialects =
+        all_dialects_except(|d| d.supports_is_not_null_alias(IsNotNullAlias::NotSpaceNull));
+
+    assert_matches!(
+        supported_dialects.expr_parses_to("NOT NULL NOT NULL", "NOT NULL IS NOT NULL"),
+        Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            ..
+        }
+    );
+
+    // for unsupported dialects, parsing should stop at `NOT NULL`
+    unsuported_dialects.expr_parses_to("NOT NULL NOT NULL", "NOT NULL");
+}
+
+#[test]
 fn parse_notnull_unsupported() {
     // Only Postgres, DuckDB, and SQLite support `x NOTNULL` as an expression
     // All other dialects consider `x NOTNULL` like `x AS NOTNULL` and thus
@@ -16021,4 +16042,25 @@ fn parse_notnull_supported() {
     // Postgres, DuckDB and SQLite support `x NOTNULL` as an alias for `x IS NOT NULL`
     let dialects = all_dialects_where(|d| d.supports_is_not_null_alias(IsNotNullAlias::NotNull));
     let _ = dialects.expr_parses_to("x NOTNULL", "x IS NOT NULL");
+}
+
+#[test]
+fn test_notnull_precedence() {
+    // For dialects which support it, `NOT NULL NOTNULL` should
+    // parse as `(NOT (NULL IS NOT NULL))`
+    let supported_dialects =
+        all_dialects_where(|d| d.supports_is_not_null_alias(IsNotNullAlias::NotNull));
+    let unsuported_dialects =
+        all_dialects_except(|d| d.supports_is_not_null_alias(IsNotNullAlias::NotNull));
+
+    assert_matches!(
+        supported_dialects.expr_parses_to("NOT NULL NOTNULL", "NOT NULL IS NOT NULL"),
+        Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            ..
+        }
+    );
+
+    // for unsupported dialects, parsing should stop at `NOT NULL`
+    unsuported_dialects.expr_parses_to("NOT NULL NOTNULL", "NOT NULL");
 }

@@ -16005,11 +16005,12 @@ fn parse_not_null_unsupported() {
 
 #[test]
 fn parse_not_null_supported() {
-    // DuckDB and SQLite support `x NOT NULL` as an expression
+    // DuckDB and SQLite support `x NOT NULL` as an alias for `x IS NOT NULL`
     let sql = r#"WITH t AS (SELECT NULL AS x) SELECT x NOT NULL FROM t"#;
+    let canonical = r#"WITH t AS (SELECT NULL AS x) SELECT x IS NOT NULL FROM t"#;
     let dialects =
         all_dialects_where(|d| d.supports_is_not_null_alias(IsNotNullAlias::NotSpaceNull));
-    let stmt = dialects.one_statement_parses_to(sql, sql);
+    let stmt = dialects.one_statement_parses_to(sql, canonical);
     match stmt {
         Statement::Query(qry) => match *qry.body {
             SetExpr::Select(select) => {
@@ -16022,14 +16023,11 @@ fn parse_not_null_supported() {
                         };
                         assert_eq!(
                             *expr,
-                            Expr::NotNull {
-                                expr: Box::new(Identifier(Ident {
-                                    value: "x".to_string(),
-                                    quote_style: None,
-                                    span: fake_span,
-                                })),
-                                with_space: true,
-                            },
+                            Expr::IsNotNull(Box::new(Identifier(Ident {
+                                value: "x".to_string(),
+                                quote_style: None,
+                                span: fake_span,
+                            })),),
                         );
                     }
                     _ => unreachable!(),
@@ -16088,10 +16086,11 @@ fn parse_notnull_unsupported() {
 
 #[test]
 fn parse_notnull_supported() {
-    // DuckDB and SQLite support `x NOT NULL` as an expression
+    // Postgres, DuckDB and SQLite support `x NOTNULL` as an alias for `x IS NOT NULL`
     let sql = r#"WITH t AS (SELECT NULL AS x) SELECT x NOTNULL FROM t"#;
+    let canonical = r#"WITH t AS (SELECT NULL AS x) SELECT x IS NOT NULL FROM t"#;
     let dialects = all_dialects_where(|d| d.supports_is_not_null_alias(IsNotNullAlias::NotNull));
-    let stmt = dialects.one_statement_parses_to(sql, "");
+    let stmt = dialects.one_statement_parses_to(sql, canonical);
     match stmt {
         Statement::Query(qry) => match *qry.body {
             SetExpr::Select(select) => {
@@ -16104,14 +16103,11 @@ fn parse_notnull_supported() {
                         };
                         assert_eq!(
                             *expr,
-                            Expr::NotNull {
-                                expr: Box::new(Identifier(Ident {
-                                    value: "x".to_string(),
-                                    quote_style: None,
-                                    span: fake_span,
-                                })),
-                                with_space: false,
-                            },
+                            Expr::IsNotNull(Box::new(Identifier(Ident {
+                                value: "x".to_string(),
+                                quote_style: None,
+                                span: fake_span,
+                            })),),
                         );
                     }
                     _ => unreachable!(),

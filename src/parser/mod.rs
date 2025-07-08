@@ -3574,10 +3574,7 @@ impl<'a> Parser<'a> {
                             regexp,
                         })
                     } else if dialect.supports_is_not_null_alias(NotSpaceNull) && negated && null {
-                        Ok(Expr::NotNull {
-                            expr: Box::new(expr),
-                            with_space: true,
-                        })
+                        Ok(Expr::IsNotNull(Box::new(expr)))
                     } else if self.parse_keyword(Keyword::IN) {
                         self.parse_in(expr, negated)
                     } else if self.parse_keyword(Keyword::BETWEEN) {
@@ -3616,10 +3613,7 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Keyword::NOTNULL if dialect.supports_is_not_null_alias(NotNull) => {
-                    Ok(Expr::NotNull {
-                        expr: Box::new(expr),
-                        with_space: false,
-                    })
+                    Ok(Expr::IsNotNull(Box::new(expr)))
                 }
                 Keyword::MEMBER => {
                     if self.parse_keyword(Keyword::OF) {

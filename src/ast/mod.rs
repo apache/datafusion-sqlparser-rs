@@ -778,12 +778,6 @@ pub enum Expr {
     IsNull(Box<Expr>),
     /// `IS NOT NULL` operator
     IsNotNull(Box<Expr>),
-    /// `NOTNULL` or `NOT NULL` operator
-    NotNull {
-        expr: Box<Expr>,
-        /// true if `NOT NULL`, false if `NOTNULL`
-        with_space: bool,
-    },
     /// `IS UNKNOWN` operator
     IsUnknown(Box<Expr>),
     /// `IS NOT UNKNOWN` operator
@@ -1458,12 +1452,6 @@ impl fmt::Display for Expr {
             Expr::IsNotFalse(ast) => write!(f, "{ast} IS NOT FALSE"),
             Expr::IsNull(ast) => write!(f, "{ast} IS NULL"),
             Expr::IsNotNull(ast) => write!(f, "{ast} IS NOT NULL"),
-            Expr::NotNull { expr, with_space } => write!(
-                f,
-                "{} {}",
-                expr,
-                if *with_space { "NOT NULL" } else { "NOTNULL" }
-            ),
             Expr::IsUnknown(ast) => write!(f, "{ast} IS UNKNOWN"),
             Expr::IsNotUnknown(ast) => write!(f, "{ast} IS NOT UNKNOWN"),
             Expr::InList {

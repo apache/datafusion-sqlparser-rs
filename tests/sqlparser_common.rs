@@ -15992,51 +15992,18 @@ fn parse_create_procedure_with_parameter_modes() {
 #[test]
 fn parse_not_null_unsupported() {
     // Only DuckDB and SQLite support `x NOT NULL` as an expression
-    // All other dialects fail to parse.
-    let sql = r#"WITH t AS (SELECT NULL AS x) SELECT x NOT NULL FROM t"#;
+    // All other dialects fail to parse the `NOT NULL` portion
     let dialects =
         all_dialects_except(|d| d.supports_is_not_null_alias(IsNotNullAlias::NotSpaceNull));
-    let res = dialects.parse_sql_statements(sql);
-    assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: NULL".to_string()),
-        res.unwrap_err()
-    );
+    let _ = dialects.expr_parses_to("x NOT NULL", "x");
 }
 
 #[test]
 fn parse_not_null_supported() {
     // DuckDB and SQLite support `x NOT NULL` as an alias for `x IS NOT NULL`
-    let sql = r#"WITH t AS (SELECT NULL AS x) SELECT x NOT NULL FROM t"#;
-    let canonical = r#"WITH t AS (SELECT NULL AS x) SELECT x IS NOT NULL FROM t"#;
     let dialects =
         all_dialects_where(|d| d.supports_is_not_null_alias(IsNotNullAlias::NotSpaceNull));
-    let stmt = dialects.one_statement_parses_to(sql, canonical);
-    match stmt {
-        Statement::Query(qry) => match *qry.body {
-            SetExpr::Select(select) => {
-                assert_eq!(select.projection.len(), 1);
-                match select.projection.first().unwrap() {
-                    UnnamedExpr(expr) => {
-                        let fake_span = Span {
-                            start: Location { line: 0, column: 0 },
-                            end: Location { line: 0, column: 0 },
-                        };
-                        assert_eq!(
-                            *expr,
-                            Expr::IsNotNull(Box::new(Identifier(Ident {
-                                value: "x".to_string(),
-                                quote_style: None,
-                                span: fake_span,
-                            })),),
-                        );
-                    }
-                    _ => unreachable!(),
-                }
-            }
-            _ => unreachable!(),
-        },
-        _ => unreachable!(),
-    }
+    let _ = dialects.expr_parses_to("x NOT NULL", "x IS NOT NULL");
 }
 
 #[test]
@@ -16044,77 +16011,14 @@ fn parse_notnull_unsupported() {
     // Only Postgres, DuckDB, and SQLite support `x NOTNULL` as an expression
     // All other dialects consider `x NOTNULL` like `x AS NOTNULL` and thus
     // consider `NOTNULL` an alias for x.
-    let sql = r#"WITH t AS (SELECT NULL AS x) SELECT x NOTNULL FROM t"#;
-    let canonical = r#"WITH t AS (SELECT NULL AS x) SELECT x AS NOTNULL FROM t"#;
     let dialects = all_dialects_except(|d| d.supports_is_not_null_alias(IsNotNullAlias::NotNull));
-    let stmt = dialects.one_statement_parses_to(sql, canonical);
-    match stmt {
-        Statement::Query(qry) => match *qry.body {
-            SetExpr::Select(select) => {
-                assert_eq!(select.projection.len(), 1);
-                match select.projection.first().unwrap() {
-                    SelectItem::ExprWithAlias { expr, alias } => {
-                        let fake_span = Span {
-                            start: Location { line: 0, column: 0 },
-                            end: Location { line: 0, column: 0 },
-                        };
-                        assert_eq!(
-                            *expr,
-                            Identifier(Ident {
-                                value: "x".to_string(),
-                                quote_style: None,
-                                span: fake_span,
-                            })
-                        );
-                        assert_eq!(
-                            *alias,
-                            Ident {
-                                value: "NOTNULL".to_string(),
-                                quote_style: None,
-                                span: fake_span,
-                            }
-                        );
-                    }
-                    _ => unreachable!(),
-                }
-            }
-            _ => unreachable!(),
-        },
-        _ => unreachable!(),
-    }
+    let _ = dialects
+        .verified_only_select_with_canonical("SELECT NULL NOTNULL", "SELECT NULL AS NOTNULL");
 }
 
 #[test]
 fn parse_notnull_supported() {
     // Postgres, DuckDB and SQLite support `x NOTNULL` as an alias for `x IS NOT NULL`
-    let sql = r#"WITH t AS (SELECT NULL AS x) SELECT x NOTNULL FROM t"#;
-    let canonical = r#"WITH t AS (SELECT NULL AS x) SELECT x IS NOT NULL FROM t"#;
     let dialects = all_dialects_where(|d| d.supports_is_not_null_alias(IsNotNullAlias::NotNull));
-    let stmt = dialects.one_statement_parses_to(sql, canonical);
-    match stmt {
-        Statement::Query(qry) => match *qry.body {
-            SetExpr::Select(select) => {
-                assert_eq!(select.projection.len(), 1);
-                match select.projection.first().unwrap() {
-                    UnnamedExpr(expr) => {
-                        let fake_span = Span {
-                            start: Location { line: 0, column: 0 },
-                            end: Location { line: 0, column: 0 },
-                        };
-                        assert_eq!(
-                            *expr,
-                            Expr::IsNotNull(Box::new(Identifier(Ident {
-                                value: "x".to_string(),
-                                quote_style: None,
-                                span: fake_span,
-                            })),),
-                        );
-                    }
-                    _ => unreachable!(),
-                }
-            }
-            _ => unreachable!(),
-        },
-        _ => unreachable!(),
-    }
+    let _ = dialects.expr_parses_to("x NOTNULL", "x IS NOT NULL");
 }

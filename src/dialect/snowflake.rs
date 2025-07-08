@@ -555,7 +555,6 @@ pub fn parse_create_table(
                 Keyword::AS => {
                     let query = parser.parse_query()?;
                     builder = builder.query(Some(query));
-                    break;
                 }
                 Keyword::CLONE => {
                     let clone = parser.parse_object_name(false).ok();
@@ -691,7 +690,7 @@ pub fn parse_create_table(
                 builder = builder.columns(columns).constraints(constraints);
             }
             Token::EOF => {
-                if builder.columns.is_empty() {
+                if builder.columns.is_empty() && builder.query.is_none() {
                     return Err(ParserError::ParserError(
                         "unexpected end of input".to_string(),
                     ));
@@ -700,7 +699,7 @@ pub fn parse_create_table(
                 break;
             }
             Token::SemiColon => {
-                if builder.columns.is_empty() {
+                if builder.columns.is_empty() && builder.query.is_none() {
                     return Err(ParserError::ParserError(
                         "unexpected end of input".to_string(),
                     ));

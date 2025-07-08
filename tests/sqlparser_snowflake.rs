@@ -996,6 +996,16 @@ fn test_snowflake_create_iceberg_table_without_location() {
 }
 
 #[test]
+fn test_snowflake_create_table_as() {
+    // Test additional options after AS (query)
+    snowflake()
+        .parse_sql_statements(
+            "CREATE TEMP TABLE dst AS (SELECT * FROM src) ON COMMIT PRESERVE ROWS",
+        )
+        .unwrap();
+}
+
+#[test]
 fn parse_sf_create_or_replace_view_with_comment_missing_equal() {
     assert!(snowflake_and_generic()
         .parse_sql_statements("CREATE OR REPLACE VIEW v COMMENT = 'hello, world' AS SELECT 1")

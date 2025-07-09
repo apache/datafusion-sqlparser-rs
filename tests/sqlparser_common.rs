@@ -5548,7 +5548,8 @@ fn parse_named_window_functions() {
                WINDOW w AS (PARTITION BY x), win AS (ORDER BY y)";
     supported_dialects.verified_stmt(sql);
 
-    let select = verified_only_select(sql);
+    let select = all_dialects_except(|d| d.is_table_alias(&Keyword::WINDOW, &mut Parser::new(d)))
+        .verified_only_select(sql);
 
     const EXPECTED_PROJ_QTY: usize = 2;
     assert_eq!(EXPECTED_PROJ_QTY, select.projection.len());
@@ -5578,6 +5579,7 @@ fn parse_named_window_functions() {
 
 #[test]
 fn parse_window_clause() {
+    let dialects = all_dialects_except(|d| d.is_table_alias(&Keyword::WINDOW, &mut Parser::new(d)));
     let sql = "SELECT * \
     FROM mytable \
     WINDOW \
@@ -5590,10 +5592,14 @@ fn parse_window_clause() {
         window7 AS (window1 ROWS UNBOUNDED PRECEDING), \
         window8 AS (window1 PARTITION BY a ORDER BY b ROWS UNBOUNDED PRECEDING) \
     ORDER BY C3";
-    verified_only_select(sql);
+    dialects.verified_only_select(sql);
 
     let sql = "SELECT * from mytable WINDOW window1 AS window2";
-    let dialects = all_dialects_except(|d| d.is::<BigQueryDialect>() || d.is::<GenericDialect>());
+    let dialects = all_dialects_except(|d| {
+        d.is::<BigQueryDialect>()
+            || d.is::<GenericDialect>()
+            || d.is_table_alias(&Keyword::WINDOW, &mut Parser::new(d))
+    });
     let res = dialects.parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError("Expected: (, found: window2".to_string()),
@@ -5603,6 +5609,7 @@ fn parse_window_clause() {
 
 #[test]
 fn test_parse_named_window() {
+    let dialects = all_dialects_except(|d| d.is_table_alias(&Keyword::WINDOW, &mut Parser::new(d)));
     let sql = "SELECT \
     MIN(c12) OVER window1 AS min1, \
     MAX(c12) OVER window2 AS max1 \
@@ -5610,7 +5617,7 @@ fn test_parse_named_window() {
     WINDOW window1 AS (ORDER BY C12), \
     window2 AS (PARTITION BY C11) \
     ORDER BY C3";
-    let actual_select_only = verified_only_select(sql);
+    let actual_select_only = dialects.verified_only_select(sql);
     let expected = Select {
         select_token: AttachedToken::empty(),
         distinct: None,
@@ -5759,6 +5766,10 @@ fn test_parse_named_window() {
 
 #[test]
 fn parse_window_and_qualify_clause() {
+    let dialects = all_dialects_except(|d| {
+        d.is_table_alias(&Keyword::WINDOW, &mut Parser::new(d))
+            || d.is_table_alias(&Keyword::QUALIFY, &mut Parser::new(d))
+    });
     let sql = "SELECT \
     MIN(c12) OVER window1 AS min1 \
     FROM aggregate_test_100 \
@@ -5766,7 +5777,7 @@ fn parse_window_and_qualify_clause() {
     WINDOW window1 AS (ORDER BY C12), \
     window2 AS (PARTITION BY C11) \
     ORDER BY C3";
-    verified_only_select(sql);
+    dialects.verified_only_select(sql);
 
     let sql = "SELECT \
     MIN(c12) OVER window1 AS min1 \
@@ -5775,7 +5786,7 @@ fn parse_window_and_qualify_clause() {
     window2 AS (PARTITION BY C11) \
     QUALIFY ROW_NUMBER() OVER my_window \
     ORDER BY C3";
-    verified_only_select(sql);
+    dialects.verified_only_select(sql);
 }
 
 #[test]
@@ -7443,7 +7454,8 @@ fn parse_join_syntax_variants() {
         "SELECT c1 FROM t1 FULL JOIN t2 USING(c1)",
     );
 
-    let res = parse_sql_statements("SELECT * FROM a OUTER JOIN b ON 1");
+    let dialects = all_dialects_except(|d| d.is_table_alias(&Keyword::OUTER, &mut Parser::new(d)));
+    let res = dialects.parse_sql_statements("SELECT * FROM a OUTER JOIN b ON 1");
     assert_eq!(
         ParserError::ParserError("Expected: APPLY, found: JOIN".to_string()),
         res.unwrap_err()

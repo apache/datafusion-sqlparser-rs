@@ -321,6 +321,11 @@ pub struct Select {
     pub top_before_distinct: bool,
     /// projection expressions
     pub projection: Vec<SelectItem>,
+    /// Excluded columns from the projection expression which are not specified
+    /// directly after a wildcard.
+    ///
+    /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_EXCLUDE_list.html)
+    pub exclude: Option<ExcludeSelectItem>,
     /// INTO
     pub into: Option<SelectInto>,
     /// FROM
@@ -399,6 +404,10 @@ impl fmt::Display for Select {
 
         if !self.projection.is_empty() {
             indented_list(f, &self.projection)?;
+        }
+
+        if let Some(exclude) = &self.exclude {
+            write!(f, " {exclude}")?;
         }
 
         if let Some(ref into) = self.into {

@@ -131,4 +131,12 @@ impl Dialect for RedshiftSqlDialect {
     fn supports_string_literal_backslash_escape(&self) -> bool {
         true
     }
+
+    fn supports_select_wildcard_exclude(&self) -> bool {
+        true
+    }
+
+    fn supports_select_exclude(&self) -> bool {
+        true
+    }
 }

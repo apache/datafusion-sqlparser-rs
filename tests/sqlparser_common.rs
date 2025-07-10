@@ -459,6 +459,7 @@ fn parse_update_set_from() {
                                 SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
                                 SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id"))),
                             ],
+                            exclude: None,
                             into: None,
                             from: vec![TableWithJoins {
                                 relation: table_from_name(ObjectName::from(vec![Ident::new("t1")])),
@@ -5688,6 +5689,7 @@ fn test_parse_named_window() {
                 },
             },
         ],
+        exclude: None,
         into: None,
         from: vec![TableWithJoins {
             relation: table_from_name(ObjectName::from(vec![Ident {
@@ -6340,6 +6342,7 @@ fn parse_interval_and_or_xor() {
                 quote_style: None,
                 span: Span::empty(),
             }))],
+            exclude: None,
             into: None,
             from: vec![TableWithJoins {
                 relation: table_from_name(ObjectName::from(vec![Ident {
@@ -8608,6 +8611,7 @@ fn lateral_function() {
         distinct: None,
         top: None,
         projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
+        exclude: None,
         top_before_distinct: false,
         into: None,
         from: vec![TableWithJoins {
@@ -9604,6 +9608,7 @@ fn parse_merge() {
                             projection: vec![SelectItem::Wildcard(
                                 WildcardAdditionalOptions::default()
                             )],
+                            exclude: None,
                             into: None,
                             from: vec![TableWithJoins {
                                 relation: table_from_name(ObjectName::from(vec![
@@ -11522,6 +11527,7 @@ fn parse_unload() {
                     top: None,
                     top_before_distinct: false,
                     projection: vec![UnnamedExpr(Expr::Identifier(Ident::new("cola"))),],
+                    exclude: None,
                     into: None,
                     from: vec![TableWithJoins {
                         relation: table_from_name(ObjectName::from(vec![Ident::new("tab")])),
@@ -11722,6 +11728,7 @@ fn parse_connect_by() {
             SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("manager_id"))),
             SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("title"))),
         ],
+        exclude: None,
         from: vec![TableWithJoins {
             relation: table_from_name(ObjectName::from(vec![Ident::new("employees")])),
             joins: vec![],
@@ -11803,6 +11810,7 @@ fn parse_connect_by() {
                 SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("manager_id"))),
                 SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("title"))),
             ],
+            exclude: None,
             from: vec![TableWithJoins {
                 relation: table_from_name(ObjectName::from(vec![Ident::new("employees")])),
                 joins: vec![],
@@ -12736,6 +12744,7 @@ fn test_extract_seconds_ok() {
                     format: None,
                 }),
             })],
+            exclude: None,
             into: None,
             from: vec![],
             lateral_views: vec![],
@@ -14808,6 +14817,7 @@ fn test_select_from_first() {
                 distinct: None,
                 top: None,
                 projection,
+                exclude: None,
                 top_before_distinct: false,
                 into: None,
                 from: vec![TableWithJoins {
@@ -15987,4 +15997,65 @@ fn parse_create_procedure_with_parameter_modes() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn test_select_exclude() {
+    let dialects = all_dialects_where(|d| d.supports_select_wildcard_exclude());
+    match &dialects
+        .verified_only_select("SELECT * EXCLUDE c1 FROM test")
+        .projection[0]
+    {
+        SelectItem::Wildcard(WildcardAdditionalOptions { opt_exclude, .. }) => {
+            assert_eq!(
+                *opt_exclude,
+                Some(ExcludeSelectItem::Single(Ident::new("c1")))
+            );
+        }
+        _ => unreachable!(),
+    }
+    match &dialects
+        .verified_only_select("SELECT * EXCLUDE (c1, c2) FROM test")
+        .projection[0]
+    {
+        SelectItem::Wildcard(WildcardAdditionalOptions { opt_exclude, .. }) => {
+            assert_eq!(
+                *opt_exclude,
+                Some(ExcludeSelectItem::Multiple(vec![
+                    Ident::new("c1"),
+                    Ident::new("c2")
+                ]))
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = dialects.verified_only_select("SELECT * EXCLUDE c1, c2 FROM test");
+    match &select.projection[0] {
+        SelectItem::Wildcard(WildcardAdditionalOptions { opt_exclude, .. }) => {
+            assert_eq!(
+                *opt_exclude,
+                Some(ExcludeSelectItem::Single(Ident::new("c1")))
+            );
+        }
+        _ => unreachable!(),
+    }
+    match &select.projection[1] {
+        SelectItem::UnnamedExpr(Expr::Identifier(ident)) => {
+            assert_eq!(*ident, Ident::new("c2"));
+        }
+        _ => unreachable!(),
+    }
+
+    let dialects = all_dialects_where(|d| d.supports_select_exclude());
+    let select = dialects.verified_only_select("SELECT *, c1 EXCLUDE c1 FROM test");
+    match &select.projection[0] {
+        SelectItem::Wildcard(additional_options) => {
+            assert_eq!(*additional_options, WildcardAdditionalOptions::default());
+        }
+        _ => unreachable!(),
+    }
+    assert_eq!(
+        select.exclude,
+        Some(ExcludeSelectItem::Single(Ident::new("c1")))
+    );
 }

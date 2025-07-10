@@ -384,6 +384,10 @@ impl Dialect for SnowflakeDialect {
     fn supports_select_expr_star(&self) -> bool {
         true
     }
+
+    fn supports_select_wildcard_exclude(&self) -> bool {
+        true
+    }
 }
 
 fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statement, ParserError> {

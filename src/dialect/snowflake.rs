@@ -25,8 +25,8 @@ use crate::ast::helpers::stmt_data_loading::{
 use crate::ast::{
     ColumnOption, ColumnPolicy, ColumnPolicyProperty, CopyIntoSnowflakeKind, Ident,
     IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
-    IdentityPropertyOrder, ObjectName, RowAccessPolicy, ShowObjects, SqlOption, Statement,
-    TagsColumnOption, WrappedCollection,
+    IdentityPropertyOrder, ObjectName, ObjectNamePart, RowAccessPolicy, ShowObjects, SqlOption,
+    Statement, TagsColumnOption, WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
@@ -365,6 +365,23 @@ impl Dialect for SnowflakeDialect {
     }
 
     fn supports_comma_separated_drop_column_list(&self) -> bool {
+        true
+    }
+
+    fn is_identifier_generating_function_name(
+        &self,
+        ident: &Ident,
+        name_parts: &[ObjectNamePart],
+    ) -> bool {
+        ident.quote_style.is_none()
+            && ident.value.to_lowercase() == "identifier"
+            && !name_parts
+                .iter()
+                .any(|p| matches!(p, ObjectNamePart::Function(_)))
+    }
+
+    // For example: `SELECT IDENTIFIER('alias1').* FROM tbl AS alias1`
+    fn supports_select_expr_star(&self) -> bool {
         true
     }
 }

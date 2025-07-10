@@ -344,12 +344,14 @@ impl fmt::Display for ObjectName {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ObjectNamePart {
     Identifier(Ident),
+    Function(ObjectNamePartFunction),
 }
 
 impl ObjectNamePart {
     pub fn as_ident(&self) -> Option<&Ident> {
         match self {
             ObjectNamePart::Identifier(ident) => Some(ident),
+            ObjectNamePart::Function(_) => None,
         }
     }
 }
@@ -358,7 +360,27 @@ impl fmt::Display for ObjectNamePart {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ObjectNamePart::Identifier(ident) => write!(f, "{ident}"),
+            ObjectNamePart::Function(func) => write!(f, "{func}"),
         }
+    }
+}
+
+/// An object name part that consists of a function that dynamically
+/// constructs identifiers.
+///
+/// - [Snowflake](https://docs.snowflake.com/en/sql-reference/identifier-literal)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ObjectNamePartFunction {
+    pub name: Ident,
+    pub args: Vec<FunctionArg>,
+}
+
+impl fmt::Display for ObjectNamePartFunction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}(", self.name)?;
+        write!(f, "{})", display_comma_separated(&self.args))
     }
 }
 

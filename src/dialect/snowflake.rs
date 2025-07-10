@@ -735,6 +735,7 @@ pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserE
             Token::Tilde => ident.push('~'),
             Token::Mod => ident.push('%'),
             Token::Div => ident.push('/'),
+            Token::Plus => ident.push('+'),
             Token::Word(w) => ident.push_str(&w.to_string()),
             _ => return parser.expected("stage name identifier", parser.peek_token()),
         }

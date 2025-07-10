@@ -2581,6 +2581,26 @@ fn test_snowflake_copy_into() {
         }
         _ => unreachable!(),
     }
+
+    // Test for non-ident characters in stage names
+    let sql = "COPY INTO a.b FROM @namespace.stage_name/x@x~x%x+";
+    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+    match snowflake().verified_stmt(sql) {
+        Statement::CopyIntoSnowflake { into, from_obj, .. } => {
+            assert_eq!(
+                into,
+                ObjectName::from(vec![Ident::new("a"), Ident::new("b")])
+            );
+            assert_eq!(
+                from_obj,
+                Some(ObjectName::from(vec![
+                    Ident::new("@namespace"),
+                    Ident::new("stage_name/x@x~x%x+")
+                ]))
+            )
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]

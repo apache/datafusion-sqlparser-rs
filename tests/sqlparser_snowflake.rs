@@ -4350,4 +4350,20 @@ fn test_snowflake_identifier_function() {
         }
         _ => unreachable!(),
     }
+
+    // Cannot have more than one IDENTIFIER part in an object name
+    assert_eq!(
+        snowflake()
+            .parse_sql_statements(
+                "CREATE TABLE IDENTIFIER('db1').IDENTIFIER('sc1').IDENTIFIER('tbl') (id INT)"
+            )
+            .is_err(),
+        true
+    );
+    assert_eq!(
+        snowflake()
+            .parse_sql_statements("CREATE TABLE IDENTIFIER('db1')..IDENTIFIER('tbl') (id INT)")
+            .is_err(),
+        true
+    );
 }

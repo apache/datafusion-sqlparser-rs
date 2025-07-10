@@ -10409,7 +10409,10 @@ impl<'a> Parser<'a> {
                     parts.push(ObjectNamePart::Identifier(Ident::new("")));
                 } else {
                     let ident = self.parse_identifier()?;
-                    let part = if self.dialect.is_identifier_generating_function_name(&ident) {
+                    let part = if self
+                        .dialect
+                        .is_identifier_generating_function_name(&ident, &parts)
+                    {
                         self.expect_token(&Token::LParen)?;
                         let args: Vec<FunctionArg> =
                             self.parse_comma_separated0(Self::parse_function_args, Token::RParen)?;

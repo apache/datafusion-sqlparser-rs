@@ -49,7 +49,7 @@ pub use self::postgresql::PostgreSqlDialect;
 pub use self::redshift::RedshiftSqlDialect;
 pub use self::snowflake::SnowflakeDialect;
 pub use self::sqlite::SQLiteDialect;
-use crate::ast::{ColumnOption, Expr, GranteesType, Ident, Statement};
+use crate::ast::{ColumnOption, Expr, GranteesType, Ident, ObjectNamePart, Statement};
 pub use crate::keywords;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -1082,7 +1082,11 @@ pub trait Dialect: Debug + Any {
     /// programmatically.
     ///
     /// - [Snowflake](https://docs.snowflake.com/en/sql-reference/identifier-literal)
-    fn is_identifier_generating_function_name(&self, _ident: &Ident) -> bool {
+    fn is_identifier_generating_function_name(
+        &self,
+        _ident: &Ident,
+        _name_parts: &[ObjectNamePart],
+    ) -> bool {
         false
     }
 }

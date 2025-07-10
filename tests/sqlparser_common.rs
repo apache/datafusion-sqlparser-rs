@@ -9460,6 +9460,8 @@ fn parse_grant() {
     verified_stmt("GRANT SELECT ON FUTURE VIEWS IN SCHEMA db1.sc1 TO ROLE role1");
     verified_stmt("GRANT SELECT ON FUTURE MATERIALIZED VIEWS IN SCHEMA db1.sc1 TO ROLE role1");
     verified_stmt("GRANT SELECT ON FUTURE SEQUENCES IN SCHEMA db1.sc1 TO ROLE role1");
+    verified_stmt("GRANT USAGE ON PROCEDURE db1.sc1.foo(INT) TO ROLE role1");
+    verified_stmt("GRANT USAGE ON FUNCTION db1.sc1.foo(INT) TO ROLE role1");
 }
 
 #[test]

@@ -7023,6 +7023,25 @@ pub enum GrantObjects {
     ReplicationGroup(Vec<ObjectName>),
     /// Grant privileges on external volumes
     ExternalVolumes(Vec<ObjectName>),
+    /// Grant privileges on a procedure. In dialects that
+    /// support overloading, the argument types must be specified.
+    ///
+    /// For example:
+    /// `GRANT USAGE ON PROCEDURE foo(varchar) TO ROLE role1`
+    Procedure {
+        name: ObjectName,
+        arg_types: Vec<DataType>,
+    },
+
+    /// Grant privileges on a function. In dialects that
+    /// support overloading, the argument types must be specified.
+    ///
+    /// For example:
+    /// `GRANT USAGE ON FUNCTION foo(varchar) TO ROLE role1`
+    Function {
+        name: ObjectName,
+        arg_types: Vec<DataType>,
+    },
 }
 
 impl fmt::Display for GrantObjects {
@@ -7146,6 +7165,20 @@ impl fmt::Display for GrantObjects {
             }
             GrantObjects::ExternalVolumes(objects) => {
                 write!(f, "EXTERNAL VOLUME {}", display_comma_separated(objects))
+            }
+            GrantObjects::Procedure { name, arg_types } => {
+                write!(f, "PROCEDURE {name}")?;
+                if !arg_types.is_empty() {
+                    write!(f, "({})", display_comma_separated(arg_types))?;
+                }
+                Ok(())
+            }
+            GrantObjects::Function { name, arg_types } => {
+                write!(f, "FUNCTION {name}")?;
+                if !arg_types.is_empty() {
+                    write!(f, "({})", display_comma_separated(arg_types))?;
+                }
+                Ok(())
             }
         }
     }

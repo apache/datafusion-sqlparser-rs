@@ -219,11 +219,9 @@ impl From<bool> for MatchedTrailingBracket {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParserOptions {
     pub trailing_commas: bool,
-    
     /// Controls how literal values are unescaped. See
     /// [`Tokenizer::with_unescape`] for more details.
     pub unescape: bool,
-    
     /// Controls if the parser expects a semi-colon token
     /// between statements.
     pub require_semicolon_stmt_delimiter: bool,

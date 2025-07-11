@@ -2505,8 +2505,5 @@ DECLARE @Y AS NVARCHAR(MAX)='y'
 
     let stmts = tsql().parse_sql_statements(sql).unwrap();
     assert_eq!(stmts.len(), 2);
-    assert_eq!(
-        stmts.iter().all(|s| matches!(s, Statement::Declare { .. })),
-        true
-    );
+    assert!(stmts.iter().all(|s| matches!(s, Statement::Declare { .. })));
 }

@@ -98,7 +98,7 @@ impl Dialect for DuckDbDialect {
     fn supports_select_wildcard_exclude(&self) -> bool {
         true
     }
-  
+
     /// DuckDB supports `NOTNULL` as an alias for `IS NOT NULL`,
     /// see DuckDB Comparisons <https://duckdb.org/docs/stable/sql/expressions/comparison_operators#between-and-is-not-null>
     fn supports_notnull_operator(&self) -> bool {

@@ -144,4 +144,8 @@ impl Dialect for BigQueryDialect {
     fn supports_pipe_operator(&self) -> bool {
         true
     }
+
+    fn supports_create_table_multi_schema_info_sources(&self) -> bool {
+        true
+    }
 }

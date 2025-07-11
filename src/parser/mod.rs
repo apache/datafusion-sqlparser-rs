@@ -28,16 +28,16 @@ use helpers::attached_token::AttachedToken;
 
 use log::debug;
 
-use recursion::RecursionCounter;
-use IsLateral::*;
-use IsOptional::*;
-
 use crate::ast::helpers::stmt_create_table::{CreateTableBuilder, CreateTableConfiguration};
 use crate::ast::Statement::CreatePolicy;
 use crate::ast::*;
 use crate::dialect::*;
 use crate::keywords::{Keyword, ALL_KEYWORDS};
 use crate::tokenizer::*;
+use recursion::RecursionCounter;
+use sqlparser::parser::ParserState::ColumnDefinition;
+use IsLateral::*;
+use IsOptional::*;
 
 mod alter;
 
@@ -275,6 +275,9 @@ enum ParserState {
     /// PRIOR expressions while still allowing prior as an identifier name
     /// in other contexts.
     ConnectBy,
+    /// The state when parsing column definitions.  This state prohibits
+    /// NOT NULL as an alias for IS NOT NULL.
+    ColumnDefinition,
 }
 
 /// A SQL Parser
@@ -3570,6 +3573,11 @@ impl<'a> Parser<'a> {
                     let negated = self.parse_keyword(Keyword::NOT);
                     let regexp = self.parse_keyword(Keyword::REGEXP);
                     let rlike = self.parse_keyword(Keyword::RLIKE);
+                    let null = if self.in_normal_state() {
+                        self.parse_keyword(Keyword::NULL)
+                    } else {
+                        false
+                    };
                     if regexp || rlike {
                         Ok(Expr::RLike {
                             negated,
@@ -3579,6 +3587,8 @@ impl<'a> Parser<'a> {
                             ),
                             regexp,
                         })
+                    } else if negated && null {
+                        Ok(Expr::IsNotNull(Box::new(expr)))
                     } else if self.parse_keyword(Keyword::IN) {
                         self.parse_in(expr, negated)
                     } else if self.parse_keyword(Keyword::BETWEEN) {
@@ -3615,6 +3625,9 @@ impl<'a> Parser<'a> {
                     } else {
                         self.expected("IN or BETWEEN after NOT", self.peek_token())
                     }
+                }
+                Keyword::NOTNULL if dialect.supports_notnull_operator() => {
+                    Ok(Expr::IsNotNull(Box::new(expr)))
                 }
                 Keyword::MEMBER => {
                     if self.parse_keyword(Keyword::OF) {
@@ -7724,6 +7737,15 @@ impl<'a> Parser<'a> {
             return option;
         }
 
+        self.with_state(
+            ColumnDefinition,
+            |parser| -> Result<Option<ColumnOption>, ParserError> {
+                parser.parse_optional_column_option_inner()
+            },
+        )
+    }
+
+    fn parse_optional_column_option_inner(&mut self) -> Result<Option<ColumnOption>, ParserError> {
         if self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET]) {
             Ok(Some(ColumnOption::CharacterSet(
                 self.parse_object_name(false)?,
@@ -16506,6 +16528,10 @@ impl<'a> Parser<'a> {
         } else {
             Ok(None)
         }
+    }
+
+    pub fn in_normal_state(&self) -> bool {
+        matches!(self.state, ParserState::Normal)
     }
 }
 

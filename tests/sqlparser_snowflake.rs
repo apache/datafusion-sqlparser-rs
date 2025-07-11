@@ -997,17 +997,38 @@ fn test_snowflake_create_iceberg_table_without_location() {
 
 #[test]
 fn test_snowflake_create_table_trailing_options() {
+    // Serialization to SQL assume that in `CREATE TABLE AS` the options come before the `AS (<query>)`
+    // but Snowflake supports also the other way around
+    snowflake()
+        .verified_stmt("CREATE TEMPORARY TABLE dst ON COMMIT PRESERVE ROWS AS (SELECT * FROM src)");
     snowflake()
         .parse_sql_statements(
-            "CREATE TEMP TABLE dst AS (SELECT * FROM src) ON COMMIT PRESERVE ROWS",
+            "CREATE TEMPORARY TABLE dst AS (SELECT * FROM src) ON COMMIT PRESERVE ROWS",
         )
         .unwrap();
+
+    // Same for `CREATE TABLE LIKE|CLONE`:
+    snowflake().verified_stmt("CREATE TEMPORARY TABLE dst LIKE src ON COMMIT PRESERVE ROWS");
     snowflake()
-        .parse_sql_statements("CREATE TEMP TABLE tbl LIKE customers ON COMMIT PRESERVE ROWS;")
+        .parse_sql_statements("CREATE TEMPORARY TABLE dst ON COMMIT PRESERVE ROWS LIKE src")
         .unwrap();
+
+    snowflake().verified_stmt("CREATE TEMPORARY TABLE dst CLONE src ON COMMIT PRESERVE ROWS");
     snowflake()
-        .parse_sql_statements("CREATE TEMP TABLE tbl CLONE customers ON COMMIT PRESERVE ROWS;")
+        .parse_sql_statements("CREATE TEMPORARY TABLE dst ON COMMIT PRESERVE ROWS CLONE src")
         .unwrap();
+}
+
+#[test]
+fn test_snowflake_create_table_has_schema_info() {
+    // The parser validates there's information on the schema of the new
+    // table, such as a list of columns or a source table\query to copy it from.
+    assert_eq!(
+        snowflake()
+            .parse_sql_statements("CREATE TABLE dst")
+            .is_err(),
+        true
+    );
 }
 
 #[test]

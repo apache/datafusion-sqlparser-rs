@@ -386,7 +386,7 @@ impl CreateTableBuilder {
     /// Returns true if information on the structure of the table
     /// to be created was provided to the builder. If not, the
     /// statement is invalid.
-    pub fn has_schema_info(&self) -> bool {
+    pub(crate) fn has_schema_info(&self) -> bool {
         !self.columns.is_empty()
             || self.query.is_some()
             || self.like.is_some()

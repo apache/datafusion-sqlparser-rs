@@ -4374,9 +4374,9 @@ fn test_snowflake_identifier_function() {
 
     // Using IDENTIFIER to reference a database
     match snowflake().verified_stmt("CREATE DATABASE IDENTIFIER('tbl')") {
-        Statement::CreateDatabase { db_name, .. } => {
+        Statement::CreateSnowflakeDatabase(CreateSnowflakeDatabase { name, .. }) => {
             assert_eq!(
-                db_name,
+                name,
                 ObjectName(vec![ObjectNamePart::Function(ObjectNamePartFunction {
                     name: Ident::new("IDENTIFIER"),
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(

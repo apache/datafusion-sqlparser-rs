@@ -9550,6 +9550,29 @@ impl Display for Tag {
     }
 }
 
+/// Snowflake `WITH CONTACT ( purpose = contact [ , purpose = contact ...] )`
+///
+/// <https://docs.snowflake.com/en/sql-reference/sql/create-database>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ContactEntry {
+    pub purpose: String,
+    pub contact: String,
+}
+
+impl ContactEntry {
+    pub fn new(purpose: String, contact: String) -> Self {
+        Self { purpose, contact }
+    }
+}
+
+impl Display for ContactEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} = {}", self.purpose, self.contact)
+    }
+}
+
 /// Helper to indicate if a comment includes the `=` in the display form
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

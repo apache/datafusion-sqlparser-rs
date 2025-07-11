@@ -31,7 +31,7 @@ use sqlparser_derive::{Visit, VisitMut};
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
     display_comma_separated, display_separated, ArgMode, CatalogSyncNamespaceMode, CommentDef,
-    CreateFunctionBody, CreateFunctionUsing, DataType, Expr, FunctionBehavior,
+    ContactEntry, CreateFunctionBody, CreateFunctionUsing, DataType, Expr, FunctionBehavior,
     FunctionCalledOnNull, FunctionDeterminismSpecifier, FunctionParallel, Ident, IndexColumn,
     MySQLColumnPosition, ObjectName, OperateFunctionArg, OrderByExpr, ProjectionSelect,
     SequenceOptions, SqlOption, StorageSerializationPolicy, Tag, Value, ValueWithSpan,
@@ -2546,7 +2546,7 @@ pub struct CreateSnowflakeDatabase {
     pub catalog_sync_namespace_mode: Option<CatalogSyncNamespaceMode>,
     pub catalog_sync_namespace_flatten_delimiter: Option<String>,
     pub with_tags: Option<Vec<Tag>>,
-    pub with_contacts: Option<Vec<(String, String)>>,
+    pub with_contacts: Option<Vec<ContactEntry>>,
 }
 
 impl fmt::Display for CreateSnowflakeDatabase {
@@ -2619,16 +2619,7 @@ impl fmt::Display for CreateSnowflakeDatabase {
         }
 
         if let Some(contacts) = &self.with_contacts {
-            write!(
-                f,
-                " WITH CONTACT ({})",
-                display_comma_separated(
-                    &contacts
-                        .iter()
-                        .map(|(purpose, contact)| format!("{purpose} = {contact}"))
-                        .collect::<Vec<_>>()
-                )
-            )?;
+            write!(f, " WITH CONTACT ({})", display_comma_separated(contacts))?;
         }
 
         Ok(())

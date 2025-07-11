@@ -51,7 +51,7 @@ use crate::parser::ParserError;
 /// )
 /// ```
 ///
-/// [1]: Statement::CreateTable
+/// [1]: Statement::CreateSnowflakeDatabase
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

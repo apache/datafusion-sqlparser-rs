@@ -7898,7 +7898,7 @@ fn parse_exists_subquery() {
 #[test]
 fn parse_create_database() {
     let sql = "CREATE DATABASE mydb";
-    match verified_stmt(sql) {
+    match all_dialects_except(|d| d.is::<SnowflakeDialect>()).verified_stmt(sql) {
         Statement::CreateDatabase {
             db_name,
             if_not_exists,
@@ -7917,7 +7917,7 @@ fn parse_create_database() {
 #[test]
 fn parse_create_database_ine() {
     let sql = "CREATE DATABASE IF NOT EXISTS mydb";
-    match verified_stmt(sql) {
+    match all_dialects_except(|d| d.is::<SnowflakeDialect>()).verified_stmt(sql) {
         Statement::CreateDatabase {
             db_name,
             if_not_exists,

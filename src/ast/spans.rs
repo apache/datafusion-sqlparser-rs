@@ -21,24 +21,24 @@ use core::iter;
 use crate::tokenizer::Span;
 
 use super::{
-    dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation,
-    AlterIndexOperation, AlterTableOperation, Array, Assignment, AssignmentTarget, AttachedToken,
-    BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef, ColumnOption,
-    ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements, ConflictTarget, ConnectBy,
-    ConstraintCharacteristics, CopySource, CreateIndex, CreateTable, CreateTableOptions, Cte,
-    Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, FromTable,
-    Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
-    FunctionArguments, GroupByExpr, HavingBound, IfStatement, IlikeSelectItem, IndexColumn, Insert,
-    Interpolate, InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem,
-    LateralView, LimitClause, MatchRecognizePattern, Measure, NamedParenthesizedList,
-    NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
-    OnInsert, OpenStatement, OrderBy, OrderByExpr, OrderByKind, Partition, PivotValueSource,
-    ProjectionSelect, Query, RaiseStatement, RaiseStatementValue, ReferentialAction,
-    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
-    SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
-    TableConstraint, TableFactor, TableObject, TableOptionsClustered, TableWithJoins,
-    UpdateTableFromKind, Use, Value, Values, ViewColumnDef, WhileStatement,
-    WildcardAdditionalOptions, With, WithFill,
+    dcl::SecondaryRoles, ddl::CreateSnowflakeDatabase, value::ValueWithSpan, AccessExpr,
+    AlterColumnOperation, AlterIndexOperation, AlterTableOperation, Array, Assignment,
+    AssignmentTarget, AttachedToken, BeginEndStatements, CaseStatement, CloseCursor,
+    ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConditionalStatementBlock,
+    ConditionalStatements, ConflictTarget, ConnectBy, ConstraintCharacteristics, CopySource,
+    CreateIndex, CreateTable, CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem,
+    ExcludeSelectItem, Expr, ExprWithAlias, Fetch, FromTable, Function, FunctionArg,
+    FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr,
+    HavingBound, IfStatement, IlikeSelectItem, IndexColumn, Insert, Interpolate, InterpolateExpr,
+    Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
+    MatchRecognizePattern, Measure, NamedParenthesizedList, NamedWindowDefinition, ObjectName,
+    ObjectNamePart, Offset, OnConflict, OnConflictAction, OnInsert, OpenStatement, OrderBy,
+    OrderByExpr, OrderByKind, Partition, PivotValueSource, ProjectionSelect, Query, RaiseStatement,
+    RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
+    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
+    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
+    TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use, Value, Values, ViewColumnDef,
+    WhileStatement, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -386,6 +386,7 @@ impl Spanned for Statement {
                     .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span()))),
             ),
             Statement::Delete(delete) => delete.span(),
+            Statement::CreateSnowflakeDatabase(create_database) => create_database.span(),
             Statement::CreateView {
                 or_alter: _,
                 or_replace: _,
@@ -613,6 +614,12 @@ impl Spanned for CreateTable {
                 .chain(like.iter().map(|i| i.span()))
                 .chain(clone.iter().map(|i| i.span())),
         )
+    }
+}
+
+impl Spanned for CreateSnowflakeDatabase {
+    fn span(&self) -> Span {
+        union_spans(core::iter::once(self.name.span()).chain(self.clone.iter().map(|c| c.span())))
     }
 }
 

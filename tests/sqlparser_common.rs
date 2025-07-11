@@ -16058,4 +16058,48 @@ fn test_select_exclude() {
         select.exclude,
         Some(ExcludeSelectItem::Single(Ident::new("c1")))
     );
+
+    let dialects = all_dialects_where(|d| {
+        d.supports_select_wildcard_exclude() && !d.supports_select_exclude()
+    });
+    let select = dialects.verified_only_select("SELECT * EXCLUDE c1 FROM test");
+    match &select.projection[0] {
+        SelectItem::Wildcard(WildcardAdditionalOptions { opt_exclude, .. }) => {
+            assert_eq!(
+                *opt_exclude,
+                Some(ExcludeSelectItem::Single(Ident::new("c1")))
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // Dialects that only support the wildcard form and do not accept EXCLUDE as an implicity alias
+    // will fail when encountered with the `c2` ident
+    let dialects = all_dialects_where(|d| {
+        d.supports_select_wildcard_exclude()
+            && !d.supports_select_exclude()
+            && d.is_column_alias(&Keyword::EXCLUDE, &mut Parser::new(d))
+    });
+    assert_eq!(
+        dialects
+            .parse_sql_statements("SELECT *, c1 EXCLUDE c2 FROM test")
+            .err()
+            .unwrap(),
+        ParserError::ParserError("Expected: end of statement, found: c2".to_string())
+    );
+
+    // Dialects that only support the wildcard form and accept EXCLUDE as an implicity alias
+    // will fail when encountered with the `EXCLUDE` keyword
+    let dialects = all_dialects_where(|d| {
+        d.supports_select_wildcard_exclude()
+            && !d.supports_select_exclude()
+            && !d.is_column_alias(&Keyword::EXCLUDE, &mut Parser::new(d))
+    });
+    assert_eq!(
+        dialects
+            .parse_sql_statements("SELECT *, c1 EXCLUDE c2 FROM test")
+            .err()
+            .unwrap(),
+        ParserError::ParserError("Expected: end of statement, found: EXCLUDE".to_string())
+    );
 }

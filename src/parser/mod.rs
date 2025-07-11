@@ -9574,6 +9574,15 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse a boolean string
+    pub fn parse_boolean_string(&mut self) -> Result<bool, ParserError> {
+        match self.parse_one_of_keywords(&[Keyword::TRUE, Keyword::FALSE]) {
+            Some(Keyword::TRUE) => Ok(true),
+            Some(Keyword::FALSE) => Ok(false),
+            _ => self.expected("TRUE or FALSE", self.peek_token()),
+        }
+    }
+
     /// Parse a literal unicode normalization clause
     pub fn parse_unicode_is_normalized(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         let neg = self.parse_keyword(Keyword::NOT);

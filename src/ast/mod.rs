@@ -63,12 +63,12 @@ pub use self::ddl::{
     AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
     ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy,
     ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain, CreateFunction,
-    Deduplicate, DeferrableInitial, DropBehavior, GeneratedAs, GeneratedExpressionMode,
-    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
-    IdentityPropertyOrder, IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner,
-    Partition, ProcedureParam, ReferentialAction, ReplicaIdentity, TableConstraint,
-    TagsColumnOption, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
-    ViewColumnDef,
+    CreateSnowflakeDatabase, Deduplicate, DeferrableInitial, DropBehavior, GeneratedAs,
+    GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
+    IdentityPropertyKind, IdentityPropertyOrder, IndexOption, IndexType, KeyOrIndexDisplay,
+    NullsDistinctOption, Owner, Partition, ProcedureParam, ReferentialAction, ReplicaIdentity,
+    TableConstraint, TagsColumnOption, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{CreateIndex, CreateTable, Delete, IndexColumn, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -3857,6 +3857,31 @@ pub enum Statement {
         managed_location: Option<String>,
     },
     /// ```sql
+    /// CREATE [ OR REPLACE ] [ TRANSIENT ] DATABASE [ IF NOT EXISTS ] <name>
+    ///     [ CLONE <source_schema>
+    ///         [ { AT | BEFORE } ( { TIMESTAMP => <timestamp> | OFFSET => <time_difference> | STATEMENT => <id> } ) ]
+    ///         [ IGNORE TABLES WITH INSUFFICIENT DATA RETENTION ]
+    ///         [ IGNORE HYBRID TABLES ] ]
+    ///     [ DATA_RETENTION_TIME_IN_DAYS = <integer> ]
+    ///     [ MAX_DATA_EXTENSION_TIME_IN_DAYS = <integer> ]
+    ///     [ EXTERNAL_VOLUME = <external_volume_name> ]
+    ///     [ CATALOG = <catalog_integration_name> ]
+    ///     [ REPLACE_INVALID_CHARACTERS = { TRUE | FALSE } ]
+    ///     [ DEFAULT_DDL_COLLATION = '<collation_specification>' ]
+    ///     [ STORAGE_SERIALIZATION_POLICY = { COMPATIBLE | OPTIMIZED } ]
+    ///     [ COMMENT = '<string_literal>' ]
+    ///     [ CATALOG_SYNC = '<snowflake_open_catalog_integration_name>' ]
+    ///     [ CATALOG_SYNC_NAMESPACE_MODE = { NEST | FLATTEN } ]
+    ///     [ CATALOG_SYNC_NAMESPACE_FLATTEN_DELIMITER = '<string_literal>' ]
+    ///     [ [ WITH ] TAG ( <tag_name> = '<tag_value>' [ , <tag_name> = '<tag_value>' , ... ] ) ]
+    ///     [ WITH CONTACT ( <purpose> = <contact_name> [ , <purpose> = <contact_name> ... ] ) ]
+    /// ```
+    /// See:
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-database>
+    ///
+    /// Creates a new database in the system.
+    CreateSnowflakeDatabase(CreateSnowflakeDatabase),
+    /// ```sql
     /// CREATE FUNCTION
     /// ```
     ///
@@ -4805,6 +4830,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::CreateSnowflakeDatabase(create_database) => create_database.fmt(f),
             Statement::CreateFunction(create_function) => create_function.fmt(f),
             Statement::CreateDomain(create_domain) => create_domain.fmt(f),
             Statement::CreateTrigger {
@@ -9946,6 +9972,29 @@ impl Display for StorageSerializationPolicy {
         match self {
             StorageSerializationPolicy::Compatible => write!(f, "COMPATIBLE"),
             StorageSerializationPolicy::Optimized => write!(f, "OPTIMIZED"),
+        }
+    }
+}
+
+/// Snowflake CatalogSyncNamespaceMode
+/// ```sql
+/// [ CATALOG_SYNC_NAMESPACE_MODE = { NEST | FLATTEN } ]
+/// ```
+///
+/// <https://docs.snowflake.com/en/sql-reference/sql/create-database>
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CatalogSyncNamespaceMode {
+    Nest,
+    Flatten,
+}
+
+impl Display for CatalogSyncNamespaceMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CatalogSyncNamespaceMode::Nest => write!(f, "NEST"),
+            CatalogSyncNamespaceMode::Flatten => write!(f, "FLATTEN"),
         }
     }
 }

@@ -4438,3 +4438,63 @@ fn test_snowflake_identifier_function() {
         true
     );
 }
+
+#[test]
+fn test_create_database_basic() {
+    snowflake().verified_stmt("CREATE DATABASE my_db");
+    snowflake().verified_stmt("CREATE OR REPLACE DATABASE my_db");
+    snowflake().verified_stmt("CREATE TRANSIENT DATABASE IF NOT EXISTS my_db");
+}
+
+#[test]
+fn test_create_database_clone() {
+    snowflake().verified_stmt("CREATE DATABASE my_db CLONE src_db");
+    snowflake().verified_stmt(
+        "CREATE OR REPLACE DATABASE my_db CLONE src_db DATA_RETENTION_TIME_IN_DAYS = 1",
+    );
+}
+
+#[test]
+fn test_create_database_with_all_options() {
+    snowflake().one_statement_parses_to(
+        r#"
+        CREATE OR REPLACE TRANSIENT DATABASE IF NOT EXISTS my_db
+        CLONE src_db
+        DATA_RETENTION_TIME_IN_DAYS = 1
+        MAX_DATA_EXTENSION_TIME_IN_DAYS = 5
+        EXTERNAL_VOLUME = 'volume1'
+        CATALOG = 'my_catalog'
+        REPLACE_INVALID_CHARACTERS = TRUE
+        DEFAULT_DDL_COLLATION = 'en-ci'
+        STORAGE_SERIALIZATION_POLICY = COMPATIBLE
+        COMMENT = 'This is my database'
+        CATALOG_SYNC = 'sync_integration'
+        CATALOG_SYNC_NAMESPACE_FLATTEN_DELIMITER = '/'
+        WITH TAG (env = 'prod', team = 'data')
+        WITH CONTACT (owner = 'admin', dpo = 'compliance')
+    "#,
+        "CREATE OR REPLACE TRANSIENT DATABASE IF NOT EXISTS \
+        my_db CLONE src_db DATA_RETENTION_TIME_IN_DAYS = 1 MAX_DATA_EXTENSION_TIME_IN_DAYS = 5 \
+        EXTERNAL_VOLUME = 'volume1' CATALOG = 'my_catalog' \
+        REPLACE_INVALID_CHARACTERS = TRUE DEFAULT_DDL_COLLATION = 'en-ci' \
+        STORAGE_SERIALIZATION_POLICY = COMPATIBLE COMMENT = 'This is my database' \
+        CATALOG_SYNC = 'sync_integration' CATALOG_SYNC_NAMESPACE_FLATTEN_DELIMITER = '/' \
+        WITH TAG (env='prod', team='data') \
+        WITH CONTACT (owner = admin, dpo = compliance)",
+    );
+}
+
+#[test]
+fn test_create_database_errors() {
+    let err = snowflake()
+        .parse_sql_statements("CREATE DATABASE")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("Expected"), "Unexpected error: {err}");
+
+    let err = snowflake()
+        .parse_sql_statements("CREATE DATABASE my_db CLONE")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("Expected"), "Unexpected error: {err}");
+}

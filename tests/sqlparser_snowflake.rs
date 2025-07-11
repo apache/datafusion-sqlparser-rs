@@ -1020,12 +1020,21 @@ fn test_snowflake_create_table_trailing_options() {
 }
 
 #[test]
-fn test_snowflake_create_table_has_schema_info() {
-    // The parser validates there's information on the schema of the new
-    // table, such as a list of columns or a source table\query to copy it from.
+fn test_snowflake_create_table_valid_schema_info() {
+    // Validate there's exactly one source of information on the schema of the new table
     assert_eq!(
         snowflake()
             .parse_sql_statements("CREATE TABLE dst")
+            .is_err(),
+        true
+    );
+    assert_eq!(
+        snowflake().parse_sql_statements("CREATE OR REPLACE TEMP TABLE dst LIKE src AS (SELECT * FROM CUSTOMERS) ON COMMIT PRESERVE ROWS").is_err(),
+        true
+    );
+    assert_eq!(
+        snowflake()
+            .parse_sql_statements("CREATE OR REPLACE TEMP TABLE dst CLONE customers LIKE customer2")
             .is_err(),
         true
     );

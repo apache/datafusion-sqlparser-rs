@@ -688,7 +688,7 @@ pub fn parse_create_table(
                 builder = builder.columns(columns).constraints(constraints);
             }
             Token::EOF => {
-                if !builder.has_schema_info() {
+                if !builder.validate_schema_info() {
                     return Err(ParserError::ParserError(
                         "unexpected end of input".to_string(),
                     ));
@@ -697,7 +697,7 @@ pub fn parse_create_table(
                 break;
             }
             Token::SemiColon => {
-                if !builder.has_schema_info() {
+                if !builder.validate_schema_info() {
                     return Err(ParserError::ParserError(
                         "unexpected end of input".to_string(),
                     ));

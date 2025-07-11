@@ -4346,8 +4346,9 @@ fn parse_create_table_as() {
     // BigQuery allows specifying table schema in CTAS
     // ANSI SQL and PostgreSQL let you only specify the list of columns
     // (without data types) in a CTAS, but we have yet to support that.
+    let dialects = all_dialects_where(|d| d.supports_create_table_multi_schema_info_sources());
     let sql = "CREATE TABLE t (a INT, b INT) AS SELECT 1 AS b, 2 AS a";
-    match verified_stmt(sql) {
+    match dialects.verified_stmt(sql) {
         Statement::CreateTable(CreateTable { columns, query, .. }) => {
             assert_eq!(columns.len(), 2);
             assert_eq!(columns[0].to_string(), "a INT".to_string());
@@ -4449,20 +4450,6 @@ fn parse_create_or_replace_table() {
         }) => {
             assert_eq!(name.to_string(), "t".to_string());
             assert!(or_replace);
-        }
-        _ => unreachable!(),
-    }
-
-    let sql = "CREATE TABLE t (a INT, b INT) AS SELECT 1 AS b, 2 AS a";
-    match verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { columns, query, .. }) => {
-            assert_eq!(columns.len(), 2);
-            assert_eq!(columns[0].to_string(), "a INT".to_string());
-            assert_eq!(columns[1].to_string(), "b INT".to_string());
-            assert_eq!(
-                query,
-                Some(Box::new(verified_query("SELECT 1 AS b, 2 AS a")))
-            );
         }
         _ => unreachable!(),
     }

@@ -383,14 +383,24 @@ impl CreateTableBuilder {
         self
     }
 
-    /// Returns true if information on the structure of the table
-    /// to be created was provided to the builder. If not, the
-    /// statement is invalid.
-    pub(crate) fn has_schema_info(&self) -> bool {
-        !self.columns.is_empty()
-            || self.query.is_some()
-            || self.like.is_some()
-            || self.clone.is_some()
+    /// Returns true if the statement has exactly one source of info on the schema of the new table.
+    /// This is Snowflake-specific, some dialects allow more than one source.
+    pub(crate) fn validate_schema_info(&self) -> bool {
+        let mut sources = 0;
+        if !self.columns.is_empty() {
+            sources += 1;
+        }
+        if self.query.is_some() {
+            sources += 1;
+        }
+        if self.like.is_some() {
+            sources += 1;
+        }
+        if self.clone.is_some() {
+            sources += 1;
+        }
+
+        sources == 1
     }
 
     pub fn build(self) -> Statement {

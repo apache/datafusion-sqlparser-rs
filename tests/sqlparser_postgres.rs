@@ -1305,6 +1305,7 @@ fn parse_copy_to() {
                             },
                         }
                     ],
+                    exclude: None,
                     into: None,
                     from: vec![],
                     lateral_views: vec![],
@@ -2948,6 +2949,7 @@ fn parse_array_subquery_expr() {
                         projection: vec![SelectItem::UnnamedExpr(Expr::Value(
                             (number("1")).with_empty_span()
                         ))],
+                        exclude: None,
                         into: None,
                         from: vec![],
                         lateral_views: vec![],
@@ -2973,6 +2975,7 @@ fn parse_array_subquery_expr() {
                         projection: vec![SelectItem::UnnamedExpr(Expr::Value(
                             (number("2")).with_empty_span()
                         ))],
+                        exclude: None,
                         into: None,
                         from: vec![],
                         lateral_views: vec![],

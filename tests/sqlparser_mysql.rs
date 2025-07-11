@@ -1403,6 +1403,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
                     quote_style: Some('`'),
                     span: Span::empty(),
                 }))],
+                exclude: None,
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -1456,6 +1457,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
                     quote_style: Some('`'),
                     span: Span::empty(),
                 }))],
+                exclude: None,
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -1503,6 +1505,7 @@ fn parse_escaped_backticks_with_escape() {
                     quote_style: Some('`'),
                     span: Span::empty(),
                 }))],
+                exclude: None,
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -1554,6 +1557,7 @@ fn parse_escaped_backticks_with_no_escape() {
                     quote_style: Some('`'),
                     span: Span::empty(),
                 }))],
+                exclude: None,
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -2225,6 +2229,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                     projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new(
                         "123col_$@123abc"
                     )))],
+                    exclude: None,
                     into: None,
                     from: vec![TableWithJoins {
                         relation: table_from_name(ObjectName::from(vec![Ident::with_quote(
@@ -2392,7 +2397,6 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                 q.body,
                 Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
-
                     distinct: None,
                     top: None,
                     top_before_distinct: false,
@@ -2400,6 +2404,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                         SelectItem::UnnamedExpr(Expr::value(number("123e4"))),
                         SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("123col_$@123abc")))
                     ],
+                    exclude: None,
                     into: None,
                     from: vec![TableWithJoins {
                         relation: table_from_name(ObjectName::from(vec![Ident::with_quote(
@@ -3043,6 +3048,7 @@ fn parse_substring_in_select() {
                             special: true,
                             shorthand: false,
                         })],
+                        exclude: None,
                         into: None,
                         from: vec![TableWithJoins {
                             relation: table_from_name(ObjectName::from(vec![Ident {
@@ -3357,6 +3363,7 @@ fn parse_hex_string_introducer() {
                     )
                     .into(),
                 })],
+                exclude: None,
                 from: vec![],
                 lateral_views: vec![],
                 prewhere: None,

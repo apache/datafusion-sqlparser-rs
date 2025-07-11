@@ -126,6 +126,7 @@ fn parse_create_procedure() {
                         projection: vec![SelectItem::UnnamedExpr(Expr::Value(
                             (number("1")).with_empty_span()
                         ))],
+                        exclude: None,
                         into: None,
                         from: vec![],
                         lateral_views: vec![],
@@ -1368,6 +1369,7 @@ fn parse_substring_in_select() {
                             special: true,
                             shorthand: false,
                         })],
+                        exclude: None,
                         into: None,
                         from: vec![TableWithJoins {
                             relation: table_from_name(ObjectName::from(vec![Ident {
@@ -1516,6 +1518,7 @@ fn parse_mssql_declare() {
                             (Value::Number("4".parse().unwrap(), false)).with_empty_span()
                         )),
                     })],
+                    exclude: None,
                     into: None,
                     from: vec![],
                     lateral_views: vec![],

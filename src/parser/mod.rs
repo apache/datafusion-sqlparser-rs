@@ -11740,6 +11740,7 @@ impl<'a> Parser<'a> {
                     top: None,
                     top_before_distinct: false,
                     projection: vec![],
+                    exclude: None,
                     into: None,
                     from,
                     lateral_views: vec![],
@@ -11781,6 +11782,12 @@ impl<'a> Parser<'a> {
             } else {
                 self.parse_projection()?
             };
+
+        let exclude = if self.dialect.supports_select_exclude() {
+            self.parse_optional_select_item_exclude()?
+        } else {
+            None
+        };
 
         let into = if self.parse_keyword(Keyword::INTO) {
             Some(self.parse_select_into()?)
@@ -11915,6 +11922,7 @@ impl<'a> Parser<'a> {
             top,
             top_before_distinct,
             projection,
+            exclude,
             into,
             from,
             lateral_views,
@@ -15052,8 +15060,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let opt_exclude = if opt_ilike.is_none()
-            && dialect_of!(self is GenericDialect | DuckDbDialect | SnowflakeDialect)
+        let opt_exclude = if opt_ilike.is_none() && self.dialect.supports_select_wildcard_exclude()
         {
             self.parse_optional_select_item_exclude()?
         } else {

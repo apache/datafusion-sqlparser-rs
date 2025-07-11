@@ -94,4 +94,8 @@ impl Dialect for DuckDbDialect {
     fn supports_order_by_all(&self) -> bool {
         true
     }
+
+    fn supports_select_wildcard_exclude(&self) -> bool {
+        true
+    }
 }

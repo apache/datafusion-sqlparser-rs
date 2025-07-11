@@ -570,6 +570,26 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports an exclude option
+    /// following a wildcard in the projection section. For example:
+    /// `SELECT * EXCLUDE col1 FROM tbl`.
+    ///
+    /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_EXCLUDE_list.html)
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/select)
+    fn supports_select_wildcard_exclude(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports an exclude option
+    /// as the last item in the projection section, not necessarily
+    /// after a wildcard. For example:
+    /// `SELECT *, c1, c2 EXCLUDE c3 FROM tbl`
+    ///
+    /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_EXCLUDE_list.html)
+    fn supports_select_exclude(&self) -> bool {
+        false
+    }
+
     /// Dialect-specific infix parser override
     ///
     /// This method is called to parse the next infix expression.

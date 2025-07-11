@@ -16000,3 +16000,11 @@ fn parse_create_procedure_with_parameter_modes() {
         _ => unreachable!(),
     }
 }
+
+    #[test] 
+    fn test_unicode_support() {
+        let unicode_sql = r#"SELECT phoneǤЖשचᎯ⻩☯♜🦄⚛🀄ᚠ⌛🌀 tbl FROM customers"#;
+        let dialects_supporting_unicode = TestedDialects::new(vec![Box::new(MySqlDialect {}), Box::new(RedshiftSqlDialect {}), Box::new(PostgreSqlDialect {})]);
+        let _ = dialects_supporting_unicode.parse_sql_statements(unicode_sql).unwrap();
+    }
+

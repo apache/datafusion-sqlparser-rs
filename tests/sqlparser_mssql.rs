@@ -32,7 +32,7 @@ use sqlparser::ast::DeclareAssignment::MsSqlAssignment;
 use sqlparser::ast::Value::SingleQuotedString;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MsSqlDialect};
-use sqlparser::parser::{Parser, ParserError};
+use sqlparser::parser::{Parser, ParserError, ParserOptions};
 
 #[test]
 fn parse_mssql_identifiers() {
@@ -2327,6 +2327,18 @@ fn ms() -> TestedDialects {
     TestedDialects::new(vec![Box::new(MsSqlDialect {})])
 }
 
+// MS SQL dialect with support for optional semi-colon statement delimiters
+fn tsql() -> TestedDialects {
+    TestedDialects::new_with_options(
+        vec![Box::new(MsSqlDialect {})],
+        ParserOptions {
+            trailing_commas: false,
+            unescape: true,
+            require_semicolon_stmt_delimiter: false,
+        },
+    )
+}
+
 fn ms_and_generic() -> TestedDialects {
     TestedDialects::new(vec![Box::new(MsSqlDialect {}), Box::new(GenericDialect {})])
 }
@@ -2482,4 +2494,16 @@ fn parse_mssql_grant() {
 #[test]
 fn parse_mssql_deny() {
     ms().verified_stmt("DENY SELECT ON my_table TO public, db_admin");
+}
+
+#[test]
+fn test_tsql_no_semicolon_delimiter() {
+    let sql = r#"
+DECLARE @X AS NVARCHAR(MAX)='x'
+DECLARE @Y AS NVARCHAR(MAX)='y'
+    "#;
+
+    let stmts = tsql().parse_sql_statements(sql).unwrap();
+    assert_eq!(stmts.len(), 2);
+    assert!(stmts.iter().all(|s| matches!(s, Statement::Declare { .. })));
 }

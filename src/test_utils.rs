@@ -294,6 +294,11 @@ pub fn all_dialects() -> TestedDialects {
     ])
 }
 
+// Returns all available dialects with the specified parser options
+pub fn all_dialects_with_options(options: ParserOptions) -> TestedDialects {
+    TestedDialects::new_with_options(all_dialects().dialects, options)
+}
+
 /// Returns all dialects matching the given predicate.
 pub fn all_dialects_where<F>(predicate: F) -> TestedDialects
 where

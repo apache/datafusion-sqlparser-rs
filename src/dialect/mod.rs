@@ -650,6 +650,9 @@ pub trait Dialect: Debug + Any {
                 Token::Word(w) if w.keyword == Keyword::MATCH => Ok(p!(Like)),
                 Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
                 Token::Word(w) if w.keyword == Keyword::MEMBER => Ok(p!(Like)),
+                Token::Word(w) if w.keyword == Keyword::NULL && parser.in_normal_state() => {
+                    Ok(p!(Is))
+                }
                 _ => Ok(self.prec_unknown()),
             },
             Token::Word(w) if w.keyword == Keyword::NOTNULL && self.supports_notnull_operator() => {

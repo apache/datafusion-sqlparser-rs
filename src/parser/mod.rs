@@ -223,7 +223,7 @@ pub struct ParserOptions {
     /// [`Tokenizer::with_unescape`] for more details.
     pub unescape: bool,
     /// Controls if the parser expects a semi-colon token
-    /// between statements.
+    /// between statements. Default is `true`.
     pub require_semicolon_stmt_delimiter: bool,
 }
 

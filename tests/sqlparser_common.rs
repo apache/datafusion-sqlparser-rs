@@ -40,8 +40,9 @@ use sqlparser::parser::{Parser, ParserError, ParserOptions};
 use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::{Location, Span};
 use test_utils::{
-    all_dialects, all_dialects_where, alter_table_op, assert_eq_vec, call, expr_from_projection,
-    join, number, only, table, table_alias, table_from_name, TestedDialects,
+    all_dialects, all_dialects_where, all_dialects_with_options, alter_table_op, assert_eq_vec,
+    call, expr_from_projection, join, number, only, table, table_alias, table_from_name,
+    TestedDialects,
 };
 
 #[macro_use]
@@ -16114,4 +16115,21 @@ fn test_select_exclude() {
             .unwrap(),
         ParserError::ParserError("Expected: end of statement, found: EXCLUDE".to_string())
     );
+}
+
+#[test]
+fn test_no_semicolon_required_between_statements() {
+    let sql = r#"
+SELECT * FROM tbl1
+SELECT * FROM tbl2
+    "#;
+
+    let dialects = all_dialects_with_options(ParserOptions {
+        trailing_commas: false,
+        unescape: true,
+        require_semicolon_stmt_delimiter: false,
+    });
+    let stmts = dialects.parse_sql_statements(sql).unwrap();
+    assert_eq!(stmts.len(), 2);
+    assert!(stmts.iter().all(|s| matches!(s, Statement::Query { .. })));
 }

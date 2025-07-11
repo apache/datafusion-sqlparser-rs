@@ -35,7 +35,6 @@ use IsOptional::*;
 use crate::ast::helpers::stmt_create_table::{CreateTableBuilder, CreateTableConfiguration};
 use crate::ast::Statement::CreatePolicy;
 use crate::ast::*;
-use crate::dialect::IsNotNullAlias::{NotNull, NotSpaceNull};
 use crate::dialect::*;
 use crate::keywords::{Keyword, ALL_KEYWORDS};
 use crate::tokenizer::*;
@@ -1243,6 +1242,21 @@ impl<'a> Parser<'a> {
             }
 
             expr = self.parse_infix(expr, next_precedence)?;
+        }
+
+        // Special case: if expr is an identifier or NULL, accept `expr NOT NULL`
+        // as an alias for `expr IS NOT NULL`.
+        if match &expr {
+            Expr::Identifier(_) if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) => true,
+            Expr::Value(v)
+                if v.value == Value::Null
+                    && self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) =>
+            {
+                true
+            }
+            _ => false,
+        } {
+            return Ok(Expr::IsNotNull(Box::new(expr)));
         }
         Ok(expr)
     }
@@ -3563,7 +3577,6 @@ impl<'a> Parser<'a> {
                     let negated = self.parse_keyword(Keyword::NOT);
                     let regexp = self.parse_keyword(Keyword::REGEXP);
                     let rlike = self.parse_keyword(Keyword::RLIKE);
-                    let null = self.parse_keyword(Keyword::NULL);
                     if regexp || rlike {
                         Ok(Expr::RLike {
                             negated,
@@ -3573,8 +3586,6 @@ impl<'a> Parser<'a> {
                             ),
                             regexp,
                         })
-                    } else if dialect.supports_is_not_null_alias(NotSpaceNull) && negated && null {
-                        Ok(Expr::IsNotNull(Box::new(expr)))
                     } else if self.parse_keyword(Keyword::IN) {
                         self.parse_in(expr, negated)
                     } else if self.parse_keyword(Keyword::BETWEEN) {
@@ -3612,7 +3623,7 @@ impl<'a> Parser<'a> {
                         self.expected("IN or BETWEEN after NOT", self.peek_token())
                     }
                 }
-                Keyword::NOTNULL if dialect.supports_is_not_null_alias(NotNull) => {
+                Keyword::NOTNULL if dialect.supports_notnull_operator() => {
                     Ok(Expr::IsNotNull(Box::new(expr)))
                 }
                 Keyword::MEMBER => {

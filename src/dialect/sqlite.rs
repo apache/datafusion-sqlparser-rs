@@ -20,7 +20,7 @@ use alloc::boxed::Box;
 
 use crate::ast::BinaryOperator;
 use crate::ast::{Expr, Statement};
-use crate::dialect::{Dialect, IsNotNullAlias};
+use crate::dialect::Dialect;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 
@@ -111,12 +111,9 @@ impl Dialect for SQLiteDialect {
         true
     }
 
-    /// SQLite supports ``NOT NULL` and `NOTNULL` as
-    /// aliases for `IS NOT NULL`, see: <https://sqlite.org/syntax/expr.html>
-    fn supports_is_not_null_alias(&self, alias: IsNotNullAlias) -> bool {
-        match alias {
-            IsNotNullAlias::NotNull => true,
-            IsNotNullAlias::NotSpaceNull => true,
-        }
+    /// SQLite supports `NOTNULL` as aliases for `IS NOT NULL`
+    /// See: <https://sqlite.org/syntax/expr.html>
+    fn supports_notnull_operator(&self) -> bool {
+        true
     }
 }

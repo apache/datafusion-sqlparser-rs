@@ -269,6 +269,7 @@ fn test_select_union_by_name() {
                 distinct: None,
                 top: None,
                 projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
+                exclude: None,
                 top_before_distinct: false,
                 into: None,
                 from: vec![TableWithJoins {
@@ -299,6 +300,7 @@ fn test_select_union_by_name() {
                 distinct: None,
                 top: None,
                 projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
+                exclude: None,
                 top_before_distinct: false,
                 into: None,
                 from: vec![TableWithJoins {

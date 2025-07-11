@@ -570,6 +570,26 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports an exclude option
+    /// following a wildcard in the projection section. For example:
+    /// `SELECT * EXCLUDE col1 FROM tbl`.
+    ///
+    /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_EXCLUDE_list.html)
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/select)
+    fn supports_select_wildcard_exclude(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports an exclude option
+    /// as the last item in the projection section, not necessarily
+    /// after a wildcard. For example:
+    /// `SELECT *, c1, c2 EXCLUDE c3 FROM tbl`
+    ///
+    /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_EXCLUDE_list.html)
+    fn supports_select_exclude(&self) -> bool {
+        false
+    }
+
     /// Dialect-specific infix parser override
     ///
     /// This method is called to parse the next infix expression.
@@ -998,11 +1018,17 @@ pub trait Dialect: Debug + Any {
         explicit || self.is_column_alias(kw, parser)
     }
 
+    /// Returns true if the specified keyword should be parsed as a table identifier.
+    /// See [keywords::RESERVED_FOR_TABLE_ALIAS]
+    fn is_table_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+        !keywords::RESERVED_FOR_TABLE_ALIAS.contains(kw)
+    }
+
     /// Returns true if the specified keyword should be parsed as a table factor alias.
     /// When explicit is true, the keyword is preceded by an `AS` word. Parser is provided
     /// to enable looking ahead if needed.
-    fn is_table_factor_alias(&self, explicit: bool, kw: &Keyword, _parser: &mut Parser) -> bool {
-        explicit || !keywords::RESERVED_FOR_TABLE_ALIAS.contains(kw)
+    fn is_table_factor_alias(&self, explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
+        explicit || self.is_table_alias(kw, parser)
     }
 
     /// Returns true if this dialect supports querying historical table data

@@ -179,4 +179,8 @@ impl Dialect for GenericDialect {
     fn supports_filter_during_aggregation(&self) -> bool {
         true
     }
+
+    fn supports_select_wildcard_exclude(&self) -> bool {
+        true
+    }
 }

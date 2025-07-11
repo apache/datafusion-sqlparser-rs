@@ -32,7 +32,7 @@ use sqlparser::ast::DeclareAssignment::MsSqlAssignment;
 use sqlparser::ast::Value::SingleQuotedString;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MsSqlDialect};
-use sqlparser::parser::{Parser, ParserError};
+use sqlparser::parser::{Parser, ParserError, ParserOptions};
 
 #[test]
 fn parse_mssql_identifiers() {
@@ -126,6 +126,7 @@ fn parse_create_procedure() {
                         projection: vec![SelectItem::UnnamedExpr(Expr::Value(
                             (number("1")).with_empty_span()
                         ))],
+                        exclude: None,
                         into: None,
                         from: vec![],
                         lateral_views: vec![],
@@ -1368,6 +1369,7 @@ fn parse_substring_in_select() {
                             special: true,
                             shorthand: false,
                         })],
+                        exclude: None,
                         into: None,
                         from: vec![TableWithJoins {
                             relation: table_from_name(ObjectName::from(vec![Ident {
@@ -1516,6 +1518,7 @@ fn parse_mssql_declare() {
                             (Value::Number("4".parse().unwrap(), false)).with_empty_span()
                         )),
                     })],
+                    exclude: None,
                     into: None,
                     from: vec![],
                     lateral_views: vec![],
@@ -2324,6 +2327,18 @@ fn ms() -> TestedDialects {
     TestedDialects::new(vec![Box::new(MsSqlDialect {})])
 }
 
+// MS SQL dialect with support for optional semi-colon statement delimiters
+fn tsql() -> TestedDialects {
+    TestedDialects::new_with_options(
+        vec![Box::new(MsSqlDialect {})],
+        ParserOptions {
+            trailing_commas: false,
+            unescape: true,
+            require_semicolon_stmt_delimiter: false,
+        },
+    )
+}
+
 fn ms_and_generic() -> TestedDialects {
     TestedDialects::new(vec![Box::new(MsSqlDialect {}), Box::new(GenericDialect {})])
 }
@@ -2479,4 +2494,16 @@ fn parse_mssql_grant() {
 #[test]
 fn parse_mssql_deny() {
     ms().verified_stmt("DENY SELECT ON my_table TO public, db_admin");
+}
+
+#[test]
+fn test_tsql_no_semicolon_delimiter() {
+    let sql = r#"
+DECLARE @X AS NVARCHAR(MAX)='x'
+DECLARE @Y AS NVARCHAR(MAX)='y'
+    "#;
+
+    let stmts = tsql().parse_sql_statements(sql).unwrap();
+    assert_eq!(stmts.len(), 2);
+    assert!(stmts.iter().all(|s| matches!(s, Statement::Declare { .. })));
 }

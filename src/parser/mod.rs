@@ -222,6 +222,9 @@ pub struct ParserOptions {
     /// Controls how literal values are unescaped. See
     /// [`Tokenizer::with_unescape`] for more details.
     pub unescape: bool,
+    /// Controls if the parser expects a semi-colon token
+    /// between statements. Default is `true`.
+    pub require_semicolon_stmt_delimiter: bool,
 }
 
 impl Default for ParserOptions {
@@ -229,6 +232,7 @@ impl Default for ParserOptions {
         Self {
             trailing_commas: false,
             unescape: true,
+            require_semicolon_stmt_delimiter: true,
         }
     }
 }
@@ -467,6 +471,10 @@ impl<'a> Parser<'a> {
         loop {
             // ignore empty statements (between successive statement delimiters)
             while self.consume_token(&Token::SemiColon) {
+                expecting_statement_delimiter = false;
+            }
+
+            if !self.options.require_semicolon_stmt_delimiter {
                 expecting_statement_delimiter = false;
             }
 
@@ -11762,6 +11770,7 @@ impl<'a> Parser<'a> {
                     top: None,
                     top_before_distinct: false,
                     projection: vec![],
+                    exclude: None,
                     into: None,
                     from,
                     lateral_views: vec![],
@@ -11803,6 +11812,12 @@ impl<'a> Parser<'a> {
             } else {
                 self.parse_projection()?
             };
+
+        let exclude = if self.dialect.supports_select_exclude() {
+            self.parse_optional_select_item_exclude()?
+        } else {
+            None
+        };
 
         let into = if self.parse_keyword(Keyword::INTO) {
             Some(self.parse_select_into()?)
@@ -11937,6 +11952,7 @@ impl<'a> Parser<'a> {
             top,
             top_before_distinct,
             projection,
+            exclude,
             into,
             from,
             lateral_views,
@@ -15074,8 +15090,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let opt_exclude = if opt_ilike.is_none()
-            && dialect_of!(self is GenericDialect | DuckDbDialect | SnowflakeDialect)
+        let opt_exclude = if opt_ilike.is_none() && self.dialect.supports_select_wildcard_exclude()
         {
             self.parse_optional_select_item_exclude()?
         } else {

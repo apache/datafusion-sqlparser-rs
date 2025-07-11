@@ -318,9 +318,11 @@ impl Dialect for SnowflakeDialect {
             }
 
             // `FETCH` can be considered an alias as long as it's not followed by `FIRST`` or `NEXT`
-            // which would give it a different meanings, for example: `SELECT 1 FETCH FIRST 10 ROWS` - not an alias
-            Keyword::FETCH
-                if parser.peek_keyword(Keyword::FIRST) || parser.peek_keyword(Keyword::NEXT) =>
+            // which would give it a different meanings, for example: 
+            // `SELECT 1 FETCH FIRST 10 ROWS` - not an alias
+            // `SELECT 1 FETCH 10` - not an alias
+            Keyword::FETCH if parser.peek_one_of_keywords(&[Keyword::FIRST, Keyword::NEXT]).is_some()
+                    || matches!(parser.peek_token().token, Token::Number(_, _)) =>
             {
                 false
             }
@@ -339,6 +341,86 @@ impl Dialect for SnowflakeDialect {
             | Keyword::UNION
             | Keyword::WHERE
             | Keyword::WITH => false,
+
+            // Any other word is considered an alias
+            _ => true,
+        }
+    }
+
+    fn is_table_alias(&self, kw: &Keyword, parser: &mut Parser) -> bool {
+        match kw {
+            // The following keywords can be considered an alias as long as
+            // they are not followed by other tokens that may change their meaning
+            Keyword::LIMIT
+            | Keyword::RETURNING
+            | Keyword::INNER
+            | Keyword::USING
+            | Keyword::PIVOT
+            | Keyword::UNPIVOT
+            | Keyword::EXCEPT
+            | Keyword::MATCH_RECOGNIZE
+            | Keyword::OFFSET
+                if !matches!(parser.peek_token_ref().token, Token::SemiColon | Token::EOF) =>
+            {
+                false
+            }
+
+            // `FETCH` can be considered an alias as long as it's not followed by `FIRST`` or `NEXT`
+            // which would give it a different meanings, for example:
+            // `SELECT * FROM tbl FETCH FIRST 10 ROWS` - not an alias
+            // `SELECT * FROM tbl FETCH 10` - not an alias
+            Keyword::FETCH
+                if parser
+                    .peek_one_of_keywords(&[Keyword::FIRST, Keyword::NEXT])
+                    .is_some()
+                    || matches!(parser.peek_token().token, Token::Number(_, _)) =>
+            {
+                false
+            }
+
+            // All sorts of join-related keywords can be considered aliases unless additional
+            // keywords change their meaning.
+            Keyword::RIGHT | Keyword::LEFT | Keyword::SEMI | Keyword::ANTI
+                if parser
+                    .peek_one_of_keywords(&[Keyword::JOIN, Keyword::OUTER])
+                    .is_some() =>
+            {
+                false
+            }
+            Keyword::GLOBAL if parser.peek_keyword(Keyword::FULL) => false,
+
+            // Reserved keywords by the Snowflake dialect, which seem to be less strictive
+            // than what is listed in `keywords::RESERVED_FOR_TABLE_ALIAS`. The following
+            // keywords were tested with the this statement: `SELECT <KW>.* FROM tbl <KW>`.
+            Keyword::WITH
+            | Keyword::ORDER
+            | Keyword::SELECT
+            | Keyword::WHERE
+            | Keyword::GROUP
+            | Keyword::HAVING
+            | Keyword::LATERAL
+            | Keyword::UNION
+            | Keyword::INTERSECT
+            | Keyword::MINUS
+            | Keyword::ON
+            | Keyword::JOIN
+            | Keyword::INNER
+            | Keyword::CROSS
+            | Keyword::FULL
+            | Keyword::LEFT
+            | Keyword::RIGHT
+            | Keyword::NATURAL
+            | Keyword::USING
+            | Keyword::ASOF
+            | Keyword::MATCH_CONDITION
+            | Keyword::SET
+            | Keyword::QUALIFY
+            | Keyword::FOR
+            | Keyword::START
+            | Keyword::CONNECT
+            | Keyword::SAMPLE
+            | Keyword::TABLESAMPLE
+            | Keyword::FROM => false,
 
             // Any other word is considered an alias
             _ => true,
@@ -382,6 +464,10 @@ impl Dialect for SnowflakeDialect {
 
     // For example: `SELECT IDENTIFIER('alias1').* FROM tbl AS alias1`
     fn supports_select_expr_star(&self) -> bool {
+        true
+    }
+
+    fn supports_select_wildcard_exclude(&self) -> bool {
         true
     }
 }

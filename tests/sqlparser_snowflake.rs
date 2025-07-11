@@ -3493,6 +3493,57 @@ fn test_sql_keywords_as_select_item_aliases() {
 }
 
 #[test]
+fn test_sql_keywords_as_table_aliases() {
+    // Some keywords that should be parsed as an alias implicitly
+    let unreserved_kws = vec![
+        "VIEW",
+        "EXPLAIN",
+        "ANALYZE",
+        "SORT",
+        "PIVOT",
+        "UNPIVOT",
+        "TOP",
+        "LIMIT",
+        "OFFSET",
+        "FETCH",
+        "EXCEPT",
+        "CLUSTER",
+        "DISTRIBUTE",
+        "GLOBAL",
+        "ANTI",
+        "SEMI",
+        "RETURNING",
+        "OUTER",
+        "WINDOW",
+        "END",
+        "PARTITION",
+        "PREWHERE",
+        "SETTINGS",
+        "FORMAT",
+        "MATCH_RECOGNIZE",
+        "OPEN",
+    ];
+
+    for kw in unreserved_kws {
+        snowflake().verified_stmt(&format!("SELECT * FROM tbl AS {kw}"));
+        snowflake().one_statement_parses_to(
+            &format!("SELECT * FROM tbl {kw}"),
+            &format!("SELECT * FROM tbl AS {kw}"),
+        );
+    }
+
+    // Some keywords that should not be parsed as an alias implicitly
+    let reserved_kws = vec![
+        "FROM", "GROUP", "HAVING", "ORDER", "SELECT", "UNION", "WHERE", "WITH",
+    ];
+    for kw in reserved_kws {
+        assert!(snowflake()
+            .parse_sql_statements(&format!("SELECT * FROM tbl {kw}"))
+            .is_err());
+    }
+}
+
+#[test]
 fn test_timetravel_at_before() {
     snowflake().verified_only_select("SELECT * FROM tbl AT(TIMESTAMP => '2024-12-15 00:00:00')");
     snowflake()

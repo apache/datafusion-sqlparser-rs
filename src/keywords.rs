@@ -1120,6 +1120,7 @@ pub const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
     Keyword::FETCH,
     Keyword::UNION,
     Keyword::EXCEPT,
+    Keyword::EXCLUDE,
     Keyword::INTERSECT,
     Keyword::MINUS,
     Keyword::CLUSTER,

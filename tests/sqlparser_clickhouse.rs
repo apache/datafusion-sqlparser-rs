@@ -60,6 +60,7 @@ fn parse_map_access_expr() {
                     ),
                 })],
             })],
+            exclude: None,
             into: None,
             from: vec![TableWithJoins {
                 relation: table_from_name(ObjectName::from(vec![Ident::new("foos")])),

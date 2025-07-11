@@ -2220,6 +2220,7 @@ impl Spanned for Select {
             distinct: _, // todo
             top: _,      // todo, mysql specific
             projection,
+            exclude: _,
             into,
             from,
             lateral_views,

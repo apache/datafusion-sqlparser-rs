@@ -40,8 +40,9 @@ use sqlparser::parser::{Parser, ParserError, ParserOptions};
 use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::{Location, Span};
 use test_utils::{
-    all_dialects, all_dialects_where, alter_table_op, assert_eq_vec, call, expr_from_projection,
-    join, number, only, table, table_alias, table_from_name, TestedDialects,
+    all_dialects, all_dialects_where, all_dialects_with_options, alter_table_op, assert_eq_vec,
+    call, expr_from_projection, join, number, only, table, table_alias, table_from_name,
+    TestedDialects,
 };
 
 #[macro_use]
@@ -459,6 +460,7 @@ fn parse_update_set_from() {
                                 SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
                                 SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id"))),
                             ],
+                            exclude: None,
                             into: None,
                             from: vec![TableWithJoins {
                                 relation: table_from_name(ObjectName::from(vec![Ident::new("t1")])),
@@ -5548,7 +5550,8 @@ fn parse_named_window_functions() {
                WINDOW w AS (PARTITION BY x), win AS (ORDER BY y)";
     supported_dialects.verified_stmt(sql);
 
-    let select = verified_only_select(sql);
+    let select = all_dialects_except(|d| d.is_table_alias(&Keyword::WINDOW, &mut Parser::new(d)))
+        .verified_only_select(sql);
 
     const EXPECTED_PROJ_QTY: usize = 2;
     assert_eq!(EXPECTED_PROJ_QTY, select.projection.len());
@@ -5578,6 +5581,7 @@ fn parse_named_window_functions() {
 
 #[test]
 fn parse_window_clause() {
+    let dialects = all_dialects_except(|d| d.is_table_alias(&Keyword::WINDOW, &mut Parser::new(d)));
     let sql = "SELECT * \
     FROM mytable \
     WINDOW \
@@ -5590,10 +5594,14 @@ fn parse_window_clause() {
         window7 AS (window1 ROWS UNBOUNDED PRECEDING), \
         window8 AS (window1 PARTITION BY a ORDER BY b ROWS UNBOUNDED PRECEDING) \
     ORDER BY C3";
-    verified_only_select(sql);
+    dialects.verified_only_select(sql);
 
     let sql = "SELECT * from mytable WINDOW window1 AS window2";
-    let dialects = all_dialects_except(|d| d.is::<BigQueryDialect>() || d.is::<GenericDialect>());
+    let dialects = all_dialects_except(|d| {
+        d.is::<BigQueryDialect>()
+            || d.is::<GenericDialect>()
+            || d.is_table_alias(&Keyword::WINDOW, &mut Parser::new(d))
+    });
     let res = dialects.parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError("Expected: (, found: window2".to_string()),
@@ -5603,6 +5611,7 @@ fn parse_window_clause() {
 
 #[test]
 fn test_parse_named_window() {
+    let dialects = all_dialects_except(|d| d.is_table_alias(&Keyword::WINDOW, &mut Parser::new(d)));
     let sql = "SELECT \
     MIN(c12) OVER window1 AS min1, \
     MAX(c12) OVER window2 AS max1 \
@@ -5610,7 +5619,7 @@ fn test_parse_named_window() {
     WINDOW window1 AS (ORDER BY C12), \
     window2 AS (PARTITION BY C11) \
     ORDER BY C3";
-    let actual_select_only = verified_only_select(sql);
+    let actual_select_only = dialects.verified_only_select(sql);
     let expected = Select {
         select_token: AttachedToken::empty(),
         distinct: None,
@@ -5688,6 +5697,7 @@ fn test_parse_named_window() {
                 },
             },
         ],
+        exclude: None,
         into: None,
         from: vec![TableWithJoins {
             relation: table_from_name(ObjectName::from(vec![Ident {
@@ -5759,6 +5769,10 @@ fn test_parse_named_window() {
 
 #[test]
 fn parse_window_and_qualify_clause() {
+    let dialects = all_dialects_except(|d| {
+        d.is_table_alias(&Keyword::WINDOW, &mut Parser::new(d))
+            || d.is_table_alias(&Keyword::QUALIFY, &mut Parser::new(d))
+    });
     let sql = "SELECT \
     MIN(c12) OVER window1 AS min1 \
     FROM aggregate_test_100 \
@@ -5766,7 +5780,7 @@ fn parse_window_and_qualify_clause() {
     WINDOW window1 AS (ORDER BY C12), \
     window2 AS (PARTITION BY C11) \
     ORDER BY C3";
-    verified_only_select(sql);
+    dialects.verified_only_select(sql);
 
     let sql = "SELECT \
     MIN(c12) OVER window1 AS min1 \
@@ -5775,7 +5789,7 @@ fn parse_window_and_qualify_clause() {
     window2 AS (PARTITION BY C11) \
     QUALIFY ROW_NUMBER() OVER my_window \
     ORDER BY C3";
-    verified_only_select(sql);
+    dialects.verified_only_select(sql);
 }
 
 #[test]
@@ -6340,6 +6354,7 @@ fn parse_interval_and_or_xor() {
                 quote_style: None,
                 span: Span::empty(),
             }))],
+            exclude: None,
             into: None,
             from: vec![TableWithJoins {
                 relation: table_from_name(ObjectName::from(vec![Ident {
@@ -7443,7 +7458,8 @@ fn parse_join_syntax_variants() {
         "SELECT c1 FROM t1 FULL JOIN t2 USING(c1)",
     );
 
-    let res = parse_sql_statements("SELECT * FROM a OUTER JOIN b ON 1");
+    let dialects = all_dialects_except(|d| d.is_table_alias(&Keyword::OUTER, &mut Parser::new(d)));
+    let res = dialects.parse_sql_statements("SELECT * FROM a OUTER JOIN b ON 1");
     assert_eq!(
         ParserError::ParserError("Expected: APPLY, found: JOIN".to_string()),
         res.unwrap_err()
@@ -8608,6 +8624,7 @@ fn lateral_function() {
         distinct: None,
         top: None,
         projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
+        exclude: None,
         top_before_distinct: false,
         into: None,
         from: vec![TableWithJoins {
@@ -9604,6 +9621,7 @@ fn parse_merge() {
                             projection: vec![SelectItem::Wildcard(
                                 WildcardAdditionalOptions::default()
                             )],
+                            exclude: None,
                             into: None,
                             from: vec![TableWithJoins {
                                 relation: table_from_name(ObjectName::from(vec![
@@ -11522,6 +11540,7 @@ fn parse_unload() {
                     top: None,
                     top_before_distinct: false,
                     projection: vec![UnnamedExpr(Expr::Identifier(Ident::new("cola"))),],
+                    exclude: None,
                     into: None,
                     from: vec![TableWithJoins {
                         relation: table_from_name(ObjectName::from(vec![Ident::new("tab")])),
@@ -11722,6 +11741,7 @@ fn parse_connect_by() {
             SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("manager_id"))),
             SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("title"))),
         ],
+        exclude: None,
         from: vec![TableWithJoins {
             relation: table_from_name(ObjectName::from(vec![Ident::new("employees")])),
             joins: vec![],
@@ -11803,6 +11823,7 @@ fn parse_connect_by() {
                 SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("manager_id"))),
                 SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("title"))),
             ],
+            exclude: None,
             from: vec![TableWithJoins {
                 relation: table_from_name(ObjectName::from(vec![Ident::new("employees")])),
                 joins: vec![],
@@ -12736,6 +12757,7 @@ fn test_extract_seconds_ok() {
                     format: None,
                 }),
             })],
+            exclude: None,
             into: None,
             from: vec![],
             lateral_views: vec![],
@@ -14808,6 +14830,7 @@ fn test_select_from_first() {
                 distinct: None,
                 top: None,
                 projection,
+                exclude: None,
                 top_before_distinct: false,
                 into: None,
                 from: vec![TableWithJoins {
@@ -16011,6 +16034,128 @@ fn test_not_null_precedence() {
             ..
         }
     );
+}
+
+#[test]
+fn test_select_exclude() {
+    let dialects = all_dialects_where(|d| d.supports_select_wildcard_exclude());
+    match &dialects
+        .verified_only_select("SELECT * EXCLUDE c1 FROM test")
+        .projection[0]
+    {
+        SelectItem::Wildcard(WildcardAdditionalOptions { opt_exclude, .. }) => {
+            assert_eq!(
+                *opt_exclude,
+                Some(ExcludeSelectItem::Single(Ident::new("c1")))
+            );
+        }
+        _ => unreachable!(),
+    }
+    match &dialects
+        .verified_only_select("SELECT * EXCLUDE (c1, c2) FROM test")
+        .projection[0]
+    {
+        SelectItem::Wildcard(WildcardAdditionalOptions { opt_exclude, .. }) => {
+            assert_eq!(
+                *opt_exclude,
+                Some(ExcludeSelectItem::Multiple(vec![
+                    Ident::new("c1"),
+                    Ident::new("c2")
+                ]))
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = dialects.verified_only_select("SELECT * EXCLUDE c1, c2 FROM test");
+    match &select.projection[0] {
+        SelectItem::Wildcard(WildcardAdditionalOptions { opt_exclude, .. }) => {
+            assert_eq!(
+                *opt_exclude,
+                Some(ExcludeSelectItem::Single(Ident::new("c1")))
+            );
+        }
+        _ => unreachable!(),
+    }
+    match &select.projection[1] {
+        SelectItem::UnnamedExpr(Expr::Identifier(ident)) => {
+            assert_eq!(*ident, Ident::new("c2"));
+        }
+        _ => unreachable!(),
+    }
+
+    let dialects = all_dialects_where(|d| d.supports_select_exclude());
+    let select = dialects.verified_only_select("SELECT *, c1 EXCLUDE c1 FROM test");
+    match &select.projection[0] {
+        SelectItem::Wildcard(additional_options) => {
+            assert_eq!(*additional_options, WildcardAdditionalOptions::default());
+        }
+        _ => unreachable!(),
+    }
+    assert_eq!(
+        select.exclude,
+        Some(ExcludeSelectItem::Single(Ident::new("c1")))
+    );
+
+    let dialects = all_dialects_where(|d| {
+        d.supports_select_wildcard_exclude() && !d.supports_select_exclude()
+    });
+    let select = dialects.verified_only_select("SELECT * EXCLUDE c1 FROM test");
+    match &select.projection[0] {
+        SelectItem::Wildcard(WildcardAdditionalOptions { opt_exclude, .. }) => {
+            assert_eq!(
+                *opt_exclude,
+                Some(ExcludeSelectItem::Single(Ident::new("c1")))
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // Dialects that only support the wildcard form and do not accept EXCLUDE as an implicity alias
+    // will fail when encountered with the `c2` ident
+    let dialects = all_dialects_where(|d| {
+        d.supports_select_wildcard_exclude()
+            && !d.supports_select_exclude()
+            && d.is_column_alias(&Keyword::EXCLUDE, &mut Parser::new(d))
+    });
+    assert_eq!(
+        dialects
+            .parse_sql_statements("SELECT *, c1 EXCLUDE c2 FROM test")
+            .err()
+            .unwrap(),
+        ParserError::ParserError("Expected: end of statement, found: c2".to_string())
+    );
+
+    // Dialects that only support the wildcard form and accept EXCLUDE as an implicity alias
+    // will fail when encountered with the `EXCLUDE` keyword
+    let dialects = all_dialects_where(|d| {
+        d.supports_select_wildcard_exclude()
+            && !d.supports_select_exclude()
+            && !d.is_column_alias(&Keyword::EXCLUDE, &mut Parser::new(d))
+    });
+    assert_eq!(
+        dialects
+            .parse_sql_statements("SELECT *, c1 EXCLUDE c2 FROM test")
+            .err()
+            .unwrap(),
+        ParserError::ParserError("Expected: end of statement, found: EXCLUDE".to_string())
+    );
+}
+
+#[test]
+fn test_no_semicolon_required_between_statements() {
+    let sql = r#"
+SELECT * FROM tbl1
+SELECT * FROM tbl2
+    "#;
+
+    let dialects = all_dialects_with_options(ParserOptions {
+        trailing_commas: false,
+        unescape: true,
+        require_semicolon_stmt_delimiter: false,
+    });
+    let stmts = dialects.parse_sql_statements(sql).unwrap();
+    assert_eq!(stmts.len(), 2);
+    assert!(stmts.iter().all(|s| matches!(s, Statement::Query { .. })));
 }
 
 #[test]

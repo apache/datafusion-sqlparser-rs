@@ -219,9 +219,14 @@ impl From<bool> for MatchedTrailingBracket {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParserOptions {
     pub trailing_commas: bool,
+    
     /// Controls how literal values are unescaped. See
     /// [`Tokenizer::with_unescape`] for more details.
     pub unescape: bool,
+    
+    /// Controls if the parser expects a semi-colon token
+    /// between statements.
+    pub require_semicolon_stmt_delimiter: bool,
 }
 
 impl Default for ParserOptions {
@@ -229,6 +234,7 @@ impl Default for ParserOptions {
         Self {
             trailing_commas: false,
             unescape: true,
+            require_semicolon_stmt_delimiter: true,
         }
     }
 }
@@ -464,6 +470,10 @@ impl<'a> Parser<'a> {
         loop {
             // ignore empty statements (between successive statement delimiters)
             while self.consume_token(&Token::SemiColon) {
+                expecting_statement_delimiter = false;
+            }
+
+            if !self.options.require_semicolon_stmt_delimiter {
                 expecting_statement_delimiter = false;
             }
 

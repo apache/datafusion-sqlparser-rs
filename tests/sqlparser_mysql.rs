@@ -1442,6 +1442,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
             ParserOptions {
                 trailing_commas: false,
                 unescape: false,
+                require_semicolon_stmt_delimiter: true,
             }
         )
         .verified_stmt(sql),

@@ -4059,6 +4059,12 @@ pub enum Statement {
         immediate: bool,
         into: Vec<Ident>,
         using: Vec<ExprWithAlias>,
+        /// Whether the last parameter is the return value of the procedure
+        /// MSSQL: <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/execute-transact-sql?view=sql-server-ver17#output>
+        output: bool,
+        /// Whether to invoke the procedure with the default parameter values
+        /// MSSQL: <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/execute-transact-sql?view=sql-server-ver17#default>
+        default: bool,
     },
     /// ```sql
     /// PREPARE name [ ( data_type [, ...] ) ] AS statement
@@ -5815,6 +5821,8 @@ impl fmt::Display for Statement {
                 immediate,
                 into,
                 using,
+                output,
+                default,
             } => {
                 let (open, close) = if *has_parentheses {
                     ("(", ")")
@@ -5835,6 +5843,12 @@ impl fmt::Display for Statement {
                 if !using.is_empty() {
                     write!(f, " USING {}", display_comma_separated(using))?;
                 };
+                if *output {
+                    write!(f, " OUTPUT")?;
+                }
+                if *default {
+                    write!(f, " DEFAULT")?;
+                }
                 Ok(())
             }
             Statement::Prepare {

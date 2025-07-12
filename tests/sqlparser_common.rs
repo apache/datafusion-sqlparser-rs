@@ -11406,6 +11406,8 @@ fn parse_execute_stored_procedure() {
         immediate: false,
         using: vec![],
         into: vec![],
+        output: false,
+        default: false,
     };
     assert_eq!(
         // Microsoft SQL Server does not use parentheses around arguments for EXECUTE
@@ -11420,6 +11422,18 @@ fn parse_execute_stored_procedure() {
         ),
         expected
     );
+    match ms_and_generic().verified_stmt("EXECUTE dbo.proc1 @ReturnVal = @X OUTPUT") {
+        Statement::Execute { output, .. } => {
+            assert!(output);
+        }
+        _ => unreachable!(),
+    }
+    match ms_and_generic().verified_stmt("EXECUTE dbo.proc1 DEFAULT") {
+        Statement::Execute { default, .. } => {
+            assert!(default);
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]
@@ -11438,6 +11452,8 @@ fn parse_execute_immediate() {
         into: vec![Ident::new("a")],
         name: None,
         has_parentheses: false,
+        output: false,
+        default: false,
     };
 
     let stmt = dialects.verified_stmt("EXECUTE IMMEDIATE 'SELECT 1' INTO a USING 1 AS b");

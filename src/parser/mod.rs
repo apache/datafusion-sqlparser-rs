@@ -15734,10 +15734,11 @@ impl<'a> Parser<'a> {
 
         let has_parentheses = self.consume_token(&Token::LParen);
 
+        let end_kws = &[Keyword::USING, Keyword::OUTPUT, Keyword::DEFAULT];
         let end_token = match (has_parentheses, self.peek_token().token) {
             (true, _) => Token::RParen,
             (false, Token::EOF) => Token::EOF,
-            (false, Token::Word(w)) if w.keyword == Keyword::USING => Token::Word(w),
+            (false, Token::Word(w)) if end_kws.contains(&w.keyword) => Token::Word(w),
             (false, _) => Token::SemiColon,
         };
 
@@ -15759,6 +15760,10 @@ impl<'a> Parser<'a> {
             vec![]
         };
 
+        let output = self.parse_keyword(Keyword::OUTPUT);
+
+        let default = self.parse_keyword(Keyword::DEFAULT);
+
         Ok(Statement::Execute {
             immediate: name.is_none(),
             name,
@@ -15766,6 +15771,8 @@ impl<'a> Parser<'a> {
             has_parentheses,
             into,
             using,
+            output,
+            default,
         })
     }
 

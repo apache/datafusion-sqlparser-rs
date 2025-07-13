@@ -3586,6 +3586,11 @@ fn test_sql_keywords_as_table_aliases() {
             .parse_sql_statements(&format!("SELECT * FROM tbl {kw}"))
             .is_err());
     }
+
+    // LIMIT as alias and not as alias
+    snowflake().one_statement_parses_to("SELECT * FROM tbl LIMIT", "SELECT * FROM tbl AS LIMIT");
+    snowflake().verified_stmt("SELECT * FROM tbl LIMIT 1");
+    snowflake().verified_stmt("SELECT * FROM tbl LIMIT $1");
 }
 
 #[test]

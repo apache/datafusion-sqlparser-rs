@@ -351,8 +351,7 @@ impl Dialect for SnowflakeDialect {
         match kw {
             // The following keywords can be considered an alias as long as
             // they are not followed by other tokens that may change their meaning
-            Keyword::LIMIT
-            | Keyword::RETURNING
+            Keyword::RETURNING
             | Keyword::INNER
             | Keyword::USING
             | Keyword::PIVOT
@@ -365,6 +364,18 @@ impl Dialect for SnowflakeDialect {
                 false
             }
 
+            // `LIMIT` can be considered an alias as long as it's not followed by a value. For example:
+            // `SELECT * FROM tbl LIMIT WHERE 1=1` - alias
+            // `SELECT * FROM tbl LIMIT 3` - not an alias
+            Keyword::LIMIT
+                if matches!(
+                    parser.peek_token().token,
+                    Token::Number(_, _) | Token::Placeholder(_)
+                ) =>
+            {
+                false
+            }
+
             // `FETCH` can be considered an alias as long as it's not followed by `FIRST`` or `NEXT`
             // which would give it a different meanings, for example:
             // `SELECT * FROM tbl FETCH FIRST 10 ROWS` - not an alias
@@ -373,7 +384,10 @@ impl Dialect for SnowflakeDialect {
                 if parser
                     .peek_one_of_keywords(&[Keyword::FIRST, Keyword::NEXT])
                     .is_some()
-                    || matches!(parser.peek_token().token, Token::Number(_, _)) =>
+                    || matches!(
+                        parser.peek_token().token,
+                        Token::Number(_, _) | Token::Placeholder(_)
+                    ) =>
             {
                 false
             }
@@ -387,6 +401,7 @@ impl Dialect for SnowflakeDialect {
             {
                 false
             }
+
             Keyword::GLOBAL if parser.peek_keyword(Keyword::FULL) => false,
 
             // Reserved keywords by the Snowflake dialect, which seem to be less strictive

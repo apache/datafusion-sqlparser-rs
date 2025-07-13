@@ -72,7 +72,9 @@ impl Dialect for PostgreSqlDialect {
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
-        ch.is_alphabetic() || ch.is_ascii_digit() || ch == '$' || ch == '_'  || !ch.is_ascii()
+        ch.is_alphabetic() || ch.is_ascii_digit() || ch == '$' || ch == '_'  ||
+        // PostgreSQL implements Unicode characters in identifiers.
+        !ch.is_ascii()
     }
 
     fn supports_unicode_string_literal(&self) -> bool {

@@ -88,7 +88,7 @@ impl Dialect for RedshiftSqlDialect {
     fn is_identifier_part(&self, ch: char) -> bool {
         // Extends Postgres dialect with sharp and UTF-8 multibyte chars
         // https://docs.aws.amazon.com/redshift/latest/dg/r_names.html
-        PostgreSqlDialect {}.is_identifier_part(ch) || ch == '#' 
+        PostgreSqlDialect {}.is_identifier_part(ch) || ch == '#'
     }
 
     /// redshift has `CONVERT(type, value)` instead of `CONVERT(value, type)`

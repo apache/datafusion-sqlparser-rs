@@ -7761,7 +7761,14 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::NULL) {
             Ok(Some(ColumnOption::Null))
         } else if self.parse_keyword(Keyword::DEFAULT) {
-            Ok(Some(ColumnOption::Default(self.parse_expr()?)))
+            // When parsing the `DEFAULT` expr if it's enclosed in parentheses
+            // then we want to parse using Normal state so `NOT NULL` is allowed
+            if matches!(self.peek_token().token, Token::LParen) {
+                let expr: Expr = self.with_state(ParserState::Normal, |p| Ok(p.parse_prefix()?))?;
+                Ok(Some(ColumnOption::Default(expr)))
+            } else {
+                Ok(Some(ColumnOption::Default(self.parse_expr()?)))
+            }
         } else if dialect_of!(self is ClickHouseDialect| GenericDialect)
             && self.parse_keyword(Keyword::MATERIALIZED)
         {
@@ -17267,5 +17274,12 @@ mod tests {
         let sql = r#"REPLACE"#;
 
         assert!(Parser::parse_sql(&MySqlDialect {}, sql).is_err());
+    }
+
+    #[test]
+    fn test_parse_not_null_in_column_default() {
+        let canonical = "CREATE TABLE foo (abc INT DEFAULT (42 IS NOT NULL) NOT NULL)";
+        all_dialects().verified_stmt(canonical);
+        all_dialects().one_statement_parses_to("CREATE TABLE foo (abc INT DEFAULT (42 NOT NULL) NOT NULL)", canonical);
     }
 }

@@ -16136,3 +16136,14 @@ SELECT * FROM tbl2
     assert_eq!(stmts.len(), 2);
     assert!(stmts.iter().all(|s| matches!(s, Statement::Query { .. })));
 }
+
+#[test]
+fn test_identifier_unicode_support() {
+    let sql = r#"SELECT phoneǤЖשचᎯ⻩☯♜🦄⚛🀄ᚠ⌛🌀 AS tbl FROM customers"#;
+    let dialects = TestedDialects::new(vec![
+        Box::new(MySqlDialect {}),
+        Box::new(RedshiftSqlDialect {}),
+        Box::new(PostgreSqlDialect {}),
+    ]);
+    let _ = dialects.verified_stmt(sql);
+}

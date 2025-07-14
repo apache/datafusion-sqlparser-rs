@@ -51,7 +51,9 @@ impl Dialect for MySqlDialect {
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
-        self.is_identifier_start(ch) || ch.is_ascii_digit()
+        self.is_identifier_start(ch) || ch.is_ascii_digit() ||
+        // MySQL implements Unicode characters in identifiers.
+        !ch.is_ascii()
     }
 
     fn is_delimited_identifier_start(&self, ch: char) -> bool {

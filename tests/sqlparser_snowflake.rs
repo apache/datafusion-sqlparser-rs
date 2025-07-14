@@ -3607,6 +3607,18 @@ fn test_sql_keywords_as_table_aliases() {
 }
 
 #[test]
+fn test_sql_keywords_as_table_factor() {
+    // LIMIT is a table factor, Snowflake does not reserve it
+    snowflake().one_statement_parses_to("SELECT * FROM tbl, LIMIT", "SELECT * FROM tbl, LIMIT");
+    // LIMIT is not a table factor
+    snowflake().one_statement_parses_to("SELECT * FROM tbl, LIMIT 1", "SELECT * FROM tbl LIMIT 1");
+    // ORDER is reserved
+    assert!(snowflake()
+        .parse_sql_statements("SELECT * FROM tbl, order")
+        .is_err());
+}
+
+#[test]
 fn test_timetravel_at_before() {
     snowflake().verified_only_select("SELECT * FROM tbl AT(TIMESTAMP => '2024-12-15 00:00:00')");
     snowflake()
@@ -4503,4 +4515,17 @@ fn test_snowflake_identifier_function() {
 
     snowflake().verified_stmt("GRANT ROLE IDENTIFIER('AAA') TO USER IDENTIFIER('AAA')");
     snowflake().verified_stmt("REVOKE ROLE IDENTIFIER('AAA') FROM USER IDENTIFIER('AAA')");
+}
+
+#[test]
+fn test_x() {
+    println!(
+        "{:#?}",
+        snowflake()
+            .parse_sql_statements(
+                r#"
+SELECT email from customers, order by 1"#
+            )
+            .unwrap()
+    );
 }

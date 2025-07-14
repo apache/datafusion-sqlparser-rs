@@ -963,12 +963,6 @@ pub trait Dialect: Debug + Any {
         keywords::RESERVED_FOR_IDENTIFIER.contains(&kw)
     }
 
-    /// Returns reserved keywords when looking to parse a `TableFactor`.
-    /// See [Self::supports_from_trailing_commas]
-    fn get_reserved_keywords_for_table_factor(&self) -> &[Keyword] {
-        keywords::RESERVED_FOR_TABLE_FACTOR
-    }
-
     /// Returns reserved keywords that may prefix a select item expression
     /// e.g. `SELECT CONNECT_BY_ROOT name FROM Tbl2` (Snowflake)
     fn get_reserved_keywords_for_select_item_operator(&self) -> &[Keyword] {
@@ -1027,7 +1021,13 @@ pub trait Dialect: Debug + Any {
         explicit || self.is_column_alias(kw, parser)
     }
 
-    /// Returns true if the specified keyword should be parsed as a table identifier.
+    /// Returns true if the specified keyword should be parsed as a table factor identifier.
+    /// See [keywords::RESERVED_FOR_TABLE_FACTOR]
+    fn is_table_factor(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+        !keywords::RESERVED_FOR_TABLE_FACTOR.contains(kw)
+    }
+
+    /// Returns true if the specified keyword should be parsed as a table factor alias.
     /// See [keywords::RESERVED_FOR_TABLE_ALIAS]
     fn is_table_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
         !keywords::RESERVED_FOR_TABLE_ALIAS.contains(kw)

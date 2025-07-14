@@ -1666,7 +1666,9 @@ fn parse_execute() {
             has_parentheses: false,
             using: vec![],
             immediate: false,
-            into: vec![]
+            into: vec![],
+            output: false,
+            default: false,
         }
     );
 
@@ -1682,7 +1684,9 @@ fn parse_execute() {
             has_parentheses: true,
             using: vec![],
             immediate: false,
-            into: vec![]
+            into: vec![],
+            output: false,
+            default: false,
         }
     );
 
@@ -1719,7 +1723,9 @@ fn parse_execute() {
                 },
             ],
             immediate: false,
-            into: vec![]
+            into: vec![],
+            output: false,
+            default: false,
         }
     );
 }

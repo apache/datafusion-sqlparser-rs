@@ -4347,8 +4347,9 @@ fn parse_create_table_as() {
     // BigQuery allows specifying table schema in CTAS
     // ANSI SQL and PostgreSQL let you only specify the list of columns
     // (without data types) in a CTAS, but we have yet to support that.
+    let dialects = all_dialects_where(|d| d.supports_create_table_multi_schema_info_sources());
     let sql = "CREATE TABLE t (a INT, b INT) AS SELECT 1 AS b, 2 AS a";
-    match verified_stmt(sql) {
+    match dialects.verified_stmt(sql) {
         Statement::CreateTable(CreateTable { columns, query, .. }) => {
             assert_eq!(columns.len(), 2);
             assert_eq!(columns[0].to_string(), "a INT".to_string());
@@ -4450,20 +4451,6 @@ fn parse_create_or_replace_table() {
         }) => {
             assert_eq!(name.to_string(), "t".to_string());
             assert!(or_replace);
-        }
-        _ => unreachable!(),
-    }
-
-    let sql = "CREATE TABLE t (a INT, b INT) AS SELECT 1 AS b, 2 AS a";
-    match verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { columns, query, .. }) => {
-            assert_eq!(columns.len(), 2);
-            assert_eq!(columns[0].to_string(), "a INT".to_string());
-            assert_eq!(columns[1].to_string(), "b INT".to_string());
-            assert_eq!(
-                query,
-                Some(Box::new(verified_query("SELECT 1 AS b, 2 AS a")))
-            );
         }
         _ => unreachable!(),
     }
@@ -11406,6 +11393,8 @@ fn parse_execute_stored_procedure() {
         immediate: false,
         using: vec![],
         into: vec![],
+        output: false,
+        default: false,
     };
     assert_eq!(
         // Microsoft SQL Server does not use parentheses around arguments for EXECUTE
@@ -11420,6 +11409,18 @@ fn parse_execute_stored_procedure() {
         ),
         expected
     );
+    match ms_and_generic().verified_stmt("EXECUTE dbo.proc1 @ReturnVal = @X OUTPUT") {
+        Statement::Execute { output, .. } => {
+            assert!(output);
+        }
+        _ => unreachable!(),
+    }
+    match ms_and_generic().verified_stmt("EXECUTE dbo.proc1 DEFAULT") {
+        Statement::Execute { default, .. } => {
+            assert!(default);
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]
@@ -11438,6 +11439,8 @@ fn parse_execute_immediate() {
         into: vec![Ident::new("a")],
         name: None,
         has_parentheses: false,
+        output: false,
+        default: false,
     };
 
     let stmt = dialects.verified_stmt("EXECUTE IMMEDIATE 'SELECT 1' INTO a USING 1 AS b");
@@ -16156,6 +16159,17 @@ SELECT * FROM tbl2
     let stmts = dialects.parse_sql_statements(sql).unwrap();
     assert_eq!(stmts.len(), 2);
     assert!(stmts.iter().all(|s| matches!(s, Statement::Query { .. })));
+}
+
+#[test]
+fn test_identifier_unicode_support() {
+    let sql = r#"SELECT phoneǤЖשचᎯ⻩☯♜🦄⚛🀄ᚠ⌛🌀 AS tbl FROM customers"#;
+    let dialects = TestedDialects::new(vec![
+        Box::new(MySqlDialect {}),
+        Box::new(RedshiftSqlDialect {}),
+        Box::new(PostgreSqlDialect {}),
+    ]);
+    let _ = dialects.verified_stmt(sql);
 }
 
 #[test]

@@ -383,6 +383,26 @@ impl CreateTableBuilder {
         self
     }
 
+    /// Returns true if the statement has exactly one source of info on the schema of the new table.
+    /// This is Snowflake-specific, some dialects allow more than one source.
+    pub(crate) fn validate_schema_info(&self) -> bool {
+        let mut sources = 0;
+        if !self.columns.is_empty() {
+            sources += 1;
+        }
+        if self.query.is_some() {
+            sources += 1;
+        }
+        if self.like.is_some() {
+            sources += 1;
+        }
+        if self.clone.is_some() {
+            sources += 1;
+        }
+
+        sources == 1
+    }
+
     pub fn build(self) -> Statement {
         Statement::CreateTable(CreateTable {
             or_replace: self.or_replace,

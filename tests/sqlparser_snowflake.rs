@@ -4450,16 +4450,3 @@ fn test_snowflake_identifier_function() {
         true
     );
 }
-
-#[test]
-fn test_x() {
-    println!(
-        "{:#?}",
-        snowflake()
-            .parse_sql_statements(
-                r#"
-SELECT email from customers, order by 1"#
-            )
-            .unwrap()
-    );
-}

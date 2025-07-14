@@ -7746,6 +7746,18 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_optional_column_option_inner(&mut self) -> Result<Option<ColumnOption>, ParserError> {
+        /// In some cases, we need to revert to [ParserState::Normal] when parsing nested expressions
+        /// In those cases we use the following macro to parse instead of calling [parse_expr] directly.
+        macro_rules! parse_expr_normal {
+            ($option:expr) => {
+                if matches!(self.peek_token().token, Token::LParen) {
+                    let expr: Expr = self.with_state(ParserState::Normal, |p| p.parse_prefix())?;
+                    Ok(Some($option(expr)))
+                } else {
+                    Ok(Some($option(self.parse_expr()?)))
+                }
+            };
+        }
         if self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET]) {
             Ok(Some(ColumnOption::CharacterSet(
                 self.parse_object_name(false)?,
@@ -7761,18 +7773,11 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::NULL) {
             Ok(Some(ColumnOption::Null))
         } else if self.parse_keyword(Keyword::DEFAULT) {
-            // When parsing the `DEFAULT` expr if it's enclosed in parentheses
-            // then we want to parse using Normal state so `NOT NULL` is allowed
-            if matches!(self.peek_token().token, Token::LParen) {
-                let expr: Expr = self.with_state(ParserState::Normal, |p| Ok(p.parse_prefix()?))?;
-                Ok(Some(ColumnOption::Default(expr)))
-            } else {
-                Ok(Some(ColumnOption::Default(self.parse_expr()?)))
-            }
+            parse_expr_normal!(ColumnOption::Default)
         } else if dialect_of!(self is ClickHouseDialect| GenericDialect)
             && self.parse_keyword(Keyword::MATERIALIZED)
         {
-            Ok(Some(ColumnOption::Materialized(self.parse_expr()?)))
+            parse_expr_normal!(ColumnOption::Materialized)
         } else if dialect_of!(self is ClickHouseDialect| GenericDialect)
             && self.parse_keyword(Keyword::ALIAS)
         {
@@ -7828,7 +7833,8 @@ impl<'a> Parser<'a> {
             }))
         } else if self.parse_keyword(Keyword::CHECK) {
             self.expect_token(&Token::LParen)?;
-            let expr = self.parse_expr()?;
+            // since `CHECK` requires parentheses, we can parse the inner expression in ParserState::Normal
+            let expr: Expr = self.with_state(ParserState::Normal, |p| p.parse_expr())?;
             self.expect_token(&Token::RParen)?;
             Ok(Some(ColumnOption::Check(expr)))
         } else if self.parse_keyword(Keyword::AUTO_INCREMENT)
@@ -17277,9 +17283,13 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_not_null_in_column_default() {
-        let canonical = "CREATE TABLE foo (abc INT DEFAULT (42 IS NOT NULL) NOT NULL)";
+    fn test_parse_not_null_in_column_options() {
+        let canonical =
+            "CREATE TABLE foo (abc INT DEFAULT (42 IS NOT NULL) NOT NULL, CHECK (abc IS NOT NULL))";
         all_dialects().verified_stmt(canonical);
-        all_dialects().one_statement_parses_to("CREATE TABLE foo (abc INT DEFAULT (42 NOT NULL) NOT NULL)", canonical);
+        all_dialects().one_statement_parses_to(
+            "CREATE TABLE foo (abc INT DEFAULT (42 NOT NULL) NOT NULL, CHECK (abc NOT NULL) )",
+            canonical,
+        );
     }
 }

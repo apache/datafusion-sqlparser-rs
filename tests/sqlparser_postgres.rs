@@ -2180,8 +2180,8 @@ fn parse_pg_regex_match_ops() {
         ("!~*", BinaryOperator::PGRegexNotIMatch),
     ];
 
+    // Match against a single value
     for (str_op, op) in pg_regex_match_ops {
-        // Basic binary operator usage
         let select = pg().verified_only_select(&format!("SELECT 'abc' {str_op} '^a'"));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::BinaryOp {
@@ -2191,8 +2191,10 @@ fn parse_pg_regex_match_ops() {
             }),
             select.projection[0]
         );
+    }
 
-        // Binary operator with ANY operator
+    // Match against any value from an array
+    for (str_op, op) in pg_regex_match_ops {
         let select =
             pg().verified_only_select(&format!("SELECT 'abc' {str_op} ANY(ARRAY['^a', 'x'])"));
         assert_eq!(
@@ -2222,8 +2224,8 @@ fn parse_pg_like_match_ops() {
         ("!~~*", BinaryOperator::PGNotILikeMatch),
     ];
 
+    // Match against a single value
     for (str_op, op) in pg_like_match_ops {
-        // Basic binary operator usage
         let select = pg().verified_only_select(&format!("SELECT 'abc' {str_op} 'a_c%'"));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::BinaryOp {
@@ -2233,8 +2235,10 @@ fn parse_pg_like_match_ops() {
             }),
             select.projection[0]
         );
+    }
 
-        // Binary operator with ALL operator
+    // Match against all values from an array
+    for (str_op, op) in pg_like_match_ops {
         let select =
             pg().verified_only_select(&format!("SELECT 'abc' {str_op} ALL(ARRAY['a_c%'])"));
         assert_eq!(

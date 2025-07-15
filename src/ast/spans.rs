@@ -1201,6 +1201,9 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::Lock { .. } => Span::empty(),
             AlterTableOperation::ReplicaIdentity { .. } => Span::empty(),
             AlterTableOperation::ValidateConstraint { name } => name.span,
+            AlterTableOperation::SetStorageParameters { storage_parameters } => {
+                union_spans(storage_parameters.iter().map(|i| i.span()))
+            }
         }
     }
 }

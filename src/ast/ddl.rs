@@ -351,6 +351,10 @@ pub enum AlterTableOperation {
     ValidateConstraint {
         name: Ident,
     },
+    /// `SET ( storage_parameter [= value] [, ... ] )`
+    SetStorageParameters {
+        storage_parameters: Vec<SqlOption>,
+    },
 }
 
 /// An `ALTER Policy` (`Statement::AlterPolicy`) operation
@@ -790,6 +794,9 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::ValidateConstraint { name } => {
                 write!(f, "VALIDATE CONSTRAINT {name}")
+            }
+            AlterTableOperation::SetStorageParameters { storage_parameters } => {
+                write!(f, "SET ({})", display_comma_separated(storage_parameters))
             }
         }
     }

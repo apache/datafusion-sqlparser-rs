@@ -8938,16 +8938,17 @@ impl<'a> Parser<'a> {
             let name = self.parse_identifier()?;
             AlterTableOperation::ValidateConstraint { name }
         } else {
-            let maybe_options = self.maybe_parse_options(Keyword::SET)?;
-            if let Some(options) = maybe_options {
-                AlterTableOperation::SetStorageParameters {
-                    storage_parameters: options,
+            let mut options =
+                self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;
+            if !options.is_empty() {
+                AlterTableOperation::SetTblProperties {
+                    table_properties: options,
                 }
             } else {
-                let options: Vec<SqlOption> = self.parse_options(Keyword::TBLPROPERTIES)?;
+                options = self.parse_options(Keyword::SET)?;
                 if !options.is_empty() {
-                    AlterTableOperation::SetTblProperties {
-                        table_properties: options,
+                    AlterTableOperation::SetStorageParameters {
+                        storage_parameters: options,
                     }
                 } else {
                     return self.expected(

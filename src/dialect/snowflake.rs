@@ -301,9 +301,8 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
-    fn is_select_item_alias(&self, explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
-        explicit
-            || match kw {
+    fn is_column_alias(&self, kw: &Keyword, parser: &mut Parser) -> bool {
+        match kw {
             // The following keywords can be considered an alias as long as 
             // they are not followed by other tokens that may change their meaning
             // e.g. `SELECT * EXCEPT (col1) FROM tbl`
@@ -362,6 +361,10 @@ impl Dialect for SnowflakeDialect {
     }
 
     fn supports_space_separated_column_options(&self) -> bool {
+        true
+    }
+
+    fn supports_comma_separated_drop_column_list(&self) -> bool {
         true
     }
 }

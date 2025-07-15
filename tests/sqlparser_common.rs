@@ -4996,15 +4996,18 @@ fn parse_alter_table_drop_column() {
         "ALTER TABLE tab DROP is_active CASCADE",
     );
 
+    let dialects = all_dialects_where(|d| d.supports_comma_separated_drop_column_list());
+    dialects.verified_stmt("ALTER TABLE tbl DROP COLUMN c1, c2, c3");
+
     fn check_one(constraint_text: &str) {
         match alter_table_op(verified_stmt(&format!("ALTER TABLE tab {constraint_text}"))) {
             AlterTableOperation::DropColumn {
                 has_column_keyword: true,
-                column_name,
+                column_names,
                 if_exists,
                 drop_behavior,
             } => {
-                assert_eq!("is_active", column_name.to_string());
+                assert_eq!("is_active", column_names.first().unwrap().to_string());
                 assert!(if_exists);
                 match drop_behavior {
                     None => assert!(constraint_text.ends_with(" is_active")),
@@ -9431,6 +9434,9 @@ fn parse_grant() {
     verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO APPLICATION role1");
     verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO APPLICATION ROLE role1");
     verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO SHARE share1");
+    verified_stmt("GRANT SELECT ON ALL VIEWS IN SCHEMA db1.sc1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON ALL MATERIALIZED VIEWS IN SCHEMA db1.sc1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON ALL EXTERNAL TABLES IN SCHEMA db1.sc1 TO ROLE role1");
     verified_stmt("GRANT USAGE ON SCHEMA sc1 TO a:b");
     verified_stmt("GRANT USAGE ON SCHEMA sc1 TO GROUP group1");
     verified_stmt("GRANT OWNERSHIP ON ALL TABLES IN SCHEMA DEV_STAS_ROGOZHIN TO ROLE ANALYST");
@@ -9444,7 +9450,10 @@ fn parse_grant() {
         .verified_stmt("GRANT SELECT ON [my_table] TO [public]");
     verified_stmt("GRANT SELECT ON FUTURE SCHEMAS IN DATABASE db1 TO ROLE role1");
     verified_stmt("GRANT SELECT ON FUTURE TABLES IN SCHEMA db1.sc1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON FUTURE EXTERNAL TABLES IN SCHEMA db1.sc1 TO ROLE role1");
     verified_stmt("GRANT SELECT ON FUTURE VIEWS IN SCHEMA db1.sc1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON FUTURE MATERIALIZED VIEWS IN SCHEMA db1.sc1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON FUTURE SEQUENCES IN SCHEMA db1.sc1 TO ROLE role1");
 }
 
 #[test]
@@ -11181,7 +11190,7 @@ fn parse_trailing_comma() {
     trailing_commas.verified_stmt(r#"SELECT "from" FROM "from""#);
 
     // doesn't allow any trailing commas
-    let trailing_commas = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+    let trailing_commas = TestedDialects::new(vec![Box::new(PostgreSqlDialect {})]);
 
     assert_eq!(
         trailing_commas

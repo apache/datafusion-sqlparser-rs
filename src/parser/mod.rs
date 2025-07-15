@@ -8683,11 +8683,15 @@ impl<'a> Parser<'a> {
             } else {
                 let has_column_keyword = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
                 let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-                let column_name = self.parse_identifier()?;
+                let column_names = if self.dialect.supports_comma_separated_drop_column_list() {
+                    self.parse_comma_separated(Parser::parse_identifier)?
+                } else {
+                    vec![self.parse_identifier()?]
+                };
                 let drop_behavior = self.parse_optional_drop_behavior();
                 AlterTableOperation::DropColumn {
                     has_column_keyword,
-                    column_name,
+                    column_names,
                     if_exists,
                     drop_behavior,
                 }
@@ -13906,6 +13910,35 @@ impl<'a> Parser<'a> {
                     schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
                 })
             } else if self.parse_keywords(&[
+                Keyword::ALL,
+                Keyword::EXTERNAL,
+                Keyword::TABLES,
+                Keyword::IN,
+                Keyword::SCHEMA,
+            ]) {
+                Some(GrantObjects::AllExternalTablesInSchema {
+                    schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                })
+            } else if self.parse_keywords(&[
+                Keyword::ALL,
+                Keyword::VIEWS,
+                Keyword::IN,
+                Keyword::SCHEMA,
+            ]) {
+                Some(GrantObjects::AllViewsInSchema {
+                    schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                })
+            } else if self.parse_keywords(&[
+                Keyword::ALL,
+                Keyword::MATERIALIZED,
+                Keyword::VIEWS,
+                Keyword::IN,
+                Keyword::SCHEMA,
+            ]) {
+                Some(GrantObjects::AllMaterializedViewsInSchema {
+                    schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                })
+            } else if self.parse_keywords(&[
                 Keyword::FUTURE,
                 Keyword::SCHEMAS,
                 Keyword::IN,
@@ -13925,11 +13958,31 @@ impl<'a> Parser<'a> {
                 })
             } else if self.parse_keywords(&[
                 Keyword::FUTURE,
+                Keyword::EXTERNAL,
+                Keyword::TABLES,
+                Keyword::IN,
+                Keyword::SCHEMA,
+            ]) {
+                Some(GrantObjects::FutureExternalTablesInSchema {
+                    schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                })
+            } else if self.parse_keywords(&[
+                Keyword::FUTURE,
                 Keyword::VIEWS,
                 Keyword::IN,
                 Keyword::SCHEMA,
             ]) {
                 Some(GrantObjects::FutureViewsInSchema {
+                    schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                })
+            } else if self.parse_keywords(&[
+                Keyword::FUTURE,
+                Keyword::MATERIALIZED,
+                Keyword::VIEWS,
+                Keyword::IN,
+                Keyword::SCHEMA,
+            ]) {
+                Some(GrantObjects::FutureMaterializedViewsInSchema {
                     schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
                 })
             } else if self.parse_keywords(&[
@@ -13939,6 +13992,15 @@ impl<'a> Parser<'a> {
                 Keyword::SCHEMA,
             ]) {
                 Some(GrantObjects::AllSequencesInSchema {
+                    schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                })
+            } else if self.parse_keywords(&[
+                Keyword::FUTURE,
+                Keyword::SEQUENCES,
+                Keyword::IN,
+                Keyword::SCHEMA,
+            ]) {
+                Some(GrantObjects::FutureSequencesInSchema {
                     schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
                 })
             } else if self.parse_keywords(&[Keyword::RESOURCE, Keyword::MONITOR]) {
@@ -16199,9 +16261,9 @@ impl<'a> Parser<'a> {
 
     fn parse_parenthesized_identifiers(&mut self) -> Result<Vec<Ident>, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let partitions = self.parse_comma_separated(|p| p.parse_identifier())?;
+        let idents = self.parse_comma_separated0(|p| p.parse_identifier(), Token::RParen)?;
         self.expect_token(&Token::RParen)?;
-        Ok(partitions)
+        Ok(idents)
     }
 
     fn parse_column_position(&mut self) -> Result<Option<MySQLColumnPosition>, ParserError> {

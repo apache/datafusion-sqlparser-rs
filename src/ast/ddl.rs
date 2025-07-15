@@ -140,10 +140,10 @@ pub enum AlterTableOperation {
         name: Ident,
         drop_behavior: Option<DropBehavior>,
     },
-    /// `DROP [ COLUMN ] [ IF EXISTS ] <column_name> [ CASCADE ]`
+    /// `DROP [ COLUMN ] [ IF EXISTS ] <column_name> [ , <column_name>, ... ] [ CASCADE ]`
     DropColumn {
         has_column_keyword: bool,
-        column_name: Ident,
+        column_names: Vec<Ident>,
         if_exists: bool,
         drop_behavior: Option<DropBehavior>,
     },
@@ -631,7 +631,7 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::DropIndex { name } => write!(f, "DROP INDEX {name}"),
             AlterTableOperation::DropColumn {
                 has_column_keyword,
-                column_name,
+                column_names: column_name,
                 if_exists,
                 drop_behavior,
             } => write!(
@@ -639,7 +639,7 @@ impl fmt::Display for AlterTableOperation {
                 "DROP {}{}{}{}",
                 if *has_column_keyword { "COLUMN " } else { "" },
                 if *if_exists { "IF EXISTS " } else { "" },
-                column_name,
+                display_comma_separated(column_name),
                 match drop_behavior {
                     None => "",
                     Some(DropBehavior::Restrict) => " RESTRICT",

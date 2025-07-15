@@ -4374,9 +4374,9 @@ fn test_snowflake_identifier_function() {
 
     // Using IDENTIFIER to reference a database
     match snowflake().verified_stmt("CREATE DATABASE IDENTIFIER('tbl')") {
-        Statement::CreateSnowflakeDatabase(CreateSnowflakeDatabase { name, .. }) => {
+        Statement::CreateDatabase { db_name, .. } => {
             assert_eq!(
-                name,
+                db_name,
                 ObjectName(vec![ObjectNamePart::Function(ObjectNamePartFunction {
                     name: Ident::new("IDENTIFIER"),
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
@@ -4440,22 +4440,14 @@ fn test_snowflake_identifier_function() {
 }
 
 #[test]
-fn test_create_database_basic() {
+fn test_create_database() {
     snowflake().verified_stmt("CREATE DATABASE my_db");
     snowflake().verified_stmt("CREATE OR REPLACE DATABASE my_db");
     snowflake().verified_stmt("CREATE TRANSIENT DATABASE IF NOT EXISTS my_db");
-}
-
-#[test]
-fn test_create_database_clone() {
     snowflake().verified_stmt("CREATE DATABASE my_db CLONE src_db");
     snowflake().verified_stmt(
         "CREATE OR REPLACE DATABASE my_db CLONE src_db DATA_RETENTION_TIME_IN_DAYS = 1",
     );
-}
-
-#[test]
-fn test_create_database_with_all_options() {
     snowflake().one_statement_parses_to(
         r#"
         CREATE OR REPLACE TRANSIENT DATABASE IF NOT EXISTS my_db
@@ -4469,6 +4461,7 @@ fn test_create_database_with_all_options() {
         STORAGE_SERIALIZATION_POLICY = COMPATIBLE
         COMMENT = 'This is my database'
         CATALOG_SYNC = 'sync_integration'
+        CATALOG_SYNC_NAMESPACE_MODE = NEST
         CATALOG_SYNC_NAMESPACE_FLATTEN_DELIMITER = '/'
         WITH TAG (env = 'prod', team = 'data')
         WITH CONTACT (owner = 'admin', dpo = 'compliance')
@@ -4478,14 +4471,12 @@ fn test_create_database_with_all_options() {
         EXTERNAL_VOLUME = 'volume1' CATALOG = 'my_catalog' \
         REPLACE_INVALID_CHARACTERS = TRUE DEFAULT_DDL_COLLATION = 'en-ci' \
         STORAGE_SERIALIZATION_POLICY = COMPATIBLE COMMENT = 'This is my database' \
-        CATALOG_SYNC = 'sync_integration' CATALOG_SYNC_NAMESPACE_FLATTEN_DELIMITER = '/' \
+        CATALOG_SYNC = 'sync_integration' CATALOG_SYNC_NAMESPACE_MODE = NEST \
+        CATALOG_SYNC_NAMESPACE_FLATTEN_DELIMITER = '/' \
         WITH TAG (env='prod', team='data') \
         WITH CONTACT (owner = admin, dpo = compliance)",
     );
-}
 
-#[test]
-fn test_create_database_errors() {
     let err = snowflake()
         .parse_sql_statements("CREATE DATABASE")
         .unwrap_err()

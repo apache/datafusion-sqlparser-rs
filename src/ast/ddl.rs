@@ -30,11 +30,11 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
-    display_comma_separated, display_separated, ArgMode, CatalogSyncNamespaceMode, CommentDef,
-    ContactEntry, CreateFunctionBody, CreateFunctionUsing, DataType, Expr, FunctionBehavior,
-    FunctionCalledOnNull, FunctionDeterminismSpecifier, FunctionParallel, Ident, IndexColumn,
-    MySQLColumnPosition, ObjectName, OperateFunctionArg, OrderByExpr, ProjectionSelect,
-    SequenceOptions, SqlOption, StorageSerializationPolicy, Tag, Value, ValueWithSpan,
+    display_comma_separated, display_separated, ArgMode, CommentDef, CreateFunctionBody,
+    CreateFunctionUsing, DataType, Expr, FunctionBehavior, FunctionCalledOnNull,
+    FunctionDeterminismSpecifier, FunctionParallel, Ident, IndexColumn, MySQLColumnPosition,
+    ObjectName, OperateFunctionArg, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Tag,
+    Value, ValueWithSpan,
 };
 use crate::keywords::Keyword;
 use crate::tokenizer::Token;
@@ -2519,107 +2519,6 @@ impl fmt::Display for CreateConnector {
                 " WITH DCPROPERTIES({})",
                 display_comma_separated(with_dcproperties)
             )?;
-        }
-
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct CreateSnowflakeDatabase {
-    pub or_replace: bool,
-    pub transient: bool,
-    pub if_not_exists: bool,
-    pub name: ObjectName,
-    pub clone: Option<ObjectName>,
-    pub data_retention_time_in_days: Option<u64>,
-    pub max_data_extension_time_in_days: Option<u64>,
-    pub external_volume: Option<String>,
-    pub catalog: Option<String>,
-    pub replace_invalid_characters: Option<bool>,
-    pub default_ddl_collation: Option<String>,
-    pub storage_serialization_policy: Option<StorageSerializationPolicy>,
-    pub comment: Option<String>,
-    pub catalog_sync: Option<String>,
-    pub catalog_sync_namespace_mode: Option<CatalogSyncNamespaceMode>,
-    pub catalog_sync_namespace_flatten_delimiter: Option<String>,
-    pub with_tags: Option<Vec<Tag>>,
-    pub with_contacts: Option<Vec<ContactEntry>>,
-}
-
-impl fmt::Display for CreateSnowflakeDatabase {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "CREATE {or_replace}{transient}DATABASE {if_not_exists}{name}",
-            or_replace = if self.or_replace { "OR REPLACE " } else { "" },
-            transient = if self.transient { "TRANSIENT " } else { "" },
-            if_not_exists = if self.if_not_exists {
-                "IF NOT EXISTS "
-            } else {
-                ""
-            },
-            name = self.name,
-        )?;
-
-        if let Some(clone) = &self.clone {
-            write!(f, " CLONE {clone}")?;
-        }
-
-        if let Some(value) = self.data_retention_time_in_days {
-            write!(f, " DATA_RETENTION_TIME_IN_DAYS = {value}")?;
-        }
-
-        if let Some(value) = self.max_data_extension_time_in_days {
-            write!(f, " MAX_DATA_EXTENSION_TIME_IN_DAYS = {value}")?;
-        }
-
-        if let Some(vol) = &self.external_volume {
-            write!(f, " EXTERNAL_VOLUME = '{vol}'")?;
-        }
-
-        if let Some(cat) = &self.catalog {
-            write!(f, " CATALOG = '{cat}'")?;
-        }
-
-        if let Some(true) = self.replace_invalid_characters {
-            write!(f, " REPLACE_INVALID_CHARACTERS = TRUE")?;
-        } else if let Some(false) = self.replace_invalid_characters {
-            write!(f, " REPLACE_INVALID_CHARACTERS = FALSE")?;
-        }
-
-        if let Some(collation) = &self.default_ddl_collation {
-            write!(f, " DEFAULT_DDL_COLLATION = '{collation}'")?;
-        }
-
-        if let Some(policy) = &self.storage_serialization_policy {
-            write!(f, " STORAGE_SERIALIZATION_POLICY = {policy}")?;
-        }
-
-        if let Some(comment) = &self.comment {
-            write!(f, " COMMENT = '{comment}'")?;
-        }
-
-        if let Some(sync) = &self.catalog_sync {
-            write!(f, " CATALOG_SYNC = '{sync}'")?;
-        }
-
-        if let Some(mode) = &self.catalog_sync_namespace_mode {
-            write!(f, " CATALOG_SYNC_NAMESPACE_MODE = {mode}")?;
-        }
-
-        if let Some(delim) = &self.catalog_sync_namespace_flatten_delimiter {
-            write!(f, " CATALOG_SYNC_NAMESPACE_FLATTEN_DELIMITER = '{delim}'")?;
-        }
-
-        if let Some(tags) = &self.with_tags {
-            write!(f, " WITH TAG ({})", display_comma_separated(tags))?;
-        }
-
-        if let Some(contacts) = &self.with_contacts {
-            write!(f, " WITH CONTACT ({})", display_comma_separated(contacts))?;
         }
 
         Ok(())

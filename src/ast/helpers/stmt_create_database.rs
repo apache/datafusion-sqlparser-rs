@@ -24,7 +24,6 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::ddl::CreateSnowflakeDatabase;
 use crate::ast::{
     CatalogSyncNamespaceMode, ContactEntry, ObjectName, Statement, StorageSerializationPolicy, Tag,
 };
@@ -51,15 +50,17 @@ use crate::parser::ParserError;
 /// )
 /// ```
 ///
-/// [1]: Statement::CreateSnowflakeDatabase
+/// [1]: Statement::CreateDatabase
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct CreateDatabaseBuilder {
+    pub db_name: ObjectName,
+    pub if_not_exists: bool,
+    pub location: Option<String>,
+    pub managed_location: Option<String>,
     pub or_replace: bool,
     pub transient: bool,
-    pub if_not_exists: bool,
-    pub name: ObjectName,
     pub clone: Option<ObjectName>,
     pub data_retention_time_in_days: Option<u64>,
     pub max_data_extension_time_in_days: Option<u64>,
@@ -79,10 +80,12 @@ pub struct CreateDatabaseBuilder {
 impl CreateDatabaseBuilder {
     pub fn new(name: ObjectName) -> Self {
         Self {
+            db_name: name,
+            if_not_exists: false,
+            location: None,
+            managed_location: None,
             or_replace: false,
             transient: false,
-            if_not_exists: false,
-            name,
             clone: None,
             data_retention_time_in_days: None,
             max_data_extension_time_in_days: None,
@@ -98,6 +101,16 @@ impl CreateDatabaseBuilder {
             with_tags: None,
             with_contacts: None,
         }
+    }
+
+    pub fn location(mut self, location: Option<String>) -> Self {
+        self.location = location;
+        self
+    }
+
+    pub fn managed_location(mut self, managed_location: Option<String>) -> Self {
+        self.managed_location = managed_location;
+        self
     }
 
     pub fn or_replace(mut self, or_replace: bool) -> Self {
@@ -198,11 +211,13 @@ impl CreateDatabaseBuilder {
     }
 
     pub fn build(self) -> Statement {
-        Statement::CreateSnowflakeDatabase(CreateSnowflakeDatabase {
+        Statement::CreateDatabase {
+            db_name: self.db_name,
+            if_not_exists: self.if_not_exists,
+            managed_location: self.managed_location,
+            location: self.location,
             or_replace: self.or_replace,
             transient: self.transient,
-            if_not_exists: self.if_not_exists,
-            name: self.name,
             clone: self.clone,
             data_retention_time_in_days: self.data_retention_time_in_days,
             max_data_extension_time_in_days: self.max_data_extension_time_in_days,
@@ -217,7 +232,7 @@ impl CreateDatabaseBuilder {
             catalog_sync_namespace_flatten_delimiter: self.catalog_sync_namespace_flatten_delimiter,
             with_tags: self.with_tags,
             with_contacts: self.with_contacts,
-        })
+        }
     }
 }
 
@@ -226,11 +241,13 @@ impl TryFrom<Statement> for CreateDatabaseBuilder {
 
     fn try_from(stmt: Statement) -> Result<Self, Self::Error> {
         match stmt {
-            Statement::CreateSnowflakeDatabase(CreateSnowflakeDatabase {
+            Statement::CreateDatabase {
+                db_name,
+                if_not_exists,
+                location,
+                managed_location,
                 or_replace,
                 transient,
-                if_not_exists,
-                name,
                 clone,
                 data_retention_time_in_days,
                 max_data_extension_time_in_days,
@@ -245,11 +262,13 @@ impl TryFrom<Statement> for CreateDatabaseBuilder {
                 catalog_sync_namespace_flatten_delimiter,
                 with_tags,
                 with_contacts,
-            }) => Ok(Self {
+            } => Ok(Self {
+                db_name,
+                if_not_exists,
+                location,
+                managed_location,
                 or_replace,
                 transient,
-                if_not_exists,
-                name,
                 clone,
                 data_retention_time_in_days,
                 max_data_extension_time_in_days,

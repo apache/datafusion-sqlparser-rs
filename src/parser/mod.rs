@@ -4937,6 +4937,22 @@ impl<'a> Parser<'a> {
             if_not_exists: ine,
             location,
             managed_location,
+            or_replace: false,
+            transient: false,
+            clone: None,
+            data_retention_time_in_days: None,
+            max_data_extension_time_in_days: None,
+            external_volume: None,
+            catalog: None,
+            replace_invalid_characters: None,
+            default_ddl_collation: None,
+            storage_serialization_policy: None,
+            comment: None,
+            catalog_sync: None,
+            catalog_sync_namespace_mode: None,
+            catalog_sync_namespace_flatten_delimiter: None,
+            with_tags: None,
+            with_contacts: None,
         })
     }
 

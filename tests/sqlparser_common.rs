@@ -5287,6 +5287,15 @@ fn parse_explain_analyze_with_simple_select() {
 
     run_explain_analyze(
         all_dialects(),
+        "EXPLAIN ANALYZE VERBOSE FORMAT=JSON SELECT sqrt(id) FROM foo",
+        true,
+        true,
+        Some(AnalyzeFormat::JSON),
+        None,
+    );
+
+    run_explain_analyze(
+        all_dialects(),
         "EXPLAIN VERBOSE FORMAT TEXT SELECT sqrt(id) FROM foo",
         true,
         false,

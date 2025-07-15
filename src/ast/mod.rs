@@ -4126,7 +4126,7 @@ pub enum Statement {
         /// A SQL query that specifies what to explain
         statement: Box<Statement>,
         /// Optional output format of explain
-        format: Option<AnalyzeFormat>,
+        format: Option<AnalyzeFormatKind>,
         /// Postgres style utility options, `(analyze, verbose true)`
         options: Option<Vec<UtilityOption>>,
     },
@@ -4494,7 +4494,7 @@ impl fmt::Display for Statement {
                 }
 
                 if let Some(format) = format {
-                    write!(f, "FORMAT {format} ")?;
+                    write!(f, " {format} ")?;
                 }
 
                 if let Some(options) = options {
@@ -7644,10 +7644,29 @@ impl fmt::Display for DuplicateTreatment {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AnalyzeFormatKind {
+    Keyword(AnalyzeFormat),
+    Assignment(AnalyzeFormat)    
+}
+
+impl fmt::Display for AnalyzeFormatKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            AnalyzeFormatKind::Keyword(format) => write!(f, "FORMAT {format}"),
+            AnalyzeFormatKind::Assignment(format) => write!(f, "FORMAT={format}"),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AnalyzeFormat {
     TEXT,
     GRAPHVIZ,
     JSON,
+    TRADITIONAL,
+    TREE
 }
 
 impl fmt::Display for AnalyzeFormat {
@@ -7656,6 +7675,8 @@ impl fmt::Display for AnalyzeFormat {
             AnalyzeFormat::TEXT => "TEXT",
             AnalyzeFormat::GRAPHVIZ => "GRAPHVIZ",
             AnalyzeFormat::JSON => "JSON",
+            AnalyzeFormat::TRADITIONAL => "TRADITIONAL",
+            AnalyzeFormat::TREE => "TREE",
         })
     }
 }

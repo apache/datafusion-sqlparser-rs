@@ -4494,7 +4494,7 @@ impl fmt::Display for Statement {
                 }
 
                 if let Some(format) = format {
-                    write!(f, " {format} ")?;
+                    write!(f, "{format} ")?;
                 }
 
                 if let Some(options) = options {
@@ -7646,7 +7646,7 @@ impl fmt::Display for DuplicateTreatment {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AnalyzeFormatKind {
     Keyword(AnalyzeFormat),
-    Assignment(AnalyzeFormat)    
+    Assignment(AnalyzeFormat),
 }
 
 impl fmt::Display for AnalyzeFormatKind {
@@ -7666,7 +7666,7 @@ pub enum AnalyzeFormat {
     GRAPHVIZ,
     JSON,
     TRADITIONAL,
-    TREE
+    TREE,
 }
 
 impl fmt::Display for AnalyzeFormat {

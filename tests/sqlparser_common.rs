@@ -5161,7 +5161,7 @@ fn run_explain_analyze(
     query: &str,
     expected_verbose: bool,
     expected_analyze: bool,
-    expected_format: Option<AnalyzeFormat>,
+    expected_format: Option<AnalyzeFormatKind>,
     expected_options: Option<Vec<UtilityOption>>,
 ) {
     match dialect.verified_stmt(query) {
@@ -5272,7 +5272,7 @@ fn parse_explain_analyze_with_simple_select() {
         "EXPLAIN ANALYZE FORMAT GRAPHVIZ SELECT sqrt(id) FROM foo",
         false,
         true,
-        Some(AnalyzeFormat::GRAPHVIZ),
+        Some(AnalyzeFormatKind::Keyword(AnalyzeFormat::GRAPHVIZ)),
         None,
     );
 
@@ -5281,7 +5281,7 @@ fn parse_explain_analyze_with_simple_select() {
         "EXPLAIN ANALYZE VERBOSE FORMAT JSON SELECT sqrt(id) FROM foo",
         true,
         true,
-        Some(AnalyzeFormat::JSON),
+        Some(AnalyzeFormatKind::Keyword(AnalyzeFormat::JSON)),
         None,
     );
 
@@ -5290,7 +5290,7 @@ fn parse_explain_analyze_with_simple_select() {
         "EXPLAIN ANALYZE VERBOSE FORMAT=JSON SELECT sqrt(id) FROM foo",
         true,
         true,
-        Some(AnalyzeFormat::JSON),
+        Some(AnalyzeFormatKind::Assignment(AnalyzeFormat::JSON)),
         None,
     );
 
@@ -5299,7 +5299,7 @@ fn parse_explain_analyze_with_simple_select() {
         "EXPLAIN VERBOSE FORMAT TEXT SELECT sqrt(id) FROM foo",
         true,
         false,
-        Some(AnalyzeFormat::TEXT),
+        Some(AnalyzeFormatKind::Keyword(AnalyzeFormat::TEXT)),
         None,
     );
 }

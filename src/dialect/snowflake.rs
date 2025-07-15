@@ -834,7 +834,7 @@ pub fn parse_create_database(
                         return parser.expected("TAG or CONTACT", next_token);
                     }
                 }
-                _ => return parser.expected("end of statementrrr", next_token),
+                _ => return parser.expected("end of statement", next_token),
             },
             Token::SemiColon | Token::EOF => break,
             _ => return parser.expected("end of statement", next_token),

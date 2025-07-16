@@ -34,6 +34,9 @@ use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MsSqlDialect};
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
 
+#[cfg(test)]
+use pretty_assertions::assert_eq;
+
 #[test]
 fn parse_mssql_identifiers() {
     let sql = "SELECT @@version, _foo$123 FROM ##temp";
@@ -196,6 +199,10 @@ fn parse_mssql_create_procedure() {
     let _ = ms().verified_stmt("CREATE PROCEDURE [foo] AS BEGIN SELECT [foo], CASE WHEN [foo] IS NULL THEN 'empty' ELSE 'notempty' END AS [foo]; END");
     // Multiple statements
     let _ = ms().verified_stmt("CREATE PROCEDURE [foo] AS BEGIN UPDATE bar SET col = 'test'; SELECT [foo] FROM BAR WHERE [FOO] > 10; END");
+    // early return
+    let _ = ms().verified_stmt(
+        "CREATE PROCEDURE [foo] AS BEGIN IF 1 = 0 RETURN;; DECLARE @x INT; RETURN @x; END",
+    );
 }
 
 #[test]
@@ -246,6 +253,7 @@ fn parse_create_function() {
             remote_connection: None,
         }),
     );
+    let _ = ms().statements_without_semicolons_parse_to(return_expression_function, "");
 
     let multi_statement_function = "\
         CREATE FUNCTION some_scalar_udf(@foo INT, @bar VARCHAR(256)) \
@@ -257,6 +265,7 @@ fn parse_create_function() {
         END\
     ";
     let _ = ms().verified_stmt(multi_statement_function);
+    let _ = ms().statements_without_semicolons_parse_to(multi_statement_function, "");
 
     let multi_statement_function_without_as = multi_statement_function.replace(" AS", "");
     let _ = ms().one_statement_parses_to(
@@ -277,6 +286,7 @@ fn parse_create_function() {
         END\
     ";
     let _ = ms().verified_stmt(create_function_with_conditional);
+    let _ = ms().statements_without_semicolons_parse_to(create_function_with_conditional, "");
 
     let create_or_alter_function = "\
         CREATE OR ALTER FUNCTION some_scalar_udf(@foo INT, @bar VARCHAR(256)) \
@@ -288,6 +298,7 @@ fn parse_create_function() {
         END\
     ";
     let _ = ms().verified_stmt(create_or_alter_function);
+    let _ = ms().statements_without_semicolons_parse_to(create_or_alter_function, "");
 
     let create_function_with_return_expression = "\
         CREATE FUNCTION some_scalar_udf(@foo INT, @bar VARCHAR(256)) \
@@ -298,6 +309,7 @@ fn parse_create_function() {
         END\
     ";
     let _ = ms().verified_stmt(create_function_with_return_expression);
+    let _ = ms().statements_without_semicolons_parse_to(create_function_with_return_expression, "");
 
     let create_inline_table_value_function = "\
         CREATE FUNCTION some_inline_tvf(@foo INT, @bar VARCHAR(256)) \
@@ -1567,6 +1579,7 @@ fn test_mssql_cursor() {
         DEALLOCATE Employee_Cursor\
     ";
     let _ = ms().statements_parse_to(full_cursor_usage, "");
+    let _ = ms().statements_without_semicolons_parse_to(full_cursor_usage, "");
 }
 
 #[test]
@@ -2195,7 +2208,7 @@ fn parse_mssql_if_else() {
 
     // Multiple statements
     let stmts = ms()
-        .parse_sql_statements("DECLARE @A INT; IF 1=1 BEGIN SET @A = 1 END ELSE SET @A = 2")
+        .parse_sql_statements("DECLARE @A INT; IF 1=1 BEGIN SET @A = 1; END ELSE SET @A = 2;")
         .unwrap();
     match &stmts[..] {
         [Statement::Declare { .. }, Statement::If(stmt)] => {
@@ -2210,11 +2223,11 @@ fn parse_mssql_if_else() {
 
 #[test]
 fn test_mssql_if_else_span() {
-    let sql = "IF 1 = 1 SELECT '1' ELSE SELECT '2'";
+    let sql = "IF 1 = 1 SELECT '1'; ELSE SELECT '2';";
     let mut parser = Parser::new(&MsSqlDialect {}).try_with_sql(sql).unwrap();
     assert_eq!(
         parser.parse_statement().unwrap().span(),
-        Span::new(Location::new(1, 1), Location::new(1, sql.len() as u64 + 1))
+        Span::new(Location::new(1, 1), Location::new(1, sql.len() as u64))
     );
 }
 
@@ -2237,7 +2250,7 @@ fn test_mssql_if_else_multiline_span() {
 #[test]
 fn test_mssql_if_statements_span() {
     // Simple statements
-    let mut sql = "IF 1 = 1 SELECT '1' ELSE SELECT '2'";
+    let mut sql = "IF 1 = 1 SELECT '1'; ELSE SELECT '2'";
     let mut parser = Parser::new(&MsSqlDialect {}).try_with_sql(sql).unwrap();
     match parser.parse_statement().unwrap() {
         Statement::If(IfStatement {
@@ -2251,14 +2264,15 @@ fn test_mssql_if_statements_span() {
             );
             assert_eq!(
                 else_block.span(),
-                Span::new(Location::new(1, 21), Location::new(1, 36))
+                Span::new(Location::new(1, 22), Location::new(1, 37))
             );
         }
         stmt => panic!("Unexpected statement: {stmt:?}"),
     }
+    let _ = ms().statements_without_semicolons_parse_to(sql, "");
 
     // Blocks
-    sql = "IF 1 = 1 BEGIN SET @A = 1; END ELSE BEGIN SET @A = 2 END";
+    sql = "IF 1 = 1 BEGIN SET @A = 1; END ELSE BEGIN SET @A = 2; END";
     parser = Parser::new(&MsSqlDialect {}).try_with_sql(sql).unwrap();
     match parser.parse_statement().unwrap() {
         Statement::If(IfStatement {
@@ -2272,11 +2286,12 @@ fn test_mssql_if_statements_span() {
             );
             assert_eq!(
                 else_block.span(),
-                Span::new(Location::new(1, 32), Location::new(1, 57))
+                Span::new(Location::new(1, 32), Location::new(1, 58))
             );
         }
         stmt => panic!("Unexpected statement: {stmt:?}"),
     }
+    let _ = ms().statements_without_semicolons_parse_to(sql, "");
 }
 
 #[test]
@@ -2437,6 +2452,7 @@ fn parse_create_trigger() {
         END\
     ";
     let _ = ms().verified_stmt(multi_statement_trigger);
+    let _ = ms().statements_without_semicolons_parse_to(multi_statement_trigger, "");
 
     let create_trigger_with_return = "\
         CREATE TRIGGER some_trigger ON some_table FOR INSERT \
@@ -2446,15 +2462,7 @@ fn parse_create_trigger() {
         END\
     ";
     let _ = ms().verified_stmt(create_trigger_with_return);
-
-    let create_trigger_with_return = "\
-        CREATE TRIGGER some_trigger ON some_table FOR INSERT \
-        AS \
-        BEGIN \
-            RETURN; \
-        END\
-    ";
-    let _ = ms().verified_stmt(create_trigger_with_return);
+    let _ = ms().statements_without_semicolons_parse_to(create_trigger_with_return, "");
 
     let create_trigger_with_conditional = "\
         CREATE TRIGGER some_trigger ON some_table FOR INSERT \
@@ -2468,6 +2476,7 @@ fn parse_create_trigger() {
         END\
     ";
     let _ = ms().verified_stmt(create_trigger_with_conditional);
+    let _ = ms().statements_without_semicolons_parse_to(create_trigger_with_conditional, "");
 }
 
 #[test]
@@ -2522,4 +2531,319 @@ DECLARE @Y AS NVARCHAR(MAX)='y'
     let stmts = tsql().parse_sql_statements(sql).unwrap();
     assert_eq!(stmts.len(), 2);
     assert!(stmts.iter().all(|s| matches!(s, Statement::Declare { .. })));
+}
+
+#[test]
+fn test_supports_statements_without_semicolon_delimiter() {
+    use sqlparser::ast::Ident;
+
+    use sqlparser::tokenizer::Location;
+
+    fn parse_n_statements(n: usize, sql: &str) -> Vec<Statement> {
+        let dialect = MsSqlDialect {};
+        let parser = Parser::new(&dialect)
+            .with_options(ParserOptions::default().with_require_semicolon_stmt_delimiter(false));
+        let stmts = parser
+            .try_with_sql(sql)
+            .unwrap()
+            .parse_statements()
+            .unwrap();
+        assert_eq!(stmts.len(), n);
+        stmts
+    }
+
+    let multiple_statements = "SELECT 1 SELECT 2";
+    assert_eq!(
+        parse_n_statements(2, multiple_statements),
+        vec![
+            Statement::Query(Box::new(Query {
+                with: None,
+                limit_clause: None,
+                fetch: None,
+                locks: vec![],
+                for_clause: None,
+                order_by: None,
+                settings: None,
+                format_clause: None,
+                pipe_operators: vec![],
+                body: Box::new(SetExpr::Select(Box::new(Select {
+                    select_token: AttachedToken::empty(),
+                    distinct: None,
+                    top: None,
+                    top_before_distinct: false,
+                    projection: vec![SelectItem::UnnamedExpr(Expr::Value(
+                        (Value::Number("1".parse().unwrap(), false)).with_empty_span()
+                    ))],
+                    exclude: None,
+                    into: None,
+                    from: vec![],
+                    lateral_views: vec![],
+                    prewhere: None,
+                    selection: None,
+                    group_by: GroupByExpr::Expressions(vec![], vec![]),
+                    cluster_by: vec![],
+                    distribute_by: vec![],
+                    sort_by: vec![],
+                    having: None,
+                    named_window: vec![],
+                    window_before_qualify: false,
+                    qualify: None,
+                    value_table_mode: None,
+                    connect_by: None,
+                    flavor: SelectFlavor::Standard,
+                }))),
+            })),
+            Statement::Query(Box::new(Query {
+                with: None,
+                limit_clause: None,
+                fetch: None,
+                locks: vec![],
+                for_clause: None,
+                order_by: None,
+                settings: None,
+                format_clause: None,
+                pipe_operators: vec![],
+                body: Box::new(SetExpr::Select(Box::new(Select {
+                    select_token: AttachedToken::empty(),
+                    distinct: None,
+                    top: None,
+                    top_before_distinct: false,
+                    projection: vec![SelectItem::UnnamedExpr(Expr::Value(
+                        (Value::Number("2".parse().unwrap(), false)).with_empty_span()
+                    ))],
+                    exclude: None,
+                    into: None,
+                    from: vec![],
+                    lateral_views: vec![],
+                    prewhere: None,
+                    selection: None,
+                    group_by: GroupByExpr::Expressions(vec![], vec![]),
+                    cluster_by: vec![],
+                    distribute_by: vec![],
+                    sort_by: vec![],
+                    having: None,
+                    named_window: vec![],
+                    window_before_qualify: false,
+                    qualify: None,
+                    value_table_mode: None,
+                    connect_by: None,
+                    flavor: SelectFlavor::Standard
+                }))),
+            })),
+        ]
+    );
+
+    let udf = "CREATE OR ALTER FUNCTION utc_now()
+        RETURNS SMALLDATETIME \
+        AS \
+        BEGIN \
+            RETURN GETUTCDATE()
+        END \
+    ";
+    assert_eq!(
+        parse_n_statements(1, udf)[0],
+        Statement::CreateFunction(CreateFunction {
+            or_alter: true,
+            or_replace: false,
+            temporary: false,
+            if_not_exists: false,
+            name: ObjectName::from(vec![sqlparser::ast::Ident::with_span(
+                Span::new(Location::new(1, 26), Location::new(1, 33)),
+                "utc_now"
+            )]),
+            args: Some(vec![]),
+            return_type: Some(sqlparser::ast::DataType::Custom(
+                ObjectName(vec![sqlparser::ast::ObjectNamePart::Identifier(Ident {
+                    value: "SMALLDATETIME".to_string(),
+                    quote_style: None,
+                    span: Span {
+                        start: Location::new(2, 17),
+                        end: Location::new(2, 30)
+                    },
+                })]),
+                vec![]
+            )),
+            function_body: Some(CreateFunctionBody::AsBeginEnd(BeginEndStatements {
+                begin_token: AttachedToken(TokenWithSpan {
+                    token: Token::Word(Word {
+                        value: "BEGIN".to_string(),
+                        quote_style: None,
+                        keyword: Keyword::BEGIN
+                    }),
+                    span: Span::new(Location::new(2, 47), Location::new(2, 57)),
+                }),
+                statements: vec![Statement::Return(ReturnStatement {
+                    value: Some(ReturnStatementValue::Expr(Expr::Function(Function {
+                        name: ObjectName::from(vec![Ident::new("GETUTCDATE")]),
+                        uses_odbc_syntax: false,
+                        parameters: FunctionArguments::None,
+                        args: FunctionArguments::List(FunctionArgumentList {
+                            duplicate_treatment: None,
+                            args: vec![],
+                            clauses: vec![],
+                        }),
+                        filter: None,
+                        null_treatment: None,
+                        over: None,
+                        within_group: vec![],
+                    }))),
+                })],
+                end_token: AttachedToken(TokenWithSpan {
+                    token: Token::Word(Word {
+                        value: "END".to_string(),
+                        quote_style: None,
+                        keyword: Keyword::END
+                    }),
+                    span: Span::new(Location::new(3, 9), Location::new(3, 12)),
+                })
+            })),
+            behavior: None,
+            called_on_null: None,
+            parallel: None,
+            using: None,
+            language: None,
+            determinism_specifier: None,
+            options: None,
+            remote_connection: None
+        })
+    );
+
+    let sp = "CREATE OR ALTER PROCEDURE example_sp \
+        AS \
+            IF USER_NAME() = 'X' \
+                RETURN \
+            IF 1 = 2 \
+                RETURN (SELECT 1) \
+            \
+            RETURN CONVERT(INT, 123) \
+    ";
+    assert_eq!(
+        parse_n_statements(1, sp)[0],
+        Statement::CreateProcedure {
+            or_alter: true,
+            name: ObjectName::from(vec![Ident::new("example_sp")]),
+            params: Some(vec![]),
+            language: None,
+            body: ConditionalStatements::Sequence {
+                statements: vec![
+                    Statement::If(IfStatement {
+                        if_block: ConditionalStatementBlock {
+                            start_token: AttachedToken::empty(),
+                            condition: Some(Expr::BinaryOp {
+                                left: Box::new(Expr::Function(Function {
+                                    name: ObjectName::from(vec![Ident::new("USER_NAME")]),
+                                    uses_odbc_syntax: false,
+                                    parameters: FunctionArguments::None,
+                                    args: FunctionArguments::List(FunctionArgumentList {
+                                        duplicate_treatment: None,
+                                        args: vec![],
+                                        clauses: vec![],
+                                    }),
+                                    filter: None,
+                                    null_treatment: None,
+                                    over: None,
+                                    within_group: vec![],
+                                })),
+                                op: BinaryOperator::Eq,
+                                right: Box::new(Expr::Value(ValueWithSpan {
+                                    value: Value::SingleQuotedString("X".to_string()),
+                                    span: Span::new(Location::new(1, 58), Location::new(1, 61)),
+                                })),
+                            }),
+                            then_token: None,
+                            conditional_statements: ConditionalStatements::Sequence {
+                                statements: vec![Statement::Return(ReturnStatement {
+                                    value: None
+                                })],
+                            },
+                        },
+                        elseif_blocks: vec![],
+                        else_block: None,
+                        end_token: None,
+                    }),
+                    Statement::If(IfStatement {
+                        if_block: ConditionalStatementBlock {
+                            start_token: AttachedToken::empty(),
+                            condition: Some(Expr::BinaryOp {
+                                left: Box::new(Expr::Value(number("1").with_span(Span::new(
+                                    Location::new(1, 73),
+                                    Location::new(1, 74)
+                                )))),
+                                op: BinaryOperator::Eq,
+                                right: Box::new(Expr::Value(number("2").with_span(Span::new(
+                                    Location::new(1, 76),
+                                    Location::new(1, 77)
+                                )))),
+                            }),
+                            then_token: None,
+                            conditional_statements: ConditionalStatements::Sequence {
+                                statements: vec![Statement::Return(ReturnStatement {
+                                    value: Some(ReturnStatementValue::Expr(Expr::Subquery(
+                                        Box::new(Query {
+                                            with: None,
+                                            body: Box::new(SetExpr::Select(Box::new(Select {
+                                                select_token: AttachedToken::empty(),
+                                                distinct: None,
+                                                top: None,
+                                                top_before_distinct: false,
+                                                projection: vec![SelectItem::UnnamedExpr(
+                                                    Expr::Value(number("1").with_span(Span::new(
+                                                        Location::new(1, 93),
+                                                        Location::new(1, 94)
+                                                    )))
+                                                ),],
+                                                exclude: None,
+                                                into: None,
+                                                from: vec![],
+                                                lateral_views: vec![],
+                                                prewhere: None,
+                                                selection: None,
+                                                group_by: GroupByExpr::Expressions(vec![], vec![],),
+                                                cluster_by: vec![],
+                                                distribute_by: vec![],
+                                                sort_by: vec![],
+                                                having: None,
+                                                named_window: vec![],
+                                                qualify: None,
+                                                window_before_qualify: false,
+                                                value_table_mode: None,
+                                                connect_by: None,
+                                                flavor: SelectFlavor::Standard,
+                                            }),)),
+                                            order_by: None,
+                                            limit_clause: None,
+                                            fetch: None,
+                                            locks: vec![],
+                                            for_clause: None,
+                                            settings: None,
+                                            format_clause: None,
+                                            pipe_operators: vec![],
+                                        }),
+                                    ))),
+                                })],
+                            },
+                        },
+                        elseif_blocks: vec![],
+                        else_block: None,
+                        end_token: None,
+                    }),
+                    Statement::Return(ReturnStatement {
+                        value: Some(ReturnStatementValue::Expr(Expr::Convert {
+                            is_try: false,
+                            expr: Box::new(Expr::Value(
+                                number("123").with_span(Span::new(
+                                    Location::new(1, 89),
+                                    Location::new(1, 92)
+                                ))
+                            )),
+                            data_type: Some(DataType::Int(None)),
+                            charset: None,
+                            target_before_value: true,
+                            styles: vec![],
+                        })),
+                    }),
+                ],
+            },
+        }
+    );
 }

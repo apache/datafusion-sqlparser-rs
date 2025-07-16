@@ -1207,6 +1207,11 @@ pub trait Dialect: Debug + Any {
     fn supports_semantic_view_table_factor(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect supports parsing statements without a semicolon delimiter.
+    fn supports_statements_without_semicolon_delimiter(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

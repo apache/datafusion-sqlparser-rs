@@ -32,7 +32,12 @@ use recursion::RecursionCounter;
 use IsLateral::*;
 use IsOptional::*;
 
-use crate::ast::helpers::stmt_create_table::{CreateTableBuilder, CreateTableConfiguration};
+use crate::ast::helpers::{
+    key_value_options::{
+        KeyValueOption, KeyValueOptionType, KeyValueOptions, KeyValueOptionsDelimiter,
+    },
+    stmt_create_table::{CreateTableBuilder, CreateTableConfiguration},
+};
 use crate::ast::Statement::CreatePolicy;
 use crate::ast::*;
 use crate::dialect::*;
@@ -4680,6 +4685,8 @@ impl<'a> Parser<'a> {
             self.parse_create_macro(or_replace, temporary)
         } else if self.parse_keyword(Keyword::SECRET) {
             self.parse_create_secret(or_replace, temporary, persistent)
+        } else if self.parse_keyword(Keyword::USER) {
+            self.parse_create_user(or_replace)
         } else if or_replace {
             self.expected(
                 "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION after CREATE OR REPLACE",
@@ -4712,6 +4719,32 @@ impl<'a> Parser<'a> {
         } else {
             self.expected("an object type after CREATE", self.peek_token())
         }
+    }
+
+    pub fn parse_create_user(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let name = self.parse_identifier()?;
+        let options = self.parse_key_value_options(false, &[Keyword::WITH, Keyword::TAG])?;
+        let with_tags = self.parse_keyword(Keyword::WITH);
+        let tags = if self.parse_keyword(Keyword::TAG) {
+            self.parse_key_value_options(true, &[])?
+        } else {
+            vec![]
+        };
+        Ok(Statement::CreateUser(CreateUser {
+            or_replace,
+            if_not_exists,
+            name,
+            options: KeyValueOptions {
+                options,
+                delimiter: KeyValueOptionsDelimiter::Space,
+            },
+            with_tags,
+            tags: KeyValueOptions {
+                options: tags,
+                delimiter: KeyValueOptionsDelimiter::Comma,
+            },
+        }))
     }
 
     /// See [DuckDB Docs](https://duckdb.org/docs/sql/statements/create_secret.html) for more details.
@@ -16611,6 +16644,83 @@ impl<'a> Parser<'a> {
 
     pub(crate) fn in_column_definition_state(&self) -> bool {
         matches!(self.state, ColumnDefinition)
+    }
+
+    /// Parses options provided in key-value format.
+    ///
+    /// * `parenthesized` - true if the options are enclosed in parenthesis
+    /// * `end_words` - a list of keywords that any of them indicates the end of the options section
+    pub(crate) fn parse_key_value_options(
+        &mut self,
+        parenthesized: bool,
+        end_words: &[Keyword],
+    ) -> Result<Vec<KeyValueOption>, ParserError> {
+        let mut options: Vec<KeyValueOption> = Vec::new();
+        if parenthesized {
+            self.expect_token(&Token::LParen)?;
+        }
+        loop {
+            match self.next_token().token {
+                Token::RParen => {
+                    if parenthesized {
+                        break;
+                    } else {
+                        return self.expected(" another option or EOF", self.peek_token());
+                    }
+                }
+                Token::EOF => break,
+                Token::Comma => continue,
+                Token::Word(w) if !end_words.contains(&w.keyword) => {
+                    options.push(self.parse_key_value_option(w)?)
+                }
+                Token::Word(w) if end_words.contains(&w.keyword) => {
+                    self.prev_token();
+                    break;
+                }
+                _ => return self.expected("another option, EOF, Comma or ')'", self.peek_token()),
+            };
+        }
+        Ok(options)
+    }
+
+    // Parses a `KEY = VALUE` construct based on the specified key
+    pub(crate) fn parse_key_value_option(
+        &mut self,
+        key: Word,
+    ) -> Result<KeyValueOption, ParserError> {
+        self.expect_token(&Token::Eq)?;
+        if self.parse_keyword(Keyword::TRUE) {
+            Ok(KeyValueOption {
+                option_name: key.value,
+                option_type: KeyValueOptionType::BOOLEAN,
+                value: "TRUE".to_string(),
+            })
+        } else if self.parse_keyword(Keyword::FALSE) {
+            Ok(KeyValueOption {
+                option_name: key.value,
+                option_type: KeyValueOptionType::BOOLEAN,
+                value: "FALSE".to_string(),
+            })
+        } else {
+            match self.next_token().token {
+                Token::SingleQuotedString(value) => Ok(KeyValueOption {
+                    option_name: key.value,
+                    option_type: KeyValueOptionType::STRING,
+                    value,
+                }),
+                Token::Word(word) => Ok(KeyValueOption {
+                    option_name: key.value,
+                    option_type: KeyValueOptionType::ENUM,
+                    value: word.value,
+                }),
+                Token::Number(n, _) => Ok(KeyValueOption {
+                    option_name: key.value,
+                    option_type: KeyValueOptionType::NUMBER,
+                    value: n,
+                }),
+                _ => self.expected("expected option value", self.peek_token()),
+            }
+        }
     }
 }
 

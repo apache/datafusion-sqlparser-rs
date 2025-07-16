@@ -17,7 +17,9 @@
 
 #[cfg(not(feature = "std"))]
 use crate::alloc::string::ToString;
-use crate::ast::helpers::key_value_options::{KeyValueOption, KeyValueOptionType, KeyValueOptions};
+use crate::ast::helpers::key_value_options::{
+    KeyValueOption, KeyValueOptionType, KeyValueOptions, KeyValueOptionsDelimiter,
+};
 use crate::ast::helpers::stmt_create_table::CreateTableBuilder;
 use crate::ast::helpers::stmt_data_loading::{
     FileStagingCommand, StageLoadSelectItem, StageLoadSelectItemKind, StageParamsObject,
@@ -31,7 +33,7 @@ use crate::ast::{
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{IsOptional, Parser, ParserError};
-use crate::tokenizer::{Token, Word};
+use crate::tokenizer::Token;
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
 #[cfg(not(feature = "std"))]
@@ -516,6 +518,7 @@ fn parse_alter_session(parser: &mut Parser, set: bool) -> Result<Statement, Pars
         set,
         session_params: KeyValueOptions {
             options: session_options,
+            delimiter: KeyValueOptionsDelimiter::Space,
         },
     })
 }
@@ -777,19 +780,19 @@ pub fn parse_create_stage(
     // [ directoryTableParams ]
     if parser.parse_keyword(Keyword::DIRECTORY) {
         parser.expect_token(&Token::Eq)?;
-        directory_table_params = parse_parentheses_options(parser)?;
+        directory_table_params = parser.parse_key_value_options(true, &[])?;
     }
 
     // [ file_format]
     if parser.parse_keyword(Keyword::FILE_FORMAT) {
         parser.expect_token(&Token::Eq)?;
-        file_format = parse_parentheses_options(parser)?;
+        file_format = parser.parse_key_value_options(true, &[])?;
     }
 
     // [ copy_options ]
     if parser.parse_keyword(Keyword::COPY_OPTIONS) {
         parser.expect_token(&Token::Eq)?;
-        copy_options = parse_parentheses_options(parser)?;
+        copy_options = parser.parse_key_value_options(true, &[])?;
     }
 
     // [ comment ]
@@ -806,12 +809,15 @@ pub fn parse_create_stage(
         stage_params,
         directory_table_params: KeyValueOptions {
             options: directory_table_params,
+            delimiter: KeyValueOptionsDelimiter::Space,
         },
         file_format: KeyValueOptions {
             options: file_format,
+            delimiter: KeyValueOptionsDelimiter::Space,
         },
         copy_options: KeyValueOptions {
             options: copy_options,
+            delimiter: KeyValueOptionsDelimiter::Space,
         },
         comment,
     })
@@ -879,10 +885,16 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
     let mut from_stage = None;
     let mut stage_params = StageParamsObject {
         url: None,
-        encryption: KeyValueOptions { options: vec![] },
+        encryption: KeyValueOptions {
+            options: vec![],
+            delimiter: KeyValueOptionsDelimiter::Space,
+        },
         endpoint: None,
         storage_integration: None,
-        credentials: KeyValueOptions { options: vec![] },
+        credentials: KeyValueOptions {
+            options: vec![],
+            delimiter: KeyValueOptionsDelimiter::Space,
+        },
     };
     let mut from_query = None;
     let mut partition = None;
@@ -944,7 +956,7 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
         // FILE_FORMAT
         if parser.parse_keyword(Keyword::FILE_FORMAT) {
             parser.expect_token(&Token::Eq)?;
-            file_format = parse_parentheses_options(parser)?;
+            file_format = parser.parse_key_value_options(true, &[])?;
         // PARTITION BY
         } else if parser.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
             partition = Some(Box::new(parser.parse_expr()?))
@@ -982,14 +994,14 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
         // COPY OPTIONS
         } else if parser.parse_keyword(Keyword::COPY_OPTIONS) {
             parser.expect_token(&Token::Eq)?;
-            copy_options = parse_parentheses_options(parser)?;
+            copy_options = parser.parse_key_value_options(true, &[])?;
         } else {
             match parser.next_token().token {
                 Token::SemiColon | Token::EOF => break,
                 Token::Comma => continue,
                 // In `COPY INTO <location>` the copy options do not have a shared key
                 // like in `COPY INTO <table>`
-                Token::Word(key) => copy_options.push(parse_option(parser, key)?),
+                Token::Word(key) => copy_options.push(parser.parse_key_value_option(key)?),
                 _ => return parser.expected("another copy option, ; or EOF'", parser.peek_token()),
             }
         }
@@ -1008,9 +1020,11 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
         pattern,
         file_format: KeyValueOptions {
             options: file_format,
+            delimiter: KeyValueOptionsDelimiter::Space,
         },
         copy_options: KeyValueOptions {
             options: copy_options,
+            delimiter: KeyValueOptionsDelimiter::Space,
         },
         validation_mode,
         partition,
@@ -1110,8 +1124,14 @@ fn parse_select_item_for_data_load(
 
 fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserError> {
     let (mut url, mut storage_integration, mut endpoint) = (None, None, None);
-    let mut encryption: KeyValueOptions = KeyValueOptions { options: vec![] };
-    let mut credentials: KeyValueOptions = KeyValueOptions { options: vec![] };
+    let mut encryption: KeyValueOptions = KeyValueOptions {
+        options: vec![],
+        delimiter: KeyValueOptionsDelimiter::Space,
+    };
+    let mut credentials: KeyValueOptions = KeyValueOptions {
+        options: vec![],
+        delimiter: KeyValueOptionsDelimiter::Space,
+    };
 
     // URL
     if parser.parse_keyword(Keyword::URL) {
@@ -1141,7 +1161,8 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
     if parser.parse_keyword(Keyword::CREDENTIALS) {
         parser.expect_token(&Token::Eq)?;
         credentials = KeyValueOptions {
-            options: parse_parentheses_options(parser)?,
+            options: parser.parse_key_value_options(true, &[])?,
+            delimiter: KeyValueOptionsDelimiter::Space,
         };
     }
 
@@ -1149,7 +1170,8 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
     if parser.parse_keyword(Keyword::ENCRYPTION) {
         parser.expect_token(&Token::Eq)?;
         encryption = KeyValueOptions {
-            options: parse_parentheses_options(parser)?,
+            options: parser.parse_key_value_options(true, &[])?,
+            delimiter: KeyValueOptionsDelimiter::Space,
         };
     }
 
@@ -1183,7 +1205,7 @@ fn parse_session_options(
             Token::Word(key) => {
                 parser.advance_token();
                 if set {
-                    let option = parse_option(parser, key)?;
+                    let option = parser.parse_key_value_option(key)?;
                     options.push(option);
                 } else {
                     options.push(KeyValueOption {
@@ -1204,63 +1226,6 @@ fn parse_session_options(
         ))
     } else {
         Ok(options)
-    }
-}
-
-/// Parses options provided within parentheses like:
-/// ( ENABLE = { TRUE | FALSE }
-///      [ AUTO_REFRESH = { TRUE | FALSE } ]
-///      [ REFRESH_ON_CREATE =  { TRUE | FALSE } ]
-///      [ NOTIFICATION_INTEGRATION = '<notification_integration_name>' ] )
-///
-fn parse_parentheses_options(parser: &mut Parser) -> Result<Vec<KeyValueOption>, ParserError> {
-    let mut options: Vec<KeyValueOption> = Vec::new();
-    parser.expect_token(&Token::LParen)?;
-    loop {
-        match parser.next_token().token {
-            Token::RParen => break,
-            Token::Comma => continue,
-            Token::Word(key) => options.push(parse_option(parser, key)?),
-            _ => return parser.expected("another option or ')'", parser.peek_token()),
-        };
-    }
-    Ok(options)
-}
-
-/// Parses a `KEY = VALUE` construct based on the specified key
-fn parse_option(parser: &mut Parser, key: Word) -> Result<KeyValueOption, ParserError> {
-    parser.expect_token(&Token::Eq)?;
-    if parser.parse_keyword(Keyword::TRUE) {
-        Ok(KeyValueOption {
-            option_name: key.value,
-            option_type: KeyValueOptionType::BOOLEAN,
-            value: "TRUE".to_string(),
-        })
-    } else if parser.parse_keyword(Keyword::FALSE) {
-        Ok(KeyValueOption {
-            option_name: key.value,
-            option_type: KeyValueOptionType::BOOLEAN,
-            value: "FALSE".to_string(),
-        })
-    } else {
-        match parser.next_token().token {
-            Token::SingleQuotedString(value) => Ok(KeyValueOption {
-                option_name: key.value,
-                option_type: KeyValueOptionType::STRING,
-                value,
-            }),
-            Token::Word(word) => Ok(KeyValueOption {
-                option_name: key.value,
-                option_type: KeyValueOptionType::ENUM,
-                value: word.value,
-            }),
-            Token::Number(n, _) => Ok(KeyValueOption {
-                option_name: key.value,
-                option_type: KeyValueOptionType::NUMBER,
-                value: n,
-            }),
-            _ => parser.expected("expected option value", parser.peek_token()),
-        }
     }
 }
 

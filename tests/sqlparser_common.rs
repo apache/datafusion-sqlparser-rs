@@ -16256,3 +16256,16 @@ fn parse_notnull() {
     // for unsupported dialects, parsing should stop at `NOT NULL`
     notnull_unsupported_dialects.expr_parses_to("NOT NULL NOTNULL", "NOT NULL");
 }
+
+#[test]
+fn parse_create_user() {
+    verified_stmt("CREATE USER u1");
+    verified_stmt("CREATE OR REPLACE USER u1");
+    verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1");
+    verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret'");
+    verified_stmt(
+        "CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=TRUE",
+    );
+    verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=TRUE TYPE=SERVICE TAG (t1='v1')");
+    verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=TRUE TYPE=SERVICE WITH TAG (t1='v1', t2='v2')");
+}

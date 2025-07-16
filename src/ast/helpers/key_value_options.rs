@@ -31,11 +31,22 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
+use crate::ast::display_separated;
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct KeyValueOptions {
     pub options: Vec<KeyValueOption>,
+    pub delimiter: KeyValueOptionsDelimiter,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum KeyValueOptionsDelimiter {
+    Space,
+    Comma,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -59,18 +70,11 @@ pub struct KeyValueOption {
 
 impl fmt::Display for KeyValueOptions {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if !self.options.is_empty() {
-            let mut first = false;
-            for option in &self.options {
-                if !first {
-                    first = true;
-                } else {
-                    f.write_str(" ")?;
-                }
-                write!(f, "{option}")?;
-            }
-        }
-        Ok(())
+        let sep = match self.delimiter {
+            KeyValueOptionsDelimiter::Space => " ",
+            KeyValueOptionsDelimiter::Comma => ", ",
+        };
+        write!(f, "{}", display_separated(&self.options, sep))
     }
 }
 

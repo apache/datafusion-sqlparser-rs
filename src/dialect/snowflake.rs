@@ -23,8 +23,8 @@ use crate::ast::helpers::stmt_data_loading::{
     FileStagingCommand, StageLoadSelectItem, StageLoadSelectItemKind, StageParamsObject,
 };
 use crate::ast::{
-    ColumnOption, ColumnPolicy, ColumnPolicyProperty, CopyIntoSnowflakeKind, Ident,
-    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
+    ColumnOption, ColumnPolicy, ColumnPolicyProperty, CopyIntoSnowflakeKind, DollarQuotedString,
+    Ident, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
     IdentityPropertyOrder, ObjectName, ObjectNamePart, RowAccessPolicy, ShowObjects, SqlOption,
     Statement, TagsColumnOption, WrappedCollection,
 };
@@ -307,22 +307,22 @@ impl Dialect for SnowflakeDialect {
             // they are not followed by other tokens that may change their meaning
             // e.g. `SELECT * EXCEPT (col1) FROM tbl`
             Keyword::EXCEPT
-            // e.g. `SELECT 1 LIMIT 5`
-            | Keyword::LIMIT
-            // e.g. `SELECT 1 OFFSET 5 ROWS`
-            | Keyword::OFFSET
             // e.g. `INSERT INTO t SELECT 1 RETURNING *`
             | Keyword::RETURNING if !matches!(parser.peek_token_ref().token, Token::Comma | Token::EOF) =>
             {
                 false
             }
 
+            // e.g. `SELECT 1 LIMIT 5` - not an alias
+            // e.g. `SELECT 1 OFFSET 5 ROWS` - not an alias
+            Keyword::LIMIT | Keyword::OFFSET if peek_for_limit_options(parser) => false,
+
             // `FETCH` can be considered an alias as long as it's not followed by `FIRST`` or `NEXT`
             // which would give it a different meanings, for example: 
             // `SELECT 1 FETCH FIRST 10 ROWS` - not an alias
             // `SELECT 1 FETCH 10` - not an alias
             Keyword::FETCH if parser.peek_one_of_keywords(&[Keyword::FIRST, Keyword::NEXT]).is_some()
-                    || matches!(parser.peek_token().token, Token::Number(_, _)) =>
+                    || peek_for_limit_options(parser) =>
             {
                 false
             }
@@ -358,7 +358,6 @@ impl Dialect for SnowflakeDialect {
             | Keyword::UNPIVOT
             | Keyword::EXCEPT
             | Keyword::MATCH_RECOGNIZE
-            | Keyword::OFFSET
                 if !matches!(parser.peek_token_ref().token, Token::SemiColon | Token::EOF) =>
             {
                 false
@@ -367,14 +366,7 @@ impl Dialect for SnowflakeDialect {
             // `LIMIT` can be considered an alias as long as it's not followed by a value. For example:
             // `SELECT * FROM tbl LIMIT WHERE 1=1` - alias
             // `SELECT * FROM tbl LIMIT 3` - not an alias
-            Keyword::LIMIT
-                if matches!(
-                    parser.peek_token().token,
-                    Token::Number(_, _) | Token::Placeholder(_)
-                ) =>
-            {
-                false
-            }
+            Keyword::LIMIT | Keyword::OFFSET if peek_for_limit_options(parser) => false,
 
             // `FETCH` can be considered an alias as long as it's not followed by `FIRST`` or `NEXT`
             // which would give it a different meanings, for example:
@@ -384,10 +376,7 @@ impl Dialect for SnowflakeDialect {
                 if parser
                     .peek_one_of_keywords(&[Keyword::FIRST, Keyword::NEXT])
                     .is_some()
-                    || matches!(
-                        parser.peek_token().token,
-                        Token::Number(_, _) | Token::Placeholder(_)
-                    ) =>
+                    || peek_for_limit_options(parser) =>
             {
                 false
             }
@@ -484,6 +473,18 @@ impl Dialect for SnowflakeDialect {
 
     fn supports_select_wildcard_exclude(&self) -> bool {
         true
+    }
+}
+
+// Peeks ahead to identify tokens that are expected after
+// a LIMIT/FETCH keyword.
+fn peek_for_limit_options(parser: &Parser) -> bool {
+    match &parser.peek_token_ref().token {
+        Token::Number(_, _) | Token::Placeholder(_) => true,
+        Token::SingleQuotedString(val) if val.is_empty() => true,
+        Token::DollarQuotedString(DollarQuotedString { value, .. }) if value.is_empty() => true,
+        Token::Word(w) if w.keyword == Keyword::NULL => true,
+        _ => false,
     }
 }
 

@@ -3535,6 +3535,15 @@ fn test_sql_keywords_as_select_item_aliases() {
             .parse_sql_statements(&format!("SELECT 1 {kw}"))
             .is_err());
     }
+
+    // LIMIT is alias
+    snowflake().one_statement_parses_to("SELECT 1 LIMIT", "SELECT 1 AS LIMIT");
+    // LIMIT is not an alias
+    snowflake().verified_stmt("SELECT 1 LIMIT 1");
+    snowflake().verified_stmt("SELECT 1 LIMIT $1");
+    snowflake().verified_stmt("SELECT 1 LIMIT ''");
+    snowflake().verified_stmt("SELECT 1 LIMIT NULL");
+    snowflake().verified_stmt("SELECT 1 LIMIT $$$$");
 }
 
 #[test]
@@ -3587,10 +3596,14 @@ fn test_sql_keywords_as_table_aliases() {
             .is_err());
     }
 
-    // LIMIT as alias and not as alias
+    // LIMIT is alias
     snowflake().one_statement_parses_to("SELECT * FROM tbl LIMIT", "SELECT * FROM tbl AS LIMIT");
+    // LIMIT is not an alias
     snowflake().verified_stmt("SELECT * FROM tbl LIMIT 1");
     snowflake().verified_stmt("SELECT * FROM tbl LIMIT $1");
+    snowflake().verified_stmt("SELECT * FROM tbl LIMIT ''");
+    snowflake().verified_stmt("SELECT * FROM tbl LIMIT NULL");
+    snowflake().verified_stmt("SELECT * FROM tbl LIMIT $$$$");
 }
 
 #[test]

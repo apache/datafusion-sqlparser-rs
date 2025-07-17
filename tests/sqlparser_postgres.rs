@@ -4723,7 +4723,7 @@ fn parse_dollar_quoted_string() {
                 quote_style: None,
                 span: Span::empty(),
             },
-        }
+        },
     );
 
     assert_eq!(
@@ -5296,13 +5296,14 @@ fn parse_at_time_zone() {
     // check precedence
     let expr = Expr::BinaryOp {
         left: Box::new(Expr::AtTimeZone {
-            timestamp: Box::new(Expr::TypedString {
+            timestamp: Box::new(Expr::TypedString(TypedString {
                 data_type: DataType::Timestamp(None, TimezoneInfo::None),
                 value: ValueWithSpan {
                     value: Value::SingleQuotedString("2001-09-28 01:00".to_string()),
                     span: Span::empty(),
                 },
-            }),
+                uses_odbc_syntax: false,
+            })),
             time_zone: Box::new(Expr::Cast {
                 kind: CastKind::DoubleColon,
                 expr: Box::new(Expr::Value(

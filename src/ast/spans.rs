@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::ast::{query::SelectItemQualifiedWildcardKind, ColumnOptions};
+use crate::ast::{query::SelectItemQualifiedWildcardKind, ColumnOptions, TypedString};
 use core::iter;
 
 use crate::tokenizer::Span;
@@ -1510,7 +1510,7 @@ impl Spanned for Expr {
                 .union(&union_spans(collation.0.iter().map(|i| i.span()))),
             Expr::Nested(expr) => expr.span(),
             Expr::Value(value) => value.span(),
-            Expr::TypedString { value, .. } => value.span(),
+            Expr::TypedString(TypedString { value, .. }) => value.span(),
             Expr::Function(function) => function.span(),
             Expr::GroupingSets(vec) => {
                 union_spans(vec.iter().flat_map(|i| i.iter().map(|k| k.span())))

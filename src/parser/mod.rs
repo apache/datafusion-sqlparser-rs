@@ -28,16 +28,17 @@ use helpers::attached_token::AttachedToken;
 
 use log::debug;
 
+use recursion::RecursionCounter;
+use IsLateral::*;
+use IsOptional::*;
+
 use crate::ast::helpers::stmt_create_table::{CreateTableBuilder, CreateTableConfiguration};
 use crate::ast::Statement::CreatePolicy;
 use crate::ast::*;
 use crate::dialect::*;
 use crate::keywords::{Keyword, ALL_KEYWORDS};
 use crate::tokenizer::*;
-use recursion::RecursionCounter;
 use sqlparser::parser::ParserState::ColumnDefinition;
-use IsLateral::*;
-use IsOptional::*;
 
 mod alter;
 
@@ -276,7 +277,10 @@ enum ParserState {
     /// in other contexts.
     ConnectBy,
     /// The state when parsing column definitions.  This state prohibits
-    /// NOT NULL as an alias for IS NOT NULL.
+    /// NOT NULL as an alias for IS NOT NULL.  For example:
+    /// ```sql
+    /// CREATE TABLE foo (abc BIGINT NOT NULL);
+    /// ```
     ColumnDefinition,
 }
 
@@ -3573,7 +3577,7 @@ impl<'a> Parser<'a> {
                     let negated = self.parse_keyword(Keyword::NOT);
                     let regexp = self.parse_keyword(Keyword::REGEXP);
                     let rlike = self.parse_keyword(Keyword::RLIKE);
-                    let null = if self.in_normal_state() {
+                    let null = if !self.in_column_definition_state() {
                         self.parse_keyword(Keyword::NULL)
                     } else {
                         false
@@ -7746,18 +7750,6 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_optional_column_option_inner(&mut self) -> Result<Option<ColumnOption>, ParserError> {
-        /// In some cases, we need to revert to [ParserState::Normal] when parsing nested expressions
-        /// In those cases we use the following macro to parse instead of calling [parse_expr] directly.
-        macro_rules! parse_expr_normal {
-            ($option:expr) => {
-                if matches!(self.peek_token().token, Token::LParen) {
-                    let expr: Expr = self.with_state(ParserState::Normal, |p| p.parse_prefix())?;
-                    Ok(Some($option(expr)))
-                } else {
-                    Ok(Some($option(self.parse_expr()?)))
-                }
-            };
-        }
         if self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET]) {
             Ok(Some(ColumnOption::CharacterSet(
                 self.parse_object_name(false)?,
@@ -7773,11 +7765,15 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::NULL) {
             Ok(Some(ColumnOption::Null))
         } else if self.parse_keyword(Keyword::DEFAULT) {
-            parse_expr_normal!(ColumnOption::Default)
+            Ok(Some(ColumnOption::Default(
+                self.parse_column_option_expr()?,
+            )))
         } else if dialect_of!(self is ClickHouseDialect| GenericDialect)
             && self.parse_keyword(Keyword::MATERIALIZED)
         {
-            parse_expr_normal!(ColumnOption::Materialized)
+            Ok(Some(ColumnOption::Materialized(
+                self.parse_column_option_expr()?,
+            )))
         } else if dialect_of!(self is ClickHouseDialect| GenericDialect)
             && self.parse_keyword(Keyword::ALIAS)
         {
@@ -7926,6 +7922,31 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// When parsing some column option expressions we need to revert to [ParserState::Normal] since
+    /// `NOT NULL` is allowed as an alias for `IS NOT NULL`.
+    /// In those cases we use this helper instead of calling [parse_expr] directly.
+    ///
+    /// For example, consider these `CREATE TABLE` statements:
+    /// ```sql
+    /// CREATE TABLE foo (abc BOOL DEFAULT (42 NOT NULL) NOT NULL);
+    /// ```
+    /// vs
+    /// ```sql
+    /// CREATE TABLE foo (abc BOOL NOT NULL);
+    /// ```
+    ///
+    /// In the first we should parse the inner portion of `(42 NOT NULL)` as [Expr::IsNotNull],
+    /// whereas is both statements that trailing `NOT NULL` should only be parsed as a
+    /// [ColumnOption::NotNull].
+    fn parse_column_option_expr(&mut self) -> Result<Expr, ParserError> {
+        if self.peek_token_ref().token == Token::LParen {
+            let expr: Expr = self.with_state(ParserState::Normal, |p| p.parse_prefix())?;
+            Ok(expr)
+        } else {
+            Ok(self.parse_expr()?)
+        }
+    }
+
     pub(crate) fn parse_tag(&mut self) -> Result<Tag, ParserError> {
         let name = self.parse_object_name(false)?;
         self.expect_token(&Token::Eq)?;
@@ -7970,7 +7991,7 @@ impl<'a> Parser<'a> {
             }))
         } else if self.parse_keywords(&[Keyword::ALWAYS, Keyword::AS]) {
             if self.expect_token(&Token::LParen).is_ok() {
-                let expr = self.parse_expr()?;
+                let expr: Expr = self.with_state(ParserState::Normal, |p| p.parse_expr())?;
                 self.expect_token(&Token::RParen)?;
                 let (gen_as, expr_mode) = if self.parse_keywords(&[Keyword::STORED]) {
                     Ok((
@@ -16550,8 +16571,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn in_normal_state(&self) -> bool {
-        matches!(self.state, ParserState::Normal)
+    pub(crate) fn in_column_definition_state(&self) -> bool {
+        matches!(self.state, ColumnDefinition)
     }
 }
 
@@ -17291,11 +17312,24 @@ mod tests {
 
     #[test]
     fn test_parse_not_null_in_column_options() {
-        let canonical =
-            "CREATE TABLE foo (abc INT DEFAULT (42 IS NOT NULL) NOT NULL, CHECK (abc IS NOT NULL))";
+        let canonical = concat!(
+            "CREATE TABLE foo (",
+            "abc INT DEFAULT (42 IS NOT NULL) NOT NULL,",
+            " def INT,",
+            " def_null BOOL GENERATED ALWAYS AS (def IS NOT NULL) STORED,",
+            " CHECK (abc IS NOT NULL)",
+            ")"
+        );
         all_dialects().verified_stmt(canonical);
         all_dialects().one_statement_parses_to(
-            "CREATE TABLE foo (abc INT DEFAULT (42 NOT NULL) NOT NULL, CHECK (abc NOT NULL) )",
+            concat!(
+                "CREATE TABLE foo (",
+                "abc INT DEFAULT (42 NOT NULL) NOT NULL,",
+                " def INT,",
+                " def_null BOOL GENERATED ALWAYS AS (def NOT NULL) STORED,",
+                " CHECK (abc NOT NULL)",
+                ")"
+            ),
             canonical,
         );
     }

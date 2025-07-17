@@ -7645,7 +7645,9 @@ impl fmt::Display for DuplicateTreatment {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AnalyzeFormatKind {
+    /// e.g. `EXPLAIN ANALYZE FORMAT JSON SELECT * FROM tbl`
     Keyword(AnalyzeFormat),
+    /// e.g. `EXPLAIN ANALYZE FORMAT=JSON SELECT * FROM tbl`
     Assignment(AnalyzeFormat),
 }
 

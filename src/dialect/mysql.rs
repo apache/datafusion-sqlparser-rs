@@ -43,11 +43,13 @@ impl Dialect for MySqlDialect {
         // See https://dev.mysql.com/doc/refman/8.0/en/identifiers.html.
         // Identifiers which begin with a digit are recognized while tokenizing numbers,
         // so they can be distinguished from exponent numeric literals.
+        // MySQL also implements non ascii utf-8 charecters
         ch.is_alphabetic()
             || ch == '_'
             || ch == '$'
             || ch == '@'
             || ('\u{0080}'..='\u{ffff}').contains(&ch)
+            || !ch.is_ascii()
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {

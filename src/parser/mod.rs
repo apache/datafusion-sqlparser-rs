@@ -3493,10 +3493,18 @@ impl<'a> Parser<'a> {
                         | BinaryOperator::LtEq
                         | BinaryOperator::Eq
                         | BinaryOperator::NotEq
+                        | BinaryOperator::PGRegexMatch
+                        | BinaryOperator::PGRegexIMatch
+                        | BinaryOperator::PGRegexNotMatch
+                        | BinaryOperator::PGRegexNotIMatch
+                        | BinaryOperator::PGLikeMatch
+                        | BinaryOperator::PGILikeMatch
+                        | BinaryOperator::PGNotLikeMatch
+                        | BinaryOperator::PGNotILikeMatch
                 ) {
                     return parser_err!(
                         format!(
-                        "Expected one of [=, >, <, =>, =<, !=] as comparison operator, found: {op}"
+                        "Expected one of [=, >, <, =>, =<, !=, ~, ~*, !~, !~*, ~~, ~~*, !~~, !~~*] as comparison operator, found: {op}"
                     ),
                         span.start
                     );
@@ -6260,6 +6268,8 @@ impl<'a> Parser<'a> {
             ObjectType::Stage
         } else if self.parse_keyword(Keyword::TYPE) {
             ObjectType::Type
+        } else if self.parse_keyword(Keyword::USER) {
+            ObjectType::User
         } else if self.parse_keyword(Keyword::FUNCTION) {
             return self.parse_drop_function();
         } else if self.parse_keyword(Keyword::POLICY) {
@@ -6278,7 +6288,7 @@ impl<'a> Parser<'a> {
             return self.parse_drop_extension();
         } else {
             return self.expected(
-                "CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, or MATERIALIZED VIEW after DROP",
+                "CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW or USER after DROP",
                 self.peek_token(),
             );
         };

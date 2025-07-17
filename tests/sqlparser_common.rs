@@ -8355,6 +8355,24 @@ fn parse_drop_view() {
 }
 
 #[test]
+fn parse_drop_user() {
+    let sql = "DROP USER u1";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            names, object_type, ..
+        } => {
+            assert_eq!(
+                vec!["u1"],
+                names.iter().map(ToString::to_string).collect::<Vec<_>>()
+            );
+            assert_eq!(ObjectType::User, object_type);
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("DROP USER IF EXISTS u1");
+}
+
+#[test]
 fn parse_invalid_subquery_without_parens() {
     let res = parse_sql_statements("SELECT SELECT 1 FROM bar WHERE 1=1 FROM baz");
     assert_eq!(
@@ -11151,9 +11169,7 @@ fn parse_non_latin_identifiers() {
     let supported_dialects = TestedDialects::new(vec![
         Box::new(GenericDialect {}),
         Box::new(DuckDbDialect {}),
-        Box::new(PostgreSqlDialect {}),
         Box::new(MsSqlDialect {}),
-        Box::new(MySqlDialect {}),
     ]);
     assert!(supported_dialects
         .parse_sql_statements("SELECT 💝 FROM table1")
@@ -16164,6 +16180,17 @@ SELECT * FROM tbl2
 #[test]
 fn test_identifier_unicode_support() {
     let sql = r#"SELECT phoneǤЖשचᎯ⻩☯♜🦄⚛🀄ᚠ⌛🌀 AS tbl FROM customers"#;
+    let dialects = TestedDialects::new(vec![
+        Box::new(MySqlDialect {}),
+        Box::new(RedshiftSqlDialect {}),
+        Box::new(PostgreSqlDialect {}),
+    ]);
+    let _ = dialects.verified_stmt(sql);
+}
+
+#[test]
+fn test_identifier_unicode_start() {
+    let sql = r#"SELECT 💝phone AS 💝 FROM customers"#;
     let dialects = TestedDialects::new(vec![
         Box::new(MySqlDialect {}),
         Box::new(RedshiftSqlDialect {}),

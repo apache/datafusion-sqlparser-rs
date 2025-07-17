@@ -65,10 +65,9 @@ impl Dialect for PostgreSqlDialect {
     }
 
     fn is_identifier_start(&self, ch: char) -> bool {
-        // See https://www.postgresql.org/docs/11/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS
-        // We don't yet support identifiers beginning with "letters with
-        // diacritical marks"
-        ch.is_alphabetic() || ch == '_'
+        ch.is_alphabetic() || ch == '_' ||
+        // PostgreSQL implements Unicode characters in identifiers.
+        !ch.is_ascii()
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {

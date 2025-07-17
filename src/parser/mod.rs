@@ -3486,10 +3486,18 @@ impl<'a> Parser<'a> {
                         | BinaryOperator::LtEq
                         | BinaryOperator::Eq
                         | BinaryOperator::NotEq
+                        | BinaryOperator::PGRegexMatch
+                        | BinaryOperator::PGRegexIMatch
+                        | BinaryOperator::PGRegexNotMatch
+                        | BinaryOperator::PGRegexNotIMatch
+                        | BinaryOperator::PGLikeMatch
+                        | BinaryOperator::PGILikeMatch
+                        | BinaryOperator::PGNotLikeMatch
+                        | BinaryOperator::PGNotILikeMatch
                 ) {
                     return parser_err!(
                         format!(
-                        "Expected one of [=, >, <, =>, =<, !=] as comparison operator, found: {op}"
+                        "Expected one of [=, >, <, =>, =<, !=, ~, ~*, !~, !~*, ~~, ~~*, !~~, !~~*] as comparison operator, found: {op}"
                     ),
                         span.start
                     );

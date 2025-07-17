@@ -1711,7 +1711,7 @@ fn test_parse_not_null_in_column_options() {
     // can contain `IS NOT NULL` and thus `NOT NULL` as an alias.
     let canonical = "CREATE TABLE foo (abc INT DEFAULT (42 IS NOT NULL) NOT NULL, not_null BOOL MATERIALIZED (abc IS NOT NULL), CHECK (abc IS NOT NULL))";
     clickhouse().verified_stmt(canonical);
-    clickhouse().one_statement_parses_to("CREATE TABLE foo (abc INT DEFAULT (42 NOT NULL) NOT NULL, not_null BOOL MATERIALIZED (abc IS NOT NULL), CHECK (abc NOT NULL) )", canonical);
+    clickhouse().one_statement_parses_to("CREATE TABLE foo (abc INT DEFAULT (42 NOT NULL) NOT NULL, not_null BOOL MATERIALIZED (abc NOT NULL), CHECK (abc NOT NULL) )", canonical);
 }
 
 fn clickhouse() -> TestedDialects {

@@ -8355,6 +8355,24 @@ fn parse_drop_view() {
 }
 
 #[test]
+fn parse_drop_user() {
+    let sql = "DROP USER u1";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            names, object_type, ..
+        } => {
+            assert_eq!(
+                vec!["u1"],
+                names.iter().map(ToString::to_string).collect::<Vec<_>>()
+            );
+            assert_eq!(ObjectType::User, object_type);
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("DROP USER IF EXISTS u1");
+}
+
+#[test]
 fn parse_invalid_subquery_without_parens() {
     let res = parse_sql_statements("SELECT SELECT 1 FROM bar WHERE 1=1 FROM baz");
     assert_eq!(

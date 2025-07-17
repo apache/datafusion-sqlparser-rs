@@ -327,13 +327,14 @@ fn data_type_timestamp_ntz() {
     // Literal
     assert_eq!(
         databricks().verified_expr("TIMESTAMP_NTZ '2025-03-29T18:52:00'"),
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::TimestampNtz,
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("2025-03-29T18:52:00".to_owned()),
                 span: Span::empty(),
-            }
-        }
+            },
+            uses_odbc_syntax: false
+        })
     );
 
     // Cast

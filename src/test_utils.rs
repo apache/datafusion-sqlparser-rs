@@ -25,6 +25,7 @@
 #[cfg(not(feature = "std"))]
 use alloc::{
     boxed::Box,
+    format,
     string::{String, ToString},
     vec,
     vec::Vec,
@@ -186,6 +187,37 @@ impl TestedDialects {
         statements
     }
 
+    /// The same as [`statements_parse_to`] but it will strip semicolons from the SQL text.
+    pub fn statements_without_semicolons_parse_to(
+        &self,
+        sql: &str,
+        canonical: &str,
+    ) -> Vec<Statement> {
+        let sql_without_semicolons = sql
+            .replace("; ", " ")
+            .replace(" ;", " ")
+            .replace(";\n", "\n")
+            .replace("\n;", "\n")
+            .replace(";", " ");
+        let statements = self
+            .parse_sql_statements(&sql_without_semicolons)
+            .expect(&sql_without_semicolons);
+        if !canonical.is_empty() && sql != canonical {
+            assert_eq!(self.parse_sql_statements(canonical).unwrap(), statements);
+        } else {
+            assert_eq!(
+                sql,
+                statements
+                    .iter()
+                    // note: account for format_statement_list manually inserted semicolons
+                    .map(|s| s.to_string().trim_end_matches(";").to_string())
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            );
+        }
+        statements
+    }
+
     /// Ensures that `sql` parses as an [`Expr`], and that
     /// re-serializing the parse result produces canonical
     pub fn expr_parses_to(&self, sql: &str, canonical: &str) -> Expr {
@@ -316,6 +348,43 @@ where
     F: Fn(&dyn Dialect) -> bool,
 {
     all_dialects_where(|d| !except(d))
+}
+
+/// Returns all dialects that don't support statements without semicolon delimiters.
+/// (i.e. dialects that require semicolon delimiters.)
+pub fn all_dialects_requiring_semicolon_statement_delimiter() -> TestedDialects {
+    let tested_dialects =
+        all_dialects_except(|d| d.supports_statements_without_semicolon_delimiter());
+    assert_ne!(tested_dialects.dialects.len(), 0);
+    tested_dialects
+}
+
+/// Returns all dialects that do support statements without semicolon delimiters.
+/// (i.e. dialects not requiring semicolon delimiters.)
+pub fn all_dialects_not_requiring_semicolon_statement_delimiter() -> TestedDialects {
+    let tested_dialects =
+        all_dialects_where(|d| d.supports_statements_without_semicolon_delimiter());
+    assert_ne!(tested_dialects.dialects.len(), 0);
+    tested_dialects
+}
+
+/// Asserts an error for `parse_sql_statements`:
+/// - "end of statement" for dialects that require semicolon delimiters
+/// - "an SQL statement" for dialects that don't require semicolon delimiters.
+pub fn assert_err_parse_statements(sql: &str, found: &str) {
+    assert_eq!(
+        ParserError::ParserError(format!("Expected: end of statement, found: {found}")),
+        all_dialects_requiring_semicolon_statement_delimiter()
+            .parse_sql_statements(sql)
+            .unwrap_err()
+    );
+
+    assert_eq!(
+        ParserError::ParserError(format!("Expected: an SQL statement, found: {found}")),
+        all_dialects_not_requiring_semicolon_statement_delimiter()
+            .parse_sql_statements(sql)
+            .unwrap_err()
+    );
 }
 
 pub fn assert_eq_vec<T: ToString>(expected: &[&str], actual: &[T]) {

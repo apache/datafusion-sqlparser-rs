@@ -8947,9 +8947,7 @@ impl<'a> Parser<'a> {
             } else {
                 options = self.parse_options(Keyword::SET)?;
                 if !options.is_empty() {
-                    AlterTableOperation::SetStorageParameters {
-                        storage_parameters: options,
-                    }
+                    AlterTableOperation::SetOptionsParens { options }
                 } else {
                     return self.expected(
                     "ADD, RENAME, PARTITION, SWAP, DROP, REPLICA IDENTITY, SET, or SET TBLPROPERTIES after ALTER TABLE",

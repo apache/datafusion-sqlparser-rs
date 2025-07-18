@@ -4728,9 +4728,9 @@ fn parse_alter_table() {
 
     let set_storage_parameters = "ALTER TABLE tab SET (autovacuum_vacuum_scale_factor = 0.01, autovacuum_vacuum_threshold = 500)";
     match alter_table_op(verified_stmt(set_storage_parameters)) {
-        AlterTableOperation::SetStorageParameters { storage_parameters } => {
+        AlterTableOperation::SetOptionsParens { options } => {
             assert_eq!(
-                storage_parameters,
+                options,
                 [
                     SqlOption::KeyValue {
                         key: Ident {

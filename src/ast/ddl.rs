@@ -352,8 +352,11 @@ pub enum AlterTableOperation {
         name: Ident,
     },
     /// `SET ( storage_parameter [= value] [, ... ] )`
-    SetStorageParameters {
-        storage_parameters: Vec<SqlOption>,
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    /// Please refer to [PostgreSQL documentation](https://www.postgresql.org/docs/current/sql-altertable.html)
+    SetOptionsParens {
+        options: Vec<SqlOption>,
     },
 }
 
@@ -795,8 +798,8 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::ValidateConstraint { name } => {
                 write!(f, "VALIDATE CONSTRAINT {name}")
             }
-            AlterTableOperation::SetStorageParameters { storage_parameters } => {
-                write!(f, "SET ({})", display_comma_separated(storage_parameters))
+            AlterTableOperation::SetOptionsParens { options } => {
+                write!(f, "SET ({})", display_comma_separated(options))
             }
         }
     }

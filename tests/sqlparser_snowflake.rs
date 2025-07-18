@@ -4500,4 +4500,7 @@ fn test_snowflake_identifier_function() {
             .is_err(),
         true
     );
+
+    snowflake().verified_stmt("GRANT ROLE IDENTIFIER('AAA') TO USER IDENTIFIER('AAA')");
+    snowflake().verified_stmt("REVOKE ROLE IDENTIFIER('AAA') FROM USER IDENTIFIER('AAA')");
 }

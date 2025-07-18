@@ -9484,6 +9484,8 @@ fn parse_grant() {
     verified_stmt("GRANT SELECT ON FUTURE SEQUENCES IN SCHEMA db1.sc1 TO ROLE role1");
     verified_stmt("GRANT USAGE ON PROCEDURE db1.sc1.foo(INT) TO ROLE role1");
     verified_stmt("GRANT USAGE ON FUNCTION db1.sc1.foo(INT) TO ROLE role1");
+    verified_stmt("GRANT ROLE role1 TO ROLE role2");
+    verified_stmt("GRANT ROLE role1 TO USER user");
 }
 
 #[test]

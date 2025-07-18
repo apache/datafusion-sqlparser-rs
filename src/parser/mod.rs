@@ -14237,7 +14237,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::REPLICATE) {
             Ok(Action::Replicate)
         } else if self.parse_keyword(Keyword::ROLE) {
-            let role = self.parse_identifier()?;
+            let role = self.parse_object_name(false)?;
             Ok(Action::Role { role })
         } else if self.parse_keyword(Keyword::SELECT) {
             Ok(Action::Select {

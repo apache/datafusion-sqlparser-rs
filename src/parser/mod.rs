@@ -5674,6 +5674,14 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_analyze_format_kind(&mut self) -> Result<AnalyzeFormatKind, ParserError> {
+        if self.consume_token(&Token::Eq) {
+            Ok(AnalyzeFormatKind::Assignment(self.parse_analyze_format()?))
+        } else {
+            Ok(AnalyzeFormatKind::Keyword(self.parse_analyze_format()?))
+        }
+    }
+
     pub fn parse_analyze_format(&mut self) -> Result<AnalyzeFormat, ParserError> {
         let next_token = self.next_token();
         match &next_token.token {
@@ -11074,7 +11082,7 @@ impl<'a> Parser<'a> {
             analyze = self.parse_keyword(Keyword::ANALYZE);
             verbose = self.parse_keyword(Keyword::VERBOSE);
             if self.parse_keyword(Keyword::FORMAT) {
-                format = Some(self.parse_analyze_format()?);
+                format = Some(self.parse_analyze_format_kind()?);
             }
         }
 

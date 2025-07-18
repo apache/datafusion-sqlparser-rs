@@ -16041,6 +16041,27 @@ fn parse_create_procedure_with_parameter_modes() {
 }
 
 #[test]
+fn parse_not_null() {
+    let _ = all_dialects().expr_parses_to("x NOT NULL", "x IS NOT NULL");
+    let _ = all_dialects().expr_parses_to("NULL NOT NULL", "NULL IS NOT NULL");
+
+    assert_matches!(
+        all_dialects().expr_parses_to("NOT NULL NOT NULL", "NOT NULL IS NOT NULL"),
+        Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            ..
+        }
+    );
+    assert_matches!(
+        all_dialects().expr_parses_to("NOT x NOT NULL", "NOT x IS NOT NULL"),
+        Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            ..
+        }
+    );
+}
+
+#[test]
 fn test_select_exclude() {
     let dialects = all_dialects_where(|d| d.supports_select_wildcard_exclude());
     match &dialects
@@ -16182,4 +16203,30 @@ fn test_identifier_unicode_start() {
         Box::new(PostgreSqlDialect {}),
     ]);
     let _ = dialects.verified_stmt(sql);
+}
+
+#[test]
+fn parse_notnull() {
+    // Some dialects support `x NOTNULL` as an expression while others consider
+    // `x NOTNULL` like `x AS NOTNULL` and thus consider `NOTNULL` an alias for x.
+    let notnull_unsupported_dialects = all_dialects_except(|d| d.supports_notnull_operator());
+    let _ = notnull_unsupported_dialects
+        .verified_only_select_with_canonical("SELECT NULL NOTNULL", "SELECT NULL AS NOTNULL");
+
+    // Supported dialects consider `x NOTNULL` as an alias for `x IS NOT NULL`
+    let notnull_supported_dialects = all_dialects_where(|d| d.supports_notnull_operator());
+    let _ = notnull_supported_dialects.expr_parses_to("x NOTNULL", "x IS NOT NULL");
+
+    // For dialects which support it, `NOT NULL NOTNULL` should
+    // parse as `(NOT (NULL IS NOT NULL))`
+    assert_matches!(
+        notnull_supported_dialects.expr_parses_to("NOT NULL NOTNULL", "NOT NULL IS NOT NULL"),
+        Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            ..
+        }
+    );
+
+    // for unsupported dialects, parsing should stop at `NOT NULL`
+    notnull_unsupported_dialects.expr_parses_to("NOT NULL NOTNULL", "NOT NULL");
 }

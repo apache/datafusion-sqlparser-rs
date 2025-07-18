@@ -351,6 +351,13 @@ pub enum AlterTableOperation {
     ValidateConstraint {
         name: Ident,
     },
+    /// `SET ( storage_parameter [= value] [, ... ] )`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    /// Please refer to [PostgreSQL documentation](https://www.postgresql.org/docs/current/sql-altertable.html)
+    SetOptionsParens {
+        options: Vec<SqlOption>,
+    },
 }
 
 /// An `ALTER Policy` (`Statement::AlterPolicy`) operation
@@ -790,6 +797,9 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::ValidateConstraint { name } => {
                 write!(f, "VALIDATE CONSTRAINT {name}")
+            }
+            AlterTableOperation::SetOptionsParens { options } => {
+                write!(f, "SET ({})", display_comma_separated(options))
             }
         }
     }

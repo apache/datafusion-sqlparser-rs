@@ -7787,7 +7787,7 @@ impl<'a> Parser<'a> {
         } else if dialect_of!(self is ClickHouseDialect| GenericDialect)
             && self.parse_keyword(Keyword::ALIAS)
         {
-            Ok(Some(ColumnOption::Alias(self.parse_expr()?)))
+            Ok(Some(ColumnOption::Alias(self.parse_column_option_expr()?)))
         } else if dialect_of!(self is ClickHouseDialect| GenericDialect)
             && self.parse_keyword(Keyword::EPHEMERAL)
         {
@@ -7796,7 +7796,9 @@ impl<'a> Parser<'a> {
             if matches!(self.peek_token().token, Token::Comma | Token::RParen) {
                 Ok(Some(ColumnOption::Ephemeral(None)))
             } else {
-                Ok(Some(ColumnOption::Ephemeral(Some(self.parse_expr()?))))
+                Ok(Some(ColumnOption::Ephemeral(Some(
+                    self.parse_column_option_expr()?,
+                ))))
             }
         } else if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY]) {
             let characteristics = self.parse_constraint_characteristics()?;
@@ -7874,7 +7876,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keywords(&[Keyword::ON, Keyword::UPDATE])
             && dialect_of!(self is MySqlDialect | GenericDialect)
         {
-            let expr = self.parse_expr()?;
+            let expr = self.parse_column_option_expr()?;
             Ok(Some(ColumnOption::OnUpdate(expr)))
         } else if self.parse_keyword(Keyword::GENERATED) {
             self.parse_optional_column_option_generated()
@@ -7892,7 +7894,9 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::SRID)
             && dialect_of!(self is MySqlDialect | GenericDialect)
         {
-            Ok(Some(ColumnOption::Srid(Box::new(self.parse_expr()?))))
+            Ok(Some(ColumnOption::Srid(Box::new(
+                self.parse_column_option_expr()?,
+            ))))
         } else if self.parse_keyword(Keyword::IDENTITY)
             && dialect_of!(self is MsSqlDialect | GenericDialect)
         {
@@ -7934,7 +7938,7 @@ impl<'a> Parser<'a> {
 
     /// When parsing some column option expressions we need to revert to [ParserState::Normal] since
     /// `NOT NULL` is allowed as an alias for `IS NOT NULL`.
-    /// In those cases we use this helper instead of calling [parse_expr] directly.
+    /// In those cases we use this helper instead of calling [Parser::parse_expr] directly.
     ///
     /// For example, consider these `CREATE TABLE` statements:
     /// ```sql

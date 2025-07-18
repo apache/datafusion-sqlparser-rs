@@ -16032,13 +16032,10 @@ fn parse_create_procedure_with_parameter_modes() {
 }
 
 #[test]
-fn parse_not_null_supported() {
+fn parse_not_null() {
     let _ = all_dialects().expr_parses_to("x NOT NULL", "x IS NOT NULL");
     let _ = all_dialects().expr_parses_to("NULL NOT NULL", "NULL IS NOT NULL");
-}
 
-#[test]
-fn test_not_null_precedence() {
     assert_matches!(
         all_dialects().expr_parses_to("NOT NULL NOT NULL", "NOT NULL IS NOT NULL"),
         Expr::UnaryOp {
@@ -16200,31 +16197,21 @@ fn test_identifier_unicode_start() {
 }
 
 #[test]
-fn parse_notnull_unsupported() {
-    // Only Postgres, DuckDB, and SQLite support `x NOTNULL` as an expression
-    // All other dialects consider `x NOTNULL` like `x AS NOTNULL` and thus
-    // consider `NOTNULL` an alias for x.
-    let dialects = all_dialects_except(|d| d.supports_notnull_operator());
-    let _ = dialects
+fn parse_notnull() {
+    // Some dialects support `x NOTNULL` as an expression while others consider
+    // `x NOTNULL` like `x AS NOTNULL` and thus consider `NOTNULL` an alias for x.
+    let notnull_unsupported_dialects = all_dialects_except(|d| d.supports_notnull_operator());
+    let _ = notnull_unsupported_dialects
         .verified_only_select_with_canonical("SELECT NULL NOTNULL", "SELECT NULL AS NOTNULL");
-}
 
-#[test]
-fn parse_notnull_supported() {
-    // Postgres, DuckDB and SQLite support `x NOTNULL` as an alias for `x IS NOT NULL`
-    let dialects = all_dialects_where(|d| d.supports_notnull_operator());
-    let _ = dialects.expr_parses_to("x NOTNULL", "x IS NOT NULL");
-}
+    // Supported dialects consider `x NOTNULL` as an alias for `x IS NOT NULL`
+    let notnull_supported_dialects = all_dialects_where(|d| d.supports_notnull_operator());
+    let _ = notnull_supported_dialects.expr_parses_to("x NOTNULL", "x IS NOT NULL");
 
-#[test]
-fn test_notnull_precedence() {
     // For dialects which support it, `NOT NULL NOTNULL` should
     // parse as `(NOT (NULL IS NOT NULL))`
-    let supported_dialects = all_dialects_where(|d| d.supports_notnull_operator());
-    let unsupported_dialects = all_dialects_except(|d| d.supports_notnull_operator());
-
     assert_matches!(
-        supported_dialects.expr_parses_to("NOT NULL NOTNULL", "NOT NULL IS NOT NULL"),
+        notnull_supported_dialects.expr_parses_to("NOT NULL NOTNULL", "NOT NULL IS NOT NULL"),
         Expr::UnaryOp {
             op: UnaryOperator::Not,
             ..
@@ -16232,5 +16219,5 @@ fn test_notnull_precedence() {
     );
 
     // for unsupported dialects, parsing should stop at `NOT NULL`
-    unsupported_dialects.expr_parses_to("NOT NULL NOTNULL", "NOT NULL");
+    notnull_unsupported_dialects.expr_parses_to("NOT NULL NOTNULL", "NOT NULL");
 }

@@ -4339,6 +4339,12 @@ pub enum Statement {
     ///
     /// See [ReturnStatement]
     Return(ReturnStatement),
+    /// Go (MsSql)
+    ///
+    /// GO is not a Transact-SQL statement; it is a command recognized by various tools as a batch delimiter
+    ///
+    /// See: <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/sql-server-utilities-statements-go>
+    Go(GoStatement),
 }
 
 /// ```sql
@@ -6166,6 +6172,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Print(s) => write!(f, "{s}"),
+            Statement::Go(s) => write!(f, "{s}"),
             Statement::Return(r) => write!(f, "{r}"),
             Statement::List(command) => write!(f, "LIST {command}"),
             Statement::Remove(command) => write!(f, "REMOVE {command}"),
@@ -10073,6 +10080,26 @@ pub struct MemberOf {
 impl fmt::Display for MemberOf {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} MEMBER OF({})", self.value, self.array)
+    }
+}
+
+/// Represents a `GO` statement.
+///
+/// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/language-elements/sql-server-utilities-statements-go)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct GoStatement {
+    pub count: Option<u64>,
+}
+
+impl Display for GoStatement {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(count) = self.count {
+            write!(f, "GO {count}")
+        } else {
+            write!(f, "GO")
+        }
     }
 }
 

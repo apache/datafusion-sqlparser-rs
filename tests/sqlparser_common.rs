@@ -4296,6 +4296,7 @@ fn parse_create_schema() {
     verified_stmt(r#"CREATE SCHEMA a.b.c WITH (key1 = 'value1', key2 = 'value2')"#);
     verified_stmt(r#"CREATE SCHEMA IF NOT EXISTS a WITH (key1 = 'value1')"#);
     verified_stmt(r#"CREATE SCHEMA IF NOT EXISTS a WITH ()"#);
+    verified_stmt(r#"CREATE SCHEMA a CLONE b"#);
 }
 
 #[test]
@@ -7900,11 +7901,33 @@ fn parse_create_database() {
             if_not_exists,
             location,
             managed_location,
+            clone,
         } => {
             assert_eq!("mydb", db_name.to_string());
             assert!(!if_not_exists);
             assert_eq!(None, location);
             assert_eq!(None, managed_location);
+            assert_eq!(None, clone);
+        }
+        _ => unreachable!(),
+    }
+    let sql = "CREATE DATABASE mydb CLONE otherdb";
+    match verified_stmt(sql) {
+        Statement::CreateDatabase {
+            db_name,
+            if_not_exists,
+            location,
+            managed_location,
+            clone,
+        } => {
+            assert_eq!("mydb", db_name.to_string());
+            assert!(!if_not_exists);
+            assert_eq!(None, location);
+            assert_eq!(None, managed_location);
+            assert_eq!(
+                Some(ObjectName::from(vec![Ident::new("otherdb".to_string())])),
+                clone
+            );
         }
         _ => unreachable!(),
     }
@@ -7919,11 +7942,13 @@ fn parse_create_database_ine() {
             if_not_exists,
             location,
             managed_location,
+            clone,
         } => {
             assert_eq!("mydb", db_name.to_string());
             assert!(if_not_exists);
             assert_eq!(None, location);
             assert_eq!(None, managed_location);
+            assert_eq!(None, clone);
         }
         _ => unreachable!(),
     }

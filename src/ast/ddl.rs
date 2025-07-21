@@ -351,10 +351,13 @@ pub enum AlterTableOperation {
     ValidateConstraint {
         name: Ident,
     },
-    /// `SET ( storage_parameter [= value] [, ... ] )`
+    /// Arbitrary parenthesized `SET` options.
     ///
-    /// Note: this is a PostgreSQL-specific operation.
-    /// Please refer to [PostgreSQL documentation](https://www.postgresql.org/docs/current/sql-altertable.html)
+    /// Example:
+    /// ```sql
+    /// SET (scale_factor = 0.01, threshold = 500)`
+    /// ```
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
     SetOptionsParens {
         options: Vec<SqlOption>,
     },

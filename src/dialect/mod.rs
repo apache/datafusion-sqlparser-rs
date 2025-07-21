@@ -677,8 +677,16 @@ pub trait Dialect: Debug + Any {
                 Token::Word(w) if w.keyword == Keyword::MATCH => Ok(p!(Like)),
                 Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
                 Token::Word(w) if w.keyword == Keyword::MEMBER => Ok(p!(Like)),
+                Token::Word(w)
+                    if w.keyword == Keyword::NULL && !parser.in_column_definition_state() =>
+                {
+                    Ok(p!(Is))
+                }
                 _ => Ok(self.prec_unknown()),
             },
+            Token::Word(w) if w.keyword == Keyword::NOTNULL && self.supports_notnull_operator() => {
+                Ok(p!(Is))
+            }
             Token::Word(w) if w.keyword == Keyword::IS => Ok(p!(Is)),
             Token::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
@@ -1120,6 +1128,12 @@ pub trait Dialect: Debug + Any {
         _ident: &Ident,
         _name_parts: &[ObjectNamePart],
     ) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports the `x NOTNULL`
+    /// operator expression.
+    fn supports_notnull_operator(&self) -> bool {
         false
     }
 }

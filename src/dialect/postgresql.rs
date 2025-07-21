@@ -263,4 +263,10 @@ impl Dialect for PostgreSqlDialect {
     fn supports_alter_column_type_using(&self) -> bool {
         true
     }
+
+    /// Postgres supports `NOTNULL` as an alias for `IS NOT NULL`
+    /// See: <https://www.postgresql.org/docs/17/functions-comparison.html>
+    fn supports_notnull_operator(&self) -> bool {
+        true
+    }
 }

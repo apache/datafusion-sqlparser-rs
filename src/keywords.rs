@@ -608,6 +608,7 @@ define_keywords!(
     NOT,
     NOTHING,
     NOTIFY,
+    NOTNULL,
     NOWAIT,
     NO_WRITE_TO_BINLOG,
     NTH_VALUE,

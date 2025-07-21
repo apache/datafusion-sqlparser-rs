@@ -4917,12 +4917,19 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let clone = if self.parse_keyword(Keyword::CLONE) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
+
         Ok(Statement::CreateSchema {
             schema_name,
             if_not_exists,
             with,
             options,
             default_collate_spec,
+            clone,
         })
     }
 
@@ -4957,11 +4964,18 @@ impl<'a> Parser<'a> {
                 _ => break,
             }
         }
+        let clone = if self.parse_keyword(Keyword::CLONE) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
+
         Ok(Statement::CreateDatabase {
             db_name,
             if_not_exists: ine,
             location,
             managed_location,
+            clone,
         })
     }
 

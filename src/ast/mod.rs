@@ -3846,6 +3846,14 @@ pub enum Statement {
         ///
         /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_schema_statement)
         default_collate_spec: Option<Expr>,
+        /// Clones a schema
+        ///
+        /// ```sql
+        /// CREATE SCHEMA myschema CLONE otherschema
+        /// ```
+        ///
+        /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-clone#databases-schemas)
+        clone: Option<ObjectName>,
     },
     /// ```sql
     /// CREATE DATABASE
@@ -3855,6 +3863,14 @@ pub enum Statement {
         if_not_exists: bool,
         location: Option<String>,
         managed_location: Option<String>,
+        /// Clones a database
+        ///
+        /// ```sql
+        /// CREATE DATABASE mydb CLONE otherdb
+        /// ```
+        ///
+        /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-clone#databases-schemas)
+        clone: Option<ObjectName>,
     },
     /// ```sql
     /// CREATE FUNCTION
@@ -4797,6 +4813,7 @@ impl fmt::Display for Statement {
                 if_not_exists,
                 location,
                 managed_location,
+                clone,
             } => {
                 write!(f, "CREATE DATABASE")?;
                 if *if_not_exists {
@@ -4808,6 +4825,9 @@ impl fmt::Display for Statement {
                 }
                 if let Some(ml) = managed_location {
                     write!(f, " MANAGEDLOCATION '{ml}'")?;
+                }
+                if let Some(clone) = clone {
+                    write!(f, " CLONE {clone}")?;
                 }
                 Ok(())
             }
@@ -5730,6 +5750,7 @@ impl fmt::Display for Statement {
                 with,
                 options,
                 default_collate_spec,
+                clone,
             } => {
                 write!(
                     f,
@@ -5750,6 +5771,9 @@ impl fmt::Display for Statement {
                     write!(f, " OPTIONS({})", display_comma_separated(options))?;
                 }
 
+                if let Some(clone) = clone {
+                    write!(f, " CLONE {clone}")?;
+                }
                 Ok(())
             }
             Statement::Assert { condition, message } => {

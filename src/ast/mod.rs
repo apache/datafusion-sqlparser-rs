@@ -10521,6 +10521,48 @@ impl fmt::Display for CreateTableLike {
     }
 }
 
+/// Specifies the refresh mode for the dynamic table.
+///
+/// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-dynamic-table)
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum RefreshModeKind {
+    Auto,
+    Full,
+    Incremental,
+}
+
+impl fmt::Display for RefreshModeKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            RefreshModeKind::Auto => write!(f, "AUTO"),
+            RefreshModeKind::Full => write!(f, "FULL"),
+            RefreshModeKind::Incremental => write!(f, "INCREMENTAL"),
+        }
+    }
+}
+
+/// Specifies the behavior of the initial refresh of the dynamic table.
+///
+/// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-dynamic-table)
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum InitializeKind {
+    OnCreate,
+    OnSchedule,
+}
+
+impl fmt::Display for InitializeKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            InitializeKind::OnCreate => write!(f, "ON_CREATE"),
+            InitializeKind::OnSchedule => write!(f, "ON_SCHEDULE"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::tokenizer::Location;

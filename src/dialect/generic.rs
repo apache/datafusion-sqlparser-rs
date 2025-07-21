@@ -88,6 +88,14 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn create_view_if_not_exists_supported(&self) -> bool {
+        true
+    }
+
+    fn create_view_name_before_if_not_exists_supported(&self) -> bool {
+        true
+    }
+
     fn support_map_literal_syntax(&self) -> bool {
         true
     }

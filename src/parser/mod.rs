@@ -5768,12 +5768,30 @@ impl<'a> Parser<'a> {
     ) -> Result<Statement, ParserError> {
         let materialized = self.parse_keyword(Keyword::MATERIALIZED);
         self.expect_keyword_is(Keyword::VIEW)?;
-        let if_not_exists = dialect_of!(self is BigQueryDialect|SQLiteDialect|GenericDialect)
-            && self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let allow_unquoted_hyphen = dialect_of!(self is BigQueryDialect);
+        let mut if_not_exists = false;
+        let name: ObjectName;
+        let mut name_before_not_exists = false;
+        if self.peek_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]) {
+            // Possible syntax -> ... IF NOT EXISTS <name>
+            if self.dialect.create_view_if_not_exists_supported() {
+                if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+            }
+            name = self.parse_object_name(allow_unquoted_hyphen)?;
+        } else {
+            // Possible syntax -> ... <name> IF NOT EXISTS
+            name = self.parse_object_name(allow_unquoted_hyphen)?;
+            if self
+                .dialect
+                .create_view_name_before_if_not_exists_supported()
+                && self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS])
+            {
+                if_not_exists = true;
+                name_before_not_exists = true;
+            }
+        }
         // Many dialects support `OR ALTER` right after `CREATE`, but we don't (yet).
         // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
-        let allow_unquoted_hyphen = dialect_of!(self is BigQueryDialect);
-        let name = self.parse_object_name(allow_unquoted_hyphen)?;
         let columns = self.parse_view_columns()?;
         let mut options = CreateTableOptions::None;
         let with_options = self.parse_options(Keyword::WITH)?;
@@ -5840,6 +5858,7 @@ impl<'a> Parser<'a> {
             temporary,
             to,
             params: create_view_params,
+            name_before_not_exists,
         })
     }
 

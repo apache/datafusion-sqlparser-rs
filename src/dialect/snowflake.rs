@@ -285,6 +285,16 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    // See https://docs.snowflake.com/en/sql-reference/sql/create-view
+    fn create_view_if_not_exists_supported(&self) -> bool {
+        true
+    }
+
+    // Snowflake allows table name before if not exists in CREATE VIEW
+    fn create_view_name_before_if_not_exists_supported(&self) -> bool {
+        true
+    }
+
     fn supports_left_associative_joins_without_parens(&self) -> bool {
         false
     }

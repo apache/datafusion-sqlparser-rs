@@ -116,6 +116,11 @@ impl Dialect for BigQueryDialect {
         true
     }
 
+    // See https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#:~:text=CREATE%20%5B%20OR%20REPLACE%20%5D%20VIEW%20%5B%20IF%20NOT%20EXISTS%20%5D
+    fn create_view_if_not_exists_supported(&self) -> bool {
+        true
+    }
+
     fn require_interval_qualifier(&self) -> bool {
         true
     }

@@ -1848,6 +1848,7 @@ fn parse_create_table_with_valid_options() {
                 temporary: false,
                 external: false,
                 global: None,
+                dynamic: false,
                 if_not_exists: false,
                 transient: false,
                 volatile: false,
@@ -1924,7 +1925,13 @@ fn parse_create_table_with_valid_options() {
                 catalog: None,
                 catalog_sync: None,
                 storage_serialization_policy: None,
-                table_options: CreateTableOptions::With(with_options)
+                table_options: CreateTableOptions::With(with_options),
+                target_lag: None,
+                warehouse: None,
+                version: None,
+                refresh_mode: None,
+                initialize: None,
+                require_user: false,
             })
         );
     }
@@ -2031,6 +2038,7 @@ fn parse_create_table_with_identity_column() {
                 temporary: false,
                 external: false,
                 global: None,
+                dynamic: false,
                 if_not_exists: false,
                 transient: false,
                 volatile: false,
@@ -2088,7 +2096,13 @@ fn parse_create_table_with_identity_column() {
                 catalog: None,
                 catalog_sync: None,
                 storage_serialization_policy: None,
-                table_options: CreateTableOptions::None
+                table_options: CreateTableOptions::None,
+                target_lag: None,
+                warehouse: None,
+                version: None,
+                refresh_mode: None,
+                initialize: None,
+                require_user: false,
             }),
         );
     }

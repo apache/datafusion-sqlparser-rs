@@ -29,7 +29,10 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::display_utils::{indented_list, DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
+use crate::{
+    ast::{InitializeKind, RefreshModeKind, TableVersion},
+    display_utils::{indented_list, DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline},
+};
 
 pub use super::ddl::{ColumnDef, TableConstraint};
 
@@ -135,6 +138,7 @@ pub struct CreateTable {
     pub or_replace: bool,
     pub temporary: bool,
     pub external: bool,
+    pub dynamic: bool,
     pub global: Option<bool>,
     pub if_not_exists: bool,
     pub transient: bool,
@@ -155,6 +159,7 @@ pub struct CreateTable {
     pub without_rowid: bool,
     pub like: Option<ObjectName>,
     pub clone: Option<ObjectName>,
+    pub version: Option<TableVersion>,
     // For Hive dialect, the table comment is after the column definitions without `=`,
     // so the `comment` field is optional and different than the comment field in the general options list.
     // [Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable)
@@ -232,6 +237,21 @@ pub struct CreateTable {
     /// Snowflake "STORAGE_SERIALIZATION_POLICY" clause for Iceberg tables
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table>
     pub storage_serialization_policy: Option<StorageSerializationPolicy>,
+    /// Snowflake "TARGET_LAG" clause for dybamic tables
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-dynamic-table>
+    pub target_lag: Option<String>,
+    /// Snowflake "WAREHOUSE" clause for dybamic tables
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-dynamic-table>
+    pub warehouse: Option<Ident>,
+    /// Snowflake "REFRESH_MODE" clause for dybamic tables
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-dynamic-table>
+    pub refresh_mode: Option<RefreshModeKind>,
+    /// Snowflake "INITIALIZE" clause for dybamic tables
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-dynamic-table>
+    pub initialize: Option<InitializeKind>,
+    /// Snowflake "REQUIRE USER" clause for dybamic tables
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-dynamic-table>
+    pub require_user: bool,
 }
 
 impl Display for CreateTable {
@@ -245,7 +265,7 @@ impl Display for CreateTable {
         //   `CREATE TABLE t (a INT) AS SELECT a from t2`
         write!(
             f,
-            "CREATE {or_replace}{external}{global}{temporary}{transient}{volatile}{iceberg}TABLE {if_not_exists}{name}",
+            "CREATE {or_replace}{external}{global}{temporary}{transient}{volatile}{iceberg}{dynamic}TABLE {if_not_exists}{name}",
             or_replace = if self.or_replace { "OR REPLACE " } else { "" },
             external = if self.external { "EXTERNAL " } else { "" },
             global = self.global
@@ -263,6 +283,7 @@ impl Display for CreateTable {
             volatile = if self.volatile { "VOLATILE " } else { "" },
             // Only for Snowflake
             iceberg = if self.iceberg { "ICEBERG " } else { "" },
+            dynamic = if self.dynamic { "DYNAMIC " } else { "" },
             name = self.name,
         )?;
         if let Some(on_cluster) = &self.on_cluster {
@@ -478,6 +499,26 @@ impl Display for CreateTable {
 
         if let Some(tag) = &self.with_tags {
             write!(f, " WITH TAG ({})", display_comma_separated(tag.as_slice()))?;
+        }
+
+        if let Some(target_lag) = &self.target_lag {
+            write!(f, " TARGET_LAG='{target_lag}'")?;
+        }
+
+        if let Some(warehouse) = &self.warehouse {
+            write!(f, " WAREHOUSE={warehouse}")?;
+        }
+
+        if let Some(refresh_mode) = &self.refresh_mode {
+            write!(f, " REFRESH_MODE={refresh_mode}")?;
+        }
+
+        if let Some(initialize) = &self.initialize {
+            write!(f, " INITIALIZE={initialize}")?;
+        }
+
+        if self.require_user {
+            write!(f, " REQUIRE USER")?;
         }
 
         if self.on_commit.is_some() {

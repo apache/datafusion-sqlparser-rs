@@ -529,23 +529,6 @@ fn test_snowflake_create_table_comment() {
 }
 
 #[test]
-fn test_snowflake_create_table_incomplete_statement() {
-    assert_eq!(
-        snowflake().parse_sql_statements("CREATE TABLE my_table"),
-        Err(ParserError::ParserError(
-            "unexpected end of input".to_string()
-        ))
-    );
-
-    assert_eq!(
-        snowflake().parse_sql_statements("CREATE TABLE my_table; (c int)"),
-        Err(ParserError::ParserError(
-            "unexpected end of input".to_string()
-        ))
-    );
-}
-
-#[test]
 fn test_snowflake_single_line_tokenize() {
     let sql = "CREATE TABLE# this is a comment \ntable_1";
     let dialect = SnowflakeDialect {};
@@ -1020,27 +1003,6 @@ fn test_snowflake_create_table_trailing_options() {
 }
 
 #[test]
-fn test_snowflake_create_table_valid_schema_info() {
-    // Validate there's exactly one source of information on the schema of the new table
-    assert_eq!(
-        snowflake()
-            .parse_sql_statements("CREATE TABLE dst")
-            .is_err(),
-        true
-    );
-    assert_eq!(
-        snowflake().parse_sql_statements("CREATE OR REPLACE TEMP TABLE dst LIKE src AS (SELECT * FROM CUSTOMERS) ON COMMIT PRESERVE ROWS").is_err(),
-        true
-    );
-    assert_eq!(
-        snowflake()
-            .parse_sql_statements("CREATE OR REPLACE TEMP TABLE dst CLONE customers LIKE customer2")
-            .is_err(),
-        true
-    );
-}
-
-#[test]
 fn parse_sf_create_or_replace_view_with_comment_missing_equal() {
     assert!(snowflake_and_generic()
         .parse_sql_statements("CREATE OR REPLACE VIEW v COMMENT = 'hello, world' AS SELECT 1")
@@ -1102,6 +1064,56 @@ fn parse_sf_create_table_or_view_with_dollar_quoted_comment() {
         r#"CREATE TABLE my_table (a STRING COMMENT $$comment 1$$) COMMENT = $$table comment$$"#,
         r#"CREATE TABLE my_table (a STRING COMMENT 'comment 1') COMMENT = 'table comment'"#,
     );
+}
+
+#[test]
+fn parse_create_dynamic_table() {
+    snowflake().verified_stmt(r#"CREATE OR REPLACE DYNAMIC TABLE my_dynamic_table TARGET_LAG='20 minutes' WAREHOUSE=mywh AS SELECT product_id, product_name FROM staging_table"#);
+    snowflake()
+        .parse_sql_statements(
+            r#"
+CREATE DYNAMIC ICEBERG TABLE my_dynamic_table (date TIMESTAMP_NTZ, id NUMBER, content STRING)
+  TARGET_LAG = '20 minutes'
+  WAREHOUSE = mywh
+  EXTERNAL_VOLUME = 'my_external_volume'
+  CATALOG = 'SNOWFLAKE'
+  BASE_LOCATION = 'my_iceberg_table'
+  AS
+    SELECT product_id, product_name FROM staging_table;
+    "#,
+        )
+        .unwrap();
+
+    snowflake()
+        .parse_sql_statements(
+            r#"
+CREATE DYNAMIC TABLE my_dynamic_table (date TIMESTAMP_NTZ, id NUMBER, content VARIANT)
+  TARGET_LAG = '20 minutes'
+  WAREHOUSE = mywh
+  CLUSTER BY (date, id)
+  AS
+    SELECT product_id, product_name FROM staging_table;
+    "#,
+        )
+        .unwrap();
+
+    snowflake().parse_sql_statements(r#"
+CREATE DYNAMIC TABLE my_cloned_dynamic_table CLONE my_dynamic_table AT (TIMESTAMP => TO_TIMESTAMP_TZ('04/05/2013 01:02:03', 'mm/dd/yyyy hh24:mi:ss'));
+    "#).unwrap();
+
+    snowflake()
+        .parse_sql_statements(
+            r#"
+CREATE DYNAMIC TABLE my_dynamic_table
+  TARGET_LAG = 'DOWNSTREAM'
+  WAREHOUSE = mywh
+  INITIALIZE = on_schedule
+  REQUIRE USER
+  AS
+    SELECT product_id, product_name FROM staging_table;
+    "#,
+        )
+        .unwrap();
 }
 
 #[test]

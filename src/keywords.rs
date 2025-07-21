@@ -404,6 +404,7 @@ define_keywords!(
     GIN,
     GIST,
     GLOBAL,
+    GO,
     GRANT,
     GRANTED,
     GRANTS,

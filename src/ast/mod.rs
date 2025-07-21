@@ -6611,6 +6611,7 @@ pub enum Action {
         role: ObjectName,
     },
     Delete,
+    Drop,
     EvolveSchema,
     Exec {
         obj_type: Option<ActionExecuteObjectType>,
@@ -6680,6 +6681,7 @@ impl fmt::Display for Action {
             }
             Action::DatabaseRole { role } => write!(f, "DATABASE ROLE {role}")?,
             Action::Delete => f.write_str("DELETE")?,
+            Action::Drop => f.write_str("DROP")?,
             Action::EvolveSchema => f.write_str("EVOLVE SCHEMA")?,
             Action::Exec { obj_type } => {
                 f.write_str("EXEC")?;

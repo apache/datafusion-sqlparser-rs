@@ -14339,6 +14339,8 @@ impl<'a> Parser<'a> {
             Ok(Action::Usage)
         } else if self.parse_keyword(Keyword::OWNERSHIP) {
             Ok(Action::Ownership)
+        } else if self.parse_keyword(Keyword::DROP) {
+            Ok(Action::Drop)
         } else {
             self.expected("a privilege keyword", self.peek_token())?
         }

@@ -400,6 +400,7 @@ impl Spanned for Statement {
                 if_not_exists: _,
                 temporary: _,
                 to,
+                name_before_not_exists: _,
                 params: _,
             } => union_spans(
                 core::iter::once(name.span())

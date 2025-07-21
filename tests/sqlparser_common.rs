@@ -7985,6 +7985,7 @@ fn parse_create_view() {
             temporary,
             to,
             params,
+            name_before_not_exists: _,
         } => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
@@ -8053,6 +8054,7 @@ fn parse_create_view_with_columns() {
             temporary,
             to,
             params,
+            name_before_not_exists: _,
         } => {
             assert_eq!(or_alter, false);
             assert_eq!("v", name.to_string());
@@ -8102,6 +8104,7 @@ fn parse_create_view_temporary() {
             temporary,
             to,
             params,
+            name_before_not_exists: _,
         } => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
@@ -8141,6 +8144,7 @@ fn parse_create_or_replace_view() {
             temporary,
             to,
             params,
+            name_before_not_exists: _,
         } => {
             assert_eq!(or_alter, false);
             assert_eq!("v", name.to_string());
@@ -8184,6 +8188,7 @@ fn parse_create_or_replace_materialized_view() {
             temporary,
             to,
             params,
+            name_before_not_exists: _,
         } => {
             assert_eq!(or_alter, false);
             assert_eq!("v", name.to_string());
@@ -8223,6 +8228,7 @@ fn parse_create_materialized_view() {
             temporary,
             to,
             params,
+            name_before_not_exists: _,
         } => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
@@ -8262,6 +8268,7 @@ fn parse_create_materialized_view_with_cluster_by() {
             temporary,
             to,
             params,
+            name_before_not_exists: _,
         } => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
@@ -16180,6 +16187,24 @@ fn test_identifier_unicode_start() {
         Box::new(MySqlDialect {}),
         Box::new(RedshiftSqlDialect {}),
         Box::new(PostgreSqlDialect {}),
+    ]);
+    let _ = dialects.verified_stmt(sql);
+}
+
+#[test]
+fn parse_create_view_if_not_exists() {
+    let sql = "CREATE VIEW IF NOT EXISTS v AS SELECT 1";
+    let dialects = TestedDialects::new(vec![
+        Box::new(SnowflakeDialect {}),
+        Box::new(GenericDialect {}),
+        Box::new(SQLiteDialect {}),
+        Box::new(BigQueryDialect {}),
+    ]);
+    let _ = dialects.verified_stmt(sql);
+    let sql = "CREATE VIEW v IF NOT EXISTS AS SELECT 1";
+    let dialects = TestedDialects::new(vec![
+        Box::new(SnowflakeDialect {}),
+        Box::new(GenericDialect {}),
     ]);
     let _ = dialects.verified_stmt(sql);
 }

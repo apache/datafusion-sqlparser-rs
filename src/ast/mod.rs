@@ -10131,6 +10131,14 @@ impl fmt::Display for MemberOf {
     }
 }
 
+/// Creates a user
+///
+/// Syntax:
+/// ```sql
+/// CREATE [OR REPLACE] USER [IF NOT EXISTS] <name> [OPTIONS]
+/// ```
+///
+/// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-user)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

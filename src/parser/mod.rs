@@ -4721,7 +4721,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_create_user(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
+    fn parse_create_user(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let name = self.parse_identifier()?;
         let options = self.parse_key_value_options(false, &[Keyword::WITH, Keyword::TAG])?;
@@ -16683,43 +16683,38 @@ impl<'a> Parser<'a> {
         Ok(options)
     }
 
-    // Parses a `KEY = VALUE` construct based on the specified key
+    /// Parses a `KEY = VALUE` construct based on the specified key
     pub(crate) fn parse_key_value_option(
         &mut self,
         key: Word,
     ) -> Result<KeyValueOption, ParserError> {
         self.expect_token(&Token::Eq)?;
-        if self.parse_keyword(Keyword::TRUE) {
-            Ok(KeyValueOption {
+        match self.next_token().token {
+            Token::SingleQuotedString(value) => Ok(KeyValueOption {
                 option_name: key.value,
-                option_type: KeyValueOptionType::BOOLEAN,
-                value: "TRUE".to_string(),
-            })
-        } else if self.parse_keyword(Keyword::FALSE) {
-            Ok(KeyValueOption {
-                option_name: key.value,
-                option_type: KeyValueOptionType::BOOLEAN,
-                value: "FALSE".to_string(),
-            })
-        } else {
-            match self.next_token().token {
-                Token::SingleQuotedString(value) => Ok(KeyValueOption {
+                option_type: KeyValueOptionType::STRING,
+                value,
+            }),
+            Token::Word(word)
+                if word.keyword == Keyword::TRUE || word.keyword == Keyword::FALSE =>
+            {
+                Ok(KeyValueOption {
                     option_name: key.value,
-                    option_type: KeyValueOptionType::STRING,
-                    value,
-                }),
-                Token::Word(word) => Ok(KeyValueOption {
-                    option_name: key.value,
-                    option_type: KeyValueOptionType::ENUM,
-                    value: word.value,
-                }),
-                Token::Number(n, _) => Ok(KeyValueOption {
-                    option_name: key.value,
-                    option_type: KeyValueOptionType::NUMBER,
-                    value: n,
-                }),
-                _ => self.expected("expected option value", self.peek_token()),
+                    option_type: KeyValueOptionType::BOOLEAN,
+                    value: word.value.to_uppercase(),
+                })
             }
+            Token::Word(word) => Ok(KeyValueOption {
+                option_name: key.value,
+                option_type: KeyValueOptionType::ENUM,
+                value: word.value,
+            }),
+            Token::Number(n, _) => Ok(KeyValueOption {
+                option_name: key.value,
+                option_type: KeyValueOptionType::NUMBER,
+                value: n,
+            }),
+            _ => self.expected("expected option value", self.peek_token()),
         }
     }
 }

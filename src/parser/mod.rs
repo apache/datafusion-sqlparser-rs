@@ -509,7 +509,12 @@ impl<'a> Parser<'a> {
 
             match self.peek_token().token {
                 Token::EOF => break,
-
+                // end of statement
+                Token::Word(word) => {
+                    if expecting_statement_delimiter && word.keyword == Keyword::END {
+                        break;
+                    }
+                }
                 // don't expect a semicolon statement delimiter after a newline when not otherwise required
                 Token::Whitespace(Whitespace::Newline) => {
                     if !self.options.require_semicolon_stmt_delimiter {

@@ -1215,6 +1215,13 @@ pub trait Dialect: Debug + Any {
     }
 
     /// Returns true if the dialect supports parsing statements without a semicolon delimiter.
+    ///
+    /// If returns true, the following SQL will not parse. If returns `false` the SQL will parse
+    ///
+    /// ```sql
+    /// SELECT 1
+    /// SELECT 2
+    /// ```
     fn supports_statements_without_semicolon_delimiter(&self) -> bool {
         false
     }

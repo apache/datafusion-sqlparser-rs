@@ -4635,11 +4635,7 @@ impl<'a> Parser<'a> {
             return Ok(vec![]);
         }
 
-        if end_token == Token::SemiColon
-            && self
-                .dialect
-                .supports_statements_without_semicolon_delimiter()
-        {
+        if end_token == Token::SemiColon && !self.options.require_semicolon_stmt_delimiter {
             if let Token::Word(ref kw) = self.peek_token().token {
                 if kw.keyword != Keyword::NoKeyword {
                     return Ok(vec![]);

@@ -193,12 +193,7 @@ impl TestedDialects {
         sql: &str,
         canonical: &str,
     ) -> Vec<Statement> {
-        let sql_without_semicolons = sql
-            .replace("; ", " ")
-            .replace(" ;", " ")
-            .replace(";\n", "\n")
-            .replace("\n;", "\n")
-            .replace(";", " ");
+        let sql_without_semicolons = sql.replace(";", " ");
         let statements = self
             .parse_sql_statements(&sql_without_semicolons)
             .expect(&sql_without_semicolons);

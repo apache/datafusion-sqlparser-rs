@@ -1072,6 +1072,7 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::ANTI,
     Keyword::SEMI,
     Keyword::RETURNING,
+    Keyword::RETURN,
     Keyword::ASOF,
     Keyword::MATCH_CONDITION,
     // for MSSQL-specific OUTER APPLY (seems reserved in most dialects)
@@ -1097,6 +1098,11 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::TABLESAMPLE,
     Keyword::FROM,
     Keyword::OPEN,
+    Keyword::INSERT,
+    Keyword::UPDATE,
+    Keyword::DELETE,
+    Keyword::EXEC,
+    Keyword::EXECUTE,
 ];
 
 /// Can't be used as a column alias, so that `SELECT <expr> alias`
@@ -1126,6 +1132,7 @@ pub const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
     Keyword::CLUSTER,
     Keyword::DISTRIBUTE,
     Keyword::RETURNING,
+    Keyword::RETURN,
     // Reserved only as a column alias in the `SELECT` clause
     Keyword::FROM,
     Keyword::INTO,
@@ -1140,6 +1147,7 @@ pub const RESERVED_FOR_TABLE_FACTOR: &[Keyword] = &[
     Keyword::LIMIT,
     Keyword::HAVING,
     Keyword::WHERE,
+    Keyword::RETURN,
 ];
 
 /// Global list of reserved keywords that cannot be parsed as identifiers
@@ -1150,4 +1158,5 @@ pub const RESERVED_FOR_IDENTIFIER: &[Keyword] = &[
     Keyword::INTERVAL,
     Keyword::STRUCT,
     Keyword::TRIM,
+    Keyword::RETURN,
 ];

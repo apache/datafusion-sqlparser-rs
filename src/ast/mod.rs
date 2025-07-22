@@ -6771,6 +6771,7 @@ pub enum ActionCreateObjectType {
     OrganiationListing,
     ReplicationGroup,
     Role,
+    Schema,
     Share,
     User,
     Warehouse,
@@ -6792,6 +6793,7 @@ impl fmt::Display for ActionCreateObjectType {
             ActionCreateObjectType::OrganiationListing => write!(f, "ORGANIZATION LISTING"),
             ActionCreateObjectType::ReplicationGroup => write!(f, "REPLICATION GROUP"),
             ActionCreateObjectType::Role => write!(f, "ROLE"),
+            ActionCreateObjectType::Schema => write!(f, "SCHEMA"),
             ActionCreateObjectType::Share => write!(f, "SHARE"),
             ActionCreateObjectType::User => write!(f, "USER"),
             ActionCreateObjectType::Warehouse => write!(f, "WAREHOUSE"),
@@ -7029,6 +7031,8 @@ pub enum GrantObjects {
     AllMaterializedViewsInSchema { schemas: Vec<ObjectName> },
     /// Grant privileges on `ALL EXTERNAL TABLES IN SCHEMA <schema_name> [, ...]`
     AllExternalTablesInSchema { schemas: Vec<ObjectName> },
+    /// Grant privileges on `ALL FUNCTIONS IN SCHEMA <schema_name> [, ...]`
+    AllFunctionsInSchema { schemas: Vec<ObjectName> },
     /// Grant privileges on `FUTURE SCHEMAS IN DATABASE <database_name> [, ...]`
     FutureSchemasInDatabase { databases: Vec<ObjectName> },
     /// Grant privileges on `FUTURE TABLES IN SCHEMA <schema_name> [, ...]`
@@ -7146,6 +7150,13 @@ impl fmt::Display for GrantObjects {
                 write!(
                     f,
                     "ALL MATERIALIZED VIEWS IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
+            GrantObjects::AllFunctionsInSchema { schemas } => {
+                write!(
+                    f,
+                    "ALL FUNCTIONS IN SCHEMA {}",
                     display_comma_separated(schemas)
                 )
             }

@@ -66,9 +66,9 @@ pub use self::ddl::{
     Deduplicate, DeferrableInitial, DropBehavior, GeneratedAs, GeneratedExpressionMode,
     IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
     IdentityPropertyOrder, IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner,
-    Partition, ProcedureParam, ReferentialAction, ReplicaIdentity, TableConstraint,
-    TagsColumnOption, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
-    ViewColumnDef,
+    Partition, ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity,
+    TableConstraint, TagsColumnOption, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{CreateIndex, CreateTable, Delete, IndexColumn, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};

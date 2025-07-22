@@ -8647,7 +8647,14 @@ impl<'a> Parser<'a> {
                 AlterTableOperation::RenameConstraint { old_name, new_name }
             } else if self.parse_keyword(Keyword::TO) {
                 let table_name = self.parse_object_name(false)?;
-                AlterTableOperation::RenameTable { table_name }
+                AlterTableOperation::RenameTable {
+                    table_name: RenameTableNameKind::To(table_name),
+                }
+            } else if self.parse_keyword(Keyword::AS) {
+                let table_name = self.parse_object_name(false)?;
+                AlterTableOperation::RenameTable {
+                    table_name: RenameTableNameKind::As(table_name),
+                }
             } else {
                 let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
                 let old_column_name = self.parse_identifier()?;

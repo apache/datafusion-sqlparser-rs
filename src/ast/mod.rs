@@ -7475,12 +7475,15 @@ impl fmt::Display for TypedString {
                 write!(f, "{data_type}")?;
                 write!(f, " {value}")
             }
-            true => match data_type {
-                DataType::Date => write!(f, "{{d {value}}}"),
-                DataType::Time(..) => write!(f, "{{t {value}}}"),
-                DataType::Timestamp(..) => write!(f, "{{ts {value}}}"),
-                _ => write!(f, "{{? {value}}}"),
-            },
+            true => {
+                let prefix = match data_type {
+                    DataType::Date => "d",
+                    DataType::Time(..) => "t",
+                    DataType::Timestamp(..) => "ts",
+                    _ => "?",
+                };
+                write!(f, "{{{prefix} {value}}}")
+            }
         }
     }
 }

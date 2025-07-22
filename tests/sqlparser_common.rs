@@ -16327,6 +16327,13 @@ fn test_odbc_time_date_timestamp_support() {
 }
 
 #[test]
+#[should_panic]
+fn test_invalid_odbc_literal_fails() {
+    let sql = "SELECT {tt '14:12:01'} FROM foo";
+    let _ = all_dialects().verified_stmt(sql);
+}
+
+#[test]
 fn parse_create_user() {
     let create = verified_stmt("CREATE USER u1");
     match create {

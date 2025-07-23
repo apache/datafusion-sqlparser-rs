@@ -29,7 +29,10 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::display_utils::{indented_list, DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
+use crate::{
+    ast::CreateTableLikeKind,
+    display_utils::{indented_list, DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline},
+};
 
 pub use super::ddl::{ColumnDef, TableConstraint};
 
@@ -153,7 +156,7 @@ pub struct CreateTable {
     pub location: Option<String>,
     pub query: Option<Box<Query>>,
     pub without_rowid: bool,
-    pub like: Option<ObjectName>,
+    pub like: Option<CreateTableLikeKind>,
     pub clone: Option<ObjectName>,
     // For Hive dialect, the table comment is after the column definitions without `=`,
     // so the `comment` field is optional and different than the comment field in the general options list.
@@ -282,6 +285,8 @@ impl Display for CreateTable {
         } else if self.query.is_none() && self.like.is_none() && self.clone.is_none() {
             // PostgreSQL allows `CREATE TABLE t ();`, but requires empty parens
             f.write_str(" ()")?;
+        } else if let Some(CreateTableLikeKind::Parenthesized(like_in_columns_list)) = &self.like {
+            write!(f, " ({like_in_columns_list})")?;
         }
 
         // Hive table comment should be after column definitions, please refer to:
@@ -295,9 +300,8 @@ impl Display for CreateTable {
             write!(f, " WITHOUT ROWID")?;
         }
 
-        // Only for Hive
-        if let Some(l) = &self.like {
-            write!(f, " LIKE {l}")?;
+        if let Some(CreateTableLikeKind::NotParenthesized(like)) = &self.like {
+            write!(f, " {like}")?;
         }
 
         if let Some(c) = &self.clone {

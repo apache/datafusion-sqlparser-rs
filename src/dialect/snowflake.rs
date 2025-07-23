@@ -23,10 +23,10 @@ use crate::ast::helpers::stmt_data_loading::{
     FileStagingCommand, StageLoadSelectItem, StageLoadSelectItemKind, StageParamsObject,
 };
 use crate::ast::{
-    ColumnOption, ColumnPolicy, ColumnPolicyProperty, CopyIntoSnowflakeKind, DollarQuotedString,
-    Ident, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
-    IdentityPropertyOrder, ObjectName, ObjectNamePart, RowAccessPolicy, ShowObjects, SqlOption,
-    Statement, TagsColumnOption, WrappedCollection,
+    ColumnOption, ColumnPolicy, ColumnPolicyProperty, CopyIntoSnowflakeKind, CreateTableLikeKind,
+    DollarQuotedString, Ident, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
+    IdentityPropertyKind, IdentityPropertyOrder, ObjectName, ObjectNamePart, RowAccessPolicy,
+    ShowObjects, SqlOption, Statement, TagsColumnOption, WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
@@ -577,8 +577,13 @@ pub fn parse_create_table(
                     builder = builder.clone_clause(clone);
                 }
                 Keyword::LIKE => {
-                    let like = parser.parse_object_name(false).ok();
-                    builder = builder.like(like);
+                    let name = parser.parse_object_name(false)?;
+                    builder = builder.like(Some(CreateTableLikeKind::NotParenthesized(
+                        crate::ast::CreateTableLike {
+                            name,
+                            defaults: None,
+                        },
+                    )));
                 }
                 Keyword::CLUSTER => {
                     parser.expect_keyword_is(Keyword::BY)?;

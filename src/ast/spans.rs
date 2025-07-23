@@ -575,7 +575,7 @@ impl Spanned for CreateTable {
             location: _,          // string, no span
             query,
             without_rowid: _, // bool
-            like,
+            like: _,
             clone,
             comment: _, // todo, no span
             on_commit: _,
@@ -610,7 +610,6 @@ impl Spanned for CreateTable {
                 .chain(columns.iter().map(|i| i.span()))
                 .chain(constraints.iter().map(|i| i.span()))
                 .chain(query.iter().map(|i| i.span()))
-                .chain(like.iter().map(|i| i.span()))
                 .chain(clone.iter().map(|i| i.span())),
         )
     }

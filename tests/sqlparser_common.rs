@@ -10875,7 +10875,10 @@ fn parse_pivot_table() {
                 expected_function("b", Some("t")),
                 expected_function("c", Some("u")),
             ],
-            value_column: vec![Expr::CompoundIdentifier(vec![Ident::new("a"), Ident::new("MONTH")])],
+            value_column: vec![Expr::CompoundIdentifier(vec![
+                Ident::new("a"),
+                Ident::new("MONTH")
+            ])],
             value_source: PivotValueSource::List(vec![
                 ExprWithAlias {
                     expr: Expr::value(number("1")),
@@ -10927,7 +10930,10 @@ fn parse_pivot_table() {
         "SELECT * FROM person ",
         "PIVOT(SUM(age) AS a, AVG(class) AS c FOR (name, age) IN (('John', 30) AS c1, ('Mike', 40) AS c2))"
     );
-    assert_eq!(verified_stmt(sql_with_multiple_value_column).to_string(), sql_with_multiple_value_column);
+    assert_eq!(
+        verified_stmt(sql_with_multiple_value_column).to_string(),
+        sql_with_multiple_value_column
+    );
 }
 
 #[test]

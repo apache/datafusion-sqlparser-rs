@@ -1336,7 +1336,7 @@ pub enum TableFactor {
     Pivot {
         table: Box<TableFactor>,
         aggregate_functions: Vec<ExprWithAlias>, // Function expression
-        value_column: Vec<Expr>, // Expr is a identifier or a compound identifier
+        value_column: Vec<Expr>,                 // Expr is a identifier or a compound identifier
         value_source: PivotValueSource,
         default_on_null: Option<Expr>,
         alias: Option<TableAlias>,

@@ -10826,7 +10826,9 @@ impl<'a> Parser<'a> {
         allow_empty: bool,
     ) -> Result<Vec<Expr>, ParserError> {
         self.parse_parenthesized_column_list_inner(optional, allow_empty, |p| {
-            Ok(Expr::CompoundIdentifier(p.parse_period_separated(|p| p.parse_identifier())?))
+            Ok(Expr::CompoundIdentifier(
+                p.parse_period_separated(|p| p.parse_identifier())?,
+            ))
         })
     }
 
@@ -13841,7 +13843,9 @@ impl<'a> Parser<'a> {
         let value_column = if self.peek_token_ref().token == Token::LParen {
             self.parse_parenthesized_compound_identifier_list(Mandatory, false)?
         } else {
-            vec![Expr::CompoundIdentifier(self.parse_period_separated(|p| p.parse_identifier())?)]
+            vec![Expr::CompoundIdentifier(
+                self.parse_period_separated(|p| p.parse_identifier())?,
+            )]
         };
         self.expect_keyword_is(Keyword::IN)?;
 

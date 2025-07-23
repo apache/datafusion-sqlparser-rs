@@ -2039,7 +2039,7 @@ impl<'a> Parser<'a> {
     /// Currently implemented:
     /// Scalar Function Calls
     /// Date, Time, and Timestamp Literals
-    /// See https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/escape-sequences-in-odbc?view=sql-server-2017
+    /// See <https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/escape-sequences-in-odbc?view=sql-server-2017>
     fn maybe_parse_odbc_body(&mut self) -> Result<Option<Expr>, ParserError> {
         // Attempt 1: Try to parse it as a function.
         if let Some(expr) = self.maybe_parse_odbc_fn_body()? {

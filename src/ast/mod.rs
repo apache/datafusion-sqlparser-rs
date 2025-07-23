@@ -8570,9 +8570,9 @@ pub enum CopyLegacyOption {
     Null(String),
     /// CSV ...
     Csv(Vec<CopyLegacyCsvOption>),
-    /// IAM_ROLE { default | 'arn:aws:iam::<AWS account-id>:role/<role-name>' }
+    /// IAM_ROLE { default | 'arn:aws:iam::123456789:role/role1' }
     IamRole(Option<String>),
-    /// IGNOREHEADER [ AS ] number_rows
+    /// IGNOREHEADER \[ AS \] number_rows
     IgnoreHeader(u64),
 }
 

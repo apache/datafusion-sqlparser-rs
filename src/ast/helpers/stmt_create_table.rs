@@ -26,7 +26,7 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use super::super::dml::CreateTable;
 use crate::ast::{
-    ClusteredBy, ColumnDef, CommentDef, CreateTableOptions, Expr, FileFormat,
+    ClusteredBy, ColumnDef, CommentDef, CreateTableLikeKind, CreateTableOptions, Expr, FileFormat,
     HiveDistributionStyle, HiveFormat, Ident, ObjectName, OnCommit, OneOrManyWithParens, Query,
     RowAccessPolicy, Statement, StorageSerializationPolicy, TableConstraint, Tag,
     WrappedCollection,
@@ -82,7 +82,7 @@ pub struct CreateTableBuilder {
     pub location: Option<String>,
     pub query: Option<Box<Query>>,
     pub without_rowid: bool,
-    pub like: Option<ObjectName>,
+    pub like: Option<CreateTableLikeKind>,
     pub clone: Option<ObjectName>,
     pub comment: Option<CommentDef>,
     pub on_commit: Option<OnCommit>,
@@ -238,7 +238,7 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn like(mut self, like: Option<ObjectName>) -> Self {
+    pub fn like(mut self, like: Option<CreateTableLikeKind>) -> Self {
         self.like = like;
         self
     }

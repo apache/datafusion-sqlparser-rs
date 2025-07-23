@@ -16729,3 +16729,25 @@ fn parse_create_table_like() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn pares_copy_options() {
+    let copy = verified_stmt(
+        r#"COPY dst (c1, c2, c3) FROM 's3://redshift-downloads/tickit/category_pipe.txt' IAM_ROLE 'arn:aws:iam::123456789:role/role1' CSV IGNOREHEADER 1"#,
+    );
+    match copy {
+        Statement::Copy { legacy_options, .. } => {
+            assert_eq!(
+                legacy_options,
+                vec![
+                    CopyLegacyOption::IamRole(Some(
+                        "arn:aws:iam::123456789:role/role1".to_string()
+                    )),
+                    CopyLegacyOption::Csv(vec![]),
+                    CopyLegacyOption::IgnoreHeader(1),
+                ]
+            );
+        }
+        _ => unreachable!(),
+    }
+}

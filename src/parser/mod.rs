@@ -13838,7 +13838,7 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let aggregate_functions = self.parse_comma_separated(Self::parse_aliased_function_call)?;
         self.expect_keyword_is(Keyword::FOR)?;
-        let value_column = if self.peek_token().token == Token::LParen {
+        let value_column = if self.peek_token_ref().token == Token::LParen {
             self.parse_parenthesized_compound_identifier_list(Mandatory, false)?
         } else {
             vec![Expr::CompoundIdentifier(self.parse_period_separated(|p| p.parse_identifier())?)]

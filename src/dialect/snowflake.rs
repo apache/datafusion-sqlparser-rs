@@ -668,8 +668,13 @@ pub fn parse_create_table(
                     builder = builder.clone_clause(clone);
                 }
                 Keyword::LIKE => {
-                    let like = parser.parse_object_name(false).ok();
-                    builder = builder.like(like);
+                    let name = parser.parse_object_name(false)?;
+                    builder = builder.like(Some(CreateTableLikeKind::NotParenthesized(
+                        crate::ast::CreateTableLike {
+                            name,
+                            defaults: None,
+                        },
+                    )));
                 }
                 Keyword::CLUSTER => {
                     parser.expect_keyword_is(Keyword::BY)?;

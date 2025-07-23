@@ -16655,3 +16655,77 @@ fn test_parse_default_with_collate_column_option() {
         panic!("Expected create table statement");
     }
 }
+
+#[test]
+fn parse_create_table_like() {
+    let dialects = all_dialects_except(|d| d.supports_create_table_like_in_parens());
+    let sql = "CREATE TABLE new LIKE old";
+    match dialects.verified_stmt(sql) {
+        Statement::CreateTable(stmt) => {
+            assert_eq!(
+                stmt.name,
+                ObjectName::from(vec![Ident::new("new".to_string())])
+            );
+            assert_eq!(
+                stmt.like,
+                Some(CreateTableLikeKind::NotParenthesized(CreateTableLike {
+                    name: ObjectName::from(vec![Ident::new("old".to_string())]),
+                    defaults: None,
+                }))
+            )
+        }
+        _ => unreachable!(),
+    }
+    let dialects = all_dialects_where(|d| d.supports_create_table_like_in_parens());
+    let sql = "CREATE TABLE new (LIKE old)";
+    match dialects.verified_stmt(sql) {
+        Statement::CreateTable(stmt) => {
+            assert_eq!(
+                stmt.name,
+                ObjectName::from(vec![Ident::new("new".to_string())])
+            );
+            assert_eq!(
+                stmt.like,
+                Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
+                    name: ObjectName::from(vec![Ident::new("old".to_string())]),
+                    defaults: None,
+                }))
+            )
+        }
+        _ => unreachable!(),
+    }
+    let sql = "CREATE TABLE new (LIKE old INCLUDING DEFAULTS)";
+    match dialects.verified_stmt(sql) {
+        Statement::CreateTable(stmt) => {
+            assert_eq!(
+                stmt.name,
+                ObjectName::from(vec![Ident::new("new".to_string())])
+            );
+            assert_eq!(
+                stmt.like,
+                Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
+                    name: ObjectName::from(vec![Ident::new("old".to_string())]),
+                    defaults: Some(CreateTableLikeDefaults::Including),
+                }))
+            )
+        }
+        _ => unreachable!(),
+    }
+    let sql = "CREATE TABLE new (LIKE old EXCLUDING DEFAULTS)";
+    match dialects.verified_stmt(sql) {
+        Statement::CreateTable(stmt) => {
+            assert_eq!(
+                stmt.name,
+                ObjectName::from(vec![Ident::new("new".to_string())])
+            );
+            assert_eq!(
+                stmt.like,
+                Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
+                    name: ObjectName::from(vec![Ident::new("old".to_string())]),
+                    defaults: Some(CreateTableLikeDefaults::Excluding),
+                }))
+            )
+        }
+        _ => unreachable!(),
+    }
+}

@@ -10465,6 +10465,63 @@ impl fmt::Display for CreateUser {
     }
 }
 
+/// Specifies how to create a new table based on an existing table's schema.
+///
+/// Not parenthesized:
+/// '''sql
+/// CREATE TABLE new LIKE old ...
+/// '''
+/// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-table#label-create-table-like)
+/// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_table_like)
+///
+/// Parenthesized:
+/// '''sql
+/// CREATE TABLE new (LIKE old ...)
+/// '''
+/// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreateTableLikeKind {
+    Parenthesized(CreateTableLike),
+    NotParenthesized(CreateTableLike),
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreateTableLikeDefaults {
+    Including,
+    Excluding,
+}
+
+impl fmt::Display for CreateTableLikeDefaults {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CreateTableLikeDefaults::Including => write!(f, "INCLUDING DEFAULTS"),
+            CreateTableLikeDefaults::Excluding => write!(f, "EXCLUDING DEFAULTS"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateTableLike {
+    pub name: ObjectName,
+    pub defaults: Option<CreateTableLikeDefaults>,
+}
+
+impl fmt::Display for CreateTableLike {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "LIKE {}", self.name)?;
+        if let Some(defaults) = &self.defaults {
+            write!(f, " {defaults}")?;
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::tokenizer::Location;

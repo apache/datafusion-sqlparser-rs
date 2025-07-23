@@ -139,4 +139,8 @@ impl Dialect for RedshiftSqlDialect {
     fn supports_select_exclude(&self) -> bool {
         true
     }
+
+    fn supports_create_table_like_in_parens(&self) -> bool {
+        true
+    }
 }

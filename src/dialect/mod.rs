@@ -1163,6 +1163,25 @@ pub trait Dialect: Debug + Any {
     fn supports_interval_options(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect supports specifying which table to copy
+    /// the schema from inside parenthesis.
+    ///
+    /// Not parenthesized:
+    /// '''sql
+    /// CREATE TABLE new LIKE old ...
+    /// '''
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-table#label-create-table-like)
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_table_like)
+    ///
+    /// Parenthesized:
+    /// '''sql
+    /// CREATE TABLE new (LIKE old ...)
+    /// '''
+    /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html)
+    fn supports_create_table_like_in_parens(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

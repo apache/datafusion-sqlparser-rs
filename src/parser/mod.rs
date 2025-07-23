@@ -10810,6 +10810,29 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse_identifiers_with_alias(&mut self) -> Result<IdentsWithAlias, ParserError> {
+        let idents = match self.peek_token_ref().token {
+            Token::LParen => self.parse_parenthesized_column_list(Mandatory, false)?,
+            _ => vec![self.parse_identifier()?],
+        };
+        let alias = if self.parse_keyword(Keyword::AS) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+        Ok(IdentsWithAlias { idents, alias })
+    }
+
+    pub fn parse_parenthesized_columns_with_alias_list(
+        &mut self,
+        optional: IsOptional,
+        allow_empty: bool,
+    ) -> Result<Vec<IdentsWithAlias>, ParserError> {
+        self.parse_parenthesized_column_list_inner(optional, allow_empty, |p| {
+            p.parse_identifiers_with_alias()
+        })
+    }
+
     /// Parses a parenthesized comma-separated list of unqualified, possibly quoted identifiers.
     /// For example: `(col1, "col 2", ...)`
     pub fn parse_parenthesized_column_list(
@@ -13882,11 +13905,20 @@ impl<'a> Parser<'a> {
             None
         };
         self.expect_token(&Token::LParen)?;
-        let value = self.parse_identifier()?;
+        let value = match self.peek_token_ref().token {
+            Token::LParen => {
+                // multi value column unpivot
+                self.parse_parenthesized_column_list(Mandatory, false)?
+            }
+            _ => {
+                // single value column unpivot
+                vec![self.parse_identifier()?]
+            }
+        };
         self.expect_keyword_is(Keyword::FOR)?;
         let name = self.parse_identifier()?;
         self.expect_keyword_is(Keyword::IN)?;
-        let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
+        let columns = self.parse_parenthesized_columns_with_alias_list(Mandatory, false)?;
         self.expect_token(&Token::RParen)?;
         let alias = self.maybe_parse_table_alias()?;
         Ok(TableFactor::Unpivot {

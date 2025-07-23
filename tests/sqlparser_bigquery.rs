@@ -2566,3 +2566,101 @@ fn test_struct_trailing_and_nested_bracket() {
         )
     );
 }
+
+#[test]
+fn test_datetime_granularity() {
+    let stmt = bigquery().verified_stmt(concat!(
+        "SELECT ",
+        "DATE_TRUNC(CURRENT_DATE, DAY), ",
+        "DATE_TRUNC(CURRENT_DATE, WEEK(MONDAY)) ",
+        "FROM my_table",
+    ));
+    match stmt {
+        Statement::Query(query) => {
+            let body = query.body.as_ref();
+            match body {
+                SetExpr::Select(select) => {
+                    let projection = &select.projection;
+                    assert_eq!(
+                        projection[0],
+                        SelectItem::UnnamedExpr(Expr::Function(Function {
+                            name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new(
+                                "DATE_TRUNC"
+                            ))]),
+                            args: FunctionArguments::List(FunctionArgumentList {
+                                args: vec![
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Function(
+                                        Function {
+                                            name: ObjectName(vec![ObjectNamePart::Identifier(
+                                                Ident::new("CURRENT_DATE")
+                                            )]),
+                                            args: FunctionArguments::None,
+                                            uses_odbc_syntax: false,
+                                            parameters: FunctionArguments::None,
+                                            filter: None,
+                                            null_treatment: None,
+                                            over: None,
+                                            within_group: vec![],
+                                        }
+                                    ))),
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                        Expr::DateTimeField(DateTimeField::Day)
+                                    )),
+                                ],
+                                clauses: vec![],
+                                duplicate_treatment: None,
+                            }),
+                            uses_odbc_syntax: false,
+                            parameters: FunctionArguments::None,
+                            filter: None,
+                            null_treatment: None,
+                            over: None,
+                            within_group: vec![],
+                        }))
+                    );
+                    assert_eq!(
+                        projection[1],
+                        SelectItem::UnnamedExpr(Expr::Function(Function {
+                            name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new(
+                                "DATE_TRUNC"
+                            ))]),
+                            args: FunctionArguments::List(FunctionArgumentList {
+                                args: vec![
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Function(
+                                        Function {
+                                            name: ObjectName(vec![ObjectNamePart::Identifier(
+                                                Ident::new("CURRENT_DATE")
+                                            )]),
+                                            args: FunctionArguments::None,
+                                            uses_odbc_syntax: false,
+                                            parameters: FunctionArguments::None,
+                                            filter: None,
+                                            null_treatment: None,
+                                            over: None,
+                                            within_group: vec![],
+                                        }
+                                    ))),
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                        Expr::DateTimeField(DateTimeField::Week(Some(Ident::new(
+                                            "MONDAY"
+                                        ))))
+                                    )),
+                                ],
+                                clauses: vec![],
+                                duplicate_treatment: None,
+                            }),
+                            uses_odbc_syntax: false,
+                            parameters: FunctionArguments::None,
+                            filter: None,
+                            null_treatment: None,
+                            over: None,
+                            within_group: vec![],
+                        }))
+                    );
+                }
+                _ => panic!("Expected a select statement"),
+            }
+        }
+        _ => panic!("Expected a select statement"),
+    }
+}

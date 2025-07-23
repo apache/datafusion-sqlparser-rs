@@ -14896,6 +14896,12 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_function_args(&mut self) -> Result<FunctionArg, ParserError> {
+        if dialect_of!(self is BigQueryDialect) && self.next_token_is_temporal_unit() {
+            let unit = self.parse_date_time_field()?;
+            return Ok(FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                Expr::DateTimeField(unit),
+            )));
+        }
         let arg = if self.dialect.supports_named_fn_args_with_expr_name() {
             self.maybe_parse(|p| {
                 let name = p.parse_expr()?;

@@ -924,6 +924,9 @@ pub enum Expr {
         syntax: ExtractSyntax,
         expr: Box<Expr>,
     },
+    /// In BigQuery, the `DATE_TRUNC` and `DATETIME_TRUNC` functions can be used to truncate a timestamp to a different granularity.
+    /// e.g. `DATE_TRUNC(CURRENT_DATE(), DAY)`
+    DateTimeField(DateTimeField),
     /// ```sql
     /// CEIL(<expr> [TO DateTimeField])
     /// ```
@@ -1937,6 +1940,7 @@ impl fmt::Display for Expr {
             Expr::Prior(expr) => write!(f, "PRIOR {expr}"),
             Expr::Lambda(lambda) => write!(f, "{lambda}"),
             Expr::MemberOf(member_of) => write!(f, "{member_of}"),
+            Expr::DateTimeField(field) => write!(f, "{field}"),
         }
     }
 }

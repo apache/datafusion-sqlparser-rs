@@ -6654,7 +6654,7 @@ pub enum Action {
     Replicate,
     ResolveAll,
     Role {
-        role: Ident,
+        role: ObjectName,
     },
     Select {
         columns: Option<Vec<Ident>>,

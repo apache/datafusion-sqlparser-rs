@@ -1202,6 +1202,9 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::Lock { .. } => Span::empty(),
             AlterTableOperation::ReplicaIdentity { .. } => Span::empty(),
             AlterTableOperation::ValidateConstraint { name } => name.span,
+            AlterTableOperation::SetOptionsParens { options } => {
+                union_spans(options.iter().map(|i| i.span()))
+            }
         }
     }
 }

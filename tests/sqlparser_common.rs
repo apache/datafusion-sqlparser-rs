@@ -4728,6 +4728,34 @@ fn parse_alter_table() {
         }
         _ => unreachable!(),
     }
+
+    let set_storage_parameters = "ALTER TABLE tab SET (autovacuum_vacuum_scale_factor = 0.01, autovacuum_vacuum_threshold = 500)";
+    match alter_table_op(verified_stmt(set_storage_parameters)) {
+        AlterTableOperation::SetOptionsParens { options } => {
+            assert_eq!(
+                options,
+                [
+                    SqlOption::KeyValue {
+                        key: Ident {
+                            value: "autovacuum_vacuum_scale_factor".to_string(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        },
+                        value: Expr::Value(test_utils::number("0.01").with_empty_span()),
+                    },
+                    SqlOption::KeyValue {
+                        key: Ident {
+                            value: "autovacuum_vacuum_threshold".to_string(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        },
+                        value: Expr::Value(test_utils::number("500").with_empty_span()),
+                    }
+                ],
+            );
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]

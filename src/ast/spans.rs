@@ -531,6 +531,7 @@ impl Spanned for Statement {
             Statement::Print { .. } => Span::empty(),
             Statement::Return { .. } => Span::empty(),
             Statement::List(..) | Statement::Remove(..) => Span::empty(),
+            Statement::CreateUser(..) => Span::empty(),
         }
     }
 }

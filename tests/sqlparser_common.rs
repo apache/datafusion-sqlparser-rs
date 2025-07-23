@@ -27,6 +27,8 @@ extern crate core;
 
 use helpers::attached_token::AttachedToken;
 use matches::assert_matches;
+use sqlparser::ast::helpers::key_value_options::*;
+use sqlparser::ast::helpers::key_value_options::{KeyValueOptions, KeyValueOptionsDelimiter};
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::TableFactor::{Pivot, Unpivot};
 use sqlparser::ast::*;
@@ -16255,4 +16257,73 @@ fn parse_notnull() {
 
     // for unsupported dialects, parsing should stop at `NOT NULL`
     notnull_unsupported_dialects.expr_parses_to("NOT NULL NOTNULL", "NOT NULL");
+}
+
+#[test]
+fn parse_create_user() {
+    let create = verified_stmt("CREATE USER u1");
+    match create {
+        Statement::CreateUser(stmt) => {
+            assert_eq!(stmt.name, Ident::new("u1"));
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("CREATE OR REPLACE USER u1");
+    verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1");
+    verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret'");
+    verified_stmt(
+        "CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=TRUE",
+    );
+    verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=TRUE TYPE=SERVICE TAG (t1='v1')");
+    let create = verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=TRUE TYPE=SERVICE WITH TAG (t1='v1', t2='v2')");
+    match create {
+        Statement::CreateUser(stmt) => {
+            assert_eq!(stmt.name, Ident::new("u1"));
+            assert_eq!(stmt.or_replace, true);
+            assert_eq!(stmt.if_not_exists, true);
+            assert_eq!(
+                stmt.options,
+                KeyValueOptions {
+                    delimiter: KeyValueOptionsDelimiter::Space,
+                    options: vec![
+                        KeyValueOption {
+                            option_name: "PASSWORD".to_string(),
+                            value: "secret".to_string(),
+                            option_type: KeyValueOptionType::STRING
+                        },
+                        KeyValueOption {
+                            option_name: "MUST_CHANGE_PASSWORD".to_string(),
+                            value: "TRUE".to_string(),
+                            option_type: KeyValueOptionType::BOOLEAN
+                        },
+                        KeyValueOption {
+                            option_name: "TYPE".to_string(),
+                            value: "SERVICE".to_string(),
+                            option_type: KeyValueOptionType::ENUM
+                        },
+                    ],
+                },
+            );
+            assert_eq!(stmt.with_tags, true);
+            assert_eq!(
+                stmt.tags,
+                KeyValueOptions {
+                    delimiter: KeyValueOptionsDelimiter::Comma,
+                    options: vec![
+                        KeyValueOption {
+                            option_name: "t1".to_string(),
+                            value: "v1".to_string(),
+                            option_type: KeyValueOptionType::STRING
+                        },
+                        KeyValueOption {
+                            option_name: "t2".to_string(),
+                            value: "v2".to_string(),
+                            option_type: KeyValueOptionType::STRING
+                        },
+                    ]
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
 }

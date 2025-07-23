@@ -8772,6 +8772,10 @@ pub enum CopyLegacyOption {
     Null(String),
     /// CSV ...
     Csv(Vec<CopyLegacyCsvOption>),
+    /// IAM_ROLE { DEFAULT | 'arn:aws:iam::AWS_ACCOUNT_ID:role/ROLE_NAME' }
+    IamRole(Option<String>),
+    /// IGNOREHEADER \[ AS \] number_rows
+    IgnoreHeader(u64),
 }
 
 impl fmt::Display for CopyLegacyOption {
@@ -8781,7 +8785,21 @@ impl fmt::Display for CopyLegacyOption {
             Binary => write!(f, "BINARY"),
             Delimiter(char) => write!(f, "DELIMITER '{char}'"),
             Null(string) => write!(f, "NULL '{}'", value::escape_single_quote_string(string)),
-            Csv(opts) => write!(f, "CSV {}", display_separated(opts, " ")),
+            Csv(opts) => {
+                write!(f, "CSV")?;
+                if !opts.is_empty() {
+                    write!(f, " {}", display_separated(opts, " "))?;
+                }
+                Ok(())
+            }
+            IamRole(role) => {
+                write!(f, "IAM_ROLE")?;
+                match role {
+                    Some(role) => write!(f, " '{role}'"),
+                    None => write!(f, " default"),
+                }
+            }
+            IgnoreHeader(num_rows) => write!(f, "IGNOREHEADER {num_rows}"),
         }
     }
 }

@@ -1971,7 +1971,7 @@ impl Spanned for TableFactor {
             } => union_spans(
                 core::iter::once(table.span())
                     .chain(aggregate_functions.iter().map(|i| i.span()))
-                    .chain(value_column.iter().map(|i| i.span))
+                    .chain(value_column.iter().map(|i| i.span()))
                     .chain(core::iter::once(value_source.span()))
                     .chain(default_on_null.as_ref().map(|i| i.span()))
                     .chain(alias.as_ref().map(|i| i.span())),

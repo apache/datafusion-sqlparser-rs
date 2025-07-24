@@ -10150,7 +10150,12 @@ pub struct ExportData {
 
 impl fmt::Display for ExportData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "EXPORT DATA OPTIONS({}) AS {}", display_comma_separated(&self.options), self.query)
+        write!(
+            f,
+            "EXPORT DATA OPTIONS({}) AS {}",
+            display_comma_separated(&self.options),
+            self.query
+        )
     }
 }
 /// Creates a user

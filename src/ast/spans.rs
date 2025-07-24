@@ -532,7 +532,10 @@ impl Spanned for Statement {
             Statement::Return { .. } => Span::empty(),
             Statement::List(..) | Statement::Remove(..) => Span::empty(),
             Statement::ExportData(ExportData { options, query }) => union_spans(
-                options.iter().map(|i| i.span()).chain(core::iter::once(query.span()))
+                options
+                    .iter()
+                    .map(|i| i.span())
+                    .chain(core::iter::once(query.span())),
             ),
             Statement::CreateUser(..) => Span::empty(),
         }

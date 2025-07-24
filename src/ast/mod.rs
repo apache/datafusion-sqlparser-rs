@@ -7835,6 +7835,7 @@ pub enum ObjectType {
     Stage,
     Type,
     User,
+    Stream,
 }
 
 impl fmt::Display for ObjectType {
@@ -7851,6 +7852,7 @@ impl fmt::Display for ObjectType {
             ObjectType::Stage => "STAGE",
             ObjectType::Type => "TYPE",
             ObjectType::User => "USER",
+            ObjectType::Stream => "STREAM",
         })
     }
 }

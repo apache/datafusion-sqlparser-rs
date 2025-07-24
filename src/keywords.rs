@@ -870,6 +870,7 @@ define_keywords!(
     STORAGE_SERIALIZATION_POLICY,
     STORED,
     STRAIGHT_JOIN,
+    STREAM,
     STRICT,
     STRING,
     STRUCT,

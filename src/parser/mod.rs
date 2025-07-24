@@ -6325,6 +6325,8 @@ impl<'a> Parser<'a> {
             ObjectType::Type
         } else if self.parse_keyword(Keyword::USER) {
             ObjectType::User
+        } else if self.parse_keyword(Keyword::STREAM) {
+            ObjectType::Stream
         } else if self.parse_keyword(Keyword::FUNCTION) {
             return self.parse_drop_function();
         } else if self.parse_keyword(Keyword::POLICY) {

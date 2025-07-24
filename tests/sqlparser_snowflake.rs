@@ -2628,7 +2628,7 @@ fn test_snowflake_copy_into() {
     }
 
     // Test for non-ident characters in stage names
-    let sql = "COPY INTO a.b FROM @namespace.stage_name/x@x~x%x+";
+    let sql = "COPY INTO a.b FROM @namespace.stage_name/x@x~x%x+/20250723_data";
     assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
     match snowflake().verified_stmt(sql) {
         Statement::CopyIntoSnowflake { into, from_obj, .. } => {
@@ -2640,7 +2640,7 @@ fn test_snowflake_copy_into() {
                 from_obj,
                 Some(ObjectName::from(vec![
                     Ident::new("@namespace"),
-                    Ident::new("stage_name/x@x~x%x+")
+                    Ident::new("stage_name/x@x~x%x+/20250723_data")
                 ]))
             )
         }
@@ -4500,4 +4500,7 @@ fn test_snowflake_identifier_function() {
             .is_err(),
         true
     );
+
+    snowflake().verified_stmt("GRANT ROLE IDENTIFIER('AAA') TO USER IDENTIFIER('AAA')");
+    snowflake().verified_stmt("REVOKE ROLE IDENTIFIER('AAA') FROM USER IDENTIFIER('AAA')");
 }

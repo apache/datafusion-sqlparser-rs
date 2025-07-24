@@ -351,6 +351,16 @@ pub enum AlterTableOperation {
     ValidateConstraint {
         name: Ident,
     },
+    /// Arbitrary parenthesized `SET` options.
+    ///
+    /// Example:
+    /// ```sql
+    /// SET (scale_factor = 0.01, threshold = 500)`
+    /// ```
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
+    SetOptionsParens {
+        options: Vec<SqlOption>,
+    },
 }
 
 /// An `ALTER Policy` (`Statement::AlterPolicy`) operation
@@ -790,6 +800,9 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::ValidateConstraint { name } => {
                 write!(f, "VALIDATE CONSTRAINT {name}")
+            }
+            AlterTableOperation::SetOptionsParens { options } => {
+                write!(f, "SET ({})", display_comma_separated(options))
             }
         }
     }

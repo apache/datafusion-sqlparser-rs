@@ -4355,7 +4355,6 @@ pub enum Statement {
     ///
     /// See [ReturnStatement]
     Return(ReturnStatement),
-
     /// Export data statement
     ///
     /// Example:
@@ -4364,6 +4363,11 @@ pub enum Statement {
     /// SELECT field1, field2 FROM mydataset.table1 ORDER BY field1 LIMIT 10
     /// ```
     ExportData(ExportData),
+    /// ```sql
+    /// CREATE [OR REPLACE] USER <user> [IF NOT EXISTS]
+    /// ```
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-user)
+    CreateUser(CreateUser),
 }
 
 /// ```sql
@@ -6203,6 +6207,7 @@ impl fmt::Display for Statement {
             Statement::List(command) => write!(f, "LIST {command}"),
             Statement::Remove(command) => write!(f, "REMOVE {command}"),
             Statement::ExportData(e) => write!(f, "{e}"),
+            Statement::CreateUser(s) => write!(f, "{s}"),
         }
     }
 }
@@ -6658,7 +6663,7 @@ pub enum Action {
     Replicate,
     ResolveAll,
     Role {
-        role: Ident,
+        role: ObjectName,
     },
     Select {
         columns: Option<Vec<Ident>>,
@@ -10146,6 +10151,49 @@ pub struct ExportData {
 impl fmt::Display for ExportData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "EXPORT DATA OPTIONS({}) AS {}", display_comma_separated(&self.options), self.query)
+    }
+}
+/// Creates a user
+///
+/// Syntax:
+/// ```sql
+/// CREATE [OR REPLACE] USER [IF NOT EXISTS] <name> [OPTIONS]
+/// ```
+///
+/// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-user)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateUser {
+    pub or_replace: bool,
+    pub if_not_exists: bool,
+    pub name: Ident,
+    pub options: KeyValueOptions,
+    pub with_tags: bool,
+    pub tags: KeyValueOptions,
+}
+
+impl fmt::Display for CreateUser {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CREATE")?;
+        if self.or_replace {
+            write!(f, " OR REPLACE")?;
+        }
+        write!(f, " USER")?;
+        if self.if_not_exists {
+            write!(f, " IF NOT EXISTS")?;
+        }
+        write!(f, " {}", self.name)?;
+        if !self.options.options.is_empty() {
+            write!(f, " {}", self.options)?;
+        }
+        if !self.tags.options.is_empty() {
+            if self.with_tags {
+                write!(f, " WITH")?;
+            }
+            write!(f, " TAG ({})", self.tags)?;
+        }
+        Ok(())
     }
 }
 

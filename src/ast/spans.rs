@@ -534,6 +534,7 @@ impl Spanned for Statement {
             Statement::ExportData(ExportData { options, query }) => union_spans(
                 options.iter().map(|i| i.span()).chain(core::iter::once(query.span()))
             ),
+            Statement::CreateUser(..) => Span::empty(),
         }
     }
 }
@@ -1204,6 +1205,9 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::Lock { .. } => Span::empty(),
             AlterTableOperation::ReplicaIdentity { .. } => Span::empty(),
             AlterTableOperation::ValidateConstraint { name } => name.span,
+            AlterTableOperation::SetOptionsParens { options } => {
+                union_spans(options.iter().map(|i| i.span()))
+            }
         }
     }
 }

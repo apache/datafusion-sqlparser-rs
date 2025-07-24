@@ -1117,7 +1117,6 @@ fn parse_create_dynamic_table() {
         " REQUIRE USER",
         " AS SELECT product_id, product_name FROM staging_table"
     ));
-
 }
 
 #[test]

@@ -1884,7 +1884,7 @@ impl fmt::Display for TableFactor {
                     write!(f, " WITH ({})", display_comma_separated(with_hints))?;
                 }
                 if let Some(version) = version {
-                    write!(f, "{version}")?;
+                    write!(f, " {version}")?;
                 }
                 if let Some(TableSampleKind::AfterTableAlias(sample)) = sample {
                     write!(f, " {sample}")?;
@@ -2179,8 +2179,8 @@ pub enum TableVersion {
 impl Display for TableVersion {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            TableVersion::ForSystemTimeAsOf(e) => write!(f, " FOR SYSTEM_TIME AS OF {e}")?,
-            TableVersion::Function(func) => write!(f, " {func}")?,
+            TableVersion::ForSystemTimeAsOf(e) => write!(f, "FOR SYSTEM_TIME AS OF {e}")?,
+            TableVersion::Function(func) => write!(f, "{func}")?,
         }
         Ok(())
     }

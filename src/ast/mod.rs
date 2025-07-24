@@ -10146,16 +10146,26 @@ impl fmt::Display for MemberOf {
 pub struct ExportData {
     pub options: Vec<SqlOption>,
     pub query: Box<Query>,
+    pub connection: Option<ObjectName>,
 }
 
 impl fmt::Display for ExportData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "EXPORT DATA OPTIONS({}) AS {}",
-            display_comma_separated(&self.options),
-            self.query
-        )
+        if let Some(connection) = &self.connection {
+            write!(
+                f,
+                "EXPORT DATA WITH CONNECTION {connection} OPTIONS({}) AS {}",
+                display_comma_separated(&self.options),
+                self.query
+            )
+        } else {
+            write!(
+                f,
+                "EXPORT DATA OPTIONS({}) AS {}",
+                display_comma_separated(&self.options),
+                self.query
+            )
+        }
     }
 }
 /// Creates a user

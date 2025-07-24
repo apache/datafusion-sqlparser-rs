@@ -16513,13 +16513,23 @@ impl<'a> Parser<'a> {
 
     fn parse_export(&mut self) -> Result<Statement, ParserError> {
         self.expect_keyword(Keyword::DATA)?;
+
+        let connection = if self.parse_keywords(&[Keyword::WITH, Keyword::CONNECTION]) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
         self.expect_keyword(Keyword::OPTIONS)?;
         self.expect_token(&Token::LParen)?;
         let options = self.parse_comma_separated(|p| p.parse_sql_option())?;
         self.expect_token(&Token::RParen)?;
         self.expect_keyword(Keyword::AS)?;
         let query = self.parse_query()?;
-        Ok(Statement::ExportData(ExportData { options, query }))
+        Ok(Statement::ExportData(ExportData {
+            options,
+            query,
+            connection,
+        }))
     }
 
     /// Consume the parser and return its underlying token buffer

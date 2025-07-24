@@ -2577,4 +2577,13 @@ fn test_export() {
         ") AS ",
         "SELECT field1, field2 FROM mydataset.table1 ORDER BY field1 LIMIT 10",
     ));
+
+    bigquery().verified_stmt(concat!(
+        "EXPORT DATA WITH CONNECTION myconnection.myproject.us OPTIONS(",
+        "uri = 'gs://bucket/folder/*', ",
+        "format = 'PARQUET', ",
+        "overwrite = true",
+        ") AS ",
+        "SELECT field1, field2 FROM mydataset.table1 ORDER BY field1 LIMIT 10",
+    ));
 }

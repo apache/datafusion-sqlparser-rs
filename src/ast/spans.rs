@@ -531,11 +531,16 @@ impl Spanned for Statement {
             Statement::Print { .. } => Span::empty(),
             Statement::Return { .. } => Span::empty(),
             Statement::List(..) | Statement::Remove(..) => Span::empty(),
-            Statement::ExportData(ExportData { options, query }) => union_spans(
+            Statement::ExportData(ExportData {
+                options,
+                query,
+                connection,
+            }) => union_spans(
                 options
                     .iter()
                     .map(|i| i.span())
-                    .chain(core::iter::once(query.span())),
+                    .chain(core::iter::once(query.span()))
+                    .chain(connection.iter().map(|i| i.span())),
             ),
             Statement::CreateUser(..) => Span::empty(),
         }

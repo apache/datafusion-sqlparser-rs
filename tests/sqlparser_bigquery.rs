@@ -2566,3 +2566,15 @@ fn test_struct_trailing_and_nested_bracket() {
         )
     );
 }
+
+#[test]
+fn test_export() {
+    bigquery().verified_stmt(concat!(
+        "EXPORT DATA OPTIONS(",
+        "uri = 'gs://bucket/folder/*', ",
+        "format = 'PARQUET', ",
+        "overwrite = true",
+        ") AS ",
+        "SELECT field1, field2 FROM mydataset.table1 ORDER BY field1 LIMIT 10",
+    ));
+}

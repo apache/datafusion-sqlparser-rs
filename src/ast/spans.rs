@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::ast::{query::SelectItemQualifiedWildcardKind, ColumnOptions};
+use crate::ast::{query::SelectItemQualifiedWildcardKind, ColumnOptions, ExportData};
 use core::iter;
 
 use crate::tokenizer::Span;
@@ -531,6 +531,9 @@ impl Spanned for Statement {
             Statement::Print { .. } => Span::empty(),
             Statement::Return { .. } => Span::empty(),
             Statement::List(..) | Statement::Remove(..) => Span::empty(),
+            Statement::ExportData(ExportData { options, query }) => union_spans(
+                options.iter().map(|i| i.span()).chain(core::iter::once(query.span()))
+            ),
         }
     }
 }

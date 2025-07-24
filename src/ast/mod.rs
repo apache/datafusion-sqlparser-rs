@@ -4355,6 +4355,15 @@ pub enum Statement {
     ///
     /// See [ReturnStatement]
     Return(ReturnStatement),
+
+    /// Export data statement
+    ///
+    /// Example:
+    /// ```sql
+    /// EXPORT DATA OPTIONS(uri='gs://bucket/folder/*', format='PARQUET', overwrite=true) AS
+    /// SELECT field1, field2 FROM mydataset.table1 ORDER BY field1 LIMIT 10
+    /// ```
+    ExportData(ExportData),
 }
 
 /// ```sql
@@ -6193,6 +6202,7 @@ impl fmt::Display for Statement {
             Statement::Return(r) => write!(f, "{r}"),
             Statement::List(command) => write!(f, "LIST {command}"),
             Statement::Remove(command) => write!(f, "REMOVE {command}"),
+            Statement::ExportData(e) => write!(f, "{e}"),
         }
     }
 }
@@ -10122,6 +10132,20 @@ pub struct MemberOf {
 impl fmt::Display for MemberOf {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} MEMBER OF({})", self.value, self.array)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ExportData {
+    pub options: Vec<SqlOption>,
+    pub query: Box<Query>,
+}
+
+impl fmt::Display for ExportData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "EXPORT DATA OPTIONS({}) AS {}", display_comma_separated(&self.options), self.query)
     }
 }
 

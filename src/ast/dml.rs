@@ -257,7 +257,7 @@ impl Display for CreateTable {
         //   `CREATE TABLE t (a INT) AS SELECT a from t2`
         write!(
             f,
-            "CREATE {or_replace}{external}{global}{temporary}{transient}{volatile}{iceberg}{dynamic}TABLE {if_not_exists}{name}",
+            "CREATE {or_replace}{external}{global}{temporary}{transient}{volatile}{dynamic}{iceberg}TABLE {if_not_exists}{name}",
             or_replace = if self.or_replace { "OR REPLACE " } else { "" },
             external = if self.external { "EXTERNAL " } else { "" },
             global = self.global
@@ -315,6 +315,10 @@ impl Display for CreateTable {
 
         if let Some(c) = &self.clone {
             write!(f, " CLONE {c}")?;
+        }
+
+        if let Some(version) = &self.version {
+            write!(f, " {version}")?;
         }
 
         match &self.hive_distribution {
@@ -419,27 +423,27 @@ impl Display for CreateTable {
             write!(f, " {options}")?;
         }
         if let Some(external_volume) = self.external_volume.as_ref() {
-            write!(f, " EXTERNAL_VOLUME = '{external_volume}'")?;
+            write!(f, " EXTERNAL_VOLUME='{external_volume}'")?;
         }
 
         if let Some(catalog) = self.catalog.as_ref() {
-            write!(f, " CATALOG = '{catalog}'")?;
+            write!(f, " CATALOG='{catalog}'")?;
         }
 
         if self.iceberg {
             if let Some(base_location) = self.base_location.as_ref() {
-                write!(f, " BASE_LOCATION = '{base_location}'")?;
+                write!(f, " BASE_LOCATION='{base_location}'")?;
             }
         }
 
         if let Some(catalog_sync) = self.catalog_sync.as_ref() {
-            write!(f, " CATALOG_SYNC = '{catalog_sync}'")?;
+            write!(f, " CATALOG_SYNC='{catalog_sync}'")?;
         }
 
         if let Some(storage_serialization_policy) = self.storage_serialization_policy.as_ref() {
             write!(
                 f,
-                " STORAGE_SERIALIZATION_POLICY = {storage_serialization_policy}"
+                " STORAGE_SERIALIZATION_POLICY={storage_serialization_policy}"
             )?;
         }
 

@@ -16357,3 +16357,21 @@ fn parse_create_user() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn parse_drop_stream() {
+    let sql = "DROP STREAM s1";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            names, object_type, ..
+        } => {
+            assert_eq!(
+                vec!["s1"],
+                names.iter().map(ToString::to_string).collect::<Vec<_>>()
+            );
+            assert_eq!(ObjectType::Stream, object_type);
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("DROP STREAM IF EXISTS s1");
+}

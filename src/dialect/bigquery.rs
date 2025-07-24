@@ -19,6 +19,7 @@ use crate::ast::Statement;
 use crate::dialect::Dialect;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
+use crate::tokenizer::Token;
 
 /// These keywords are disallowed as column identifiers. Such that
 /// `SELECT 5 AS <col> FROM T` is rejected by BigQuery.
@@ -47,6 +48,15 @@ pub struct BigQueryDialect;
 impl Dialect for BigQueryDialect {
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
         if parser.parse_keyword(Keyword::BEGIN) {
+            if parser.peek_keyword(Keyword::TRANSACTION) {
+                parser.prev_token();
+                return None;
+            }
+            let peek_token = parser.peek_token_ref();
+            if peek_token.token == Token::SemiColon || peek_token.token == Token::EOF {
+                parser.prev_token();
+                return None;
+            }
             return Some(parser.parse_begin_exception_end());
         }
 

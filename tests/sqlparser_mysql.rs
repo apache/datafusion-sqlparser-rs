@@ -4143,3 +4143,11 @@ fn parse_json_member_of() {
         _ => panic!("Unexpected statement {stmt}"),
     }
 }
+
+#[test]
+fn parse_show_charset() {
+    let _ = mysql().verified_stmt("SHOW CHARACTER SET");
+    let _ = mysql().verified_stmt("SHOW CHARACTER SET LIKE 'utf8mb4%'");
+    let _ = mysql().verified_stmt("SHOW CHARSET WHERE charset = 'utf8mb4%'");
+    let _ = mysql().verified_stmt("SHOW CHARSET LIKE 'utf8mb4%'");
+}

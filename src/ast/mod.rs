@@ -3704,6 +3704,20 @@ pub enum Statement {
         history: bool,
         show_options: ShowStatementOptions,
     },
+    // ```sql
+    // SHOW {CHARACTER SET | CHARSET} [like_or_where]
+    // ```
+    // where:
+    // like_or_where: {
+    //     LIKE 'pattern'
+    //   | WHERE expr
+    // }
+    // MySQL specific statement
+    // <https://dev.mysql.com/doc/refman/8.4/en/show.html#:~:text=SHOW%20%7BCHARACTER%20SET%20%7C%20CHARSET%7D%20%5Blike_or_where%5D>
+    ShowCharset {
+        is_shorthand: bool,
+        filter: Option<ShowStatementFilter>,
+    },
     /// ```sql
     /// SHOW OBJECTS LIKE 'line%' IN mydb.public
     /// ```
@@ -5671,6 +5685,21 @@ impl fmt::Display for Statement {
                 write!(f, "SHOW COLLATION")?;
                 if let Some(filter) = filter {
                     write!(f, " {filter}")?;
+                }
+                Ok(())
+            }
+            Statement::ShowCharset {
+                is_shorthand,
+                filter,
+            } => {
+                write!(f, "SHOW")?;
+                if *is_shorthand {
+                    write!(f, " CHARSET")?;
+                } else {
+                    write!(f, " CHARACTER SET")?;
+                }
+                if filter.is_some() {
+                    write!(f, " {}", filter.as_ref().unwrap())?;
                 }
                 Ok(())
             }

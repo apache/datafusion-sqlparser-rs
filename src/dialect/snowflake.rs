@@ -47,6 +47,82 @@ use super::keywords::RESERVED_FOR_IDENTIFIER;
 use sqlparser::ast::StorageSerializationPolicy;
 
 const RESERVED_KEYWORDS_FOR_SELECT_ITEM_OPERATOR: [Keyword; 1] = [Keyword::CONNECT_BY_ROOT];
+
+// See: <https://docs.snowflake.com/en/sql-reference/reserved-keywords>
+const RESERVED_KEYWORDS_FOR_TABLE_FACTOR: &[Keyword] = &[
+    Keyword::ALL,
+    Keyword::ALTER,
+    Keyword::AND,
+    Keyword::ANY,
+    Keyword::AS,
+    Keyword::BETWEEN,
+    Keyword::BY,
+    Keyword::CHECK,
+    Keyword::COLUMN,
+    Keyword::CONNECT,
+    Keyword::CREATE,
+    Keyword::CROSS,
+    Keyword::CURRENT,
+    Keyword::DELETE,
+    Keyword::DISTINCT,
+    Keyword::DROP,
+    Keyword::ELSE,
+    Keyword::EXISTS,
+    Keyword::FOLLOWING,
+    Keyword::FOR,
+    Keyword::FROM,
+    Keyword::FULL,
+    Keyword::GRANT,
+    Keyword::GROUP,
+    Keyword::HAVING,
+    Keyword::ILIKE,
+    Keyword::IN,
+    Keyword::INCREMENT,
+    Keyword::INNER,
+    Keyword::INSERT,
+    Keyword::INTERSECT,
+    Keyword::INTO,
+    Keyword::IS,
+    Keyword::JOIN,
+    Keyword::LEFT,
+    Keyword::LIKE,
+    Keyword::MINUS,
+    Keyword::NATURAL,
+    Keyword::NOT,
+    Keyword::NULL,
+    Keyword::OF,
+    Keyword::ON,
+    Keyword::OR,
+    Keyword::ORDER,
+    Keyword::QUALIFY,
+    Keyword::REGEXP,
+    Keyword::REVOKE,
+    Keyword::RIGHT,
+    Keyword::RLIKE,
+    Keyword::ROW,
+    Keyword::ROWS,
+    Keyword::SAMPLE,
+    Keyword::SELECT,
+    Keyword::SET,
+    Keyword::SOME,
+    Keyword::START,
+    Keyword::TABLE,
+    Keyword::TABLESAMPLE,
+    Keyword::THEN,
+    Keyword::TO,
+    Keyword::TRIGGER,
+    Keyword::UNION,
+    Keyword::UNIQUE,
+    Keyword::UPDATE,
+    Keyword::USING,
+    Keyword::VALUES,
+    Keyword::WHEN,
+    Keyword::WHENEVER,
+    Keyword::WHERE,
+    Keyword::WINDOW,
+    Keyword::WITH,
+];
+
 /// A [`Dialect`] for [Snowflake](https://www.snowflake.com/)
 #[derive(Debug, Default)]
 pub struct SnowflakeDialect;
@@ -430,6 +506,21 @@ impl Dialect for SnowflakeDialect {
 
             // Any other word is considered an alias
             _ => true,
+        }
+    }
+
+    fn is_table_factor(&self, kw: &Keyword, parser: &mut Parser) -> bool {
+        match kw {
+            Keyword::LIMIT
+                if matches!(
+                    parser.peek_token().token,
+                    Token::Number(_, _) | Token::Placeholder(_)
+                ) =>
+            {
+                false
+            }
+
+            _ => !RESERVED_KEYWORDS_FOR_TABLE_FACTOR.contains(kw),
         }
     }
 

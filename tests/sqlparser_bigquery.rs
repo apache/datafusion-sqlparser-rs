@@ -2566,3 +2566,13 @@ fn test_struct_trailing_and_nested_bracket() {
         )
     );
 }
+
+#[test]
+fn test_begin_transaction() {
+    bigquery().verified_stmt("BEGIN TRANSACTION");
+}
+
+#[test]
+fn test_begin_statement() {
+    bigquery().verified_stmt("BEGIN");
+}

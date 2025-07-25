@@ -48,12 +48,10 @@ pub struct BigQueryDialect;
 impl Dialect for BigQueryDialect {
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
         if parser.parse_keyword(Keyword::BEGIN) {
-            if parser.peek_keyword(Keyword::TRANSACTION) {
-                parser.prev_token();
-                return None;
-            }
-            let peek_token = parser.peek_token_ref();
-            if peek_token.token == Token::SemiColon || peek_token.token == Token::EOF {
+            if parser.peek_keyword(Keyword::TRANSACTION)
+                || parser.peek_token_ref().token == Token::SemiColon
+                || parser.peek_token_ref().token == Token::EOF
+            {
                 parser.prev_token();
                 return None;
             }

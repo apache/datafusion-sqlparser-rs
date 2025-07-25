@@ -2567,7 +2567,6 @@ fn test_struct_trailing_and_nested_bracket() {
     );
 }
 
-// https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#begin_transaction
 #[test]
 fn test_begin_transaction() {
     bigquery().verified_stmt("BEGIN TRANSACTION");

@@ -1162,7 +1162,10 @@ impl Spanned for AlterTableOperation {
                 old_column_name,
                 new_column_name,
             } => old_column_name.span.union(&new_column_name.span),
-            AlterTableOperation::RenameTable { table_name } => table_name.span(),
+            AlterTableOperation::RenameTable {
+                to_keyword: _,
+                table_name,
+            } => table_name.span(),
             AlterTableOperation::ChangeColumn {
                 old_name,
                 new_name,

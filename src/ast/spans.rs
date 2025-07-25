@@ -477,6 +477,7 @@ impl Spanned for Statement {
             Statement::ShowColumns { .. } => Span::empty(),
             Statement::ShowTables { .. } => Span::empty(),
             Statement::ShowCollation { .. } => Span::empty(),
+            Statement::ShowCharset { .. } => Span::empty(),
             Statement::Use(u) => u.span(),
             Statement::StartTransaction { .. } => Span::empty(),
             Statement::Comment { .. } => Span::empty(),

@@ -27,8 +27,8 @@ use crate::ast::helpers::stmt_data_loading::{
 use crate::ast::{
     ColumnOption, ColumnPolicy, ColumnPolicyProperty, CopyIntoSnowflakeKind, DollarQuotedString,
     Ident, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
-    IdentityPropertyOrder, ObjectName, ObjectNamePart, RowAccessPolicy, ShowObjects, SqlOption,
-    Statement, TagsColumnOption, WrappedCollection,
+    IdentityPropertyOrder, InitializeKind, ObjectName, ObjectNamePart, RefreshModeKind,
+    RowAccessPolicy, ShowObjects, SqlOption, Statement, TagsColumnOption, WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
@@ -158,6 +158,8 @@ impl Dialect for SnowflakeDialect {
                 _ => None,
             };
 
+            let dynamic = parser.parse_keyword(Keyword::DYNAMIC);
+
             let mut temporary = false;
             let mut volatile = false;
             let mut transient = false;
@@ -182,7 +184,7 @@ impl Dialect for SnowflakeDialect {
                 return Some(parse_create_stage(or_replace, temporary, parser));
             } else if parser.parse_keyword(Keyword::TABLE) {
                 return Some(parse_create_table(
-                    or_replace, global, temporary, volatile, transient, iceberg, parser,
+                    or_replace, global, temporary, volatile, transient, iceberg, dynamic, parser,
                 ));
             } else {
                 // need to go back with the cursor
@@ -526,6 +528,7 @@ fn parse_alter_session(parser: &mut Parser, set: bool) -> Result<Statement, Pars
 /// Parse snowflake create table statement.
 /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
 /// <https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table>
+#[allow(clippy::too_many_arguments)]
 pub fn parse_create_table(
     or_replace: bool,
     global: Option<bool>,
@@ -533,6 +536,7 @@ pub fn parse_create_table(
     volatile: bool,
     transient: bool,
     iceberg: bool,
+    dynamic: bool,
     parser: &mut Parser,
 ) -> Result<Statement, ParserError> {
     let if_not_exists = parser.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
@@ -546,6 +550,7 @@ pub fn parse_create_table(
         .volatile(volatile)
         .iceberg(iceberg)
         .global(global)
+        .dynamic(dynamic)
         .hive_formats(Some(Default::default()));
 
     // Snowflake does not enforce order of the parameters in the statement. The parser needs to
@@ -697,6 +702,49 @@ pub fn parse_create_table(
                 Keyword::IF if parser.parse_keywords(&[Keyword::NOT, Keyword::EXISTS]) => {
                     builder = builder.if_not_exists(true);
                 }
+                Keyword::TARGET_LAG => {
+                    parser.expect_token(&Token::Eq)?;
+                    let target_lag = parser.parse_literal_string()?;
+                    builder = builder.target_lag(Some(target_lag));
+                }
+                Keyword::WAREHOUSE => {
+                    parser.expect_token(&Token::Eq)?;
+                    let warehouse = parser.parse_identifier()?;
+                    builder = builder.warehouse(Some(warehouse));
+                }
+                Keyword::AT | Keyword::BEFORE => {
+                    parser.prev_token();
+                    let version = parser.maybe_parse_table_version()?;
+                    builder = builder.version(version);
+                }
+                Keyword::REFRESH_MODE => {
+                    parser.expect_token(&Token::Eq)?;
+                    let refresh_mode = match parser.parse_one_of_keywords(&[
+                        Keyword::AUTO,
+                        Keyword::FULL,
+                        Keyword::INCREMENTAL,
+                    ]) {
+                        Some(Keyword::AUTO) => Some(RefreshModeKind::Auto),
+                        Some(Keyword::FULL) => Some(RefreshModeKind::Full),
+                        Some(Keyword::INCREMENTAL) => Some(RefreshModeKind::Incremental),
+                        _ => return parser.expected("AUTO, FULL or INCREMENTAL", next_token),
+                    };
+                    builder = builder.refresh_mode(refresh_mode);
+                }
+                Keyword::INITIALIZE => {
+                    parser.expect_token(&Token::Eq)?;
+                    let initialize = match parser
+                        .parse_one_of_keywords(&[Keyword::ON_CREATE, Keyword::ON_SCHEDULE])
+                    {
+                        Some(Keyword::ON_CREATE) => Some(InitializeKind::OnCreate),
+                        Some(Keyword::ON_SCHEDULE) => Some(InitializeKind::OnSchedule),
+                        _ => return parser.expected("ON_CREATE or ON_SCHEDULE", next_token),
+                    };
+                    builder = builder.initialize(initialize);
+                }
+                Keyword::REQUIRE if parser.parse_keyword(Keyword::USER) => {
+                    builder = builder.require_user(true);
+                }
                 _ => {
                     return parser.expected("end of statement", next_token);
                 }
@@ -707,21 +755,9 @@ pub fn parse_create_table(
                 builder = builder.columns(columns).constraints(constraints);
             }
             Token::EOF => {
-                if !builder.validate_schema_info() {
-                    return Err(ParserError::ParserError(
-                        "unexpected end of input".to_string(),
-                    ));
-                }
-
                 break;
             }
             Token::SemiColon => {
-                if !builder.validate_schema_info() {
-                    return Err(ParserError::ParserError(
-                        "unexpected end of input".to_string(),
-                    ));
-                }
-
                 parser.prev_token();
                 break;
             }

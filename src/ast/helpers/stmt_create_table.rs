@@ -27,9 +27,9 @@ use sqlparser_derive::{Visit, VisitMut};
 use super::super::dml::CreateTable;
 use crate::ast::{
     ClusteredBy, ColumnDef, CommentDef, CreateTableOptions, Expr, FileFormat,
-    HiveDistributionStyle, HiveFormat, Ident, ObjectName, OnCommit, OneOrManyWithParens, Query,
-    RowAccessPolicy, Statement, StorageSerializationPolicy, TableConstraint, Tag,
-    WrappedCollection,
+    HiveDistributionStyle, HiveFormat, Ident, InitializeKind, ObjectName, OnCommit,
+    OneOrManyWithParens, Query, RefreshModeKind, RowAccessPolicy, Statement,
+    StorageSerializationPolicy, TableConstraint, TableVersion, Tag, WrappedCollection,
 };
 
 use crate::parser::ParserError;
@@ -73,6 +73,7 @@ pub struct CreateTableBuilder {
     pub transient: bool,
     pub volatile: bool,
     pub iceberg: bool,
+    pub dynamic: bool,
     pub name: ObjectName,
     pub columns: Vec<ColumnDef>,
     pub constraints: Vec<TableConstraint>,
@@ -84,6 +85,7 @@ pub struct CreateTableBuilder {
     pub without_rowid: bool,
     pub like: Option<ObjectName>,
     pub clone: Option<ObjectName>,
+    pub version: Option<TableVersion>,
     pub comment: Option<CommentDef>,
     pub on_commit: Option<OnCommit>,
     pub on_cluster: Option<Ident>,
@@ -109,6 +111,11 @@ pub struct CreateTableBuilder {
     pub catalog_sync: Option<String>,
     pub storage_serialization_policy: Option<StorageSerializationPolicy>,
     pub table_options: CreateTableOptions,
+    pub target_lag: Option<String>,
+    pub warehouse: Option<Ident>,
+    pub refresh_mode: Option<RefreshModeKind>,
+    pub initialize: Option<InitializeKind>,
+    pub require_user: bool,
 }
 
 impl CreateTableBuilder {
@@ -122,6 +129,7 @@ impl CreateTableBuilder {
             transient: false,
             volatile: false,
             iceberg: false,
+            dynamic: false,
             name,
             columns: vec![],
             constraints: vec![],
@@ -133,6 +141,7 @@ impl CreateTableBuilder {
             without_rowid: false,
             like: None,
             clone: None,
+            version: None,
             comment: None,
             on_commit: None,
             on_cluster: None,
@@ -158,6 +167,11 @@ impl CreateTableBuilder {
             catalog_sync: None,
             storage_serialization_policy: None,
             table_options: CreateTableOptions::None,
+            target_lag: None,
+            warehouse: None,
+            refresh_mode: None,
+            initialize: None,
+            require_user: false,
         }
     }
     pub fn or_replace(mut self, or_replace: bool) -> Self {
@@ -197,6 +211,11 @@ impl CreateTableBuilder {
 
     pub fn iceberg(mut self, iceberg: bool) -> Self {
         self.iceberg = iceberg;
+        self
+    }
+
+    pub fn dynamic(mut self, dynamic: bool) -> Self {
+        self.dynamic = dynamic;
         self
     }
 
@@ -246,6 +265,11 @@ impl CreateTableBuilder {
     // Different name to allow the object to be cloned
     pub fn clone_clause(mut self, clone: Option<ObjectName>) -> Self {
         self.clone = clone;
+        self
+    }
+
+    pub fn version(mut self, version: Option<TableVersion>) -> Self {
+        self.version = version;
         self
     }
 
@@ -383,24 +407,29 @@ impl CreateTableBuilder {
         self
     }
 
-    /// Returns true if the statement has exactly one source of info on the schema of the new table.
-    /// This is Snowflake-specific, some dialects allow more than one source.
-    pub(crate) fn validate_schema_info(&self) -> bool {
-        let mut sources = 0;
-        if !self.columns.is_empty() {
-            sources += 1;
-        }
-        if self.query.is_some() {
-            sources += 1;
-        }
-        if self.like.is_some() {
-            sources += 1;
-        }
-        if self.clone.is_some() {
-            sources += 1;
-        }
+    pub fn target_lag(mut self, target_lag: Option<String>) -> Self {
+        self.target_lag = target_lag;
+        self
+    }
 
-        sources == 1
+    pub fn warehouse(mut self, warehouse: Option<Ident>) -> Self {
+        self.warehouse = warehouse;
+        self
+    }
+
+    pub fn refresh_mode(mut self, refresh_mode: Option<RefreshModeKind>) -> Self {
+        self.refresh_mode = refresh_mode;
+        self
+    }
+
+    pub fn initialize(mut self, initialize: Option<InitializeKind>) -> Self {
+        self.initialize = initialize;
+        self
+    }
+
+    pub fn require_user(mut self, require_user: bool) -> Self {
+        self.require_user = require_user;
+        self
     }
 
     pub fn build(self) -> Statement {
@@ -413,6 +442,7 @@ impl CreateTableBuilder {
             transient: self.transient,
             volatile: self.volatile,
             iceberg: self.iceberg,
+            dynamic: self.dynamic,
             name: self.name,
             columns: self.columns,
             constraints: self.constraints,
@@ -424,6 +454,7 @@ impl CreateTableBuilder {
             without_rowid: self.without_rowid,
             like: self.like,
             clone: self.clone,
+            version: self.version,
             comment: self.comment,
             on_commit: self.on_commit,
             on_cluster: self.on_cluster,
@@ -449,6 +480,11 @@ impl CreateTableBuilder {
             catalog_sync: self.catalog_sync,
             storage_serialization_policy: self.storage_serialization_policy,
             table_options: self.table_options,
+            target_lag: self.target_lag,
+            warehouse: self.warehouse,
+            refresh_mode: self.refresh_mode,
+            initialize: self.initialize,
+            require_user: self.require_user,
         })
     }
 }
@@ -469,6 +505,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 transient,
                 volatile,
                 iceberg,
+                dynamic,
                 name,
                 columns,
                 constraints,
@@ -480,6 +517,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 without_rowid,
                 like,
                 clone,
+                version,
                 comment,
                 on_commit,
                 on_cluster,
@@ -505,6 +543,11 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 catalog_sync,
                 storage_serialization_policy,
                 table_options,
+                target_lag,
+                warehouse,
+                refresh_mode,
+                initialize,
+                require_user,
             }) => Ok(Self {
                 or_replace,
                 temporary,
@@ -512,6 +555,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 global,
                 if_not_exists,
                 transient,
+                dynamic,
                 name,
                 columns,
                 constraints,
@@ -523,6 +567,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 without_rowid,
                 like,
                 clone,
+                version,
                 comment,
                 on_commit,
                 on_cluster,
@@ -550,6 +595,11 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 catalog_sync,
                 storage_serialization_policy,
                 table_options,
+                target_lag,
+                warehouse,
+                refresh_mode,
+                initialize,
+                require_user,
             }),
             _ => Err(ParserError::ParserError(format!(
                 "Expected create table statement, but received: {stmt}"

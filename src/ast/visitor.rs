@@ -884,6 +884,8 @@ mod tests {
                     "PRE: EXPR: a.amount",
                     "POST: EXPR: a.amount",
                     "POST: EXPR: SUM(a.amount)",
+                    "PRE: EXPR: a.MONTH",
+                    "POST: EXPR: a.MONTH",
                     "PRE: EXPR: 'JAN'",
                     "POST: EXPR: 'JAN'",
                     "PRE: EXPR: 'FEB'",

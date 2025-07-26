@@ -4362,6 +4362,7 @@ pub enum Statement {
     /// EXPORT DATA OPTIONS(uri='gs://bucket/folder/*', format='PARQUET', overwrite=true) AS
     /// SELECT field1, field2 FROM mydataset.table1 ORDER BY field1 LIMIT 10
     /// ```
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/export-statements)
     ExportData(ExportData),
     /// ```sql
     /// CREATE [OR REPLACE] USER <user> [IF NOT EXISTS]

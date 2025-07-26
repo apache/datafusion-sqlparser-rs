@@ -645,7 +645,10 @@ impl<'a> Parser<'a> {
                 Keyword::COMMENT if self.dialect.supports_comment_on() => self.parse_comment(),
                 Keyword::PRINT => self.parse_print(),
                 Keyword::RETURN => self.parse_return(),
-                Keyword::EXPORT => self.parse_export(),
+                Keyword::EXPORT => {
+                    self.prev_token();
+                    self.parse_export_data()
+                }
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
@@ -16524,8 +16527,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_export(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword(Keyword::DATA)?;
+    /// /// Parse a `EXPORT DATA` statement.
+    ///
+    /// See [Statement::ExportData]
+    fn parse_export_data(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keywords(&[Keyword::EXPORT, Keyword::DATA])?;
 
         let connection = if self.parse_keywords(&[Keyword::WITH, Keyword::CONNECTION]) {
             Some(self.parse_object_name(false)?)

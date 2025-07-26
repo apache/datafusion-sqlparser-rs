@@ -2657,7 +2657,7 @@ fn test_export_data() {
                 }),
                 limit_clause: Some(LimitClause::LimitOffset {
                     limit: Some(Expr::Value(
-                        Value::Number("10".to_string(), false).with_empty_span()
+                        Value::Number("10".into(), false).with_empty_span()
                     )),
                     offset: None,
                     limit_by: vec![],
@@ -2763,7 +2763,7 @@ fn test_export_data() {
                 }),
                 limit_clause: Some(LimitClause::LimitOffset {
                     limit: Some(Expr::Value(
-                        Value::Number("10".to_string(), false).with_empty_span()
+                        Value::Number("10".into(), false).with_empty_span()
                     )),
                     offset: None,
                     limit_by: vec![],

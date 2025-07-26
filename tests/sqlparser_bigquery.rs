@@ -2656,9 +2656,7 @@ fn test_export_data() {
                     interpolate: None,
                 }),
                 limit_clause: Some(LimitClause::LimitOffset {
-                    limit: Some(Expr::Value(
-                        Value::Number("10".into(), false).with_empty_span()
-                    )),
+                    limit: Some(Expr::Value(number("10").with_empty_span())),
                     offset: None,
                     limit_by: vec![],
                 }),
@@ -2762,9 +2760,7 @@ fn test_export_data() {
                     interpolate: None,
                 }),
                 limit_clause: Some(LimitClause::LimitOffset {
-                    limit: Some(Expr::Value(
-                        Value::Number("10".into(), false).with_empty_span()
-                    )),
+                    limit: Some(Expr::Value(number("10").with_empty_span())),
                     offset: None,
                     limit_by: vec![],
                 }),

@@ -645,6 +645,10 @@ impl<'a> Parser<'a> {
                 Keyword::COMMENT if self.dialect.supports_comment_on() => self.parse_comment(),
                 Keyword::PRINT => self.parse_print(),
                 Keyword::RETURN => self.parse_return(),
+                Keyword::EXPORT => {
+                    self.prev_token();
+                    self.parse_export_data()
+                }
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
@@ -16521,6 +16525,30 @@ impl<'a> Parser<'a> {
             })),
             None => Ok(Statement::Return(ReturnStatement { value: None })),
         }
+    }
+
+    /// /// Parse a `EXPORT DATA` statement.
+    ///
+    /// See [Statement::ExportData]
+    fn parse_export_data(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keywords(&[Keyword::EXPORT, Keyword::DATA])?;
+
+        let connection = if self.parse_keywords(&[Keyword::WITH, Keyword::CONNECTION]) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
+        self.expect_keyword(Keyword::OPTIONS)?;
+        self.expect_token(&Token::LParen)?;
+        let options = self.parse_comma_separated(|p| p.parse_sql_option())?;
+        self.expect_token(&Token::RParen)?;
+        self.expect_keyword(Keyword::AS)?;
+        let query = self.parse_query()?;
+        Ok(Statement::ExportData(ExportData {
+            options,
+            query,
+            connection,
+        }))
     }
 
     /// Consume the parser and return its underlying token buffer

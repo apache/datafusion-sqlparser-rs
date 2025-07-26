@@ -6326,6 +6326,8 @@ impl<'a> Parser<'a> {
             ObjectType::Type
         } else if self.parse_keyword(Keyword::USER) {
             ObjectType::User
+        } else if self.parse_keyword(Keyword::STREAM) {
+            ObjectType::Stream
         } else if self.parse_keyword(Keyword::FUNCTION) {
             return self.parse_drop_function();
         } else if self.parse_keyword(Keyword::POLICY) {
@@ -14110,6 +14112,15 @@ impl<'a> Parser<'a> {
                     schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
                 })
             } else if self.parse_keywords(&[
+                Keyword::ALL,
+                Keyword::FUNCTIONS,
+                Keyword::IN,
+                Keyword::SCHEMA,
+            ]) {
+                Some(GrantObjects::AllFunctionsInSchema {
+                    schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                })
+            } else if self.parse_keywords(&[
                 Keyword::FUTURE,
                 Keyword::SCHEMAS,
                 Keyword::IN,
@@ -14415,6 +14426,8 @@ impl<'a> Parser<'a> {
             Some(ActionCreateObjectType::Integration)
         } else if self.parse_keyword(Keyword::ROLE) {
             Some(ActionCreateObjectType::Role)
+        } else if self.parse_keyword(Keyword::SCHEMA) {
+            Some(ActionCreateObjectType::Schema)
         } else if self.parse_keyword(Keyword::SHARE) {
             Some(ActionCreateObjectType::Share)
         } else if self.parse_keyword(Keyword::USER) {

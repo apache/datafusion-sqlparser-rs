@@ -2568,7 +2568,7 @@ fn test_struct_trailing_and_nested_bracket() {
 }
 
 #[test]
-fn test_export() {
+fn test_export_data() {
     bigquery().verified_stmt(concat!(
         "EXPORT DATA OPTIONS(",
         "uri = 'gs://bucket/folder/*', ",
@@ -2586,4 +2586,14 @@ fn test_export() {
         ") AS ",
         "SELECT field1, field2 FROM mydataset.table1 ORDER BY field1 LIMIT 10",
     ));
+}
+
+#[test]
+fn test_begin_transaction() {
+    bigquery().verified_stmt("BEGIN TRANSACTION");
+}
+
+#[test]
+fn test_begin_statement() {
+    bigquery().verified_stmt("BEGIN");
 }

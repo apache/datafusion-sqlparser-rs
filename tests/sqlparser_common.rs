@@ -16317,20 +16317,28 @@ fn parse_notnull() {
 }
 
 #[test]
-fn test_odbc_time_date_timestamp_support() {
+fn parse_odbc_time_date_timestamp() {
+    // Supported statements
     let sql_d = "SELECT {d '2025-07-17'}, category_name FROM categories";
     let _ = all_dialects().verified_stmt(sql_d);
     let sql_t = "SELECT {t '14:12:01'}, category_name FROM categories";
     let _ = all_dialects().verified_stmt(sql_t);
     let sql_ts = "SELECT {ts '2025-07-17 14:12:01'}, category_name FROM categories";
     let _ = all_dialects().verified_stmt(sql_ts);
-}
-
-#[test]
-#[should_panic]
-fn test_invalid_odbc_literal_fails() {
+    // Unsupported statement
+    let supports_dictionary = all_dialects_where(|d| d.supports_dictionary_syntax());
+    let dictionary_unsupported = all_dialects_where(|d| !d.supports_dictionary_syntax());
     let sql = "SELECT {tt '14:12:01'} FROM foo";
-    let _ = all_dialects().verified_stmt(sql);
+    let res = supports_dictionary.parse_sql_statements(sql);
+    let res_dict = dictionary_unsupported.parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected: :, found: '14:12:01'".to_string()),
+        res.unwrap_err()
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected: an expression, found: {".to_string()),
+        res_dict.unwrap_err()
+    );
 }
 
 #[test]

@@ -4146,8 +4146,15 @@ fn parse_json_member_of() {
 
 #[test]
 fn parse_show_charset() {
-    let _ = mysql().verified_stmt("SHOW CHARACTER SET");
-    let _ = mysql().verified_stmt("SHOW CHARACTER SET LIKE 'utf8mb4%'");
-    let _ = mysql().verified_stmt("SHOW CHARSET WHERE charset = 'utf8mb4%'");
-    let _ = mysql().verified_stmt("SHOW CHARSET LIKE 'utf8mb4%'");
+    let res = mysql().verified_stmt("SHOW CHARACTER SET");
+    assert_eq!(
+        res,
+        Statement::ShowCharset(ShowCharset {
+            is_shorthand: false,
+            filter: None
+        })
+    );
+    mysql().verified_stmt("SHOW CHARACTER SET LIKE 'utf8mb4%'");
+    mysql().verified_stmt("SHOW CHARSET WHERE charset = 'utf8mb4%'");
+    mysql().verified_stmt("SHOW CHARSET LIKE 'utf8mb4%'");
 }

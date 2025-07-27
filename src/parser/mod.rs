@@ -12518,10 +12518,10 @@ impl<'a> Parser<'a> {
 
     fn parse_show_charset(&mut self, is_shorthand: bool) -> Result<Statement, ParserError> {
         // parse one of keywords
-        Ok(Statement::ShowCharset {
+        Ok(Statement::ShowCharset(ShowCharset {
             is_shorthand,
             filter: self.parse_show_statement_filter()?,
-        })
+        }))
     }
 
     fn parse_show_databases(&mut self, terse: bool) -> Result<Statement, ParserError> {

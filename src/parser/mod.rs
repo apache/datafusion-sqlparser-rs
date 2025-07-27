@@ -5774,18 +5774,13 @@ impl<'a> Parser<'a> {
         let mut name_before_not_exists = false;
         if self.peek_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]) {
             // Possible syntax -> ... IF NOT EXISTS <name>
-            if self.dialect.create_view_if_not_exists_supported() {
-                if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-            }
+            if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
             name = self.parse_object_name(allow_unquoted_hyphen)?;
         } else {
             // Possible syntax -> ... <name> IF NOT EXISTS
+            // Supported by snowflake but is undocumented
             name = self.parse_object_name(allow_unquoted_hyphen)?;
-            if self
-                .dialect
-                .create_view_name_before_if_not_exists_supported()
-                && self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS])
-            {
+            if self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]) {
                 if_not_exists = true;
                 name_before_not_exists = true;
             }

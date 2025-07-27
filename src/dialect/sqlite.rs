@@ -57,11 +57,6 @@ impl Dialect for SQLiteDialect {
         true
     }
 
-    // See https://www.sqlite.org/lang_createview.html
-    fn create_view_if_not_exists_supported(&self) -> bool {
-        true
-    }
-
     fn supports_start_transaction_modifier(&self) -> bool {
         true
     }

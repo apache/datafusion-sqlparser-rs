@@ -16387,18 +16387,8 @@ fn parse_drop_stream() {
 
 #[test]
 fn parse_create_view_if_not_exists() {
-    let sql = "CREATE VIEW IF NOT EXISTS v AS SELECT 1";
-    let dialects = TestedDialects::new(vec![
-        Box::new(SnowflakeDialect {}),
-        Box::new(GenericDialect {}),
-        Box::new(SQLiteDialect {}),
-        Box::new(BigQueryDialect {}),
-    ]);
-    let _ = dialects.verified_stmt(sql);
+    let sql: &'static str = "CREATE VIEW IF NOT EXISTS v AS SELECT 1";
+    let _ = all_dialects().verified_stmt(sql);
     let sql = "CREATE VIEW v IF NOT EXISTS AS SELECT 1";
-    let dialects = TestedDialects::new(vec![
-        Box::new(SnowflakeDialect {}),
-        Box::new(GenericDialect {}),
-    ]);
-    let _ = dialects.verified_stmt(sql);
+    let _ = all_dialects().verified_stmt(sql);
 }

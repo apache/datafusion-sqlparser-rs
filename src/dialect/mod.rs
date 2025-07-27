@@ -247,18 +247,6 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Does the dialect support sql statements such as:
-    /// CREATE VIEW IF NOT EXISTS view_name AS SELECT * FROM table_name
-    fn create_view_if_not_exists_supported(&self) -> bool {
-        false
-    }
-
-    /// Does the dialect support view_name before IF NOT EXISTS in CREATE VIEW:
-    /// CREATE VIEW IF NOT EXISTS view_name AS SELECT * FROM table_name
-    fn create_view_name_before_if_not_exists_supported(&self) -> bool {
-        false
-    }
-
     /// Returns true if the dialect supports referencing another named window
     /// within a window clause declaration.
     ///

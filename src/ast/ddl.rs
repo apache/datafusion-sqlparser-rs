@@ -264,6 +264,7 @@ pub enum AlterTableOperation {
     },
     /// `RENAME TO <table_name>`
     RenameTable {
+        to_keyword: bool,
         table_name: ObjectName,
     },
     // CHANGE [ COLUMN ] <old_name> <new_name> <data_type> [ <options> ]
@@ -696,8 +697,15 @@ impl fmt::Display for AlterTableOperation {
                 old_column_name,
                 new_column_name,
             } => write!(f, "RENAME COLUMN {old_column_name} TO {new_column_name}"),
-            AlterTableOperation::RenameTable { table_name } => {
-                write!(f, "RENAME TO {table_name}")
+            AlterTableOperation::RenameTable {
+                to_keyword,
+                table_name,
+            } => {
+                if *to_keyword {
+                    write!(f, "RENAME TO {table_name}")
+                } else {
+                    write!(f, "RENAME AS {table_name}")
+                }
             }
             AlterTableOperation::ChangeColumn {
                 old_name,

@@ -9528,6 +9528,7 @@ fn parse_grant() {
     verified_stmt("GRANT SELECT ON ALL VIEWS IN SCHEMA db1.sc1 TO ROLE role1");
     verified_stmt("GRANT SELECT ON ALL MATERIALIZED VIEWS IN SCHEMA db1.sc1 TO ROLE role1");
     verified_stmt("GRANT SELECT ON ALL EXTERNAL TABLES IN SCHEMA db1.sc1 TO ROLE role1");
+    verified_stmt("GRANT USAGE ON ALL FUNCTIONS IN SCHEMA db1.sc1 TO ROLE role1");
     verified_stmt("GRANT USAGE ON SCHEMA sc1 TO a:b");
     verified_stmt("GRANT USAGE ON SCHEMA sc1 TO GROUP group1");
     verified_stmt("GRANT OWNERSHIP ON ALL TABLES IN SCHEMA DEV_STAS_ROGOZHIN TO ROLE ANALYST");
@@ -9551,6 +9552,7 @@ fn parse_grant() {
     verified_stmt("GRANT USAGE ON FUNCTION db1.sc1.foo(INT) TO ROLE role1");
     verified_stmt("GRANT ROLE role1 TO ROLE role2");
     verified_stmt("GRANT ROLE role1 TO USER user");
+    verified_stmt("GRANT CREATE SCHEMA ON DATABASE db1 TO ROLE role1");
 }
 
 #[test]
@@ -16356,4 +16358,22 @@ fn parse_create_user() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_drop_stream() {
+    let sql = "DROP STREAM s1";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            names, object_type, ..
+        } => {
+            assert_eq!(
+                vec!["s1"],
+                names.iter().map(ToString::to_string).collect::<Vec<_>>()
+            );
+            assert_eq!(ObjectType::Stream, object_type);
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("DROP STREAM IF EXISTS s1");
 }

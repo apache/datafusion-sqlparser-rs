@@ -20,10 +20,12 @@ mod test_utils;
 
 use std::ops::Deref;
 
+use sqlparser::ast::helpers::attached_token::AttachedToken;
 use sqlparser::ast::*;
 use sqlparser::dialect::{BigQueryDialect, GenericDialect};
+use sqlparser::keywords::Keyword;
 use sqlparser::parser::{ParserError, ParserOptions};
-use sqlparser::tokenizer::{Location, Span};
+use sqlparser::tokenizer::{Location, Span, Token, TokenWithSpan, Word};
 use test_utils::*;
 
 #[test]
@@ -2565,6 +2567,244 @@ fn test_struct_trailing_and_nested_bracket() {
             "Expected: ',' or ')' after column definition, found: >".to_string()
         )
     );
+}
+
+#[test]
+fn test_export_data() {
+    let stmt = bigquery().verified_stmt(concat!(
+        "EXPORT DATA OPTIONS(",
+        "uri = 'gs://bucket/folder/*', ",
+        "format = 'PARQUET', ",
+        "overwrite = true",
+        ") AS ",
+        "SELECT field1, field2 FROM mydataset.table1 ORDER BY field1 LIMIT 10",
+    ));
+    assert_eq!(
+        stmt,
+        Statement::ExportData(ExportData {
+            options: vec![
+                SqlOption::KeyValue {
+                    key: Ident::new("uri"),
+                    value: Expr::Value(
+                        Value::SingleQuotedString("gs://bucket/folder/*".to_owned())
+                            .with_empty_span()
+                    ),
+                },
+                SqlOption::KeyValue {
+                    key: Ident::new("format"),
+                    value: Expr::Value(
+                        Value::SingleQuotedString("PARQUET".to_owned()).with_empty_span()
+                    ),
+                },
+                SqlOption::KeyValue {
+                    key: Ident::new("overwrite"),
+                    value: Expr::Value(Value::Boolean(true).with_empty_span()),
+                },
+            ],
+            connection: None,
+            query: Box::new(Query {
+                with: None,
+                body: Box::new(SetExpr::Select(Box::new(Select {
+                    select_token: AttachedToken(TokenWithSpan::new(
+                        Token::Word(Word {
+                            value: "SELECT".to_string(),
+                            quote_style: None,
+                            keyword: Keyword::SELECT,
+                        }),
+                        Span::empty()
+                    )),
+                    distinct: None,
+                    top: None,
+                    top_before_distinct: false,
+                    projection: vec![
+                        SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("field1"))),
+                        SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("field2"))),
+                    ],
+                    exclude: None,
+                    into: None,
+                    from: vec![TableWithJoins {
+                        relation: table_from_name(ObjectName::from(vec![
+                            Ident::new("mydataset"),
+                            Ident::new("table1")
+                        ])),
+                        joins: vec![],
+                    }],
+                    lateral_views: vec![],
+                    prewhere: None,
+                    selection: None,
+                    group_by: GroupByExpr::Expressions(vec![], vec![]),
+                    cluster_by: vec![],
+                    distribute_by: vec![],
+                    sort_by: vec![],
+                    having: None,
+                    named_window: vec![],
+                    qualify: None,
+                    window_before_qualify: false,
+                    value_table_mode: None,
+                    connect_by: None,
+                    flavor: SelectFlavor::Standard,
+                }))),
+                order_by: Some(OrderBy {
+                    kind: OrderByKind::Expressions(vec![OrderByExpr {
+                        expr: Expr::Identifier(Ident::new("field1")),
+                        options: OrderByOptions {
+                            asc: None,
+                            nulls_first: None,
+                        },
+                        with_fill: None,
+                    },]),
+                    interpolate: None,
+                }),
+                limit_clause: Some(LimitClause::LimitOffset {
+                    limit: Some(Expr::Value(number("10").with_empty_span())),
+                    offset: None,
+                    limit_by: vec![],
+                }),
+                fetch: None,
+                locks: vec![],
+                for_clause: None,
+                settings: None,
+                format_clause: None,
+                pipe_operators: vec![],
+            })
+        })
+    );
+
+    let stmt = bigquery().verified_stmt(concat!(
+        "EXPORT DATA WITH CONNECTION myconnection.myproject.us OPTIONS(",
+        "uri = 'gs://bucket/folder/*', ",
+        "format = 'PARQUET', ",
+        "overwrite = true",
+        ") AS ",
+        "SELECT field1, field2 FROM mydataset.table1 ORDER BY field1 LIMIT 10",
+    ));
+
+    assert_eq!(
+        stmt,
+        Statement::ExportData(ExportData {
+            options: vec![
+                SqlOption::KeyValue {
+                    key: Ident::new("uri"),
+                    value: Expr::Value(
+                        Value::SingleQuotedString("gs://bucket/folder/*".to_owned())
+                            .with_empty_span()
+                    ),
+                },
+                SqlOption::KeyValue {
+                    key: Ident::new("format"),
+                    value: Expr::Value(
+                        Value::SingleQuotedString("PARQUET".to_owned()).with_empty_span()
+                    ),
+                },
+                SqlOption::KeyValue {
+                    key: Ident::new("overwrite"),
+                    value: Expr::Value(Value::Boolean(true).with_empty_span()),
+                },
+            ],
+            connection: Some(ObjectName::from(vec![
+                Ident::new("myconnection"),
+                Ident::new("myproject"),
+                Ident::new("us")
+            ])),
+            query: Box::new(Query {
+                with: None,
+                body: Box::new(SetExpr::Select(Box::new(Select {
+                    select_token: AttachedToken(TokenWithSpan::new(
+                        Token::Word(Word {
+                            value: "SELECT".to_string(),
+                            quote_style: None,
+                            keyword: Keyword::SELECT,
+                        }),
+                        Span::empty()
+                    )),
+                    distinct: None,
+                    top: None,
+                    top_before_distinct: false,
+                    projection: vec![
+                        SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("field1"))),
+                        SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("field2"))),
+                    ],
+                    exclude: None,
+                    into: None,
+                    from: vec![TableWithJoins {
+                        relation: table_from_name(ObjectName::from(vec![
+                            Ident::new("mydataset"),
+                            Ident::new("table1")
+                        ])),
+                        joins: vec![],
+                    }],
+                    lateral_views: vec![],
+                    prewhere: None,
+                    selection: None,
+                    group_by: GroupByExpr::Expressions(vec![], vec![]),
+                    cluster_by: vec![],
+                    distribute_by: vec![],
+                    sort_by: vec![],
+                    having: None,
+                    named_window: vec![],
+                    qualify: None,
+                    window_before_qualify: false,
+                    value_table_mode: None,
+                    connect_by: None,
+                    flavor: SelectFlavor::Standard,
+                }))),
+                order_by: Some(OrderBy {
+                    kind: OrderByKind::Expressions(vec![OrderByExpr {
+                        expr: Expr::Identifier(Ident::new("field1")),
+                        options: OrderByOptions {
+                            asc: None,
+                            nulls_first: None,
+                        },
+                        with_fill: None,
+                    },]),
+                    interpolate: None,
+                }),
+                limit_clause: Some(LimitClause::LimitOffset {
+                    limit: Some(Expr::Value(number("10").with_empty_span())),
+                    offset: None,
+                    limit_by: vec![],
+                }),
+                fetch: None,
+                locks: vec![],
+                for_clause: None,
+                settings: None,
+                format_clause: None,
+                pipe_operators: vec![],
+            })
+        })
+    );
+
+    // at least one option (uri) is required
+    let err = bigquery()
+        .parse_sql_statements(concat!(
+            "EXPORT DATA OPTIONS() AS ",
+            "SELECT field1, field2 FROM mydataset.table1 ORDER BY field1 LIMIT 10",
+        ))
+        .unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "sql parser error: Expected: identifier, found: )"
+    );
+
+    let err = bigquery()
+        .parse_sql_statements(concat!(
+            "EXPORT DATA AS SELECT field1, field2 FROM mydataset.table1 ORDER BY field1 LIMIT 10",
+        ))
+        .unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "sql parser error: Expected: OPTIONS, found: AS"
+    );
+}
+
+#[test]
+fn test_begin_transaction() {
+    bigquery().verified_stmt("BEGIN TRANSACTION");
+}
+
+#[test]
+fn test_begin_statement() {
+    bigquery().verified_stmt("BEGIN");
 }
 
 #[test]

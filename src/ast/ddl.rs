@@ -149,7 +149,7 @@ pub enum AlterTableOperation {
     },
     /// `ATTACH PART|PARTITION <partition_expr>`
     /// Note: this is a ClickHouse-specific operation, please refer to
-    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/pakrtition#attach-partitionpart)
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/partition#attach-partitionpart)
     AttachPartition {
         // PART is not a short form of PARTITION, it's a separate keyword
         // which represents a physical file on disk and partition is a logical entity.

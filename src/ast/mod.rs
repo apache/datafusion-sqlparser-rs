@@ -1144,7 +1144,7 @@ pub enum Expr {
     ///
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/functions#higher-order-functions---operator-and-lambdaparams-expr-function)
     /// [Databricks](https://docs.databricks.com/en/sql/language-manual/sql-ref-lambda-functions.html)
-    /// [DuckDb](https://duckdb.org/docs/sql/functions/lambda.html)
+    /// [DuckDB](https://duckdb.org/docs/stable/sql/functions/lambda)
     Lambda(LambdaFunction),
     /// Checks membership of a value in a JSON array
     MemberOf(MemberOf),
@@ -4366,6 +4366,15 @@ pub enum Statement {
     ///
     /// See [ReturnStatement]
     Return(ReturnStatement),
+    /// Export data statement
+    ///
+    /// Example:
+    /// ```sql
+    /// EXPORT DATA OPTIONS(uri='gs://bucket/folder/*', format='PARQUET', overwrite=true) AS
+    /// SELECT field1, field2 FROM mydataset.table1 ORDER BY field1 LIMIT 10
+    /// ```
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/export-statements)
+    ExportData(ExportData),
     /// ```sql
     /// CREATE [OR REPLACE] USER <user> [IF NOT EXISTS]
     /// ```
@@ -6209,6 +6218,7 @@ impl fmt::Display for Statement {
             Statement::Return(r) => write!(f, "{r}"),
             Statement::List(command) => write!(f, "LIST {command}"),
             Statement::Remove(command) => write!(f, "REMOVE {command}"),
+            Statement::ExportData(e) => write!(f, "{e}"),
             Statement::CreateUser(s) => write!(f, "{s}"),
             Statement::AlterSchema {
                 name, operations, ..
@@ -6791,6 +6801,7 @@ pub enum ActionCreateObjectType {
     OrganiationListing,
     ReplicationGroup,
     Role,
+    Schema,
     Share,
     User,
     Warehouse,
@@ -6812,6 +6823,7 @@ impl fmt::Display for ActionCreateObjectType {
             ActionCreateObjectType::OrganiationListing => write!(f, "ORGANIZATION LISTING"),
             ActionCreateObjectType::ReplicationGroup => write!(f, "REPLICATION GROUP"),
             ActionCreateObjectType::Role => write!(f, "ROLE"),
+            ActionCreateObjectType::Schema => write!(f, "SCHEMA"),
             ActionCreateObjectType::Share => write!(f, "SHARE"),
             ActionCreateObjectType::User => write!(f, "USER"),
             ActionCreateObjectType::Warehouse => write!(f, "WAREHOUSE"),
@@ -7049,6 +7061,8 @@ pub enum GrantObjects {
     AllMaterializedViewsInSchema { schemas: Vec<ObjectName> },
     /// Grant privileges on `ALL EXTERNAL TABLES IN SCHEMA <schema_name> [, ...]`
     AllExternalTablesInSchema { schemas: Vec<ObjectName> },
+    /// Grant privileges on `ALL FUNCTIONS IN SCHEMA <schema_name> [, ...]`
+    AllFunctionsInSchema { schemas: Vec<ObjectName> },
     /// Grant privileges on `FUTURE SCHEMAS IN DATABASE <database_name> [, ...]`
     FutureSchemasInDatabase { databases: Vec<ObjectName> },
     /// Grant privileges on `FUTURE TABLES IN SCHEMA <schema_name> [, ...]`
@@ -7166,6 +7180,13 @@ impl fmt::Display for GrantObjects {
                 write!(
                     f,
                     "ALL MATERIALIZED VIEWS IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
+            GrantObjects::AllFunctionsInSchema { schemas } => {
+                write!(
+                    f,
+                    "ALL FUNCTIONS IN SCHEMA {}",
                     display_comma_separated(schemas)
                 )
             }
@@ -7844,6 +7865,7 @@ pub enum ObjectType {
     Stage,
     Type,
     User,
+    Stream,
 }
 
 impl fmt::Display for ObjectType {
@@ -7860,6 +7882,7 @@ impl fmt::Display for ObjectType {
             ObjectType::Stage => "STAGE",
             ObjectType::Type => "TYPE",
             ObjectType::User => "USER",
+            ObjectType::Stream => "STREAM",
         })
     }
 }
@@ -10151,6 +10174,34 @@ impl fmt::Display for MemberOf {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ExportData {
+    pub options: Vec<SqlOption>,
+    pub query: Box<Query>,
+    pub connection: Option<ObjectName>,
+}
+
+impl fmt::Display for ExportData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(connection) = &self.connection {
+            write!(
+                f,
+                "EXPORT DATA WITH CONNECTION {connection} OPTIONS({}) AS {}",
+                display_comma_separated(&self.options),
+                self.query
+            )
+        } else {
+            write!(
+                f,
+                "EXPORT DATA OPTIONS({}) AS {}",
+                display_comma_separated(&self.options),
+                self.query
+            )
+        }
+    }
+}
 /// Creates a user
 ///
 /// Syntax:

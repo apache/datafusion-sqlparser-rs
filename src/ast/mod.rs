@@ -4355,6 +4355,15 @@ pub enum Statement {
     ///
     /// See [ReturnStatement]
     Return(ReturnStatement),
+    /// Export data statement
+    ///
+    /// Example:
+    /// ```sql
+    /// EXPORT DATA OPTIONS(uri='gs://bucket/folder/*', format='PARQUET', overwrite=true) AS
+    /// SELECT field1, field2 FROM mydataset.table1 ORDER BY field1 LIMIT 10
+    /// ```
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/export-statements)
+    ExportData(ExportData),
     /// ```sql
     /// CREATE [OR REPLACE] USER <user> [IF NOT EXISTS]
     /// ```
@@ -6198,6 +6207,7 @@ impl fmt::Display for Statement {
             Statement::Return(r) => write!(f, "{r}"),
             Statement::List(command) => write!(f, "LIST {command}"),
             Statement::Remove(command) => write!(f, "REMOVE {command}"),
+            Statement::ExportData(e) => write!(f, "{e}"),
             Statement::CreateUser(s) => write!(f, "{s}"),
         }
     }
@@ -10144,6 +10154,34 @@ impl fmt::Display for MemberOf {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ExportData {
+    pub options: Vec<SqlOption>,
+    pub query: Box<Query>,
+    pub connection: Option<ObjectName>,
+}
+
+impl fmt::Display for ExportData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(connection) = &self.connection {
+            write!(
+                f,
+                "EXPORT DATA WITH CONNECTION {connection} OPTIONS({}) AS {}",
+                display_comma_separated(&self.options),
+                self.query
+            )
+        } else {
+            write!(
+                f,
+                "EXPORT DATA OPTIONS({}) AS {}",
+                display_comma_separated(&self.options),
+                self.query
+            )
+        }
+    }
+}
 /// Creates a user
 ///
 /// Syntax:

@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::ast::{query::SelectItemQualifiedWildcardKind, ColumnOptions};
+use crate::ast::{query::SelectItemQualifiedWildcardKind, AlterSchemaOperation, ColumnOptions};
 use core::iter;
 
 use crate::tokenizer::Span;
@@ -532,6 +532,11 @@ impl Spanned for Statement {
             Statement::Return { .. } => Span::empty(),
             Statement::List(..) | Statement::Remove(..) => Span::empty(),
             Statement::CreateUser(..) => Span::empty(),
+            Statement::AlterSchema {
+                name, operations, ..
+            } => union_spans(
+                core::iter::once(name.span()).chain(operations.iter().map(|i| i.span())),
+            ),
         }
     }
 }
@@ -2358,6 +2363,22 @@ impl Spanned for OpenStatement {
     fn span(&self) -> Span {
         let OpenStatement { cursor_name } = self;
         cursor_name.span
+    }
+}
+
+impl Spanned for AlterSchemaOperation {
+    fn span(&self) -> Span {
+        match self {
+            AlterSchemaOperation::SetDefaultCollate { collate } => collate.span(),
+            AlterSchemaOperation::AddReplica { replica, options } => union_spans(
+                core::iter::once(replica.span)
+                    .chain(options.iter().flat_map(|i| i.iter().map(|i| i.span()))),
+            ),
+            AlterSchemaOperation::DropReplica { replica } => replica.span,
+            AlterSchemaOperation::SetOptionsParens { options } => {
+                union_spans(options.iter().map(|i| i.span()))
+            }
+        }
     }
 }
 

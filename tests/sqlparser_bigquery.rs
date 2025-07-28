@@ -2566,3 +2566,23 @@ fn test_struct_trailing_and_nested_bracket() {
         )
     );
 }
+
+#[test]
+fn test_alter_schema_default_collate() {
+    bigquery_and_generic().verified_stmt("ALTER SCHEMA mydataset SET DEFAULT COLLATE 'und:ci'");
+}
+
+#[test]
+fn test_alter_schema_add_replica() {
+    bigquery_and_generic().verified_stmt("ALTER SCHEMA mydataset ADD REPLICA 'us'");
+}
+
+#[test]
+fn test_alter_schema_drop_replica() {
+    bigquery_and_generic().verified_stmt("ALTER SCHEMA mydataset DROP REPLICA 'us'");
+}
+
+#[test]
+fn test_alter_schema_set_options() {
+    bigquery_and_generic().verified_stmt("ALTER SCHEMA mydataset SET OPTIONS (location = 'us')");
+}

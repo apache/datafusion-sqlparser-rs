@@ -59,16 +59,16 @@ pub use self::dcl::{
 };
 pub use self::ddl::{
     AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterPolicyOperation,
-    AlterTableAlgorithm, AlterTableLock, AlterTableOperation, AlterType, AlterTypeAddValue,
-    AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
-    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy,
-    ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain, CreateFunction,
-    Deduplicate, DeferrableInitial, DropBehavior, GeneratedAs, GeneratedExpressionMode,
-    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
-    IdentityPropertyOrder, IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner,
-    Partition, ProcedureParam, ReferentialAction, ReplicaIdentity, TableConstraint,
-    TagsColumnOption, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
-    ViewColumnDef,
+    AlterSchemaOperation, AlterTableAlgorithm, AlterTableLock, AlterTableOperation, AlterType,
+    AlterTypeAddValue, AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename,
+    AlterTypeRenameValue, ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions,
+    ColumnPolicy, ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain,
+    CreateFunction, Deduplicate, DeferrableInitial, DropBehavior, GeneratedAs,
+    GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
+    IdentityPropertyKind, IdentityPropertyOrder, IndexOption, IndexType, KeyOrIndexDisplay,
+    NullsDistinctOption, Owner, Partition, ProcedureParam, ReferentialAction, ReplicaIdentity,
+    TableConstraint, TagsColumnOption, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{CreateIndex, CreateTable, Delete, IndexColumn, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -3381,6 +3381,17 @@ pub enum Statement {
         iceberg: bool,
     },
     /// ```sql
+    /// ALTER SCHEMA
+    /// ```
+    /// See [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_schema_collate_statement)
+    AlterSchema {
+        /// Schema name
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+        name: ObjectName,
+        if_exists: bool,
+        operations: Vec<AlterSchemaOperation>,
+    },
+    /// ```sql
     /// ALTER INDEX
     /// ```
     AlterIndex {
@@ -6199,6 +6210,15 @@ impl fmt::Display for Statement {
             Statement::List(command) => write!(f, "LIST {command}"),
             Statement::Remove(command) => write!(f, "REMOVE {command}"),
             Statement::CreateUser(s) => write!(f, "{s}"),
+            Statement::AlterSchema {
+                name, operations, ..
+            } => {
+                write!(f, "ALTER SCHEMA {name}")?;
+                for operation in operations {
+                    write!(f, " {operation}")?;
+                }
+                Ok(())
+            }
         }
     }
 }

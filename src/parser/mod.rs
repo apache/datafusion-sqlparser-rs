@@ -10810,26 +10810,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_identifiers_with_alias(&mut self) -> Result<IdentsWithAlias, ParserError> {
-        let idents = match self.peek_token_ref().token {
-            Token::LParen => self.parse_parenthesized_column_list(Mandatory, false)?,
-            _ => vec![self.parse_identifier()?],
-        };
-        let alias = if self.parse_keyword(Keyword::AS) {
-            Some(self.parse_identifier()?)
-        } else {
-            None
-        };
-        Ok(IdentsWithAlias { idents, alias })
-    }
-
     pub fn parse_parenthesized_columns_with_alias_list(
         &mut self,
         optional: IsOptional,
         allow_empty: bool,
-    ) -> Result<Vec<IdentsWithAlias>, ParserError> {
+    ) -> Result<Vec<ExprWithAlias>, ParserError> {
         self.parse_parenthesized_column_list_inner(optional, allow_empty, |p| {
-            p.parse_identifiers_with_alias()
+            p.parse_expr_with_alias()
         })
     }
 
@@ -13908,11 +13895,16 @@ impl<'a> Parser<'a> {
         let value = match self.peek_token_ref().token {
             Token::LParen => {
                 // multi value column unpivot
-                self.parse_parenthesized_column_list(Mandatory, false)?
+                Expr::Tuple(
+                    self.parse_parenthesized_column_list(Mandatory, false)?
+                        .into_iter()
+                        .map(|col| Expr::Identifier(col))
+                        .collect(),
+                )
             }
             _ => {
                 // single value column unpivot
-                vec![self.parse_identifier()?]
+                Expr::Identifier(self.parse_identifier()?)
             }
         };
         self.expect_keyword_is(Keyword::FOR)?;

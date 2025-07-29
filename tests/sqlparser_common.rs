@@ -10947,20 +10947,14 @@ fn parse_unpivot_table() {
             index_hints: vec![],
         }),
         null_inclusion: None,
-        value: vec![Ident {
-            value: "quantity".to_string(),
-            quote_style: None,
-            span: Span::empty(),
-        }],
-
-        name: Ident {
-            value: "quarter".to_string(),
-            quote_style: None,
-            span: Span::empty(),
-        },
+        value: Expr::Identifier(Ident::new("quantity")),
+        name: Ident::new("quarter"),
         columns: ["Q1", "Q2", "Q3", "Q4"]
             .into_iter()
-            .map(|col| IdentsWithAlias::new(vec![Ident::new(col)], None))
+            .map(|col| ExprWithAlias {
+                expr: Expr::Identifier(Ident::new(col)),
+                alias: None,
+            })
             .collect(),
         alias: Some(TableAlias {
             name: Ident::new("u"),
@@ -11024,9 +11018,12 @@ fn parse_unpivot_table() {
     );
 
     let sql_unpivot_with_alias = concat!(
-                "SELECT * FROM sales AS s ",
-                "UNPIVOT INCLUDE NULLS (quantity FOR quarter IN (Q1 AS Quater1, Q2 AS Quater2, Q3 AS Quater3, Q4 AS Quater4)) AS u (product, quarter, quantity)"
-            );
+        "SELECT * FROM sales AS s ",
+        "UNPIVOT INCLUDE NULLS ",
+        "(quantity FOR quarter IN ",
+        "(Q1 AS Quater1, Q2 AS Quater2, Q3 AS Quater3, Q4 AS Quater4)) ",
+        "AS u (product, quarter, quantity)"
+    );
 
     if let Unpivot { value, columns, .. } =
         &verified_only_select(sql_unpivot_with_alias).from[0].relation
@@ -11034,13 +11031,25 @@ fn parse_unpivot_table() {
         assert_eq!(
             *columns,
             vec![
-                IdentsWithAlias::new(vec![Ident::new("Q1")], Some(Ident::new("Quater1"))),
-                IdentsWithAlias::new(vec![Ident::new("Q2")], Some(Ident::new("Quater2"))),
-                IdentsWithAlias::new(vec![Ident::new("Q3")], Some(Ident::new("Quater3"))),
-                IdentsWithAlias::new(vec![Ident::new("Q4")], Some(Ident::new("Quater4"))),
+                ExprWithAlias {
+                    expr: Expr::Identifier(Ident::new("Q1")),
+                    alias: Some(Ident::new("Quater1")),
+                },
+                ExprWithAlias {
+                    expr: Expr::Identifier(Ident::new("Q2")),
+                    alias: Some(Ident::new("Quater2")),
+                },
+                ExprWithAlias {
+                    expr: Expr::Identifier(Ident::new("Q3")),
+                    alias: Some(Ident::new("Quater3")),
+                },
+                ExprWithAlias {
+                    expr: Expr::Identifier(Ident::new("Q4")),
+                    alias: Some(Ident::new("Quater4")),
+                },
             ]
         );
-        assert_eq!(*value, vec![Ident::new("quantity")]);
+        assert_eq!(*value, Expr::Identifier(Ident::new("quantity")));
     }
 
     assert_eq!(
@@ -11048,7 +11057,7 @@ fn parse_unpivot_table() {
         sql_unpivot_with_alias
     );
 
-    let sql_unpivot_with_alias = concat!(
+    let sql_unpivot_with_alias_and_multi_value = concat!(
         "SELECT * FROM sales AS s ",
         "UNPIVOT INCLUDE NULLS ((first_quarter, second_quarter) ",
         "FOR half_of_the_year IN (",
@@ -11058,30 +11067,39 @@ fn parse_unpivot_table() {
     );
 
     if let Unpivot { value, columns, .. } =
-        &verified_only_select(sql_unpivot_with_alias).from[0].relation
+        &verified_only_select(sql_unpivot_with_alias_and_multi_value).from[0].relation
     {
         assert_eq!(
             *columns,
             vec![
-                IdentsWithAlias::new(
-                    vec![Ident::new("Q1"), Ident::new("Q2")],
-                    Some(Ident::new("H1"))
-                ),
-                IdentsWithAlias::new(
-                    vec![Ident::new("Q3"), Ident::new("Q4")],
-                    Some(Ident::new("H2"))
-                ),
+                ExprWithAlias {
+                    expr: Expr::Tuple(vec![
+                        Expr::Identifier(Ident::new("Q1")),
+                        Expr::Identifier(Ident::new("Q2")),
+                    ]),
+                    alias: Some(Ident::new("H1")),
+                },
+                ExprWithAlias {
+                    expr: Expr::Tuple(vec![
+                        Expr::Identifier(Ident::new("Q3")),
+                        Expr::Identifier(Ident::new("Q4")),
+                    ]),
+                    alias: Some(Ident::new("H2")),
+                },
             ]
         );
         assert_eq!(
             *value,
-            vec![Ident::new("first_quarter"), Ident::new("second_quarter")]
+            Expr::Tuple(vec![
+                Expr::Identifier(Ident::new("first_quarter")),
+                Expr::Identifier(Ident::new("second_quarter")),
+            ])
         );
     }
 
     assert_eq!(
-        verified_stmt(sql_unpivot_with_alias).to_string(),
-        sql_unpivot_with_alias
+        verified_stmt(sql_unpivot_with_alias_and_multi_value).to_string(),
+        sql_unpivot_with_alias_and_multi_value
     );
 }
 
@@ -11180,20 +11198,14 @@ fn parse_pivot_unpivot_table() {
                     index_hints: vec![],
                 }),
                 null_inclusion: None,
-                value: vec![Ident {
-                    value: "population".to_string(),
-                    quote_style: None,
-                    span: Span::empty()
-                }],
-
-                name: Ident {
-                    value: "year".to_string(),
-                    quote_style: None,
-                    span: Span::empty()
-                },
+                value: Expr::Identifier(Ident::new("population")),
+                name: Ident::new("year"),
                 columns: ["population_2000", "population_2010"]
                     .into_iter()
-                    .map(|col| IdentsWithAlias::new(vec![Ident::new(col)], None))
+                    .map(|col| ExprWithAlias {
+                        expr: Expr::Identifier(Ident::new(col)),
+                        alias: None,
+                    })
                     .collect(),
                 alias: Some(TableAlias {
                     name: Ident::new("u"),

@@ -745,47 +745,6 @@ impl fmt::Display for IdentWithAlias {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct IdentsWithAlias {
-    pub idents: Vec<Ident>,
-    pub alias: Option<Ident>,
-}
-
-impl IdentsWithAlias {
-    pub fn new(idents: Vec<Ident>, alias: Option<Ident>) -> Self {
-        Self { idents, alias }
-    }
-}
-
-impl fmt::Display for IdentsWithAlias {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.idents.len() {
-            0 => Ok(()),
-            1 => {
-                if let Some(alias) = &self.alias {
-                    write!(f, "{} AS {}", self.idents[0], alias)
-                } else {
-                    write!(f, "{}", self.idents[0])
-                }
-            }
-            _ => {
-                if let Some(alias) = &self.alias {
-                    write!(
-                        f,
-                        "({}) AS {}",
-                        display_comma_separated(&self.idents),
-                        alias
-                    )
-                } else {
-                    write!(f, "({})", display_comma_separated(&self.idents))
-                }
-            }
-        }
-    }
-}
-
 /// Additional options for wildcards, e.g. Snowflake `EXCLUDE`/`RENAME` and Bigquery `EXCEPT`.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -1390,11 +1349,12 @@ pub enum TableFactor {
     /// ```
     ///
     /// See <https://docs.snowflake.com/en/sql-reference/constructs/unpivot>.
+    /// See <https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-select-unpivot>.
     Unpivot {
         table: Box<TableFactor>,
-        value: Vec<Ident>,
+        value: Expr,
         name: Ident,
-        columns: Vec<IdentsWithAlias>,
+        columns: Vec<ExprWithAlias>,
         null_inclusion: Option<NullInclusion>,
         alias: Option<TableAlias>,
     },
@@ -2076,17 +2036,10 @@ impl fmt::Display for TableFactor {
                 if let Some(null_inclusion) = null_inclusion {
                     write!(f, " {null_inclusion} ")?;
                 }
-                write!(f, "(")?;
-                if value.len() == 1 {
-                    // single value column unpivot
-                    write!(f, "{}", value[0])?;
-                } else {
-                    // multi value column unpivot
-                    write!(f, "({})", display_comma_separated(value))?;
-                }
                 write!(
                     f,
-                    " FOR {} IN ({}))",
+                    "({} FOR {} IN ({}))",
+                    value,
                     name,
                     display_comma_separated(columns)
                 )?;

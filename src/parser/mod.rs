@@ -1543,10 +1543,11 @@ impl<'a> Parser<'a> {
                 // an unary negation `NOT ('a' LIKE 'b')`. To solve this, we don't accept the
                 // `type 'string'` syntax for the custom data types at all.
                 DataType::Custom(..) => parser_err!("dummy", loc),
-                data_type => Ok(Expr::TypedString {
+                data_type => Ok(Expr::TypedString(TypedString {
                     data_type,
                     value: parser.parse_value()?,
-                }),
+                    uses_odbc_syntax: false,
+                })),
             }
         })?;
 
@@ -1732,10 +1733,11 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_geometric_type(&mut self, kind: GeometricTypeKind) -> Result<Expr, ParserError> {
-        Ok(Expr::TypedString {
+        Ok(Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(kind),
             value: self.parse_value()?,
-        })
+            uses_odbc_syntax: false,
+        }))
     }
 
     /// Try to parse an [Expr::CompoundFieldAccess] like `a.b.c` or `a.b[1].c`.
@@ -2028,6 +2030,50 @@ impl<'a> Parser<'a> {
             Ok(Expr::Lambda(LambdaFunction {
                 params: OneOrManyWithParens::Many(params),
                 body: Box::new(expr),
+            }))
+        })
+    }
+
+    /// Tries to parse the body of an [ODBC escaping sequence]
+    /// i.e. without the enclosing braces
+    /// Currently implemented:
+    /// Scalar Function Calls
+    /// Date, Time, and Timestamp Literals
+    /// See <https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/escape-sequences-in-odbc?view=sql-server-2017>
+    fn maybe_parse_odbc_body(&mut self) -> Result<Option<Expr>, ParserError> {
+        // Attempt 1: Try to parse it as a function.
+        if let Some(expr) = self.maybe_parse_odbc_fn_body()? {
+            return Ok(Some(expr));
+        }
+        // Attempt 2: Try to parse it as a Date, Time or Timestamp Literal
+        self.maybe_parse_odbc_body_datetime()
+    }
+
+    /// Tries to parse the body of an [ODBC Date, Time, and Timestamp Literals] call.
+    ///
+    /// ```sql
+    /// {d '2025-07-17'}
+    /// {t '14:12:01'}
+    /// {ts '2025-07-17 14:12:01'}
+    /// ```
+    ///
+    /// [ODBC Date, Time, and Timestamp Literals]:
+    /// https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/date-time-and-timestamp-literals?view=sql-server-2017
+    fn maybe_parse_odbc_body_datetime(&mut self) -> Result<Option<Expr>, ParserError> {
+        self.maybe_parse(|p| {
+            let token = p.next_token().clone();
+            let word_string = token.token.to_string();
+            let data_type = match word_string.as_str() {
+                "t" => DataType::Time(None, TimezoneInfo::None),
+                "d" => DataType::Date,
+                "ts" => DataType::Timestamp(None, TimezoneInfo::None),
+                _ => return p.expected("ODBC datetime keyword (t, d, or ts)", token),
+            };
+            let value = p.parse_value()?;
+            Ok(Expr::TypedString(TypedString {
+                data_type,
+                value,
+                uses_odbc_syntax: true,
             }))
         })
     }
@@ -2786,7 +2832,7 @@ impl<'a> Parser<'a> {
     fn parse_lbrace_expr(&mut self) -> Result<Expr, ParserError> {
         let token = self.expect_token(&Token::LBrace)?;
 
-        if let Some(fn_expr) = self.maybe_parse_odbc_fn_body()? {
+        if let Some(fn_expr) = self.maybe_parse_odbc_body()? {
             self.expect_token(&Token::RBrace)?;
             return Ok(fn_expr);
         }

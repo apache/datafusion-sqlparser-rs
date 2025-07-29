@@ -5914,13 +5914,14 @@ fn parse_literal_date() {
     let sql = "SELECT DATE '1999-01-01'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::Date,
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1999-01-01".into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -5930,13 +5931,14 @@ fn parse_literal_time() {
     let sql = "SELECT TIME '01:23:34'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::Time(None, TimezoneInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("01:23:34".into()),
                 span: Span::empty(),
             },
-        },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -5946,13 +5948,14 @@ fn parse_literal_datetime() {
     let sql = "SELECT DATETIME '1999-01-01 01:23:34.45'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::Datetime(None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into()),
                 span: Span::empty(),
             },
-        },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -5962,13 +5965,14 @@ fn parse_literal_timestamp_without_time_zone() {
     let sql = "SELECT TIMESTAMP '1999-01-01 01:23:34'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::Timestamp(None, TimezoneInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1999-01-01 01:23:34".into()),
                 span: Span::empty(),
             },
-        },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
@@ -5980,13 +5984,14 @@ fn parse_literal_timestamp_with_time_zone() {
     let sql = "SELECT TIMESTAMPTZ '1999-01-01 01:23:34Z'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::Timestamp(None, TimezoneInfo::Tz),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1999-01-01 01:23:34Z".into()),
                 span: Span::empty(),
             },
-        },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
@@ -6556,7 +6561,7 @@ fn parse_json_keyword() {
 }'"#;
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::JSON,
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(
@@ -6583,8 +6588,9 @@ fn parse_json_keyword() {
                     .to_string()
                 ),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false,
+        }),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -6593,17 +6599,23 @@ fn parse_json_keyword() {
 fn parse_typed_strings() {
     let expr = verified_expr(r#"JSON '{"foo":"bar"}'"#);
     assert_eq!(
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::JSON,
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(r#"{"foo":"bar"}"#.into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr
     );
 
-    if let Expr::TypedString { data_type, value } = expr {
+    if let Expr::TypedString(TypedString {
+        data_type,
+        value,
+        uses_odbc_syntax: false,
+    }) = expr
+    {
         assert_eq!(DataType::JSON, data_type);
         assert_eq!(r#"{"foo":"bar"}"#, value.into_string().unwrap());
     }
@@ -6614,13 +6626,14 @@ fn parse_bignumeric_keyword() {
     let sql = r#"SELECT BIGNUMERIC '0'"#;
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(r#"0"#.into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '0'");
@@ -6628,13 +6641,14 @@ fn parse_bignumeric_keyword() {
     let sql = r#"SELECT BIGNUMERIC '123456'"#;
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(r#"123456"#.into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '123456'");
@@ -6642,13 +6656,14 @@ fn parse_bignumeric_keyword() {
     let sql = r#"SELECT BIGNUMERIC '-3.14'"#;
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(r#"-3.14"#.into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '-3.14'");
@@ -6656,13 +6671,14 @@ fn parse_bignumeric_keyword() {
     let sql = r#"SELECT BIGNUMERIC '-0.54321'"#;
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(r#"-0.54321"#.into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '-0.54321'");
@@ -6670,13 +6686,14 @@ fn parse_bignumeric_keyword() {
     let sql = r#"SELECT BIGNUMERIC '1.23456e05'"#;
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(r#"1.23456e05"#.into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '1.23456e05'");
@@ -6684,13 +6701,14 @@ fn parse_bignumeric_keyword() {
     let sql = r#"SELECT BIGNUMERIC '-9.876e-3'"#;
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(r#"-9.876e-3"#.into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '-9.876e-3'");
@@ -15015,83 +15033,90 @@ fn test_geometry_type() {
     let sql = "point '1,2'";
     assert_eq!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Point),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1,2".to_string()),
                 span: Span::empty(),
             },
-        }
+            uses_odbc_syntax: false
+        })
     );
 
     let sql = "line '1,2,3,4'";
     assert_eq!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Line),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1,2,3,4".to_string()),
                 span: Span::empty(),
             },
-        }
+            uses_odbc_syntax: false
+        })
     );
 
     let sql = "path '1,2,3,4'";
     assert_eq!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::GeometricPath),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1,2,3,4".to_string()),
                 span: Span::empty(),
             },
-        }
+            uses_odbc_syntax: false
+        })
     );
     let sql = "box '1,2,3,4'";
     assert_eq!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::GeometricBox),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1,2,3,4".to_string()),
                 span: Span::empty(),
             },
-        }
+            uses_odbc_syntax: false
+        })
     );
 
     let sql = "circle '1,2,3'";
     assert_eq!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Circle),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1,2,3".to_string()),
                 span: Span::empty(),
             },
-        }
+            uses_odbc_syntax: false
+        })
     );
 
     let sql = "polygon '1,2,3,4'";
     assert_eq!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Polygon),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1,2,3,4".to_string()),
                 span: Span::empty(),
             },
-        }
+            uses_odbc_syntax: false
+        })
     );
     let sql = "lseg '1,2,3,4'";
     assert_eq!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::LineSegment),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1,2,3,4".to_string()),
                 span: Span::empty(),
             },
-        }
+            uses_odbc_syntax: false
+        })
     );
 }
 #[test]
@@ -16289,6 +16314,31 @@ fn parse_notnull() {
 
     // for unsupported dialects, parsing should stop at `NOT NULL`
     notnull_unsupported_dialects.expr_parses_to("NOT NULL NOTNULL", "NOT NULL");
+}
+
+#[test]
+fn parse_odbc_time_date_timestamp() {
+    // Supported statements
+    let sql_d = "SELECT {d '2025-07-17'}, category_name FROM categories";
+    let _ = all_dialects().verified_stmt(sql_d);
+    let sql_t = "SELECT {t '14:12:01'}, category_name FROM categories";
+    let _ = all_dialects().verified_stmt(sql_t);
+    let sql_ts = "SELECT {ts '2025-07-17 14:12:01'}, category_name FROM categories";
+    let _ = all_dialects().verified_stmt(sql_ts);
+    // Unsupported statement
+    let supports_dictionary = all_dialects_where(|d| d.supports_dictionary_syntax());
+    let dictionary_unsupported = all_dialects_where(|d| !d.supports_dictionary_syntax());
+    let sql = "SELECT {tt '14:12:01'} FROM foo";
+    let res = supports_dictionary.parse_sql_statements(sql);
+    let res_dict = dictionary_unsupported.parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected: :, found: '14:12:01'".to_string()),
+        res.unwrap_err()
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected: an expression, found: {".to_string()),
+        res_dict.unwrap_err()
+    );
 }
 
 #[test]

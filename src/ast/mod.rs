@@ -1014,12 +1014,7 @@ pub enum Expr {
     /// A constant of form `<data_type> 'value'`.
     /// This can represent ANSI SQL `DATE`, `TIME`, and `TIMESTAMP` literals (such as `DATE '2020-01-01'`),
     /// as well as constants of other types (a non-standard PostgreSQL extension).
-    TypedString {
-        data_type: DataType,
-        /// The value of the constant.
-        /// Hint: you can unwrap the string value using `value.into_string()`.
-        value: ValueWithSpan,
-    },
+    TypedString(TypedString),
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
@@ -1734,10 +1729,7 @@ impl fmt::Display for Expr {
             Expr::Nested(ast) => write!(f, "({ast})"),
             Expr::Value(v) => write!(f, "{v}"),
             Expr::Prefixed { prefix, value } => write!(f, "{prefix} {value}"),
-            Expr::TypedString { data_type, value } => {
-                write!(f, "{data_type}")?;
-                write!(f, " {value}")
-            }
+            Expr::TypedString(ts) => ts.fmt(f),
             Expr::Function(fun) => fun.fmt(f),
             Expr::Case {
                 case_token: _,
@@ -7448,6 +7440,52 @@ pub struct DropDomain {
     pub name: ObjectName,
     /// The behavior to apply when dropping the domain
     pub drop_behavior: Option<DropBehavior>,
+}
+
+/// A constant of form `<data_type> 'value'`.
+/// This can represent ANSI SQL `DATE`, `TIME`, and `TIMESTAMP` literals (such as `DATE '2020-01-01'`),
+/// as well as constants of other types (a non-standard PostgreSQL extension).
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct TypedString {
+    pub data_type: DataType,
+    /// The value of the constant.
+    /// Hint: you can unwrap the string value using `value.into_string()`.
+    pub value: ValueWithSpan,
+    /// Flags whether this TypedString uses the [ODBC syntax].
+    ///
+    /// Example:
+    /// ```sql
+    /// -- An ODBC date literal:
+    /// SELECT {d '2025-07-16'}
+    /// -- This is equivalent to the standard ANSI SQL literal:
+    /// SELECT DATE '2025-07-16'
+    ///
+    /// [ODBC syntax]: https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/date-time-and-timestamp-literals?view=sql-server-2017
+    pub uses_odbc_syntax: bool,
+}
+
+impl fmt::Display for TypedString {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let data_type = &self.data_type;
+        let value = &self.value;
+        match self.uses_odbc_syntax {
+            false => {
+                write!(f, "{data_type}")?;
+                write!(f, " {value}")
+            }
+            true => {
+                let prefix = match data_type {
+                    DataType::Date => "d",
+                    DataType::Time(..) => "t",
+                    DataType::Timestamp(..) => "ts",
+                    _ => "?",
+                };
+                write!(f, "{{{prefix} {value}}}")
+            }
+        }
+    }
 }
 
 /// A function call

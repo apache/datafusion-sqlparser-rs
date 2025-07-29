@@ -2808,21 +2808,13 @@ fn test_begin_statement() {
 }
 
 #[test]
-fn test_alter_schema_default_collate() {
+fn test_alter_schema() {
     bigquery_and_generic().verified_stmt("ALTER SCHEMA mydataset SET DEFAULT COLLATE 'und:ci'");
-}
-
-#[test]
-fn test_alter_schema_add_replica() {
     bigquery_and_generic().verified_stmt("ALTER SCHEMA mydataset ADD REPLICA 'us'");
-}
-
-#[test]
-fn test_alter_schema_drop_replica() {
+    bigquery_and_generic()
+        .verified_stmt("ALTER SCHEMA mydataset ADD REPLICA 'us' OPTIONS (location = 'us')");
     bigquery_and_generic().verified_stmt("ALTER SCHEMA mydataset DROP REPLICA 'us'");
-}
-
-#[test]
-fn test_alter_schema_set_options() {
     bigquery_and_generic().verified_stmt("ALTER SCHEMA mydataset SET OPTIONS (location = 'us')");
+    bigquery_and_generic()
+        .verified_stmt("ALTER SCHEMA IF EXISTS mydataset SET OPTIONS (location = 'us')");
 }

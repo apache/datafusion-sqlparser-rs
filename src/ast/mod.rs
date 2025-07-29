@@ -59,8 +59,8 @@ pub use self::dcl::{
 };
 pub use self::ddl::{
     AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterPolicyOperation,
-    AlterSchemaOperation, AlterTableAlgorithm, AlterTableLock, AlterTableOperation, AlterType,
-    AlterTypeAddValue, AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename,
+    AlterSchema, AlterSchemaOperation, AlterTableAlgorithm, AlterTableLock, AlterTableOperation,
+    AlterType, AlterTypeAddValue, AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename,
     AlterTypeRenameValue, ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions,
     ColumnPolicy, ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain,
     CreateFunction, Deduplicate, DeferrableInitial, DropBehavior, GeneratedAs,
@@ -3384,13 +3384,7 @@ pub enum Statement {
     /// ALTER SCHEMA
     /// ```
     /// See [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_schema_collate_statement)
-    AlterSchema {
-        /// Schema name
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        name: ObjectName,
-        if_exists: bool,
-        operations: Vec<AlterSchemaOperation>,
-    },
+    AlterSchema(AlterSchema),
     /// ```sql
     /// ALTER INDEX
     /// ```
@@ -6220,15 +6214,7 @@ impl fmt::Display for Statement {
             Statement::Remove(command) => write!(f, "REMOVE {command}"),
             Statement::ExportData(e) => write!(f, "{e}"),
             Statement::CreateUser(s) => write!(f, "{s}"),
-            Statement::AlterSchema {
-                name, operations, ..
-            } => {
-                write!(f, "ALTER SCHEMA {name}")?;
-                for operation in operations {
-                    write!(f, " {operation}")?;
-                }
-                Ok(())
-            }
+            Statement::AlterSchema(s) => write!(f, "{s}"),
         }
     }
 }

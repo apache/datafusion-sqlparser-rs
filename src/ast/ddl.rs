@@ -2580,3 +2580,27 @@ impl fmt::Display for AlterSchemaOperation {
         }
     }
 }
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterSchema {
+    pub name: ObjectName,
+    pub if_exists: bool,
+    pub operations: Vec<AlterSchemaOperation>,
+}
+
+impl fmt::Display for AlterSchema {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ALTER SCHEMA ")?;
+        if self.if_exists {
+            write!(f, "IF EXISTS ")?;
+        }
+        write!(f, "{}", self.name)?;
+        for operation in &self.operations {
+            write!(f, " {operation}")?;
+        }
+
+        Ok(())
+    }
+}

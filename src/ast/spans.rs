@@ -16,7 +16,8 @@
 // under the License.
 
 use crate::ast::{
-    query::SelectItemQualifiedWildcardKind, AlterSchemaOperation, ColumnOptions, ExportData,
+    ddl::AlterSchema, query::SelectItemQualifiedWildcardKind, AlterSchemaOperation, ColumnOptions,
+    ExportData,
 };
 use core::iter;
 
@@ -545,11 +546,7 @@ impl Spanned for Statement {
                     .chain(connection.iter().map(|i| i.span())),
             ),
             Statement::CreateUser(..) => Span::empty(),
-            Statement::AlterSchema {
-                name, operations, ..
-            } => union_spans(
-                core::iter::once(name.span()).chain(operations.iter().map(|i| i.span())),
-            ),
+            Statement::AlterSchema(s) => s.span(),
         }
     }
 }
@@ -2392,6 +2389,14 @@ impl Spanned for AlterSchemaOperation {
                 union_spans(options.iter().map(|i| i.span()))
             }
         }
+    }
+}
+
+impl Spanned for AlterSchema {
+    fn span(&self) -> Span {
+        union_spans(
+            core::iter::once(self.name.span()).chain(self.operations.iter().map(|i| i.span())),
+        )
     }
 }
 

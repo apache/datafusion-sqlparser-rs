@@ -13898,7 +13898,7 @@ impl<'a> Parser<'a> {
                 Expr::Tuple(
                     self.parse_parenthesized_column_list(Mandatory, false)?
                         .into_iter()
-                        .map(|col| Expr::Identifier(col))
+                        .map(Expr::Identifier)
                         .collect(),
                 )
             }

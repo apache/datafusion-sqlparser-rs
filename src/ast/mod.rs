@@ -3263,7 +3263,16 @@ pub enum Statement {
         materialized: bool,
         /// View name
         name: ObjectName,
-        // Name IF NOT EXIST instead of IF NOT EXIST name
+        /// If `if_not_exists` is true, this flag is set to true if the view name comes before the `IF NOT EXISTS` clause.
+        /// Example:
+        /// ```sql
+        /// CREATE VIEW myview IF NOT EXISTS AS SELECT 1`
+        ///  ```
+        /// Otherwise, the flag is set to false if the view name comes after the clause
+        /// Example:
+        /// ```sql
+        /// CREATE VIEW IF NOT EXISTS myview AS SELECT 1`
+        ///  ```
         name_before_not_exists: bool,
         columns: Vec<ViewColumnDef>,
         query: Box<Query>,

@@ -5769,22 +5769,14 @@ impl<'a> Parser<'a> {
         let materialized = self.parse_keyword(Keyword::MATERIALIZED);
         self.expect_keyword_is(Keyword::VIEW)?;
         let allow_unquoted_hyphen = dialect_of!(self is BigQueryDialect);
-        let mut if_not_exists = false;
-        let name: ObjectName;
-        let mut name_before_not_exists = false;
-        if self.peek_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]) {
-            // Possible syntax -> ... IF NOT EXISTS <name>
-            if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-            name = self.parse_object_name(allow_unquoted_hyphen)?;
-        } else {
-            // Possible syntax -> ... <name> IF NOT EXISTS
-            // Supported by snowflake but is undocumented
-            name = self.parse_object_name(allow_unquoted_hyphen)?;
-            if self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]) {
-                if_not_exists = true;
-                name_before_not_exists = true;
-            }
-        }
+        // Tries to parse IF NOT EXISTS either before name or after name
+        // Name before IF NOT EXISTS is supported by snowflake but undocumented
+        let if_not_exists_first =
+            self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let name = self.parse_object_name(allow_unquoted_hyphen)?;
+        let name_before_not_exists = !if_not_exists_first
+            && self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let if_not_exists = if_not_exists_first || name_before_not_exists;
         // Many dialects support `OR ALTER` right after `CREATE`, but we don't (yet).
         // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
         let columns = self.parse_view_columns()?;

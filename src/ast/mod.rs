@@ -9804,7 +9804,7 @@ impl fmt::Display for ShowStatementIn {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ShowCharset {
-    /// The statement can be written as SHOW CHARSET or SHOW CHARACTER SET
+    /// The statement can be written as `SHOW CHARSET` or `SHOW CHARACTER SET`
     /// true means CHARSET was used and false means CHARACTER SET was used
     pub is_shorthand: bool,
     pub filter: Option<ShowStatementFilter>,

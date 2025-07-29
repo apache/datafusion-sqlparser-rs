@@ -3696,6 +3696,12 @@ pub enum Statement {
         history: bool,
         show_options: ShowStatementOptions,
     },
+    // ```sql
+    // SHOW {CHARACTER SET | CHARSET}
+    // ```
+    // [MySQL]:
+    // <https://dev.mysql.com/doc/refman/8.4/en/show.html#:~:text=SHOW%20%7BCHARACTER%20SET%20%7C%20CHARSET%7D%20%5Blike_or_where%5D>
+    ShowCharset(ShowCharset),
     /// ```sql
     /// SHOW OBJECTS LIKE 'line%' IN mydb.public
     /// ```
@@ -5680,6 +5686,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::ShowCharset(show_stm) => show_stm.fmt(f),
             Statement::StartTransaction {
                 modes,
                 begin: syntax_begin,
@@ -9854,6 +9861,32 @@ impl fmt::Display for ShowStatementIn {
         }
         if let Some(parent_name) = &self.parent_name {
             write!(f, " {parent_name}")?;
+        }
+        Ok(())
+    }
+}
+
+/// A Show Charset statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowCharset {
+    /// The statement can be written as `SHOW CHARSET` or `SHOW CHARACTER SET`
+    /// true means CHARSET was used and false means CHARACTER SET was used
+    pub is_shorthand: bool,
+    pub filter: Option<ShowStatementFilter>,
+}
+
+impl fmt::Display for ShowCharset {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "SHOW")?;
+        if self.is_shorthand {
+            write!(f, " CHARSET")?;
+        } else {
+            write!(f, " CHARACTER SET")?;
+        }
+        if self.filter.is_some() {
+            write!(f, " {}", self.filter.as_ref().unwrap())?;
         }
         Ok(())
     }

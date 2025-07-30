@@ -21,7 +21,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Version](https://img.shields.io/crates/v/sqlparser.svg)](https://crates.io/crates/sqlparser)
-[![Build Status](https://github.com/sqlparser-rs/sqlparser-rs/workflows/Rust/badge.svg?branch=main)](https://github.com/sqlparser-rs/sqlparser-rs/actions?query=workflow%3ARust+branch%3Amain)
+[![Build Status](https://github.com/apache/datafusion-sqlparser-rs/actions/workflows/rust.yml/badge.svg)](https://github.com/sqlparser-rs/sqlparser-rs/actions?query=workflow%3ARust+branch%3Amain)
 [![Coverage Status](https://coveralls.io/repos/github/sqlparser-rs/sqlparser-rs/badge.svg?branch=main)](https://coveralls.io/github/sqlparser-rs/sqlparser-rs?branch=main)
 [![Gitter Chat](https://badges.gitter.im/sqlparser-rs/community.svg)](https://gitter.im/sqlparser-rs/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 

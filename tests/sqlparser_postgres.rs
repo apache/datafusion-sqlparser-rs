@@ -1666,7 +1666,9 @@ fn parse_execute() {
             has_parentheses: false,
             using: vec![],
             immediate: false,
-            into: vec![]
+            into: vec![],
+            output: false,
+            default: false,
         }
     );
 
@@ -1682,7 +1684,9 @@ fn parse_execute() {
             has_parentheses: true,
             using: vec![],
             immediate: false,
-            into: vec![]
+            into: vec![],
+            output: false,
+            default: false,
         }
     );
 
@@ -1719,7 +1723,9 @@ fn parse_execute() {
                 },
             ],
             immediate: false,
-            into: vec![]
+            into: vec![],
+            output: false,
+            default: false,
         }
     );
 }
@@ -2181,20 +2187,38 @@ fn parse_pg_regex_match_ops() {
         ("!~*", BinaryOperator::PGRegexNotIMatch),
     ];
 
+    // Match against a single value
     for (str_op, op) in pg_regex_match_ops {
-        let select = pg().verified_only_select(&format!("SELECT 'abc' {} '^a'", &str_op));
+        let select = pg().verified_only_select(&format!("SELECT 'abc' {str_op} '^a'"));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::BinaryOp {
-                left: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("abc".into())).with_empty_span()
-                )),
+                left: Box::new(Expr::Value(single_quoted_string("abc").with_empty_span(),)),
                 op: op.clone(),
-                right: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("^a".into())).with_empty_span()
-                )),
+                right: Box::new(Expr::Value(single_quoted_string("^a").with_empty_span(),)),
             }),
             select.projection[0]
         );
+    }
+
+    // Match against any value from an array
+    for (str_op, op) in pg_regex_match_ops {
+        let select =
+            pg().verified_only_select(&format!("SELECT 'abc' {str_op} ANY(ARRAY['^a', 'x'])"));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::AnyOp {
+                left: Box::new(Expr::Value(single_quoted_string("abc").with_empty_span(),)),
+                compare_op: op.clone(),
+                right: Box::new(Expr::Array(Array {
+                    elem: vec![
+                        Expr::Value(single_quoted_string("^a").with_empty_span()),
+                        Expr::Value(single_quoted_string("x").with_empty_span()),
+                    ],
+                    named: true,
+                })),
+                is_some: false,
+            }),
+            select.projection[0]
+        )
     }
 }
 
@@ -2207,20 +2231,34 @@ fn parse_pg_like_match_ops() {
         ("!~~*", BinaryOperator::PGNotILikeMatch),
     ];
 
+    // Match against a single value
     for (str_op, op) in pg_like_match_ops {
-        let select = pg().verified_only_select(&format!("SELECT 'abc' {} 'a_c%'", &str_op));
+        let select = pg().verified_only_select(&format!("SELECT 'abc' {str_op} 'a_c%'"));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::BinaryOp {
-                left: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("abc".into())).with_empty_span()
-                )),
+                left: Box::new(Expr::Value(single_quoted_string("abc").with_empty_span(),)),
                 op: op.clone(),
-                right: Box::new(Expr::Value(
-                    (Value::SingleQuotedString("a_c%".into())).with_empty_span()
-                )),
+                right: Box::new(Expr::Value(single_quoted_string("a_c%").with_empty_span(),)),
             }),
             select.projection[0]
         );
+    }
+
+    // Match against all values from an array
+    for (str_op, op) in pg_like_match_ops {
+        let select =
+            pg().verified_only_select(&format!("SELECT 'abc' {str_op} ALL(ARRAY['a_c%'])"));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::AllOp {
+                left: Box::new(Expr::Value(single_quoted_string("abc").with_empty_span(),)),
+                compare_op: op.clone(),
+                right: Box::new(Expr::Array(Array {
+                    elem: vec![Expr::Value(single_quoted_string("a_c%").with_empty_span())],
+                    named: true,
+                })),
+            }),
+            select.projection[0]
+        )
     }
 }
 
@@ -4685,7 +4723,7 @@ fn parse_dollar_quoted_string() {
                 quote_style: None,
                 span: Span::empty(),
             },
-        }
+        },
     );
 
     assert_eq!(
@@ -5258,13 +5296,14 @@ fn parse_at_time_zone() {
     // check precedence
     let expr = Expr::BinaryOp {
         left: Box::new(Expr::AtTimeZone {
-            timestamp: Box::new(Expr::TypedString {
+            timestamp: Box::new(Expr::TypedString(TypedString {
                 data_type: DataType::Timestamp(None, TimezoneInfo::None),
                 value: ValueWithSpan {
                     value: Value::SingleQuotedString("2001-09-28 01:00".to_string()),
                     span: Span::empty(),
                 },
-            }),
+                uses_odbc_syntax: false,
+            })),
             time_zone: Box::new(Expr::Cast {
                 kind: CastKind::DoubleColon,
                 expr: Box::new(Expr::Value(

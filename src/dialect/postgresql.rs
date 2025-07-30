@@ -65,14 +65,15 @@ impl Dialect for PostgreSqlDialect {
     }
 
     fn is_identifier_start(&self, ch: char) -> bool {
-        // See https://www.postgresql.org/docs/11/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS
-        // We don't yet support identifiers beginning with "letters with
-        // diacritical marks"
-        ch.is_alphabetic() || ch == '_'
+        ch.is_alphabetic() || ch == '_' ||
+        // PostgreSQL implements Unicode characters in identifiers.
+        !ch.is_ascii()
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
-        ch.is_alphabetic() || ch.is_ascii_digit() || ch == '$' || ch == '_'
+        ch.is_alphabetic() || ch.is_ascii_digit() || ch == '$' || ch == '_'  ||
+        // PostgreSQL implements Unicode characters in identifiers.
+        !ch.is_ascii()
     }
 
     fn supports_unicode_string_literal(&self) -> bool {
@@ -260,6 +261,12 @@ impl Dialect for PostgreSqlDialect {
     }
 
     fn supports_alter_column_type_using(&self) -> bool {
+        true
+    }
+
+    /// Postgres supports `NOTNULL` as an alias for `IS NOT NULL`
+    /// See: <https://www.postgresql.org/docs/17/functions-comparison.html>
+    fn supports_notnull_operator(&self) -> bool {
         true
     }
 }

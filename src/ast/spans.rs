@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::ast::{query::SelectItemQualifiedWildcardKind, ColumnOptions};
+use crate::ast::{query::SelectItemQualifiedWildcardKind, ColumnOptions, ExportData, TypedString};
 use core::iter;
 
 use crate::tokenizer::Span;
@@ -477,6 +477,7 @@ impl Spanned for Statement {
             Statement::ShowColumns { .. } => Span::empty(),
             Statement::ShowTables { .. } => Span::empty(),
             Statement::ShowCollation { .. } => Span::empty(),
+            Statement::ShowCharset { .. } => Span::empty(),
             Statement::Use(u) => u.span(),
             Statement::StartTransaction { .. } => Span::empty(),
             Statement::Comment { .. } => Span::empty(),
@@ -531,6 +532,18 @@ impl Spanned for Statement {
             Statement::Print { .. } => Span::empty(),
             Statement::Return { .. } => Span::empty(),
             Statement::List(..) | Statement::Remove(..) => Span::empty(),
+            Statement::ExportData(ExportData {
+                options,
+                query,
+                connection,
+            }) => union_spans(
+                options
+                    .iter()
+                    .map(|i| i.span())
+                    .chain(core::iter::once(query.span()))
+                    .chain(connection.iter().map(|i| i.span())),
+            ),
+            Statement::CreateUser(..) => Span::empty(),
         }
     }
 }
@@ -1201,6 +1214,9 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::Lock { .. } => Span::empty(),
             AlterTableOperation::ReplicaIdentity { .. } => Span::empty(),
             AlterTableOperation::ValidateConstraint { name } => name.span,
+            AlterTableOperation::SetOptionsParens { options } => {
+                union_spans(options.iter().map(|i| i.span()))
+            }
         }
     }
 }
@@ -1510,7 +1526,7 @@ impl Spanned for Expr {
                 .union(&union_spans(collation.0.iter().map(|i| i.span()))),
             Expr::Nested(expr) => expr.span(),
             Expr::Value(value) => value.span(),
-            Expr::TypedString { value, .. } => value.span(),
+            Expr::TypedString(TypedString { value, .. }) => value.span(),
             Expr::Function(function) => function.span(),
             Expr::GroupingSets(vec) => {
                 union_spans(vec.iter().flat_map(|i| i.iter().map(|k| k.span())))

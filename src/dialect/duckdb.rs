@@ -65,7 +65,7 @@ impl Dialect for DuckDbDialect {
         true
     }
 
-    /// See <https://duckdb.org/docs/sql/functions/lambda.html>
+    /// See <https://duckdb.org/docs/stable/sql/functions/lambda>
     fn supports_lambda_functions(&self) -> bool {
         true
     }
@@ -96,6 +96,12 @@ impl Dialect for DuckDbDialect {
     }
 
     fn supports_select_wildcard_exclude(&self) -> bool {
+        true
+    }
+
+    /// DuckDB supports `NOTNULL` as an alias for `IS NOT NULL`,
+    /// see DuckDB Comparisons <https://duckdb.org/docs/stable/sql/expressions/comparison_operators#between-and-is-not-null>
+    fn supports_notnull_operator(&self) -> bool {
         true
     }
 }

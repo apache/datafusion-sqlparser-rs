@@ -32,12 +32,18 @@ use recursion::RecursionCounter;
 use IsLateral::*;
 use IsOptional::*;
 
-use crate::ast::helpers::stmt_create_table::{CreateTableBuilder, CreateTableConfiguration};
+use crate::ast::helpers::{
+    key_value_options::{
+        KeyValueOption, KeyValueOptionType, KeyValueOptions, KeyValueOptionsDelimiter,
+    },
+    stmt_create_table::{CreateTableBuilder, CreateTableConfiguration},
+};
 use crate::ast::Statement::CreatePolicy;
 use crate::ast::*;
 use crate::dialect::*;
 use crate::keywords::{Keyword, ALL_KEYWORDS};
 use crate::tokenizer::*;
+use sqlparser::parser::ParserState::ColumnDefinition;
 
 mod alter;
 
@@ -275,6 +281,12 @@ enum ParserState {
     /// PRIOR expressions while still allowing prior as an identifier name
     /// in other contexts.
     ConnectBy,
+    /// The state when parsing column definitions.  This state prohibits
+    /// NOT NULL as an alias for IS NOT NULL.  For example:
+    /// ```sql
+    /// CREATE TABLE foo (abc BIGINT NOT NULL);
+    /// ```
+    ColumnDefinition,
 }
 
 /// A SQL Parser
@@ -633,6 +645,10 @@ impl<'a> Parser<'a> {
                 Keyword::COMMENT if self.dialect.supports_comment_on() => self.parse_comment(),
                 Keyword::PRINT => self.parse_print(),
                 Keyword::RETURN => self.parse_return(),
+                Keyword::EXPORT => {
+                    self.prev_token();
+                    self.parse_export_data()
+                }
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
@@ -1527,10 +1543,11 @@ impl<'a> Parser<'a> {
                 // an unary negation `NOT ('a' LIKE 'b')`. To solve this, we don't accept the
                 // `type 'string'` syntax for the custom data types at all.
                 DataType::Custom(..) => parser_err!("dummy", loc),
-                data_type => Ok(Expr::TypedString {
+                data_type => Ok(Expr::TypedString(TypedString {
                     data_type,
                     value: parser.parse_value()?,
-                }),
+                    uses_odbc_syntax: false,
+                })),
             }
         })?;
 
@@ -1716,10 +1733,11 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_geometric_type(&mut self, kind: GeometricTypeKind) -> Result<Expr, ParserError> {
-        Ok(Expr::TypedString {
+        Ok(Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(kind),
             value: self.parse_value()?,
-        })
+            uses_odbc_syntax: false,
+        }))
     }
 
     /// Try to parse an [Expr::CompoundFieldAccess] like `a.b.c` or `a.b[1].c`.
@@ -2012,6 +2030,50 @@ impl<'a> Parser<'a> {
             Ok(Expr::Lambda(LambdaFunction {
                 params: OneOrManyWithParens::Many(params),
                 body: Box::new(expr),
+            }))
+        })
+    }
+
+    /// Tries to parse the body of an [ODBC escaping sequence]
+    /// i.e. without the enclosing braces
+    /// Currently implemented:
+    /// Scalar Function Calls
+    /// Date, Time, and Timestamp Literals
+    /// See <https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/escape-sequences-in-odbc?view=sql-server-2017>
+    fn maybe_parse_odbc_body(&mut self) -> Result<Option<Expr>, ParserError> {
+        // Attempt 1: Try to parse it as a function.
+        if let Some(expr) = self.maybe_parse_odbc_fn_body()? {
+            return Ok(Some(expr));
+        }
+        // Attempt 2: Try to parse it as a Date, Time or Timestamp Literal
+        self.maybe_parse_odbc_body_datetime()
+    }
+
+    /// Tries to parse the body of an [ODBC Date, Time, and Timestamp Literals] call.
+    ///
+    /// ```sql
+    /// {d '2025-07-17'}
+    /// {t '14:12:01'}
+    /// {ts '2025-07-17 14:12:01'}
+    /// ```
+    ///
+    /// [ODBC Date, Time, and Timestamp Literals]:
+    /// https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/date-time-and-timestamp-literals?view=sql-server-2017
+    fn maybe_parse_odbc_body_datetime(&mut self) -> Result<Option<Expr>, ParserError> {
+        self.maybe_parse(|p| {
+            let token = p.next_token().clone();
+            let word_string = token.token.to_string();
+            let data_type = match word_string.as_str() {
+                "t" => DataType::Time(None, TimezoneInfo::None),
+                "d" => DataType::Date,
+                "ts" => DataType::Timestamp(None, TimezoneInfo::None),
+                _ => return p.expected("ODBC datetime keyword (t, d, or ts)", token),
+            };
+            let value = p.parse_value()?;
+            Ok(Expr::TypedString(TypedString {
+                data_type,
+                value,
+                uses_odbc_syntax: true,
             }))
         })
     }
@@ -2770,7 +2832,7 @@ impl<'a> Parser<'a> {
     fn parse_lbrace_expr(&mut self) -> Result<Expr, ParserError> {
         let token = self.expect_token(&Token::LBrace)?;
 
-        if let Some(fn_expr) = self.maybe_parse_odbc_fn_body()? {
+        if let Some(fn_expr) = self.maybe_parse_odbc_body()? {
             self.expect_token(&Token::RBrace)?;
             return Ok(fn_expr);
         }
@@ -3486,10 +3548,18 @@ impl<'a> Parser<'a> {
                         | BinaryOperator::LtEq
                         | BinaryOperator::Eq
                         | BinaryOperator::NotEq
+                        | BinaryOperator::PGRegexMatch
+                        | BinaryOperator::PGRegexIMatch
+                        | BinaryOperator::PGRegexNotMatch
+                        | BinaryOperator::PGRegexNotIMatch
+                        | BinaryOperator::PGLikeMatch
+                        | BinaryOperator::PGILikeMatch
+                        | BinaryOperator::PGNotLikeMatch
+                        | BinaryOperator::PGNotILikeMatch
                 ) {
                     return parser_err!(
                         format!(
-                        "Expected one of [=, >, <, =>, =<, !=] as comparison operator, found: {op}"
+                        "Expected one of [=, >, <, =>, =<, !=, ~, ~*, !~, !~*, ~~, ~~*, !~~, !~~*] as comparison operator, found: {op}"
                     ),
                         span.start
                     );
@@ -3570,6 +3640,11 @@ impl<'a> Parser<'a> {
                     let negated = self.parse_keyword(Keyword::NOT);
                     let regexp = self.parse_keyword(Keyword::REGEXP);
                     let rlike = self.parse_keyword(Keyword::RLIKE);
+                    let null = if !self.in_column_definition_state() {
+                        self.parse_keyword(Keyword::NULL)
+                    } else {
+                        false
+                    };
                     if regexp || rlike {
                         Ok(Expr::RLike {
                             negated,
@@ -3579,6 +3654,8 @@ impl<'a> Parser<'a> {
                             ),
                             regexp,
                         })
+                    } else if negated && null {
+                        Ok(Expr::IsNotNull(Box::new(expr)))
                     } else if self.parse_keyword(Keyword::IN) {
                         self.parse_in(expr, negated)
                     } else if self.parse_keyword(Keyword::BETWEEN) {
@@ -3615,6 +3692,9 @@ impl<'a> Parser<'a> {
                     } else {
                         self.expected("IN or BETWEEN after NOT", self.peek_token())
                     }
+                }
+                Keyword::NOTNULL if dialect.supports_notnull_operator() => {
+                    Ok(Expr::IsNotNull(Box::new(expr)))
                 }
                 Keyword::MEMBER => {
                     if self.parse_keyword(Keyword::OF) {
@@ -4655,6 +4735,8 @@ impl<'a> Parser<'a> {
             self.parse_create_macro(or_replace, temporary)
         } else if self.parse_keyword(Keyword::SECRET) {
             self.parse_create_secret(or_replace, temporary, persistent)
+        } else if self.parse_keyword(Keyword::USER) {
+            self.parse_create_user(or_replace)
         } else if or_replace {
             self.expected(
                 "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION after CREATE OR REPLACE",
@@ -4687,6 +4769,32 @@ impl<'a> Parser<'a> {
         } else {
             self.expected("an object type after CREATE", self.peek_token())
         }
+    }
+
+    fn parse_create_user(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let name = self.parse_identifier()?;
+        let options = self.parse_key_value_options(false, &[Keyword::WITH, Keyword::TAG])?;
+        let with_tags = self.parse_keyword(Keyword::WITH);
+        let tags = if self.parse_keyword(Keyword::TAG) {
+            self.parse_key_value_options(true, &[])?
+        } else {
+            vec![]
+        };
+        Ok(Statement::CreateUser(CreateUser {
+            or_replace,
+            if_not_exists,
+            name,
+            options: KeyValueOptions {
+                options,
+                delimiter: KeyValueOptionsDelimiter::Space,
+            },
+            with_tags,
+            tags: KeyValueOptions {
+                options: tags,
+                delimiter: KeyValueOptionsDelimiter::Comma,
+            },
+        }))
     }
 
     /// See [DuckDB Docs](https://duckdb.org/docs/sql/statements/create_secret.html) for more details.
@@ -4892,12 +5000,19 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let clone = if self.parse_keyword(Keyword::CLONE) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
+
         Ok(Statement::CreateSchema {
             schema_name,
             if_not_exists,
             with,
             options,
             default_collate_spec,
+            clone,
         })
     }
 
@@ -4932,6 +5047,12 @@ impl<'a> Parser<'a> {
                 _ => break,
             }
         }
+        let clone = if self.parse_keyword(Keyword::CLONE) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
+
         Ok(Statement::CreateDatabase {
             db_name,
             if_not_exists: ine,
@@ -5682,6 +5803,14 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_analyze_format_kind(&mut self) -> Result<AnalyzeFormatKind, ParserError> {
+        if self.consume_token(&Token::Eq) {
+            Ok(AnalyzeFormatKind::Assignment(self.parse_analyze_format()?))
+        } else {
+            Ok(AnalyzeFormatKind::Keyword(self.parse_analyze_format()?))
+        }
+    }
+
     pub fn parse_analyze_format(&mut self) -> Result<AnalyzeFormat, ParserError> {
         let next_token = self.next_token();
         match &next_token.token {
@@ -6259,6 +6388,10 @@ impl<'a> Parser<'a> {
             ObjectType::Stage
         } else if self.parse_keyword(Keyword::TYPE) {
             ObjectType::Type
+        } else if self.parse_keyword(Keyword::USER) {
+            ObjectType::User
+        } else if self.parse_keyword(Keyword::STREAM) {
+            ObjectType::Stream
         } else if self.parse_keyword(Keyword::FUNCTION) {
             return self.parse_drop_function();
         } else if self.parse_keyword(Keyword::POLICY) {
@@ -6277,7 +6410,7 @@ impl<'a> Parser<'a> {
             return self.parse_drop_extension();
         } else {
             return self.expected(
-                "CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, or MATERIALIZED VIEW after DROP",
+                "CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW or USER after DROP",
                 self.peek_token(),
             );
         };
@@ -7740,6 +7873,15 @@ impl<'a> Parser<'a> {
             return option;
         }
 
+        self.with_state(
+            ColumnDefinition,
+            |parser| -> Result<Option<ColumnOption>, ParserError> {
+                parser.parse_optional_column_option_inner()
+            },
+        )
+    }
+
+    fn parse_optional_column_option_inner(&mut self) -> Result<Option<ColumnOption>, ParserError> {
         if self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET]) {
             Ok(Some(ColumnOption::CharacterSet(
                 self.parse_object_name(false)?,
@@ -7755,15 +7897,19 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::NULL) {
             Ok(Some(ColumnOption::Null))
         } else if self.parse_keyword(Keyword::DEFAULT) {
-            Ok(Some(ColumnOption::Default(self.parse_expr()?)))
+            Ok(Some(ColumnOption::Default(
+                self.parse_column_option_expr()?,
+            )))
         } else if dialect_of!(self is ClickHouseDialect| GenericDialect)
             && self.parse_keyword(Keyword::MATERIALIZED)
         {
-            Ok(Some(ColumnOption::Materialized(self.parse_expr()?)))
+            Ok(Some(ColumnOption::Materialized(
+                self.parse_column_option_expr()?,
+            )))
         } else if dialect_of!(self is ClickHouseDialect| GenericDialect)
             && self.parse_keyword(Keyword::ALIAS)
         {
-            Ok(Some(ColumnOption::Alias(self.parse_expr()?)))
+            Ok(Some(ColumnOption::Alias(self.parse_column_option_expr()?)))
         } else if dialect_of!(self is ClickHouseDialect| GenericDialect)
             && self.parse_keyword(Keyword::EPHEMERAL)
         {
@@ -7772,7 +7918,9 @@ impl<'a> Parser<'a> {
             if matches!(self.peek_token().token, Token::Comma | Token::RParen) {
                 Ok(Some(ColumnOption::Ephemeral(None)))
             } else {
-                Ok(Some(ColumnOption::Ephemeral(Some(self.parse_expr()?))))
+                Ok(Some(ColumnOption::Ephemeral(Some(
+                    self.parse_column_option_expr()?,
+                ))))
             }
         } else if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY]) {
             let characteristics = self.parse_constraint_characteristics()?;
@@ -7815,7 +7963,8 @@ impl<'a> Parser<'a> {
             }))
         } else if self.parse_keyword(Keyword::CHECK) {
             self.expect_token(&Token::LParen)?;
-            let expr = self.parse_expr()?;
+            // since `CHECK` requires parentheses, we can parse the inner expression in ParserState::Normal
+            let expr: Expr = self.with_state(ParserState::Normal, |p| p.parse_expr())?;
             self.expect_token(&Token::RParen)?;
             Ok(Some(ColumnOption::Check(expr)))
         } else if self.parse_keyword(Keyword::AUTO_INCREMENT)
@@ -7849,7 +7998,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keywords(&[Keyword::ON, Keyword::UPDATE])
             && dialect_of!(self is MySqlDialect | GenericDialect)
         {
-            let expr = self.parse_expr()?;
+            let expr = self.parse_column_option_expr()?;
             Ok(Some(ColumnOption::OnUpdate(expr)))
         } else if self.parse_keyword(Keyword::GENERATED) {
             self.parse_optional_column_option_generated()
@@ -7867,7 +8016,9 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::SRID)
             && dialect_of!(self is MySqlDialect | GenericDialect)
         {
-            Ok(Some(ColumnOption::Srid(Box::new(self.parse_expr()?))))
+            Ok(Some(ColumnOption::Srid(Box::new(
+                self.parse_column_option_expr()?,
+            ))))
         } else if self.parse_keyword(Keyword::IDENTITY)
             && dialect_of!(self is MsSqlDialect | GenericDialect)
         {
@@ -7904,6 +8055,31 @@ impl<'a> Parser<'a> {
             )))
         } else {
             Ok(None)
+        }
+    }
+
+    /// When parsing some column option expressions we need to revert to [ParserState::Normal] since
+    /// `NOT NULL` is allowed as an alias for `IS NOT NULL`.
+    /// In those cases we use this helper instead of calling [Parser::parse_expr] directly.
+    ///
+    /// For example, consider these `CREATE TABLE` statements:
+    /// ```sql
+    /// CREATE TABLE foo (abc BOOL DEFAULT (42 NOT NULL) NOT NULL);
+    /// ```
+    /// vs
+    /// ```sql
+    /// CREATE TABLE foo (abc BOOL NOT NULL);
+    /// ```
+    ///
+    /// In the first we should parse the inner portion of `(42 NOT NULL)` as [Expr::IsNotNull],
+    /// whereas is both statements that trailing `NOT NULL` should only be parsed as a
+    /// [ColumnOption::NotNull].
+    fn parse_column_option_expr(&mut self) -> Result<Expr, ParserError> {
+        if self.peek_token_ref().token == Token::LParen {
+            let expr: Expr = self.with_state(ParserState::Normal, |p| p.parse_prefix())?;
+            Ok(expr)
+        } else {
+            Ok(self.parse_expr()?)
         }
     }
 
@@ -7951,7 +8127,7 @@ impl<'a> Parser<'a> {
             }))
         } else if self.parse_keywords(&[Keyword::ALWAYS, Keyword::AS]) {
             if self.expect_token(&Token::LParen).is_ok() {
-                let expr = self.parse_expr()?;
+                let expr: Expr = self.with_state(ParserState::Normal, |p| p.parse_expr())?;
                 self.expect_token(&Token::RParen)?;
                 let (gen_as, expr_mode) = if self.parse_keywords(&[Keyword::STORED]) {
                     Ok((
@@ -8936,17 +9112,22 @@ impl<'a> Parser<'a> {
             let name = self.parse_identifier()?;
             AlterTableOperation::ValidateConstraint { name }
         } else {
-            let options: Vec<SqlOption> =
+            let mut options =
                 self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;
             if !options.is_empty() {
                 AlterTableOperation::SetTblProperties {
                     table_properties: options,
                 }
             } else {
-                return self.expected(
-                    "ADD, RENAME, PARTITION, SWAP, DROP, REPLICA IDENTITY, or SET TBLPROPERTIES after ALTER TABLE",
+                options = self.parse_options(Keyword::SET)?;
+                if !options.is_empty() {
+                    AlterTableOperation::SetOptionsParens { options }
+                } else {
+                    return self.expected(
+                    "ADD, RENAME, PARTITION, SWAP, DROP, REPLICA IDENTITY, SET, or SET TBLPROPERTIES after ALTER TABLE",
                     self.peek_token(),
-                );
+                  );
+                }
             }
         };
         Ok(operation)
@@ -11089,7 +11270,7 @@ impl<'a> Parser<'a> {
             analyze = self.parse_keyword(Keyword::ANALYZE);
             verbose = self.parse_keyword(Keyword::VERBOSE);
             if self.parse_keyword(Keyword::FORMAT) {
-                format = Some(self.parse_analyze_format()?);
+                format = Some(self.parse_analyze_format_kind()?);
             }
         }
 
@@ -12438,11 +12619,23 @@ impl<'a> Parser<'a> {
             self.parse_show_databases(terse)
         } else if self.parse_keyword(Keyword::SCHEMAS) {
             self.parse_show_schemas(terse)
+        } else if self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET]) {
+            self.parse_show_charset(false)
+        } else if self.parse_keyword(Keyword::CHARSET) {
+            self.parse_show_charset(true)
         } else {
             Ok(Statement::ShowVariable {
                 variable: self.parse_identifiers()?,
             })
         }
+    }
+
+    fn parse_show_charset(&mut self, is_shorthand: bool) -> Result<Statement, ParserError> {
+        // parse one of keywords
+        Ok(Statement::ShowCharset(ShowCharset {
+            is_shorthand,
+            filter: self.parse_show_statement_filter()?,
+        }))
     }
 
     fn parse_show_databases(&mut self, terse: bool) -> Result<Statement, ParserError> {
@@ -14004,6 +14197,15 @@ impl<'a> Parser<'a> {
                     schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
                 })
             } else if self.parse_keywords(&[
+                Keyword::ALL,
+                Keyword::FUNCTIONS,
+                Keyword::IN,
+                Keyword::SCHEMA,
+            ]) {
+                Some(GrantObjects::AllFunctionsInSchema {
+                    schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                })
+            } else if self.parse_keywords(&[
                 Keyword::FUTURE,
                 Keyword::SCHEMAS,
                 Keyword::IN,
@@ -14252,7 +14454,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::REPLICATE) {
             Ok(Action::Replicate)
         } else if self.parse_keyword(Keyword::ROLE) {
-            let role = self.parse_identifier()?;
+            let role = self.parse_object_name(false)?;
             Ok(Action::Role { role })
         } else if self.parse_keyword(Keyword::SELECT) {
             Ok(Action::Select {
@@ -14272,6 +14474,8 @@ impl<'a> Parser<'a> {
             Ok(Action::Usage)
         } else if self.parse_keyword(Keyword::OWNERSHIP) {
             Ok(Action::Ownership)
+        } else if self.parse_keyword(Keyword::DROP) {
+            Ok(Action::Drop)
         } else {
             self.expected("a privilege keyword", self.peek_token())?
         }
@@ -14307,6 +14511,8 @@ impl<'a> Parser<'a> {
             Some(ActionCreateObjectType::Integration)
         } else if self.parse_keyword(Keyword::ROLE) {
             Some(ActionCreateObjectType::Role)
+        } else if self.parse_keyword(Keyword::SCHEMA) {
+            Some(ActionCreateObjectType::Schema)
         } else if self.parse_keyword(Keyword::SHARE) {
             Some(ActionCreateObjectType::Share)
         } else if self.parse_keyword(Keyword::USER) {
@@ -15759,10 +15965,11 @@ impl<'a> Parser<'a> {
 
         let has_parentheses = self.consume_token(&Token::LParen);
 
+        let end_kws = &[Keyword::USING, Keyword::OUTPUT, Keyword::DEFAULT];
         let end_token = match (has_parentheses, self.peek_token().token) {
             (true, _) => Token::RParen,
             (false, Token::EOF) => Token::EOF,
-            (false, Token::Word(w)) if w.keyword == Keyword::USING => Token::Word(w),
+            (false, Token::Word(w)) if end_kws.contains(&w.keyword) => Token::Word(w),
             (false, _) => Token::SemiColon,
         };
 
@@ -15784,6 +15991,10 @@ impl<'a> Parser<'a> {
             vec![]
         };
 
+        let output = self.parse_keyword(Keyword::OUTPUT);
+
+        let default = self.parse_keyword(Keyword::DEFAULT);
+
         Ok(Statement::Execute {
             immediate: name.is_none(),
             name,
@@ -15791,6 +16002,8 @@ impl<'a> Parser<'a> {
             has_parentheses,
             into,
             using,
+            output,
+            default,
         })
     }
 
@@ -16396,6 +16609,30 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// /// Parse a `EXPORT DATA` statement.
+    ///
+    /// See [Statement::ExportData]
+    fn parse_export_data(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keywords(&[Keyword::EXPORT, Keyword::DATA])?;
+
+        let connection = if self.parse_keywords(&[Keyword::WITH, Keyword::CONNECTION]) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
+        self.expect_keyword(Keyword::OPTIONS)?;
+        self.expect_token(&Token::LParen)?;
+        let options = self.parse_comma_separated(|p| p.parse_sql_option())?;
+        self.expect_token(&Token::RParen)?;
+        self.expect_keyword(Keyword::AS)?;
+        let query = self.parse_query()?;
+        Ok(Statement::ExportData(ExportData {
+            options,
+            query,
+            connection,
+        }))
+    }
+
     /// Consume the parser and return its underlying token buffer
     pub fn into_tokens(self) -> Vec<TokenWithSpan> {
         self.tokens
@@ -16530,6 +16767,82 @@ impl<'a> Parser<'a> {
             Ok(Some(self.parse_value()?.value))
         } else {
             Ok(None)
+        }
+    }
+
+    pub(crate) fn in_column_definition_state(&self) -> bool {
+        matches!(self.state, ColumnDefinition)
+    }
+
+    /// Parses options provided in key-value format.
+    ///
+    /// * `parenthesized` - true if the options are enclosed in parenthesis
+    /// * `end_words` - a list of keywords that any of them indicates the end of the options section
+    pub(crate) fn parse_key_value_options(
+        &mut self,
+        parenthesized: bool,
+        end_words: &[Keyword],
+    ) -> Result<Vec<KeyValueOption>, ParserError> {
+        let mut options: Vec<KeyValueOption> = Vec::new();
+        if parenthesized {
+            self.expect_token(&Token::LParen)?;
+        }
+        loop {
+            match self.next_token().token {
+                Token::RParen => {
+                    if parenthesized {
+                        break;
+                    } else {
+                        return self.expected(" another option or EOF", self.peek_token());
+                    }
+                }
+                Token::EOF => break,
+                Token::Comma => continue,
+                Token::Word(w) if !end_words.contains(&w.keyword) => {
+                    options.push(self.parse_key_value_option(w)?)
+                }
+                Token::Word(w) if end_words.contains(&w.keyword) => {
+                    self.prev_token();
+                    break;
+                }
+                _ => return self.expected("another option, EOF, Comma or ')'", self.peek_token()),
+            };
+        }
+        Ok(options)
+    }
+
+    /// Parses a `KEY = VALUE` construct based on the specified key
+    pub(crate) fn parse_key_value_option(
+        &mut self,
+        key: Word,
+    ) -> Result<KeyValueOption, ParserError> {
+        self.expect_token(&Token::Eq)?;
+        match self.next_token().token {
+            Token::SingleQuotedString(value) => Ok(KeyValueOption {
+                option_name: key.value,
+                option_type: KeyValueOptionType::STRING,
+                value,
+            }),
+            Token::Word(word)
+                if word.keyword == Keyword::TRUE || word.keyword == Keyword::FALSE =>
+            {
+                Ok(KeyValueOption {
+                    option_name: key.value,
+                    option_type: KeyValueOptionType::BOOLEAN,
+                    value: word.value.to_uppercase(),
+                })
+            }
+            Token::Word(word) => Ok(KeyValueOption {
+                option_name: key.value,
+                option_type: KeyValueOptionType::ENUM,
+                value: word.value,
+            }),
+            Token::Number(n, _) => Ok(KeyValueOption {
+                option_name: key.value,
+                option_type: KeyValueOptionType::NUMBER,
+                value: n,
+            }),
+            _ => self.expected("expected option value", self.peek_token()),
         }
     }
 }
@@ -17266,5 +17579,29 @@ mod tests {
         let sql = r#"REPLACE"#;
 
         assert!(Parser::parse_sql(&MySqlDialect {}, sql).is_err());
+    }
+
+    #[test]
+    fn test_parse_not_null_in_column_options() {
+        let canonical = concat!(
+            "CREATE TABLE foo (",
+            "abc INT DEFAULT (42 IS NOT NULL) NOT NULL,",
+            " def INT,",
+            " def_null BOOL GENERATED ALWAYS AS (def IS NOT NULL) STORED,",
+            " CHECK (abc IS NOT NULL)",
+            ")"
+        );
+        all_dialects().verified_stmt(canonical);
+        all_dialects().one_statement_parses_to(
+            concat!(
+                "CREATE TABLE foo (",
+                "abc INT DEFAULT (42 NOT NULL) NOT NULL,",
+                " def INT,",
+                " def_null BOOL GENERATED ALWAYS AS (def NOT NULL) STORED,",
+                " CHECK (abc NOT NULL)",
+                ")"
+            ),
+            canonical,
+        );
     }
 }

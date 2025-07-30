@@ -149,7 +149,7 @@ pub enum AlterTableOperation {
     },
     /// `ATTACH PART|PARTITION <partition_expr>`
     /// Note: this is a ClickHouse-specific operation, please refer to
-    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/pakrtition#attach-partitionpart)
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/partition#attach-partitionpart)
     AttachPartition {
         // PART is not a short form of PARTITION, it's a separate keyword
         // which represents a physical file on disk and partition is a logical entity.
@@ -350,6 +350,16 @@ pub enum AlterTableOperation {
     /// `VALIDATE CONSTRAINT <name>`
     ValidateConstraint {
         name: Ident,
+    },
+    /// Arbitrary parenthesized `SET` options.
+    ///
+    /// Example:
+    /// ```sql
+    /// SET (scale_factor = 0.01, threshold = 500)`
+    /// ```
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
+    SetOptionsParens {
+        options: Vec<SqlOption>,
     },
 }
 
@@ -790,6 +800,9 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::ValidateConstraint { name } => {
                 write!(f, "VALIDATE CONSTRAINT {name}")
+            }
+            AlterTableOperation::SetOptionsParens { options } => {
+                write!(f, "SET ({})", display_comma_separated(options))
             }
         }
     }

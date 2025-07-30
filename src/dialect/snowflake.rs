@@ -17,23 +17,19 @@
 
 #[cfg(not(feature = "std"))]
 use crate::alloc::string::ToString;
-use crate::ast::helpers::key_value_options::{KeyValueOption, KeyValueOptionType, KeyValueOptions};
 use crate::ast::helpers::stmt_create_database::CreateDatabaseBuilder;
+use crate::ast::helpers::key_value_options::{
+    KeyValueOption, KeyValueOptionType, KeyValueOptions, KeyValueOptionsDelimiter,
+};
 use crate::ast::helpers::stmt_create_table::CreateTableBuilder;
 use crate::ast::helpers::stmt_data_loading::{
     FileStagingCommand, StageLoadSelectItem, StageLoadSelectItemKind, StageParamsObject,
 };
-use crate::ast::{
-    CatalogSyncNamespaceMode, ColumnOption, ColumnPolicy, ColumnPolicyProperty, ContactEntry,
-    CopyIntoSnowflakeKind, Ident, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
-    IdentityPropertyKind, IdentityPropertyOrder, ObjectName, ObjectNamePart, RowAccessPolicy,
-    ShowObjects, SqlOption, Statement, StorageSerializationPolicy, TagsColumnOption,
-    WrappedCollection,
-};
+use crate::ast::{CatalogSyncNamespaceMode, ColumnOption, ColumnPolicy, ColumnPolicyProperty, ContactEntry, CopyIntoSnowflakeKind, DollarQuotedString, Ident, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, ObjectName, ObjectNamePart, RowAccessPolicy, ShowObjects, SqlOption, Statement, StorageSerializationPolicy, TagsColumnOption, WrappedCollection};
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{IsOptional, Parser, ParserError};
-use crate::tokenizer::{Token, Word};
+use crate::tokenizer::Token;
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
 #[cfg(not(feature = "std"))]
@@ -310,22 +306,22 @@ impl Dialect for SnowflakeDialect {
             // they are not followed by other tokens that may change their meaning
             // e.g. `SELECT * EXCEPT (col1) FROM tbl`
             Keyword::EXCEPT
-            // e.g. `SELECT 1 LIMIT 5`
-            | Keyword::LIMIT
-            // e.g. `SELECT 1 OFFSET 5 ROWS`
-            | Keyword::OFFSET
             // e.g. `INSERT INTO t SELECT 1 RETURNING *`
             | Keyword::RETURNING if !matches!(parser.peek_token_ref().token, Token::Comma | Token::EOF) =>
             {
                 false
             }
 
+            // e.g. `SELECT 1 LIMIT 5` - not an alias
+            // e.g. `SELECT 1 OFFSET 5 ROWS` - not an alias
+            Keyword::LIMIT | Keyword::OFFSET if peek_for_limit_options(parser) => false,
+
             // `FETCH` can be considered an alias as long as it's not followed by `FIRST`` or `NEXT`
             // which would give it a different meanings, for example: 
             // `SELECT 1 FETCH FIRST 10 ROWS` - not an alias
             // `SELECT 1 FETCH 10` - not an alias
             Keyword::FETCH if parser.peek_one_of_keywords(&[Keyword::FIRST, Keyword::NEXT]).is_some()
-                    || matches!(parser.peek_token().token, Token::Number(_, _)) =>
+                    || peek_for_limit_options(parser) =>
             {
                 false
             }
@@ -354,19 +350,22 @@ impl Dialect for SnowflakeDialect {
         match kw {
             // The following keywords can be considered an alias as long as
             // they are not followed by other tokens that may change their meaning
-            Keyword::LIMIT
-            | Keyword::RETURNING
+            Keyword::RETURNING
             | Keyword::INNER
             | Keyword::USING
             | Keyword::PIVOT
             | Keyword::UNPIVOT
             | Keyword::EXCEPT
             | Keyword::MATCH_RECOGNIZE
-            | Keyword::OFFSET
                 if !matches!(parser.peek_token_ref().token, Token::SemiColon | Token::EOF) =>
             {
                 false
             }
+
+            // `LIMIT` can be considered an alias as long as it's not followed by a value. For example:
+            // `SELECT * FROM tbl LIMIT WHERE 1=1` - alias
+            // `SELECT * FROM tbl LIMIT 3` - not an alias
+            Keyword::LIMIT | Keyword::OFFSET if peek_for_limit_options(parser) => false,
 
             // `FETCH` can be considered an alias as long as it's not followed by `FIRST`` or `NEXT`
             // which would give it a different meanings, for example:
@@ -376,7 +375,7 @@ impl Dialect for SnowflakeDialect {
                 if parser
                     .peek_one_of_keywords(&[Keyword::FIRST, Keyword::NEXT])
                     .is_some()
-                    || matches!(parser.peek_token().token, Token::Number(_, _)) =>
+                    || peek_for_limit_options(parser) =>
             {
                 false
             }
@@ -390,6 +389,7 @@ impl Dialect for SnowflakeDialect {
             {
                 false
             }
+
             Keyword::GLOBAL if parser.peek_keyword(Keyword::FULL) => false,
 
             // Reserved keywords by the Snowflake dialect, which seem to be less strictive
@@ -475,6 +475,18 @@ impl Dialect for SnowflakeDialect {
     }
 }
 
+// Peeks ahead to identify tokens that are expected after
+// a LIMIT/FETCH keyword.
+fn peek_for_limit_options(parser: &Parser) -> bool {
+    match &parser.peek_token_ref().token {
+        Token::Number(_, _) | Token::Placeholder(_) => true,
+        Token::SingleQuotedString(val) if val.is_empty() => true,
+        Token::DollarQuotedString(DollarQuotedString { value, .. }) if value.is_empty() => true,
+        Token::Word(w) if w.keyword == Keyword::NULL => true,
+        _ => false,
+    }
+}
+
 fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statement, ParserError> {
     let stage = parse_snowflake_stage_name(parser)?;
     let pattern = if parser.parse_keyword(Keyword::PATTERN) {
@@ -503,6 +515,7 @@ fn parse_alter_session(parser: &mut Parser, set: bool) -> Result<Statement, Pars
         set,
         session_params: KeyValueOptions {
             options: session_options,
+            delimiter: KeyValueOptionsDelimiter::Space,
         },
     })
 }
@@ -558,17 +571,14 @@ pub fn parse_create_table(
                 Keyword::AS => {
                     let query = parser.parse_query()?;
                     builder = builder.query(Some(query));
-                    break;
                 }
                 Keyword::CLONE => {
                     let clone = parser.parse_object_name(false).ok();
                     builder = builder.clone_clause(clone);
-                    break;
                 }
                 Keyword::LIKE => {
                     let like = parser.parse_object_name(false).ok();
                     builder = builder.like(like);
-                    break;
                 }
                 Keyword::CLUSTER => {
                     parser.expect_keyword_is(Keyword::BY)?;
@@ -694,7 +704,7 @@ pub fn parse_create_table(
                 builder = builder.columns(columns).constraints(constraints);
             }
             Token::EOF => {
-                if builder.columns.is_empty() {
+                if !builder.validate_schema_info() {
                     return Err(ParserError::ParserError(
                         "unexpected end of input".to_string(),
                     ));
@@ -703,7 +713,7 @@ pub fn parse_create_table(
                 break;
             }
             Token::SemiColon => {
-                if builder.columns.is_empty() {
+                if !builder.validate_schema_info() {
                     return Err(ParserError::ParserError(
                         "unexpected end of input".to_string(),
                     ));
@@ -826,7 +836,7 @@ pub fn parse_create_database(
                             let purpose = p.parse_identifier()?.value;
                             p.expect_token(&Token::Eq)?;
                             let contact = p.parse_identifier()?.value;
-                            Ok(ContactEntry::new(purpose, contact))
+                            Ok(ContactEntry {  purpose, contact })
                         })?;
                         parser.expect_token(&Token::RParen)?;
                         builder = builder.with_contacts(Some(contacts));
@@ -876,19 +886,19 @@ pub fn parse_create_stage(
     // [ directoryTableParams ]
     if parser.parse_keyword(Keyword::DIRECTORY) {
         parser.expect_token(&Token::Eq)?;
-        directory_table_params = parse_parentheses_options(parser)?;
+        directory_table_params = parser.parse_key_value_options(true, &[])?;
     }
 
     // [ file_format]
     if parser.parse_keyword(Keyword::FILE_FORMAT) {
         parser.expect_token(&Token::Eq)?;
-        file_format = parse_parentheses_options(parser)?;
+        file_format = parser.parse_key_value_options(true, &[])?;
     }
 
     // [ copy_options ]
     if parser.parse_keyword(Keyword::COPY_OPTIONS) {
         parser.expect_token(&Token::Eq)?;
-        copy_options = parse_parentheses_options(parser)?;
+        copy_options = parser.parse_key_value_options(true, &[])?;
     }
 
     // [ comment ]
@@ -905,12 +915,15 @@ pub fn parse_create_stage(
         stage_params,
         directory_table_params: KeyValueOptions {
             options: directory_table_params,
+            delimiter: KeyValueOptionsDelimiter::Space,
         },
         file_format: KeyValueOptions {
             options: file_format,
+            delimiter: KeyValueOptionsDelimiter::Space,
         },
         copy_options: KeyValueOptions {
             options: copy_options,
+            delimiter: KeyValueOptionsDelimiter::Space,
         },
         comment,
     })
@@ -934,6 +947,7 @@ pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserE
             Token::Mod => ident.push('%'),
             Token::Div => ident.push('/'),
             Token::Plus => ident.push('+'),
+            Token::Number(n, _) => ident.push_str(n),
             Token::Word(w) => ident.push_str(&w.to_string()),
             _ => return parser.expected("stage name identifier", parser.peek_token()),
         }
@@ -978,10 +992,16 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
     let mut from_stage = None;
     let mut stage_params = StageParamsObject {
         url: None,
-        encryption: KeyValueOptions { options: vec![] },
+        encryption: KeyValueOptions {
+            options: vec![],
+            delimiter: KeyValueOptionsDelimiter::Space,
+        },
         endpoint: None,
         storage_integration: None,
-        credentials: KeyValueOptions { options: vec![] },
+        credentials: KeyValueOptions {
+            options: vec![],
+            delimiter: KeyValueOptionsDelimiter::Space,
+        },
     };
     let mut from_query = None;
     let mut partition = None;
@@ -1043,7 +1063,7 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
         // FILE_FORMAT
         if parser.parse_keyword(Keyword::FILE_FORMAT) {
             parser.expect_token(&Token::Eq)?;
-            file_format = parse_parentheses_options(parser)?;
+            file_format = parser.parse_key_value_options(true, &[])?;
         // PARTITION BY
         } else if parser.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
             partition = Some(Box::new(parser.parse_expr()?))
@@ -1081,14 +1101,14 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
         // COPY OPTIONS
         } else if parser.parse_keyword(Keyword::COPY_OPTIONS) {
             parser.expect_token(&Token::Eq)?;
-            copy_options = parse_parentheses_options(parser)?;
+            copy_options = parser.parse_key_value_options(true, &[])?;
         } else {
             match parser.next_token().token {
                 Token::SemiColon | Token::EOF => break,
                 Token::Comma => continue,
                 // In `COPY INTO <location>` the copy options do not have a shared key
                 // like in `COPY INTO <table>`
-                Token::Word(key) => copy_options.push(parse_option(parser, key)?),
+                Token::Word(key) => copy_options.push(parser.parse_key_value_option(key)?),
                 _ => return parser.expected("another copy option, ; or EOF'", parser.peek_token()),
             }
         }
@@ -1107,9 +1127,11 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
         pattern,
         file_format: KeyValueOptions {
             options: file_format,
+            delimiter: KeyValueOptionsDelimiter::Space,
         },
         copy_options: KeyValueOptions {
             options: copy_options,
+            delimiter: KeyValueOptionsDelimiter::Space,
         },
         validation_mode,
         partition,
@@ -1209,8 +1231,14 @@ fn parse_select_item_for_data_load(
 
 fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserError> {
     let (mut url, mut storage_integration, mut endpoint) = (None, None, None);
-    let mut encryption: KeyValueOptions = KeyValueOptions { options: vec![] };
-    let mut credentials: KeyValueOptions = KeyValueOptions { options: vec![] };
+    let mut encryption: KeyValueOptions = KeyValueOptions {
+        options: vec![],
+        delimiter: KeyValueOptionsDelimiter::Space,
+    };
+    let mut credentials: KeyValueOptions = KeyValueOptions {
+        options: vec![],
+        delimiter: KeyValueOptionsDelimiter::Space,
+    };
 
     // URL
     if parser.parse_keyword(Keyword::URL) {
@@ -1240,7 +1268,8 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
     if parser.parse_keyword(Keyword::CREDENTIALS) {
         parser.expect_token(&Token::Eq)?;
         credentials = KeyValueOptions {
-            options: parse_parentheses_options(parser)?,
+            options: parser.parse_key_value_options(true, &[])?,
+            delimiter: KeyValueOptionsDelimiter::Space,
         };
     }
 
@@ -1248,7 +1277,8 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
     if parser.parse_keyword(Keyword::ENCRYPTION) {
         parser.expect_token(&Token::Eq)?;
         encryption = KeyValueOptions {
-            options: parse_parentheses_options(parser)?,
+            options: parser.parse_key_value_options(true, &[])?,
+            delimiter: KeyValueOptionsDelimiter::Space,
         };
     }
 
@@ -1282,7 +1312,7 @@ fn parse_session_options(
             Token::Word(key) => {
                 parser.advance_token();
                 if set {
-                    let option = parse_option(parser, key)?;
+                    let option = parser.parse_key_value_option(key)?;
                     options.push(option);
                 } else {
                     options.push(KeyValueOption {
@@ -1303,63 +1333,6 @@ fn parse_session_options(
         ))
     } else {
         Ok(options)
-    }
-}
-
-/// Parses options provided within parentheses like:
-/// ( ENABLE = { TRUE | FALSE }
-///      [ AUTO_REFRESH = { TRUE | FALSE } ]
-///      [ REFRESH_ON_CREATE =  { TRUE | FALSE } ]
-///      [ NOTIFICATION_INTEGRATION = '<notification_integration_name>' ] )
-///
-fn parse_parentheses_options(parser: &mut Parser) -> Result<Vec<KeyValueOption>, ParserError> {
-    let mut options: Vec<KeyValueOption> = Vec::new();
-    parser.expect_token(&Token::LParen)?;
-    loop {
-        match parser.next_token().token {
-            Token::RParen => break,
-            Token::Comma => continue,
-            Token::Word(key) => options.push(parse_option(parser, key)?),
-            _ => return parser.expected("another option or ')'", parser.peek_token()),
-        };
-    }
-    Ok(options)
-}
-
-/// Parses a `KEY = VALUE` construct based on the specified key
-fn parse_option(parser: &mut Parser, key: Word) -> Result<KeyValueOption, ParserError> {
-    parser.expect_token(&Token::Eq)?;
-    if parser.parse_keyword(Keyword::TRUE) {
-        Ok(KeyValueOption {
-            option_name: key.value,
-            option_type: KeyValueOptionType::BOOLEAN,
-            value: "TRUE".to_string(),
-        })
-    } else if parser.parse_keyword(Keyword::FALSE) {
-        Ok(KeyValueOption {
-            option_name: key.value,
-            option_type: KeyValueOptionType::BOOLEAN,
-            value: "FALSE".to_string(),
-        })
-    } else {
-        match parser.next_token().token {
-            Token::SingleQuotedString(value) => Ok(KeyValueOption {
-                option_name: key.value,
-                option_type: KeyValueOptionType::STRING,
-                value,
-            }),
-            Token::Word(word) => Ok(KeyValueOption {
-                option_name: key.value,
-                option_type: KeyValueOptionType::ENUM,
-                value: word.value,
-            }),
-            Token::Number(n, _) => Ok(KeyValueOption {
-                option_name: key.value,
-                option_type: KeyValueOptionType::NUMBER,
-                value: n,
-            }),
-            _ => parser.expected("expected option value", parser.peek_token()),
-        }
     }
 }
 

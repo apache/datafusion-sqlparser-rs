@@ -1014,12 +1014,7 @@ pub enum Expr {
     /// A constant of form `<data_type> 'value'`.
     /// This can represent ANSI SQL `DATE`, `TIME`, and `TIMESTAMP` literals (such as `DATE '2020-01-01'`),
     /// as well as constants of other types (a non-standard PostgreSQL extension).
-    TypedString {
-        data_type: DataType,
-        /// The value of the constant.
-        /// Hint: you can unwrap the string value using `value.into_string()`.
-        value: ValueWithSpan,
-    },
+    TypedString(TypedString),
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
@@ -1144,7 +1139,7 @@ pub enum Expr {
     ///
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/functions#higher-order-functions---operator-and-lambdaparams-expr-function)
     /// [Databricks](https://docs.databricks.com/en/sql/language-manual/sql-ref-lambda-functions.html)
-    /// [DuckDb](https://duckdb.org/docs/sql/functions/lambda.html)
+    /// [DuckDB](https://duckdb.org/docs/stable/sql/functions/lambda)
     Lambda(LambdaFunction),
     /// Checks membership of a value in a JSON array
     MemberOf(MemberOf),
@@ -1734,10 +1729,7 @@ impl fmt::Display for Expr {
             Expr::Nested(ast) => write!(f, "({ast})"),
             Expr::Value(v) => write!(f, "{v}"),
             Expr::Prefixed { prefix, value } => write!(f, "{prefix} {value}"),
-            Expr::TypedString { data_type, value } => {
-                write!(f, "{data_type}")?;
-                write!(f, " {value}")
-            }
+            Expr::TypedString(ts) => ts.fmt(f),
             Expr::Function(fun) => fun.fmt(f),
             Expr::Case {
                 case_token: _,
@@ -3704,6 +3696,12 @@ pub enum Statement {
         history: bool,
         show_options: ShowStatementOptions,
     },
+    // ```sql
+    // SHOW {CHARACTER SET | CHARSET}
+    // ```
+    // [MySQL]:
+    // <https://dev.mysql.com/doc/refman/8.4/en/show.html#:~:text=SHOW%20%7BCHARACTER%20SET%20%7C%20CHARSET%7D%20%5Blike_or_where%5D>
+    ShowCharset(ShowCharset),
     /// ```sql
     /// SHOW OBJECTS LIKE 'line%' IN mydb.public
     /// ```
@@ -3846,6 +3844,14 @@ pub enum Statement {
         ///
         /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_schema_statement)
         default_collate_spec: Option<Expr>,
+        /// Clones a schema
+        ///
+        /// ```sql
+        /// CREATE SCHEMA myschema CLONE otherschema
+        /// ```
+        ///
+        /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-clone#databases-schemas)
+        clone: Option<ObjectName>,
     },
     /// ```sql
     /// CREATE DATABASE
@@ -4077,6 +4083,12 @@ pub enum Statement {
         immediate: bool,
         into: Vec<Ident>,
         using: Vec<ExprWithAlias>,
+        /// Whether the last parameter is the return value of the procedure
+        /// MSSQL: <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/execute-transact-sql?view=sql-server-ver17#output>
+        output: bool,
+        /// Whether to invoke the procedure with the default parameter values
+        /// MSSQL: <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/execute-transact-sql?view=sql-server-ver17#default>
+        default: bool,
     },
     /// ```sql
     /// PREPARE name [ ( data_type [, ...] ) ] AS statement
@@ -4138,7 +4150,7 @@ pub enum Statement {
         /// A SQL query that specifies what to explain
         statement: Box<Statement>,
         /// Optional output format of explain
-        format: Option<AnalyzeFormat>,
+        format: Option<AnalyzeFormatKind>,
         /// Postgres style utility options, `(analyze, verbose true)`
         options: Option<Vec<UtilityOption>>,
     },
@@ -4351,6 +4363,20 @@ pub enum Statement {
     ///
     /// See [ReturnStatement]
     Return(ReturnStatement),
+    /// Export data statement
+    ///
+    /// Example:
+    /// ```sql
+    /// EXPORT DATA OPTIONS(uri='gs://bucket/folder/*', format='PARQUET', overwrite=true) AS
+    /// SELECT field1, field2 FROM mydataset.table1 ORDER BY field1 LIMIT 10
+    /// ```
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/export-statements)
+    ExportData(ExportData),
+    /// ```sql
+    /// CREATE [OR REPLACE] USER <user> [IF NOT EXISTS]
+    /// ```
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-user)
+    CreateUser(CreateUser),
 }
 
 /// ```sql
@@ -4506,7 +4532,7 @@ impl fmt::Display for Statement {
                 }
 
                 if let Some(format) = format {
-                    write!(f, "FORMAT {format} ")?;
+                    write!(f, "{format} ")?;
                 }
 
                 if let Some(options) = options {
@@ -4898,7 +4924,6 @@ impl fmt::Display for Statement {
                 if let Some(contacts) = with_contacts {
                     write!(f, " WITH CONTACT ({})", display_comma_separated(contacts))?;
                 }
-
                 Ok(())
             }
             Statement::CreateFunction(create_function) => create_function.fmt(f),
@@ -5744,6 +5769,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::ShowCharset(show_stm) => show_stm.fmt(f),
             Statement::StartTransaction {
                 modes,
                 begin: syntax_begin,
@@ -5820,6 +5846,7 @@ impl fmt::Display for Statement {
                 with,
                 options,
                 default_collate_spec,
+                clone,
             } => {
                 write!(
                     f,
@@ -5840,6 +5867,9 @@ impl fmt::Display for Statement {
                     write!(f, " OPTIONS({})", display_comma_separated(options))?;
                 }
 
+                if let Some(clone) = clone {
+                    write!(f, " CLONE {clone}")?;
+                }
                 Ok(())
             }
             Statement::Assert { condition, message } => {
@@ -5911,6 +5941,8 @@ impl fmt::Display for Statement {
                 immediate,
                 into,
                 using,
+                output,
+                default,
             } => {
                 let (open, close) = if *has_parentheses {
                     ("(", ")")
@@ -5931,6 +5963,12 @@ impl fmt::Display for Statement {
                 if !using.is_empty() {
                     write!(f, " USING {}", display_comma_separated(using))?;
                 };
+                if *output {
+                    write!(f, " OUTPUT")?;
+                }
+                if *default {
+                    write!(f, " DEFAULT")?;
+                }
                 Ok(())
             }
             Statement::Prepare {
@@ -6251,6 +6289,8 @@ impl fmt::Display for Statement {
             Statement::Return(r) => write!(f, "{r}"),
             Statement::List(command) => write!(f, "LIST {command}"),
             Statement::Remove(command) => write!(f, "REMOVE {command}"),
+            Statement::ExportData(e) => write!(f, "{e}"),
+            Statement::CreateUser(s) => write!(f, "{s}"),
         }
     }
 }
@@ -6669,6 +6709,7 @@ pub enum Action {
         role: ObjectName,
     },
     Delete,
+    Drop,
     EvolveSchema,
     Exec {
         obj_type: Option<ActionExecuteObjectType>,
@@ -6705,7 +6746,7 @@ pub enum Action {
     Replicate,
     ResolveAll,
     Role {
-        role: Ident,
+        role: ObjectName,
     },
     Select {
         columns: Option<Vec<Ident>>,
@@ -6738,6 +6779,7 @@ impl fmt::Display for Action {
             }
             Action::DatabaseRole { role } => write!(f, "DATABASE ROLE {role}")?,
             Action::Delete => f.write_str("DELETE")?,
+            Action::Drop => f.write_str("DROP")?,
             Action::EvolveSchema => f.write_str("EVOLVE SCHEMA")?,
             Action::Exec { obj_type } => {
                 f.write_str("EXEC")?;
@@ -6821,6 +6863,7 @@ pub enum ActionCreateObjectType {
     OrganiationListing,
     ReplicationGroup,
     Role,
+    Schema,
     Share,
     User,
     Warehouse,
@@ -6842,6 +6885,7 @@ impl fmt::Display for ActionCreateObjectType {
             ActionCreateObjectType::OrganiationListing => write!(f, "ORGANIZATION LISTING"),
             ActionCreateObjectType::ReplicationGroup => write!(f, "REPLICATION GROUP"),
             ActionCreateObjectType::Role => write!(f, "ROLE"),
+            ActionCreateObjectType::Schema => write!(f, "SCHEMA"),
             ActionCreateObjectType::Share => write!(f, "SHARE"),
             ActionCreateObjectType::User => write!(f, "USER"),
             ActionCreateObjectType::Warehouse => write!(f, "WAREHOUSE"),
@@ -7079,6 +7123,8 @@ pub enum GrantObjects {
     AllMaterializedViewsInSchema { schemas: Vec<ObjectName> },
     /// Grant privileges on `ALL EXTERNAL TABLES IN SCHEMA <schema_name> [, ...]`
     AllExternalTablesInSchema { schemas: Vec<ObjectName> },
+    /// Grant privileges on `ALL FUNCTIONS IN SCHEMA <schema_name> [, ...]`
+    AllFunctionsInSchema { schemas: Vec<ObjectName> },
     /// Grant privileges on `FUTURE SCHEMAS IN DATABASE <database_name> [, ...]`
     FutureSchemasInDatabase { databases: Vec<ObjectName> },
     /// Grant privileges on `FUTURE TABLES IN SCHEMA <schema_name> [, ...]`
@@ -7196,6 +7242,13 @@ impl fmt::Display for GrantObjects {
                 write!(
                     f,
                     "ALL MATERIALIZED VIEWS IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
+            GrantObjects::AllFunctionsInSchema { schemas } => {
+                write!(
+                    f,
+                    "ALL FUNCTIONS IN SCHEMA {}",
                     display_comma_separated(schemas)
                 )
             }
@@ -7479,6 +7532,52 @@ pub struct DropDomain {
     pub drop_behavior: Option<DropBehavior>,
 }
 
+/// A constant of form `<data_type> 'value'`.
+/// This can represent ANSI SQL `DATE`, `TIME`, and `TIMESTAMP` literals (such as `DATE '2020-01-01'`),
+/// as well as constants of other types (a non-standard PostgreSQL extension).
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct TypedString {
+    pub data_type: DataType,
+    /// The value of the constant.
+    /// Hint: you can unwrap the string value using `value.into_string()`.
+    pub value: ValueWithSpan,
+    /// Flags whether this TypedString uses the [ODBC syntax].
+    ///
+    /// Example:
+    /// ```sql
+    /// -- An ODBC date literal:
+    /// SELECT {d '2025-07-16'}
+    /// -- This is equivalent to the standard ANSI SQL literal:
+    /// SELECT DATE '2025-07-16'
+    ///
+    /// [ODBC syntax]: https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/date-time-and-timestamp-literals?view=sql-server-2017
+    pub uses_odbc_syntax: bool,
+}
+
+impl fmt::Display for TypedString {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let data_type = &self.data_type;
+        let value = &self.value;
+        match self.uses_odbc_syntax {
+            false => {
+                write!(f, "{data_type}")?;
+                write!(f, " {value}")
+            }
+            true => {
+                let prefix = match data_type {
+                    DataType::Date => "d",
+                    DataType::Time(..) => "t",
+                    DataType::Timestamp(..) => "ts",
+                    _ => "?",
+                };
+                write!(f, "{{{prefix} {value}}}")
+            }
+        }
+    }
+}
+
 /// A function call
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -7726,10 +7825,31 @@ impl fmt::Display for DuplicateTreatment {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AnalyzeFormatKind {
+    /// e.g. `EXPLAIN ANALYZE FORMAT JSON SELECT * FROM tbl`
+    Keyword(AnalyzeFormat),
+    /// e.g. `EXPLAIN ANALYZE FORMAT=JSON SELECT * FROM tbl`
+    Assignment(AnalyzeFormat),
+}
+
+impl fmt::Display for AnalyzeFormatKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            AnalyzeFormatKind::Keyword(format) => write!(f, "FORMAT {format}"),
+            AnalyzeFormatKind::Assignment(format) => write!(f, "FORMAT={format}"),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AnalyzeFormat {
     TEXT,
     GRAPHVIZ,
     JSON,
+    TRADITIONAL,
+    TREE,
 }
 
 impl fmt::Display for AnalyzeFormat {
@@ -7738,6 +7858,8 @@ impl fmt::Display for AnalyzeFormat {
             AnalyzeFormat::TEXT => "TEXT",
             AnalyzeFormat::GRAPHVIZ => "GRAPHVIZ",
             AnalyzeFormat::JSON => "JSON",
+            AnalyzeFormat::TRADITIONAL => "TRADITIONAL",
+            AnalyzeFormat::TREE => "TREE",
         })
     }
 }
@@ -7850,6 +7972,8 @@ pub enum ObjectType {
     Sequence,
     Stage,
     Type,
+    User,
+    Stream,
 }
 
 impl fmt::Display for ObjectType {
@@ -7865,6 +7989,8 @@ impl fmt::Display for ObjectType {
             ObjectType::Sequence => "SEQUENCE",
             ObjectType::Stage => "STAGE",
             ObjectType::Type => "TYPE",
+            ObjectType::User => "USER",
+            ObjectType::Stream => "STREAM",
         })
     }
 }
@@ -9631,12 +9757,6 @@ pub struct ContactEntry {
     pub contact: String,
 }
 
-impl ContactEntry {
-    pub fn new(purpose: String, contact: String) -> Self {
-        Self { purpose, contact }
-    }
-}
-
 impl Display for ContactEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} = {}", self.purpose, self.contact)
@@ -9841,6 +9961,32 @@ impl fmt::Display for ShowStatementIn {
         }
         if let Some(parent_name) = &self.parent_name {
             write!(f, " {parent_name}")?;
+        }
+        Ok(())
+    }
+}
+
+/// A Show Charset statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowCharset {
+    /// The statement can be written as `SHOW CHARSET` or `SHOW CHARACTER SET`
+    /// true means CHARSET was used and false means CHARACTER SET was used
+    pub is_shorthand: bool,
+    pub filter: Option<ShowStatementFilter>,
+}
+
+impl fmt::Display for ShowCharset {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "SHOW")?;
+        if self.is_shorthand {
+            write!(f, " CHARSET")?;
+        } else {
+            write!(f, " CHARACTER SET")?;
+        }
+        if self.filter.is_some() {
+            write!(f, " {}", self.filter.as_ref().unwrap())?;
         }
         Ok(())
     }
@@ -10199,6 +10345,78 @@ pub struct MemberOf {
 impl fmt::Display for MemberOf {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} MEMBER OF({})", self.value, self.array)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ExportData {
+    pub options: Vec<SqlOption>,
+    pub query: Box<Query>,
+    pub connection: Option<ObjectName>,
+}
+
+impl fmt::Display for ExportData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(connection) = &self.connection {
+            write!(
+                f,
+                "EXPORT DATA WITH CONNECTION {connection} OPTIONS({}) AS {}",
+                display_comma_separated(&self.options),
+                self.query
+            )
+        } else {
+            write!(
+                f,
+                "EXPORT DATA OPTIONS({}) AS {}",
+                display_comma_separated(&self.options),
+                self.query
+            )
+        }
+    }
+}
+/// Creates a user
+///
+/// Syntax:
+/// ```sql
+/// CREATE [OR REPLACE] USER [IF NOT EXISTS] <name> [OPTIONS]
+/// ```
+///
+/// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-user)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateUser {
+    pub or_replace: bool,
+    pub if_not_exists: bool,
+    pub name: Ident,
+    pub options: KeyValueOptions,
+    pub with_tags: bool,
+    pub tags: KeyValueOptions,
+}
+
+impl fmt::Display for CreateUser {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CREATE")?;
+        if self.or_replace {
+            write!(f, " OR REPLACE")?;
+        }
+        write!(f, " USER")?;
+        if self.if_not_exists {
+            write!(f, " IF NOT EXISTS")?;
+        }
+        write!(f, " {}", self.name)?;
+        if !self.options.options.is_empty() {
+            write!(f, " {}", self.options)?;
+        }
+        if !self.tags.options.is_empty() {
+            if self.with_tags {
+                write!(f, " WITH")?;
+            }
+            write!(f, " TAG ({})", self.tags)?;
+        }
+        Ok(())
     }
 }
 

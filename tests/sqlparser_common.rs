@@ -27,6 +27,8 @@ extern crate core;
 
 use helpers::attached_token::AttachedToken;
 use matches::assert_matches;
+use sqlparser::ast::helpers::key_value_options::*;
+use sqlparser::ast::helpers::key_value_options::{KeyValueOptions, KeyValueOptionsDelimiter};
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::TableFactor::{Pivot, Unpivot};
 use sqlparser::ast::*;
@@ -4296,6 +4298,7 @@ fn parse_create_schema() {
     verified_stmt(r#"CREATE SCHEMA a.b.c WITH (key1 = 'value1', key2 = 'value2')"#);
     verified_stmt(r#"CREATE SCHEMA IF NOT EXISTS a WITH (key1 = 'value1')"#);
     verified_stmt(r#"CREATE SCHEMA IF NOT EXISTS a WITH ()"#);
+    verified_stmt(r#"CREATE SCHEMA a CLONE b"#);
 }
 
 #[test]
@@ -4347,8 +4350,9 @@ fn parse_create_table_as() {
     // BigQuery allows specifying table schema in CTAS
     // ANSI SQL and PostgreSQL let you only specify the list of columns
     // (without data types) in a CTAS, but we have yet to support that.
+    let dialects = all_dialects_where(|d| d.supports_create_table_multi_schema_info_sources());
     let sql = "CREATE TABLE t (a INT, b INT) AS SELECT 1 AS b, 2 AS a";
-    match verified_stmt(sql) {
+    match dialects.verified_stmt(sql) {
         Statement::CreateTable(CreateTable { columns, query, .. }) => {
             assert_eq!(columns.len(), 2);
             assert_eq!(columns[0].to_string(), "a INT".to_string());
@@ -4450,20 +4454,6 @@ fn parse_create_or_replace_table() {
         }) => {
             assert_eq!(name.to_string(), "t".to_string());
             assert!(or_replace);
-        }
-        _ => unreachable!(),
-    }
-
-    let sql = "CREATE TABLE t (a INT, b INT) AS SELECT 1 AS b, 2 AS a";
-    match verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { columns, query, .. }) => {
-            assert_eq!(columns.len(), 2);
-            assert_eq!(columns[0].to_string(), "a INT".to_string());
-            assert_eq!(columns[1].to_string(), "b INT".to_string());
-            assert_eq!(
-                query,
-                Some(Box::new(verified_query("SELECT 1 AS b, 2 AS a")))
-            );
         }
         _ => unreachable!(),
     }
@@ -4734,6 +4724,34 @@ fn parse_alter_table() {
                         (Value::SingleQuotedString("parquet".to_string())).with_empty_span()
                     ),
                 }],
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    let set_storage_parameters = "ALTER TABLE tab SET (autovacuum_vacuum_scale_factor = 0.01, autovacuum_vacuum_threshold = 500)";
+    match alter_table_op(verified_stmt(set_storage_parameters)) {
+        AlterTableOperation::SetOptionsParens { options } => {
+            assert_eq!(
+                options,
+                [
+                    SqlOption::KeyValue {
+                        key: Ident {
+                            value: "autovacuum_vacuum_scale_factor".to_string(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        },
+                        value: Expr::Value(test_utils::number("0.01").with_empty_span()),
+                    },
+                    SqlOption::KeyValue {
+                        key: Ident {
+                            value: "autovacuum_vacuum_threshold".to_string(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        },
+                        value: Expr::Value(test_utils::number("500").with_empty_span()),
+                    }
+                ],
             );
         }
         _ => unreachable!(),
@@ -5174,7 +5192,7 @@ fn run_explain_analyze(
     query: &str,
     expected_verbose: bool,
     expected_analyze: bool,
-    expected_format: Option<AnalyzeFormat>,
+    expected_format: Option<AnalyzeFormatKind>,
     expected_options: Option<Vec<UtilityOption>>,
 ) {
     match dialect.verified_stmt(query) {
@@ -5285,7 +5303,7 @@ fn parse_explain_analyze_with_simple_select() {
         "EXPLAIN ANALYZE FORMAT GRAPHVIZ SELECT sqrt(id) FROM foo",
         false,
         true,
-        Some(AnalyzeFormat::GRAPHVIZ),
+        Some(AnalyzeFormatKind::Keyword(AnalyzeFormat::GRAPHVIZ)),
         None,
     );
 
@@ -5294,7 +5312,16 @@ fn parse_explain_analyze_with_simple_select() {
         "EXPLAIN ANALYZE VERBOSE FORMAT JSON SELECT sqrt(id) FROM foo",
         true,
         true,
-        Some(AnalyzeFormat::JSON),
+        Some(AnalyzeFormatKind::Keyword(AnalyzeFormat::JSON)),
+        None,
+    );
+
+    run_explain_analyze(
+        all_dialects(),
+        "EXPLAIN ANALYZE VERBOSE FORMAT=JSON SELECT sqrt(id) FROM foo",
+        true,
+        true,
+        Some(AnalyzeFormatKind::Assignment(AnalyzeFormat::JSON)),
         None,
     );
 
@@ -5303,7 +5330,7 @@ fn parse_explain_analyze_with_simple_select() {
         "EXPLAIN VERBOSE FORMAT TEXT SELECT sqrt(id) FROM foo",
         true,
         false,
-        Some(AnalyzeFormat::TEXT),
+        Some(AnalyzeFormatKind::Keyword(AnalyzeFormat::TEXT)),
         None,
     );
 }
@@ -5887,13 +5914,14 @@ fn parse_literal_date() {
     let sql = "SELECT DATE '1999-01-01'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::Date,
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1999-01-01".into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -5903,13 +5931,14 @@ fn parse_literal_time() {
     let sql = "SELECT TIME '01:23:34'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::Time(None, TimezoneInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("01:23:34".into()),
                 span: Span::empty(),
             },
-        },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -5919,13 +5948,14 @@ fn parse_literal_datetime() {
     let sql = "SELECT DATETIME '1999-01-01 01:23:34.45'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::Datetime(None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into()),
                 span: Span::empty(),
             },
-        },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -5935,13 +5965,14 @@ fn parse_literal_timestamp_without_time_zone() {
     let sql = "SELECT TIMESTAMP '1999-01-01 01:23:34'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::Timestamp(None, TimezoneInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1999-01-01 01:23:34".into()),
                 span: Span::empty(),
             },
-        },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
@@ -5953,13 +5984,14 @@ fn parse_literal_timestamp_with_time_zone() {
     let sql = "SELECT TIMESTAMPTZ '1999-01-01 01:23:34Z'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::Timestamp(None, TimezoneInfo::Tz),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1999-01-01 01:23:34Z".into()),
                 span: Span::empty(),
             },
-        },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
@@ -6529,7 +6561,7 @@ fn parse_json_keyword() {
 }'"#;
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::JSON,
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(
@@ -6556,8 +6588,9 @@ fn parse_json_keyword() {
                     .to_string()
                 ),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false,
+        }),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -6566,17 +6599,23 @@ fn parse_json_keyword() {
 fn parse_typed_strings() {
     let expr = verified_expr(r#"JSON '{"foo":"bar"}'"#);
     assert_eq!(
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::JSON,
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(r#"{"foo":"bar"}"#.into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr
     );
 
-    if let Expr::TypedString { data_type, value } = expr {
+    if let Expr::TypedString(TypedString {
+        data_type,
+        value,
+        uses_odbc_syntax: false,
+    }) = expr
+    {
         assert_eq!(DataType::JSON, data_type);
         assert_eq!(r#"{"foo":"bar"}"#, value.into_string().unwrap());
     }
@@ -6587,13 +6626,14 @@ fn parse_bignumeric_keyword() {
     let sql = r#"SELECT BIGNUMERIC '0'"#;
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(r#"0"#.into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '0'");
@@ -6601,13 +6641,14 @@ fn parse_bignumeric_keyword() {
     let sql = r#"SELECT BIGNUMERIC '123456'"#;
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(r#"123456"#.into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '123456'");
@@ -6615,13 +6656,14 @@ fn parse_bignumeric_keyword() {
     let sql = r#"SELECT BIGNUMERIC '-3.14'"#;
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(r#"-3.14"#.into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '-3.14'");
@@ -6629,13 +6671,14 @@ fn parse_bignumeric_keyword() {
     let sql = r#"SELECT BIGNUMERIC '-0.54321'"#;
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(r#"-0.54321"#.into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '-0.54321'");
@@ -6643,13 +6686,14 @@ fn parse_bignumeric_keyword() {
     let sql = r#"SELECT BIGNUMERIC '1.23456e05'"#;
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(r#"1.23456e05"#.into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '1.23456e05'");
@@ -6657,13 +6701,14 @@ fn parse_bignumeric_keyword() {
     let sql = r#"SELECT BIGNUMERIC '-9.876e-3'"#;
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(r#"-9.876e-3"#.into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '-9.876e-3'");
@@ -7904,12 +7949,37 @@ fn parse_create_database() {
             if_not_exists,
             location,
             managed_location,
+<<<<<<< HEAD
             ..
+=======
+            clone,
+>>>>>>> origin/main
         } => {
             assert_eq!("mydb", db_name.to_string());
             assert!(!if_not_exists);
             assert_eq!(None, location);
             assert_eq!(None, managed_location);
+            assert_eq!(None, clone);
+        }
+        _ => unreachable!(),
+    }
+    let sql = "CREATE DATABASE mydb CLONE otherdb";
+    match verified_stmt(sql) {
+        Statement::CreateDatabase {
+            db_name,
+            if_not_exists,
+            location,
+            managed_location,
+            clone,
+        } => {
+            assert_eq!("mydb", db_name.to_string());
+            assert!(!if_not_exists);
+            assert_eq!(None, location);
+            assert_eq!(None, managed_location);
+            assert_eq!(
+                Some(ObjectName::from(vec![Ident::new("otherdb".to_string())])),
+                clone
+            );
         }
         _ => unreachable!(),
     }
@@ -7924,12 +7994,17 @@ fn parse_create_database_ine() {
             if_not_exists,
             location,
             managed_location,
+<<<<<<< HEAD
             ..
+=======
+            clone,
+>>>>>>> origin/main
         } => {
             assert_eq!("mydb", db_name.to_string());
             assert!(if_not_exists);
             assert_eq!(None, location);
             assert_eq!(None, managed_location);
+            assert_eq!(None, clone);
         }
         _ => unreachable!(),
     }
@@ -8367,6 +8442,24 @@ fn parse_drop_view() {
 
     verified_stmt("DROP MATERIALIZED VIEW a.b.c");
     verified_stmt("DROP MATERIALIZED VIEW IF EXISTS a.b.c");
+}
+
+#[test]
+fn parse_drop_user() {
+    let sql = "DROP USER u1";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            names, object_type, ..
+        } => {
+            assert_eq!(
+                vec!["u1"],
+                names.iter().map(ToString::to_string).collect::<Vec<_>>()
+            );
+            assert_eq!(ObjectType::User, object_type);
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("DROP USER IF EXISTS u1");
 }
 
 #[test]
@@ -9305,7 +9398,7 @@ fn parse_drop_role() {
 
 #[test]
 fn parse_grant() {
-    let sql = "GRANT SELECT, INSERT, UPDATE (shape, size), USAGE, DELETE, TRUNCATE, REFERENCES, TRIGGER, CONNECT, CREATE, EXECUTE, TEMPORARY ON abc, def TO xyz, m WITH GRANT OPTION GRANTED BY jj";
+    let sql = "GRANT SELECT, INSERT, UPDATE (shape, size), USAGE, DELETE, TRUNCATE, REFERENCES, TRIGGER, CONNECT, CREATE, EXECUTE, TEMPORARY, DROP ON abc, def TO xyz, m WITH GRANT OPTION GRANTED BY jj";
     match verified_stmt(sql) {
         Statement::Grant {
             privileges,
@@ -9343,6 +9436,7 @@ fn parse_grant() {
                         Action::Create { obj_type: None },
                         Action::Execute { obj_type: None },
                         Action::Temporary,
+                        Action::Drop,
                     ],
                     actions
                 );
@@ -9460,6 +9554,7 @@ fn parse_grant() {
     verified_stmt("GRANT SELECT ON ALL VIEWS IN SCHEMA db1.sc1 TO ROLE role1");
     verified_stmt("GRANT SELECT ON ALL MATERIALIZED VIEWS IN SCHEMA db1.sc1 TO ROLE role1");
     verified_stmt("GRANT SELECT ON ALL EXTERNAL TABLES IN SCHEMA db1.sc1 TO ROLE role1");
+    verified_stmt("GRANT USAGE ON ALL FUNCTIONS IN SCHEMA db1.sc1 TO ROLE role1");
     verified_stmt("GRANT USAGE ON SCHEMA sc1 TO a:b");
     verified_stmt("GRANT USAGE ON SCHEMA sc1 TO GROUP group1");
     verified_stmt("GRANT OWNERSHIP ON ALL TABLES IN SCHEMA DEV_STAS_ROGOZHIN TO ROLE ANALYST");
@@ -9481,6 +9576,9 @@ fn parse_grant() {
     verified_stmt("GRANT SELECT ON FUTURE SEQUENCES IN SCHEMA db1.sc1 TO ROLE role1");
     verified_stmt("GRANT USAGE ON PROCEDURE db1.sc1.foo(INT) TO ROLE role1");
     verified_stmt("GRANT USAGE ON FUNCTION db1.sc1.foo(INT) TO ROLE role1");
+    verified_stmt("GRANT ROLE role1 TO ROLE role2");
+    verified_stmt("GRANT ROLE role1 TO USER user");
+    verified_stmt("GRANT CREATE SCHEMA ON DATABASE db1 TO ROLE role1");
 }
 
 #[test]
@@ -11166,9 +11264,7 @@ fn parse_non_latin_identifiers() {
     let supported_dialects = TestedDialects::new(vec![
         Box::new(GenericDialect {}),
         Box::new(DuckDbDialect {}),
-        Box::new(PostgreSqlDialect {}),
         Box::new(MsSqlDialect {}),
-        Box::new(MySqlDialect {}),
     ]);
     assert!(supported_dialects
         .parse_sql_statements("SELECT 💝 FROM table1")
@@ -11408,6 +11504,8 @@ fn parse_execute_stored_procedure() {
         immediate: false,
         using: vec![],
         into: vec![],
+        output: false,
+        default: false,
     };
     assert_eq!(
         // Microsoft SQL Server does not use parentheses around arguments for EXECUTE
@@ -11422,6 +11520,18 @@ fn parse_execute_stored_procedure() {
         ),
         expected
     );
+    match ms_and_generic().verified_stmt("EXECUTE dbo.proc1 @ReturnVal = @X OUTPUT") {
+        Statement::Execute { output, .. } => {
+            assert!(output);
+        }
+        _ => unreachable!(),
+    }
+    match ms_and_generic().verified_stmt("EXECUTE dbo.proc1 DEFAULT") {
+        Statement::Execute { default, .. } => {
+            assert!(default);
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]
@@ -11440,6 +11550,8 @@ fn parse_execute_immediate() {
         into: vec![Ident::new("a")],
         name: None,
         has_parentheses: false,
+        output: false,
+        default: false,
     };
 
     let stmt = dialects.verified_stmt("EXECUTE IMMEDIATE 'SELECT 1' INTO a USING 1 AS b");
@@ -14929,83 +15041,90 @@ fn test_geometry_type() {
     let sql = "point '1,2'";
     assert_eq!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Point),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1,2".to_string()),
                 span: Span::empty(),
             },
-        }
+            uses_odbc_syntax: false
+        })
     );
 
     let sql = "line '1,2,3,4'";
     assert_eq!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Line),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1,2,3,4".to_string()),
                 span: Span::empty(),
             },
-        }
+            uses_odbc_syntax: false
+        })
     );
 
     let sql = "path '1,2,3,4'";
     assert_eq!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::GeometricPath),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1,2,3,4".to_string()),
                 span: Span::empty(),
             },
-        }
+            uses_odbc_syntax: false
+        })
     );
     let sql = "box '1,2,3,4'";
     assert_eq!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::GeometricBox),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1,2,3,4".to_string()),
                 span: Span::empty(),
             },
-        }
+            uses_odbc_syntax: false
+        })
     );
 
     let sql = "circle '1,2,3'";
     assert_eq!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Circle),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1,2,3".to_string()),
                 span: Span::empty(),
             },
-        }
+            uses_odbc_syntax: false
+        })
     );
 
     let sql = "polygon '1,2,3,4'";
     assert_eq!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Polygon),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1,2,3,4".to_string()),
                 span: Span::empty(),
             },
-        }
+            uses_odbc_syntax: false
+        })
     );
     let sql = "lseg '1,2,3,4'";
     assert_eq!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::LineSegment),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1,2,3,4".to_string()),
                 span: Span::empty(),
             },
-        }
+            uses_odbc_syntax: false
+        })
     );
 }
 #[test]
@@ -16015,6 +16134,27 @@ fn parse_create_procedure_with_parameter_modes() {
 }
 
 #[test]
+fn parse_not_null() {
+    let _ = all_dialects().expr_parses_to("x NOT NULL", "x IS NOT NULL");
+    let _ = all_dialects().expr_parses_to("NULL NOT NULL", "NULL IS NOT NULL");
+
+    assert_matches!(
+        all_dialects().expr_parses_to("NOT NULL NOT NULL", "NOT NULL IS NOT NULL"),
+        Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            ..
+        }
+    );
+    assert_matches!(
+        all_dialects().expr_parses_to("NOT x NOT NULL", "NOT x IS NOT NULL"),
+        Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            ..
+        }
+    );
+}
+
+#[test]
 fn test_select_exclude() {
     let dialects = all_dialects_where(|d| d.supports_select_wildcard_exclude());
     match &dialects
@@ -16134,4 +16274,164 @@ SELECT * FROM tbl2
     let stmts = dialects.parse_sql_statements(sql).unwrap();
     assert_eq!(stmts.len(), 2);
     assert!(stmts.iter().all(|s| matches!(s, Statement::Query { .. })));
+}
+
+#[test]
+fn test_identifier_unicode_support() {
+    let sql = r#"SELECT phoneǤЖשचᎯ⻩☯♜🦄⚛🀄ᚠ⌛🌀 AS tbl FROM customers"#;
+    let dialects = TestedDialects::new(vec![
+        Box::new(MySqlDialect {}),
+        Box::new(RedshiftSqlDialect {}),
+        Box::new(PostgreSqlDialect {}),
+    ]);
+    let _ = dialects.verified_stmt(sql);
+}
+
+#[test]
+fn test_identifier_unicode_start() {
+    let sql = r#"SELECT 💝phone AS 💝 FROM customers"#;
+    let dialects = TestedDialects::new(vec![
+        Box::new(MySqlDialect {}),
+        Box::new(RedshiftSqlDialect {}),
+        Box::new(PostgreSqlDialect {}),
+    ]);
+    let _ = dialects.verified_stmt(sql);
+}
+
+#[test]
+fn parse_notnull() {
+    // Some dialects support `x NOTNULL` as an expression while others consider
+    // `x NOTNULL` like `x AS NOTNULL` and thus consider `NOTNULL` an alias for x.
+    let notnull_unsupported_dialects = all_dialects_except(|d| d.supports_notnull_operator());
+    let _ = notnull_unsupported_dialects
+        .verified_only_select_with_canonical("SELECT NULL NOTNULL", "SELECT NULL AS NOTNULL");
+
+    // Supported dialects consider `x NOTNULL` as an alias for `x IS NOT NULL`
+    let notnull_supported_dialects = all_dialects_where(|d| d.supports_notnull_operator());
+    let _ = notnull_supported_dialects.expr_parses_to("x NOTNULL", "x IS NOT NULL");
+
+    // For dialects which support it, `NOT NULL NOTNULL` should
+    // parse as `(NOT (NULL IS NOT NULL))`
+    assert_matches!(
+        notnull_supported_dialects.expr_parses_to("NOT NULL NOTNULL", "NOT NULL IS NOT NULL"),
+        Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            ..
+        }
+    );
+
+    // for unsupported dialects, parsing should stop at `NOT NULL`
+    notnull_unsupported_dialects.expr_parses_to("NOT NULL NOTNULL", "NOT NULL");
+}
+
+#[test]
+fn parse_odbc_time_date_timestamp() {
+    // Supported statements
+    let sql_d = "SELECT {d '2025-07-17'}, category_name FROM categories";
+    let _ = all_dialects().verified_stmt(sql_d);
+    let sql_t = "SELECT {t '14:12:01'}, category_name FROM categories";
+    let _ = all_dialects().verified_stmt(sql_t);
+    let sql_ts = "SELECT {ts '2025-07-17 14:12:01'}, category_name FROM categories";
+    let _ = all_dialects().verified_stmt(sql_ts);
+    // Unsupported statement
+    let supports_dictionary = all_dialects_where(|d| d.supports_dictionary_syntax());
+    let dictionary_unsupported = all_dialects_where(|d| !d.supports_dictionary_syntax());
+    let sql = "SELECT {tt '14:12:01'} FROM foo";
+    let res = supports_dictionary.parse_sql_statements(sql);
+    let res_dict = dictionary_unsupported.parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected: :, found: '14:12:01'".to_string()),
+        res.unwrap_err()
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected: an expression, found: {".to_string()),
+        res_dict.unwrap_err()
+    );
+}
+
+#[test]
+fn parse_create_user() {
+    let create = verified_stmt("CREATE USER u1");
+    match create {
+        Statement::CreateUser(stmt) => {
+            assert_eq!(stmt.name, Ident::new("u1"));
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("CREATE OR REPLACE USER u1");
+    verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1");
+    verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret'");
+    verified_stmt(
+        "CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=TRUE",
+    );
+    verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=TRUE TYPE=SERVICE TAG (t1='v1')");
+    let create = verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=TRUE TYPE=SERVICE WITH TAG (t1='v1', t2='v2')");
+    match create {
+        Statement::CreateUser(stmt) => {
+            assert_eq!(stmt.name, Ident::new("u1"));
+            assert_eq!(stmt.or_replace, true);
+            assert_eq!(stmt.if_not_exists, true);
+            assert_eq!(
+                stmt.options,
+                KeyValueOptions {
+                    delimiter: KeyValueOptionsDelimiter::Space,
+                    options: vec![
+                        KeyValueOption {
+                            option_name: "PASSWORD".to_string(),
+                            value: "secret".to_string(),
+                            option_type: KeyValueOptionType::STRING
+                        },
+                        KeyValueOption {
+                            option_name: "MUST_CHANGE_PASSWORD".to_string(),
+                            value: "TRUE".to_string(),
+                            option_type: KeyValueOptionType::BOOLEAN
+                        },
+                        KeyValueOption {
+                            option_name: "TYPE".to_string(),
+                            value: "SERVICE".to_string(),
+                            option_type: KeyValueOptionType::ENUM
+                        },
+                    ],
+                },
+            );
+            assert_eq!(stmt.with_tags, true);
+            assert_eq!(
+                stmt.tags,
+                KeyValueOptions {
+                    delimiter: KeyValueOptionsDelimiter::Comma,
+                    options: vec![
+                        KeyValueOption {
+                            option_name: "t1".to_string(),
+                            value: "v1".to_string(),
+                            option_type: KeyValueOptionType::STRING
+                        },
+                        KeyValueOption {
+                            option_name: "t2".to_string(),
+                            value: "v2".to_string(),
+                            option_type: KeyValueOptionType::STRING
+                        },
+                    ]
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_drop_stream() {
+    let sql = "DROP STREAM s1";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            names, object_type, ..
+        } => {
+            assert_eq!(
+                vec!["s1"],
+                names.iter().map(ToString::to_string).collect::<Vec<_>>()
+            );
+            assert_eq!(ObjectType::Stream, object_type);
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("DROP STREAM IF EXISTS s1");
 }

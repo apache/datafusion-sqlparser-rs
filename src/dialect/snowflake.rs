@@ -17,15 +17,21 @@
 
 #[cfg(not(feature = "std"))]
 use crate::alloc::string::ToString;
-use crate::ast::helpers::stmt_create_database::CreateDatabaseBuilder;
 use crate::ast::helpers::key_value_options::{
     KeyValueOption, KeyValueOptionType, KeyValueOptions, KeyValueOptionsDelimiter,
 };
+use crate::ast::helpers::stmt_create_database::CreateDatabaseBuilder;
 use crate::ast::helpers::stmt_create_table::CreateTableBuilder;
 use crate::ast::helpers::stmt_data_loading::{
     FileStagingCommand, StageLoadSelectItem, StageLoadSelectItemKind, StageParamsObject,
 };
-use crate::ast::{CatalogSyncNamespaceMode, ColumnOption, ColumnPolicy, ColumnPolicyProperty, ContactEntry, CopyIntoSnowflakeKind, DollarQuotedString, Ident, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, ObjectName, ObjectNamePart, RowAccessPolicy, ShowObjects, SqlOption, Statement, StorageSerializationPolicy, TagsColumnOption, WrappedCollection};
+use crate::ast::{
+    CatalogSyncNamespaceMode, ColumnOption, ColumnPolicy, ColumnPolicyProperty, ContactEntry,
+    CopyIntoSnowflakeKind, DollarQuotedString, Ident, IdentityParameters, IdentityProperty,
+    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, ObjectName,
+    ObjectNamePart, RowAccessPolicy, ShowObjects, SqlOption, Statement, StorageSerializationPolicy,
+    TagsColumnOption, WrappedCollection,
+};
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{IsOptional, Parser, ParserError};
@@ -836,7 +842,7 @@ pub fn parse_create_database(
                             let purpose = p.parse_identifier()?.value;
                             p.expect_token(&Token::Eq)?;
                             let contact = p.parse_identifier()?.value;
-                            Ok(ContactEntry {  purpose, contact })
+                            Ok(ContactEntry { purpose, contact })
                         })?;
                         parser.expect_token(&Token::RParen)?;
                         builder = builder.with_contacts(Some(contacts));

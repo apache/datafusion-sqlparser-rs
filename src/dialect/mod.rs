@@ -1136,6 +1136,18 @@ pub trait Dialect: Debug + Any {
     fn supports_notnull_operator(&self) -> bool {
         false
     }
+
+    /// Returns true if this dialect allows an optional `SIGNED` suffix after integer data types.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE TABLE t (i INT(20) SIGNED);
+    /// ```
+    ///
+    /// Note that this is canonicalized to `INT(20)`.
+    fn supports_data_type_signed_suffix(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

@@ -9848,6 +9848,9 @@ impl<'a> Parser<'a> {
                     if self.parse_keyword(Keyword::UNSIGNED) {
                         Ok(DataType::TinyIntUnsigned(optional_precision?))
                     } else {
+                        if dialect.supports_data_type_signed_suffix() {
+                            let _ = self.parse_keyword(Keyword::SIGNED);
+                        }
                         Ok(DataType::TinyInt(optional_precision?))
                     }
                 }
@@ -9864,6 +9867,9 @@ impl<'a> Parser<'a> {
                     if self.parse_keyword(Keyword::UNSIGNED) {
                         Ok(DataType::SmallIntUnsigned(optional_precision?))
                     } else {
+                        if dialect.supports_data_type_signed_suffix() {
+                            let _ = self.parse_keyword(Keyword::SIGNED);
+                        }
                         Ok(DataType::SmallInt(optional_precision?))
                     }
                 }
@@ -9872,6 +9878,9 @@ impl<'a> Parser<'a> {
                     if self.parse_keyword(Keyword::UNSIGNED) {
                         Ok(DataType::MediumIntUnsigned(optional_precision?))
                     } else {
+                        if dialect.supports_data_type_signed_suffix() {
+                            let _ = self.parse_keyword(Keyword::SIGNED);
+                        }
                         Ok(DataType::MediumInt(optional_precision?))
                     }
                 }
@@ -9880,6 +9889,9 @@ impl<'a> Parser<'a> {
                     if self.parse_keyword(Keyword::UNSIGNED) {
                         Ok(DataType::IntUnsigned(optional_precision?))
                     } else {
+                        if dialect.supports_data_type_signed_suffix() {
+                            let _ = self.parse_keyword(Keyword::SIGNED);
+                        }
                         Ok(DataType::Int(optional_precision?))
                     }
                 }
@@ -9909,6 +9921,9 @@ impl<'a> Parser<'a> {
                     if self.parse_keyword(Keyword::UNSIGNED) {
                         Ok(DataType::IntegerUnsigned(optional_precision?))
                     } else {
+                        if dialect.supports_data_type_signed_suffix() {
+                            let _ = self.parse_keyword(Keyword::SIGNED);
+                        }
                         Ok(DataType::Integer(optional_precision?))
                     }
                 }
@@ -9917,6 +9932,9 @@ impl<'a> Parser<'a> {
                     if self.parse_keyword(Keyword::UNSIGNED) {
                         Ok(DataType::BigIntUnsigned(optional_precision?))
                     } else {
+                        if dialect.supports_data_type_signed_suffix() {
+                            let _ = self.parse_keyword(Keyword::SIGNED);
+                        }
                         Ok(DataType::BigInt(optional_precision?))
                     }
                 }

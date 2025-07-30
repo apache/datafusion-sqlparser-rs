@@ -1706,6 +1706,51 @@ fn parse_create_table_unsigned() {
 }
 
 #[test]
+fn parse_signed_data_types() {
+    let sql = "CREATE TABLE foo (bar_tinyint TINYINT(3) SIGNED, bar_smallint SMALLINT(5) SIGNED, bar_mediumint MEDIUMINT(13) SIGNED, bar_int INT(11) SIGNED, bar_bigint BIGINT(20) SIGNED)";
+    let canonical = "CREATE TABLE foo (bar_tinyint TINYINT(3), bar_smallint SMALLINT(5), bar_mediumint MEDIUMINT(13), bar_int INT(11), bar_bigint BIGINT(20))";
+    match mysql().one_statement_parses_to(sql, canonical) {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![
+                    ColumnDef {
+                        name: Ident::new("bar_tinyint"),
+                        data_type: DataType::TinyInt(Some(3)),
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_smallint"),
+                        data_type: DataType::SmallInt(Some(5)),
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_mediumint"),
+                        data_type: DataType::MediumInt(Some(13)),
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_int"),
+                        data_type: DataType::Int(Some(11)),
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_bigint"),
+                        data_type: DataType::BigInt(Some(20)),
+                        options: vec![],
+                    },
+                ],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+    all_dialects_except(|d| d.supports_data_type_signed_suffix())
+        .run_parser_method(sql, |p| p.parse_statement())
+        .expect_err("SIGNED suffix should not be allowed");
+}
+
+#[test]
 fn parse_simple_insert() {
     let sql = r"INSERT INTO tasks (title, priority) VALUES ('Test Some Inserts', 1), ('Test Entry 2', 2), ('Test Entry 3', 3)";
 

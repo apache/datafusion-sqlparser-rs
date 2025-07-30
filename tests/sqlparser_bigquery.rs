@@ -961,7 +961,10 @@ fn parse_typed_struct_syntax_bigquery() {
             })],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Interval,
+                field_type: DataType::Interval {
+                    fields: None,
+                    precision: None
+                },
                 options: None,
             }]
         },
@@ -1300,7 +1303,10 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             })],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Interval,
+                field_type: DataType::Interval {
+                    fields: None,
+                    precision: None
+                },
                 options: None,
             }]
         },

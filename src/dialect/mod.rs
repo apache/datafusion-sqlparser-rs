@@ -1148,6 +1148,21 @@ pub trait Dialect: Debug + Any {
     fn supports_data_type_signed_suffix(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect supports the `INTERVAL` data type with [Postgres]-style options.
+    ///
+    /// Examples:
+    /// ```sql
+    /// CREATE TABLE t (i INTERVAL YEAR TO MONTH);
+    /// SELECT '1 second'::INTERVAL HOUR TO SECOND(3);
+    /// ```
+    ///
+    /// See [`crate::ast::DataType::Interval`] and [`crate::ast::IntervalFields`].
+    ///
+    /// [Postgres]: https://www.postgresql.org/docs/17/datatype-datetime.html
+    fn supports_interval_options(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

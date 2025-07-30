@@ -5333,6 +5333,44 @@ fn parse_at_time_zone() {
 }
 
 #[test]
+fn parse_interval_data_type() {
+    pg_and_generic().verified_stmt("CREATE TABLE t (i INTERVAL)");
+    for p in 0..=6 {
+        pg_and_generic().verified_stmt(&format!("CREATE TABLE t (i INTERVAL({p}))"));
+        pg_and_generic().verified_stmt(&format!("SELECT '1 second'::INTERVAL({p})"));
+        pg_and_generic().verified_stmt(&format!("SELECT CAST('1 second' AS INTERVAL({p}))"));
+    }
+    let fields = [
+        "YEAR",
+        "MONTH",
+        "DAY",
+        "HOUR",
+        "MINUTE",
+        "SECOND",
+        "YEAR TO MONTH",
+        "DAY TO HOUR",
+        "DAY TO MINUTE",
+        "DAY TO SECOND",
+        "HOUR TO MINUTE",
+        "HOUR TO SECOND",
+        "MINUTE TO SECOND",
+    ];
+    for field in fields {
+        pg_and_generic().verified_stmt(&format!("CREATE TABLE t (i INTERVAL {field})"));
+        pg_and_generic().verified_stmt(&format!("SELECT '1 second'::INTERVAL {field}"));
+        pg_and_generic().verified_stmt(&format!("SELECT CAST('1 second' AS INTERVAL {field})"));
+    }
+    for p in 0..=6 {
+        for field in fields {
+            pg_and_generic().verified_stmt(&format!("CREATE TABLE t (i INTERVAL {field}({p}))"));
+            pg_and_generic().verified_stmt(&format!("SELECT '1 second'::INTERVAL {field}({p})"));
+            pg_and_generic()
+                .verified_stmt(&format!("SELECT CAST('1 second' AS INTERVAL {field}({p}))"));
+        }
+    }
+}
+
+#[test]
 fn parse_create_table_with_options() {
     let sql = "CREATE TABLE t (c INT) WITH (foo = 'bar', a = 123)";
     match pg().verified_stmt(sql) {

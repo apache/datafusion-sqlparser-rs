@@ -5060,7 +5060,7 @@ impl<'a> Parser<'a> {
             managed_location,
             or_replace: false,
             transient: false,
-            clone: None,
+            clone,
             data_retention_time_in_days: None,
             max_data_extension_time_in_days: None,
             external_volume: None,

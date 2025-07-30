@@ -7968,6 +7968,7 @@ fn parse_create_database() {
             location,
             managed_location,
             clone,
+            ..
         } => {
             assert_eq!("mydb", db_name.to_string());
             assert!(!if_not_exists);

@@ -3255,6 +3255,17 @@ pub enum Statement {
         materialized: bool,
         /// View name
         name: ObjectName,
+        /// If `if_not_exists` is true, this flag is set to true if the view name comes before the `IF NOT EXISTS` clause.
+        /// Example:
+        /// ```sql
+        /// CREATE VIEW myview IF NOT EXISTS AS SELECT 1`
+        ///  ```
+        /// Otherwise, the flag is set to false if the view name comes after the clause
+        /// Example:
+        /// ```sql
+        /// CREATE VIEW IF NOT EXISTS myview AS SELECT 1`
+        ///  ```
+        name_before_not_exists: bool,
         columns: Vec<ViewColumnDef>,
         query: Box<Query>,
         options: CreateTableOptions,
@@ -4994,6 +5005,7 @@ impl fmt::Display for Statement {
                 temporary,
                 to,
                 params,
+                name_before_not_exists,
             } => {
                 write!(
                     f,
@@ -5006,11 +5018,18 @@ impl fmt::Display for Statement {
                 }
                 write!(
                     f,
-                    "{materialized}{temporary}VIEW {if_not_exists}{name}{to}",
+                    "{materialized}{temporary}VIEW {if_not_and_name}{to}",
+                    if_not_and_name = if *if_not_exists {
+                        if *name_before_not_exists {
+                            format!("{name} IF NOT EXISTS")
+                        } else {
+                            format!("IF NOT EXISTS {name}")
+                        }
+                    } else {
+                        format!("{name}")
+                    },
                     materialized = if *materialized { "MATERIALIZED " } else { "" },
-                    name = name,
                     temporary = if *temporary { "TEMPORARY " } else { "" },
-                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                     to = to
                         .as_ref()
                         .map(|to| format!(" TO {to}"))

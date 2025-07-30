@@ -5818,12 +5818,17 @@ impl<'a> Parser<'a> {
     ) -> Result<Statement, ParserError> {
         let materialized = self.parse_keyword(Keyword::MATERIALIZED);
         self.expect_keyword_is(Keyword::VIEW)?;
-        let if_not_exists = dialect_of!(self is BigQueryDialect|SQLiteDialect|GenericDialect)
+        let allow_unquoted_hyphen = dialect_of!(self is BigQueryDialect);
+        // Tries to parse IF NOT EXISTS either before name or after name
+        // Name before IF NOT EXISTS is supported by snowflake but undocumented
+        let if_not_exists_first =
+            self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let name = self.parse_object_name(allow_unquoted_hyphen)?;
+        let name_before_not_exists = !if_not_exists_first
             && self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let if_not_exists = if_not_exists_first || name_before_not_exists;
         // Many dialects support `OR ALTER` right after `CREATE`, but we don't (yet).
         // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
-        let allow_unquoted_hyphen = dialect_of!(self is BigQueryDialect);
-        let name = self.parse_object_name(allow_unquoted_hyphen)?;
         let columns = self.parse_view_columns()?;
         let mut options = CreateTableOptions::None;
         let with_options = self.parse_options(Keyword::WITH)?;
@@ -5890,6 +5895,7 @@ impl<'a> Parser<'a> {
             temporary,
             to,
             params: create_view_params,
+            name_before_not_exists,
         })
     }
 

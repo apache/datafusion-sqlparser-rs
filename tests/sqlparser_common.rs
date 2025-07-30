@@ -8058,6 +8058,7 @@ fn parse_create_view() {
             temporary,
             to,
             params,
+            name_before_not_exists: _,
         } => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
@@ -8126,6 +8127,7 @@ fn parse_create_view_with_columns() {
             temporary,
             to,
             params,
+            name_before_not_exists: _,
         } => {
             assert_eq!(or_alter, false);
             assert_eq!("v", name.to_string());
@@ -8175,6 +8177,7 @@ fn parse_create_view_temporary() {
             temporary,
             to,
             params,
+            name_before_not_exists: _,
         } => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
@@ -8214,6 +8217,7 @@ fn parse_create_or_replace_view() {
             temporary,
             to,
             params,
+            name_before_not_exists: _,
         } => {
             assert_eq!(or_alter, false);
             assert_eq!("v", name.to_string());
@@ -8257,6 +8261,7 @@ fn parse_create_or_replace_materialized_view() {
             temporary,
             to,
             params,
+            name_before_not_exists: _,
         } => {
             assert_eq!(or_alter, false);
             assert_eq!("v", name.to_string());
@@ -8296,6 +8301,7 @@ fn parse_create_materialized_view() {
             temporary,
             to,
             params,
+            name_before_not_exists: _,
         } => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
@@ -8335,6 +8341,7 @@ fn parse_create_materialized_view_with_cluster_by() {
             temporary,
             to,
             params,
+            name_before_not_exists: _,
         } => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
@@ -16426,4 +16433,21 @@ fn parse_drop_stream() {
         _ => unreachable!(),
     }
     verified_stmt("DROP STREAM IF EXISTS s1");
+}
+
+#[test]
+fn parse_create_view_if_not_exists() {
+    // Name after IF NOT EXISTS
+    let sql: &'static str = "CREATE VIEW IF NOT EXISTS v AS SELECT 1";
+    let _ = all_dialects().verified_stmt(sql);
+    // Name before IF NOT EXISTS
+    let sql = "CREATE VIEW v IF NOT EXISTS AS SELECT 1";
+    let _ = all_dialects().verified_stmt(sql);
+    // Name missing from query
+    let sql = "CREATE VIEW IF NOT EXISTS AS SELECT 1";
+    let res = all_dialects().parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected: AS, found: SELECT".to_string()),
+        res.unwrap_err()
+    );
 }

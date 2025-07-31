@@ -5840,6 +5840,7 @@ fn parse_trigger_related_functions() {
             temporary: false,
             external: false,
             global: None,
+            dynamic: false,
             if_not_exists: false,
             transient: false,
             volatile: false,
@@ -5905,7 +5906,13 @@ fn parse_trigger_related_functions() {
             catalog: None,
             catalog_sync: None,
             storage_serialization_policy: None,
-            table_options: CreateTableOptions::None
+            table_options: CreateTableOptions::None,
+            target_lag: None,
+            warehouse: None,
+            version: None,
+            refresh_mode: None,
+            initialize: None,
+            require_user: false,
         }
     );
 

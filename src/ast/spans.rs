@@ -2512,4 +2512,27 @@ pub mod tests {
             "CASE 1 WHEN 2 THEN 3 ELSE 4 END"
         );
     }
+
+    #[test]
+    fn test_placeholder_span() {
+        let sql = "\nSELECT\n  :fooBar";
+        let r = Parser::parse_sql(&GenericDialect, sql).unwrap();
+        assert_eq!(1, r.len());
+        match &r[0] {
+            Statement::Query(q) => {
+                let col = &q.body.as_select().unwrap().projection[0];
+                match col {
+                    SelectItem::UnnamedExpr(Expr::Value(ValueWithSpan {
+                        value: Value::Placeholder(s),
+                        span,
+                    })) => {
+                        assert_eq!(":fooBar", s);
+                        assert_eq!(&Span::new((3, 3).into(), (3, 10).into()), span);
+                    }
+                    _ => panic!("expected unnamed expression; got {col:?}"),
+                }
+            }
+            stmt => panic!("expected query; got {stmt:?}"),
+        }
+    }
 }

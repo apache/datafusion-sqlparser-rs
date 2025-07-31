@@ -9584,8 +9584,13 @@ impl<'a> Parser<'a> {
             Token::HexStringLiteral(ref s) => ok_value(Value::HexStringLiteral(s.to_string())),
             Token::Placeholder(ref s) => ok_value(Value::Placeholder(s.to_string())),
             tok @ Token::Colon | tok @ Token::AtSign => {
-                // Not calling self.parse_identifier(false)? because only in placeholder we want to check numbers as idfentifies
-                // This because snowflake allows numbers as placeholders
+                // 1. Not calling self.parse_identifier(false)?
+                //    because only in placeholder we want to check
+                //    numbers as idfentifies.  This because snowflake
+                //    allows numbers as placeholders
+                // 2. Not calling self.next_token() to enforce `tok`
+                //    be followed immediately by a word/number, ie.
+                //    without any whitespace in between
                 let next_token = self.next_token_no_skip().unwrap_or(&EOF_TOKEN).clone();
                 let ident = match next_token.token {
                     Token::Word(w) => Ok(w.into_ident(next_token.span)),
@@ -17493,5 +17498,13 @@ mod tests {
             ),
             canonical,
         );
+    }
+
+    #[test]
+    fn test_placeholder_invalid_whitespace() {
+        for w in ["  ", "/*invalid*/"] {
+            let sql = format!("\nSELECT\n  :{w}fooBar");
+            assert!(Parser::parse_sql(&GenericDialect, &sql).is_err());
+        }
     }
 }

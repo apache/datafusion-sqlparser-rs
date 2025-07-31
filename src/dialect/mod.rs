@@ -841,12 +841,6 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if this dialect allow colon placeholders
-    /// e.g. `SELECT :var` (JPA named parameters)
-    fn supports_colon_placeholder(&self) -> bool {
-        false
-    }
-
     /// Does the dialect support with clause in create index statement?
     /// e.g. `CREATE INDEX idx ON t WITH (key = value, key2)`
     fn supports_create_index_with_clause(&self) -> bool {

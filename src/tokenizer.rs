@@ -1521,11 +1521,6 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some(':') => self.consume_and_return(chars, Token::DoubleColon),
                         Some('=') => self.consume_and_return(chars, Token::Assignment),
-                        Some(c)
-                            if self.dialect.supports_colon_placeholder() && c.is_alphabetic() =>
-                        {
-                            self.tokenize_colon_preceeded_placeholder(chars).map(Some)
-                        }
                         _ => Ok(Some(Token::Colon)),
                     }
                 }
@@ -1759,30 +1754,6 @@ impl<'a> Tokenizer<'a> {
                 format!("Expected a valid binary operator after '{prefix}'"),
             ),
         }
-    }
-
-    /// Tokenizes an identifier followed immediately after a colon,
-    /// aka named query parameter, e.g. `:name`. The next char of the
-    /// processed char stream is to be an alphabetic - panics otherwise.
-    fn tokenize_colon_preceeded_placeholder(
-        &self,
-        chars: &mut State,
-    ) -> Result<Token, TokenizerError> {
-        let mut s = String::with_capacity(16);
-        s.push(':');
-        s.push(chars.next().expect("initial character missing"));
-        while let Some(&ch) = chars.peek() {
-            if ch.is_alphanumeric()
-                || ch == '_'
-                || matches!(ch, '$' if self.dialect.supports_dollar_placeholder())
-            {
-                s.push(ch);
-                chars.next();
-            } else {
-                break;
-            }
-        }
-        Ok(Token::Placeholder(s))
     }
 
     /// Tokenize dollar preceded value (i.e: a string/placeholder)
@@ -2978,68 +2949,6 @@ mod tests {
                     column: 17
                 }
             })
-        );
-    }
-
-    #[test]
-    fn tokenize_colon_placeholder() {
-        #[derive(Debug)]
-        struct TestDialect(bool);
-        impl Dialect for TestDialect {
-            fn supports_colon_placeholder(&self) -> bool {
-                true
-            }
-            fn supports_dollar_placeholder(&self) -> bool {
-                self.0
-            }
-            fn is_identifier_start(&self, ch: char) -> bool {
-                ch.is_alphabetic() || ch == '_'
-            }
-            fn is_identifier_part(&self, ch: char) -> bool {
-                ch.is_alphabetic() || ch.is_ascii_digit() || ch == '_'
-            }
-        }
-
-        let sql = "SELECT :foo FROM bar";
-        let tokens = Tokenizer::new(&TestDialect(false), sql)
-            .tokenize_with_location()
-            .unwrap();
-        assert_eq!(
-            tokens.iter().map(|t| t.token.clone()).collect::<Vec<_>>(),
-            vec![
-                Token::make_keyword("SELECT"),
-                Token::Whitespace(Whitespace::Space),
-                Token::Placeholder(":foo".into()),
-                Token::Whitespace(Whitespace::Space),
-                Token::make_keyword("FROM"),
-                Token::Whitespace(Whitespace::Space),
-                Token::make_word("bar", None)
-            ]
-        );
-        assert_eq!(
-            tokens[2].span,
-            Span::new(Location::of(1, 8), Location::of(1, 12))
-        );
-
-        let sql = "SELECT :foo$bar FROM bar";
-        let tokens = Tokenizer::new(&TestDialect(true), sql)
-            .tokenize_with_location()
-            .unwrap();
-        assert_eq!(
-            tokens.iter().map(|t| t.token.clone()).collect::<Vec<_>>(),
-            vec![
-                Token::make_keyword("SELECT"),
-                Token::Whitespace(Whitespace::Space),
-                Token::Placeholder(":foo$bar".into()),
-                Token::Whitespace(Whitespace::Space),
-                Token::make_keyword("FROM"),
-                Token::Whitespace(Whitespace::Space),
-                Token::make_word("bar", None)
-            ]
-        );
-        assert_eq!(
-            tokens[2].span,
-            Span::new(Location::of(1, 8), Location::of(1, 16))
         );
     }
 

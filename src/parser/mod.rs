@@ -4449,11 +4449,7 @@ impl<'a> Parser<'a> {
         self.parse_comma_separated_with_trailing_commas(
             Parser::parse_table_and_joins,
             trailing_commas,
-            |kw, _parser| {
-                self.dialect
-                    .get_reserved_keywords_for_table_factor()
-                    .contains(kw)
-            },
+            |kw, parser| !self.dialect.is_table_factor(kw, parser),
         )
     }
 

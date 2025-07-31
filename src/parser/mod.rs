@@ -9586,14 +9586,14 @@ impl<'a> Parser<'a> {
             tok @ Token::Colon | tok @ Token::AtSign => {
                 // Not calling self.parse_identifier(false)? because only in placeholder we want to check numbers as idfentifies
                 // This because snowflake allows numbers as placeholders
-                let next_token = self.next_token();
+                let next_token = self.next_token_no_skip().unwrap_or(&EOF_TOKEN).clone();
                 let ident = match next_token.token {
                     Token::Word(w) => Ok(w.into_ident(next_token.span)),
-                    Token::Number(w, false) => Ok(Ident::new(w)),
+                    Token::Number(w, false) => Ok(Ident::with_span(next_token.span, w)),
                     _ => self.expected("placeholder", next_token),
                 }?;
-                let placeholder = tok.to_string() + &ident.value;
-                ok_value(Value::Placeholder(placeholder))
+                Ok(Value::Placeholder(tok.to_string() + &ident.value)
+                    .with_span(Span::new(span.start, ident.span.end)))
             }
             unexpected => self.expected(
                 "a value",

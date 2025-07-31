@@ -11101,6 +11101,44 @@ fn parse_unpivot_table() {
         verified_stmt(sql_unpivot_with_alias_and_multi_value).to_string(),
         sql_unpivot_with_alias_and_multi_value
     );
+
+    let sql_unpivot_with_alias_and_multi_value_and_qualifier = concat!(
+        "SELECT * FROM sales AS s ",
+        "UNPIVOT INCLUDE NULLS ((first_quarter, second_quarter) ",
+        "FOR half_of_the_year IN (",
+        "(sales.Q1, sales.Q2) AS H1, ",
+        "(sales.Q3, sales.Q4) AS H2",
+        "))"
+    );
+
+    if let Unpivot { columns, .. } =
+        &verified_only_select(sql_unpivot_with_alias_and_multi_value_and_qualifier).from[0].relation
+    {
+        assert_eq!(
+            *columns,
+            vec![
+                ExprWithAlias {
+                    expr: Expr::Tuple(vec![
+                        Expr::CompoundIdentifier(vec![Ident::new("sales"), Ident::new("Q1"),]),
+                        Expr::CompoundIdentifier(vec![Ident::new("sales"), Ident::new("Q2"),]),
+                    ]),
+                    alias: Some(Ident::new("H1")),
+                },
+                ExprWithAlias {
+                    expr: Expr::Tuple(vec![
+                        Expr::CompoundIdentifier(vec![Ident::new("sales"), Ident::new("Q3"),]),
+                        Expr::CompoundIdentifier(vec![Ident::new("sales"), Ident::new("Q4"),]),
+                    ]),
+                    alias: Some(Ident::new("H2")),
+                },
+            ]
+        );
+    }
+
+    assert_eq!(
+        verified_stmt(sql_unpivot_with_alias_and_multi_value_and_qualifier).to_string(),
+        sql_unpivot_with_alias_and_multi_value_and_qualifier
+    );
 }
 
 #[test]

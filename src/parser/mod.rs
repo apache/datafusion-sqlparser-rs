@@ -13892,21 +13892,7 @@ impl<'a> Parser<'a> {
             None
         };
         self.expect_token(&Token::LParen)?;
-        let value = match self.peek_token_ref().token {
-            Token::LParen => {
-                // multi value column unpivot
-                Expr::Tuple(
-                    self.parse_parenthesized_column_list(Mandatory, false)?
-                        .into_iter()
-                        .map(Expr::Identifier)
-                        .collect(),
-                )
-            }
-            _ => {
-                // single value column unpivot
-                Expr::Identifier(self.parse_identifier()?)
-            }
-        };
+        let value = self.parse_expr()?;
         self.expect_keyword_is(Keyword::FOR)?;
         let name = self.parse_identifier()?;
         self.expect_keyword_is(Keyword::IN)?;

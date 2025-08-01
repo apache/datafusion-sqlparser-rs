@@ -14033,11 +14033,13 @@ impl<'a> Parser<'a> {
             None
         };
         self.expect_token(&Token::LParen)?;
-        let value = self.parse_identifier()?;
+        let value = self.parse_expr()?;
         self.expect_keyword_is(Keyword::FOR)?;
         let name = self.parse_identifier()?;
         self.expect_keyword_is(Keyword::IN)?;
-        let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
+        let columns = self.parse_parenthesized_column_list_inner(Mandatory, false, |p| {
+            p.parse_expr_with_alias()
+        })?;
         self.expect_token(&Token::RParen)?;
         let alias = self.maybe_parse_table_alias()?;
         Ok(TableFactor::Unpivot {

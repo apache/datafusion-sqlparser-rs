@@ -2002,9 +2002,9 @@ impl Spanned for TableFactor {
                 alias,
             } => union_spans(
                 core::iter::once(table.span())
-                    .chain(core::iter::once(value.span))
+                    .chain(core::iter::once(value.span()))
                     .chain(core::iter::once(name.span))
-                    .chain(columns.iter().map(|i| i.span))
+                    .chain(columns.iter().map(|ilist| ilist.span()))
                     .chain(alias.as_ref().map(|alias| alias.span())),
             ),
             TableFactor::MatchRecognize {

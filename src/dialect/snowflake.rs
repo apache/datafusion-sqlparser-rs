@@ -598,29 +598,11 @@ pub fn parse_create_table(
                 }
                 Keyword::ENABLE_SCHEMA_EVOLUTION => {
                     parser.expect_token(&Token::Eq)?;
-                    let enable_schema_evolution =
-                        match parser.parse_one_of_keywords(&[Keyword::TRUE, Keyword::FALSE]) {
-                            Some(Keyword::TRUE) => true,
-                            Some(Keyword::FALSE) => false,
-                            _ => {
-                                return parser.expected("TRUE or FALSE", next_token);
-                            }
-                        };
-
-                    builder = builder.enable_schema_evolution(Some(enable_schema_evolution));
+                    builder = builder.enable_schema_evolution(Some(parser.parse_boolean_string()?));
                 }
                 Keyword::CHANGE_TRACKING => {
                     parser.expect_token(&Token::Eq)?;
-                    let change_tracking =
-                        match parser.parse_one_of_keywords(&[Keyword::TRUE, Keyword::FALSE]) {
-                            Some(Keyword::TRUE) => true,
-                            Some(Keyword::FALSE) => false,
-                            _ => {
-                                return parser.expected("TRUE or FALSE", next_token);
-                            }
-                        };
-
-                    builder = builder.change_tracking(Some(change_tracking));
+                    builder = builder.change_tracking(Some(parser.parse_boolean_string()?));
                 }
                 Keyword::DATA_RETENTION_TIME_IN_DAYS => {
                     parser.expect_token(&Token::Eq)?;

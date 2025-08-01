@@ -9772,7 +9772,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a boolean string
-    pub fn parse_boolean_string(&mut self) -> Result<bool, ParserError> {
+    pub(crate) fn parse_boolean_string(&mut self) -> Result<bool, ParserError> {
         match self.parse_one_of_keywords(&[Keyword::TRUE, Keyword::FALSE]) {
             Some(Keyword::TRUE) => Ok(true),
             Some(Keyword::FALSE) => Ok(false),

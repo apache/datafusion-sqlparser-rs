@@ -10810,16 +10810,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_parenthesized_columns_with_alias_list(
-        &mut self,
-        optional: IsOptional,
-        allow_empty: bool,
-    ) -> Result<Vec<ExprWithAlias>, ParserError> {
-        self.parse_parenthesized_column_list_inner(optional, allow_empty, |p| {
-            p.parse_expr_with_alias()
-        })
-    }
-
     /// Parses a parenthesized comma-separated list of unqualified, possibly quoted identifiers.
     /// For example: `(col1, "col 2", ...)`
     pub fn parse_parenthesized_column_list(
@@ -13896,7 +13886,9 @@ impl<'a> Parser<'a> {
         self.expect_keyword_is(Keyword::FOR)?;
         let name = self.parse_identifier()?;
         self.expect_keyword_is(Keyword::IN)?;
-        let columns = self.parse_parenthesized_columns_with_alias_list(Mandatory, false)?;
+        let columns = self.parse_parenthesized_column_list_inner(Mandatory, false, |p| {
+            p.parse_expr_with_alias()
+        })?;
         self.expect_token(&Token::RParen)?;
         let alias = self.maybe_parse_table_alias()?;
         Ok(TableFactor::Unpivot {

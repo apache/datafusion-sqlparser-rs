@@ -590,7 +590,7 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returne true if the dialect supports specifying multiple options
+    /// Return true if the dialect supports specifying multiple options
     /// in a `CREATE TABLE` statement for the structure of the new table. For example:
     /// `CREATE TABLE t (a INT, b INT) AS SELECT 1 AS b, 2 AS a`
     fn supports_create_table_multi_schema_info_sources(&self) -> bool {
@@ -1146,6 +1146,21 @@ pub trait Dialect: Debug + Any {
     ///
     /// Note that this is canonicalized to `INT(20)`.
     fn supports_data_type_signed_suffix(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect allows table-level options for `CREATE TABLE` to be comma
+    /// separated, as does [MySQL].
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE TABLE t (x INT) ENGINE=InnoDB, AUTO_INCREMENT=100;
+    /// -- equivalent to:
+    /// CREATE TABLE t (x INT) ENGINE=InnoDB AUTO_INCREMENT=100;
+    /// ```
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/create-table.html
+    fn supports_comma_separated_create_table_options(&self) -> bool {
         false
     }
 }

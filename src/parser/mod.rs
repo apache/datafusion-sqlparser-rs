@@ -7708,6 +7708,9 @@ impl<'a> Parser<'a> {
 
         while let Some(option) = self.parse_plain_option()? {
             options.push(option);
+            if self.dialect.supports_comma_separated_create_table_options() {
+                let _ = self.consume_token(&Token::Comma);
+            }
         }
 
         Ok(options)

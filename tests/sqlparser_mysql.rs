@@ -1362,6 +1362,13 @@ fn parse_create_table_gencol() {
 }
 
 #[test]
+fn parse_create_table_options_comma_separated() {
+    let sql = "CREATE TABLE t (x INT) DEFAULT CHARSET = utf8mb4, ENGINE = InnoDB , AUTO_INCREMENT 1 DATA DIRECTORY '/var/lib/mysql/data'";
+    let canonical = "CREATE TABLE t (x INT) DEFAULT CHARSET = utf8mb4 ENGINE = InnoDB AUTO_INCREMENT = 1 DATA DIRECTORY = '/var/lib/mysql/data'";
+    mysql_and_generic().one_statement_parses_to(sql, canonical);
+}
+
+#[test]
 fn parse_quote_identifiers() {
     let sql = "CREATE TABLE `PRIMARY` (`BEGIN` INT PRIMARY KEY)";
     match mysql().verified_stmt(sql) {

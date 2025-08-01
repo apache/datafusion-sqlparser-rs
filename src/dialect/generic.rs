@@ -183,4 +183,8 @@ impl Dialect for GenericDialect {
     fn supports_select_wildcard_exclude(&self) -> bool {
         true
     }
+
+    fn supports_data_type_signed_suffix(&self) -> bool {
+        true
+    }
 }

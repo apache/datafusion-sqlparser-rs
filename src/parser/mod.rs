@@ -5054,7 +5054,22 @@ impl<'a> Parser<'a> {
             if_not_exists: ine,
             location,
             managed_location,
+            or_replace: false,
+            transient: false,
             clone,
+            data_retention_time_in_days: None,
+            max_data_extension_time_in_days: None,
+            external_volume: None,
+            catalog: None,
+            replace_invalid_characters: None,
+            default_ddl_collation: None,
+            storage_serialization_policy: None,
+            comment: None,
+            catalog_sync: None,
+            catalog_sync_namespace_mode: None,
+            catalog_sync_namespace_flatten_delimiter: None,
+            with_tags: None,
+            with_contacts: None,
         })
     }
 
@@ -9760,6 +9775,15 @@ impl<'a> Parser<'a> {
             }
             Token::UnicodeStringLiteral(s) => Ok(s),
             _ => self.expected("literal string", next_token),
+        }
+    }
+
+    /// Parse a boolean string
+    pub(crate) fn parse_boolean_string(&mut self) -> Result<bool, ParserError> {
+        match self.parse_one_of_keywords(&[Keyword::TRUE, Keyword::FALSE]) {
+            Some(Keyword::TRUE) => Ok(true),
+            Some(Keyword::FALSE) => Ok(false),
+            _ => self.expected("TRUE or FALSE", self.peek_token()),
         }
     }
 

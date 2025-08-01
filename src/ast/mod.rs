@@ -3867,19 +3867,29 @@ pub enum Statement {
     /// ```sql
     /// CREATE DATABASE
     /// ```
+    /// See:
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-database>
     CreateDatabase {
         db_name: ObjectName,
         if_not_exists: bool,
         location: Option<String>,
         managed_location: Option<String>,
-        /// Clones a database
-        ///
-        /// ```sql
-        /// CREATE DATABASE mydb CLONE otherdb
-        /// ```
-        ///
-        /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-clone#databases-schemas)
+        or_replace: bool,
+        transient: bool,
         clone: Option<ObjectName>,
+        data_retention_time_in_days: Option<u64>,
+        max_data_extension_time_in_days: Option<u64>,
+        external_volume: Option<String>,
+        catalog: Option<String>,
+        replace_invalid_characters: Option<bool>,
+        default_ddl_collation: Option<String>,
+        storage_serialization_policy: Option<StorageSerializationPolicy>,
+        comment: Option<String>,
+        catalog_sync: Option<String>,
+        catalog_sync_namespace_mode: Option<CatalogSyncNamespaceMode>,
+        catalog_sync_namespace_flatten_delimiter: Option<String>,
+        with_tags: Option<Vec<Tag>>,
+        with_contacts: Option<Vec<ContactEntry>>,
     },
     /// ```sql
     /// CREATE FUNCTION
@@ -4836,13 +4846,32 @@ impl fmt::Display for Statement {
                 if_not_exists,
                 location,
                 managed_location,
+                or_replace,
+                transient,
                 clone,
+                data_retention_time_in_days,
+                max_data_extension_time_in_days,
+                external_volume,
+                catalog,
+                replace_invalid_characters,
+                default_ddl_collation,
+                storage_serialization_policy,
+                comment,
+                catalog_sync,
+                catalog_sync_namespace_mode,
+                catalog_sync_namespace_flatten_delimiter,
+                with_tags,
+                with_contacts,
             } => {
-                write!(f, "CREATE DATABASE")?;
-                if *if_not_exists {
-                    write!(f, " IF NOT EXISTS")?;
-                }
-                write!(f, " {db_name}")?;
+                write!(
+                    f,
+                    "CREATE {or_replace}{transient}DATABASE {if_not_exists}{name}",
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                    transient = if *transient { "TRANSIENT " } else { "" },
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    name = db_name,
+                )?;
+
                 if let Some(l) = location {
                     write!(f, " LOCATION '{l}'")?;
                 }
@@ -4851,6 +4880,60 @@ impl fmt::Display for Statement {
                 }
                 if let Some(clone) = clone {
                     write!(f, " CLONE {clone}")?;
+                }
+
+                if let Some(value) = data_retention_time_in_days {
+                    write!(f, " DATA_RETENTION_TIME_IN_DAYS = {value}")?;
+                }
+
+                if let Some(value) = max_data_extension_time_in_days {
+                    write!(f, " MAX_DATA_EXTENSION_TIME_IN_DAYS = {value}")?;
+                }
+
+                if let Some(vol) = external_volume {
+                    write!(f, " EXTERNAL_VOLUME = '{vol}'")?;
+                }
+
+                if let Some(cat) = catalog {
+                    write!(f, " CATALOG = '{cat}'")?;
+                }
+
+                if let Some(true) = replace_invalid_characters {
+                    write!(f, " REPLACE_INVALID_CHARACTERS = TRUE")?;
+                } else if let Some(false) = replace_invalid_characters {
+                    write!(f, " REPLACE_INVALID_CHARACTERS = FALSE")?;
+                }
+
+                if let Some(collation) = default_ddl_collation {
+                    write!(f, " DEFAULT_DDL_COLLATION = '{collation}'")?;
+                }
+
+                if let Some(policy) = storage_serialization_policy {
+                    write!(f, " STORAGE_SERIALIZATION_POLICY = {policy}")?;
+                }
+
+                if let Some(comment) = comment {
+                    write!(f, " COMMENT = '{comment}'")?;
+                }
+
+                if let Some(sync) = catalog_sync {
+                    write!(f, " CATALOG_SYNC = '{sync}'")?;
+                }
+
+                if let Some(mode) = catalog_sync_namespace_mode {
+                    write!(f, " CATALOG_SYNC_NAMESPACE_MODE = {mode}")?;
+                }
+
+                if let Some(delim) = catalog_sync_namespace_flatten_delimiter {
+                    write!(f, " CATALOG_SYNC_NAMESPACE_FLATTEN_DELIMITER = '{delim}'")?;
+                }
+
+                if let Some(tags) = with_tags {
+                    write!(f, " WITH TAG ({})", display_comma_separated(tags))?;
+                }
+
+                if let Some(contacts) = with_contacts {
+                    write!(f, " WITH CONTACT ({})", display_comma_separated(contacts))?;
                 }
                 Ok(())
             }
@@ -9682,6 +9765,23 @@ impl Display for Tag {
     }
 }
 
+/// Snowflake `WITH CONTACT ( purpose = contact [ , purpose = contact ...] )`
+///
+/// <https://docs.snowflake.com/en/sql-reference/sql/create-database>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ContactEntry {
+    pub purpose: String,
+    pub contact: String,
+}
+
+impl Display for ContactEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} = {}", self.purpose, self.contact)
+    }
+}
+
 /// Helper to indicate if a comment includes the `=` in the display form
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -10130,6 +10230,29 @@ impl Display for StorageSerializationPolicy {
         match self {
             StorageSerializationPolicy::Compatible => write!(f, "COMPATIBLE"),
             StorageSerializationPolicy::Optimized => write!(f, "OPTIMIZED"),
+        }
+    }
+}
+
+/// Snowflake CatalogSyncNamespaceMode
+/// ```sql
+/// [ CATALOG_SYNC_NAMESPACE_MODE = { NEST | FLATTEN } ]
+/// ```
+///
+/// <https://docs.snowflake.com/en/sql-reference/sql/create-database>
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CatalogSyncNamespaceMode {
+    Nest,
+    Flatten,
+}
+
+impl Display for CatalogSyncNamespaceMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CatalogSyncNamespaceMode::Nest => write!(f, "NEST"),
+            CatalogSyncNamespaceMode::Flatten => write!(f, "FLATTEN"),
         }
     }
 }

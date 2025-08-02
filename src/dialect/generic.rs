@@ -187,4 +187,8 @@ impl Dialect for GenericDialect {
     fn supports_data_type_signed_suffix(&self) -> bool {
         true
     }
+
+    fn supports_interval_options(&self) -> bool {
+        true
+    }
 }

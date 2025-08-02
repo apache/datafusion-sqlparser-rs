@@ -12955,7 +12955,10 @@ fn test_extract_seconds_ok() {
                 expr: Box::new(Expr::Value(
                     (Value::SingleQuotedString("2 seconds".to_string())).with_empty_span()
                 )),
-                data_type: DataType::Interval,
+                data_type: DataType::Interval {
+                    fields: None,
+                    precision: None
+                },
                 format: None,
             }),
         }
@@ -12980,7 +12983,10 @@ fn test_extract_seconds_ok() {
                     expr: Box::new(Expr::Value(
                         (Value::SingleQuotedString("2 seconds".to_string())).with_empty_span(),
                     )),
-                    data_type: DataType::Interval,
+                    data_type: DataType::Interval {
+                        fields: None,
+                        precision: None,
+                    },
                     format: None,
                 }),
             })],
@@ -13034,7 +13040,10 @@ fn test_extract_seconds_single_quote_ok() {
                 expr: Box::new(Expr::Value(
                     (Value::SingleQuotedString("2 seconds".to_string())).with_empty_span()
                 )),
-                data_type: DataType::Interval,
+                data_type: DataType::Interval {
+                    fields: None,
+                    precision: None
+                },
                 format: None,
             }),
         }

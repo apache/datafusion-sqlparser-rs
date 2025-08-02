@@ -269,4 +269,11 @@ impl Dialect for PostgreSqlDialect {
     fn supports_notnull_operator(&self) -> bool {
         true
     }
+
+    /// [Postgres] supports optional field and precision options for `INTERVAL` data type.
+    ///
+    /// [Postgres]: https://www.postgresql.org/docs/17/datatype-datetime.html
+    fn supports_interval_options(&self) -> bool {
+        true
+    }
 }

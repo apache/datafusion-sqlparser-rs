@@ -1534,7 +1534,7 @@ impl<'a> Parser<'a> {
         let loc = self.peek_token_ref().span.start;
         let opt_expr = self.maybe_parse(|parser| {
             match parser.parse_data_type()? {
-                DataType::Interval => parser.parse_interval(),
+                DataType::Interval { .. } => parser.parse_interval(),
                 // PostgreSQL allows almost any identifier to be used as custom data type name,
                 // and we support that in `parse_data_type()`. But unlike Postgres we don't
                 // have a list of globally reserved keywords (since they vary across dialects),
@@ -10066,10 +10066,18 @@ impl<'a> Parser<'a> {
                     self.parse_optional_precision()?,
                     TimezoneInfo::Tz,
                 )),
-                // Interval types can be followed by a complicated interval
-                // qualifier that we don't currently support. See
-                // parse_interval for a taste.
-                Keyword::INTERVAL => Ok(DataType::Interval),
+                Keyword::INTERVAL => {
+                    if self.dialect.supports_interval_options() {
+                        let fields = self.maybe_parse_optional_interval_fields()?;
+                        let precision = self.parse_optional_precision()?;
+                        Ok(DataType::Interval { fields, precision })
+                    } else {
+                        Ok(DataType::Interval {
+                            fields: None,
+                            precision: None,
+                        })
+                    }
+                }
                 Keyword::JSON => Ok(DataType::JSON),
                 Keyword::JSONB => Ok(DataType::JSONB),
                 Keyword::REGCLASS => Ok(DataType::Regclass),
@@ -11035,6 +11043,85 @@ impl<'a> Parser<'a> {
             Ok(Some(n))
         } else {
             Ok(None)
+        }
+    }
+
+    fn maybe_parse_optional_interval_fields(
+        &mut self,
+    ) -> Result<Option<IntervalFields>, ParserError> {
+        match self.parse_one_of_keywords(&[
+            // Can be followed by `TO` option
+            Keyword::YEAR,
+            Keyword::DAY,
+            Keyword::HOUR,
+            Keyword::MINUTE,
+            // No `TO` option
+            Keyword::MONTH,
+            Keyword::SECOND,
+        ]) {
+            Some(Keyword::YEAR) => {
+                if self.peek_keyword(Keyword::TO) {
+                    self.expect_keyword(Keyword::TO)?;
+                    self.expect_keyword(Keyword::MONTH)?;
+                    Ok(Some(IntervalFields::YearToMonth))
+                } else {
+                    Ok(Some(IntervalFields::Year))
+                }
+            }
+            Some(Keyword::DAY) => {
+                if self.peek_keyword(Keyword::TO) {
+                    self.expect_keyword(Keyword::TO)?;
+                    match self.expect_one_of_keywords(&[
+                        Keyword::HOUR,
+                        Keyword::MINUTE,
+                        Keyword::SECOND,
+                    ])? {
+                        Keyword::HOUR => Ok(Some(IntervalFields::DayToHour)),
+                        Keyword::MINUTE => Ok(Some(IntervalFields::DayToMinute)),
+                        Keyword::SECOND => Ok(Some(IntervalFields::DayToSecond)),
+                        _ => {
+                            self.prev_token();
+                            self.expected("HOUR, MINUTE, or SECOND", self.peek_token())
+                        }
+                    }
+                } else {
+                    Ok(Some(IntervalFields::Day))
+                }
+            }
+            Some(Keyword::HOUR) => {
+                if self.peek_keyword(Keyword::TO) {
+                    self.expect_keyword(Keyword::TO)?;
+                    match self.expect_one_of_keywords(&[Keyword::MINUTE, Keyword::SECOND])? {
+                        Keyword::MINUTE => Ok(Some(IntervalFields::HourToMinute)),
+                        Keyword::SECOND => Ok(Some(IntervalFields::HourToSecond)),
+                        _ => {
+                            self.prev_token();
+                            self.expected("MINUTE or SECOND", self.peek_token())
+                        }
+                    }
+                } else {
+                    Ok(Some(IntervalFields::Hour))
+                }
+            }
+            Some(Keyword::MINUTE) => {
+                if self.peek_keyword(Keyword::TO) {
+                    self.expect_keyword(Keyword::TO)?;
+                    self.expect_keyword(Keyword::SECOND)?;
+                    Ok(Some(IntervalFields::MinuteToSecond))
+                } else {
+                    Ok(Some(IntervalFields::Minute))
+                }
+            }
+            Some(Keyword::MONTH) => Ok(Some(IntervalFields::Month)),
+            Some(Keyword::SECOND) => Ok(Some(IntervalFields::Second)),
+            Some(_) => {
+                self.prev_token();
+                self.expected(
+                    "YEAR, MONTH, DAY, HOUR, MINUTE, or SECOND",
+                    self.peek_token(),
+                )
+            }
+            None => Ok(None),
         }
     }
 

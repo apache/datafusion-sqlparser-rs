@@ -52,7 +52,7 @@ use crate::{
 
 pub use self::data_type::{
     ArrayElemTypeDef, BinaryLength, CharLengthUnits, CharacterLength, DataType, EnumMember,
-    ExactNumberInfo, StructBracketKind, TimezoneInfo,
+    ExactNumberInfo, IntervalFields, StructBracketKind, TimezoneInfo,
 };
 pub use self::dcl::{
     AlterRoleOperation, ResetConfig, RoleOption, SecondaryRoles, SetConfigValue, Use,

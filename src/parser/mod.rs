@@ -11232,26 +11232,24 @@ impl<'a> Parser<'a> {
     /// Parse an optionally signed integer literal.
     fn parse_signed_integer(&mut self) -> Result<i64, ParserError> {
         let next_token = self.next_token();
-        match next_token.token {
-            Token::Number(s, _) => Self::parse::<i64>(s, next_token.span.start),
+        let (sign, number_token) = match next_token.token {
             Token::Minus => {
-                let next_token = self.next_token();
-                match next_token.token {
-                    Token::Number(s, _) => {
-                        let positive_value = Self::parse::<i64>(s, next_token.span.start)?;
-                        Ok(-positive_value)
-                    }
-                    _ => self.expected("number after minus", next_token),
-                }
+                let number_token = self.next_token();
+                (-1, number_token)
             }
             Token::Plus => {
-                let next_token = self.next_token();
-                match next_token.token {
-                    Token::Number(s, _) => Self::parse::<i64>(s, next_token.span.start),
-                    _ => self.expected("number after plus", next_token),
-                }
+                let number_token = self.next_token();
+                (1, number_token)
             }
-            _ => self.expected("number", next_token),
+            _ => (1, next_token),
+        };
+
+        match number_token.token {
+            Token::Number(s, _) => {
+                let value = Self::parse::<i64>(s, number_token.span.start)?;
+                Ok(sign * value)
+            }
+            _ => self.expected("number", number_token),
         }
     }
 

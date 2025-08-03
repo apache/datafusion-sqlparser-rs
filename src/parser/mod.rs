@@ -11229,14 +11229,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a scale value for NUMERIC/DECIMAL data types.
-    ///
-    /// Supports positive, negative, and explicitly positive (with `+`) scale values.
-    /// Negative scale values are particularly useful for PostgreSQL, where they indicate
-    /// rounding to the left of the decimal point. For example:
-    /// - `NUMERIC(5, 2)` stores up to 5 digits with 2 decimal places (e.g., 123.45)
-    /// - `NUMERIC(5, -2)` stores up to 5 digits rounded to hundreds (e.g., 12300)
-    fn parse_scale_value(&mut self) -> Result<i64, ParserError> {
+    /// Parse an optionally signed integer literal.
+    fn parse_signed_integer(&mut self) -> Result<i64, ParserError> {
         let next_token = self.next_token();
         match next_token.token {
             Token::Number(s, _) => Self::parse::<i64>(s, next_token.span.start),

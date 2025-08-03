@@ -962,7 +962,7 @@ pub enum ExactNumberInfo {
     /// Only precision information, e.g. `DECIMAL(10)`
     Precision(u64),
     /// Precision and scale information, e.g. `DECIMAL(10,2)`
-    PrecisionAndScale(u64, u64),
+    PrecisionAndScale(u64, i64),
 }
 
 impl fmt::Display for ExactNumberInfo {

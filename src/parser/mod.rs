@@ -11213,7 +11213,7 @@ impl<'a> Parser<'a> {
         if self.consume_token(&Token::LParen) {
             let precision = self.parse_literal_uint()?;
             let scale = if self.consume_token(&Token::Comma) {
-                Some(self.parse_literal_uint()?)
+                Some(self.parse_scale_value()?)
             } else {
                 None
             };
@@ -11226,6 +11226,38 @@ impl<'a> Parser<'a> {
             }
         } else {
             Ok(ExactNumberInfo::None)
+        }
+    }
+
+    /// Parse a scale value for NUMERIC/DECIMAL data types.
+    ///
+    /// Supports positive, negative, and explicitly positive (with `+`) scale values.
+    /// Negative scale values are particularly useful for PostgreSQL, where they indicate
+    /// rounding to the left of the decimal point. For example:
+    /// - `NUMERIC(5, 2)` stores up to 5 digits with 2 decimal places (e.g., 123.45)
+    /// - `NUMERIC(5, -2)` stores up to 5 digits rounded to hundreds (e.g., 12300)
+    fn parse_scale_value(&mut self) -> Result<i64, ParserError> {
+        let next_token = self.next_token();
+        match next_token.token {
+            Token::Number(s, _) => Self::parse::<i64>(s, next_token.span.start),
+            Token::Minus => {
+                let next_token = self.next_token();
+                match next_token.token {
+                    Token::Number(s, _) => {
+                        let positive_value = Self::parse::<i64>(s, next_token.span.start)?;
+                        Ok(-positive_value)
+                    }
+                    _ => self.expected("number after minus", next_token),
+                }
+            }
+            Token::Plus => {
+                let next_token = self.next_token();
+                match next_token.token {
+                    Token::Number(s, _) => Self::parse::<i64>(s, next_token.span.start),
+                    _ => self.expected("number after plus", next_token),
+                }
+            }
+            _ => self.expected("number", next_token),
         }
     }
 
@@ -17069,7 +17101,7 @@ mod tests {
         use crate::ast::{
             CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, ObjectName, TimezoneInfo,
         };
-        use crate::dialect::{AnsiDialect, GenericDialect};
+        use crate::dialect::{AnsiDialect, GenericDialect, PostgreSqlDialect};
         use crate::test_utils::TestedDialects;
 
         macro_rules! test_parse_data_type {
@@ -17319,6 +17351,75 @@ mod tests {
                 "DEC(2,10)",
                 DataType::Dec(ExactNumberInfo::PrecisionAndScale(2, 10))
             );
+
+            // Test negative scale values (PostgreSQL supports scale from -1000 to 1000)
+            test_parse_data_type!(
+                dialect,
+                "NUMERIC(10,-2)",
+                DataType::Numeric(ExactNumberInfo::PrecisionAndScale(10, -2))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "DECIMAL(1000,-10)",
+                DataType::Decimal(ExactNumberInfo::PrecisionAndScale(1000, -10))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "DEC(5,-1000)",
+                DataType::Dec(ExactNumberInfo::PrecisionAndScale(5, -1000))
+            );
+
+            // Test positive scale with explicit plus sign
+            dialect.run_parser_method("NUMERIC(10,+5)", |parser| {
+                let data_type = parser.parse_data_type().unwrap();
+                assert_eq!(
+                    DataType::Numeric(ExactNumberInfo::PrecisionAndScale(10, 5)),
+                    data_type
+                );
+                // Note: Explicit '+' sign is not preserved in output, which is correct
+                assert_eq!("NUMERIC(10,5)", data_type.to_string());
+            });
+        }
+
+        #[test]
+        fn test_numeric_negative_scale() {
+            let dialect = TestedDialects::new(vec![
+                Box::new(PostgreSqlDialect {}),
+                Box::new(GenericDialect {}),
+            ]);
+
+            // Test NUMERIC with negative scale
+            test_parse_data_type!(
+                dialect,
+                "NUMERIC(10,-5)",
+                DataType::Numeric(ExactNumberInfo::PrecisionAndScale(10, -5))
+            );
+
+            // Test DECIMAL with negative scale
+            test_parse_data_type!(
+                dialect,
+                "DECIMAL(20,-10)",
+                DataType::Decimal(ExactNumberInfo::PrecisionAndScale(20, -10))
+            );
+
+            // Test DEC with negative scale
+            test_parse_data_type!(
+                dialect,
+                "DEC(5,-2)",
+                DataType::Dec(ExactNumberInfo::PrecisionAndScale(5, -2))
+            );
+
+            // Test with explicit positive scale (note: +5 parses as 5, so display shows NUMERIC(10,5))
+            dialect.run_parser_method("NUMERIC(10,+5)", |parser| {
+                let data_type = parser.parse_data_type().unwrap();
+                assert_eq!(
+                    DataType::Numeric(ExactNumberInfo::PrecisionAndScale(10, 5)),
+                    data_type
+                );
+                assert_eq!("NUMERIC(10,5)", data_type.to_string());
+            });
         }
 
         #[test]

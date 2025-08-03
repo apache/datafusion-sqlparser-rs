@@ -11213,7 +11213,7 @@ impl<'a> Parser<'a> {
         if self.consume_token(&Token::LParen) {
             let precision = self.parse_literal_uint()?;
             let scale = if self.consume_token(&Token::Comma) {
-                Some(self.parse_scale_value()?)
+                Some(self.parse_signed_integer()?)
             } else {
                 None
             };
@@ -17299,8 +17299,11 @@ mod tests {
         #[test]
         fn test_ansii_exact_numeric_types() {
             // Exact numeric types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type>
-            let dialect =
-                TestedDialects::new(vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})]);
+            let dialect = TestedDialects::new(vec![
+                Box::new(GenericDialect {}),
+                Box::new(AnsiDialect {}),
+                Box::new(PostgreSqlDialect {}),
+            ]);
 
             test_parse_data_type!(dialect, "NUMERIC", DataType::Numeric(ExactNumberInfo::None));
 
@@ -17363,6 +17366,25 @@ mod tests {
                 DataType::Dec(ExactNumberInfo::PrecisionAndScale(5, -1000))
             );
 
+            // Additional negative scale test cases
+            test_parse_data_type!(
+                dialect,
+                "NUMERIC(10,-5)",
+                DataType::Numeric(ExactNumberInfo::PrecisionAndScale(10, -5))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "DECIMAL(20,-10)",
+                DataType::Decimal(ExactNumberInfo::PrecisionAndScale(20, -10))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "DEC(5,-2)",
+                DataType::Dec(ExactNumberInfo::PrecisionAndScale(5, -2))
+            );
+
             // Test positive scale with explicit plus sign
             dialect.run_parser_method("NUMERIC(10,+5)", |parser| {
                 let data_type = parser.parse_data_type().unwrap();
@@ -17371,45 +17393,6 @@ mod tests {
                     data_type
                 );
                 // Note: Explicit '+' sign is not preserved in output, which is correct
-                assert_eq!("NUMERIC(10,5)", data_type.to_string());
-            });
-        }
-
-        #[test]
-        fn test_numeric_negative_scale() {
-            let dialect = TestedDialects::new(vec![
-                Box::new(PostgreSqlDialect {}),
-                Box::new(GenericDialect {}),
-            ]);
-
-            // Test NUMERIC with negative scale
-            test_parse_data_type!(
-                dialect,
-                "NUMERIC(10,-5)",
-                DataType::Numeric(ExactNumberInfo::PrecisionAndScale(10, -5))
-            );
-
-            // Test DECIMAL with negative scale
-            test_parse_data_type!(
-                dialect,
-                "DECIMAL(20,-10)",
-                DataType::Decimal(ExactNumberInfo::PrecisionAndScale(20, -10))
-            );
-
-            // Test DEC with negative scale
-            test_parse_data_type!(
-                dialect,
-                "DEC(5,-2)",
-                DataType::Dec(ExactNumberInfo::PrecisionAndScale(5, -2))
-            );
-
-            // Test with explicit positive scale (note: +5 parses as 5, so display shows NUMERIC(10,5))
-            dialect.run_parser_method("NUMERIC(10,+5)", |parser| {
-                let data_type = parser.parse_data_type().unwrap();
-                assert_eq!(
-                    DataType::Numeric(ExactNumberInfo::PrecisionAndScale(10, 5)),
-                    data_type
-                );
                 assert_eq!("NUMERIC(10,5)", data_type.to_string());
             });
         }

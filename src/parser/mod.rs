@@ -17346,7 +17346,7 @@ mod tests {
                 DataType::Dec(ExactNumberInfo::PrecisionAndScale(2, 10))
             );
 
-            // Test negative scale values (PostgreSQL supports scale from -1000 to 1000)
+            // Test negative scale values.
             test_parse_data_type!(
                 dialect,
                 "NUMERIC(10,-2)",

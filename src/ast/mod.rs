@@ -3238,6 +3238,8 @@ pub enum Statement {
         returning: Option<Vec<SelectItem>>,
         /// SQLite-specific conflict resolution clause
         or: Option<SqliteOnConflict>,
+        /// LIMIT
+        limit: Option<Expr>,
     },
     /// ```sql
     /// DELETE
@@ -4810,6 +4812,7 @@ impl fmt::Display for Statement {
                 selection,
                 returning,
                 or,
+                limit,
             } => {
                 f.write_str("UPDATE ")?;
                 if let Some(or) = or {
@@ -4842,6 +4845,10 @@ impl fmt::Display for Statement {
                     SpaceOrNewline.fmt(f)?;
                     f.write_str("RETURNING")?;
                     indented_list(f, returning)?;
+                }
+                if let Some(limit) = limit {
+                    SpaceOrNewline.fmt(f)?;
+                    write!(f, "LIMIT {limit}")?;
                 }
                 Ok(())
             }

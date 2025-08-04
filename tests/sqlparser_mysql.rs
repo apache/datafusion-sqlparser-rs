@@ -2516,6 +2516,7 @@ fn parse_update_with_joins() {
             selection,
             returning,
             or: None,
+            limit: None,
         } => {
             assert_eq!(
                 TableWithJoins {

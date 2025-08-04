@@ -515,6 +515,7 @@ fn parse_update_set_from() {
             }),
             returning: None,
             or: None,
+            limit: None
         }
     );
 
@@ -533,6 +534,7 @@ fn parse_update_with_table_alias() {
             selection,
             returning,
             or: None,
+            limit: None,
         } => {
             assert_eq!(
                 TableWithJoins {

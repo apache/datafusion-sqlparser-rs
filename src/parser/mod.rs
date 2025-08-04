@@ -11231,25 +11231,19 @@ impl<'a> Parser<'a> {
 
     /// Parse an optionally signed integer literal.
     fn parse_signed_integer(&mut self) -> Result<i64, ParserError> {
-        let next_token = self.next_token();
-        let (sign, number_token) = match next_token.token {
-            Token::Minus => {
-                let number_token = self.next_token();
-                (-1, number_token)
-            }
-            Token::Plus => {
-                let number_token = self.next_token();
-                (1, number_token)
-            }
-            _ => (1, next_token),
-        };
+        if !self.consume_token(&Token::Minus) {
+            return i64::try_from(self.parse_literal_uint()?)
+                .map_err(|_| ParserError::ParserError("Integer overflow".to_string()));
+        }
 
-        match number_token.token {
+        self.advance_token();
+        let next_token = self.get_current_token();
+        match &next_token.token {
             Token::Number(s, _) => {
-                let value = Self::parse::<i64>(s, number_token.span.start)?;
-                Ok(sign * value)
+                let positive_value = Self::parse::<i64>(s.clone(), next_token.span.start)?;
+                Ok(-positive_value)
             }
-            _ => self.expected("number", number_token),
+            _ => self.expected_ref("literal int", next_token),
         }
     }
 
@@ -17384,17 +17378,6 @@ mod tests {
                 "DEC(5,-2)",
                 DataType::Dec(ExactNumberInfo::PrecisionAndScale(5, -2))
             );
-
-            // Test positive scale with explicit plus sign
-            dialect.run_parser_method("NUMERIC(10,+5)", |parser| {
-                let data_type = parser.parse_data_type().unwrap();
-                assert_eq!(
-                    DataType::Numeric(ExactNumberInfo::PrecisionAndScale(10, 5)),
-                    data_type
-                );
-                // Note: Explicit '+' sign is not preserved in output, which is correct
-                assert_eq!("NUMERIC(10,5)", data_type.to_string());
-            });
         }
 
         #[test]

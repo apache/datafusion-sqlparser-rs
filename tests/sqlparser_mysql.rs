@@ -4227,3 +4227,14 @@ fn test_ddl_with_index_using() {
         mysql_and_generic().verified_stmt(&sql);
     }
 }
+
+#[test]
+fn test_create_index_options() {
+    mysql_and_generic()
+        .verified_stmt("CREATE INDEX idx_name ON t(c1, c2) USING HASH LOCK = SHARED");
+    mysql_and_generic()
+        .verified_stmt("CREATE INDEX idx_name ON t(c1, c2) USING BTREE ALGORITHM = INPLACE");
+    mysql_and_generic().verified_stmt(
+        "CREATE INDEX idx_name ON t(c1, c2) USING BTREE LOCK = EXCLUSIVE ALGORITHM = DEFAULT",
+    );
+}

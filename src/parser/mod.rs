@@ -7084,6 +7084,15 @@ impl<'a> Parser<'a> {
         // parse it anyway (as we do inside `ALTER TABLE` and `CREATE TABLE` parsing).
         let index_options = self.parse_index_options()?;
 
+        // MySQL allows `ALGORITHM` and `LOCK` options. Unlike in `ALTER TABLE`, they need not be comma separated.
+        let mut alter_options = Vec::new();
+        while self
+            .peek_one_of_keywords(&[Keyword::ALGORITHM, Keyword::LOCK])
+            .is_some()
+        {
+            alter_options.push(self.parse_alter_table_operation()?)
+        }
+
         Ok(Statement::CreateIndex(CreateIndex {
             name: index_name,
             table_name,
@@ -7097,6 +7106,7 @@ impl<'a> Parser<'a> {
             with,
             predicate,
             index_options,
+            alter_options,
         }))
     }
 

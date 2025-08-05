@@ -2344,6 +2344,13 @@ pub struct CreateIndex {
     pub with: Vec<Expr>,
     pub predicate: Option<Expr>,
     pub index_options: Vec<IndexOption>,
+    /// [MySQL] allows a subset of options normally used for `ALTER TABLE`:
+    ///
+    /// - `ALGORITHM`
+    /// - `LOCK`
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/create-index.html
+    pub alter_options: Vec<AlterTableOperation>,
 }
 
 impl fmt::Display for CreateIndex {
@@ -2389,6 +2396,9 @@ impl fmt::Display for CreateIndex {
         }
         if !self.index_options.is_empty() {
             write!(f, " {}", display_separated(&self.index_options, " "))?;
+        }
+        if !self.alter_options.is_empty() {
+            write!(f, " {}", display_separated(&self.alter_options, " "))?;
         }
         Ok(())
     }

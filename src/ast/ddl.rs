@@ -1125,6 +1125,8 @@ pub enum TableConstraint {
         index_type: Option<IndexType>,
         /// Referred column identifier list.
         columns: Vec<IndexColumn>,
+        /// Optional index options such as `USING`; see [`IndexOption`].
+        index_options: Vec<IndexOption>,
     },
     /// MySQLs [fulltext][1] definition. Since the [`SPATIAL`][2] definition is exactly the same,
     /// and MySQL displays both the same way, it is part of this definition as well.
@@ -1253,6 +1255,7 @@ impl fmt::Display for TableConstraint {
                 name,
                 index_type,
                 columns,
+                index_options,
             } => {
                 write!(f, "{}", if *display_as_key { "KEY" } else { "INDEX" })?;
                 if let Some(name) = name {
@@ -1262,7 +1265,9 @@ impl fmt::Display for TableConstraint {
                     write!(f, " USING {index_type}")?;
                 }
                 write!(f, " ({})", display_comma_separated(columns))?;
-
+                if !index_options.is_empty() {
+                    write!(f, " {}", display_comma_separated(index_options))?;
+                }
                 Ok(())
             }
             Self::FulltextOrSpatial {
@@ -1377,17 +1382,20 @@ impl fmt::Display for IndexType {
     }
 }
 
-/// MySQLs index option.
+/// MySQL index option, used in [`CREATE TABLE`], [`CREATE INDEX`], and [`ALTER TABLE`].
 ///
-/// This structure used here [`MySQL` CREATE TABLE][1], [`MySQL` CREATE INDEX][2].
-///
-/// [1]: https://dev.mysql.com/doc/refman/8.3/en/create-table.html
-/// [2]: https://dev.mysql.com/doc/refman/8.3/en/create-index.html
+/// [`CREATE TABLE`]: https://dev.mysql.com/doc/refman/8.4/en/create-table.html
+/// [`CREATE INDEX`]: https://dev.mysql.com/doc/refman/8.4/en/create-index.html
+/// [`ALTER TABLE`]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum IndexOption {
+    /// `USING { BTREE | HASH }`: Index type to use for the index.
+    ///
+    /// Note that we permissively parse non-MySQL index types, like `GIN`.
     Using(IndexType),
+    /// `COMMENT 'string'`: Specifies a comment for the index.
     Comment(String),
 }
 

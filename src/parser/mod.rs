@@ -8409,12 +8409,14 @@ impl<'a> Parser<'a> {
 
                 let index_type = self.parse_optional_using_then_index_type()?;
                 let columns = self.parse_parenthesized_index_column_list()?;
+                let index_options = self.parse_index_options()?;
 
                 Ok(Some(TableConstraint::Index {
                     display_as_key,
                     name,
                     index_type,
                     columns,
+                    index_options,
                 }))
             }
             Token::Word(w)
@@ -17477,6 +17479,7 @@ mod tests {
                 name: None,
                 index_type: None,
                 columns: vec![mk_expected_col("c1")],
+                index_options: vec![],
             }
         );
 
@@ -17488,6 +17491,7 @@ mod tests {
                 name: None,
                 index_type: None,
                 columns: vec![mk_expected_col("c1")],
+                index_options: vec![],
             }
         );
 
@@ -17499,6 +17503,7 @@ mod tests {
                 name: Some(Ident::with_quote('\'', "index")),
                 index_type: None,
                 columns: vec![mk_expected_col("c1"), mk_expected_col("c2")],
+                index_options: vec![],
             }
         );
 
@@ -17510,6 +17515,7 @@ mod tests {
                 name: None,
                 index_type: Some(IndexType::BTree),
                 columns: vec![mk_expected_col("c1")],
+                index_options: vec![],
             }
         );
 
@@ -17521,6 +17527,7 @@ mod tests {
                 name: None,
                 index_type: Some(IndexType::Hash),
                 columns: vec![mk_expected_col("c1")],
+                index_options: vec![],
             }
         );
 
@@ -17532,6 +17539,7 @@ mod tests {
                 name: Some(Ident::new("idx_name")),
                 index_type: Some(IndexType::BTree),
                 columns: vec![mk_expected_col("c1")],
+                index_options: vec![],
             }
         );
 
@@ -17543,6 +17551,7 @@ mod tests {
                 name: Some(Ident::new("idx_name")),
                 index_type: Some(IndexType::Hash),
                 columns: vec![mk_expected_col("c1")],
+                index_options: vec![],
             }
         );
     }

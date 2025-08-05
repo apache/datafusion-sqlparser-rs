@@ -713,6 +713,7 @@ impl Spanned for TableConstraint {
                 name,
                 index_type: _,
                 columns,
+                index_options: _,
             } => union_spans(
                 name.iter()
                     .map(|i| i.span)

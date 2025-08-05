@@ -4221,9 +4221,8 @@ fn test_ddl_with_index_using() {
         format!("CREATE TABLE foo (name VARCHAR(255), age INT, KEY idx_name {using} {columns})"),
         format!("ALTER TABLE foo ADD KEY idx_name {using} {columns}"),
         format!("CREATE INDEX idx_name ON test{columns} {using}"),
-        // TODO: Add index options to `TableConstraint::Index`
-        // format!("CREATE TABLE foo (name VARCHAR(255), age INT, KEY idx_name{columns} {using})"),
-        // format!("ALTER TABLE foo ADD KEY idx_name{columns} {using}"),
+        format!("CREATE TABLE foo (name VARCHAR(255), age INT, KEY idx_name {columns} {using})"),
+        format!("ALTER TABLE foo ADD KEY idx_name {columns} {using}"),
     ] {
         mysql_and_generic().verified_stmt(&sql);
     }

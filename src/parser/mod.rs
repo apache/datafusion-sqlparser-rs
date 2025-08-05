@@ -7708,6 +7708,9 @@ impl<'a> Parser<'a> {
 
         while let Some(option) = self.parse_plain_option()? {
             options.push(option);
+            // Some dialects support comma-separated options; it shouldn't introduce ambiguity to
+            // consume it for all dialects.
+            let _ = self.consume_token(&Token::Comma);
         }
 
         Ok(options)

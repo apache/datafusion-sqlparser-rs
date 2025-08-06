@@ -3609,9 +3609,13 @@ fn test_sql_keywords_as_table_aliases() {
 #[test]
 fn test_sql_keywords_as_table_factor() {
     // LIMIT is a table factor, Snowflake does not reserve it
-    snowflake().one_statement_parses_to("SELECT * FROM tbl, LIMIT", "SELECT * FROM tbl, LIMIT");
+    snowflake().verified_stmt("SELECT * FROM tbl, LIMIT");
     // LIMIT is not a table factor
     snowflake().one_statement_parses_to("SELECT * FROM tbl, LIMIT 1", "SELECT * FROM tbl LIMIT 1");
+
+    // Table functions are table factors
+    snowflake().verified_stmt("SELECT 1 FROM TABLE(GENERATOR(ROWCOUNT => 10)) AS a, TABLE(GENERATOR(ROWCOUNT => 10)) AS b");
+
     // ORDER is reserved
     assert!(snowflake()
         .parse_sql_statements("SELECT * FROM tbl, order")

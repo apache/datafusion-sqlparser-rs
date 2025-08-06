@@ -4692,7 +4692,21 @@ fn parse_alter_table() {
     let rename_table = "ALTER TABLE tab RENAME TO new_tab";
     match alter_table_op(verified_stmt(rename_table)) {
         AlterTableOperation::RenameTable { table_name } => {
-            assert_eq!("new_tab", table_name.to_string());
+            assert_eq!(
+                RenameTableNameKind::To(ObjectName::from(vec![Ident::new("new_tab")])),
+                table_name
+            );
+        }
+        _ => unreachable!(),
+    };
+
+    let rename_table_as = "ALTER TABLE tab RENAME AS new_tab";
+    match alter_table_op(verified_stmt(rename_table_as)) {
+        AlterTableOperation::RenameTable { table_name } => {
+            assert_eq!(
+                RenameTableNameKind::As(ObjectName::from(vec![Ident::new("new_tab")])),
+                table_name
+            );
         }
         _ => unreachable!(),
     };

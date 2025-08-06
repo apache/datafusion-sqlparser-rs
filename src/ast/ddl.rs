@@ -33,11 +33,11 @@ use crate::ast::{
     display_comma_separated, display_separated, ArgMode, CommentDef, CreateFunctionBody,
     CreateFunctionUsing, DataType, Expr, FunctionBehavior, FunctionCalledOnNull,
     FunctionDeterminismSpecifier, FunctionParallel, Ident, IndexColumn, MySQLColumnPosition,
-    ObjectName, OperateFunctionArg, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Tag,
-    Value, ValueWithSpan,
+    ObjectName, OperateFunctionArg, OrderByExpr, ProjectionSelect, SequenceOptions, Spanned,
+    SqlOption, Tag, Value, ValueWithSpan,
 };
 use crate::keywords::Keyword;
-use crate::tokenizer::Token;
+use crate::tokenizer::{Span, Token};
 
 /// ALTER TABLE operation REPLICA IDENTITY values
 /// See [Postgres ALTER TABLE docs](https://www.postgresql.org/docs/current/sql-altertable.html)
@@ -264,7 +264,7 @@ pub enum AlterTableOperation {
     },
     /// `RENAME TO <table_name>`
     RenameTable {
-        table_name: ObjectName,
+        table_name: RenameTableNameKind,
     },
     // CHANGE [ COLUMN ] <old_name> <new_name> <data_type> [ <options> ]
     ChangeColumn {
@@ -697,7 +697,7 @@ impl fmt::Display for AlterTableOperation {
                 new_column_name,
             } => write!(f, "RENAME COLUMN {old_column_name} TO {new_column_name}"),
             AlterTableOperation::RenameTable { table_name } => {
-                write!(f, "RENAME TO {table_name}")
+                write!(f, "RENAME {table_name}")
             }
             AlterTableOperation::ChangeColumn {
                 old_name,
@@ -2535,5 +2535,36 @@ impl fmt::Display for CreateConnector {
         }
 
         Ok(())
+    }
+}
+
+/// `RenameTableNameKind` is the kind used in an `ALTER TABLE _ RENAME` statement.
+///
+/// Note: [MySQL] is the only database that supports the AS keyword for this operation.
+///
+/// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum RenameTableNameKind {
+    As(ObjectName),
+    To(ObjectName),
+}
+
+impl fmt::Display for RenameTableNameKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            RenameTableNameKind::As(name) => write!(f, "AS {name}"),
+            RenameTableNameKind::To(name) => write!(f, "TO {name}"),
+        }
+    }
+}
+
+impl Spanned for RenameTableNameKind {
+    fn span(&self) -> Span {
+        match self {
+            RenameTableNameKind::As(name) => name.span(),
+            RenameTableNameKind::To(name) => name.span(),
+        }
     }
 }

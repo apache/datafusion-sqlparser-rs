@@ -5552,6 +5552,7 @@ fn parse_create_simple_before_insert_trigger() {
         is_constraint: false,
         name: ObjectName::from(vec![Ident::new("check_insert")]),
         period: TriggerPeriod::Before,
+        period_before_table: true,
         events: vec![TriggerEvent::Insert],
         table_name: ObjectName::from(vec![Ident::new("accounts")]),
         referenced_table_name: None,
@@ -5566,6 +5567,7 @@ fn parse_create_simple_before_insert_trigger() {
                 args: None,
             },
         }),
+        statements_as: false,
         statements: None,
         characteristics: None,
     };
@@ -5582,6 +5584,7 @@ fn parse_create_after_update_trigger_with_condition() {
         is_constraint: false,
         name: ObjectName::from(vec![Ident::new("check_update")]),
         period: TriggerPeriod::After,
+        period_before_table: true,
         events: vec![TriggerEvent::Update(vec![])],
         table_name: ObjectName::from(vec![Ident::new("accounts")]),
         referenced_table_name: None,
@@ -5603,6 +5606,7 @@ fn parse_create_after_update_trigger_with_condition() {
                 args: None,
             },
         }),
+        statements_as: false,
         statements: None,
         characteristics: None,
     };
@@ -5619,6 +5623,7 @@ fn parse_create_instead_of_delete_trigger() {
         is_constraint: false,
         name: ObjectName::from(vec![Ident::new("check_delete")]),
         period: TriggerPeriod::InsteadOf,
+        period_before_table: true,
         events: vec![TriggerEvent::Delete],
         table_name: ObjectName::from(vec![Ident::new("accounts")]),
         referenced_table_name: None,
@@ -5633,6 +5638,7 @@ fn parse_create_instead_of_delete_trigger() {
                 args: None,
             },
         }),
+        statements_as: false,
         statements: None,
         characteristics: None,
     };
@@ -5649,6 +5655,7 @@ fn parse_create_trigger_with_multiple_events_and_deferrable() {
         is_constraint: true,
         name: ObjectName::from(vec![Ident::new("check_multiple_events")]),
         period: TriggerPeriod::Before,
+        period_before_table: true,
         events: vec![
             TriggerEvent::Insert,
             TriggerEvent::Update(vec![]),
@@ -5667,6 +5674,7 @@ fn parse_create_trigger_with_multiple_events_and_deferrable() {
                 args: None,
             },
         }),
+        statements_as: false,
         statements: None,
         characteristics: Some(ConstraintCharacteristics {
             deferrable: Some(true),
@@ -5687,6 +5695,7 @@ fn parse_create_trigger_with_referencing() {
         is_constraint: false,
         name: ObjectName::from(vec![Ident::new("check_referencing")]),
         period: TriggerPeriod::Before,
+        period_before_table: true,
         events: vec![TriggerEvent::Insert],
         table_name: ObjectName::from(vec![Ident::new("accounts")]),
         referenced_table_name: None,
@@ -5712,6 +5721,7 @@ fn parse_create_trigger_with_referencing() {
                 args: None,
             },
         }),
+        statements_as: false,
         statements: None,
         characteristics: None,
     };
@@ -5994,6 +6004,7 @@ fn parse_trigger_related_functions() {
             is_constraint: false,
             name: ObjectName::from(vec![Ident::new("emp_stamp")]),
             period: TriggerPeriod::Before,
+            period_before_table: true,
             events: vec![TriggerEvent::Insert, TriggerEvent::Update(vec![])],
             table_name: ObjectName::from(vec![Ident::new("emp")]),
             referenced_table_name: None,
@@ -6005,9 +6016,10 @@ fn parse_trigger_related_functions() {
                 exec_type: TriggerExecBodyType::Function,
                 func_desc: FunctionDesc {
                     name: ObjectName::from(vec![Ident::new("emp_stamp")]),
-                    args: None,
+                    args: Some(vec![]),
                 }
             }),
+            statements_as: false,
             statements: None,
             characteristics: None
         }

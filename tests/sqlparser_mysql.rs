@@ -3914,11 +3914,8 @@ fn parse_looks_like_single_line_comment() {
 
 #[test]
 fn parse_create_trigger() {
-    let sql_create_trigger = r#"
-        CREATE TRIGGER emp_stamp BEFORE INSERT ON emp
-            FOR EACH ROW EXECUTE FUNCTION emp_stamp();
-    "#;
-    let create_stmt = mysql().one_statement_parses_to(sql_create_trigger, "");
+    let sql_create_trigger = r#"CREATE TRIGGER emp_stamp BEFORE INSERT ON emp FOR EACH ROW EXECUTE FUNCTION emp_stamp()"#;
+    let create_stmt = mysql().verified_stmt(sql_create_trigger);
     assert_eq!(
         create_stmt,
         Statement::CreateTrigger {
@@ -3927,6 +3924,7 @@ fn parse_create_trigger() {
             is_constraint: false,
             name: ObjectName::from(vec![Ident::new("emp_stamp")]),
             period: TriggerPeriod::Before,
+            period_before_table: true,
             events: vec![TriggerEvent::Insert],
             table_name: ObjectName::from(vec![Ident::new("emp")]),
             referenced_table_name: None,
@@ -3938,13 +3936,20 @@ fn parse_create_trigger() {
                 exec_type: TriggerExecBodyType::Function,
                 func_desc: FunctionDesc {
                     name: ObjectName::from(vec![Ident::new("emp_stamp")]),
-                    args: None,
+                    args: Some(vec![]),
                 }
             }),
+            statements_as: false,
             statements: None,
             characteristics: None,
         }
     );
+}
+
+#[test]
+fn parse_create_trigger_compound_statement() {
+    mysql_and_generic().verified_stmt("CREATE TRIGGER mytrigger BEFORE INSERT ON mytable FOR EACH ROW BEGIN SET NEW.a = 1; SET NEW.b = 2; END");
+    mysql_and_generic().verified_stmt("CREATE TRIGGER tr AFTER INSERT ON t1 FOR EACH ROW BEGIN INSERT INTO t2 VALUES (NEW.id); END");
 }
 
 #[test]

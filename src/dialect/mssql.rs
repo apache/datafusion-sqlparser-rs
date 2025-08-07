@@ -257,6 +257,7 @@ impl MsSqlDialect {
             is_constraint: false,
             name,
             period,
+            period_before_table: false,
             events,
             table_name,
             referenced_table_name: None,
@@ -265,6 +266,7 @@ impl MsSqlDialect {
             include_each: false,
             condition: None,
             exec_body: None,
+            statements_as: true,
             statements,
             characteristics: None,
         })

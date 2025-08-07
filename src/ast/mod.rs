@@ -3962,6 +3962,15 @@ pub enum Statement {
         /// EXECUTE FUNCTION trigger_function();
         /// ```
         period: TriggerPeriod,
+        /// Whether the trigger period was specified before the target table name.
+        ///
+        /// ```sql
+        /// -- period_before_table == true: Postgres, MySQL, and standard SQL
+        /// CREATE TRIGGER t BEFORE INSERT ON table_name ...;
+        /// -- period_before_table == false: MSSQL
+        /// CREATE TRIGGER t ON table_name BEFORE INSERT ...;
+        /// ```
+        period_before_table: bool,
         /// Multiple events can be specified using OR, such as `INSERT`, `UPDATE`, `DELETE`, or `TRUNCATE`.
         events: Vec<TriggerEvent>,
         /// The table on which the trigger is to be created.
@@ -3980,6 +3989,8 @@ pub enum Statement {
         condition: Option<Expr>,
         /// Execute logic block
         exec_body: Option<TriggerExecBody>,
+        /// For MSSQL and dialects where statements are preceded by `AS`
+        statements_as: bool,
         /// For SQL dialects with statement(s) for a body
         statements: Option<ConditionalStatements>,
         /// The characteristic of the trigger, which include whether the trigger is `DEFERRABLE`, `INITIALLY DEFERRED`, or `INITIALLY IMMEDIATE`,
@@ -4944,6 +4955,7 @@ impl fmt::Display for Statement {
                 or_replace,
                 is_constraint,
                 name,
+                period_before_table,
                 period,
                 events,
                 table_name,
@@ -4953,6 +4965,7 @@ impl fmt::Display for Statement {
                 condition,
                 include_each,
                 exec_body,
+                statements_as,
                 statements,
                 characteristics,
             } => {
@@ -4964,7 +4977,7 @@ impl fmt::Display for Statement {
                     is_constraint = if *is_constraint { "CONSTRAINT " } else { "" },
                 )?;
 
-                if exec_body.is_some() {
+                if *period_before_table {
                     write!(f, "{period}")?;
                     if !events.is_empty() {
                         write!(f, " {}", display_separated(events, " OR "))?;
@@ -5002,7 +5015,10 @@ impl fmt::Display for Statement {
                     write!(f, " EXECUTE {exec_body}")?;
                 }
                 if let Some(statements) = statements {
-                    write!(f, " AS {statements}")?;
+                    if *statements_as {
+                        write!(f, " AS")?;
+                    }
+                    write!(f, " {statements}")?;
                 }
                 Ok(())
             }

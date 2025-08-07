@@ -2376,6 +2376,7 @@ fn parse_create_trigger() {
             is_constraint: false,
             name: ObjectName::from(vec![Ident::new("reminder1")]),
             period: TriggerPeriod::After,
+            period_before_table: false,
             events: vec![TriggerEvent::Insert, TriggerEvent::Update(vec![]),],
             table_name: ObjectName::from(vec![Ident::new("Sales"), Ident::new("Customer")]),
             referenced_table_name: None,
@@ -2384,6 +2385,7 @@ fn parse_create_trigger() {
             include_each: false,
             condition: None,
             exec_body: None,
+            statements_as: true,
             statements: Some(ConditionalStatements::Sequence {
                 statements: vec![Statement::RaisError {
                     message: Box::new(Expr::Value(

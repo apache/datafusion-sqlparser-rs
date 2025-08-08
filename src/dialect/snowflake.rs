@@ -515,6 +515,8 @@ impl Dialect for SnowflakeDialect {
     fn is_table_factor(&self, kw: &Keyword, parser: &mut Parser) -> bool {
         match kw {
             Keyword::LIMIT if peek_for_limit_options(parser) => false,
+            // Table function
+            Keyword::TABLE if matches!(parser.peek_token_ref().token, Token::LParen) => true,
             _ => !RESERVED_KEYWORDS_FOR_TABLE_FACTOR.contains(kw),
         }
     }

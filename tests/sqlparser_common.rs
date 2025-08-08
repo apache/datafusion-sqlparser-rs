@@ -4759,6 +4759,25 @@ fn parse_alter_table() {
 }
 
 #[test]
+fn alter_table_span_includes_semicolon() {
+    use sqlparser::ast::Spanned;
+    use sqlparser::dialect::PostgreSqlDialect;
+    use sqlparser::parser::Parser;
+
+    let sql = r#"-- foo
+ALTER TABLE users
+  ADD COLUMN foo
+  varchar; -- hi there"#;
+    let dialect = PostgreSqlDialect {};
+    let ast = Parser::parse_sql(&dialect, sql).unwrap();
+    let stmt = &ast[0];
+    let span = stmt.span();
+
+    assert_eq!(span.end.line, 4);
+    assert_eq!(span.end.column, 11);
+}
+
+#[test]
 fn parse_rename_table() {
     match verified_stmt("RENAME TABLE test.test1 TO test_db.test2") {
         Statement::RenameTable(rename_tables) => {

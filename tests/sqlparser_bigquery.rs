@@ -2806,9 +2806,9 @@ fn test_export_data() {
     );
 
     let err = bigquery()
-        .parse_sql_statements(concat!(
+        .parse_sql_statements(
             "EXPORT DATA AS SELECT field1, field2 FROM mydataset.table1 ORDER BY field1 LIMIT 10",
-        ))
+        )
         .unwrap_err();
     assert_eq!(
         err.to_string(),

@@ -5593,9 +5593,13 @@ impl<'a> Parser<'a> {
             .then(|| self.parse_expr())
             .transpose()?;
 
-        self.expect_keyword_is(Keyword::EXECUTE)?;
-
-        let exec_body = self.parse_trigger_exec_body()?;
+        let mut exec_body = None;
+        let mut statements = None;
+        if self.parse_keyword(Keyword::EXECUTE) {
+            exec_body = Some(self.parse_trigger_exec_body()?);
+        } else {
+            statements = Some(self.parse_conditional_statements(&[Keyword::END])?);
+        }
 
         Ok(Statement::CreateTrigger {
             or_alter,
@@ -5603,6 +5607,7 @@ impl<'a> Parser<'a> {
             is_constraint,
             name,
             period,
+            period_before_table: true,
             events,
             table_name,
             referenced_table_name,
@@ -5610,8 +5615,9 @@ impl<'a> Parser<'a> {
             trigger_object,
             include_each,
             condition,
-            exec_body: Some(exec_body),
-            statements: None,
+            exec_body,
+            statements_as: false,
+            statements,
             characteristics,
         })
     }
@@ -6537,7 +6543,7 @@ impl<'a> Parser<'a> {
 
         let args = if self.consume_token(&Token::LParen) {
             if self.consume_token(&Token::RParen) {
-                None
+                Some(vec![])
             } else {
                 let args = self.parse_comma_separated(Parser::parse_function_arg)?;
                 self.expect_token(&Token::RParen)?;
@@ -9307,10 +9313,10 @@ impl<'a> Parser<'a> {
                 }),
             }))
         } else {
-            return self.expected_ref(
+            self.expected_ref(
                 "{RENAME TO | { RENAME | ADD } VALUE}",
                 self.peek_token_ref(),
-            );
+            )
         }
     }
 

@@ -485,7 +485,8 @@ fn parse_update_tuple_row_values() {
                 joins: vec![],
             },
             from: None,
-            returning: None
+            returning: None,
+            limit: None
         }
     );
 }
@@ -590,6 +591,23 @@ fn test_regexp_operator() {
         }
     );
     sqlite().verified_only_select(r#"SELECT count(*) FROM messages WHERE msg_text REGEXP '\d+'"#);
+}
+
+#[test]
+fn test_update_delete_limit() {
+    match sqlite().verified_stmt("UPDATE foo SET bar = 1 LIMIT 99") {
+        Statement::Update { limit, .. } => {
+            assert_eq!(limit, Some(Expr::value(number("99"))));
+        }
+        _ => unreachable!(),
+    }
+
+    match sqlite().verified_stmt("DELETE FROM foo LIMIT 99") {
+        Statement::Delete(Delete { limit, .. }) => {
+            assert_eq!(limit, Some(Expr::value(number("99"))));
+        }
+        _ => unreachable!(),
+    }
 }
 
 fn sqlite() -> TestedDialects {

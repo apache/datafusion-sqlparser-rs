@@ -378,6 +378,7 @@ impl Spanned for Statement {
                 selection,
                 returning,
                 or: _,
+                limit: _,
             } => union_spans(
                 core::iter::once(table.span())
                     .chain(assignments.iter().map(|i| i.span()))

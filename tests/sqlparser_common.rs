@@ -16598,3 +16598,60 @@ fn parse_create_view_if_not_exists() {
         res.unwrap_err()
     );
 }
+
+#[test]
+fn test_parse_not_null_in_column_options() {
+    let canonical = concat!(
+        "CREATE TABLE foo (",
+        "abc INT DEFAULT (42 IS NOT NULL) NOT NULL,",
+        " def INT,",
+        " def_null BOOL GENERATED ALWAYS AS (def IS NOT NULL) STORED,",
+        " CHECK (abc IS NOT NULL)",
+        ")"
+    );
+    all_dialects().verified_stmt(canonical);
+    all_dialects().one_statement_parses_to(
+        concat!(
+            "CREATE TABLE foo (",
+            "abc INT DEFAULT (42 NOT NULL) NOT NULL,",
+            " def INT,",
+            " def_null BOOL GENERATED ALWAYS AS (def NOT NULL) STORED,",
+            " CHECK (abc NOT NULL)",
+            ")"
+        ),
+        canonical,
+    );
+}
+
+#[test]
+fn test_parse_default_with_collate_column_option() {
+    let sql = "CREATE TABLE foo (abc TEXT DEFAULT 'foo' COLLATE 'en_US')";
+    let stmt = all_dialects().verified_stmt(sql);
+    if let Statement::CreateTable(CreateTable { mut columns, .. }) = stmt {
+        let mut column = columns.pop().unwrap();
+        assert_eq!(&column.name.value, "abc");
+        assert_eq!(column.data_type, DataType::Text);
+        let collate_option = column.options.pop().unwrap();
+        if let ColumnOptionDef {
+            name: None,
+            option: ColumnOption::Collation(collate),
+        } = collate_option
+        {
+            assert_eq!(collate.to_string(), "'en_US'");
+        } else {
+            panic!("Expected collate column option, got {collate_option}");
+        }
+        let default_option = column.options.pop().unwrap();
+        if let ColumnOptionDef {
+            name: None,
+            option: ColumnOption::Default(Expr::Value(value)),
+        } = default_option
+        {
+            assert_eq!(value.to_string(), "'foo'");
+        } else {
+            panic!("Expected default column option, got {default_option}");
+        }
+    } else {
+        panic!("Expected create table statement");
+    }
+}

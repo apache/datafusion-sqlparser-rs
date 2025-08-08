@@ -63,14 +63,14 @@ pub use self::ddl::{
     AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
     ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy,
     ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain, CreateFunction,
-    Deduplicate, DeferrableInitial, DropBehavior, GeneratedAs, GeneratedExpressionMode,
-    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
-    IdentityPropertyOrder, IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner,
-    Partition, ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity,
-    TableConstraint, TagsColumnOption, UserDefinedTypeCompositeAttributeDef,
-    UserDefinedTypeRepresentation, ViewColumnDef,
+    CreateIndex, CreateTable, Deduplicate, DeferrableInitial, DropBehavior, GeneratedAs,
+    GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
+    IdentityPropertyKind, IdentityPropertyOrder, IndexColumn, IndexOption, IndexType,
+    KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition, ProcedureParam, ReferentialAction,
+    RenameTableNameKind, ReplicaIdentity, TableConstraint, TagsColumnOption,
+    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
 };
-pub use self::dml::{CreateIndex, CreateTable, Delete, IndexColumn, Insert};
+pub use self::dml::{Delete, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
     AfterMatchSkip, ConnectBy, Cte, CteAsMaterialized, Distinct, EmptyMatchesMode,

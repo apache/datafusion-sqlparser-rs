@@ -4215,3 +4215,31 @@ fn parse_show_charset() {
     mysql().verified_stmt("SHOW CHARSET WHERE charset = 'utf8mb4%'");
     mysql().verified_stmt("SHOW CHARSET LIKE 'utf8mb4%'");
 }
+
+#[test]
+fn test_ddl_with_index_using() {
+    let columns = "(name, age DESC)";
+    let using = "USING BTREE";
+
+    for sql in [
+        format!("CREATE INDEX idx_name ON test {using} {columns}"),
+        format!("CREATE TABLE foo (name VARCHAR(255), age INT, KEY idx_name {using} {columns})"),
+        format!("ALTER TABLE foo ADD KEY idx_name {using} {columns}"),
+        format!("CREATE INDEX idx_name ON test{columns} {using}"),
+        format!("CREATE TABLE foo (name VARCHAR(255), age INT, KEY idx_name {columns} {using})"),
+        format!("ALTER TABLE foo ADD KEY idx_name {columns} {using}"),
+    ] {
+        mysql_and_generic().verified_stmt(&sql);
+    }
+}
+
+#[test]
+fn test_create_index_options() {
+    mysql_and_generic()
+        .verified_stmt("CREATE INDEX idx_name ON t(c1, c2) USING HASH LOCK = SHARED");
+    mysql_and_generic()
+        .verified_stmt("CREATE INDEX idx_name ON t(c1, c2) USING BTREE ALGORITHM = INPLACE");
+    mysql_and_generic().verified_stmt(
+        "CREATE INDEX idx_name ON t(c1, c2) USING BTREE LOCK = EXCLUSIVE ALGORITHM = DEFAULT",
+    );
+}

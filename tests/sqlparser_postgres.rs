@@ -2486,7 +2486,7 @@ fn parse_array_multi_subscript() {
 
 #[test]
 fn parse_create_index() {
-    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2)";
+    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1, col2)";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
@@ -2500,6 +2500,8 @@ fn parse_create_index() {
             include,
             with,
             predicate: None,
+            index_options,
+            alter_options,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -2510,6 +2512,8 @@ fn parse_create_index() {
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
+            assert!(alter_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2517,7 +2521,7 @@ fn parse_create_index() {
 
 #[test]
 fn parse_create_anonymous_index() {
-    let sql = "CREATE INDEX ON my_table(col1,col2)";
+    let sql = "CREATE INDEX ON my_table(col1, col2)";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name,
@@ -2531,6 +2535,8 @@ fn parse_create_anonymous_index() {
             nulls_distinct: None,
             with,
             predicate: None,
+            index_options,
+            alter_options,
         }) => {
             assert_eq!(None, name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -2541,6 +2547,8 @@ fn parse_create_anonymous_index() {
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
+            assert!(alter_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2577,7 +2585,7 @@ fn parse_create_indices_with_operator_classes() {
                     .unwrap_or_default()
             );
             let multi_column_sql_statement = format!(
-                "CREATE INDEX the_index_name ON users USING {expected_index_type} (column_name,concat_users_name(first_name, last_name){})",
+                "CREATE INDEX the_index_name ON users USING {expected_index_type} (column_name, concat_users_name(first_name, last_name){})",
                 expected_operator_class.as_ref().map(|oc| format!(" {oc}"))
                     .unwrap_or_default()
             );
@@ -2639,6 +2647,8 @@ fn parse_create_indices_with_operator_classes() {
                     nulls_distinct: None,
                     with,
                     predicate: None,
+                    index_options,
+                    alter_options,
                 }) => {
                     assert_eq_vec(&["the_index_name"], &name);
                     assert_eq_vec(&["users"], &table_name);
@@ -2646,6 +2656,8 @@ fn parse_create_indices_with_operator_classes() {
                     assert_eq!(expected_function_column, columns[0],);
                     assert!(include.is_empty());
                     assert!(with.is_empty());
+                    assert!(index_options.is_empty());
+                    assert!(alter_options.is_empty());
                 }
                 _ => unreachable!(),
             }
@@ -2663,6 +2675,8 @@ fn parse_create_indices_with_operator_classes() {
                     nulls_distinct: None,
                     with,
                     predicate: None,
+                    index_options,
+                    alter_options,
                 }) => {
                     assert_eq_vec(&["the_index_name"], &name);
                     assert_eq_vec(&["users"], &table_name);
@@ -2688,6 +2702,8 @@ fn parse_create_indices_with_operator_classes() {
                     assert_eq!(expected_function_column, columns[1],);
                     assert!(include.is_empty());
                     assert!(with.is_empty());
+                    assert!(index_options.is_empty());
+                    assert!(alter_options.is_empty());
                 }
                 _ => unreachable!(),
             }
@@ -2698,7 +2714,7 @@ fn parse_create_indices_with_operator_classes() {
 #[test]
 fn parse_create_bloom() {
     let sql =
-        "CREATE INDEX bloomidx ON tbloom USING BLOOM (i1,i2,i3) WITH (length = 80, col1 = 2, col2 = 2, col3 = 4)";
+        "CREATE INDEX bloomidx ON tbloom USING BLOOM (i1, i2, i3) WITH (length = 80, col1 = 2, col2 = 2, col3 = 4)";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
@@ -2712,6 +2728,8 @@ fn parse_create_bloom() {
             nulls_distinct: None,
             with,
             predicate: None,
+            index_options,
+            alter_options,
         }) => {
             assert_eq_vec(&["bloomidx"], &name);
             assert_eq_vec(&["tbloom"], &table_name);
@@ -2743,6 +2761,8 @@ fn parse_create_bloom() {
                 ],
                 with
             );
+            assert!(index_options.is_empty());
+            assert!(alter_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2764,6 +2784,8 @@ fn parse_create_brin() {
             nulls_distinct: None,
             with,
             predicate: None,
+            index_options,
+            alter_options,
         }) => {
             assert_eq_vec(&["brin_sensor_data_recorded_at"], &name);
             assert_eq_vec(&["sensor_data"], &table_name);
@@ -2771,6 +2793,8 @@ fn parse_create_brin() {
             assert_eq_vec(&["recorded_at"], &columns);
             assert!(include.is_empty());
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
+            assert!(alter_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2813,7 +2837,7 @@ fn parse_create_table_with_empty_inherits_fails() {
 
 #[test]
 fn parse_create_index_concurrently() {
-    let sql = "CREATE INDEX CONCURRENTLY IF NOT EXISTS my_index ON my_table(col1,col2)";
+    let sql = "CREATE INDEX CONCURRENTLY IF NOT EXISTS my_index ON my_table(col1, col2)";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
@@ -2827,6 +2851,8 @@ fn parse_create_index_concurrently() {
             nulls_distinct: None,
             with,
             predicate: None,
+            index_options,
+            alter_options,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -2837,6 +2863,8 @@ fn parse_create_index_concurrently() {
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
+            assert!(alter_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2844,7 +2872,7 @@ fn parse_create_index_concurrently() {
 
 #[test]
 fn parse_create_index_with_predicate() {
-    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2) WHERE col3 IS NULL";
+    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1, col2) WHERE col3 IS NULL";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
@@ -2858,6 +2886,8 @@ fn parse_create_index_with_predicate() {
             nulls_distinct: None,
             with,
             predicate: Some(_),
+            index_options,
+            alter_options,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -2868,6 +2898,8 @@ fn parse_create_index_with_predicate() {
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
+            assert!(alter_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2875,7 +2907,7 @@ fn parse_create_index_with_predicate() {
 
 #[test]
 fn parse_create_index_with_include() {
-    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2) INCLUDE (col3)";
+    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1, col2) INCLUDE (col3, col4)";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
@@ -2889,6 +2921,8 @@ fn parse_create_index_with_include() {
             nulls_distinct: None,
             with,
             predicate: None,
+            index_options,
+            alter_options,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -2897,8 +2931,10 @@ fn parse_create_index_with_include() {
             assert!(!concurrently);
             assert!(if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
-            assert_eq_vec(&["col3"], &include);
+            assert_eq_vec(&["col3", "col4"], &include);
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
+            assert!(alter_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2906,7 +2942,7 @@ fn parse_create_index_with_include() {
 
 #[test]
 fn parse_create_index_with_nulls_distinct() {
-    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2) NULLS NOT DISTINCT";
+    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1, col2) NULLS NOT DISTINCT";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
@@ -2920,6 +2956,8 @@ fn parse_create_index_with_nulls_distinct() {
             nulls_distinct: Some(nulls_distinct),
             with,
             predicate: None,
+            index_options,
+            alter_options,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -2931,11 +2969,13 @@ fn parse_create_index_with_nulls_distinct() {
             assert!(include.is_empty());
             assert!(!nulls_distinct);
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
+            assert!(alter_options.is_empty());
         }
         _ => unreachable!(),
     }
 
-    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2) NULLS DISTINCT";
+    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1, col2) NULLS DISTINCT";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
@@ -2949,6 +2989,8 @@ fn parse_create_index_with_nulls_distinct() {
             nulls_distinct: Some(nulls_distinct),
             with,
             predicate: None,
+            index_options,
+            alter_options,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -2960,6 +3002,8 @@ fn parse_create_index_with_nulls_distinct() {
             assert!(include.is_empty());
             assert!(nulls_distinct);
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
+            assert!(alter_options.is_empty());
         }
         _ => unreachable!(),
     }

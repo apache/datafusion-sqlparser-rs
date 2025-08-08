@@ -713,6 +713,7 @@ impl Spanned for TableConstraint {
                 name,
                 index_type: _,
                 columns,
+                index_options: _,
             } => union_spans(
                 name.iter()
                     .map(|i| i.span)
@@ -747,6 +748,8 @@ impl Spanned for CreateIndex {
             nulls_distinct: _, // bool
             with,
             predicate,
+            index_options: _,
+            alter_options,
         } = self;
 
         union_spans(
@@ -756,7 +759,8 @@ impl Spanned for CreateIndex {
                 .chain(columns.iter().map(|i| i.column.span()))
                 .chain(include.iter().map(|i| i.span))
                 .chain(with.iter().map(|i| i.span()))
-                .chain(predicate.iter().map(|i| i.span())),
+                .chain(predicate.iter().map(|i| i.span()))
+                .chain(alter_options.iter().map(|i| i.span())),
         )
     }
 }

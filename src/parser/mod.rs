@@ -7083,6 +7083,22 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // MySQL options (including the modern style of `USING` after the column list instead of
+        // before, which is deprecated) shouldn't conflict with other preceding options (e.g. `WITH
+        // PARSER` won't be caught by the above `WITH` clause parsing because MySQL doesn't set that
+        // support flag). This is probably invalid syntax for other dialects, but it is simpler to
+        // parse it anyway (as we do inside `ALTER TABLE` and `CREATE TABLE` parsing).
+        let index_options = self.parse_index_options()?;
+
+        // MySQL allows `ALGORITHM` and `LOCK` options. Unlike in `ALTER TABLE`, they need not be comma separated.
+        let mut alter_options = Vec::new();
+        while self
+            .peek_one_of_keywords(&[Keyword::ALGORITHM, Keyword::LOCK])
+            .is_some()
+        {
+            alter_options.push(self.parse_alter_table_operation()?)
+        }
+
         Ok(Statement::CreateIndex(CreateIndex {
             name: index_name,
             table_name,
@@ -7095,6 +7111,8 @@ impl<'a> Parser<'a> {
             nulls_distinct,
             with,
             predicate,
+            index_options,
+            alter_options,
         }))
     }
 
@@ -8407,12 +8425,14 @@ impl<'a> Parser<'a> {
 
                 let index_type = self.parse_optional_using_then_index_type()?;
                 let columns = self.parse_parenthesized_index_column_list()?;
+                let index_options = self.parse_index_options()?;
 
                 Ok(Some(TableConstraint::Index {
                     display_as_key,
                     name,
                     index_type,
                     columns,
+                    index_options,
                 }))
             }
             Token::Word(w)
@@ -17475,6 +17495,7 @@ mod tests {
                 name: None,
                 index_type: None,
                 columns: vec![mk_expected_col("c1")],
+                index_options: vec![],
             }
         );
 
@@ -17486,6 +17507,7 @@ mod tests {
                 name: None,
                 index_type: None,
                 columns: vec![mk_expected_col("c1")],
+                index_options: vec![],
             }
         );
 
@@ -17497,6 +17519,7 @@ mod tests {
                 name: Some(Ident::with_quote('\'', "index")),
                 index_type: None,
                 columns: vec![mk_expected_col("c1"), mk_expected_col("c2")],
+                index_options: vec![],
             }
         );
 
@@ -17508,6 +17531,7 @@ mod tests {
                 name: None,
                 index_type: Some(IndexType::BTree),
                 columns: vec![mk_expected_col("c1")],
+                index_options: vec![],
             }
         );
 
@@ -17519,6 +17543,7 @@ mod tests {
                 name: None,
                 index_type: Some(IndexType::Hash),
                 columns: vec![mk_expected_col("c1")],
+                index_options: vec![],
             }
         );
 
@@ -17530,6 +17555,7 @@ mod tests {
                 name: Some(Ident::new("idx_name")),
                 index_type: Some(IndexType::BTree),
                 columns: vec![mk_expected_col("c1")],
+                index_options: vec![],
             }
         );
 
@@ -17541,6 +17567,7 @@ mod tests {
                 name: Some(Ident::new("idx_name")),
                 index_type: Some(IndexType::Hash),
                 columns: vec![mk_expected_col("c1")],
+                index_options: vec![],
             }
         );
     }

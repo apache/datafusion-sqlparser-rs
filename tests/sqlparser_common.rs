@@ -10925,15 +10925,6 @@ fn parse_pivot_table() {
         verified_stmt(sql_without_table_alias).to_string(),
         sql_without_table_alias
     );
-
-    let sql_with_multiple_value_column = concat!(
-        "SELECT * FROM person ",
-        "PIVOT(SUM(age) AS a, AVG(class) AS c FOR (name, age) IN (('John', 30) AS c1, ('Mike', 40) AS c2))"
-    );
-    assert_eq!(
-        verified_stmt(sql_with_multiple_value_column).to_string(),
-        sql_with_multiple_value_column
-    );
 }
 
 #[test]

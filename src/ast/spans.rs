@@ -435,10 +435,12 @@ impl Spanned for Statement {
                 location: _,
                 on_cluster,
                 iceberg: _,
+                end_token,
             } => union_spans(
                 core::iter::once(name.span())
                     .chain(operations.iter().map(|i| i.span()))
-                    .chain(on_cluster.iter().map(|i| i.span)),
+                    .chain(on_cluster.iter().map(|i| i.span))
+                    .chain(core::iter::once(end_token.0.span)),
             ),
             Statement::AlterIndex { name, operation } => name.span().union(&operation.span()),
             Statement::AlterView {
@@ -2552,5 +2554,21 @@ pub mod tests {
             }
             stmt => panic!("expected query; got {stmt:?}"),
         }
+    }
+
+    #[test]
+    fn test_alter_table_multiline_span() {
+        let sql = r#"-- foo
+ALTER TABLE users
+  ADD COLUMN foo
+  varchar; -- hi there"#;
+
+        let r = Parser::parse_sql(&crate::dialect::PostgreSqlDialect {}, sql).unwrap();
+        assert_eq!(1, r.len());
+
+        let stmt_span = r[0].span();
+
+        assert_eq!(stmt_span.start, (2, 13).into());
+        assert_eq!(stmt_span.end, (4, 11).into());
     }
 }

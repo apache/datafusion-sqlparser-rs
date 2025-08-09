@@ -3384,6 +3384,8 @@ pub enum Statement {
         /// Snowflake "ICEBERG" clause for Iceberg tables
         /// <https://docs.snowflake.com/en/sql-reference/sql/alter-iceberg-table>
         iceberg: bool,
+        /// Token that represents the end of the statement (semicolon or EOF)
+        end_token: AttachedToken,
     },
     /// ```sql
     /// ALTER INDEX
@@ -5442,6 +5444,7 @@ impl fmt::Display for Statement {
                 location,
                 on_cluster,
                 iceberg,
+                end_token: _,
             } => {
                 if *iceberg {
                     write!(f, "ALTER ICEBERG TABLE ")?;

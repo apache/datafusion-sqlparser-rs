@@ -2643,6 +2643,7 @@ fn parse_alter_table_add_column() {
             iceberg,
             location: _,
             on_cluster: _,
+            end_token: _,
         } => {
             assert_eq!(name.to_string(), "tab");
             assert!(!if_exists);

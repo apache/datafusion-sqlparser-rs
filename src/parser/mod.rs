@@ -9263,6 +9263,12 @@ impl<'a> Parser<'a> {
             });
         }
 
+        let end_token = if self.peek_token_ref().token == Token::SemiColon {
+            self.peek_token_ref().clone()
+        } else {
+            self.get_current_token().clone()
+        };
+
         Ok(Statement::AlterTable {
             name: table_name,
             if_exists,
@@ -9271,6 +9277,7 @@ impl<'a> Parser<'a> {
             location,
             on_cluster,
             iceberg,
+            end_token: AttachedToken(end_token),
         })
     }
 

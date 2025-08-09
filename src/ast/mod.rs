@@ -3383,7 +3383,6 @@ pub enum Statement {
         /// <https://docs.snowflake.com/en/sql-reference/sql/alter-iceberg-table>
         iceberg: bool,
         /// Token that represents the end of the statement (semicolon or EOF)
-        /// Used for accurate span calculation
         end_token: AttachedToken,
     },
     /// ```sql

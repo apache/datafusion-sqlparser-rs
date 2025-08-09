@@ -11256,7 +11256,7 @@ impl<'a> Parser<'a> {
         if self.consume_token(&Token::LParen) {
             let precision = self.parse_literal_uint()?;
             let scale = if self.consume_token(&Token::Comma) {
-                Some(self.parse_literal_uint()?)
+                Some(self.parse_signed_integer()?)
             } else {
                 None
             };
@@ -11269,6 +11269,27 @@ impl<'a> Parser<'a> {
             }
         } else {
             Ok(ExactNumberInfo::None)
+        }
+    }
+
+    /// Parse an optionally signed integer literal.
+    fn parse_signed_integer(&mut self) -> Result<i64, ParserError> {
+        let is_negative = self.consume_token(&Token::Minus);
+
+        if !is_negative {
+            let _ = self.consume_token(&Token::Plus);
+        }
+
+        let current_token = self.peek_token_ref();
+        match &current_token.token {
+            Token::Number(s, _) => {
+                let s = s.clone();
+                let span_start = current_token.span.start;
+                self.advance_token();
+                let value = Self::parse::<i64>(s, span_start)?;
+                Ok(if is_negative { -value } else { value })
+            }
+            _ => self.expected_ref("number", current_token),
         }
     }
 
@@ -17118,7 +17139,7 @@ mod tests {
         use crate::ast::{
             CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, ObjectName, TimezoneInfo,
         };
-        use crate::dialect::{AnsiDialect, GenericDialect};
+        use crate::dialect::{AnsiDialect, GenericDialect, PostgreSqlDialect};
         use crate::test_utils::TestedDialects;
 
         macro_rules! test_parse_data_type {
@@ -17324,8 +17345,11 @@ mod tests {
         #[test]
         fn test_ansii_exact_numeric_types() {
             // Exact numeric types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type>
-            let dialect =
-                TestedDialects::new(vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})]);
+            let dialect = TestedDialects::new(vec![
+                Box::new(GenericDialect {}),
+                Box::new(AnsiDialect {}),
+                Box::new(PostgreSqlDialect {}),
+            ]);
 
             test_parse_data_type!(dialect, "NUMERIC", DataType::Numeric(ExactNumberInfo::None));
 
@@ -17368,6 +17392,53 @@ mod tests {
                 "DEC(2,10)",
                 DataType::Dec(ExactNumberInfo::PrecisionAndScale(2, 10))
             );
+
+            // Test negative scale values.
+            test_parse_data_type!(
+                dialect,
+                "NUMERIC(10,-2)",
+                DataType::Numeric(ExactNumberInfo::PrecisionAndScale(10, -2))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "DECIMAL(1000,-10)",
+                DataType::Decimal(ExactNumberInfo::PrecisionAndScale(1000, -10))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "DEC(5,-1000)",
+                DataType::Dec(ExactNumberInfo::PrecisionAndScale(5, -1000))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "NUMERIC(10,-5)",
+                DataType::Numeric(ExactNumberInfo::PrecisionAndScale(10, -5))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "DECIMAL(20,-10)",
+                DataType::Decimal(ExactNumberInfo::PrecisionAndScale(20, -10))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "DEC(5,-2)",
+                DataType::Dec(ExactNumberInfo::PrecisionAndScale(5, -2))
+            );
+
+            dialect.run_parser_method("NUMERIC(10,+5)", |parser| {
+                let data_type = parser.parse_data_type().unwrap();
+                assert_eq!(
+                    DataType::Numeric(ExactNumberInfo::PrecisionAndScale(10, 5)),
+                    data_type
+                );
+                // Note: Explicit '+' sign is not preserved in output, which is correct
+                assert_eq!("NUMERIC(10,5)", data_type.to_string());
+            });
         }
 
         #[test]

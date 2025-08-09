@@ -10961,7 +10961,10 @@ fn parse_pivot_table() {
                 expected_function("b", Some("t")),
                 expected_function("c", Some("u")),
             ],
-            value_column: vec![Ident::new("a"), Ident::new("MONTH")],
+            value_column: vec![Expr::CompoundIdentifier(vec![
+                Ident::new("a"),
+                Ident::new("MONTH")
+            ])],
             value_source: PivotValueSource::List(vec![
                 ExprWithAlias {
                     expr: Expr::value(number("1")),
@@ -11007,6 +11010,75 @@ fn parse_pivot_table() {
     assert_eq!(
         verified_stmt(sql_without_table_alias).to_string(),
         sql_without_table_alias
+    );
+
+    let multiple_value_columns_sql = concat!(
+        "SELECT * FROM person ",
+        "PIVOT(",
+        "SUM(age) AS a, AVG(class) AS c ",
+        "FOR (name, age) IN (('John', 30) AS c1, ('Mike', 40) AS c2))",
+    );
+
+    assert_eq!(
+        verified_only_select(multiple_value_columns_sql).from[0].relation,
+        Pivot {
+            table: Box::new(TableFactor::Table {
+                name: ObjectName::from(vec![Ident::new("person")]),
+                alias: None,
+                args: None,
+                with_hints: vec![],
+                version: None,
+                partitions: vec![],
+                with_ordinality: false,
+                json_path: None,
+                sample: None,
+                index_hints: vec![],
+            }),
+            aggregate_functions: vec![
+                ExprWithAlias {
+                    expr: call("SUM", [Expr::Identifier(Ident::new("age"))]),
+                    alias: Some(Ident::new("a"))
+                },
+                ExprWithAlias {
+                    expr: call("AVG", [Expr::Identifier(Ident::new("class"))]),
+                    alias: Some(Ident::new("c"))
+                },
+            ],
+            value_column: vec![
+                Expr::Identifier(Ident::new("name")),
+                Expr::Identifier(Ident::new("age")),
+            ],
+            value_source: PivotValueSource::List(vec![
+                ExprWithAlias {
+                    expr: Expr::Tuple(vec![
+                        Expr::Value(
+                            (Value::SingleQuotedString("John".to_string())).with_empty_span()
+                        ),
+                        Expr::Value(
+                            (Value::Number("30".parse().unwrap(), false)).with_empty_span()
+                        ),
+                    ]),
+                    alias: Some(Ident::new("c1"))
+                },
+                ExprWithAlias {
+                    expr: Expr::Tuple(vec![
+                        Expr::Value(
+                            (Value::SingleQuotedString("Mike".to_string())).with_empty_span()
+                        ),
+                        Expr::Value(
+                            (Value::Number("40".parse().unwrap(), false)).with_empty_span()
+                        ),
+                    ]),
+                    alias: Some(Ident::new("c2"))
+                },
+            ]),
+            default_on_null: None,
+            alias: None,
+        }
+    );
+    assert_eq!(
+        verified_stmt(multiple_value_columns_sql).to_string(),
+        multiple_value_columns_sql
     );
 }
 
@@ -11340,7 +11412,7 @@ fn parse_pivot_unpivot_table() {
                 expr: call("sum", [Expr::Identifier(Ident::new("population"))]),
                 alias: None
             }],
-            value_column: vec![Ident::new("year")],
+            value_column: vec![Expr::Identifier(Ident::new("year"))],
             value_source: PivotValueSource::List(vec![
                 ExprWithAlias {
                     expr: Expr::Value(

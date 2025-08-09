@@ -154,6 +154,10 @@ impl Dialect for MySqlDialect {
     fn supports_comma_separated_set_assignments(&self) -> bool {
         true
     }
+
+    fn supports_data_type_signed_suffix(&self) -> bool {
+        true
+    }
 }
 
 /// `LOCK TABLES`

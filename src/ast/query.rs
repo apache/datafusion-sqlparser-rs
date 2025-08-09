@@ -1349,11 +1349,12 @@ pub enum TableFactor {
     /// ```
     ///
     /// See <https://docs.snowflake.com/en/sql-reference/constructs/unpivot>.
+    /// See <https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-select-unpivot>.
     Unpivot {
         table: Box<TableFactor>,
-        value: Ident,
+        value: Expr,
         name: Ident,
-        columns: Vec<Ident>,
+        columns: Vec<ExprWithAlias>,
         null_inclusion: Option<NullInclusion>,
         alias: Option<TableAlias>,
     },

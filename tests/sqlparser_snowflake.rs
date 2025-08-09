@@ -3607,6 +3607,22 @@ fn test_sql_keywords_as_table_aliases() {
 }
 
 #[test]
+fn test_sql_keywords_as_table_factor() {
+    // LIMIT is a table factor, Snowflake does not reserve it
+    snowflake().verified_stmt("SELECT * FROM tbl, LIMIT");
+    // LIMIT is not a table factor
+    snowflake().one_statement_parses_to("SELECT * FROM tbl, LIMIT 1", "SELECT * FROM tbl LIMIT 1");
+
+    // Table functions are table factors
+    snowflake().verified_stmt("SELECT 1 FROM TABLE(GENERATOR(ROWCOUNT => 10)) AS a, TABLE(GENERATOR(ROWCOUNT => 10)) AS b");
+
+    // ORDER is reserved
+    assert!(snowflake()
+        .parse_sql_statements("SELECT * FROM tbl, order")
+        .is_err());
+}
+
+#[test]
 fn test_timetravel_at_before() {
     snowflake().verified_only_select("SELECT * FROM tbl AT(TIMESTAMP => '2024-12-15 00:00:00')");
     snowflake()
@@ -4503,4 +4519,55 @@ fn test_snowflake_identifier_function() {
 
     snowflake().verified_stmt("GRANT ROLE IDENTIFIER('AAA') TO USER IDENTIFIER('AAA')");
     snowflake().verified_stmt("REVOKE ROLE IDENTIFIER('AAA') FROM USER IDENTIFIER('AAA')");
+}
+
+#[test]
+fn test_create_database() {
+    snowflake().verified_stmt("CREATE DATABASE my_db");
+    snowflake().verified_stmt("CREATE OR REPLACE DATABASE my_db");
+    snowflake().verified_stmt("CREATE TRANSIENT DATABASE IF NOT EXISTS my_db");
+    snowflake().verified_stmt("CREATE DATABASE my_db CLONE src_db");
+    snowflake().verified_stmt(
+        "CREATE OR REPLACE DATABASE my_db CLONE src_db DATA_RETENTION_TIME_IN_DAYS = 1",
+    );
+    snowflake().one_statement_parses_to(
+        r#"
+        CREATE OR REPLACE TRANSIENT DATABASE IF NOT EXISTS my_db
+        CLONE src_db
+        DATA_RETENTION_TIME_IN_DAYS = 1
+        MAX_DATA_EXTENSION_TIME_IN_DAYS = 5
+        EXTERNAL_VOLUME = 'volume1'
+        CATALOG = 'my_catalog'
+        REPLACE_INVALID_CHARACTERS = TRUE
+        DEFAULT_DDL_COLLATION = 'en-ci'
+        STORAGE_SERIALIZATION_POLICY = COMPATIBLE
+        COMMENT = 'This is my database'
+        CATALOG_SYNC = 'sync_integration'
+        CATALOG_SYNC_NAMESPACE_MODE = NEST
+        CATALOG_SYNC_NAMESPACE_FLATTEN_DELIMITER = '/'
+        WITH TAG (env = 'prod', team = 'data')
+        WITH CONTACT (owner = 'admin', dpo = 'compliance')
+    "#,
+        "CREATE OR REPLACE TRANSIENT DATABASE IF NOT EXISTS \
+        my_db CLONE src_db DATA_RETENTION_TIME_IN_DAYS = 1 MAX_DATA_EXTENSION_TIME_IN_DAYS = 5 \
+        EXTERNAL_VOLUME = 'volume1' CATALOG = 'my_catalog' \
+        REPLACE_INVALID_CHARACTERS = TRUE DEFAULT_DDL_COLLATION = 'en-ci' \
+        STORAGE_SERIALIZATION_POLICY = COMPATIBLE COMMENT = 'This is my database' \
+        CATALOG_SYNC = 'sync_integration' CATALOG_SYNC_NAMESPACE_MODE = NEST \
+        CATALOG_SYNC_NAMESPACE_FLATTEN_DELIMITER = '/' \
+        WITH TAG (env='prod', team='data') \
+        WITH CONTACT (owner = admin, dpo = compliance)",
+    );
+
+    let err = snowflake()
+        .parse_sql_statements("CREATE DATABASE")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("Expected"), "Unexpected error: {err}");
+
+    let err = snowflake()
+        .parse_sql_statements("CREATE DATABASE my_db CLONE")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("Expected"), "Unexpected error: {err}");
 }

@@ -2486,7 +2486,7 @@ fn parse_array_multi_subscript() {
 
 #[test]
 fn parse_create_index() {
-    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2)";
+    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1, col2)";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
@@ -2500,6 +2500,8 @@ fn parse_create_index() {
             include,
             with,
             predicate: None,
+            index_options,
+            alter_options,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -2510,6 +2512,8 @@ fn parse_create_index() {
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
+            assert!(alter_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2517,7 +2521,7 @@ fn parse_create_index() {
 
 #[test]
 fn parse_create_anonymous_index() {
-    let sql = "CREATE INDEX ON my_table(col1,col2)";
+    let sql = "CREATE INDEX ON my_table(col1, col2)";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name,
@@ -2531,6 +2535,8 @@ fn parse_create_anonymous_index() {
             nulls_distinct: None,
             with,
             predicate: None,
+            index_options,
+            alter_options,
         }) => {
             assert_eq!(None, name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -2541,6 +2547,8 @@ fn parse_create_anonymous_index() {
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
+            assert!(alter_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2577,7 +2585,7 @@ fn parse_create_indices_with_operator_classes() {
                     .unwrap_or_default()
             );
             let multi_column_sql_statement = format!(
-                "CREATE INDEX the_index_name ON users USING {expected_index_type} (column_name,concat_users_name(first_name, last_name){})",
+                "CREATE INDEX the_index_name ON users USING {expected_index_type} (column_name, concat_users_name(first_name, last_name){})",
                 expected_operator_class.as_ref().map(|oc| format!(" {oc}"))
                     .unwrap_or_default()
             );
@@ -2639,6 +2647,8 @@ fn parse_create_indices_with_operator_classes() {
                     nulls_distinct: None,
                     with,
                     predicate: None,
+                    index_options,
+                    alter_options,
                 }) => {
                     assert_eq_vec(&["the_index_name"], &name);
                     assert_eq_vec(&["users"], &table_name);
@@ -2646,6 +2656,8 @@ fn parse_create_indices_with_operator_classes() {
                     assert_eq!(expected_function_column, columns[0],);
                     assert!(include.is_empty());
                     assert!(with.is_empty());
+                    assert!(index_options.is_empty());
+                    assert!(alter_options.is_empty());
                 }
                 _ => unreachable!(),
             }
@@ -2663,6 +2675,8 @@ fn parse_create_indices_with_operator_classes() {
                     nulls_distinct: None,
                     with,
                     predicate: None,
+                    index_options,
+                    alter_options,
                 }) => {
                     assert_eq_vec(&["the_index_name"], &name);
                     assert_eq_vec(&["users"], &table_name);
@@ -2688,6 +2702,8 @@ fn parse_create_indices_with_operator_classes() {
                     assert_eq!(expected_function_column, columns[1],);
                     assert!(include.is_empty());
                     assert!(with.is_empty());
+                    assert!(index_options.is_empty());
+                    assert!(alter_options.is_empty());
                 }
                 _ => unreachable!(),
             }
@@ -2698,7 +2714,7 @@ fn parse_create_indices_with_operator_classes() {
 #[test]
 fn parse_create_bloom() {
     let sql =
-        "CREATE INDEX bloomidx ON tbloom USING BLOOM (i1,i2,i3) WITH (length = 80, col1 = 2, col2 = 2, col3 = 4)";
+        "CREATE INDEX bloomidx ON tbloom USING BLOOM (i1, i2, i3) WITH (length = 80, col1 = 2, col2 = 2, col3 = 4)";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
@@ -2712,6 +2728,8 @@ fn parse_create_bloom() {
             nulls_distinct: None,
             with,
             predicate: None,
+            index_options,
+            alter_options,
         }) => {
             assert_eq_vec(&["bloomidx"], &name);
             assert_eq_vec(&["tbloom"], &table_name);
@@ -2743,6 +2761,8 @@ fn parse_create_bloom() {
                 ],
                 with
             );
+            assert!(index_options.is_empty());
+            assert!(alter_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2764,6 +2784,8 @@ fn parse_create_brin() {
             nulls_distinct: None,
             with,
             predicate: None,
+            index_options,
+            alter_options,
         }) => {
             assert_eq_vec(&["brin_sensor_data_recorded_at"], &name);
             assert_eq_vec(&["sensor_data"], &table_name);
@@ -2771,6 +2793,8 @@ fn parse_create_brin() {
             assert_eq_vec(&["recorded_at"], &columns);
             assert!(include.is_empty());
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
+            assert!(alter_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2813,7 +2837,7 @@ fn parse_create_table_with_empty_inherits_fails() {
 
 #[test]
 fn parse_create_index_concurrently() {
-    let sql = "CREATE INDEX CONCURRENTLY IF NOT EXISTS my_index ON my_table(col1,col2)";
+    let sql = "CREATE INDEX CONCURRENTLY IF NOT EXISTS my_index ON my_table(col1, col2)";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
@@ -2827,6 +2851,8 @@ fn parse_create_index_concurrently() {
             nulls_distinct: None,
             with,
             predicate: None,
+            index_options,
+            alter_options,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -2837,6 +2863,8 @@ fn parse_create_index_concurrently() {
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
+            assert!(alter_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2844,7 +2872,7 @@ fn parse_create_index_concurrently() {
 
 #[test]
 fn parse_create_index_with_predicate() {
-    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2) WHERE col3 IS NULL";
+    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1, col2) WHERE col3 IS NULL";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
@@ -2858,6 +2886,8 @@ fn parse_create_index_with_predicate() {
             nulls_distinct: None,
             with,
             predicate: Some(_),
+            index_options,
+            alter_options,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -2868,6 +2898,8 @@ fn parse_create_index_with_predicate() {
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
+            assert!(alter_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2875,7 +2907,7 @@ fn parse_create_index_with_predicate() {
 
 #[test]
 fn parse_create_index_with_include() {
-    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2) INCLUDE (col3)";
+    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1, col2) INCLUDE (col3, col4)";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
@@ -2889,6 +2921,8 @@ fn parse_create_index_with_include() {
             nulls_distinct: None,
             with,
             predicate: None,
+            index_options,
+            alter_options,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -2897,8 +2931,10 @@ fn parse_create_index_with_include() {
             assert!(!concurrently);
             assert!(if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
-            assert_eq_vec(&["col3"], &include);
+            assert_eq_vec(&["col3", "col4"], &include);
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
+            assert!(alter_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2906,7 +2942,7 @@ fn parse_create_index_with_include() {
 
 #[test]
 fn parse_create_index_with_nulls_distinct() {
-    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2) NULLS NOT DISTINCT";
+    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1, col2) NULLS NOT DISTINCT";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
@@ -2920,6 +2956,8 @@ fn parse_create_index_with_nulls_distinct() {
             nulls_distinct: Some(nulls_distinct),
             with,
             predicate: None,
+            index_options,
+            alter_options,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -2931,11 +2969,13 @@ fn parse_create_index_with_nulls_distinct() {
             assert!(include.is_empty());
             assert!(!nulls_distinct);
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
+            assert!(alter_options.is_empty());
         }
         _ => unreachable!(),
     }
 
-    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2) NULLS DISTINCT";
+    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1, col2) NULLS DISTINCT";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
@@ -2949,6 +2989,8 @@ fn parse_create_index_with_nulls_distinct() {
             nulls_distinct: Some(nulls_distinct),
             with,
             predicate: None,
+            index_options,
+            alter_options,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -2960,6 +3002,8 @@ fn parse_create_index_with_nulls_distinct() {
             assert!(include.is_empty());
             assert!(nulls_distinct);
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
+            assert!(alter_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -4723,7 +4767,7 @@ fn parse_dollar_quoted_string() {
                 quote_style: None,
                 span: Span::empty(),
             },
-        }
+        },
     );
 
     assert_eq!(
@@ -5296,13 +5340,14 @@ fn parse_at_time_zone() {
     // check precedence
     let expr = Expr::BinaryOp {
         left: Box::new(Expr::AtTimeZone {
-            timestamp: Box::new(Expr::TypedString {
+            timestamp: Box::new(Expr::TypedString(TypedString {
                 data_type: DataType::Timestamp(None, TimezoneInfo::None),
                 value: ValueWithSpan {
                     value: Value::SingleQuotedString("2001-09-28 01:00".to_string()),
                     span: Span::empty(),
                 },
-            }),
+                uses_odbc_syntax: false,
+            })),
             time_zone: Box::new(Expr::Cast {
                 kind: CastKind::DoubleColon,
                 expr: Box::new(Expr::Value(
@@ -5329,6 +5374,44 @@ fn parse_at_time_zone() {
         ),
         expr
     );
+}
+
+#[test]
+fn parse_interval_data_type() {
+    pg_and_generic().verified_stmt("CREATE TABLE t (i INTERVAL)");
+    for p in 0..=6 {
+        pg_and_generic().verified_stmt(&format!("CREATE TABLE t (i INTERVAL({p}))"));
+        pg_and_generic().verified_stmt(&format!("SELECT '1 second'::INTERVAL({p})"));
+        pg_and_generic().verified_stmt(&format!("SELECT CAST('1 second' AS INTERVAL({p}))"));
+    }
+    let fields = [
+        "YEAR",
+        "MONTH",
+        "DAY",
+        "HOUR",
+        "MINUTE",
+        "SECOND",
+        "YEAR TO MONTH",
+        "DAY TO HOUR",
+        "DAY TO MINUTE",
+        "DAY TO SECOND",
+        "HOUR TO MINUTE",
+        "HOUR TO SECOND",
+        "MINUTE TO SECOND",
+    ];
+    for field in fields {
+        pg_and_generic().verified_stmt(&format!("CREATE TABLE t (i INTERVAL {field})"));
+        pg_and_generic().verified_stmt(&format!("SELECT '1 second'::INTERVAL {field}"));
+        pg_and_generic().verified_stmt(&format!("SELECT CAST('1 second' AS INTERVAL {field})"));
+    }
+    for p in 0..=6 {
+        for field in fields {
+            pg_and_generic().verified_stmt(&format!("CREATE TABLE t (i INTERVAL {field}({p}))"));
+            pg_and_generic().verified_stmt(&format!("SELECT '1 second'::INTERVAL {field}({p})"));
+            pg_and_generic()
+                .verified_stmt(&format!("SELECT CAST('1 second' AS INTERVAL {field}({p}))"));
+        }
+    }
 }
 
 #[test]
@@ -5513,6 +5596,7 @@ fn parse_create_simple_before_insert_trigger() {
         is_constraint: false,
         name: ObjectName::from(vec![Ident::new("check_insert")]),
         period: TriggerPeriod::Before,
+        period_before_table: true,
         events: vec![TriggerEvent::Insert],
         table_name: ObjectName::from(vec![Ident::new("accounts")]),
         referenced_table_name: None,
@@ -5527,6 +5611,7 @@ fn parse_create_simple_before_insert_trigger() {
                 args: None,
             },
         }),
+        statements_as: false,
         statements: None,
         characteristics: None,
     };
@@ -5543,6 +5628,7 @@ fn parse_create_after_update_trigger_with_condition() {
         is_constraint: false,
         name: ObjectName::from(vec![Ident::new("check_update")]),
         period: TriggerPeriod::After,
+        period_before_table: true,
         events: vec![TriggerEvent::Update(vec![])],
         table_name: ObjectName::from(vec![Ident::new("accounts")]),
         referenced_table_name: None,
@@ -5564,6 +5650,7 @@ fn parse_create_after_update_trigger_with_condition() {
                 args: None,
             },
         }),
+        statements_as: false,
         statements: None,
         characteristics: None,
     };
@@ -5580,6 +5667,7 @@ fn parse_create_instead_of_delete_trigger() {
         is_constraint: false,
         name: ObjectName::from(vec![Ident::new("check_delete")]),
         period: TriggerPeriod::InsteadOf,
+        period_before_table: true,
         events: vec![TriggerEvent::Delete],
         table_name: ObjectName::from(vec![Ident::new("accounts")]),
         referenced_table_name: None,
@@ -5594,6 +5682,7 @@ fn parse_create_instead_of_delete_trigger() {
                 args: None,
             },
         }),
+        statements_as: false,
         statements: None,
         characteristics: None,
     };
@@ -5610,6 +5699,7 @@ fn parse_create_trigger_with_multiple_events_and_deferrable() {
         is_constraint: true,
         name: ObjectName::from(vec![Ident::new("check_multiple_events")]),
         period: TriggerPeriod::Before,
+        period_before_table: true,
         events: vec![
             TriggerEvent::Insert,
             TriggerEvent::Update(vec![]),
@@ -5628,6 +5718,7 @@ fn parse_create_trigger_with_multiple_events_and_deferrable() {
                 args: None,
             },
         }),
+        statements_as: false,
         statements: None,
         characteristics: Some(ConstraintCharacteristics {
             deferrable: Some(true),
@@ -5648,6 +5739,7 @@ fn parse_create_trigger_with_referencing() {
         is_constraint: false,
         name: ObjectName::from(vec![Ident::new("check_referencing")]),
         period: TriggerPeriod::Before,
+        period_before_table: true,
         events: vec![TriggerEvent::Insert],
         table_name: ObjectName::from(vec![Ident::new("accounts")]),
         referenced_table_name: None,
@@ -5673,6 +5765,7 @@ fn parse_create_trigger_with_referencing() {
                 args: None,
             },
         }),
+        statements_as: false,
         statements: None,
         characteristics: None,
     };
@@ -5955,6 +6048,7 @@ fn parse_trigger_related_functions() {
             is_constraint: false,
             name: ObjectName::from(vec![Ident::new("emp_stamp")]),
             period: TriggerPeriod::Before,
+            period_before_table: true,
             events: vec![TriggerEvent::Insert, TriggerEvent::Update(vec![])],
             table_name: ObjectName::from(vec![Ident::new("emp")]),
             referenced_table_name: None,
@@ -5966,9 +6060,10 @@ fn parse_trigger_related_functions() {
                 exec_type: TriggerExecBodyType::Function,
                 func_desc: FunctionDesc {
                     name: ObjectName::from(vec![Ident::new("emp_stamp")]),
-                    args: None,
+                    args: Some(vec![]),
                 }
             }),
+            statements_as: false,
             statements: None,
             characteristics: None
         }

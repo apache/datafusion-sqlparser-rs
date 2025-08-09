@@ -1362,6 +1362,13 @@ fn parse_create_table_gencol() {
 }
 
 #[test]
+fn parse_create_table_options_comma_separated() {
+    let sql = "CREATE TABLE t (x INT) DEFAULT CHARSET = utf8mb4, ENGINE = InnoDB , AUTO_INCREMENT 1 DATA DIRECTORY '/var/lib/mysql/data'";
+    let canonical = "CREATE TABLE t (x INT) DEFAULT CHARSET = utf8mb4 ENGINE = InnoDB AUTO_INCREMENT = 1 DATA DIRECTORY = '/var/lib/mysql/data'";
+    mysql_and_generic().one_statement_parses_to(sql, canonical);
+}
+
+#[test]
 fn parse_quote_identifiers() {
     let sql = "CREATE TABLE `PRIMARY` (`BEGIN` INT PRIMARY KEY)";
     match mysql().verified_stmt(sql) {
@@ -1703,6 +1710,51 @@ fn parse_create_table_unsigned() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_signed_data_types() {
+    let sql = "CREATE TABLE foo (bar_tinyint TINYINT(3) SIGNED, bar_smallint SMALLINT(5) SIGNED, bar_mediumint MEDIUMINT(13) SIGNED, bar_int INT(11) SIGNED, bar_bigint BIGINT(20) SIGNED)";
+    let canonical = "CREATE TABLE foo (bar_tinyint TINYINT(3), bar_smallint SMALLINT(5), bar_mediumint MEDIUMINT(13), bar_int INT(11), bar_bigint BIGINT(20))";
+    match mysql().one_statement_parses_to(sql, canonical) {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![
+                    ColumnDef {
+                        name: Ident::new("bar_tinyint"),
+                        data_type: DataType::TinyInt(Some(3)),
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_smallint"),
+                        data_type: DataType::SmallInt(Some(5)),
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_mediumint"),
+                        data_type: DataType::MediumInt(Some(13)),
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_int"),
+                        data_type: DataType::Int(Some(11)),
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_bigint"),
+                        data_type: DataType::BigInt(Some(20)),
+                        options: vec![],
+                    },
+                ],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+    all_dialects_except(|d| d.supports_data_type_signed_suffix())
+        .run_parser_method(sql, |p| p.parse_statement())
+        .expect_err("SIGNED suffix should not be allowed");
 }
 
 #[test]
@@ -2464,6 +2516,7 @@ fn parse_update_with_joins() {
             selection,
             returning,
             or: None,
+            limit: None,
         } => {
             assert_eq!(
                 TableWithJoins {
@@ -2590,6 +2643,7 @@ fn parse_alter_table_add_column() {
             iceberg,
             location: _,
             on_cluster: _,
+            end_token: _,
         } => {
             assert_eq!(name.to_string(), "tab");
             assert!(!if_exists);
@@ -3862,11 +3916,8 @@ fn parse_looks_like_single_line_comment() {
 
 #[test]
 fn parse_create_trigger() {
-    let sql_create_trigger = r#"
-        CREATE TRIGGER emp_stamp BEFORE INSERT ON emp
-            FOR EACH ROW EXECUTE FUNCTION emp_stamp();
-    "#;
-    let create_stmt = mysql().one_statement_parses_to(sql_create_trigger, "");
+    let sql_create_trigger = r#"CREATE TRIGGER emp_stamp BEFORE INSERT ON emp FOR EACH ROW EXECUTE FUNCTION emp_stamp()"#;
+    let create_stmt = mysql().verified_stmt(sql_create_trigger);
     assert_eq!(
         create_stmt,
         Statement::CreateTrigger {
@@ -3875,6 +3926,7 @@ fn parse_create_trigger() {
             is_constraint: false,
             name: ObjectName::from(vec![Ident::new("emp_stamp")]),
             period: TriggerPeriod::Before,
+            period_before_table: true,
             events: vec![TriggerEvent::Insert],
             table_name: ObjectName::from(vec![Ident::new("emp")]),
             referenced_table_name: None,
@@ -3886,13 +3938,20 @@ fn parse_create_trigger() {
                 exec_type: TriggerExecBodyType::Function,
                 func_desc: FunctionDesc {
                     name: ObjectName::from(vec![Ident::new("emp_stamp")]),
-                    args: None,
+                    args: Some(vec![]),
                 }
             }),
+            statements_as: false,
             statements: None,
             characteristics: None,
         }
     );
+}
+
+#[test]
+fn parse_create_trigger_compound_statement() {
+    mysql_and_generic().verified_stmt("CREATE TRIGGER mytrigger BEFORE INSERT ON mytable FOR EACH ROW BEGIN SET NEW.a = 1; SET NEW.b = 2; END");
+    mysql_and_generic().verified_stmt("CREATE TRIGGER tr AFTER INSERT ON t1 FOR EACH ROW BEGIN INSERT INTO t2 VALUES (NEW.id); END");
 }
 
 #[test]
@@ -4142,4 +4201,47 @@ fn parse_json_member_of() {
         }
         _ => panic!("Unexpected statement {stmt}"),
     }
+}
+
+#[test]
+fn parse_show_charset() {
+    let res = mysql().verified_stmt("SHOW CHARACTER SET");
+    assert_eq!(
+        res,
+        Statement::ShowCharset(ShowCharset {
+            is_shorthand: false,
+            filter: None
+        })
+    );
+    mysql().verified_stmt("SHOW CHARACTER SET LIKE 'utf8mb4%'");
+    mysql().verified_stmt("SHOW CHARSET WHERE charset = 'utf8mb4%'");
+    mysql().verified_stmt("SHOW CHARSET LIKE 'utf8mb4%'");
+}
+
+#[test]
+fn test_ddl_with_index_using() {
+    let columns = "(name, age DESC)";
+    let using = "USING BTREE";
+
+    for sql in [
+        format!("CREATE INDEX idx_name ON test {using} {columns}"),
+        format!("CREATE TABLE foo (name VARCHAR(255), age INT, KEY idx_name {using} {columns})"),
+        format!("ALTER TABLE foo ADD KEY idx_name {using} {columns}"),
+        format!("CREATE INDEX idx_name ON test{columns} {using}"),
+        format!("CREATE TABLE foo (name VARCHAR(255), age INT, KEY idx_name {columns} {using})"),
+        format!("ALTER TABLE foo ADD KEY idx_name {columns} {using}"),
+    ] {
+        mysql_and_generic().verified_stmt(&sql);
+    }
+}
+
+#[test]
+fn test_create_index_options() {
+    mysql_and_generic()
+        .verified_stmt("CREATE INDEX idx_name ON t(c1, c2) USING HASH LOCK = SHARED");
+    mysql_and_generic()
+        .verified_stmt("CREATE INDEX idx_name ON t(c1, c2) USING BTREE ALGORITHM = INPLACE");
+    mysql_and_generic().verified_stmt(
+        "CREATE INDEX idx_name ON t(c1, c2) USING BTREE LOCK = EXCLUSIVE ALGORITHM = DEFAULT",
+    );
 }

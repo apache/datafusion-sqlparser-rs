@@ -52,7 +52,7 @@ use crate::{
 
 pub use self::data_type::{
     ArrayElemTypeDef, BinaryLength, CharLengthUnits, CharacterLength, DataType, EnumMember,
-    ExactNumberInfo, StructBracketKind, TimezoneInfo,
+    ExactNumberInfo, IntervalFields, StructBracketKind, TimezoneInfo,
 };
 pub use self::dcl::{
     AlterRoleOperation, ResetConfig, RoleOption, SecondaryRoles, SetConfigValue, Use,
@@ -63,14 +63,15 @@ pub use self::ddl::{
     AlterType, AlterTypeAddValue, AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename,
     AlterTypeRenameValue, ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions,
     ColumnPolicy, ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain,
-    CreateFunction, Deduplicate, DeferrableInitial, DropBehavior, GeneratedAs,
-    GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
-    IdentityPropertyKind, IdentityPropertyOrder, IndexOption, IndexType, KeyOrIndexDisplay,
-    NullsDistinctOption, Owner, Partition, ProcedureParam, ReferentialAction, ReplicaIdentity,
-    TableConstraint, TagsColumnOption, UserDefinedTypeCompositeAttributeDef,
-    UserDefinedTypeRepresentation, ViewColumnDef,
+    CreateFunction, CreateIndex, CreateTable, Deduplicate, DeferrableInitial, DropBehavior,
+    GeneratedAs, GeneratedExpressionMode, IdentityParameters, IdentityProperty,
+    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, IndexColumn,
+    IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition,
+    ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity, TableConstraint,
+    TagsColumnOption, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
+    ViewColumnDef,
 };
-pub use self::dml::{CreateIndex, CreateTable, Delete, IndexColumn, Insert};
+pub use self::dml::{Delete, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
     AfterMatchSkip, ConnectBy, Cte, CteAsMaterialized, Distinct, EmptyMatchesMode,
@@ -1014,12 +1015,7 @@ pub enum Expr {
     /// A constant of form `<data_type> 'value'`.
     /// This can represent ANSI SQL `DATE`, `TIME`, and `TIMESTAMP` literals (such as `DATE '2020-01-01'`),
     /// as well as constants of other types (a non-standard PostgreSQL extension).
-    TypedString {
-        data_type: DataType,
-        /// The value of the constant.
-        /// Hint: you can unwrap the string value using `value.into_string()`.
-        value: ValueWithSpan,
-    },
+    TypedString(TypedString),
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
@@ -1734,10 +1730,7 @@ impl fmt::Display for Expr {
             Expr::Nested(ast) => write!(f, "({ast})"),
             Expr::Value(v) => write!(f, "{v}"),
             Expr::Prefixed { prefix, value } => write!(f, "{prefix} {value}"),
-            Expr::TypedString { data_type, value } => {
-                write!(f, "{data_type}")?;
-                write!(f, " {value}")
-            }
+            Expr::TypedString(ts) => ts.fmt(f),
             Expr::Function(fun) => fun.fmt(f),
             Expr::Case {
                 case_token: _,
@@ -3246,6 +3239,8 @@ pub enum Statement {
         returning: Option<Vec<SelectItem>>,
         /// SQLite-specific conflict resolution clause
         or: Option<SqliteOnConflict>,
+        /// LIMIT
+        limit: Option<Expr>,
     },
     /// ```sql
     /// DELETE
@@ -3263,6 +3258,17 @@ pub enum Statement {
         materialized: bool,
         /// View name
         name: ObjectName,
+        /// If `if_not_exists` is true, this flag is set to true if the view name comes before the `IF NOT EXISTS` clause.
+        /// Example:
+        /// ```sql
+        /// CREATE VIEW myview IF NOT EXISTS AS SELECT 1`
+        ///  ```
+        /// Otherwise, the flag is set to false if the view name comes after the clause
+        /// Example:
+        /// ```sql
+        /// CREATE VIEW IF NOT EXISTS myview AS SELECT 1`
+        ///  ```
+        name_before_not_exists: bool,
         columns: Vec<ViewColumnDef>,
         query: Box<Query>,
         options: CreateTableOptions,
@@ -3379,6 +3385,8 @@ pub enum Statement {
         /// Snowflake "ICEBERG" clause for Iceberg tables
         /// <https://docs.snowflake.com/en/sql-reference/sql/alter-iceberg-table>
         iceberg: bool,
+        /// Token that represents the end of the statement (semicolon or EOF)
+        end_token: AttachedToken,
     },
     /// ```sql
     /// ALTER SCHEMA
@@ -3709,6 +3717,12 @@ pub enum Statement {
         history: bool,
         show_options: ShowStatementOptions,
     },
+    // ```sql
+    // SHOW {CHARACTER SET | CHARSET}
+    // ```
+    // [MySQL]:
+    // <https://dev.mysql.com/doc/refman/8.4/en/show.html#:~:text=SHOW%20%7BCHARACTER%20SET%20%7C%20CHARSET%7D%20%5Blike_or_where%5D>
+    ShowCharset(ShowCharset),
     /// ```sql
     /// SHOW OBJECTS LIKE 'line%' IN mydb.public
     /// ```
@@ -3863,19 +3877,29 @@ pub enum Statement {
     /// ```sql
     /// CREATE DATABASE
     /// ```
+    /// See:
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-database>
     CreateDatabase {
         db_name: ObjectName,
         if_not_exists: bool,
         location: Option<String>,
         managed_location: Option<String>,
-        /// Clones a database
-        ///
-        /// ```sql
-        /// CREATE DATABASE mydb CLONE otherdb
-        /// ```
-        ///
-        /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-clone#databases-schemas)
+        or_replace: bool,
+        transient: bool,
         clone: Option<ObjectName>,
+        data_retention_time_in_days: Option<u64>,
+        max_data_extension_time_in_days: Option<u64>,
+        external_volume: Option<String>,
+        catalog: Option<String>,
+        replace_invalid_characters: Option<bool>,
+        default_ddl_collation: Option<String>,
+        storage_serialization_policy: Option<StorageSerializationPolicy>,
+        comment: Option<String>,
+        catalog_sync: Option<String>,
+        catalog_sync_namespace_mode: Option<CatalogSyncNamespaceMode>,
+        catalog_sync_namespace_flatten_delimiter: Option<String>,
+        with_tags: Option<Vec<Tag>>,
+        with_contacts: Option<Vec<ContactEntry>>,
     },
     /// ```sql
     /// CREATE FUNCTION
@@ -3948,6 +3972,15 @@ pub enum Statement {
         /// EXECUTE FUNCTION trigger_function();
         /// ```
         period: TriggerPeriod,
+        /// Whether the trigger period was specified before the target table name.
+        ///
+        /// ```sql
+        /// -- period_before_table == true: Postgres, MySQL, and standard SQL
+        /// CREATE TRIGGER t BEFORE INSERT ON table_name ...;
+        /// -- period_before_table == false: MSSQL
+        /// CREATE TRIGGER t ON table_name BEFORE INSERT ...;
+        /// ```
+        period_before_table: bool,
         /// Multiple events can be specified using OR, such as `INSERT`, `UPDATE`, `DELETE`, or `TRUNCATE`.
         events: Vec<TriggerEvent>,
         /// The table on which the trigger is to be created.
@@ -3966,6 +3999,8 @@ pub enum Statement {
         condition: Option<Expr>,
         /// Execute logic block
         exec_body: Option<TriggerExecBody>,
+        /// For MSSQL and dialects where statements are preceded by `AS`
+        statements_as: bool,
         /// For SQL dialects with statement(s) for a body
         statements: Option<ConditionalStatements>,
         /// The characteristic of the trigger, which include whether the trigger is `DEFERRABLE`, `INITIALLY DEFERRED`, or `INITIALLY IMMEDIATE`,
@@ -4785,6 +4820,7 @@ impl fmt::Display for Statement {
                 selection,
                 returning,
                 or,
+                limit,
             } => {
                 f.write_str("UPDATE ")?;
                 if let Some(or) = or {
@@ -4818,6 +4854,10 @@ impl fmt::Display for Statement {
                     f.write_str("RETURNING")?;
                     indented_list(f, returning)?;
                 }
+                if let Some(limit) = limit {
+                    SpaceOrNewline.fmt(f)?;
+                    write!(f, "LIMIT {limit}")?;
+                }
                 Ok(())
             }
             Statement::Delete(delete) => delete.fmt(f),
@@ -4832,13 +4872,32 @@ impl fmt::Display for Statement {
                 if_not_exists,
                 location,
                 managed_location,
+                or_replace,
+                transient,
                 clone,
+                data_retention_time_in_days,
+                max_data_extension_time_in_days,
+                external_volume,
+                catalog,
+                replace_invalid_characters,
+                default_ddl_collation,
+                storage_serialization_policy,
+                comment,
+                catalog_sync,
+                catalog_sync_namespace_mode,
+                catalog_sync_namespace_flatten_delimiter,
+                with_tags,
+                with_contacts,
             } => {
-                write!(f, "CREATE DATABASE")?;
-                if *if_not_exists {
-                    write!(f, " IF NOT EXISTS")?;
-                }
-                write!(f, " {db_name}")?;
+                write!(
+                    f,
+                    "CREATE {or_replace}{transient}DATABASE {if_not_exists}{name}",
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                    transient = if *transient { "TRANSIENT " } else { "" },
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    name = db_name,
+                )?;
+
                 if let Some(l) = location {
                     write!(f, " LOCATION '{l}'")?;
                 }
@@ -4847,6 +4906,60 @@ impl fmt::Display for Statement {
                 }
                 if let Some(clone) = clone {
                     write!(f, " CLONE {clone}")?;
+                }
+
+                if let Some(value) = data_retention_time_in_days {
+                    write!(f, " DATA_RETENTION_TIME_IN_DAYS = {value}")?;
+                }
+
+                if let Some(value) = max_data_extension_time_in_days {
+                    write!(f, " MAX_DATA_EXTENSION_TIME_IN_DAYS = {value}")?;
+                }
+
+                if let Some(vol) = external_volume {
+                    write!(f, " EXTERNAL_VOLUME = '{vol}'")?;
+                }
+
+                if let Some(cat) = catalog {
+                    write!(f, " CATALOG = '{cat}'")?;
+                }
+
+                if let Some(true) = replace_invalid_characters {
+                    write!(f, " REPLACE_INVALID_CHARACTERS = TRUE")?;
+                } else if let Some(false) = replace_invalid_characters {
+                    write!(f, " REPLACE_INVALID_CHARACTERS = FALSE")?;
+                }
+
+                if let Some(collation) = default_ddl_collation {
+                    write!(f, " DEFAULT_DDL_COLLATION = '{collation}'")?;
+                }
+
+                if let Some(policy) = storage_serialization_policy {
+                    write!(f, " STORAGE_SERIALIZATION_POLICY = {policy}")?;
+                }
+
+                if let Some(comment) = comment {
+                    write!(f, " COMMENT = '{comment}'")?;
+                }
+
+                if let Some(sync) = catalog_sync {
+                    write!(f, " CATALOG_SYNC = '{sync}'")?;
+                }
+
+                if let Some(mode) = catalog_sync_namespace_mode {
+                    write!(f, " CATALOG_SYNC_NAMESPACE_MODE = {mode}")?;
+                }
+
+                if let Some(delim) = catalog_sync_namespace_flatten_delimiter {
+                    write!(f, " CATALOG_SYNC_NAMESPACE_FLATTEN_DELIMITER = '{delim}'")?;
+                }
+
+                if let Some(tags) = with_tags {
+                    write!(f, " WITH TAG ({})", display_comma_separated(tags))?;
+                }
+
+                if let Some(contacts) = with_contacts {
+                    write!(f, " WITH CONTACT ({})", display_comma_separated(contacts))?;
                 }
                 Ok(())
             }
@@ -4857,6 +4970,7 @@ impl fmt::Display for Statement {
                 or_replace,
                 is_constraint,
                 name,
+                period_before_table,
                 period,
                 events,
                 table_name,
@@ -4866,6 +4980,7 @@ impl fmt::Display for Statement {
                 condition,
                 include_each,
                 exec_body,
+                statements_as,
                 statements,
                 characteristics,
             } => {
@@ -4877,7 +4992,7 @@ impl fmt::Display for Statement {
                     is_constraint = if *is_constraint { "CONSTRAINT " } else { "" },
                 )?;
 
-                if exec_body.is_some() {
+                if *period_before_table {
                     write!(f, "{period}")?;
                     if !events.is_empty() {
                         write!(f, " {}", display_separated(events, " OR "))?;
@@ -4915,7 +5030,10 @@ impl fmt::Display for Statement {
                     write!(f, " EXECUTE {exec_body}")?;
                 }
                 if let Some(statements) = statements {
-                    write!(f, " AS {statements}")?;
+                    if *statements_as {
+                        write!(f, " AS")?;
+                    }
+                    write!(f, " {statements}")?;
                 }
                 Ok(())
             }
@@ -5001,6 +5119,7 @@ impl fmt::Display for Statement {
                 temporary,
                 to,
                 params,
+                name_before_not_exists,
             } => {
                 write!(
                     f,
@@ -5013,11 +5132,18 @@ impl fmt::Display for Statement {
                 }
                 write!(
                     f,
-                    "{materialized}{temporary}VIEW {if_not_exists}{name}{to}",
+                    "{materialized}{temporary}VIEW {if_not_and_name}{to}",
+                    if_not_and_name = if *if_not_exists {
+                        if *name_before_not_exists {
+                            format!("{name} IF NOT EXISTS")
+                        } else {
+                            format!("IF NOT EXISTS {name}")
+                        }
+                    } else {
+                        format!("{name}")
+                    },
                     materialized = if *materialized { "MATERIALIZED " } else { "" },
-                    name = name,
                     temporary = if *temporary { "TEMPORARY " } else { "" },
-                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                     to = to
                         .as_ref()
                         .map(|to| format!(" TO {to}"))
@@ -5324,6 +5450,7 @@ impl fmt::Display for Statement {
                 location,
                 on_cluster,
                 iceberg,
+                end_token: _,
             } => {
                 if *iceberg {
                     write!(f, "ALTER ICEBERG TABLE ")?;
@@ -5693,6 +5820,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::ShowCharset(show_stm) => show_stm.fmt(f),
             Statement::StartTransaction {
                 modes,
                 begin: syntax_begin,
@@ -7454,6 +7582,52 @@ pub struct DropDomain {
     pub name: ObjectName,
     /// The behavior to apply when dropping the domain
     pub drop_behavior: Option<DropBehavior>,
+}
+
+/// A constant of form `<data_type> 'value'`.
+/// This can represent ANSI SQL `DATE`, `TIME`, and `TIMESTAMP` literals (such as `DATE '2020-01-01'`),
+/// as well as constants of other types (a non-standard PostgreSQL extension).
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct TypedString {
+    pub data_type: DataType,
+    /// The value of the constant.
+    /// Hint: you can unwrap the string value using `value.into_string()`.
+    pub value: ValueWithSpan,
+    /// Flags whether this TypedString uses the [ODBC syntax].
+    ///
+    /// Example:
+    /// ```sql
+    /// -- An ODBC date literal:
+    /// SELECT {d '2025-07-16'}
+    /// -- This is equivalent to the standard ANSI SQL literal:
+    /// SELECT DATE '2025-07-16'
+    ///
+    /// [ODBC syntax]: https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/date-time-and-timestamp-literals?view=sql-server-2017
+    pub uses_odbc_syntax: bool,
+}
+
+impl fmt::Display for TypedString {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let data_type = &self.data_type;
+        let value = &self.value;
+        match self.uses_odbc_syntax {
+            false => {
+                write!(f, "{data_type}")?;
+                write!(f, " {value}")
+            }
+            true => {
+                let prefix = match data_type {
+                    DataType::Date => "d",
+                    DataType::Time(..) => "t",
+                    DataType::Timestamp(..) => "ts",
+                    _ => "?",
+                };
+                write!(f, "{{{prefix} {value}}}")
+            }
+        }
+    }
 }
 
 /// A function call
@@ -9624,6 +9798,23 @@ impl Display for Tag {
     }
 }
 
+/// Snowflake `WITH CONTACT ( purpose = contact [ , purpose = contact ...] )`
+///
+/// <https://docs.snowflake.com/en/sql-reference/sql/create-database>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ContactEntry {
+    pub purpose: String,
+    pub contact: String,
+}
+
+impl Display for ContactEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} = {}", self.purpose, self.contact)
+    }
+}
+
 /// Helper to indicate if a comment includes the `=` in the display form
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -9822,6 +10013,32 @@ impl fmt::Display for ShowStatementIn {
         }
         if let Some(parent_name) = &self.parent_name {
             write!(f, " {parent_name}")?;
+        }
+        Ok(())
+    }
+}
+
+/// A Show Charset statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowCharset {
+    /// The statement can be written as `SHOW CHARSET` or `SHOW CHARACTER SET`
+    /// true means CHARSET was used and false means CHARACTER SET was used
+    pub is_shorthand: bool,
+    pub filter: Option<ShowStatementFilter>,
+}
+
+impl fmt::Display for ShowCharset {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "SHOW")?;
+        if self.is_shorthand {
+            write!(f, " CHARSET")?;
+        } else {
+            write!(f, " CHARACTER SET")?;
+        }
+        if self.filter.is_some() {
+            write!(f, " {}", self.filter.as_ref().unwrap())?;
         }
         Ok(())
     }
@@ -10046,6 +10263,29 @@ impl Display for StorageSerializationPolicy {
         match self {
             StorageSerializationPolicy::Compatible => write!(f, "COMPATIBLE"),
             StorageSerializationPolicy::Optimized => write!(f, "OPTIMIZED"),
+        }
+    }
+}
+
+/// Snowflake CatalogSyncNamespaceMode
+/// ```sql
+/// [ CATALOG_SYNC_NAMESPACE_MODE = { NEST | FLATTEN } ]
+/// ```
+///
+/// <https://docs.snowflake.com/en/sql-reference/sql/create-database>
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CatalogSyncNamespaceMode {
+    Nest,
+    Flatten,
+}
+
+impl Display for CatalogSyncNamespaceMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CatalogSyncNamespaceMode::Nest => write!(f, "NEST"),
+            CatalogSyncNamespaceMode::Flatten => write!(f, "FLATTEN"),
         }
     }
 }

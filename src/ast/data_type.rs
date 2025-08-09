@@ -346,7 +346,16 @@ pub enum DataType {
     /// [1]: https://docs.databricks.com/aws/en/sql/language-manual/data-types/timestamp-ntz-type
     TimestampNtz,
     /// Interval type.
-    Interval,
+    Interval {
+        /// [PostgreSQL] fields specification like `INTERVAL YEAR TO MONTH`.
+        ///
+        /// [PostgreSQL]: https://www.postgresql.org/docs/17/datatype-datetime.html
+        fields: Option<IntervalFields>,
+        /// [PostgreSQL] subsecond precision like `INTERVAL HOUR TO SECOND(3)`
+        ///
+        /// [PostgreSQL]: https://www.postgresql.org/docs/17/datatype-datetime.html
+        precision: Option<u64>,
+    },
     /// JSON type.
     JSON,
     /// Binary JSON type.
@@ -635,7 +644,16 @@ impl fmt::Display for DataType {
                     timezone,
                 )
             }
-            DataType::Interval => write!(f, "INTERVAL"),
+            DataType::Interval { fields, precision } => {
+                write!(f, "INTERVAL")?;
+                if let Some(fields) = fields {
+                    write!(f, " {fields}")?;
+                }
+                if let Some(precision) = precision {
+                    write!(f, "({precision})")?;
+                }
+                Ok(())
+            }
             DataType::JSON => write!(f, "JSON"),
             DataType::JSONB => write!(f, "JSONB"),
             DataType::Regclass => write!(f, "REGCLASS"),
@@ -889,6 +907,48 @@ impl fmt::Display for TimezoneInfo {
     }
 }
 
+/// Fields for [Postgres] `INTERVAL` type.
+///
+/// [Postgres]: https://www.postgresql.org/docs/17/datatype-datetime.html
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum IntervalFields {
+    Year,
+    Month,
+    Day,
+    Hour,
+    Minute,
+    Second,
+    YearToMonth,
+    DayToHour,
+    DayToMinute,
+    DayToSecond,
+    HourToMinute,
+    HourToSecond,
+    MinuteToSecond,
+}
+
+impl fmt::Display for IntervalFields {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            IntervalFields::Year => write!(f, "YEAR"),
+            IntervalFields::Month => write!(f, "MONTH"),
+            IntervalFields::Day => write!(f, "DAY"),
+            IntervalFields::Hour => write!(f, "HOUR"),
+            IntervalFields::Minute => write!(f, "MINUTE"),
+            IntervalFields::Second => write!(f, "SECOND"),
+            IntervalFields::YearToMonth => write!(f, "YEAR TO MONTH"),
+            IntervalFields::DayToHour => write!(f, "DAY TO HOUR"),
+            IntervalFields::DayToMinute => write!(f, "DAY TO MINUTE"),
+            IntervalFields::DayToSecond => write!(f, "DAY TO SECOND"),
+            IntervalFields::HourToMinute => write!(f, "HOUR TO MINUTE"),
+            IntervalFields::HourToSecond => write!(f, "HOUR TO SECOND"),
+            IntervalFields::MinuteToSecond => write!(f, "MINUTE TO SECOND"),
+        }
+    }
+}
+
 /// Additional information for `NUMERIC`, `DECIMAL`, and `DEC` data types
 /// following the 2016 [SQL Standard].
 ///
@@ -902,7 +962,7 @@ pub enum ExactNumberInfo {
     /// Only precision information, e.g. `DECIMAL(10)`
     Precision(u64),
     /// Precision and scale information, e.g. `DECIMAL(10,2)`
-    PrecisionAndScale(u64, u64),
+    PrecisionAndScale(u64, i64),
 }
 
 impl fmt::Display for ExactNumberInfo {

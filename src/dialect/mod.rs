@@ -590,7 +590,7 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returne true if the dialect supports specifying multiple options
+    /// Return true if the dialect supports specifying multiple options
     /// in a `CREATE TABLE` statement for the structure of the new table. For example:
     /// `CREATE TABLE t (a INT, b INT) AS SELECT 1 AS b, 2 AS a`
     fn supports_create_table_multi_schema_info_sources(&self) -> bool {
@@ -963,12 +963,6 @@ pub trait Dialect: Debug + Any {
         keywords::RESERVED_FOR_IDENTIFIER.contains(&kw)
     }
 
-    /// Returns reserved keywords when looking to parse a `TableFactor`.
-    /// See [Self::supports_from_trailing_commas]
-    fn get_reserved_keywords_for_table_factor(&self) -> &[Keyword] {
-        keywords::RESERVED_FOR_TABLE_FACTOR
-    }
-
     /// Returns reserved keywords that may prefix a select item expression
     /// e.g. `SELECT CONNECT_BY_ROOT name FROM Tbl2` (Snowflake)
     fn get_reserved_keywords_for_select_item_operator(&self) -> &[Keyword] {
@@ -1027,7 +1021,13 @@ pub trait Dialect: Debug + Any {
         explicit || self.is_column_alias(kw, parser)
     }
 
-    /// Returns true if the specified keyword should be parsed as a table identifier.
+    /// Returns true if the specified keyword should be parsed as a table factor identifier.
+    /// See [keywords::RESERVED_FOR_TABLE_FACTOR]
+    fn is_table_factor(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+        !keywords::RESERVED_FOR_TABLE_FACTOR.contains(kw)
+    }
+
+    /// Returns true if the specified keyword should be parsed as a table factor alias.
     /// See [keywords::RESERVED_FOR_TABLE_ALIAS]
     fn is_table_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
         !keywords::RESERVED_FOR_TABLE_ALIAS.contains(kw)
@@ -1134,6 +1134,33 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports the `x NOTNULL`
     /// operator expression.
     fn supports_notnull_operator(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect allows an optional `SIGNED` suffix after integer data types.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE TABLE t (i INT(20) SIGNED);
+    /// ```
+    ///
+    /// Note that this is canonicalized to `INT(20)`.
+    fn supports_data_type_signed_suffix(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports the `INTERVAL` data type with [Postgres]-style options.
+    ///
+    /// Examples:
+    /// ```sql
+    /// CREATE TABLE t (i INTERVAL YEAR TO MONTH);
+    /// SELECT '1 second'::INTERVAL HOUR TO SECOND(3);
+    /// ```
+    ///
+    /// See [`crate::ast::DataType::Interval`] and [`crate::ast::IntervalFields`].
+    ///
+    /// [Postgres]: https://www.postgresql.org/docs/17/datatype-datetime.html
+    fn supports_interval_options(&self) -> bool {
         false
     }
 }

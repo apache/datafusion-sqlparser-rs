@@ -351,6 +351,7 @@ pub fn alter_table_op_with_name(stmt: Statement, expected_name: &str) -> AlterTa
             on_cluster: _,
             location: _,
             iceberg,
+            end_token: _,
         } => {
             assert_eq!(name.to_string(), expected_name);
             assert!(!if_exists);

@@ -24,9 +24,8 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use super::super::dml::CreateTable;
 use crate::ast::{
-    ClusteredBy, ColumnDef, CommentDef, CreateTableOptions, Expr, FileFormat,
+    ClusteredBy, ColumnDef, CommentDef, CreateTable, CreateTableOptions, Expr, FileFormat,
     HiveDistributionStyle, HiveFormat, Ident, ObjectName, OnCommit, OneOrManyWithParens, Query,
     RowAccessPolicy, Statement, StorageSerializationPolicy, TableConstraint, Tag,
     WrappedCollection,

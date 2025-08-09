@@ -20,15 +20,17 @@ use crate::alloc::string::ToString;
 use crate::ast::helpers::key_value_options::{
     KeyValueOption, KeyValueOptionType, KeyValueOptions, KeyValueOptionsDelimiter,
 };
+use crate::ast::helpers::stmt_create_database::CreateDatabaseBuilder;
 use crate::ast::helpers::stmt_create_table::CreateTableBuilder;
 use crate::ast::helpers::stmt_data_loading::{
     FileStagingCommand, StageLoadSelectItem, StageLoadSelectItemKind, StageParamsObject,
 };
 use crate::ast::{
-    ColumnOption, ColumnPolicy, ColumnPolicyProperty, CopyIntoSnowflakeKind, DollarQuotedString,
-    Ident, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
-    IdentityPropertyOrder, ObjectName, ObjectNamePart, RowAccessPolicy, ShowObjects, SqlOption,
-    Statement, TagsColumnOption, WrappedCollection,
+    CatalogSyncNamespaceMode, ColumnOption, ColumnPolicy, ColumnPolicyProperty, ContactEntry,
+    CopyIntoSnowflakeKind, DollarQuotedString, Ident, IdentityParameters, IdentityProperty,
+    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, ObjectName,
+    ObjectNamePart, RowAccessPolicy, ShowObjects, SqlOption, Statement, StorageSerializationPolicy,
+    TagsColumnOption, WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
@@ -44,9 +46,84 @@ use alloc::vec::Vec;
 use alloc::{format, vec};
 
 use super::keywords::RESERVED_FOR_IDENTIFIER;
-use sqlparser::ast::StorageSerializationPolicy;
 
 const RESERVED_KEYWORDS_FOR_SELECT_ITEM_OPERATOR: [Keyword; 1] = [Keyword::CONNECT_BY_ROOT];
+
+// See: <https://docs.snowflake.com/en/sql-reference/reserved-keywords>
+const RESERVED_KEYWORDS_FOR_TABLE_FACTOR: &[Keyword] = &[
+    Keyword::ALL,
+    Keyword::ALTER,
+    Keyword::AND,
+    Keyword::ANY,
+    Keyword::AS,
+    Keyword::BETWEEN,
+    Keyword::BY,
+    Keyword::CHECK,
+    Keyword::COLUMN,
+    Keyword::CONNECT,
+    Keyword::CREATE,
+    Keyword::CROSS,
+    Keyword::CURRENT,
+    Keyword::DELETE,
+    Keyword::DISTINCT,
+    Keyword::DROP,
+    Keyword::ELSE,
+    Keyword::EXISTS,
+    Keyword::FOLLOWING,
+    Keyword::FOR,
+    Keyword::FROM,
+    Keyword::FULL,
+    Keyword::GRANT,
+    Keyword::GROUP,
+    Keyword::HAVING,
+    Keyword::ILIKE,
+    Keyword::IN,
+    Keyword::INCREMENT,
+    Keyword::INNER,
+    Keyword::INSERT,
+    Keyword::INTERSECT,
+    Keyword::INTO,
+    Keyword::IS,
+    Keyword::JOIN,
+    Keyword::LEFT,
+    Keyword::LIKE,
+    Keyword::MINUS,
+    Keyword::NATURAL,
+    Keyword::NOT,
+    Keyword::NULL,
+    Keyword::OF,
+    Keyword::ON,
+    Keyword::OR,
+    Keyword::ORDER,
+    Keyword::QUALIFY,
+    Keyword::REGEXP,
+    Keyword::REVOKE,
+    Keyword::RIGHT,
+    Keyword::RLIKE,
+    Keyword::ROW,
+    Keyword::ROWS,
+    Keyword::SAMPLE,
+    Keyword::SELECT,
+    Keyword::SET,
+    Keyword::SOME,
+    Keyword::START,
+    Keyword::TABLE,
+    Keyword::TABLESAMPLE,
+    Keyword::THEN,
+    Keyword::TO,
+    Keyword::TRIGGER,
+    Keyword::UNION,
+    Keyword::UNIQUE,
+    Keyword::UPDATE,
+    Keyword::USING,
+    Keyword::VALUES,
+    Keyword::WHEN,
+    Keyword::WHENEVER,
+    Keyword::WHERE,
+    Keyword::WINDOW,
+    Keyword::WITH,
+];
+
 /// A [`Dialect`] for [Snowflake](https://www.snowflake.com/)
 #[derive(Debug, Default)]
 pub struct SnowflakeDialect;
@@ -184,6 +261,8 @@ impl Dialect for SnowflakeDialect {
                 return Some(parse_create_table(
                     or_replace, global, temporary, volatile, transient, iceberg, parser,
                 ));
+            } else if parser.parse_keyword(Keyword::DATABASE) {
+                return Some(parse_create_database(or_replace, transient, parser));
             } else {
                 // need to go back with the cursor
                 let mut back = 1;
@@ -433,6 +512,15 @@ impl Dialect for SnowflakeDialect {
         }
     }
 
+    fn is_table_factor(&self, kw: &Keyword, parser: &mut Parser) -> bool {
+        match kw {
+            Keyword::LIMIT if peek_for_limit_options(parser) => false,
+            // Table function
+            Keyword::TABLE if matches!(parser.peek_token_ref().token, Token::LParen) => true,
+            _ => !RESERVED_KEYWORDS_FOR_TABLE_FACTOR.contains(kw),
+        }
+    }
+
     /// See: <https://docs.snowflake.com/en/sql-reference/constructs/at-before>
     fn supports_timestamp_versioning(&self) -> bool {
         true
@@ -595,29 +683,11 @@ pub fn parse_create_table(
                 }
                 Keyword::ENABLE_SCHEMA_EVOLUTION => {
                     parser.expect_token(&Token::Eq)?;
-                    let enable_schema_evolution =
-                        match parser.parse_one_of_keywords(&[Keyword::TRUE, Keyword::FALSE]) {
-                            Some(Keyword::TRUE) => true,
-                            Some(Keyword::FALSE) => false,
-                            _ => {
-                                return parser.expected("TRUE or FALSE", next_token);
-                            }
-                        };
-
-                    builder = builder.enable_schema_evolution(Some(enable_schema_evolution));
+                    builder = builder.enable_schema_evolution(Some(parser.parse_boolean_string()?));
                 }
                 Keyword::CHANGE_TRACKING => {
                     parser.expect_token(&Token::Eq)?;
-                    let change_tracking =
-                        match parser.parse_one_of_keywords(&[Keyword::TRUE, Keyword::FALSE]) {
-                            Some(Keyword::TRUE) => true,
-                            Some(Keyword::FALSE) => false,
-                            _ => {
-                                return parser.expected("TRUE or FALSE", next_token);
-                            }
-                        };
-
-                    builder = builder.change_tracking(Some(change_tracking));
+                    builder = builder.change_tracking(Some(parser.parse_boolean_string()?));
                 }
                 Keyword::DATA_RETENTION_TIME_IN_DAYS => {
                     parser.expect_token(&Token::Eq)?;
@@ -744,6 +814,115 @@ pub fn parse_create_table(
         ));
     }
 
+    Ok(builder.build())
+}
+
+/// Parse snowflake create database statement.
+/// <https://docs.snowflake.com/en/sql-reference/sql/create-database>
+pub fn parse_create_database(
+    or_replace: bool,
+    transient: bool,
+    parser: &mut Parser,
+) -> Result<Statement, ParserError> {
+    let if_not_exists = parser.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+    let name = parser.parse_object_name(false)?;
+
+    let mut builder = CreateDatabaseBuilder::new(name)
+        .or_replace(or_replace)
+        .transient(transient)
+        .if_not_exists(if_not_exists);
+
+    loop {
+        let next_token = parser.next_token();
+        match &next_token.token {
+            Token::Word(word) => match word.keyword {
+                Keyword::CLONE => {
+                    builder = builder.clone_clause(Some(parser.parse_object_name(false)?));
+                }
+                Keyword::DATA_RETENTION_TIME_IN_DAYS => {
+                    parser.expect_token(&Token::Eq)?;
+                    builder =
+                        builder.data_retention_time_in_days(Some(parser.parse_literal_uint()?));
+                }
+                Keyword::MAX_DATA_EXTENSION_TIME_IN_DAYS => {
+                    parser.expect_token(&Token::Eq)?;
+                    builder =
+                        builder.max_data_extension_time_in_days(Some(parser.parse_literal_uint()?));
+                }
+                Keyword::EXTERNAL_VOLUME => {
+                    parser.expect_token(&Token::Eq)?;
+                    builder = builder.external_volume(Some(parser.parse_literal_string()?));
+                }
+                Keyword::CATALOG => {
+                    parser.expect_token(&Token::Eq)?;
+                    builder = builder.catalog(Some(parser.parse_literal_string()?));
+                }
+                Keyword::REPLACE_INVALID_CHARACTERS => {
+                    parser.expect_token(&Token::Eq)?;
+                    builder =
+                        builder.replace_invalid_characters(Some(parser.parse_boolean_string()?));
+                }
+                Keyword::DEFAULT_DDL_COLLATION => {
+                    parser.expect_token(&Token::Eq)?;
+                    builder = builder.default_ddl_collation(Some(parser.parse_literal_string()?));
+                }
+                Keyword::STORAGE_SERIALIZATION_POLICY => {
+                    parser.expect_token(&Token::Eq)?;
+                    let policy = parse_storage_serialization_policy(parser)?;
+                    builder = builder.storage_serialization_policy(Some(policy));
+                }
+                Keyword::COMMENT => {
+                    parser.expect_token(&Token::Eq)?;
+                    builder = builder.comment(Some(parser.parse_literal_string()?));
+                }
+                Keyword::CATALOG_SYNC => {
+                    parser.expect_token(&Token::Eq)?;
+                    builder = builder.catalog_sync(Some(parser.parse_literal_string()?));
+                }
+                Keyword::CATALOG_SYNC_NAMESPACE_FLATTEN_DELIMITER => {
+                    parser.expect_token(&Token::Eq)?;
+                    builder = builder.catalog_sync_namespace_flatten_delimiter(Some(
+                        parser.parse_literal_string()?,
+                    ));
+                }
+                Keyword::CATALOG_SYNC_NAMESPACE_MODE => {
+                    parser.expect_token(&Token::Eq)?;
+                    let mode =
+                        match parser.parse_one_of_keywords(&[Keyword::NEST, Keyword::FLATTEN]) {
+                            Some(Keyword::NEST) => CatalogSyncNamespaceMode::Nest,
+                            Some(Keyword::FLATTEN) => CatalogSyncNamespaceMode::Flatten,
+                            _ => {
+                                return parser.expected("NEST or FLATTEN", next_token);
+                            }
+                        };
+                    builder = builder.catalog_sync_namespace_mode(Some(mode));
+                }
+                Keyword::WITH => {
+                    if parser.parse_keyword(Keyword::TAG) {
+                        parser.expect_token(&Token::LParen)?;
+                        let tags = parser.parse_comma_separated(Parser::parse_tag)?;
+                        parser.expect_token(&Token::RParen)?;
+                        builder = builder.with_tags(Some(tags));
+                    } else if parser.parse_keyword(Keyword::CONTACT) {
+                        parser.expect_token(&Token::LParen)?;
+                        let contacts = parser.parse_comma_separated(|p| {
+                            let purpose = p.parse_identifier()?.value;
+                            p.expect_token(&Token::Eq)?;
+                            let contact = p.parse_identifier()?.value;
+                            Ok(ContactEntry { purpose, contact })
+                        })?;
+                        parser.expect_token(&Token::RParen)?;
+                        builder = builder.with_contacts(Some(contacts));
+                    } else {
+                        return parser.expected("TAG or CONTACT", next_token);
+                    }
+                }
+                _ => return parser.expected("end of statement", next_token),
+            },
+            Token::SemiColon | Token::EOF => break,
+            _ => return parser.expected("end of statement", next_token),
+        }
+    }
     Ok(builder.build())
 }
 

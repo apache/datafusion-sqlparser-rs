@@ -17,7 +17,7 @@
 
 use crate::ast::{
     ddl::AlterSchema, query::SelectItemQualifiedWildcardKind, AlterSchemaOperation, ColumnOptions,
-    ExportData,
+    ExportData, TypedString,
 };
 use core::iter;
 
@@ -381,6 +381,7 @@ impl Spanned for Statement {
                 selection,
                 returning,
                 or: _,
+                limit: _,
             } => union_spans(
                 core::iter::once(table.span())
                     .chain(assignments.iter().map(|i| i.span()))
@@ -403,6 +404,7 @@ impl Spanned for Statement {
                 if_not_exists: _,
                 temporary: _,
                 to,
+                name_before_not_exists: _,
                 params: _,
             } => union_spans(
                 core::iter::once(name.span())
@@ -436,10 +438,12 @@ impl Spanned for Statement {
                 location: _,
                 on_cluster,
                 iceberg: _,
+                end_token,
             } => union_spans(
                 core::iter::once(name.span())
                     .chain(operations.iter().map(|i| i.span()))
-                    .chain(on_cluster.iter().map(|i| i.span)),
+                    .chain(on_cluster.iter().map(|i| i.span))
+                    .chain(core::iter::once(end_token.0.span)),
             ),
             Statement::AlterIndex { name, operation } => name.span().union(&operation.span()),
             Statement::AlterView {
@@ -480,6 +484,7 @@ impl Spanned for Statement {
             Statement::ShowColumns { .. } => Span::empty(),
             Statement::ShowTables { .. } => Span::empty(),
             Statement::ShowCollation { .. } => Span::empty(),
+            Statement::ShowCharset { .. } => Span::empty(),
             Statement::Use(u) => u.span(),
             Statement::StartTransaction { .. } => Span::empty(),
             Statement::Comment { .. } => Span::empty(),
@@ -715,6 +720,7 @@ impl Spanned for TableConstraint {
                 name,
                 index_type: _,
                 columns,
+                index_options: _,
             } => union_spans(
                 name.iter()
                     .map(|i| i.span)
@@ -749,6 +755,8 @@ impl Spanned for CreateIndex {
             nulls_distinct: _, // bool
             with,
             predicate,
+            index_options: _,
+            alter_options,
         } = self;
 
         union_spans(
@@ -758,7 +766,8 @@ impl Spanned for CreateIndex {
                 .chain(columns.iter().map(|i| i.column.span()))
                 .chain(include.iter().map(|i| i.span))
                 .chain(with.iter().map(|i| i.span()))
-                .chain(predicate.iter().map(|i| i.span())),
+                .chain(predicate.iter().map(|i| i.span()))
+                .chain(alter_options.iter().map(|i| i.span())),
         )
     }
 }
@@ -1529,7 +1538,7 @@ impl Spanned for Expr {
                 .union(&union_spans(collation.0.iter().map(|i| i.span()))),
             Expr::Nested(expr) => expr.span(),
             Expr::Value(value) => value.span(),
-            Expr::TypedString { value, .. } => value.span(),
+            Expr::TypedString(TypedString { value, .. }) => value.span(),
             Expr::Function(function) => function.span(),
             Expr::GroupingSets(vec) => {
                 union_spans(vec.iter().flat_map(|i| i.iter().map(|k| k.span())))
@@ -2004,9 +2013,9 @@ impl Spanned for TableFactor {
                 alias,
             } => union_spans(
                 core::iter::once(table.span())
-                    .chain(core::iter::once(value.span))
+                    .chain(core::iter::once(value.span()))
                     .chain(core::iter::once(name.span))
-                    .chain(columns.iter().map(|i| i.span))
+                    .chain(columns.iter().map(|ilist| ilist.span()))
                     .chain(alias.as_ref().map(|alias| alias.span())),
             ),
             TableFactor::MatchRecognize {
@@ -2550,5 +2559,44 @@ pub mod tests {
             test.get_source(expr_span),
             "CASE 1 WHEN 2 THEN 3 ELSE 4 END"
         );
+    }
+
+    #[test]
+    fn test_placeholder_span() {
+        let sql = "\nSELECT\n  :fooBar";
+        let r = Parser::parse_sql(&GenericDialect, sql).unwrap();
+        assert_eq!(1, r.len());
+        match &r[0] {
+            Statement::Query(q) => {
+                let col = &q.body.as_select().unwrap().projection[0];
+                match col {
+                    SelectItem::UnnamedExpr(Expr::Value(ValueWithSpan {
+                        value: Value::Placeholder(s),
+                        span,
+                    })) => {
+                        assert_eq!(":fooBar", s);
+                        assert_eq!(&Span::new((3, 3).into(), (3, 10).into()), span);
+                    }
+                    _ => panic!("expected unnamed expression; got {col:?}"),
+                }
+            }
+            stmt => panic!("expected query; got {stmt:?}"),
+        }
+    }
+
+    #[test]
+    fn test_alter_table_multiline_span() {
+        let sql = r#"-- foo
+ALTER TABLE users
+  ADD COLUMN foo
+  varchar; -- hi there"#;
+
+        let r = Parser::parse_sql(&crate::dialect::PostgreSqlDialect {}, sql).unwrap();
+        assert_eq!(1, r.len());
+
+        let stmt_span = r[0].span();
+
+        assert_eq!(stmt_span.start, (2, 13).into());
+        assert_eq!(stmt_span.end, (4, 11).into());
     }
 }

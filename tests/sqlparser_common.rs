@@ -515,6 +515,7 @@ fn parse_update_set_from() {
             }),
             returning: None,
             or: None,
+            limit: None
         }
     );
 
@@ -533,6 +534,7 @@ fn parse_update_with_table_alias() {
             selection,
             returning,
             or: None,
+            limit: None,
         } => {
             assert_eq!(
                 TableWithJoins {
@@ -4692,7 +4694,21 @@ fn parse_alter_table() {
     let rename_table = "ALTER TABLE tab RENAME TO new_tab";
     match alter_table_op(verified_stmt(rename_table)) {
         AlterTableOperation::RenameTable { table_name } => {
-            assert_eq!("new_tab", table_name.to_string());
+            assert_eq!(
+                RenameTableNameKind::To(ObjectName::from(vec![Ident::new("new_tab")])),
+                table_name
+            );
+        }
+        _ => unreachable!(),
+    };
+
+    let rename_table_as = "ALTER TABLE tab RENAME AS new_tab";
+    match alter_table_op(verified_stmt(rename_table_as)) {
+        AlterTableOperation::RenameTable { table_name } => {
+            assert_eq!(
+                RenameTableNameKind::As(ObjectName::from(vec![Ident::new("new_tab")])),
+                table_name
+            );
         }
         _ => unreachable!(),
     };
@@ -5914,13 +5930,14 @@ fn parse_literal_date() {
     let sql = "SELECT DATE '1999-01-01'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::Date,
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1999-01-01".into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -5930,13 +5947,14 @@ fn parse_literal_time() {
     let sql = "SELECT TIME '01:23:34'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::Time(None, TimezoneInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("01:23:34".into()),
                 span: Span::empty(),
             },
-        },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -5946,13 +5964,14 @@ fn parse_literal_datetime() {
     let sql = "SELECT DATETIME '1999-01-01 01:23:34.45'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::Datetime(None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into()),
                 span: Span::empty(),
             },
-        },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -5962,13 +5981,14 @@ fn parse_literal_timestamp_without_time_zone() {
     let sql = "SELECT TIMESTAMP '1999-01-01 01:23:34'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::Timestamp(None, TimezoneInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1999-01-01 01:23:34".into()),
                 span: Span::empty(),
             },
-        },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
@@ -5980,13 +6000,14 @@ fn parse_literal_timestamp_with_time_zone() {
     let sql = "SELECT TIMESTAMPTZ '1999-01-01 01:23:34Z'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::Timestamp(None, TimezoneInfo::Tz),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1999-01-01 01:23:34Z".into()),
                 span: Span::empty(),
             },
-        },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
@@ -6556,7 +6577,7 @@ fn parse_json_keyword() {
 }'"#;
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::JSON,
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(
@@ -6583,8 +6604,9 @@ fn parse_json_keyword() {
                     .to_string()
                 ),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false,
+        }),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -6593,17 +6615,23 @@ fn parse_json_keyword() {
 fn parse_typed_strings() {
     let expr = verified_expr(r#"JSON '{"foo":"bar"}'"#);
     assert_eq!(
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::JSON,
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(r#"{"foo":"bar"}"#.into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr
     );
 
-    if let Expr::TypedString { data_type, value } = expr {
+    if let Expr::TypedString(TypedString {
+        data_type,
+        value,
+        uses_odbc_syntax: false,
+    }) = expr
+    {
         assert_eq!(DataType::JSON, data_type);
         assert_eq!(r#"{"foo":"bar"}"#, value.into_string().unwrap());
     }
@@ -6614,13 +6642,14 @@ fn parse_bignumeric_keyword() {
     let sql = r#"SELECT BIGNUMERIC '0'"#;
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(r#"0"#.into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '0'");
@@ -6628,13 +6657,14 @@ fn parse_bignumeric_keyword() {
     let sql = r#"SELECT BIGNUMERIC '123456'"#;
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(r#"123456"#.into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '123456'");
@@ -6642,13 +6672,14 @@ fn parse_bignumeric_keyword() {
     let sql = r#"SELECT BIGNUMERIC '-3.14'"#;
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(r#"-3.14"#.into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '-3.14'");
@@ -6656,13 +6687,14 @@ fn parse_bignumeric_keyword() {
     let sql = r#"SELECT BIGNUMERIC '-0.54321'"#;
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(r#"-0.54321"#.into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '-0.54321'");
@@ -6670,13 +6702,14 @@ fn parse_bignumeric_keyword() {
     let sql = r#"SELECT BIGNUMERIC '1.23456e05'"#;
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(r#"1.23456e05"#.into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '1.23456e05'");
@@ -6684,13 +6717,14 @@ fn parse_bignumeric_keyword() {
     let sql = r#"SELECT BIGNUMERIC '-9.876e-3'"#;
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString(r#"-9.876e-3"#.into()),
                 span: Span::empty(),
-            }
-        },
+            },
+            uses_odbc_syntax: false
+        }),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '-9.876e-3'");
@@ -7932,6 +7966,7 @@ fn parse_create_database() {
             location,
             managed_location,
             clone,
+            ..
         } => {
             assert_eq!("mydb", db_name.to_string());
             assert!(!if_not_exists);
@@ -7949,6 +7984,7 @@ fn parse_create_database() {
             location,
             managed_location,
             clone,
+            ..
         } => {
             assert_eq!("mydb", db_name.to_string());
             assert!(!if_not_exists);
@@ -7973,6 +8009,7 @@ fn parse_create_database_ine() {
             location,
             managed_location,
             clone,
+            ..
         } => {
             assert_eq!("mydb", db_name.to_string());
             assert!(if_not_exists);
@@ -8040,6 +8077,7 @@ fn parse_create_view() {
             temporary,
             to,
             params,
+            name_before_not_exists: _,
         } => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
@@ -8108,6 +8146,7 @@ fn parse_create_view_with_columns() {
             temporary,
             to,
             params,
+            name_before_not_exists: _,
         } => {
             assert_eq!(or_alter, false);
             assert_eq!("v", name.to_string());
@@ -8157,6 +8196,7 @@ fn parse_create_view_temporary() {
             temporary,
             to,
             params,
+            name_before_not_exists: _,
         } => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
@@ -8196,6 +8236,7 @@ fn parse_create_or_replace_view() {
             temporary,
             to,
             params,
+            name_before_not_exists: _,
         } => {
             assert_eq!(or_alter, false);
             assert_eq!("v", name.to_string());
@@ -8239,6 +8280,7 @@ fn parse_create_or_replace_materialized_view() {
             temporary,
             to,
             params,
+            name_before_not_exists: _,
         } => {
             assert_eq!(or_alter, false);
             assert_eq!("v", name.to_string());
@@ -8278,6 +8320,7 @@ fn parse_create_materialized_view() {
             temporary,
             to,
             params,
+            name_before_not_exists: _,
         } => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
@@ -8317,6 +8360,7 @@ fn parse_create_materialized_view_with_cluster_by() {
             temporary,
             to,
             params,
+            name_before_not_exists: _,
         } => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
@@ -9147,7 +9191,7 @@ fn ensure_multiple_dialects_are_tested() {
 
 #[test]
 fn parse_create_index() {
-    let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test(name,age DESC)";
+    let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test(name, age DESC)";
     let indexed_columns: Vec<IndexColumn> = vec![
         IndexColumn {
             operator_class: None,
@@ -9193,7 +9237,7 @@ fn parse_create_index() {
 
 #[test]
 fn test_create_index_with_using_function() {
-    let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test USING BTREE (name,age DESC)";
+    let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test USING BTREE (name, age DESC)";
     let indexed_columns: Vec<IndexColumn> = vec![
         IndexColumn {
             operator_class: None,
@@ -9231,6 +9275,8 @@ fn test_create_index_with_using_function() {
             nulls_distinct: None,
             with,
             predicate: None,
+            index_options,
+            alter_options,
         }) => {
             assert_eq!("idx_name", name.to_string());
             assert_eq!("test", table_name.to_string());
@@ -9241,6 +9287,8 @@ fn test_create_index_with_using_function() {
             assert!(if_not_exists);
             assert!(include.is_empty());
             assert!(with.is_empty());
+            assert!(index_options.is_empty());
+            assert!(alter_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -9282,6 +9330,8 @@ fn test_create_index_with_with_clause() {
             nulls_distinct: None,
             with,
             predicate: None,
+            index_options,
+            alter_options,
         }) => {
             pretty_assertions::assert_eq!("title_idx", name.to_string());
             pretty_assertions::assert_eq!("films", table_name.to_string());
@@ -9291,6 +9341,8 @@ fn test_create_index_with_with_clause() {
             assert!(!if_not_exists);
             assert!(include.is_empty());
             pretty_assertions::assert_eq!(with_parameters, with);
+            assert!(index_options.is_empty());
+            assert!(alter_options.is_empty());
         }
         _ => unreachable!(),
     }
@@ -10981,20 +11033,14 @@ fn parse_unpivot_table() {
             index_hints: vec![],
         }),
         null_inclusion: None,
-        value: Ident {
-            value: "quantity".to_string(),
-            quote_style: None,
-            span: Span::empty(),
-        },
-
-        name: Ident {
-            value: "quarter".to_string(),
-            quote_style: None,
-            span: Span::empty(),
-        },
+        value: Expr::Identifier(Ident::new("quantity")),
+        name: Ident::new("quarter"),
         columns: ["Q1", "Q2", "Q3", "Q4"]
             .into_iter()
-            .map(Ident::new)
+            .map(|col| ExprWithAlias {
+                expr: Expr::Identifier(Ident::new(col)),
+                alias: None,
+            })
             .collect(),
         alias: Some(TableAlias {
             name: Ident::new("u"),
@@ -11055,6 +11101,129 @@ fn parse_unpivot_table() {
     assert_eq!(
         verified_stmt(sql_unpivot_include_nulls).to_string(),
         sql_unpivot_include_nulls
+    );
+
+    let sql_unpivot_with_alias = concat!(
+        "SELECT * FROM sales AS s ",
+        "UNPIVOT INCLUDE NULLS ",
+        "(quantity FOR quarter IN ",
+        "(Q1 AS Quater1, Q2 AS Quater2, Q3 AS Quater3, Q4 AS Quater4)) ",
+        "AS u (product, quarter, quantity)"
+    );
+
+    if let Unpivot { value, columns, .. } =
+        &verified_only_select(sql_unpivot_with_alias).from[0].relation
+    {
+        assert_eq!(
+            *columns,
+            vec![
+                ExprWithAlias {
+                    expr: Expr::Identifier(Ident::new("Q1")),
+                    alias: Some(Ident::new("Quater1")),
+                },
+                ExprWithAlias {
+                    expr: Expr::Identifier(Ident::new("Q2")),
+                    alias: Some(Ident::new("Quater2")),
+                },
+                ExprWithAlias {
+                    expr: Expr::Identifier(Ident::new("Q3")),
+                    alias: Some(Ident::new("Quater3")),
+                },
+                ExprWithAlias {
+                    expr: Expr::Identifier(Ident::new("Q4")),
+                    alias: Some(Ident::new("Quater4")),
+                },
+            ]
+        );
+        assert_eq!(*value, Expr::Identifier(Ident::new("quantity")));
+    }
+
+    assert_eq!(
+        verified_stmt(sql_unpivot_with_alias).to_string(),
+        sql_unpivot_with_alias
+    );
+
+    let sql_unpivot_with_alias_and_multi_value = concat!(
+        "SELECT * FROM sales AS s ",
+        "UNPIVOT INCLUDE NULLS ((first_quarter, second_quarter) ",
+        "FOR half_of_the_year IN (",
+        "(Q1, Q2) AS H1, ",
+        "(Q3, Q4) AS H2",
+        "))"
+    );
+
+    if let Unpivot { value, columns, .. } =
+        &verified_only_select(sql_unpivot_with_alias_and_multi_value).from[0].relation
+    {
+        assert_eq!(
+            *columns,
+            vec![
+                ExprWithAlias {
+                    expr: Expr::Tuple(vec![
+                        Expr::Identifier(Ident::new("Q1")),
+                        Expr::Identifier(Ident::new("Q2")),
+                    ]),
+                    alias: Some(Ident::new("H1")),
+                },
+                ExprWithAlias {
+                    expr: Expr::Tuple(vec![
+                        Expr::Identifier(Ident::new("Q3")),
+                        Expr::Identifier(Ident::new("Q4")),
+                    ]),
+                    alias: Some(Ident::new("H2")),
+                },
+            ]
+        );
+        assert_eq!(
+            *value,
+            Expr::Tuple(vec![
+                Expr::Identifier(Ident::new("first_quarter")),
+                Expr::Identifier(Ident::new("second_quarter")),
+            ])
+        );
+    }
+
+    assert_eq!(
+        verified_stmt(sql_unpivot_with_alias_and_multi_value).to_string(),
+        sql_unpivot_with_alias_and_multi_value
+    );
+
+    let sql_unpivot_with_alias_and_multi_value_and_qualifier = concat!(
+        "SELECT * FROM sales AS s ",
+        "UNPIVOT INCLUDE NULLS ((first_quarter, second_quarter) ",
+        "FOR half_of_the_year IN (",
+        "(sales.Q1, sales.Q2) AS H1, ",
+        "(sales.Q3, sales.Q4) AS H2",
+        "))"
+    );
+
+    if let Unpivot { columns, .. } =
+        &verified_only_select(sql_unpivot_with_alias_and_multi_value_and_qualifier).from[0].relation
+    {
+        assert_eq!(
+            *columns,
+            vec![
+                ExprWithAlias {
+                    expr: Expr::Tuple(vec![
+                        Expr::CompoundIdentifier(vec![Ident::new("sales"), Ident::new("Q1"),]),
+                        Expr::CompoundIdentifier(vec![Ident::new("sales"), Ident::new("Q2"),]),
+                    ]),
+                    alias: Some(Ident::new("H1")),
+                },
+                ExprWithAlias {
+                    expr: Expr::Tuple(vec![
+                        Expr::CompoundIdentifier(vec![Ident::new("sales"), Ident::new("Q3"),]),
+                        Expr::CompoundIdentifier(vec![Ident::new("sales"), Ident::new("Q4"),]),
+                    ]),
+                    alias: Some(Ident::new("H2")),
+                },
+            ]
+        );
+    }
+
+    assert_eq!(
+        verified_stmt(sql_unpivot_with_alias_and_multi_value_and_qualifier).to_string(),
+        sql_unpivot_with_alias_and_multi_value_and_qualifier
     );
 }
 
@@ -11153,20 +11322,14 @@ fn parse_pivot_unpivot_table() {
                     index_hints: vec![],
                 }),
                 null_inclusion: None,
-                value: Ident {
-                    value: "population".to_string(),
-                    quote_style: None,
-                    span: Span::empty()
-                },
-
-                name: Ident {
-                    value: "year".to_string(),
-                    quote_style: None,
-                    span: Span::empty()
-                },
+                value: Expr::Identifier(Ident::new("population")),
+                name: Ident::new("year"),
                 columns: ["population_2000", "population_2010"]
                     .into_iter()
-                    .map(Ident::new)
+                    .map(|col| ExprWithAlias {
+                        expr: Expr::Identifier(Ident::new(col)),
+                        alias: None,
+                    })
                     .collect(),
                 alias: Some(TableAlias {
                     name: Ident::new("u"),
@@ -12816,7 +12979,10 @@ fn test_extract_seconds_ok() {
                 expr: Box::new(Expr::Value(
                     (Value::SingleQuotedString("2 seconds".to_string())).with_empty_span()
                 )),
-                data_type: DataType::Interval,
+                data_type: DataType::Interval {
+                    fields: None,
+                    precision: None
+                },
                 format: None,
             }),
         }
@@ -12841,7 +13007,10 @@ fn test_extract_seconds_ok() {
                     expr: Box::new(Expr::Value(
                         (Value::SingleQuotedString("2 seconds".to_string())).with_empty_span(),
                     )),
-                    data_type: DataType::Interval,
+                    data_type: DataType::Interval {
+                        fields: None,
+                        precision: None,
+                    },
                     format: None,
                 }),
             })],
@@ -12895,7 +13064,10 @@ fn test_extract_seconds_single_quote_ok() {
                 expr: Box::new(Expr::Value(
                     (Value::SingleQuotedString("2 seconds".to_string())).with_empty_span()
                 )),
-                data_type: DataType::Interval,
+                data_type: DataType::Interval {
+                    fields: None,
+                    precision: None
+                },
                 format: None,
             }),
         }
@@ -15015,83 +15187,90 @@ fn test_geometry_type() {
     let sql = "point '1,2'";
     assert_eq!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Point),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1,2".to_string()),
                 span: Span::empty(),
             },
-        }
+            uses_odbc_syntax: false
+        })
     );
 
     let sql = "line '1,2,3,4'";
     assert_eq!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Line),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1,2,3,4".to_string()),
                 span: Span::empty(),
             },
-        }
+            uses_odbc_syntax: false
+        })
     );
 
     let sql = "path '1,2,3,4'";
     assert_eq!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::GeometricPath),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1,2,3,4".to_string()),
                 span: Span::empty(),
             },
-        }
+            uses_odbc_syntax: false
+        })
     );
     let sql = "box '1,2,3,4'";
     assert_eq!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::GeometricBox),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1,2,3,4".to_string()),
                 span: Span::empty(),
             },
-        }
+            uses_odbc_syntax: false
+        })
     );
 
     let sql = "circle '1,2,3'";
     assert_eq!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Circle),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1,2,3".to_string()),
                 span: Span::empty(),
             },
-        }
+            uses_odbc_syntax: false
+        })
     );
 
     let sql = "polygon '1,2,3,4'";
     assert_eq!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::Polygon),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1,2,3,4".to_string()),
                 span: Span::empty(),
             },
-        }
+            uses_odbc_syntax: false
+        })
     );
     let sql = "lseg '1,2,3,4'";
     assert_eq!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
-        Expr::TypedString {
+        Expr::TypedString(TypedString {
             data_type: DataType::GeometricType(GeometricTypeKind::LineSegment),
             value: ValueWithSpan {
                 value: Value::SingleQuotedString("1,2,3,4".to_string()),
                 span: Span::empty(),
             },
-        }
+            uses_odbc_syntax: false
+        })
     );
 }
 #[test]
@@ -16292,6 +16471,31 @@ fn parse_notnull() {
 }
 
 #[test]
+fn parse_odbc_time_date_timestamp() {
+    // Supported statements
+    let sql_d = "SELECT {d '2025-07-17'}, category_name FROM categories";
+    let _ = all_dialects().verified_stmt(sql_d);
+    let sql_t = "SELECT {t '14:12:01'}, category_name FROM categories";
+    let _ = all_dialects().verified_stmt(sql_t);
+    let sql_ts = "SELECT {ts '2025-07-17 14:12:01'}, category_name FROM categories";
+    let _ = all_dialects().verified_stmt(sql_ts);
+    // Unsupported statement
+    let supports_dictionary = all_dialects_where(|d| d.supports_dictionary_syntax());
+    let dictionary_unsupported = all_dialects_where(|d| !d.supports_dictionary_syntax());
+    let sql = "SELECT {tt '14:12:01'} FROM foo";
+    let res = supports_dictionary.parse_sql_statements(sql);
+    let res_dict = dictionary_unsupported.parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected: :, found: '14:12:01'".to_string()),
+        res.unwrap_err()
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected: an expression, found: {".to_string()),
+        res_dict.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_create_user() {
     let create = verified_stmt("CREATE USER u1");
     match create {
@@ -16376,4 +16580,21 @@ fn parse_drop_stream() {
         _ => unreachable!(),
     }
     verified_stmt("DROP STREAM IF EXISTS s1");
+}
+
+#[test]
+fn parse_create_view_if_not_exists() {
+    // Name after IF NOT EXISTS
+    let sql: &'static str = "CREATE VIEW IF NOT EXISTS v AS SELECT 1";
+    let _ = all_dialects().verified_stmt(sql);
+    // Name before IF NOT EXISTS
+    let sql = "CREATE VIEW v IF NOT EXISTS AS SELECT 1";
+    let _ = all_dialects().verified_stmt(sql);
+    // Name missing from query
+    let sql = "CREATE VIEW IF NOT EXISTS AS SELECT 1";
+    let res = all_dialects().parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected: AS, found: SELECT".to_string()),
+        res.unwrap_err()
+    );
 }

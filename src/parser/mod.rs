@@ -13841,11 +13841,11 @@ impl<'a> Parser<'a> {
         let aggregate_functions = self.parse_comma_separated(Self::parse_aliased_function_call)?;
         self.expect_keyword_is(Keyword::FOR)?;
         let value_column = if self.peek_token_ref().token == Token::LParen {
-            self.parse_parenthesized_compound_identifier_list(Mandatory, false)?
+            self.parse_parenthesized_column_list_inner(Mandatory, false, |p| {
+                p.parse_subexpr(self.dialect.prec_value(Precedence::Between))
+            })?
         } else {
-            vec![Expr::CompoundIdentifier(
-                self.parse_period_separated(|p| p.parse_identifier())?,
-            )]
+            vec![self.parse_subexpr(self.dialect.prec_value(Precedence::Between))?]
         };
         self.expect_keyword_is(Keyword::IN)?;
 

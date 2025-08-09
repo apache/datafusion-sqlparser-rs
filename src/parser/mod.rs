@@ -11231,19 +11231,22 @@ impl<'a> Parser<'a> {
 
     /// Parse an optionally signed integer literal.
     fn parse_signed_integer(&mut self) -> Result<i64, ParserError> {
-        if !self.consume_token(&Token::Minus) {
-            return i64::try_from(self.parse_literal_uint()?)
-                .map_err(|_| ParserError::ParserError("Integer overflow".to_string()));
+        let is_negative = self.consume_token(&Token::Minus);
+
+        if !is_negative {
+            let _ = self.consume_token(&Token::Plus);
         }
 
-        self.advance_token();
-        let next_token = self.get_current_token();
-        match &next_token.token {
+        let current_token = self.peek_token_ref();
+        match &current_token.token {
             Token::Number(s, _) => {
-                let positive_value = Self::parse::<i64>(s.clone(), next_token.span.start)?;
-                Ok(-positive_value)
+                let s = s.clone();
+                let span_start = current_token.span.start;
+                self.advance_token();
+                let value = Self::parse::<i64>(s, span_start)?;
+                Ok(if is_negative { -value } else { value })
             }
-            _ => self.expected_ref("literal int", next_token),
+            _ => self.expected_ref("number", current_token),
         }
     }
 
@@ -17360,7 +17363,6 @@ mod tests {
                 DataType::Dec(ExactNumberInfo::PrecisionAndScale(5, -1000))
             );
 
-            // Additional negative scale test cases
             test_parse_data_type!(
                 dialect,
                 "NUMERIC(10,-5)",
@@ -17378,6 +17380,16 @@ mod tests {
                 "DEC(5,-2)",
                 DataType::Dec(ExactNumberInfo::PrecisionAndScale(5, -2))
             );
+
+            dialect.run_parser_method("NUMERIC(10,+5)", |parser| {
+                let data_type = parser.parse_data_type().unwrap();
+                assert_eq!(
+                    DataType::Numeric(ExactNumberInfo::PrecisionAndScale(10, 5)),
+                    data_type
+                );
+                // Note: Explicit '+' sign is not preserved in output, which is correct
+                assert_eq!("NUMERIC(10,5)", data_type.to_string());
+            });
         }
 
         #[test]

@@ -10968,7 +10968,9 @@ fn parse_pivot_table() {
                         Expr::Value(
                             (Value::SingleQuotedString("John".to_string())).with_empty_span()
                         ),
-                        Expr::Value((Value::Number("30".into(), false)).with_empty_span()),
+                        Expr::Value(
+                            (Value::Number("30".parse().unwrap(), false)).with_empty_span()
+                        ),
                     ]),
                     alias: Some(Ident::new("c1"))
                 },
@@ -10977,7 +10979,9 @@ fn parse_pivot_table() {
                         Expr::Value(
                             (Value::SingleQuotedString("Mike".to_string())).with_empty_span()
                         ),
-                        Expr::Value((Value::Number("40".into(), false)).with_empty_span()),
+                        Expr::Value(
+                            (Value::Number("40".parse().unwrap(), false)).with_empty_span()
+                        ),
                     ]),
                     alias: Some(Ident::new("c2"))
                 },

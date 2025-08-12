@@ -16731,7 +16731,7 @@ fn parse_create_table_like() {
 }
 
 #[test]
-fn pares_copy_options() {
+fn parse_copy_options() {
     let copy = verified_stmt(
         r#"COPY dst (c1, c2, c3) FROM 's3://redshift-downloads/tickit/category_pipe.txt' IAM_ROLE 'arn:aws:iam::123456789:role/role1' CSV IGNOREHEADER 1"#,
     );
@@ -16740,9 +16740,27 @@ fn pares_copy_options() {
             assert_eq!(
                 legacy_options,
                 vec![
-                    CopyLegacyOption::IamRole(Some(
+                    CopyLegacyOption::IamRole(IamRoleKind::Arn(
                         "arn:aws:iam::123456789:role/role1".to_string()
                     )),
+                    CopyLegacyOption::Csv(vec![]),
+                    CopyLegacyOption::IgnoreHeader(1),
+                ]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    let copy = one_statement_parses_to(
+        r#"COPY dst (c1, c2, c3) FROM 's3://redshift-downloads/tickit/category_pipe.txt' IAM_ROLE DEFAULT CSV IGNOREHEADER AS 1"#,
+        r#"COPY dst (c1, c2, c3) FROM 's3://redshift-downloads/tickit/category_pipe.txt' IAM_ROLE DEFAULT CSV IGNOREHEADER 1"#,
+    );
+    match copy {
+        Statement::Copy { legacy_options, .. } => {
+            assert_eq!(
+                legacy_options,
+                vec![
+                    CopyLegacyOption::IamRole(IamRoleKind::Default),
                     CopyLegacyOption::Csv(vec![]),
                     CopyLegacyOption::IgnoreHeader(1),
                 ]

@@ -9569,14 +9569,7 @@ impl<'a> Parser<'a> {
                 }
                 opts
             }),
-            Some(Keyword::IAM_ROLE) => {
-                if self.parse_keyword(Keyword::DEFAULT) {
-                    CopyLegacyOption::IamRole(None)
-                } else {
-                    let role = self.parse_literal_string()?;
-                    CopyLegacyOption::IamRole(Some(role))
-                }
-            }
+            Some(Keyword::IAM_ROLE) => CopyLegacyOption::IamRole(self.parse_iam_role_kind()?),
             Some(Keyword::IGNOREHEADER) => {
                 let _ = self.parse_keyword(Keyword::AS);
                 let num_rows = self.parse_literal_uint()?;
@@ -9585,6 +9578,15 @@ impl<'a> Parser<'a> {
             _ => self.expected("option", self.peek_token())?,
         };
         Ok(ret)
+    }
+
+    fn parse_iam_role_kind(&mut self) -> Result<IamRoleKind, ParserError> {
+        if self.parse_keyword(Keyword::DEFAULT) {
+            Ok(IamRoleKind::Default)
+        } else {
+            let arn = self.parse_literal_string()?;
+            Ok(IamRoleKind::Arn(arn))
+        }
     }
 
     fn parse_copy_legacy_csv_option(&mut self) -> Result<CopyLegacyCsvOption, ParserError> {

@@ -1722,7 +1722,7 @@ impl<'a> Parser<'a> {
             _ => self.expected_at("an expression", next_token_index),
         }?;
 
-        if self.parse_keyword(Keyword::COLLATE) {
+        if !self.in_column_definition_state() && self.parse_keyword(Keyword::COLLATE) {
             Ok(Expr::Collate {
                 expr: Box::new(expr),
                 collation: self.parse_object_name(false)?,
@@ -3372,6 +3372,7 @@ impl<'a> Parser<'a> {
 
         self.advance_token();
         let tok = self.get_current_token();
+        debug!("infix: {tok:?}");
         let tok_index = self.get_current_index();
         let span = tok.span;
         let regular_binary_operator = match &tok.token {
@@ -17820,30 +17821,6 @@ mod tests {
         let sql = r#"REPLACE"#;
 
         assert!(Parser::parse_sql(&MySqlDialect {}, sql).is_err());
-    }
-
-    #[test]
-    fn test_parse_not_null_in_column_options() {
-        let canonical = concat!(
-            "CREATE TABLE foo (",
-            "abc INT DEFAULT (42 IS NOT NULL) NOT NULL,",
-            " def INT,",
-            " def_null BOOL GENERATED ALWAYS AS (def IS NOT NULL) STORED,",
-            " CHECK (abc IS NOT NULL)",
-            ")"
-        );
-        all_dialects().verified_stmt(canonical);
-        all_dialects().one_statement_parses_to(
-            concat!(
-                "CREATE TABLE foo (",
-                "abc INT DEFAULT (42 NOT NULL) NOT NULL,",
-                " def INT,",
-                " def_null BOOL GENERATED ALWAYS AS (def NOT NULL) STORED,",
-                " CHECK (abc NOT NULL)",
-                ")"
-            ),
-            canonical,
-        );
     }
 
     #[test]

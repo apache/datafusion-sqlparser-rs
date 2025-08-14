@@ -27,10 +27,10 @@ use crate::ast::helpers::stmt_data_loading::{
 };
 use crate::ast::{
     CatalogSyncNamespaceMode, ColumnOption, ColumnPolicy, ColumnPolicyProperty, ContactEntry,
-    CopyIntoSnowflakeKind, DollarQuotedString, Ident, IdentityParameters, IdentityProperty,
-    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, ObjectName,
-    ObjectNamePart, RowAccessPolicy, ShowObjects, SqlOption, Statement, StorageSerializationPolicy,
-    TagsColumnOption, WrappedCollection,
+    CopyIntoSnowflakeKind, CreateTableLikeKind, DollarQuotedString, Ident, IdentityParameters,
+    IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
+    ObjectName, ObjectNamePart, RowAccessPolicy, ShowObjects, SqlOption, Statement,
+    StorageSerializationPolicy, TagsColumnOption, WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
@@ -669,7 +669,7 @@ pub fn parse_create_table(
                 }
                 Keyword::LIKE => {
                     let name = parser.parse_object_name(false)?;
-                    builder = builder.like(Some(CreateTableLikeKind::NotParenthesized(
+                    builder = builder.like(Some(CreateTableLikeKind::Plain(
                         crate::ast::CreateTableLike {
                             name,
                             defaults: None,

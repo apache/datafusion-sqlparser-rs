@@ -7347,38 +7347,7 @@ impl<'a> Parser<'a> {
         // Clickhouse has `ON CLUSTER 'cluster'` syntax for DDLs
         let on_cluster = self.parse_optional_on_cluster()?;
 
-        // Try to parse `CREATE TABLE new (LIKE old [{INCLUDING | EXCLUDING} DEFAULTS])` or `CREATE TABLE new LIKE old`
-        let like = if self.dialect.supports_create_table_like_in_parens()
-            && self.consume_token(&Token::LParen)
-        {
-            if self.parse_keyword(Keyword::LIKE) {
-                let name = self.parse_object_name(allow_unquoted_hyphen)?;
-                let defaults = if self.parse_keywords(&[Keyword::INCLUDING, Keyword::DEFAULTS]) {
-                    Some(CreateTableLikeDefaults::Including)
-                } else if self.parse_keywords(&[Keyword::EXCLUDING, Keyword::DEFAULTS]) {
-                    Some(CreateTableLikeDefaults::Excluding)
-                } else {
-                    None
-                };
-                self.expect_token(&Token::RParen)?;
-                Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
-                    name,
-                    defaults,
-                }))
-            } else {
-                // Rollback the '(' it's probably the columns list
-                self.prev_token();
-                None
-            }
-        } else if self.parse_keyword(Keyword::LIKE) || self.parse_keyword(Keyword::ILIKE) {
-            let name = self.parse_object_name(allow_unquoted_hyphen)?;
-            Some(CreateTableLikeKind::NotParenthesized(CreateTableLike {
-                name,
-                defaults: None,
-            }))
-        } else {
-            None
-        };
+        let like = self.maybe_parse_create_table_like(allow_unquoted_hyphen)?;
 
         let clone = if self.parse_keyword(Keyword::CLONE) {
             self.parse_object_name(allow_unquoted_hyphen).ok()
@@ -7480,6 +7449,44 @@ impl<'a> Parser<'a> {
             .primary_key(primary_key)
             .strict(strict)
             .build())
+    }
+
+    fn maybe_parse_create_table_like(
+        &mut self,
+        allow_unquoted_hyphen: bool,
+    ) -> Result<Option<CreateTableLikeKind>, ParserError> {
+        let like = if self.dialect.supports_create_table_like_parenthesized()
+            && self.consume_token(&Token::LParen)
+        {
+            if self.parse_keyword(Keyword::LIKE) {
+                let name = self.parse_object_name(allow_unquoted_hyphen)?;
+                let defaults = if self.parse_keywords(&[Keyword::INCLUDING, Keyword::DEFAULTS]) {
+                    Some(CreateTableLikeDefaults::Including)
+                } else if self.parse_keywords(&[Keyword::EXCLUDING, Keyword::DEFAULTS]) {
+                    Some(CreateTableLikeDefaults::Excluding)
+                } else {
+                    None
+                };
+                self.expect_token(&Token::RParen)?;
+                Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
+                    name,
+                    defaults,
+                }))
+            } else {
+                // Rollback the '(' it's probably the columns list
+                self.prev_token();
+                None
+            }
+        } else if self.parse_keyword(Keyword::LIKE) || self.parse_keyword(Keyword::ILIKE) {
+            let name = self.parse_object_name(allow_unquoted_hyphen)?;
+            Some(CreateTableLikeKind::Plain(CreateTableLike {
+                name,
+                defaults: None,
+            }))
+        } else {
+            None
+        };
+        Ok(like)
     }
 
     pub(crate) fn parse_create_table_on_commit(&mut self) -> Result<OnCommit, ParserError> {

@@ -16658,7 +16658,7 @@ fn test_parse_default_with_collate_column_option() {
 
 #[test]
 fn parse_create_table_like() {
-    let dialects = all_dialects_except(|d| d.supports_create_table_like_in_parens());
+    let dialects = all_dialects_except(|d| d.supports_create_table_like_parenthesized());
     let sql = "CREATE TABLE new LIKE old";
     match dialects.verified_stmt(sql) {
         Statement::CreateTable(stmt) => {
@@ -16668,7 +16668,7 @@ fn parse_create_table_like() {
             );
             assert_eq!(
                 stmt.like,
-                Some(CreateTableLikeKind::NotParenthesized(CreateTableLike {
+                Some(CreateTableLikeKind::Plain(CreateTableLike {
                     name: ObjectName::from(vec![Ident::new("old".to_string())]),
                     defaults: None,
                 }))
@@ -16676,7 +16676,7 @@ fn parse_create_table_like() {
         }
         _ => unreachable!(),
     }
-    let dialects = all_dialects_where(|d| d.supports_create_table_like_in_parens());
+    let dialects = all_dialects_where(|d| d.supports_create_table_like_parenthesized());
     let sql = "CREATE TABLE new (LIKE old)";
     match dialects.verified_stmt(sql) {
         Statement::CreateTable(stmt) => {

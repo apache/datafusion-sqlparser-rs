@@ -1179,7 +1179,7 @@ pub trait Dialect: Debug + Any {
     /// CREATE TABLE new (LIKE old ...)
     /// '''
     /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html)
-    fn supports_create_table_like_in_parens(&self) -> bool {
+    fn supports_create_table_like_parenthesized(&self) -> bool {
         false
     }
 }

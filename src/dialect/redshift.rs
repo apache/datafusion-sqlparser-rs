@@ -140,7 +140,7 @@ impl Dialect for RedshiftSqlDialect {
         true
     }
 
-    fn supports_create_table_like_in_parens(&self) -> bool {
+    fn supports_create_table_like_parenthesized(&self) -> bool {
         true
     }
 }

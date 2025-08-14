@@ -31,12 +31,12 @@ use sqlparser_derive::{Visit, VisitMut};
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
     display_comma_separated, display_separated, ArgMode, CommentDef, CreateFunctionBody,
-    CreateFunctionUsing, CreateTableOptions, DataType, Expr, FileFormat, FunctionBehavior,
-    FunctionCalledOnNull, FunctionDeterminismSpecifier, FunctionParallel, HiveDistributionStyle,
-    HiveFormat, HiveIOFormat, HiveRowFormat, Ident, MySQLColumnPosition, ObjectName, OnCommit,
-    OneOrManyWithParens, OperateFunctionArg, OrderByExpr, ProjectionSelect, Query, RowAccessPolicy,
-    SequenceOptions, Spanned, SqlOption, StorageSerializationPolicy, Tag, Value, ValueWithSpan,
-    WrappedCollection,
+    CreateFunctionUsing, CreateTableLikeKind, CreateTableOptions, DataType, Expr, FileFormat,
+    FunctionBehavior, FunctionCalledOnNull, FunctionDeterminismSpecifier, FunctionParallel,
+    HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat, Ident, MySQLColumnPosition,
+    ObjectName, OnCommit, OneOrManyWithParens, OperateFunctionArg, OrderByExpr, ProjectionSelect,
+    Query, RowAccessPolicy, SequenceOptions, Spanned, SqlOption, StorageSerializationPolicy, Tag,
+    Value, ValueWithSpan, WrappedCollection,
 };
 use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
 use crate::keywords::Keyword;
@@ -2430,7 +2430,7 @@ pub struct CreateTable {
     pub location: Option<String>,
     pub query: Option<Box<Query>>,
     pub without_rowid: bool,
-    pub like: Option<ObjectName>,
+    pub like: Option<CreateTableLikeKind>,
     pub clone: Option<ObjectName>,
     // For Hive dialect, the table comment is after the column definitions without `=`,
     // so the `comment` field is optional and different than the comment field in the general options list.
@@ -2559,6 +2559,8 @@ impl fmt::Display for CreateTable {
         } else if self.query.is_none() && self.like.is_none() && self.clone.is_none() {
             // PostgreSQL allows `CREATE TABLE t ();`, but requires empty parens
             f.write_str(" ()")?;
+        } else if let Some(CreateTableLikeKind::Parenthesized(like_in_columns_list)) = &self.like {
+            write!(f, " ({like_in_columns_list})")?;
         }
 
         // Hive table comment should be after column definitions, please refer to:
@@ -2572,9 +2574,8 @@ impl fmt::Display for CreateTable {
             write!(f, " WITHOUT ROWID")?;
         }
 
-        // Only for Hive
-        if let Some(l) = &self.like {
-            write!(f, " LIKE {l}")?;
+        if let Some(CreateTableLikeKind::Plain(like)) = &self.like {
+            write!(f, " {like}")?;
         }
 
         if let Some(c) = &self.clone {

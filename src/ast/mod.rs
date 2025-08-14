@@ -10466,25 +10466,24 @@ impl fmt::Display for CreateUser {
 }
 
 /// Specifies how to create a new table based on an existing table's schema.
-///
-/// Not parenthesized:
 /// '''sql
 /// CREATE TABLE new LIKE old ...
 /// '''
-/// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-table#label-create-table-like)
-/// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_table_like)
-///
-/// Parenthesized:
-/// '''sql
-/// CREATE TABLE new (LIKE old ...)
-/// '''
-/// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CreateTableLikeKind {
+    /// '''sql
+    /// CREATE TABLE new (LIKE old ...)
+    /// '''
+    /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html)
     Parenthesized(CreateTableLike),
-    NotParenthesized(CreateTableLike),
+    /// '''sql
+    /// CREATE TABLE new LIKE old ...
+    /// '''
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-table#label-create-table-like)
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_table_like)
+    Plain(CreateTableLike),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

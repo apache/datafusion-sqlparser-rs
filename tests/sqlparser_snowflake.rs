@@ -1117,6 +1117,26 @@ fn parse_create_dynamic_table() {
         " REQUIRE USER",
         " AS SELECT product_id, product_name FROM staging_table"
     ));
+
+    snowflake().verified_stmt(concat!(
+        "CREATE DYNAMIC TABLE my_dynamic_table",
+        " TARGET_LAG='DOWNSTREAM'",
+        " WAREHOUSE=mywh",
+        " REFRESH_MODE=FULL",
+        " INITIALIZE=ON_SCHEDULE",
+        " REQUIRE USER",
+        " AS SELECT product_id, product_name FROM staging_table"
+    ));
+
+    snowflake().verified_stmt(concat!(
+        "CREATE DYNAMIC TABLE my_dynamic_table",
+        " TARGET_LAG='DOWNSTREAM'",
+        " WAREHOUSE=mywh",
+        " REFRESH_MODE=INCREMENTAL",
+        " INITIALIZE=ON_SCHEDULE",
+        " REQUIRE USER",
+        " AS SELECT product_id, product_name FROM staging_table"
+    ));
 }
 
 #[test]

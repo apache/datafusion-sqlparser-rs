@@ -26,11 +26,7 @@ use crate::ast::helpers::stmt_data_loading::{
     FileStagingCommand, StageLoadSelectItem, StageLoadSelectItemKind, StageParamsObject,
 };
 use crate::ast::{
-    CatalogSyncNamespaceMode, ColumnOption, ColumnPolicy, ColumnPolicyProperty, ContactEntry,
-    CopyIntoSnowflakeKind, CreateTableLikeKind, DollarQuotedString, Ident, IdentityParameters,
-    IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
-    ObjectName, ObjectNamePart, RowAccessPolicy, ShowObjects, SqlOption, Statement,
-    StorageSerializationPolicy, TagsColumnOption, WrappedCollection,
+    CatalogSyncNamespaceMode, ColumnOption, ColumnPolicy, ColumnPolicyProperty, ContactEntry, CopyIntoSnowflakeKind, CreateTableLikeKind, DollarQuotedString, Ident, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, InitializeKind, ObjectName, ObjectNamePart, RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement, StorageSerializationPolicy, TagsColumnOption, WrappedCollection
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;

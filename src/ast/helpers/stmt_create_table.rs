@@ -28,7 +28,7 @@ use crate::ast::{
     ClusteredBy, ColumnDef, CommentDef, CreateTable, CreateTableLikeKind, CreateTableOptions, Expr,
     FileFormat, HiveDistributionStyle, HiveFormat, Ident, ObjectName, OnCommit,
     OneOrManyWithParens, Query, RowAccessPolicy, Statement, StorageSerializationPolicy,
-    TableConstraint, Tag, WrappedCollection,
+    TableConstraint, Tag, WrappedCollection, InitializeKind, RefreshModeKind, TableVersion,
 };
 
 use crate::parser::ParserError;

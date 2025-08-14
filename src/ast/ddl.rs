@@ -33,10 +33,10 @@ use crate::ast::{
     display_comma_separated, display_separated, ArgMode, CommentDef, CreateFunctionBody,
     CreateFunctionUsing, CreateTableOptions, DataType, Expr, FileFormat, FunctionBehavior,
     FunctionCalledOnNull, FunctionDeterminismSpecifier, FunctionParallel, HiveDistributionStyle,
-    HiveFormat, HiveIOFormat, HiveRowFormat, Ident, MySQLColumnPosition, ObjectName, OnCommit,
-    OneOrManyWithParens, OperateFunctionArg, OrderByExpr, ProjectionSelect, Query, RowAccessPolicy,
-    SequenceOptions, Spanned, SqlOption, StorageSerializationPolicy, Tag, Value, ValueWithSpan,
-    WrappedCollection,
+    HiveFormat, HiveIOFormat, HiveRowFormat, Ident, InitializeKind, MySQLColumnPosition,
+    ObjectName, OnCommit, OneOrManyWithParens, OperateFunctionArg, OrderByExpr, ProjectionSelect,
+    Query, RefreshModeKind, RowAccessPolicy, SequenceOptions, Spanned, SqlOption,
+    StorageSerializationPolicy, TableVersion, Tag, Value, ValueWithSpan, WrappedCollection,
 };
 use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
 use crate::keywords::Keyword;
@@ -2412,6 +2412,7 @@ pub struct CreateTable {
     pub or_replace: bool,
     pub temporary: bool,
     pub external: bool,
+    pub dynamic: bool,
     pub global: Option<bool>,
     pub if_not_exists: bool,
     pub transient: bool,
@@ -2432,6 +2433,7 @@ pub struct CreateTable {
     pub without_rowid: bool,
     pub like: Option<ObjectName>,
     pub clone: Option<ObjectName>,
+    pub version: Option<TableVersion>,
     // For Hive dialect, the table comment is after the column definitions without `=`,
     // so the `comment` field is optional and different than the comment field in the general options list.
     // [Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable)
@@ -2509,6 +2511,21 @@ pub struct CreateTable {
     /// Snowflake "STORAGE_SERIALIZATION_POLICY" clause for Iceberg tables
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table>
     pub storage_serialization_policy: Option<StorageSerializationPolicy>,
+    /// Snowflake "TARGET_LAG" clause for dybamic tables
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-dynamic-table>
+    pub target_lag: Option<String>,
+    /// Snowflake "WAREHOUSE" clause for dybamic tables
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-dynamic-table>
+    pub warehouse: Option<Ident>,
+    /// Snowflake "REFRESH_MODE" clause for dybamic tables
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-dynamic-table>
+    pub refresh_mode: Option<RefreshModeKind>,
+    /// Snowflake "INITIALIZE" clause for dybamic tables
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-dynamic-table>
+    pub initialize: Option<InitializeKind>,
+    /// Snowflake "REQUIRE USER" clause for dybamic tables
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-dynamic-table>
+    pub require_user: bool,
 }
 
 impl fmt::Display for CreateTable {
@@ -2522,7 +2539,7 @@ impl fmt::Display for CreateTable {
         //   `CREATE TABLE t (a INT) AS SELECT a from t2`
         write!(
             f,
-            "CREATE {or_replace}{external}{global}{temporary}{transient}{volatile}{iceberg}TABLE {if_not_exists}{name}",
+            "CREATE {or_replace}{external}{global}{temporary}{transient}{volatile}{dynamic}{iceberg}TABLE {if_not_exists}{name}",
             or_replace = if self.or_replace { "OR REPLACE " } else { "" },
             external = if self.external { "EXTERNAL " } else { "" },
             global = self.global
@@ -2540,6 +2557,7 @@ impl fmt::Display for CreateTable {
             volatile = if self.volatile { "VOLATILE " } else { "" },
             // Only for Snowflake
             iceberg = if self.iceberg { "ICEBERG " } else { "" },
+            dynamic = if self.dynamic { "DYNAMIC " } else { "" },
             name = self.name,
         )?;
         if let Some(on_cluster) = &self.on_cluster {
@@ -2579,6 +2597,10 @@ impl fmt::Display for CreateTable {
 
         if let Some(c) = &self.clone {
             write!(f, " CLONE {c}")?;
+        }
+
+        if let Some(version) = &self.version {
+            write!(f, " {version}")?;
         }
 
         match &self.hive_distribution {
@@ -2683,27 +2705,27 @@ impl fmt::Display for CreateTable {
             write!(f, " {options}")?;
         }
         if let Some(external_volume) = self.external_volume.as_ref() {
-            write!(f, " EXTERNAL_VOLUME = '{external_volume}'")?;
+            write!(f, " EXTERNAL_VOLUME='{external_volume}'")?;
         }
 
         if let Some(catalog) = self.catalog.as_ref() {
-            write!(f, " CATALOG = '{catalog}'")?;
+            write!(f, " CATALOG='{catalog}'")?;
         }
 
         if self.iceberg {
             if let Some(base_location) = self.base_location.as_ref() {
-                write!(f, " BASE_LOCATION = '{base_location}'")?;
+                write!(f, " BASE_LOCATION='{base_location}'")?;
             }
         }
 
         if let Some(catalog_sync) = self.catalog_sync.as_ref() {
-            write!(f, " CATALOG_SYNC = '{catalog_sync}'")?;
+            write!(f, " CATALOG_SYNC='{catalog_sync}'")?;
         }
 
         if let Some(storage_serialization_policy) = self.storage_serialization_policy.as_ref() {
             write!(
                 f,
-                " STORAGE_SERIALIZATION_POLICY = {storage_serialization_policy}"
+                " STORAGE_SERIALIZATION_POLICY={storage_serialization_policy}"
             )?;
         }
 
@@ -2755,6 +2777,26 @@ impl fmt::Display for CreateTable {
 
         if let Some(tag) = &self.with_tags {
             write!(f, " WITH TAG ({})", display_comma_separated(tag.as_slice()))?;
+        }
+
+        if let Some(target_lag) = &self.target_lag {
+            write!(f, " TARGET_LAG='{target_lag}'")?;
+        }
+
+        if let Some(warehouse) = &self.warehouse {
+            write!(f, " WAREHOUSE={warehouse}")?;
+        }
+
+        if let Some(refresh_mode) = &self.refresh_mode {
+            write!(f, " REFRESH_MODE={refresh_mode}")?;
+        }
+
+        if let Some(initialize) = &self.initialize {
+            write!(f, " INITIALIZE={initialize}")?;
+        }
+
+        if self.require_user {
+            write!(f, " REQUIRE USER")?;
         }
 
         if self.on_commit.is_some() {

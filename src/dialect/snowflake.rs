@@ -28,9 +28,9 @@ use crate::ast::helpers::stmt_data_loading::{
 use crate::ast::{
     CatalogSyncNamespaceMode, ColumnOption, ColumnPolicy, ColumnPolicyProperty, ContactEntry,
     CopyIntoSnowflakeKind, DollarQuotedString, Ident, IdentityParameters, IdentityProperty,
-    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, ObjectName,
-    ObjectNamePart, RowAccessPolicy, ShowObjects, SqlOption, Statement, StorageSerializationPolicy,
-    TagsColumnOption, WrappedCollection,
+    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, InitializeKind,
+    ObjectName, ObjectNamePart, RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption,
+    Statement, StorageSerializationPolicy, TagsColumnOption, WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;

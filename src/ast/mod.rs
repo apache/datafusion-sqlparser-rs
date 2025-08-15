@@ -59,16 +59,17 @@ pub use self::dcl::{
 };
 pub use self::ddl::{
     AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterPolicyOperation,
-    AlterTableAlgorithm, AlterTableLock, AlterTableOperation, AlterType, AlterTypeAddValue,
-    AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
-    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy,
-    ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain, CreateFunction,
-    CreateIndex, CreateTable, Deduplicate, DeferrableInitial, DropBehavior, GeneratedAs,
-    GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
-    IdentityPropertyKind, IdentityPropertyOrder, IndexColumn, IndexOption, IndexType,
-    KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition, ProcedureParam, ReferentialAction,
-    RenameTableNameKind, ReplicaIdentity, TableConstraint, TagsColumnOption,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
+    AlterSchema, AlterSchemaOperation, AlterTableAlgorithm, AlterTableLock, AlterTableOperation,
+    AlterType, AlterTypeAddValue, AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename,
+    AlterTypeRenameValue, ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions,
+    ColumnPolicy, ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain,
+    CreateFunction, CreateIndex, CreateTable, Deduplicate, DeferrableInitial, DropBehavior,
+    GeneratedAs, GeneratedExpressionMode, IdentityParameters, IdentityProperty,
+    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, IndexColumn,
+    IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition,
+    ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity, TableConstraint,
+    TagsColumnOption, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
+    ViewColumnDef,
 };
 pub use self::dml::{Delete, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -3388,6 +3389,11 @@ pub enum Statement {
         end_token: AttachedToken,
     },
     /// ```sql
+    /// ALTER SCHEMA
+    /// ```
+    /// See [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_schema_collate_statement)
+    AlterSchema(AlterSchema),
+    /// ```sql
     /// ALTER INDEX
     /// ```
     AlterIndex {
@@ -6336,6 +6342,7 @@ impl fmt::Display for Statement {
             Statement::Remove(command) => write!(f, "REMOVE {command}"),
             Statement::ExportData(e) => write!(f, "{e}"),
             Statement::CreateUser(s) => write!(f, "{s}"),
+            Statement::AlterSchema(s) => write!(f, "{s}"),
         }
     }
 }

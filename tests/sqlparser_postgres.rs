@@ -3351,7 +3351,31 @@ fn test_json() {
 }
 
 #[test]
-fn test_fn_arg_with_value_operator() {
+fn json_object_colon_syntax() {
+    match pg().verified_expr("JSON_OBJECT('name' : 'value')") {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, .. }),
+            ..
+        }) => {
+            assert!(
+                matches!(
+                    &args[..],
+                    &[FunctionArg::ExprNamed {
+                        operator: FunctionArgOperator::Colon,
+                        ..
+                    }]
+                ),
+                "Invalid function argument: {args:?}"
+            );
+        }
+        other => panic!(
+            "Expected: JSON_OBJECT('name' : 'value') to be parsed as a function, but got {other:?}"
+        ),
+    }
+}
+
+#[test]
+fn json_object_value_syntax() {
     match pg().verified_expr("JSON_OBJECT('name' VALUE 'value')") {
         Expr::Function(Function { args: FunctionArguments::List(FunctionArgumentList { args, .. }), .. }) => {
             assert!(matches!(
@@ -3360,6 +3384,68 @@ fn test_fn_arg_with_value_operator() {
             ), "Invalid function argument: {args:?}");
         }
         other => panic!("Expected: JSON_OBJECT('name' VALUE 'value') to be parsed as a function, but got {other:?}"),
+    }
+}
+
+#[test]
+fn json_object_with_null_clause() {
+    match pg().verified_expr("JSON_OBJECT('name' VALUE 'value' NULL ON NULL)") {
+        Expr::Function(Function { args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }), .. }) => {
+            assert!(matches!(
+                &args[..],
+                &[FunctionArg::ExprNamed { operator: FunctionArgOperator::Value, .. }]
+            ), "Invalid function argument: {args:?}");
+            assert_eq!(
+                clauses,
+                vec![FunctionArgumentClause::JsonNullClause(JsonNullClause::NullOnNull)],
+                "Expected: NULL ON NULL to be parsed as a null treatment clause, but got {clauses:?}"
+            );
+        }
+        other => panic!("Expected: JSON_OBJECT('name' VALUE 'value' NULL ON NULL) to be parsed as a function, but got {other:?}"),
+    }
+}
+
+#[test]
+fn json_object_with_returning_clause() {
+    match pg().verified_expr("JSON_OBJECT('name' VALUE 'value' RETURNING JSONB)") {
+        Expr::Function(Function { args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }), .. }) => {
+            assert!(matches!(
+                &args[..],
+                &[FunctionArg::ExprNamed { operator: FunctionArgOperator::Value, .. }]
+            ), "Invalid function argument: {args:?}");
+            assert_eq!(
+                clauses,
+                vec![FunctionArgumentClause::JsonReturningClause(JsonReturningClause {
+                    data_type: DataType::JSONB
+                })],
+                "Expected: RETURNING JSONB to be parsed as a returning clause, but got {clauses:?}"
+            );
+        }
+        other => panic!("Expected: JSON_OBJECT('name' VALUE 'value' RETURNING jsonb) to be parsed as a function, but got {other:?}"),
+    }
+}
+
+#[test]
+fn json_object_only_returning_clause() {
+    match pg().verified_expr("JSON_OBJECT(RETURNING JSONB)") {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert!(args.is_empty(), "Expected no arguments, got: {args:?}");
+            assert_eq!(
+                clauses,
+                vec![FunctionArgumentClause::JsonReturningClause(
+                    JsonReturningClause {
+                        data_type: DataType::JSONB
+                    }
+                )],
+                "Expected: RETURNING JSONB to be parsed as a returning clause, but got {clauses:?}"
+            );
+        }
+        other => panic!(
+            "Expected: JSON_OBJECT(RETURNING jsonb) to be parsed as a function, but got {other:?}"
+        ),
     }
 }
 

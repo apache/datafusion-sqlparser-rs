@@ -15307,7 +15307,7 @@ impl<'a> Parser<'a> {
         Ok(TableFunctionArgs { args, settings })
     }
 
-    /// Parses a potentially empty list of arguments to a window function
+    /// Parses a potentially empty list of arguments to a function
     /// (including the closing parenthesis).
     ///
     /// Examples:
@@ -15318,9 +15318,16 @@ impl<'a> Parser<'a> {
     fn parse_function_argument_list(&mut self) -> Result<FunctionArgumentList, ParserError> {
         let mut clauses = vec![];
 
-        // For MSSQL empty argument list with json-null-clause case, e.g. `JSON_ARRAY(NULL ON NULL)`
+        // Handle clauses that may exist with an empty argument list
+
         if let Some(null_clause) = self.parse_json_null_clause() {
             clauses.push(FunctionArgumentClause::JsonNullClause(null_clause));
+        }
+
+        if let Some(json_returning_clause) = self.parse_json_returning_clause()? {
+            clauses.push(FunctionArgumentClause::JsonReturningClause(
+                json_returning_clause,
+            ));
         }
 
         if self.consume_token(&Token::RParen) {
@@ -15378,6 +15385,12 @@ impl<'a> Parser<'a> {
             clauses.push(FunctionArgumentClause::JsonNullClause(null_clause));
         }
 
+        if let Some(json_returning_clause) = self.parse_json_returning_clause()? {
+            clauses.push(FunctionArgumentClause::JsonReturningClause(
+                json_returning_clause,
+            ));
+        }
+
         self.expect_token(&Token::RParen)?;
         Ok(FunctionArgumentList {
             duplicate_treatment,
@@ -15386,7 +15399,6 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parses MSSQL's json-null-clause
     fn parse_json_null_clause(&mut self) -> Option<JsonNullClause> {
         if self.parse_keywords(&[Keyword::ABSENT, Keyword::ON, Keyword::NULL]) {
             Some(JsonNullClause::AbsentOnNull)
@@ -15394,6 +15406,15 @@ impl<'a> Parser<'a> {
             Some(JsonNullClause::NullOnNull)
         } else {
             None
+        }
+    }
+
+    fn parse_json_returning_clause(&mut self) -> Result<Option<JsonReturningClause>, ParserError> {
+        if self.parse_keyword(Keyword::RETURNING) {
+            let data_type = self.parse_data_type()?;
+            Ok(Some(JsonReturningClause { data_type }))
+        } else {
+            Ok(None)
         }
     }
 

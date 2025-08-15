@@ -1151,8 +1151,8 @@ impl Spanned for AlterTableOperation {
             } => partition
                 .span()
                 .union_opt(&with_name.as_ref().map(|n| n.span)),
-            AlterTableOperation::DropPrimaryKey => Span::empty(),
-            AlterTableOperation::DropForeignKey { name } => name.span,
+            AlterTableOperation::DropPrimaryKey { .. } => Span::empty(),
+            AlterTableOperation::DropForeignKey { name, .. } => name.span,
             AlterTableOperation::DropIndex { name } => name.span,
             AlterTableOperation::EnableAlwaysRule { name } => name.span,
             AlterTableOperation::EnableAlwaysTrigger { name } => name.span,

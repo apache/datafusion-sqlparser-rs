@@ -200,17 +200,18 @@ pub enum AlterTableOperation {
     },
     /// `DROP PRIMARY KEY`
     ///
-    /// Note: this is a [MySQL]-specific operation.
-    ///
-    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
-    DropPrimaryKey,
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/alter-table.html)
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/constraints-drop)
+    DropPrimaryKey {
+        drop_behavior: Option<DropBehavior>,
+    },
     /// `DROP FOREIGN KEY <fk_symbol>`
     ///
-    /// Note: this is a [MySQL]-specific operation.
-    ///
-    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/alter-table.html)
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/constraints-drop)
     DropForeignKey {
         name: Ident,
+        drop_behavior: Option<DropBehavior>,
     },
     /// `DROP INDEX <index_name>`
     ///
@@ -658,8 +659,31 @@ impl fmt::Display for AlterTableOperation {
                     }
                 )
             }
-            AlterTableOperation::DropPrimaryKey => write!(f, "DROP PRIMARY KEY"),
-            AlterTableOperation::DropForeignKey { name } => write!(f, "DROP FOREIGN KEY {name}"),
+            AlterTableOperation::DropPrimaryKey { drop_behavior } => {
+                write!(
+                    f,
+                    "DROP PRIMARY KEY{}",
+                    match drop_behavior {
+                        None => "",
+                        Some(DropBehavior::Restrict) => " RESTRICT",
+                        Some(DropBehavior::Cascade) => " CASCADE",
+                    }
+                )
+            }
+            AlterTableOperation::DropForeignKey {
+                name,
+                drop_behavior,
+            } => {
+                write!(
+                    f,
+                    "DROP FOREIGN KEY {name}{}",
+                    match drop_behavior {
+                        None => "",
+                        Some(DropBehavior::Restrict) => " RESTRICT",
+                        Some(DropBehavior::Cascade) => " CASCADE",
+                    }
+                )
+            }
             AlterTableOperation::DropIndex { name } => write!(f, "DROP INDEX {name}"),
             AlterTableOperation::DropColumn {
                 has_column_keyword,

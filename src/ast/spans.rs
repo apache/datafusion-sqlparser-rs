@@ -1791,6 +1791,7 @@ impl Spanned for FunctionArgumentClause {
             FunctionArgumentClause::Having(HavingBound(_kind, expr)) => expr.span(),
             FunctionArgumentClause::Separator(value) => value.span(),
             FunctionArgumentClause::JsonNullClause(_) => Span::empty(),
+            FunctionArgumentClause::JsonReturningClause(_) => Span::empty(),
         }
     }
 }

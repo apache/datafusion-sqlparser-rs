@@ -2752,7 +2752,9 @@ fn parse_alter_table_add_columns() {
 fn parse_alter_table_drop_primary_key() {
     assert_matches!(
         alter_table_op(mysql_and_generic().verified_stmt("ALTER TABLE tab DROP PRIMARY KEY")),
-        AlterTableOperation::DropPrimaryKey
+        AlterTableOperation::DropPrimaryKey {
+            drop_behavior: None
+        }
     );
 }
 
@@ -2762,7 +2764,7 @@ fn parse_alter_table_drop_foreign_key() {
         alter_table_op(
             mysql_and_generic().verified_stmt("ALTER TABLE tab DROP FOREIGN KEY foo_ibfk_1")
         ),
-        AlterTableOperation::DropForeignKey { name } if name.value == "foo_ibfk_1"
+        AlterTableOperation::DropForeignKey { name, .. } if name.value == "foo_ibfk_1"
     );
 }
 

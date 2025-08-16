@@ -649,40 +649,31 @@ impl fmt::Display for AlterTableOperation {
             } => {
                 write!(
                     f,
-                    "DROP CONSTRAINT {}{}{}",
+                    "DROP CONSTRAINT {}{}",
                     if *if_exists { "IF EXISTS " } else { "" },
-                    name,
-                    match drop_behavior {
-                        None => "",
-                        Some(DropBehavior::Restrict) => " RESTRICT",
-                        Some(DropBehavior::Cascade) => " CASCADE",
-                    }
-                )
+                    name
+                )?;
+                if let Some(drop_behavior) = drop_behavior {
+                    write!(f, " {drop_behavior}")?;
+                }
+                Ok(())
             }
             AlterTableOperation::DropPrimaryKey { drop_behavior } => {
-                write!(
-                    f,
-                    "DROP PRIMARY KEY{}",
-                    match drop_behavior {
-                        None => "",
-                        Some(DropBehavior::Restrict) => " RESTRICT",
-                        Some(DropBehavior::Cascade) => " CASCADE",
-                    }
-                )
+                write!(f, "DROP PRIMARY KEY")?;
+                if let Some(drop_behavior) = drop_behavior {
+                    write!(f, " {drop_behavior}")?;
+                }
+                Ok(())
             }
             AlterTableOperation::DropForeignKey {
                 name,
                 drop_behavior,
             } => {
-                write!(
-                    f,
-                    "DROP FOREIGN KEY {name}{}",
-                    match drop_behavior {
-                        None => "",
-                        Some(DropBehavior::Restrict) => " RESTRICT",
-                        Some(DropBehavior::Cascade) => " CASCADE",
-                    }
-                )
+                write!(f, "DROP FOREIGN KEY {name}")?;
+                if let Some(drop_behavior) = drop_behavior {
+                    write!(f, " {drop_behavior}")?;
+                }
+                Ok(())
             }
             AlterTableOperation::DropIndex { name } => write!(f, "DROP INDEX {name}"),
             AlterTableOperation::DropColumn {
@@ -690,18 +681,19 @@ impl fmt::Display for AlterTableOperation {
                 column_names: column_name,
                 if_exists,
                 drop_behavior,
-            } => write!(
-                f,
-                "DROP {}{}{}{}",
-                if *has_column_keyword { "COLUMN " } else { "" },
-                if *if_exists { "IF EXISTS " } else { "" },
-                display_comma_separated(column_name),
-                match drop_behavior {
-                    None => "",
-                    Some(DropBehavior::Restrict) => " RESTRICT",
-                    Some(DropBehavior::Cascade) => " CASCADE",
+            } => {
+                write!(
+                    f,
+                    "DROP {}{}{}",
+                    if *has_column_keyword { "COLUMN " } else { "" },
+                    if *if_exists { "IF EXISTS " } else { "" },
+                    display_comma_separated(column_name),
+                )?;
+                if let Some(drop_behavior) = drop_behavior {
+                    write!(f, " {drop_behavior}")?;
                 }
-            ),
+                Ok(())
+            }
             AlterTableOperation::AttachPartition { partition } => {
                 write!(f, "ATTACH {partition}")
             }

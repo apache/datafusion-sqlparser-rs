@@ -25,10 +25,10 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::{
-    ClusteredBy, ColumnDef, CommentDef, CreateTable, CreateTableOptions, Expr, FileFormat,
-    HiveDistributionStyle, HiveFormat, Ident, ObjectName, OnCommit, OneOrManyWithParens, Query,
-    RowAccessPolicy, Statement, StorageSerializationPolicy, TableConstraint, Tag,
-    WrappedCollection,
+    ClusteredBy, ColumnDef, CommentDef, CreateTable, CreateTableLikeKind, CreateTableOptions, Expr,
+    FileFormat, HiveDistributionStyle, HiveFormat, Ident, ObjectName, OnCommit,
+    OneOrManyWithParens, Query, RowAccessPolicy, Statement, StorageSerializationPolicy,
+    TableConstraint, Tag, WrappedCollection,
 };
 
 use crate::parser::ParserError;
@@ -81,7 +81,7 @@ pub struct CreateTableBuilder {
     pub location: Option<String>,
     pub query: Option<Box<Query>>,
     pub without_rowid: bool,
-    pub like: Option<ObjectName>,
+    pub like: Option<CreateTableLikeKind>,
     pub clone: Option<ObjectName>,
     pub comment: Option<CommentDef>,
     pub on_commit: Option<OnCommit>,
@@ -237,7 +237,7 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn like(mut self, like: Option<ObjectName>) -> Self {
+    pub fn like(mut self, like: Option<CreateTableLikeKind>) -> Self {
         self.like = like;
         self
     }

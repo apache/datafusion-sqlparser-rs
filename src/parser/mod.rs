@@ -9808,8 +9808,18 @@ impl<'a> Parser<'a> {
             // bigdecimal feature is enabled, and is otherwise a no-op
             // (i.e., it returns the input string).
             Token::Number(n, l) => ok_value(Value::Number(Self::parse(n, span.start)?, l)),
-            Token::SingleQuotedString(ref s) => ok_value(Value::SingleQuotedString(s.to_string())),
-            Token::DoubleQuotedString(ref s) => ok_value(Value::DoubleQuotedString(s.to_string())),
+            Token::SingleQuotedString(ref s) => {
+                if self.dialect.supports_concat_quoted_identifiers() {
+                    return ok_value(Value::SingleQuotedString(self.combine_quoted(next_token)));
+                }
+                ok_value(Value::SingleQuotedString(s.to_string()))
+            }
+            Token::DoubleQuotedString(ref s) => {
+                if self.dialect.supports_concat_quoted_identifiers() {
+                    return ok_value(Value::DoubleQuotedString(self.combine_quoted(next_token)));
+                }
+                ok_value(Value::DoubleQuotedString(s.to_string()))
+            }
             Token::TripleSingleQuotedString(ref s) => {
                 ok_value(Value::TripleSingleQuotedString(s.to_string()))
             }
@@ -9877,6 +9887,35 @@ impl<'a> Parser<'a> {
                 },
             ),
         }
+    }
+
+    fn is_quoted_string(&self, token: &Token) -> bool {
+        matches!(
+            token,
+            Token::SingleQuotedString(_) | Token::DoubleQuotedString(_)
+        )
+    }
+
+    fn get_quoted_string(&self, token: &Token) -> String {
+        match token {
+            Token::SingleQuotedString(s) => s.clone(),
+            Token::DoubleQuotedString(s) => s.clone(),
+            _ => String::new(),
+        }
+    }
+
+    fn combine_quoted(&mut self, token: TokenWithSpan) -> String {
+        let mut combined_string = self.get_quoted_string(&token.token);
+        loop {
+            let next_token = self.next_token();
+            if !self.is_quoted_string(&next_token.token) {
+                self.prev_token();
+                break;
+            }
+            let s = self.get_quoted_string(&next_token.token);
+            combined_string.push_str(&s);
+        }
+        combined_string
     }
 
     /// Parse an unsigned numeric literal

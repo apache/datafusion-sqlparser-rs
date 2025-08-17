@@ -476,6 +476,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    // Does the Dialect support concatenating of string literal
+    // Example: SELECT 'Hello ' "world" => SELECT 'Hello world'
+    fn supports_concat_quoted_identifiers(&self) -> bool {
+        false
+    }
+
     /// Does the dialect support trailing commas in the projection list?
     fn supports_projection_trailing_commas(&self) -> bool {
         self.supports_trailing_commas()

@@ -391,6 +391,7 @@ impl Spanned for Statement {
                 or_alter: _,
                 or_replace: _,
                 materialized: _,
+                secure: _,
                 name,
                 columns,
                 query,

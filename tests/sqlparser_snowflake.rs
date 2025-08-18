@@ -45,6 +45,33 @@ fn test_snowflake_create_table() {
 }
 
 #[test]
+fn parse_sf_create_secure_view_and_materialized_view() {
+    for sql in [
+        "CREATE SECURE VIEW v AS SELECT 1",
+        "CREATE SECURE MATERIALIZED VIEW v AS SELECT 1",
+        "CREATE OR REPLACE SECURE VIEW v AS SELECT 1",
+        "CREATE OR REPLACE SECURE MATERIALIZED VIEW v AS SELECT 1",
+    ] {
+        match snowflake().verified_stmt(sql) {
+            Statement::CreateView {
+                secure,
+                materialized,
+                ..
+            } => {
+                assert!(secure);
+                if sql.contains("MATERIALIZED") {
+                    assert!(materialized);
+                } else {
+                    assert!(!materialized);
+                }
+            }
+            _ => unreachable!(),
+        }
+        assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+    }
+}
+
+#[test]
 fn test_snowflake_create_or_replace_table() {
     let sql = "CREATE OR REPLACE TABLE my_table (a number)";
     match snowflake().verified_stmt(sql) {

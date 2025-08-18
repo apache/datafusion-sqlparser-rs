@@ -3255,6 +3255,9 @@ pub enum Statement {
         or_alter: bool,
         or_replace: bool,
         materialized: bool,
+        /// Snowflake: SECURE view modifier
+        /// <https://docs.snowflake.com/en/sql-reference/sql/create-view#syntax>
+        secure: bool,
         /// View name
         name: ObjectName,
         /// If `if_not_exists` is true, this flag is set to true if the view name comes before the `IF NOT EXISTS` clause.
@@ -5105,6 +5108,7 @@ impl fmt::Display for Statement {
                 columns,
                 query,
                 materialized,
+                secure,
                 options,
                 cluster_by,
                 comment,
@@ -5126,7 +5130,7 @@ impl fmt::Display for Statement {
                 }
                 write!(
                     f,
-                    "{materialized}{temporary}VIEW {if_not_and_name}{to}",
+                    "{secure}{materialized}{temporary}VIEW {if_not_and_name}{to}",
                     if_not_and_name = if *if_not_exists {
                         if *name_before_not_exists {
                             format!("{name} IF NOT EXISTS")
@@ -5136,6 +5140,7 @@ impl fmt::Display for Statement {
                     } else {
                         format!("{name}")
                     },
+                    secure = if *secure { "SECURE " } else { "" },
                     materialized = if *materialized { "MATERIALIZED " } else { "" },
                     temporary = if *temporary { "TEMPORARY " } else { "" },
                     to = to

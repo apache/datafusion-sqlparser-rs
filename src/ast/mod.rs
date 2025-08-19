@@ -4409,6 +4409,13 @@ pub enum Statement {
     /// ```
     /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-user)
     CreateUser(CreateUser),
+    /// Re-sorts rows and reclaims space in either a specified table or all tables in the current database
+    ///
+    /// ```sql
+    /// VACUUM tbl
+    /// ```
+    /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_VACUUM_command.html)
+    Vacuum(VacuumStatement),
 }
 
 /// ```sql
@@ -6343,6 +6350,7 @@ impl fmt::Display for Statement {
             Statement::ExportData(e) => write!(f, "{e}"),
             Statement::CreateUser(s) => write!(f, "{s}"),
             Statement::AlterSchema(s) => write!(f, "{s}"),
+            Statement::Vacuum(s) => write!(f, "{s}"),
         }
     }
 }
@@ -10601,6 +10609,50 @@ impl fmt::Display for InitializeKind {
             InitializeKind::OnCreate => write!(f, "ON_CREATE"),
             InitializeKind::OnSchedule => write!(f, "ON_SCHEDULE"),
         }
+    }
+}
+
+/// Re-sorts rows and reclaims space in either a specified table or all tables in the current database
+///
+/// '''sql
+/// VACUUM [ FULL | SORT ONLY | DELETE ONLY | REINDEX | RECLUSTER ] [ \[ table_name \] [ TO threshold PERCENT ] \[ BOOST \] ]
+/// '''
+/// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_VACUUM_command.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct VacuumStatement {
+    pub full: bool,
+    pub sort_only: bool,
+    pub delete_only: bool,
+    pub reindex: bool,
+    pub recluster: bool,
+    pub table_name: Option<ObjectName>,
+    pub threshold: Option<Value>,
+    pub boost: bool,
+}
+
+impl fmt::Display for VacuumStatement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "VACUUM{}{}{}{}{}",
+            if self.full { " FULL" } else { "" },
+            if self.sort_only { " SORT ONLY" } else { "" },
+            if self.delete_only { " DELETE ONLY" } else { "" },
+            if self.reindex { " REINDEX" } else { "" },
+            if self.recluster { " RECLUSTER" } else { "" },
+        )?;
+        if let Some(table_name) = &self.table_name {
+            write!(f, " {table_name}")?;
+        }
+        if let Some(threshold) = &self.threshold {
+            write!(f, " TO {threshold} PERCENT")?;
+        }
+        if self.boost {
+            write!(f, " BOOST")?;
+        }
+        Ok(())
     }
 }
 

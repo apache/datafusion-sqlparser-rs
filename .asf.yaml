@@ -48,5 +48,5 @@ github:
           - "compile-no-std"
           - "test (stable)"
           - "test (beta)"
-          - "test (wasm)"
-          - "rat"
+          - "test (nightly)"
+          - "Release Audit Tool (RAT)"

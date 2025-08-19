@@ -8930,10 +8930,15 @@ impl<'a> Parser<'a> {
                     drop_behavior,
                 }
             } else if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY]) {
-                AlterTableOperation::DropPrimaryKey
+                let drop_behavior = self.parse_optional_drop_behavior();
+                AlterTableOperation::DropPrimaryKey { drop_behavior }
             } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::KEY]) {
                 let name = self.parse_identifier()?;
-                AlterTableOperation::DropForeignKey { name }
+                let drop_behavior = self.parse_optional_drop_behavior();
+                AlterTableOperation::DropForeignKey {
+                    name,
+                    drop_behavior,
+                }
             } else if self.parse_keyword(Keyword::INDEX) {
                 let name = self.parse_identifier()?;
                 AlterTableOperation::DropIndex { name }

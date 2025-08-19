@@ -4571,3 +4571,13 @@ fn test_create_database() {
         .to_string();
     assert!(err.contains("Expected"), "Unexpected error: {err}");
 }
+
+#[test]
+fn test_drop_constraints() {
+    snowflake().verified_stmt("ALTER TABLE tbl DROP PRIMARY KEY");
+    snowflake().verified_stmt("ALTER TABLE tbl DROP FOREIGN KEY k1");
+    snowflake().verified_stmt("ALTER TABLE tbl DROP CONSTRAINT c1");
+    snowflake().verified_stmt("ALTER TABLE tbl DROP PRIMARY KEY CASCADE");
+    snowflake().verified_stmt("ALTER TABLE tbl DROP FOREIGN KEY k1 RESTRICT");
+    snowflake().verified_stmt("ALTER TABLE tbl DROP CONSTRAINT c1 CASCADE");
+}

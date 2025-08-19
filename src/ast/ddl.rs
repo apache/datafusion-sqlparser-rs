@@ -200,17 +200,18 @@ pub enum AlterTableOperation {
     },
     /// `DROP PRIMARY KEY`
     ///
-    /// Note: this is a [MySQL]-specific operation.
-    ///
-    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
-    DropPrimaryKey,
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/alter-table.html)
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/constraints-drop)
+    DropPrimaryKey {
+        drop_behavior: Option<DropBehavior>,
+    },
     /// `DROP FOREIGN KEY <fk_symbol>`
     ///
-    /// Note: this is a [MySQL]-specific operation.
-    ///
-    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/alter-table.html)
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/constraints-drop)
     DropForeignKey {
         name: Ident,
+        drop_behavior: Option<DropBehavior>,
     },
     /// `DROP INDEX <index_name>`
     ///
@@ -648,36 +649,51 @@ impl fmt::Display for AlterTableOperation {
             } => {
                 write!(
                     f,
-                    "DROP CONSTRAINT {}{}{}",
+                    "DROP CONSTRAINT {}{}",
                     if *if_exists { "IF EXISTS " } else { "" },
-                    name,
-                    match drop_behavior {
-                        None => "",
-                        Some(DropBehavior::Restrict) => " RESTRICT",
-                        Some(DropBehavior::Cascade) => " CASCADE",
-                    }
-                )
+                    name
+                )?;
+                if let Some(drop_behavior) = drop_behavior {
+                    write!(f, " {drop_behavior}")?;
+                }
+                Ok(())
             }
-            AlterTableOperation::DropPrimaryKey => write!(f, "DROP PRIMARY KEY"),
-            AlterTableOperation::DropForeignKey { name } => write!(f, "DROP FOREIGN KEY {name}"),
+            AlterTableOperation::DropPrimaryKey { drop_behavior } => {
+                write!(f, "DROP PRIMARY KEY")?;
+                if let Some(drop_behavior) = drop_behavior {
+                    write!(f, " {drop_behavior}")?;
+                }
+                Ok(())
+            }
+            AlterTableOperation::DropForeignKey {
+                name,
+                drop_behavior,
+            } => {
+                write!(f, "DROP FOREIGN KEY {name}")?;
+                if let Some(drop_behavior) = drop_behavior {
+                    write!(f, " {drop_behavior}")?;
+                }
+                Ok(())
+            }
             AlterTableOperation::DropIndex { name } => write!(f, "DROP INDEX {name}"),
             AlterTableOperation::DropColumn {
                 has_column_keyword,
                 column_names: column_name,
                 if_exists,
                 drop_behavior,
-            } => write!(
-                f,
-                "DROP {}{}{}{}",
-                if *has_column_keyword { "COLUMN " } else { "" },
-                if *if_exists { "IF EXISTS " } else { "" },
-                display_comma_separated(column_name),
-                match drop_behavior {
-                    None => "",
-                    Some(DropBehavior::Restrict) => " RESTRICT",
-                    Some(DropBehavior::Cascade) => " CASCADE",
+            } => {
+                write!(
+                    f,
+                    "DROP {}{}{}",
+                    if *has_column_keyword { "COLUMN " } else { "" },
+                    if *if_exists { "IF EXISTS " } else { "" },
+                    display_comma_separated(column_name),
+                )?;
+                if let Some(drop_behavior) = drop_behavior {
+                    write!(f, " {drop_behavior}")?;
                 }
-            ),
+                Ok(())
+            }
             AlterTableOperation::AttachPartition { partition } => {
                 write!(f, "ATTACH {partition}")
             }

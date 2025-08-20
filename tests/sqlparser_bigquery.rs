@@ -2825,3 +2825,15 @@ fn test_begin_transaction() {
 fn test_begin_statement() {
     bigquery().verified_stmt("BEGIN");
 }
+
+#[test]
+fn test_alter_schema() {
+    bigquery_and_generic().verified_stmt("ALTER SCHEMA mydataset SET DEFAULT COLLATE 'und:ci'");
+    bigquery_and_generic().verified_stmt("ALTER SCHEMA mydataset ADD REPLICA 'us'");
+    bigquery_and_generic()
+        .verified_stmt("ALTER SCHEMA mydataset ADD REPLICA 'us' OPTIONS (location = 'us')");
+    bigquery_and_generic().verified_stmt("ALTER SCHEMA mydataset DROP REPLICA 'us'");
+    bigquery_and_generic().verified_stmt("ALTER SCHEMA mydataset SET OPTIONS (location = 'us')");
+    bigquery_and_generic()
+        .verified_stmt("ALTER SCHEMA IF EXISTS mydataset SET OPTIONS (location = 'us')");
+}

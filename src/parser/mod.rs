@@ -9247,8 +9247,14 @@ impl<'a> Parser<'a> {
             Keyword::POLICY,
             Keyword::CONNECTOR,
             Keyword::ICEBERG,
+            Keyword::SCHEMA,
         ])?;
         match object_type {
+            Keyword::SCHEMA => {
+                self.prev_token();
+                self.prev_token();
+                self.parse_alter_schema()
+            }
             Keyword::VIEW => self.parse_alter_view(),
             Keyword::TYPE => self.parse_alter_type(),
             Keyword::TABLE => self.parse_alter_table(false),
@@ -9385,6 +9391,40 @@ impl<'a> Parser<'a> {
                 self.peek_token_ref(),
             )
         }
+    }
+
+    // Parse a [Statement::AlterSchema]
+    // ALTER SCHEMA [ IF EXISTS ] schema_name
+    pub fn parse_alter_schema(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keywords(&[Keyword::ALTER, Keyword::SCHEMA])?;
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let name = self.parse_object_name(false)?;
+        let operation = if self.parse_keywords(&[Keyword::SET, Keyword::OPTIONS]) {
+            self.prev_token();
+            let options = self.parse_options(Keyword::OPTIONS)?;
+            AlterSchemaOperation::SetOptionsParens { options }
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::DEFAULT, Keyword::COLLATE]) {
+            let collate = self.parse_expr()?;
+            AlterSchemaOperation::SetDefaultCollate { collate }
+        } else if self.parse_keywords(&[Keyword::ADD, Keyword::REPLICA]) {
+            let replica = self.parse_identifier()?;
+            let options = if self.peek_keyword(Keyword::OPTIONS) {
+                Some(self.parse_options(Keyword::OPTIONS)?)
+            } else {
+                None
+            };
+            AlterSchemaOperation::AddReplica { replica, options }
+        } else if self.parse_keywords(&[Keyword::DROP, Keyword::REPLICA]) {
+            let replica = self.parse_identifier()?;
+            AlterSchemaOperation::DropReplica { replica }
+        } else {
+            return self.expected_ref("ALTER SCHEMA operation", self.peek_token_ref());
+        };
+        Ok(Statement::AlterSchema(AlterSchema {
+            name,
+            if_exists,
+            operations: vec![operation],
+        }))
     }
 
     /// Parse a `CALL procedure_name(arg1, arg2, ...)`

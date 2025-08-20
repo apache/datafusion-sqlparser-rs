@@ -3080,6 +3080,48 @@ impl fmt::Display for CreateConnector {
     }
 }
 
+/// An `ALTER SCHEMA` (`Statement::AlterSchema`) operation.
+///
+/// See [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_schema_collate_statement)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterSchemaOperation {
+    SetDefaultCollate {
+        collate: Expr,
+    },
+    AddReplica {
+        replica: Ident,
+        options: Option<Vec<SqlOption>>,
+    },
+    DropReplica {
+        replica: Ident,
+    },
+    SetOptionsParens {
+        options: Vec<SqlOption>,
+    },
+}
+
+impl fmt::Display for AlterSchemaOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterSchemaOperation::SetDefaultCollate { collate } => {
+                write!(f, "SET DEFAULT COLLATE {collate}")
+            }
+            AlterSchemaOperation::AddReplica { replica, options } => {
+                write!(f, "ADD REPLICA {replica}")?;
+                if let Some(options) = options {
+                    write!(f, " OPTIONS ({})", display_comma_separated(options))?;
+                }
+                Ok(())
+            }
+            AlterSchemaOperation::DropReplica { replica } => write!(f, "DROP REPLICA {replica}"),
+            AlterSchemaOperation::SetOptionsParens { options } => {
+                write!(f, "SET OPTIONS ({})", display_comma_separated(options))
+            }
+        }
+    }
+}
 /// `RenameTableNameKind` is the kind used in an `ALTER TABLE _ RENAME` statement.
 ///
 /// Note: [MySQL] is the only database that supports the AS keyword for this operation.
@@ -3099,6 +3141,30 @@ impl fmt::Display for RenameTableNameKind {
             RenameTableNameKind::As(name) => write!(f, "AS {name}"),
             RenameTableNameKind::To(name) => write!(f, "TO {name}"),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterSchema {
+    pub name: ObjectName,
+    pub if_exists: bool,
+    pub operations: Vec<AlterSchemaOperation>,
+}
+
+impl fmt::Display for AlterSchema {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ALTER SCHEMA ")?;
+        if self.if_exists {
+            write!(f, "IF EXISTS ")?;
+        }
+        write!(f, "{}", self.name)?;
+        for operation in &self.operations {
+            write!(f, " {operation}")?;
+        }
+
+        Ok(())
     }
 }
 

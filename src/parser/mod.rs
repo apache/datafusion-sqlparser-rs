@@ -11067,6 +11067,18 @@ impl<'a> Parser<'a> {
         self.parse_parenthesized_column_list_inner(optional, allow_empty, |p| p.parse_identifier())
     }
 
+    pub fn parse_parenthesized_compound_identifier_list(
+        &mut self,
+        optional: IsOptional,
+        allow_empty: bool,
+    ) -> Result<Vec<Expr>, ParserError> {
+        self.parse_parenthesized_column_list_inner(optional, allow_empty, |p| {
+            Ok(Expr::CompoundIdentifier(
+                p.parse_period_separated(|p| p.parse_identifier())?,
+            ))
+        })
+    }
+
     /// Parses a parenthesized comma-separated list of index columns, which can be arbitrary
     /// expressions with ordering information (and an opclass in some dialects).
     fn parse_parenthesized_index_column_list(&mut self) -> Result<Vec<IndexColumn>, ParserError> {
@@ -14187,7 +14199,13 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let aggregate_functions = self.parse_comma_separated(Self::parse_aliased_function_call)?;
         self.expect_keyword_is(Keyword::FOR)?;
-        let value_column = self.parse_period_separated(|p| p.parse_identifier())?;
+        let value_column = if self.peek_token_ref().token == Token::LParen {
+            self.parse_parenthesized_column_list_inner(Mandatory, false, |p| {
+                p.parse_subexpr(self.dialect.prec_value(Precedence::Between))
+            })?
+        } else {
+            vec![self.parse_subexpr(self.dialect.prec_value(Precedence::Between))?]
+        };
         self.expect_keyword_is(Keyword::IN)?;
 
         self.expect_token(&Token::LParen)?;

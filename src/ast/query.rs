@@ -1336,7 +1336,7 @@ pub enum TableFactor {
     Pivot {
         table: Box<TableFactor>,
         aggregate_functions: Vec<ExprWithAlias>, // Function expression
-        value_column: Vec<Ident>,
+        value_column: Vec<Expr>,
         value_source: PivotValueSource,
         default_on_null: Option<Expr>,
         alias: Option<TableAlias>,
@@ -2011,10 +2011,15 @@ impl fmt::Display for TableFactor {
             } => {
                 write!(
                     f,
-                    "{table} PIVOT({} FOR {} IN ({value_source})",
+                    "{table} PIVOT({} FOR ",
                     display_comma_separated(aggregate_functions),
-                    Expr::CompoundIdentifier(value_column.to_vec()),
                 )?;
+                if value_column.len() == 1 {
+                    write!(f, "{}", value_column[0])?;
+                } else {
+                    write!(f, "({})", display_comma_separated(value_column))?;
+                }
+                write!(f, " IN ({value_source})")?;
                 if let Some(expr) = default_on_null {
                     write!(f, " DEFAULT ON NULL ({expr})")?;
                 }

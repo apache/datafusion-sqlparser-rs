@@ -9548,6 +9548,8 @@ impl<'a> Parser<'a> {
             Keyword::DELIMITER,
             Keyword::NULL,
             Keyword::CSV,
+            Keyword::IAM_ROLE,
+            Keyword::IGNOREHEADER,
         ]) {
             Some(Keyword::BINARY) => CopyLegacyOption::Binary,
             Some(Keyword::DELIMITER) => {
@@ -9567,9 +9569,24 @@ impl<'a> Parser<'a> {
                 }
                 opts
             }),
+            Some(Keyword::IAM_ROLE) => CopyLegacyOption::IamRole(self.parse_iam_role_kind()?),
+            Some(Keyword::IGNOREHEADER) => {
+                let _ = self.parse_keyword(Keyword::AS);
+                let num_rows = self.parse_literal_uint()?;
+                CopyLegacyOption::IgnoreHeader(num_rows)
+            }
             _ => self.expected("option", self.peek_token())?,
         };
         Ok(ret)
+    }
+
+    fn parse_iam_role_kind(&mut self) -> Result<IamRoleKind, ParserError> {
+        if self.parse_keyword(Keyword::DEFAULT) {
+            Ok(IamRoleKind::Default)
+        } else {
+            let arn = self.parse_literal_string()?;
+            Ok(IamRoleKind::Arn(arn))
+        }
     }
 
     fn parse_copy_legacy_csv_option(&mut self) -> Result<CopyLegacyCsvOption, ParserError> {

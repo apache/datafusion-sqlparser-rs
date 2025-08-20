@@ -8772,6 +8772,10 @@ pub enum CopyLegacyOption {
     Null(String),
     /// CSV ...
     Csv(Vec<CopyLegacyCsvOption>),
+    /// IAM_ROLE { DEFAULT | 'arn:aws:iam::123456789:role/role1' }
+    IamRole(IamRoleKind),
+    /// IGNOREHEADER \[ AS \] number_rows
+    IgnoreHeader(u64),
 }
 
 impl fmt::Display for CopyLegacyOption {
@@ -8781,7 +8785,37 @@ impl fmt::Display for CopyLegacyOption {
             Binary => write!(f, "BINARY"),
             Delimiter(char) => write!(f, "DELIMITER '{char}'"),
             Null(string) => write!(f, "NULL '{}'", value::escape_single_quote_string(string)),
-            Csv(opts) => write!(f, "CSV {}", display_separated(opts, " ")),
+            Csv(opts) => {
+                write!(f, "CSV")?;
+                if !opts.is_empty() {
+                    write!(f, " {}", display_separated(opts, " "))?;
+                }
+                Ok(())
+            }
+            IamRole(role) => write!(f, "IAM_ROLE {role}"),
+            IgnoreHeader(num_rows) => write!(f, "IGNOREHEADER {num_rows}"),
+        }
+    }
+}
+
+/// An `IAM_ROLE` option in the AWS ecosystem
+///
+/// [Redshift COPY](https://docs.aws.amazon.com/redshift/latest/dg/copy-parameters-authorization.html#copy-iam-role)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum IamRoleKind {
+    /// Default role
+    Default,
+    /// Specific role ARN, for example: `arn:aws:iam::123456789:role/role1`
+    Arn(String),
+}
+
+impl fmt::Display for IamRoleKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            IamRoleKind::Default => write!(f, "DEFAULT"),
+            IamRoleKind::Arn(arn) => write!(f, "'{arn}'"),
         }
     }
 }

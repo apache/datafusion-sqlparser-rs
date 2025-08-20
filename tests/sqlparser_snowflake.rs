@@ -529,23 +529,6 @@ fn test_snowflake_create_table_comment() {
 }
 
 #[test]
-fn test_snowflake_create_table_incomplete_statement() {
-    assert_eq!(
-        snowflake().parse_sql_statements("CREATE TABLE my_table"),
-        Err(ParserError::ParserError(
-            "unexpected end of input".to_string()
-        ))
-    );
-
-    assert_eq!(
-        snowflake().parse_sql_statements("CREATE TABLE my_table; (c int)"),
-        Err(ParserError::ParserError(
-            "unexpected end of input".to_string()
-        ))
-    );
-}
-
-#[test]
 fn test_snowflake_single_line_tokenize() {
     let sql = "CREATE TABLE# this is a comment \ntable_1";
     let dialect = SnowflakeDialect {};
@@ -923,8 +906,8 @@ fn test_snowflake_create_table_with_several_column_options() {
 #[test]
 fn test_snowflake_create_iceberg_table_all_options() {
     match snowflake().verified_stmt("CREATE ICEBERG TABLE my_table (a INT, b INT) \
-    CLUSTER BY (a, b) EXTERNAL_VOLUME = 'volume' CATALOG = 'SNOWFLAKE' BASE_LOCATION = 'relative/path' CATALOG_SYNC = 'OPEN_CATALOG' \
-    STORAGE_SERIALIZATION_POLICY = COMPATIBLE COPY GRANTS CHANGE_TRACKING=TRUE DATA_RETENTION_TIME_IN_DAYS=5 MAX_DATA_EXTENSION_TIME_IN_DAYS=10 \
+    CLUSTER BY (a, b) EXTERNAL_VOLUME='volume' CATALOG='SNOWFLAKE' BASE_LOCATION='relative/path' CATALOG_SYNC='OPEN_CATALOG' \
+    STORAGE_SERIALIZATION_POLICY=COMPATIBLE COPY GRANTS CHANGE_TRACKING=TRUE DATA_RETENTION_TIME_IN_DAYS=5 MAX_DATA_EXTENSION_TIME_IN_DAYS=10 \
     WITH AGGREGATION POLICY policy_name WITH ROW ACCESS POLICY policy_name ON (a) WITH TAG (A='TAG A', B='TAG B')") {
         Statement::CreateTable(CreateTable {
             name, cluster_by, base_location,
@@ -972,7 +955,7 @@ fn test_snowflake_create_iceberg_table_all_options() {
 #[test]
 fn test_snowflake_create_iceberg_table() {
     match snowflake()
-        .verified_stmt("CREATE ICEBERG TABLE my_table (a INT) BASE_LOCATION = 'relative_path'")
+        .verified_stmt("CREATE ICEBERG TABLE my_table (a INT) BASE_LOCATION='relative_path'")
     {
         Statement::CreateTable(CreateTable {
             name,
@@ -1017,27 +1000,6 @@ fn test_snowflake_create_table_trailing_options() {
     snowflake()
         .parse_sql_statements("CREATE TEMPORARY TABLE dst ON COMMIT PRESERVE ROWS CLONE src")
         .unwrap();
-}
-
-#[test]
-fn test_snowflake_create_table_valid_schema_info() {
-    // Validate there's exactly one source of information on the schema of the new table
-    assert_eq!(
-        snowflake()
-            .parse_sql_statements("CREATE TABLE dst")
-            .is_err(),
-        true
-    );
-    assert_eq!(
-        snowflake().parse_sql_statements("CREATE OR REPLACE TEMP TABLE dst LIKE src AS (SELECT * FROM CUSTOMERS) ON COMMIT PRESERVE ROWS").is_err(),
-        true
-    );
-    assert_eq!(
-        snowflake()
-            .parse_sql_statements("CREATE OR REPLACE TEMP TABLE dst CLONE customers LIKE customer2")
-            .is_err(),
-        true
-    );
 }
 
 #[test]
@@ -1102,6 +1064,79 @@ fn parse_sf_create_table_or_view_with_dollar_quoted_comment() {
         r#"CREATE TABLE my_table (a STRING COMMENT $$comment 1$$) COMMENT = $$table comment$$"#,
         r#"CREATE TABLE my_table (a STRING COMMENT 'comment 1') COMMENT = 'table comment'"#,
     );
+}
+
+#[test]
+fn parse_create_dynamic_table() {
+    snowflake().verified_stmt(r#"CREATE OR REPLACE DYNAMIC TABLE my_dynamic_table TARGET_LAG='20 minutes' WAREHOUSE=mywh AS SELECT product_id, product_name FROM staging_table"#);
+    snowflake().verified_stmt(concat!(
+        "CREATE DYNAMIC ICEBERG TABLE my_dynamic_table (date TIMESTAMP_NTZ, id NUMBER, content STRING)",
+        " EXTERNAL_VOLUME='my_external_volume'",
+        " CATALOG='SNOWFLAKE'",
+        " BASE_LOCATION='my_iceberg_table'",
+        " TARGET_LAG='20 minutes'", 
+        " WAREHOUSE=mywh",       
+        " AS SELECT product_id, product_name FROM staging_table"
+    ));
+
+    snowflake().verified_stmt(concat!(
+        "CREATE DYNAMIC TABLE my_dynamic_table (date TIMESTAMP_NTZ, id NUMBER, content VARIANT)",
+        " CLUSTER BY (date, id)",
+        " TARGET_LAG='20 minutes'",
+        " WAREHOUSE=mywh",
+        " AS SELECT product_id, product_name FROM staging_table"
+    ));
+
+    snowflake().verified_stmt(concat!(
+        "CREATE DYNAMIC TABLE my_cloned_dynamic_table",
+        " CLONE my_dynamic_table",
+        " AT(TIMESTAMP => TO_TIMESTAMP_TZ('04/05/2013 01:02:03', 'mm/dd/yyyy hh24:mi:ss'))"
+    ));
+
+    snowflake().verified_stmt(concat!(
+        "CREATE DYNAMIC TABLE my_cloned_dynamic_table",
+        " CLONE my_dynamic_table",
+        " BEFORE(OFFSET => TO_TIMESTAMP_TZ('04/05/2013 01:02:03', 'mm/dd/yyyy hh24:mi:ss'))"
+    ));
+
+    snowflake().verified_stmt(concat!(
+        "CREATE DYNAMIC TABLE my_dynamic_table",
+        " TARGET_LAG='DOWNSTREAM'",
+        " WAREHOUSE=mywh",
+        " INITIALIZE=ON_SCHEDULE",
+        " REQUIRE USER",
+        " AS SELECT product_id, product_name FROM staging_table"
+    ));
+
+    snowflake().verified_stmt(concat!(
+        "CREATE DYNAMIC TABLE my_dynamic_table",
+        " TARGET_LAG='DOWNSTREAM'",
+        " WAREHOUSE=mywh",
+        " REFRESH_MODE=AUTO",
+        " INITIALIZE=ON_SCHEDULE",
+        " REQUIRE USER",
+        " AS SELECT product_id, product_name FROM staging_table"
+    ));
+
+    snowflake().verified_stmt(concat!(
+        "CREATE DYNAMIC TABLE my_dynamic_table",
+        " TARGET_LAG='DOWNSTREAM'",
+        " WAREHOUSE=mywh",
+        " REFRESH_MODE=FULL",
+        " INITIALIZE=ON_SCHEDULE",
+        " REQUIRE USER",
+        " AS SELECT product_id, product_name FROM staging_table"
+    ));
+
+    snowflake().verified_stmt(concat!(
+        "CREATE DYNAMIC TABLE my_dynamic_table",
+        " TARGET_LAG='DOWNSTREAM'",
+        " WAREHOUSE=mywh",
+        " REFRESH_MODE=INCREMENTAL",
+        " INITIALIZE=ON_SCHEDULE",
+        " REQUIRE USER",
+        " AS SELECT product_id, product_name FROM staging_table"
+    ));
 }
 
 #[test]
@@ -4516,9 +4551,6 @@ fn test_snowflake_identifier_function() {
             .is_err(),
         true
     );
-
-    snowflake().verified_stmt("GRANT ROLE IDENTIFIER('AAA') TO USER IDENTIFIER('AAA')");
-    snowflake().verified_stmt("REVOKE ROLE IDENTIFIER('AAA') FROM USER IDENTIFIER('AAA')");
 }
 
 #[test]

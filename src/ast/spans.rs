@@ -579,6 +579,7 @@ impl Spanned for CreateTable {
             temporary: _,     // bool
             external: _,      // bool
             global: _,        // bool
+            dynamic: _,       // bool
             if_not_exists: _, // bool
             transient: _,     // bool
             volatile: _,      // bool
@@ -619,6 +620,12 @@ impl Spanned for CreateTable {
             catalog_sync: _,                    // todo, Snowflake specific
             storage_serialization_policy: _,
             table_options,
+            target_lag: _,
+            warehouse: _,
+            version: _,
+            refresh_mode: _,
+            initialize: _,
+            require_user: _,
         } = self;
 
         union_spans(

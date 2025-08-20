@@ -700,6 +700,7 @@ fn test_duckdb_union_datatype() {
             transient: Default::default(),
             volatile: Default::default(),
             iceberg: Default::default(),
+            dynamic: Default::default(),
             name: ObjectName::from(vec!["tbl1".into()]),
             columns: vec![
                 ColumnDef {
@@ -774,7 +775,13 @@ fn test_duckdb_union_datatype() {
             catalog: Default::default(),
             catalog_sync: Default::default(),
             storage_serialization_policy: Default::default(),
-            table_options: CreateTableOptions::None
+            table_options: CreateTableOptions::None,
+            target_lag: None,
+            warehouse: None,
+            version: None,
+            refresh_mode: None,
+            initialize: None,
+            require_user: Default::default(),
         }),
         stmt
     );

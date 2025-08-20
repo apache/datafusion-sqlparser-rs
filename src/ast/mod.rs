@@ -8759,32 +8759,54 @@ impl fmt::Display for CopyOption {
 
 /// An option in `COPY` statement before PostgreSQL version 9.0.
 ///
-/// <https://www.postgresql.org/docs/8.4/sql-copy.html>
+/// [PostgreSQL](https://www.postgresql.org/docs/8.4/sql-copy.html)
+/// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_COPY-alphabetical-parm-list.html)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CopyLegacyOption {
+    /// ACCEPTANYDATE
+    AcceptAnyDate,
+    /// ACCEPTINVCHARS
+    AcceptInvChars(Option<String>),
     /// BINARY
     Binary,
-    /// DELIMITER \[ AS \] 'delimiter_character'
-    Delimiter(char),
-    /// NULL \[ AS \] 'null_string'
-    Null(String),
+    /// BLANKSASNULL
+    BlankAsNull,
     /// CSV ...
     Csv(Vec<CopyLegacyCsvOption>),
+    /// DATEFORMAT \[ AS \] {'dateformat_string' | 'auto' }
+    DateFormat(Option<String>),
+    /// DELIMITER \[ AS \] 'delimiter_character'
+    Delimiter(char),
+    /// EMPTYASNULL
+    EmptyAsNull,
     /// IAM_ROLE { DEFAULT | 'arn:aws:iam::123456789:role/role1' }
     IamRole(IamRoleKind),
     /// IGNOREHEADER \[ AS \] number_rows
     IgnoreHeader(u64),
+    /// NULL \[ AS \] 'null_string'
+    Null(String),
+    /// TIMEFORMAT \[ AS \] {'timeformat_string' | 'auto' | 'epochsecs' | 'epochmillisecs' }
+    TimeFormat(Option<String>),
+    /// TRUNCATECOLUMNS
+    TruncateColumns,
 }
 
 impl fmt::Display for CopyLegacyOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use CopyLegacyOption::*;
         match self {
+            AcceptAnyDate => write!(f, "ACCEPTANYDATE"),
+            AcceptInvChars(ch) => {
+                write!(f, "ACCEPTINVCHARS")?;
+                if let Some(ch) = ch {
+                    write!(f, " '{}'", value::escape_single_quote_string(ch))?;
+                }
+                Ok(())
+            }
             Binary => write!(f, "BINARY"),
-            Delimiter(char) => write!(f, "DELIMITER '{char}'"),
-            Null(string) => write!(f, "NULL '{}'", value::escape_single_quote_string(string)),
+            BlankAsNull => write!(f, "BLANKSASNULL"),
             Csv(opts) => {
                 write!(f, "CSV")?;
                 if !opts.is_empty() {
@@ -8792,8 +8814,26 @@ impl fmt::Display for CopyLegacyOption {
                 }
                 Ok(())
             }
+            DateFormat(fmt) => {
+                write!(f, "DATEFORMAT")?;
+                if let Some(fmt) = fmt {
+                    write!(f, " '{}'", value::escape_single_quote_string(fmt))?;
+                }
+                Ok(())
+            }
+            Delimiter(char) => write!(f, "DELIMITER '{char}'"),
+            EmptyAsNull => write!(f, "EMPTYASNULL"),
             IamRole(role) => write!(f, "IAM_ROLE {role}"),
             IgnoreHeader(num_rows) => write!(f, "IGNOREHEADER {num_rows}"),
+            Null(string) => write!(f, "NULL '{}'", value::escape_single_quote_string(string)),
+            TimeFormat(fmt) => {
+                write!(f, "TIMEFORMAT")?;
+                if let Some(fmt) = fmt {
+                    write!(f, " '{}'", value::escape_single_quote_string(fmt))?;
+                }
+                Ok(())
+            }
+            TruncateColumns => write!(f, "TRUNCATECOLUMNS"),
         }
     }
 }

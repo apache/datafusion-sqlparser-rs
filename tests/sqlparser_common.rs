@@ -16768,4 +16768,36 @@ fn parse_copy_options() {
         }
         _ => unreachable!(),
     }
+    one_statement_parses_to(
+        concat!(
+            "COPY dst (c1, c2, c3) FROM 's3://redshift-downloads/tickit/category_pipe.txt' ",
+            "ACCEPTANYDATE ",
+            "ACCEPTINVCHARS AS '*' ",
+            "BLANKSASNULL ",
+            "CSV ",
+            "DATEFORMAT AS 'DD-MM-YYYY' ",
+            "EMPTYASNULL ",
+            "IAM_ROLE DEFAULT ",
+            "IGNOREHEADER AS 1 ",
+            "TIMEFORMAT AS 'auto' ",
+            "TRUNCATECOLUMNS",
+        ),
+        concat!(
+            "COPY dst (c1, c2, c3) FROM 's3://redshift-downloads/tickit/category_pipe.txt' ",
+            "ACCEPTANYDATE ",
+            "ACCEPTINVCHARS '*' ",
+            "BLANKSASNULL ",
+            "CSV ",
+            "DATEFORMAT 'DD-MM-YYYY' ",
+            "EMPTYASNULL ",
+            "IAM_ROLE DEFAULT ",
+            "IGNOREHEADER 1 ",
+            "TIMEFORMAT 'auto' ",
+            "TRUNCATECOLUMNS",
+        ),
+    );
+    one_statement_parses_to(
+        "COPY dst (c1, c2, c3) FROM 's3://redshift-downloads/tickit/category_pipe.txt' FORMAT AS CSV",
+        "COPY dst (c1, c2, c3) FROM 's3://redshift-downloads/tickit/category_pipe.txt' CSV",
+    );
 }

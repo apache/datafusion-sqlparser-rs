@@ -13397,6 +13397,7 @@ impl<'a> Parser<'a> {
                         | TableFactor::Pivot { alias, .. }
                         | TableFactor::Unpivot { alias, .. }
                         | TableFactor::MatchRecognize { alias, .. }
+                        | TableFactor::SemanticView { alias, .. }
                         | TableFactor::NestedJoin { alias, .. } => {
                             // but not `FROM (mytable AS alias1) AS alias2`.
                             if let Some(inner_alias) = alias {
@@ -13511,6 +13512,10 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword_with_tokens(Keyword::XMLTABLE, &[Token::LParen]) {
             self.prev_token();
             self.parse_xml_table_factor()
+        } else if self.dialect.supports_semantic_view()
+            && self.parse_keyword_with_tokens(Keyword::SEMANTIC_VIEW, &[Token::LParen])
+        {
+            self.parse_semantic_view_table_factor()
         } else {
             let name = self.parse_object_name(true)?;
 
@@ -13840,6 +13845,66 @@ impl<'a> Parser<'a> {
             }
         }
         Ok(XmlPassingClause { arguments })
+    }
+
+    fn parse_semantic_view_table_factor(&mut self) -> Result<TableFactor, ParserError> {
+        let name = self.parse_object_name(true)?;
+
+        // Parse DIMENSIONS, METRICS, FACTS and WHERE clauses in flexible order
+        let mut dimensions = Vec::new();
+        let mut metrics = Vec::new();
+        let mut facts = Vec::new();
+        let mut where_clause = None;
+
+        while self.peek_token().token != Token::RParen {
+            if self.parse_keyword(Keyword::DIMENSIONS) {
+                if !dimensions.is_empty() {
+                    return Err(ParserError::ParserError(
+                        "DIMENSIONS clause can only be specified once".to_string(),
+                    ));
+                }
+                dimensions = self.parse_comma_separated(Parser::parse_expr)?;
+            } else if self.parse_keyword(Keyword::METRICS) {
+                if !metrics.is_empty() {
+                    return Err(ParserError::ParserError(
+                        "METRICS clause can only be specified once".to_string(),
+                    ));
+                }
+                metrics = self.parse_comma_separated(|parser| parser.parse_object_name(true))?;
+            } else if self.parse_keyword(Keyword::FACTS) {
+                if !facts.is_empty() {
+                    return Err(ParserError::ParserError(
+                        "FACTS clause can only be specified once".to_string(),
+                    ));
+                }
+                facts = self.parse_comma_separated(Parser::parse_expr)?;
+            } else if self.parse_keyword(Keyword::WHERE) {
+                if where_clause.is_some() {
+                    return Err(ParserError::ParserError(
+                        "WHERE clause can only be specified once".to_string(),
+                    ));
+                }
+                where_clause = Some(self.parse_expr()?);
+            } else {
+                return parser_err!(
+                    "Expected one of DIMENSIONS, METRICS, FACTS or WHERE",
+                    self.peek_token().span.start
+                )?;
+            }
+        }
+
+        self.expect_token(&Token::RParen)?;
+
+        let alias = self.maybe_parse_table_alias()?;
+
+        Ok(TableFactor::SemanticView {
+            name,
+            dimensions,
+            metrics,
+            facts,
+            where_clause,
+            alias,
+        })
     }
 
     fn parse_match_recognize(&mut self, table: TableFactor) -> Result<TableFactor, ParserError> {

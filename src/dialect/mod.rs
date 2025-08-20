@@ -1182,6 +1182,20 @@ pub trait Dialect: Debug + Any {
     fn supports_create_table_like_parenthesized(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect supports `SEMANTIC_VIEW()` table functions.
+    ///
+    /// ```sql
+    /// SELECT * FROM SEMANTIC_VIEW(
+    ///     model_name
+    ///     DIMENSIONS customer.name, customer.region
+    ///     METRICS orders.revenue, orders.count
+    ///     WHERE customer.active = true
+    /// )
+    /// ```
+    fn supports_semantic_view(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

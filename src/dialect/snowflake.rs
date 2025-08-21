@@ -566,6 +566,10 @@ impl Dialect for SnowflakeDialect {
     fn supports_select_wildcard_exclude(&self) -> bool {
         true
     }
+
+    fn supports_semantic_view_table_factor(&self) -> bool {
+        true
+    }
 }
 
 // Peeks ahead to identify tokens that are expected after

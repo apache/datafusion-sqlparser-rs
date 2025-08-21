@@ -1410,6 +1410,31 @@ pub enum TableFactor {
         /// The alias for the table.
         alias: Option<TableAlias>,
     },
+    /// Snowflake's SEMANTIC_VIEW function for semantic models.
+    ///
+    /// <https://docs.snowflake.com/en/sql-reference/constructs/semantic_view>
+    ///
+    /// ```sql
+    /// SELECT * FROM SEMANTIC_VIEW(
+    ///     tpch_analysis
+    ///     DIMENSIONS customer.customer_market_segment
+    ///     METRICS orders.order_average_value
+    /// );
+    /// ```
+    SemanticView {
+        /// The name of the semantic model
+        name: ObjectName,
+        /// List of dimensions or expression referring to dimensions (e.g. DATE_PART('year', col))
+        dimensions: Vec<Expr>,
+        /// List of metrics (references to objects like orders.value, value, orders.*)
+        metrics: Vec<ObjectName>,
+        /// List of facts or expressions referring to facts or dimensions.
+        facts: Vec<Expr>,
+        /// WHERE clause for filtering
+        where_clause: Option<Expr>,
+        /// The alias for the table
+        alias: Option<TableAlias>,
+    },
 }
 
 /// The table sample modifier options
@@ -2110,6 +2135,40 @@ impl fmt::Display for TableFactor {
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
                 }
+                Ok(())
+            }
+            TableFactor::SemanticView {
+                name,
+                dimensions,
+                metrics,
+                facts,
+                where_clause,
+                alias,
+            } => {
+                write!(f, "SEMANTIC_VIEW({name}")?;
+
+                if !dimensions.is_empty() {
+                    write!(f, " DIMENSIONS {}", display_comma_separated(dimensions))?;
+                }
+
+                if !metrics.is_empty() {
+                    write!(f, " METRICS {}", display_comma_separated(metrics))?;
+                }
+
+                if !facts.is_empty() {
+                    write!(f, " FACTS {}", display_comma_separated(facts))?;
+                }
+
+                if let Some(where_clause) = where_clause {
+                    write!(f, " WHERE {where_clause}")?;
+                }
+
+                write!(f, ")")?;
+
+                if let Some(alias) = alias {
+                    write!(f, " AS {alias}")?;
+                }
+
                 Ok(())
             }
         }

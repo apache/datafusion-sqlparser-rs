@@ -2044,6 +2044,23 @@ impl Spanned for TableFactor {
                     .chain(symbols.iter().map(|i| i.span()))
                     .chain(alias.as_ref().map(|i| i.span())),
             ),
+            TableFactor::SemanticView {
+                name,
+                dimensions,
+                metrics,
+                facts,
+                where_clause,
+                alias,
+            } => union_spans(
+                name.0
+                    .iter()
+                    .map(|i| i.span())
+                    .chain(dimensions.iter().map(|d| d.span()))
+                    .chain(metrics.iter().map(|m| m.span()))
+                    .chain(facts.iter().map(|f| f.span()))
+                    .chain(where_clause.as_ref().map(|e| e.span()))
+                    .chain(alias.as_ref().map(|a| a.span())),
+            ),
             TableFactor::OpenJsonTable { .. } => Span::empty(),
         }
     }

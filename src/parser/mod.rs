@@ -9585,7 +9585,7 @@ impl<'a> Parser<'a> {
                 opts
             }),
             Some(Keyword::DATEFORMAT) => {
-                let _ = self.parse_keyword(Keyword::AS); // [ AS ]
+                let _ = self.parse_keyword(Keyword::AS);
                 let fmt = if matches!(self.peek_token().token, Token::SingleQuotedString(_)) {
                     Some(self.parse_literal_string()?)
                 } else {
@@ -9594,7 +9594,7 @@ impl<'a> Parser<'a> {
                 CopyLegacyOption::DateFormat(fmt)
             }
             Some(Keyword::DELIMITER) => {
-                let _ = self.parse_keyword(Keyword::AS); // [ AS ]
+                let _ = self.parse_keyword(Keyword::AS);
                 CopyLegacyOption::Delimiter(self.parse_literal_char()?)
             }
             Some(Keyword::EMPTYASNULL) => CopyLegacyOption::EmptyAsNull,
@@ -9605,11 +9605,11 @@ impl<'a> Parser<'a> {
                 CopyLegacyOption::IgnoreHeader(num_rows)
             }
             Some(Keyword::NULL) => {
-                let _ = self.parse_keyword(Keyword::AS); // [ AS ]
+                let _ = self.parse_keyword(Keyword::AS);
                 CopyLegacyOption::Null(self.parse_literal_string()?)
             }
             Some(Keyword::TIMEFORMAT) => {
-                let _ = self.parse_keyword(Keyword::AS); // [ AS ]
+                let _ = self.parse_keyword(Keyword::AS);
                 let fmt = if matches!(self.peek_token().token, Token::SingleQuotedString(_)) {
                     Some(self.parse_literal_string()?)
                 } else {

@@ -407,3 +407,48 @@ fn parse_string_literal_backslash_escape() {
 fn parse_utf8_multibyte_idents() {
     redshift().verified_stmt("SELECT 🚀.city AS 🎸 FROM customers AS 🚀");
 }
+
+#[test]
+fn parse_vacuum() {
+    let stmt = redshift().verified_stmt("VACUUM FULL");
+    match stmt {
+        Statement::Vacuum(v) => {
+            assert!(v.full);
+            assert_eq!(v.table_name, None);
+        }
+        _ => unreachable!(),
+    }
+    let stmt = redshift().verified_stmt("VACUUM tbl");
+    match stmt {
+        Statement::Vacuum(v) => {
+            assert_eq!(
+                v.table_name,
+                Some(ObjectName::from(vec![Ident::new("tbl"),]))
+            );
+        }
+        _ => unreachable!(),
+    }
+    let stmt = redshift().verified_stmt(
+        "VACUUM FULL SORT ONLY DELETE ONLY REINDEX RECLUSTER db1.sc1.tbl1 TO 20 PERCENT BOOST",
+    );
+    match stmt {
+        Statement::Vacuum(v) => {
+            assert!(v.full);
+            assert!(v.sort_only);
+            assert!(v.delete_only);
+            assert!(v.reindex);
+            assert!(v.recluster);
+            assert_eq!(
+                v.table_name,
+                Some(ObjectName::from(vec![
+                    Ident::new("db1"),
+                    Ident::new("sc1"),
+                    Ident::new("tbl1"),
+                ]))
+            );
+            assert_eq!(v.threshold, Some(number("20")));
+            assert!(v.boost);
+        }
+        _ => unreachable!(),
+    }
+}

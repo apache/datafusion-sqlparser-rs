@@ -13847,6 +13847,7 @@ impl<'a> Parser<'a> {
         Ok(XmlPassingClause { arguments })
     }
 
+    /// Parse a [TableFactor::SemanticView]
     fn parse_semantic_view_table_factor(&mut self) -> Result<TableFactor, ParserError> {
         let name = self.parse_object_name(true)?;
 

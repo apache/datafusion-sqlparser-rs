@@ -4622,12 +4622,13 @@ fn test_semantic_view_all_variants_should_pass() {
             "SELECT * FROM SEMANTIC_VIEW(model DIMENSIONS dim1, dim2)",
             None,
         ),
+        ("SELECT * FROM SEMANTIC_VIEW(a.b METRICS c.d, c.e)", None),
         (
-            "SELECT * FROM SEMANTIC_VIEW(model METRICS met1, met2)",
+            "SELECT * FROM SEMANTIC_VIEW(model FACTS fact1, fact2)",
             None,
         ),
         (
-            "SELECT * FROM SEMANTIC_VIEW(model FACTS fact1, fact2)",
+            "SELECT * FROM SEMANTIC_VIEW(model FACTS DATE_PART('year', col))",
             None,
         ),
         (
@@ -4650,7 +4651,7 @@ fn test_semantic_view_all_variants_should_pass() {
             "SELECT * FROM SEMANTIC_VIEW(model METRICS orders.col, orders.col2)",
             None,
         ),
-        // We can parse in any order bu will always produce a result in a fixed order.
+        // We can parse in any order but will always produce a result in a fixed order.
         (
             "SELECT * FROM SEMANTIC_VIEW(model WHERE x > 0 DIMENSIONS dim1)",
             Some("SELECT * FROM SEMANTIC_VIEW(model DIMENSIONS dim1 WHERE x > 0)"),

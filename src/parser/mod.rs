@@ -9602,23 +9602,38 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_copy_legacy_option(&mut self) -> Result<CopyLegacyOption, ParserError> {
+        // FORMAT \[ AS \] is optional
+        if self.parse_keyword(Keyword::FORMAT) {
+            let _ = self.parse_keyword(Keyword::AS);
+        }
+
         let ret = match self.parse_one_of_keywords(&[
+            Keyword::ACCEPTANYDATE,
+            Keyword::ACCEPTINVCHARS,
             Keyword::BINARY,
-            Keyword::DELIMITER,
-            Keyword::NULL,
+            Keyword::BLANKSASNULL,
             Keyword::CSV,
+            Keyword::DATEFORMAT,
+            Keyword::DELIMITER,
+            Keyword::EMPTYASNULL,
             Keyword::IAM_ROLE,
             Keyword::IGNOREHEADER,
+            Keyword::NULL,
+            Keyword::TIMEFORMAT,
+            Keyword::TRUNCATECOLUMNS,
         ]) {
+            Some(Keyword::ACCEPTANYDATE) => CopyLegacyOption::AcceptAnyDate,
+            Some(Keyword::ACCEPTINVCHARS) => {
+                let _ = self.parse_keyword(Keyword::AS); // [ AS ]
+                let ch = if matches!(self.peek_token().token, Token::SingleQuotedString(_)) {
+                    Some(self.parse_literal_string()?)
+                } else {
+                    None
+                };
+                CopyLegacyOption::AcceptInvChars(ch)
+            }
             Some(Keyword::BINARY) => CopyLegacyOption::Binary,
-            Some(Keyword::DELIMITER) => {
-                let _ = self.parse_keyword(Keyword::AS); // [ AS ]
-                CopyLegacyOption::Delimiter(self.parse_literal_char()?)
-            }
-            Some(Keyword::NULL) => {
-                let _ = self.parse_keyword(Keyword::AS); // [ AS ]
-                CopyLegacyOption::Null(self.parse_literal_string()?)
-            }
+            Some(Keyword::BLANKSASNULL) => CopyLegacyOption::BlankAsNull,
             Some(Keyword::CSV) => CopyLegacyOption::Csv({
                 let mut opts = vec![];
                 while let Some(opt) =
@@ -9628,12 +9643,40 @@ impl<'a> Parser<'a> {
                 }
                 opts
             }),
+            Some(Keyword::DATEFORMAT) => {
+                let _ = self.parse_keyword(Keyword::AS);
+                let fmt = if matches!(self.peek_token().token, Token::SingleQuotedString(_)) {
+                    Some(self.parse_literal_string()?)
+                } else {
+                    None
+                };
+                CopyLegacyOption::DateFormat(fmt)
+            }
+            Some(Keyword::DELIMITER) => {
+                let _ = self.parse_keyword(Keyword::AS);
+                CopyLegacyOption::Delimiter(self.parse_literal_char()?)
+            }
+            Some(Keyword::EMPTYASNULL) => CopyLegacyOption::EmptyAsNull,
             Some(Keyword::IAM_ROLE) => CopyLegacyOption::IamRole(self.parse_iam_role_kind()?),
             Some(Keyword::IGNOREHEADER) => {
                 let _ = self.parse_keyword(Keyword::AS);
                 let num_rows = self.parse_literal_uint()?;
                 CopyLegacyOption::IgnoreHeader(num_rows)
             }
+            Some(Keyword::NULL) => {
+                let _ = self.parse_keyword(Keyword::AS);
+                CopyLegacyOption::Null(self.parse_literal_string()?)
+            }
+            Some(Keyword::TIMEFORMAT) => {
+                let _ = self.parse_keyword(Keyword::AS);
+                let fmt = if matches!(self.peek_token().token, Token::SingleQuotedString(_)) {
+                    Some(self.parse_literal_string()?)
+                } else {
+                    None
+                };
+                CopyLegacyOption::TimeFormat(fmt)
+            }
+            Some(Keyword::TRUNCATECOLUMNS) => CopyLegacyOption::TruncateColumns,
             _ => self.expected("option", self.peek_token())?,
         };
         Ok(ret)

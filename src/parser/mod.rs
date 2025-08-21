@@ -4245,6 +4245,19 @@ impl<'a> Parser<'a> {
     /// not be efficient as it does a loop on the tokens with `peek_nth_token`
     /// each time.
     pub fn parse_keyword_with_tokens(&mut self, expected: Keyword, tokens: &[Token]) -> bool {
+        self.keyword_with_tokens(expected, tokens, true)
+    }
+
+    /// Peeks to see if the current token is the `expected` keyword followed by specified tokens
+    /// without consuming them.
+    ///
+    /// Note that if the length of `tokens` is too long, this function will not be efficient as it
+    /// does a loop on the tokens with `peek_nth_token` each time.
+    pub fn peek_keyword_with_tokens(&mut self, expected: Keyword, tokens: &[Token]) -> bool {
+        self.keyword_with_tokens(expected, tokens, false)
+    }
+
+    fn keyword_with_tokens(&mut self, expected: Keyword, tokens: &[Token], consume: bool) -> bool {
         match &self.peek_token_ref().token {
             Token::Word(w) if expected == w.keyword => {
                 for (idx, token) in tokens.iter().enumerate() {
@@ -4252,10 +4265,13 @@ impl<'a> Parser<'a> {
                         return false;
                     }
                 }
-                // consume all tokens
-                for _ in 0..(tokens.len() + 1) {
-                    self.advance_token();
+
+                if consume {
+                    for _ in 0..(tokens.len() + 1) {
+                        self.advance_token();
+                    }
                 }
+
                 true
             }
             _ => false,
@@ -13513,7 +13529,7 @@ impl<'a> Parser<'a> {
             self.prev_token();
             self.parse_xml_table_factor()
         } else if self.dialect.supports_semantic_view()
-            && self.parse_keyword_with_tokens(Keyword::SEMANTIC_VIEW, &[Token::LParen])
+            && self.peek_keyword_with_tokens(Keyword::SEMANTIC_VIEW, &[Token::LParen])
         {
             self.parse_semantic_view_table_factor()
         } else {
@@ -13849,6 +13865,9 @@ impl<'a> Parser<'a> {
 
     /// Parse a [TableFactor::SemanticView]
     fn parse_semantic_view_table_factor(&mut self) -> Result<TableFactor, ParserError> {
+        self.expect_keyword(Keyword::SEMANTIC_VIEW)?;
+        self.expect_token(&Token::LParen)?;
+
         let name = self.parse_object_name(true)?;
 
         // Parse DIMENSIONS, METRICS, FACTS and WHERE clauses in flexible order
@@ -18047,5 +18066,19 @@ mod tests {
             let sql = format!("\nSELECT\n  :{w}fooBar");
             assert!(Parser::parse_sql(&GenericDialect, &sql).is_err());
         }
+    }
+
+    #[test]
+    fn test_parse_semantic_view() {
+        let sql = r#"SEMANTIC_VIEW(model DIMENSIONS a.b METRICS c.d WHERE x > 0) AS sm"#;
+        let mut parser = Parser::new(&GenericDialect {})
+            .try_with_sql(sql)
+            .expect("failed to create parser");
+
+        let ast = parser
+            .parse_semantic_view_table_factor()
+            .expect("should parse SEMANTIC_VIEW");
+
+        assert!(matches!(ast, TableFactor::SemanticView { .. }));
     }
 }

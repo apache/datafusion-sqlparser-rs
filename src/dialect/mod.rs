@@ -1193,7 +1193,7 @@ pub trait Dialect: Debug + Any {
     ///     WHERE customer.active = true
     /// )
     /// ```
-    fn supports_semantic_view(&self) -> bool {
+    fn supports_semantic_view_table_factor(&self) -> bool {
         false
     }
 }

@@ -4251,9 +4251,8 @@ impl<'a> Parser<'a> {
     /// Peeks to see if the current token is the `expected` keyword followed by specified tokens
     /// without consuming them.
     ///
-    /// Note that if the length of `tokens` is too long, this function will not be efficient as it
-    /// does a loop on the tokens with `peek_nth_token` each time.
-    pub fn peek_keyword_with_tokens(&mut self, expected: Keyword, tokens: &[Token]) -> bool {
+    /// See [Self::parse_keyword_with_tokens] for details.
+    pub(crate) fn peek_keyword_with_tokens(&mut self, expected: Keyword, tokens: &[Token]) -> bool {
         self.keyword_with_tokens(expected, tokens, false)
     }
 
@@ -13528,7 +13527,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword_with_tokens(Keyword::XMLTABLE, &[Token::LParen]) {
             self.prev_token();
             self.parse_xml_table_factor()
-        } else if self.dialect.supports_semantic_view()
+        } else if self.dialect.supports_semantic_view_table_factor()
             && self.peek_keyword_with_tokens(Keyword::SEMANTIC_VIEW, &[Token::LParen])
         {
             self.parse_semantic_view_table_factor()
@@ -18066,19 +18065,5 @@ mod tests {
             let sql = format!("\nSELECT\n  :{w}fooBar");
             assert!(Parser::parse_sql(&GenericDialect, &sql).is_err());
         }
-    }
-
-    #[test]
-    fn test_parse_semantic_view() {
-        let sql = r#"SEMANTIC_VIEW(model DIMENSIONS a.b METRICS c.d WHERE x > 0) AS sm"#;
-        let mut parser = Parser::new(&GenericDialect {})
-            .try_with_sql(sql)
-            .expect("failed to create parser");
-
-        let ast = parser
-            .parse_semantic_view_table_factor()
-            .expect("should parse SEMANTIC_VIEW");
-
-        assert!(matches!(ast, TableFactor::SemanticView { .. }));
     }
 }

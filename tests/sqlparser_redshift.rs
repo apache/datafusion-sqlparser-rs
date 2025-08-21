@@ -410,7 +410,24 @@ fn parse_utf8_multibyte_idents() {
 
 #[test]
 fn parse_vacuum() {
-    redshift().verified_stmt("VACUUM db1.sc1.tbl1");
+    let stmt = redshift().verified_stmt("VACUUM FULL");
+    match stmt {
+        Statement::Vacuum(v) => {
+            assert!(v.full);
+            assert_eq!(v.table_name, None);
+        }
+        _ => unreachable!(),
+    }
+    let stmt = redshift().verified_stmt("VACUUM tbl");
+    match stmt {
+        Statement::Vacuum(v) => {
+            assert_eq!(
+                v.table_name,
+                Some(ObjectName::from(vec![Ident::new("tbl"),]))
+            );
+        }
+        _ => unreachable!(),
+    }
     let stmt = redshift().verified_stmt(
         "VACUUM FULL SORT ONLY DELETE ONLY REINDEX RECLUSTER db1.sc1.tbl1 TO 20 PERCENT BOOST",
     );

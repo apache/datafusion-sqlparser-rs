@@ -649,7 +649,10 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     self.parse_export_data()
                 }
-                Keyword::VACUUM => self.parse_vacuum(),
+                Keyword::VACUUM => {
+                    self.prev_token();
+                    self.parse_vacuum()
+                }
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
@@ -16934,25 +16937,27 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_vacuum(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword(Keyword::VACUUM)?;
         let full = self.parse_keyword(Keyword::FULL);
         let sort_only = self.parse_keywords(&[Keyword::SORT, Keyword::ONLY]);
         let delete_only = self.parse_keywords(&[Keyword::DELETE, Keyword::ONLY]);
         let reindex = self.parse_keyword(Keyword::REINDEX);
         let recluster = self.parse_keyword(Keyword::RECLUSTER);
-        let (table_name, threshold, boost) = match self.parse_object_name(false) {
-            Ok(table_name) => {
-                let threshold = if self.parse_keyword(Keyword::TO) {
-                    let value = self.parse_value()?;
-                    self.expect_keyword(Keyword::PERCENT)?;
-                    Some(value.value)
-                } else {
-                    None
-                };
-                let boost = self.parse_keyword(Keyword::BOOST);
-                (Some(table_name), threshold, boost)
-            }
-            _ => (None, None, false),
-        };
+        let (table_name, threshold, boost) =
+            match self.maybe_parse(|p| p.parse_object_name(false))? {
+                Some(table_name) => {
+                    let threshold = if self.parse_keyword(Keyword::TO) {
+                        let value = self.parse_value()?;
+                        self.expect_keyword(Keyword::PERCENT)?;
+                        Some(value.value)
+                    } else {
+                        None
+                    };
+                    let boost = self.parse_keyword(Keyword::BOOST);
+                    (Some(table_name), threshold, boost)
+                }
+                _ => (None, None, false),
+            };
         Ok(Statement::Vacuum(VacuumStatement {
             full,
             sort_only,

@@ -4615,8 +4615,8 @@ fn test_drop_constraints() {
 }
 
 #[test]
-fn test_semantic_view_all_variants_should_pass() {
-    let test_cases = [
+fn test_semantic_view() {
+    let valid_sqls = [
         ("SELECT * FROM SEMANTIC_VIEW(model)", None),
         (
             "SELECT * FROM SEMANTIC_VIEW(model DIMENSIONS dim1, dim2)",
@@ -4666,7 +4666,7 @@ fn test_semantic_view_all_variants_should_pass() {
         ),
     ];
 
-    for (input_sql, expected_sql) in test_cases {
+    for (input_sql, expected_sql) in valid_sqls {
         if let Some(expected) = expected_sql {
             // Test that non-canonical order gets normalized
             let parsed = snowflake().parse_sql_statements(input_sql).unwrap();
@@ -4676,10 +4676,7 @@ fn test_semantic_view_all_variants_should_pass() {
             snowflake().verified_stmt(input_sql);
         }
     }
-}
 
-#[test]
-fn test_semantic_view_invalid_queries_should_fail() {
     let invalid_sqls = [
         "SELECT * FROM SEMANTIC_VIEW(model DIMENSIONS dim1 INVALID inv1)",
         "SELECT * FROM SEMANTIC_VIEW(model DIMENSIONS dim1 DIMENSIONS dim2)",
@@ -4690,18 +4687,15 @@ fn test_semantic_view_invalid_queries_should_fail() {
         let result = snowflake().parse_sql_statements(sql);
         assert!(result.is_err(), "Expected error for invalid SQL: {}", sql);
     }
-}
 
-#[test]
-fn test_semantic_view_ast_structure() {
-    let sql = r#"SELECT * FROM SEMANTIC_VIEW(
+    let ast_sql = r#"SELECT * FROM SEMANTIC_VIEW(
         my_model 
         DIMENSIONS DATE_PART('year', date_col), region_name
         METRICS orders.revenue, orders.count
         WHERE active = true
     ) AS model_alias"#;
 
-    let stmt = snowflake().parse_sql_statements(sql).unwrap();
+    let stmt = snowflake().parse_sql_statements(ast_sql).unwrap();
     match &stmt[0] {
         Statement::Query(q) => {
             if let SetExpr::Select(select) = q.body.as_ref() {

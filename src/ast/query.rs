@@ -161,6 +161,7 @@ pub enum SetExpr {
     Insert(Statement),
     Update(Statement),
     Delete(Statement),
+    Merge(Statement),
     Table(Box<Table>),
 }
 
@@ -188,6 +189,7 @@ impl fmt::Display for SetExpr {
             SetExpr::Insert(v) => v.fmt(f),
             SetExpr::Update(v) => v.fmt(f),
             SetExpr::Delete(v) => v.fmt(f),
+            SetExpr::Merge(v) => v.fmt(f),
             SetExpr::Table(t) => t.fmt(f),
             SetExpr::SetOperation {
                 left,

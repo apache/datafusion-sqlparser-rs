@@ -214,6 +214,7 @@ impl Spanned for SetExpr {
             SetExpr::Table(_) => Span::empty(),
             SetExpr::Update(statement) => statement.span(),
             SetExpr::Delete(statement) => statement.span(),
+            SetExpr::Merge(statement) => statement.span(),
         }
     }
 }

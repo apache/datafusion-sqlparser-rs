@@ -11508,6 +11508,13 @@ impl<'a> Parser<'a> {
         Ok(Box::new(SetExpr::Delete(self.parse_delete()?)))
     }
 
+    /// Parse a MERGE statement, returning a `Box`ed SetExpr
+    ///
+    /// This is used to reduce the size of the stack frames in debug builds
+    fn parse_merge_setexpr_boxed(&mut self) -> Result<Box<SetExpr>, ParserError> {
+        Ok(Box::new(SetExpr::Merge(self.parse_merge()?)))
+    }
+
     pub fn parse_delete(&mut self) -> Result<Statement, ParserError> {
         let (tables, with_from_keyword) = if !self.parse_keyword(Keyword::FROM) {
             // `FROM` keyword is optional in BigQuery SQL.
@@ -11709,6 +11716,20 @@ impl<'a> Parser<'a> {
             Ok(Query {
                 with,
                 body: self.parse_delete_setexpr_boxed()?,
+                limit_clause: None,
+                order_by: None,
+                fetch: None,
+                locks: vec![],
+                for_clause: None,
+                settings: None,
+                format_clause: None,
+                pipe_operators: vec![],
+            }
+            .into())
+        } else if self.parse_keyword(Keyword::MERGE) {
+            Ok(Query {
+                with,
+                body: self.parse_merge_setexpr_boxed()?,
                 limit_clause: None,
                 order_by: None,
                 fetch: None,
@@ -16571,15 +16592,22 @@ impl<'a> Parser<'a> {
         Ok(clauses)
     }
 
-    fn parse_output(&mut self) -> Result<OutputClause, ParserError> {
-        self.expect_keyword_is(Keyword::OUTPUT)?;
+    fn parse_output(&mut self, start_keyword: Keyword) -> Result<OutputClause, ParserError> {
         let select_items = self.parse_projection()?;
-        self.expect_keyword_is(Keyword::INTO)?;
-        let into_table = self.parse_select_into()?;
+        let into_table = if start_keyword == Keyword::OUTPUT && self.peek_keyword(Keyword::INTO) {
+            self.expect_keyword_is(Keyword::INTO)?;
+            Some(self.parse_select_into()?)
+        } else {
+            None
+        };
 
-        Ok(OutputClause {
-            select_items,
-            into_table,
+        Ok(if start_keyword == Keyword::OUTPUT {
+            OutputClause::Output {
+                select_items,
+                into_table,
+            }
+        } else {
+            OutputClause::Returning { select_items }
         })
     }
 
@@ -16609,10 +16637,9 @@ impl<'a> Parser<'a> {
         self.expect_keyword_is(Keyword::ON)?;
         let on = self.parse_expr()?;
         let clauses = self.parse_merge_clauses()?;
-        let output = if self.peek_keyword(Keyword::OUTPUT) {
-            Some(self.parse_output()?)
-        } else {
-            None
+        let output = match self.parse_one_of_keywords(&[Keyword::OUTPUT, Keyword::RETURNING]) {
+            Some(start_keyword) => Some(self.parse_output(start_keyword)?),
+            None => None,
         };
 
         Ok(Statement::Merge {

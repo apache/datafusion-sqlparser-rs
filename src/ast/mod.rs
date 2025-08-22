@@ -9107,24 +9107,36 @@ impl Display for MergeClause {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct OutputClause {
-    pub select_items: Vec<SelectItem>,
-    pub into_table: SelectInto,
+pub enum OutputClause {
+    Output {
+        select_items: Vec<SelectItem>,
+        into_table: Option<SelectInto>,
+    },
+    Returning {
+        select_items: Vec<SelectItem>,
+    },
 }
 
 impl fmt::Display for OutputClause {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let OutputClause {
-            select_items,
-            into_table,
-        } = self;
-
-        write!(
-            f,
-            "OUTPUT {} {}",
-            display_comma_separated(select_items),
-            into_table
-        )
+        match self {
+            OutputClause::Output {
+                select_items,
+                into_table,
+            } => {
+                f.write_str("OUTPUT ")?;
+                display_comma_separated(select_items).fmt(f)?;
+                if let Some(into_table) = into_table {
+                    f.write_str(" ")?;
+                    into_table.fmt(f)?;
+                }
+                Ok(())
+            }
+            OutputClause::Returning { select_items } => {
+                f.write_str("RETURNING ")?;
+                display_comma_separated(select_items).fmt(f)
+            }
+        }
     }
 }
 

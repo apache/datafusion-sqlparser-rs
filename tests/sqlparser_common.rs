@@ -9903,6 +9903,29 @@ fn parse_merge() {
 }
 
 #[test]
+fn test_merge_in_cte() {
+    verified_only_select(
+        "WITH x AS (\
+            MERGE INTO t USING (VALUES (1)) ON 1 = 1 \
+            WHEN MATCHED THEN DELETE \
+            RETURNING *\
+        ) SELECT * FROM x",
+    );
+}
+
+#[test]
+fn test_merge_with_returning() {
+    let sql = "MERGE INTO wines AS w \
+    USING wine_stock_changes AS s \
+        ON s.winename = w.winename \
+    WHEN NOT MATCHED AND s.stock_delta > 0 THEN INSERT VALUES (s.winename, s.stock_delta) \
+    WHEN MATCHED AND w.stock + s.stock_delta > 0 THEN UPDATE SET stock = w.stock + s.stock_delta \
+    WHEN MATCHED THEN DELETE \
+    RETURNING merge_action(), w.*";
+    verified_stmt(sql);
+}
+
+#[test]
 fn test_merge_with_output() {
     let sql = "MERGE INTO target_table USING source_table \
         ON target_table.id = source_table.oooid \
@@ -9912,6 +9935,14 @@ fn test_merge_with_output() {
             INSERT (ID, description) VALUES (source_table.id, source_table.description) \
         OUTPUT inserted.* INTO log_target";
 
+    verified_stmt(sql);
+}
+
+#[test]
+fn test_merge_with_output_without_into() {
+    let sql = "MERGE INTO a USING b ON a.id = b.id \
+        WHEN MATCHED THEN DELETE \
+        OUTPUT inserted.*";
     verified_stmt(sql);
 }
 

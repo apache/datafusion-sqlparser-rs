@@ -4294,15 +4294,24 @@ pub enum Statement {
     /// ```
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
     UnlockTables,
+    /// Unloads the result of a query to file
+    ///
+    /// [Athena](https://docs.aws.amazon.com/athena/latest/ug/unload.html):
     /// ```sql
     /// UNLOAD(statement) TO <destination> [ WITH options ]
     /// ```
-    /// See Redshift <https://docs.aws.amazon.com/redshift/latest/dg/r_UNLOAD.html> and
-    // Athena <https://docs.aws.amazon.com/athena/latest/ug/unload.html>
+    ///
+    /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_UNLOAD.html):
+    /// ```sql
+    /// UNLOAD('statement') TO <destination> [ OPTIONS ]
+    /// ```
     Unload {
-        query: Box<Query>,
+        query: Option<Box<Query>>,
+        query_text: Option<String>,
         to: Ident,
+        auth: Option<IamRoleKind>,
         with: Vec<SqlOption>,
+        options: Vec<CopyLegacyOption>,
     },
     /// ```sql
     /// OPTIMIZE TABLE [db.]name [ON CLUSTER cluster] [PARTITION partition | PARTITION ID 'partition_id'] [FINAL] [DEDUPLICATE [BY expression]]
@@ -6282,13 +6291,31 @@ impl fmt::Display for Statement {
             Statement::UnlockTables => {
                 write!(f, "UNLOCK TABLES")
             }
-            Statement::Unload { query, to, with } => {
-                write!(f, "UNLOAD({query}) TO {to}")?;
-
+            Statement::Unload {
+                query,
+                query_text,
+                to,
+                auth,
+                with,
+                options,
+            } => {
+                write!(f, "UNLOAD(")?;
+                if let Some(query) = query {
+                    write!(f, "{query}")?;
+                }
+                if let Some(query_text) = query_text {
+                    write!(f, "'{query_text}'")?;
+                }
+                write!(f, ") TO {to}")?;
+                if let Some(auth) = auth {
+                    write!(f, " IAM_ROLE {auth}")?;
+                }
                 if !with.is_empty() {
                     write!(f, " WITH ({})", display_comma_separated(with))?;
                 }
-
+                if !options.is_empty() {
+                    write!(f, " {}", display_separated(options, " "))?;
+                }
                 Ok(())
             }
             Statement::OptimizeTable {
@@ -8797,10 +8824,18 @@ pub enum CopyLegacyOption {
     AcceptAnyDate,
     /// ACCEPTINVCHARS
     AcceptInvChars(Option<String>),
+    /// ADDQUOTES
+    AddQuotes,
+    /// ALLOWOVERWRITE
+    AllowOverwrite,
     /// BINARY
     Binary,
     /// BLANKSASNULL
     BlankAsNull,
+    /// BZIP2
+    Bzip2,
+    /// CLEANPATH
+    CleanPath,
     /// CSV ...
     Csv(Vec<CopyLegacyCsvOption>),
     /// DATEFORMAT \[ AS \] {'dateformat_string' | 'auto' }
@@ -8809,16 +8844,46 @@ pub enum CopyLegacyOption {
     Delimiter(char),
     /// EMPTYASNULL
     EmptyAsNull,
+    /// ENCRYPTED \[ AUTO \]
+    Encrypted { auto: bool },
+    /// ESCAPE
+    Escape,
+    /// EXTENSION 'extension-name'
+    Extension(String),
+    /// FIXEDWIDTH \[ AS \] 'fixedwidth-spec'
+    FixedWidth(String),
+    /// GZIP
+    Gzip,
+    /// HEADER
+    Header,
     /// IAM_ROLE { DEFAULT | 'arn:aws:iam::123456789:role/role1' }
     IamRole(IamRoleKind),
     /// IGNOREHEADER \[ AS \] number_rows
     IgnoreHeader(u64),
+    /// JSON
+    Json,
+    /// MANIFEST \[ VERBOSE \]
+    Manifest { verbose: bool },
+    /// MAXFILESIZE \[ AS \] max-size \[ MB | GB \]
+    MaxFileSize(FileSize),
     /// NULL \[ AS \] 'null_string'
     Null(String),
+    /// PARALLEL
+    Parallel(Option<bool>),
+    /// PARQUET
+    Parquet,
+    /// PARTITION BY ( column_name [, ... ] ) \[ INCLUDE \]
+    PartitionBy(PartitionBy),
+    /// REGION \[ AS \] 'aws-region' }
+    Region(String),
+    /// ROWGROUPSIZE \[ AS \] size \[ MB | GB \]
+    RowGroupSize(FileSize),
     /// TIMEFORMAT \[ AS \] {'timeformat_string' | 'auto' | 'epochsecs' | 'epochmillisecs' }
     TimeFormat(Option<String>),
     /// TRUNCATECOLUMNS
     TruncateColumns,
+    /// ZSTD
+    Zstd,
 }
 
 impl fmt::Display for CopyLegacyOption {
@@ -8833,8 +8898,12 @@ impl fmt::Display for CopyLegacyOption {
                 }
                 Ok(())
             }
+            AddQuotes => write!(f, "ADDQUOTES"),
+            AllowOverwrite => write!(f, "ALLOWOVERWRITE"),
             Binary => write!(f, "BINARY"),
             BlankAsNull => write!(f, "BLANKSASNULL"),
+            Bzip2 => write!(f, "BZIP2"),
+            CleanPath => write!(f, "CLEANPATH"),
             Csv(opts) => {
                 write!(f, "CSV")?;
                 if !opts.is_empty() {
@@ -8851,9 +8920,37 @@ impl fmt::Display for CopyLegacyOption {
             }
             Delimiter(char) => write!(f, "DELIMITER '{char}'"),
             EmptyAsNull => write!(f, "EMPTYASNULL"),
+            Encrypted { auto } => write!(f, "ENCRYPTED{}", if *auto { " AUTO" } else { "" }),
+            Escape => write!(f, "ESCAPE"),
+            Extension(ext) => write!(f, "EXTENSION '{}'", value::escape_single_quote_string(ext)),
+            FixedWidth(spec) => write!(
+                f,
+                "FIXEDWIDTH '{}'",
+                value::escape_single_quote_string(spec)
+            ),
+            Gzip => write!(f, "GZIP"),
+            Header => write!(f, "HEADER"),
             IamRole(role) => write!(f, "IAM_ROLE {role}"),
             IgnoreHeader(num_rows) => write!(f, "IGNOREHEADER {num_rows}"),
+            Json => write!(f, "JSON"),
+            Manifest { verbose } => write!(f, "MANIFEST{}", if *verbose { " VERBOSE" } else { "" }),
+            MaxFileSize(file_size) => write!(f, "MAXFILESIZE {file_size}"),
             Null(string) => write!(f, "NULL '{}'", value::escape_single_quote_string(string)),
+            Parallel(enabled) => {
+                write!(
+                    f,
+                    "PARALLEL{}",
+                    match enabled {
+                        Some(true) => " TRUE",
+                        Some(false) => " FALSE",
+                        _ => "",
+                    }
+                )
+            }
+            Parquet => write!(f, "PARQUET"),
+            PartitionBy(p) => write!(f, "{p}"),
+            Region(region) => write!(f, "REGION '{}'", value::escape_single_quote_string(region)),
+            RowGroupSize(file_size) => write!(f, "ROWGROUPSIZE {file_size}"),
             TimeFormat(fmt) => {
                 write!(f, "TIMEFORMAT")?;
                 if let Some(fmt) = fmt {
@@ -8862,7 +8959,70 @@ impl fmt::Display for CopyLegacyOption {
                 Ok(())
             }
             TruncateColumns => write!(f, "TRUNCATECOLUMNS"),
+            Zstd => write!(f, "ZSTD"),
         }
+    }
+}
+
+/// ```sql
+/// SIZE \[ MB | GB \]
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct FileSize {
+    pub size: Value,
+    pub unit: Option<FileSizeUnit>,
+}
+
+impl fmt::Display for FileSize {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.size)?;
+        if let Some(unit) = &self.unit {
+            write!(f, " {unit}")?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FileSizeUnit {
+    MB,
+    GB,
+}
+
+impl fmt::Display for FileSizeUnit {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FileSizeUnit::MB => write!(f, "MB"),
+            FileSizeUnit::GB => write!(f, "GB"),
+        }
+    }
+}
+
+/// Specifies the partition keys for the unload operation
+///
+/// ```sql
+/// PARTITION BY ( column_name [, ... ] ) [ INCLUDE ]
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct PartitionBy {
+    pub columns: Vec<Ident>,
+    pub include: bool,
+}
+
+impl fmt::Display for PartitionBy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "PARTITION BY ({}){}",
+            display_comma_separated(&self.columns),
+            if self.include { " INCLUDE" } else { "" }
+        )
     }
 }
 

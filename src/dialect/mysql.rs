@@ -71,6 +71,11 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    // see <https://dev.mysql.com/doc/refman/8.4/en/string-functions.html#:~:text=mysql%3E%20SELECT%20%27My%27%20%27S%27%20%27QL%27%3B%0A%20%20%20%20%20%20%20%20%2D%3E%20%27MySQL%27>
+    fn supports_concat_quoted_identifiers(&self) -> bool {
+        true
+    }
+
     fn ignores_wildcard_escapes(&self) -> bool {
         true
     }

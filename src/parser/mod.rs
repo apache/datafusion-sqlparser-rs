@@ -4713,11 +4713,11 @@ impl<'a> Parser<'a> {
         let create_view_params = self.parse_create_view_params()?;
         if self.parse_keyword(Keyword::TABLE) {
             self.parse_create_table(or_replace, temporary, global, transient)
-        } else if self.parse_keyword(Keyword::MATERIALIZED)
-            || self.parse_keyword(Keyword::VIEW)
-            || (dialect_of!(self is SnowflakeDialect) && self.parse_keyword(Keyword::SECURE))
+        } else if self.peek_keyword(Keyword::MATERIALIZED)
+            || self.peek_keyword(Keyword::VIEW)
+            || self.peek_keywords(&[Keyword::SECURE, Keyword::MATERIALIZED, Keyword::VIEW])
+            || self.peek_keywords(&[Keyword::SECURE, Keyword::VIEW])
         {
-            self.prev_token();
             self.parse_create_view(or_alter, or_replace, temporary, create_view_params)
         } else if self.parse_keyword(Keyword::POLICY) {
             self.parse_create_policy()

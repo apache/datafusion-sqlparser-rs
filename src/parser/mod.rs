@@ -4732,8 +4732,11 @@ impl<'a> Parser<'a> {
         let create_view_params = self.parse_create_view_params()?;
         if self.parse_keyword(Keyword::TABLE) {
             self.parse_create_table(or_replace, temporary, global, transient)
-        } else if self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW) {
-            self.prev_token();
+        } else if self.peek_keyword(Keyword::MATERIALIZED)
+            || self.peek_keyword(Keyword::VIEW)
+            || self.peek_keywords(&[Keyword::SECURE, Keyword::MATERIALIZED, Keyword::VIEW])
+            || self.peek_keywords(&[Keyword::SECURE, Keyword::VIEW])
+        {
             self.parse_create_view(or_alter, or_replace, temporary, create_view_params)
         } else if self.parse_keyword(Keyword::POLICY) {
             self.parse_create_policy()
@@ -5853,6 +5856,7 @@ impl<'a> Parser<'a> {
         temporary: bool,
         create_view_params: Option<CreateViewParams>,
     ) -> Result<Statement, ParserError> {
+        let secure = self.parse_keyword(Keyword::SECURE);
         let materialized = self.parse_keyword(Keyword::MATERIALIZED);
         self.expect_keyword_is(Keyword::VIEW)?;
         let allow_unquoted_hyphen = dialect_of!(self is BigQueryDialect);
@@ -5923,6 +5927,7 @@ impl<'a> Parser<'a> {
             columns,
             query,
             materialized,
+            secure,
             or_replace,
             options,
             cluster_by,

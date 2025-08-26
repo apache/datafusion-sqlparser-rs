@@ -833,6 +833,7 @@ define_keywords!(
     SECONDARY_ENGINE_ATTRIBUTE,
     SECONDS,
     SECRET,
+    SECURE,
     SECURITY,
     SEED,
     SELECT,

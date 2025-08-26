@@ -4788,6 +4788,10 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_create_user(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
+        if dialect_of!(self is PostgreSqlDialect) {
+            return self.parse_pg_create_user();
+        }
+
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let name = self.parse_identifier()?;
         let options = self.parse_key_value_options(false, &[Keyword::WITH, Keyword::TAG])?;
@@ -5995,6 +5999,17 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_create_role(&mut self) -> Result<Statement, ParserError> {
+        self.parse_pg_create_role_or_user(RoleKeyword::Role)
+    }
+
+    pub fn parse_pg_create_user(&mut self) -> Result<Statement, ParserError> {
+        self.parse_pg_create_role_or_user(RoleKeyword::User)
+    }
+
+    fn parse_pg_create_role_or_user(
+        &mut self,
+        keyword: RoleKeyword,
+    ) -> Result<Statement, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let names = self.parse_comma_separated(|p| p.parse_object_name(false))?;
 
@@ -6196,9 +6211,15 @@ impl<'a> Parser<'a> {
             }?
         }
 
+        // In PostgreSQL, CREATE USER defaults to LOGIN=true, CREATE ROLE defaults to LOGIN=false
+        if login.is_none() && keyword == RoleKeyword::User {
+            login = Some(true);
+        }
+
         Ok(Statement::CreateRole {
             names,
             if_not_exists,
+            keyword,
             login,
             inherit,
             bypassrls,
@@ -9263,6 +9284,7 @@ impl<'a> Parser<'a> {
             Keyword::TABLE,
             Keyword::INDEX,
             Keyword::ROLE,
+            Keyword::USER,
             Keyword::POLICY,
             Keyword::CONNECTOR,
             Keyword::ICEBERG,
@@ -9300,6 +9322,7 @@ impl<'a> Parser<'a> {
                 })
             }
             Keyword::ROLE => self.parse_alter_role(),
+            Keyword::USER => self.parse_alter_user(),
             Keyword::POLICY => self.parse_alter_policy(),
             Keyword::CONNECTOR => self.parse_alter_connector(),
             // unreachable because expect_one_of_keywords used above

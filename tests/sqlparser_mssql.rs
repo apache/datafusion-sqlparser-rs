@@ -802,6 +802,7 @@ fn parse_alter_role() {
                 quote_style: None,
                 span: Span::empty(),
             },
+            keyword: RoleKeyword::Role,
             operation: AlterRoleOperation::RenameRole {
                 role_name: Ident {
                     value: "new_name".into(),
@@ -821,6 +822,7 @@ fn parse_alter_role() {
                 quote_style: None,
                 span: Span::empty(),
             },
+            keyword: RoleKeyword::Role,
             operation: AlterRoleOperation::AddMember {
                 member_name: Ident {
                     value: "new_member".into(),
@@ -840,6 +842,7 @@ fn parse_alter_role() {
                 quote_style: None,
                 span: Span::empty(),
             },
+            keyword: RoleKeyword::Role,
             operation: AlterRoleOperation::DropMember {
                 member_name: Ident {
                     value: "old_member".into(),

@@ -16600,21 +16600,25 @@ fn parse_odbc_time_date_timestamp() {
 
 #[test]
 fn parse_create_user() {
-    let create = verified_stmt("CREATE USER u1");
+    // PostgreSQL has different CREATE USER semantics (CREATE ROLE with LOGIN=true),
+    // so we exclude it from this test which is for Snowflake-style CREATE USER
+    let dialects = all_dialects_except(|d| d.is::<PostgreSqlDialect>());
+
+    let create = dialects.verified_stmt("CREATE USER u1");
     match create {
         Statement::CreateUser(stmt) => {
             assert_eq!(stmt.name, Ident::new("u1"));
         }
         _ => unreachable!(),
     }
-    verified_stmt("CREATE OR REPLACE USER u1");
-    verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1");
-    verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret'");
-    verified_stmt(
+    dialects.verified_stmt("CREATE OR REPLACE USER u1");
+    dialects.verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1");
+    dialects.verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret'");
+    dialects.verified_stmt(
         "CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=TRUE",
     );
-    verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=TRUE TYPE=SERVICE TAG (t1='v1')");
-    let create = verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=TRUE TYPE=SERVICE WITH TAG (t1='v1', t2='v2')");
+    dialects.verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=TRUE TYPE=SERVICE TAG (t1='v1')");
+    let create = dialects.verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=TRUE TYPE=SERVICE WITH TAG (t1='v1', t2='v2')");
     match create {
         Statement::CreateUser(stmt) => {
             assert_eq!(stmt.name, Ident::new("u1"));
@@ -16982,7 +16986,7 @@ fn test_parse_semantic_view_table_factor() {
     }
 
     let ast_sql = r#"SELECT * FROM SEMANTIC_VIEW(
-        my_model 
+        my_model
         DIMENSIONS DATE_PART('year', date_col), region_name
         METRICS orders.revenue, orders.count
         WHERE active = true

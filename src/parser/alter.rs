@@ -19,7 +19,7 @@ use super::{Parser, ParserError};
 use crate::{
     ast::{
         AlterConnectorOwner, AlterPolicyOperation, AlterRoleOperation, Expr, Password, ResetConfig,
-        RoleOption, SetConfigValue, Statement,
+        RoleKeyword, RoleOption, SetConfigValue, Statement,
     },
     dialect::{MsSqlDialect, PostgreSqlDialect},
     keywords::Keyword,
@@ -36,6 +36,15 @@ impl Parser<'_> {
 
         Err(ParserError::ParserError(
             "ALTER ROLE is only support for PostgreSqlDialect, MsSqlDialect".into(),
+        ))
+    }
+
+    pub fn parse_alter_user(&mut self) -> Result<Statement, ParserError> {
+        if dialect_of!(self is PostgreSqlDialect) {
+            return self.parse_pg_alter_user();
+        }
+        Err(ParserError::ParserError(
+            "ALTER USER is only supported for PostgreSqlDialect".into(),
         ))
     }
 
@@ -162,11 +171,23 @@ impl Parser<'_> {
 
         Ok(Statement::AlterRole {
             name: role_name,
+            keyword: RoleKeyword::Role,
             operation,
         })
     }
 
     fn parse_pg_alter_role(&mut self) -> Result<Statement, ParserError> {
+        self.parse_pg_alter_role_or_user(RoleKeyword::Role)
+    }
+
+    fn parse_pg_alter_user(&mut self) -> Result<Statement, ParserError> {
+        self.parse_pg_alter_role_or_user(RoleKeyword::User)
+    }
+
+    fn parse_pg_alter_role_or_user(
+        &mut self,
+        keyword: RoleKeyword,
+    ) -> Result<Statement, ParserError> {
         let role_name = self.parse_identifier()?;
 
         // [ IN DATABASE _`database_name`_ ]
@@ -246,6 +267,7 @@ impl Parser<'_> {
 
         Ok(Statement::AlterRole {
             name: role_name,
+            keyword,
             operation,
         })
     }

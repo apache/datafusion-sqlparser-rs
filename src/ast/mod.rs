@@ -55,7 +55,7 @@ pub use self::data_type::{
     ExactNumberInfo, IntervalFields, StructBracketKind, TimezoneInfo,
 };
 pub use self::dcl::{
-    AlterRoleOperation, ResetConfig, RoleOption, SecondaryRoles, SetConfigValue, Use,
+    AlterRoleOperation, ResetConfig, RoleKeyword, RoleOption, SecondaryRoles, SetConfigValue, Use,
 };
 pub use self::ddl::{
     AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterPolicyOperation,
@@ -3314,6 +3314,8 @@ pub enum Statement {
     CreateRole {
         names: Vec<ObjectName>,
         if_not_exists: bool,
+        /// Whether ROLE or USER keyword was used
+        keyword: RoleKeyword,
         // Postgres
         login: Option<bool>,
         inherit: Option<bool>,
@@ -3421,6 +3423,8 @@ pub enum Statement {
     /// ```
     AlterRole {
         name: Ident,
+        /// Whether ROLE or USER keyword was used
+        keyword: RoleKeyword,
         operation: AlterRoleOperation,
     },
     /// ```sql
@@ -5279,6 +5283,7 @@ impl fmt::Display for Statement {
             Statement::CreateRole {
                 names,
                 if_not_exists,
+                keyword,
                 inherit,
                 login,
                 bypassrls,
@@ -5298,7 +5303,7 @@ impl fmt::Display for Statement {
             } => {
                 write!(
                     f,
-                    "CREATE ROLE {if_not_exists}{names}{superuser}{create_db}{create_role}{inherit}{login}{replication}{bypassrls}",
+                    "CREATE {keyword} {if_not_exists}{names}{superuser}{create_db}{create_role}{inherit}{login}{replication}{bypassrls}",
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                     names = display_separated(names, ", "),
                     superuser = match *superuser {
@@ -5337,6 +5342,7 @@ impl fmt::Display for Statement {
                         None => ""
                     }
                 )?;
+
                 if let Some(limit) = connection_limit {
                     write!(f, " CONNECTION LIMIT {limit}")?;
                 }
@@ -5506,8 +5512,12 @@ impl fmt::Display for Statement {
             Statement::AlterType(AlterType { name, operation }) => {
                 write!(f, "ALTER TYPE {name} {operation}")
             }
-            Statement::AlterRole { name, operation } => {
-                write!(f, "ALTER ROLE {name} {operation}")
+            Statement::AlterRole {
+                name,
+                keyword,
+                operation,
+            } => {
+                write!(f, "ALTER {keyword} {name} {operation}")
             }
             Statement::AlterPolicy {
                 name,

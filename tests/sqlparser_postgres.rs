@@ -3351,7 +3351,31 @@ fn test_json() {
 }
 
 #[test]
-fn test_fn_arg_with_value_operator() {
+fn json_object_colon_syntax() {
+    match pg().verified_expr("JSON_OBJECT('name' : 'value')") {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, .. }),
+            ..
+        }) => {
+            assert!(
+                matches!(
+                    &args[..],
+                    &[FunctionArg::ExprNamed {
+                        operator: FunctionArgOperator::Colon,
+                        ..
+                    }]
+                ),
+                "Invalid function argument: {args:?}"
+            );
+        }
+        other => panic!(
+            "Expected: JSON_OBJECT('name' : 'value') to be parsed as a function, but got {other:?}"
+        ),
+    }
+}
+
+#[test]
+fn json_object_value_syntax() {
     match pg().verified_expr("JSON_OBJECT('name' VALUE 'value')") {
         Expr::Function(Function { args: FunctionArguments::List(FunctionArgumentList { args, .. }), .. }) => {
             assert!(matches!(
@@ -3361,6 +3385,63 @@ fn test_fn_arg_with_value_operator() {
         }
         other => panic!("Expected: JSON_OBJECT('name' VALUE 'value') to be parsed as a function, but got {other:?}"),
     }
+}
+
+#[test]
+fn parse_json_object() {
+    let sql = "JSON_OBJECT('name' VALUE 'value' NULL ON NULL)";
+    let expr = pg().verified_expr(sql);
+    assert!(
+        matches!(
+            expr.clone(),
+            Expr::Function(Function {
+                name: ObjectName(parts),
+                args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+                ..
+            }) if parts == vec![ObjectNamePart::Identifier(Ident::new("JSON_OBJECT"))]
+                && matches!(
+                    &args[..],
+                    &[FunctionArg::ExprNamed { operator: FunctionArgOperator::Value, .. }]
+                )
+                && clauses == vec![FunctionArgumentClause::JsonNullClause(JsonNullClause::NullOnNull)]
+        ),
+        "Failed to parse JSON_OBJECT with expected structure, got: {expr:?}"
+    );
+
+    let sql = "JSON_OBJECT('name' VALUE 'value' RETURNING JSONB)";
+    let expr = pg().verified_expr(sql);
+    assert!(
+        matches!(
+            expr.clone(),
+            Expr::Function(Function {
+                name: ObjectName(parts),
+                args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+                ..
+            }) if parts == vec![ObjectNamePart::Identifier(Ident::new("JSON_OBJECT"))]
+                && matches!(
+                    &args[..],
+                    &[FunctionArg::ExprNamed { operator: FunctionArgOperator::Value, .. }]
+                )
+                && clauses == vec![FunctionArgumentClause::JsonReturningClause(JsonReturningClause { data_type: DataType::JSONB })]
+        ),
+        "Failed to parse JSON_OBJECT with expected structure, got: {expr:?}"
+    );
+
+    let sql = "JSON_OBJECT(RETURNING JSONB)";
+    let expr = pg().verified_expr(sql);
+    assert!(
+        matches!(
+            expr.clone(),
+            Expr::Function(Function {
+                name: ObjectName(parts),
+                args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+                ..
+            }) if parts == vec![ObjectNamePart::Identifier(Ident::new("JSON_OBJECT"))]
+                && args.is_empty()
+                && clauses == vec![FunctionArgumentClause::JsonReturningClause(JsonReturningClause { data_type: DataType::JSONB })]
+        ),
+        "Failed to parse JSON_OBJECT with expected structure, got: {expr:?}"
+    );
 }
 
 #[test]

@@ -7822,11 +7822,16 @@ pub enum FunctionArgumentClause {
     ///
     /// [`GROUP_CONCAT`]: https://dev.mysql.com/doc/refman/8.0/en/aggregate-functions.html#function_group-concat
     Separator(Value),
-    /// The json-null-clause to the [`JSON_ARRAY`]/[`JSON_OBJECT`] function in MSSQL.
+    /// The `ON NULL` clause for some JSON functions.
     ///
-    /// [`JSON_ARRAY`]: <https://learn.microsoft.com/en-us/sql/t-sql/functions/json-array-transact-sql?view=sql-server-ver16>
-    /// [`JSON_OBJECT`]: <https://learn.microsoft.com/en-us/sql/t-sql/functions/json-object-transact-sql?view=sql-server-ver16>
+    /// [MSSQL `JSON_ARRAY`](https://learn.microsoft.com/en-us/sql/t-sql/functions/json-array-transact-sql?view=sql-server-ver16)
+    /// [MSSQL `JSON_OBJECT`](https://learn.microsoft.com/en-us/sql/t-sql/functions/json-object-transact-sql?view=sql-server-ver16>)
+    /// [PostgreSQL JSON functions](https://www.postgresql.org/docs/current/functions-json.html#FUNCTIONS-JSON-PROCESSING)
     JsonNullClause(JsonNullClause),
+    /// The `RETURNING` clause for some JSON functions in PostgreSQL
+    ///
+    /// [`JSON_OBJECT`](https://www.postgresql.org/docs/current/functions-json.html#:~:text=json_object)
+    JsonReturningClause(JsonReturningClause),
 }
 
 impl fmt::Display for FunctionArgumentClause {
@@ -7843,6 +7848,9 @@ impl fmt::Display for FunctionArgumentClause {
             FunctionArgumentClause::Having(bound) => write!(f, "{bound}"),
             FunctionArgumentClause::Separator(sep) => write!(f, "SEPARATOR {sep}"),
             FunctionArgumentClause::JsonNullClause(null_clause) => write!(f, "{null_clause}"),
+            FunctionArgumentClause::JsonReturningClause(returning_clause) => {
+                write!(f, "{returning_clause}")
+            }
         }
     }
 }
@@ -10174,6 +10182,25 @@ impl Display for JsonNullClause {
             JsonNullClause::NullOnNull => write!(f, "NULL ON NULL"),
             JsonNullClause::AbsentOnNull => write!(f, "ABSENT ON NULL"),
         }
+    }
+}
+
+/// PostgreSQL JSON function RETURNING clause
+///
+/// Example:
+/// ```sql
+/// JSON_OBJECT('a': 1 RETURNING jsonb)
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct JsonReturningClause {
+    pub data_type: DataType,
+}
+
+impl Display for JsonReturningClause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "RETURNING {}", self.data_type)
     }
 }
 

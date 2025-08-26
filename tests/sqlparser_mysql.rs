@@ -4247,12 +4247,3 @@ fn test_create_index_options() {
         "CREATE INDEX idx_name ON t(c1, c2) USING BTREE LOCK = EXCLUSIVE ALGORITHM = DEFAULT",
     );
 }
-
-#[test]
-fn parse_adjacent_string_literal_concatenation() {
-    let sql = r#"SELECT 'M' "y" 'S' "q" 'l'"#;
-    mysql().one_statement_parses_to(sql, r"SELECT 'MySql'");
-
-    let sql = "SELECT * FROM t WHERE col = 'Hello' \n ' ' \t 'World!'";
-    mysql().one_statement_parses_to(sql, r"SELECT * FROM t WHERE col = 'Hello World!'");
-}

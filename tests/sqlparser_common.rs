@@ -16951,6 +16951,7 @@ fn test_parse_semantic_view_table_factor() {
             "SELECT * FROM SEMANTIC_VIEW(model METRICS orders.col, orders.col2)",
             None,
         ),
+        ("SELECT * FROM SEMANTIC_VIEW(model METRICS orders.*)", None),
         // We can parse in any order but will always produce a result in a fixed order.
         (
             "SELECT * FROM SEMANTIC_VIEW(model WHERE x > 0 DIMENSIONS dim1)",

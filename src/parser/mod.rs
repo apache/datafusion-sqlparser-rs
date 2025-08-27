@@ -13958,8 +13958,7 @@ impl<'a> Parser<'a> {
                         "METRICS clause can only be specified once".to_string(),
                     ));
                 }
-                metrics = self
-                    .parse_comma_separated(|parser| parser.parse_object_name_inner(true, true))?;
+                metrics = self.parse_comma_separated(Parser::parse_wildcard_expr)?;
             } else if self.parse_keyword(Keyword::FACTS) {
                 if !facts.is_empty() {
                     return Err(ParserError::ParserError(

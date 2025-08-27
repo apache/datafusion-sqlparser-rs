@@ -16981,7 +16981,6 @@ fn test_parse_semantic_view_table_factor() {
     let invalid_sqls = [
         "SELECT * FROM SEMANTIC_VIEW(model DIMENSIONS dim1 INVALID inv1)",
         "SELECT * FROM SEMANTIC_VIEW(model DIMENSIONS dim1 DIMENSIONS dim2)",
-        "SELECT * FROM SEMANTIC_VIEW(model METRICS SUM(met1.avg))",
     ];
 
     for sql in invalid_sqls {

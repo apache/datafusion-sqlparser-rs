@@ -1429,7 +1429,7 @@ pub enum TableFactor {
         /// List of dimensions or expression referring to dimensions (e.g. DATE_PART('year', col))
         dimensions: Vec<Expr>,
         /// List of metrics (references to objects like orders.value, value, orders.*)
-        metrics: Vec<ObjectName>,
+        metrics: Vec<Expr>,
         /// List of facts or expressions referring to facts or dimensions.
         facts: Vec<Expr>,
         /// WHERE clause for filtering

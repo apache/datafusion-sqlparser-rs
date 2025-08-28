@@ -13951,7 +13951,7 @@ impl<'a> Parser<'a> {
                         "DIMENSIONS clause can only be specified once".to_string(),
                     ));
                 }
-                dimensions = self.parse_comma_separated(Parser::parse_expr)?;
+                dimensions = self.parse_comma_separated(Parser::parse_wildcard_expr)?;
             } else if self.parse_keyword(Keyword::METRICS) {
                 if !metrics.is_empty() {
                     return Err(ParserError::ParserError(
@@ -13965,7 +13965,7 @@ impl<'a> Parser<'a> {
                         "FACTS clause can only be specified once".to_string(),
                     ));
                 }
-                facts = self.parse_comma_separated(Parser::parse_expr)?;
+                facts = self.parse_comma_separated(Parser::parse_wildcard_expr)?;
             } else if self.parse_keyword(Keyword::WHERE) {
                 if where_clause.is_some() {
                     return Err(ParserError::ParserError(

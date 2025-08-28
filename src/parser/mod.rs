@@ -13958,7 +13958,7 @@ impl<'a> Parser<'a> {
                         "METRICS clause can only be specified once".to_string(),
                     ));
                 }
-                metrics = self.parse_comma_separated(|parser| parser.parse_object_name(true))?;
+                metrics = self.parse_comma_separated(Parser::parse_wildcard_expr)?;
             } else if self.parse_keyword(Keyword::FACTS) {
                 if !facts.is_empty() {
                     return Err(ParserError::ParserError(
@@ -13975,7 +13975,10 @@ impl<'a> Parser<'a> {
                 where_clause = Some(self.parse_expr()?);
             } else {
                 return parser_err!(
-                    "Expected one of DIMENSIONS, METRICS, FACTS or WHERE",
+                    format!(
+                        "Expected one of DIMENSIONS, METRICS, FACTS or WHERE, got {}",
+                        self.peek_token().token
+                    ),
                     self.peek_token().span.start
                 )?;
             }

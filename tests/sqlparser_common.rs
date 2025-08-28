@@ -16951,6 +16951,7 @@ fn test_parse_semantic_view_table_factor() {
             "SELECT * FROM SEMANTIC_VIEW(model METRICS orders.col, orders.col2)",
             None,
         ),
+        ("SELECT * FROM SEMANTIC_VIEW(model METRICS orders.*)", None),
         // We can parse in any order but will always produce a result in a fixed order.
         (
             "SELECT * FROM SEMANTIC_VIEW(model WHERE x > 0 DIMENSIONS dim1)",
@@ -16980,7 +16981,6 @@ fn test_parse_semantic_view_table_factor() {
     let invalid_sqls = [
         "SELECT * FROM SEMANTIC_VIEW(model DIMENSIONS dim1 INVALID inv1)",
         "SELECT * FROM SEMANTIC_VIEW(model DIMENSIONS dim1 DIMENSIONS dim2)",
-        "SELECT * FROM SEMANTIC_VIEW(model METRICS SUM(met1.avg))",
     ];
 
     for sql in invalid_sqls {

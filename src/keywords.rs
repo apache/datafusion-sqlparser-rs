@@ -528,6 +528,7 @@ define_keywords!(
     LIST,
     LISTEN,
     LISTING,
+    LITE,
     LN,
     LOAD,
     LOCAL,

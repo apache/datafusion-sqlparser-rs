@@ -11894,7 +11894,7 @@ fn parse_unload() {
     assert_eq!(
         unload,
         Statement::Unload {
-            query: Box::new(Query {
+            query: Some(Box::new(Query {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
                     distinct: None,
@@ -11931,7 +11931,7 @@ fn parse_unload() {
                 settings: None,
                 format_clause: None,
                 pipe_operators: vec![],
-            }),
+            })),
             to: Ident {
                 value: "s3://...".to_string(),
                 quote_style: Some('\''),
@@ -11946,9 +11946,120 @@ fn parse_unload() {
                 value: Expr::Value(
                     (Value::SingleQuotedString("AVRO".to_string())).with_empty_span()
                 )
-            }]
+            }],
+            query_text: None,
+            auth: None,
+            options: vec![],
         }
     );
+
+    one_statement_parses_to(
+        concat!(
+            "UNLOAD('SELECT 1') ",
+            "TO 's3://...' ",
+            "IAM_ROLE 'arn:aws:iam::123456789:role/role1' ",
+            "FORMAT AS CSV ",
+            "FORMAT AS PARQUET ",
+            "FORMAT AS JSON ",
+            "MAXFILESIZE AS 10 MB ",
+            "ROWGROUPSIZE AS 10 MB ",
+            "PARALLEL ON ",
+            "PARALLEL OFF ",
+            "REGION AS 'us-east-1'"
+        ),
+        concat!(
+            "UNLOAD('SELECT 1') ",
+            "TO 's3://...' ",
+            "IAM_ROLE 'arn:aws:iam::123456789:role/role1' ",
+            "CSV ",
+            "PARQUET ",
+            "JSON ",
+            "MAXFILESIZE 10 MB ",
+            "ROWGROUPSIZE 10 MB ",
+            "PARALLEL TRUE ",
+            "PARALLEL FALSE ",
+            "REGION 'us-east-1'"
+        ),
+    );
+
+    verified_stmt(concat!(
+        "UNLOAD('SELECT 1') ",
+        "TO 's3://...' ",
+        "IAM_ROLE 'arn:aws:iam::123456789:role/role1' ",
+        "PARTITION BY (c1, c2, c3)",
+    ));
+    verified_stmt(concat!(
+        "UNLOAD('SELECT 1') ",
+        "TO 's3://...' ",
+        "IAM_ROLE 'arn:aws:iam::123456789:role/role1' ",
+        "PARTITION BY (c1, c2, c3) INCLUDE",
+    ));
+
+    verified_stmt(concat!(
+        "UNLOAD('SELECT 1') ",
+        "TO 's3://...' ",
+        "IAM_ROLE 'arn:aws:iam::123456789:role/role1' ",
+        "PARTITION BY (c1, c2, c3) INCLUDE ",
+        "MANIFEST"
+    ));
+    verified_stmt(concat!(
+        "UNLOAD('SELECT 1') ",
+        "TO 's3://...' ",
+        "IAM_ROLE 'arn:aws:iam::123456789:role/role1' ",
+        "PARTITION BY (c1, c2, c3) INCLUDE ",
+        "MANIFEST VERBOSE"
+    ));
+
+    verified_stmt(concat!(
+        "UNLOAD('SELECT 1') ",
+        "TO 's3://...' ",
+        "IAM_ROLE 'arn:aws:iam::123456789:role/role1' ",
+        "PARTITION BY (c1, c2, c3) INCLUDE ",
+        "MANIFEST VERBOSE ",
+        "HEADER ",
+        "FIXEDWIDTH 'col1:1,col2:2' ",
+        "ENCRYPTED"
+    ));
+    verified_stmt(concat!(
+        "UNLOAD('SELECT 1') ",
+        "TO 's3://...' ",
+        "IAM_ROLE 'arn:aws:iam::123456789:role/role1' ",
+        "PARTITION BY (c1, c2, c3) INCLUDE ",
+        "MANIFEST VERBOSE ",
+        "HEADER ",
+        "FIXEDWIDTH 'col1:1,col2:2' ",
+        "ENCRYPTED AUTO"
+    ));
+
+    verified_stmt(concat!(
+        "UNLOAD('SELECT 1') ",
+        "TO 's3://...' ",
+        "IAM_ROLE 'arn:aws:iam::123456789:role/role1' ",
+        "PARTITION BY (c1, c2, c3) INCLUDE ",
+        "MANIFEST VERBOSE ",
+        "HEADER ",
+        "FIXEDWIDTH 'col1:1,col2:2' ",
+        "ENCRYPTED AUTO ",
+        "BZIP2 ",
+        "GZIP ",
+        "ZSTD ",
+        "ADDQUOTES ",
+        "NULL 'nil' ",
+        "ESCAPE ",
+        "ALLOWOVERWRITE ",
+        "CLEANPATH ",
+        "PARALLEL ",
+        "PARALLEL TRUE ",
+        "PARALLEL FALSE ",
+        "MAXFILESIZE 10 ",
+        "MAXFILESIZE 10 MB ",
+        "MAXFILESIZE 10 GB ",
+        "ROWGROUPSIZE 10 ",
+        "ROWGROUPSIZE 10 MB ",
+        "ROWGROUPSIZE 10 GB ",
+        "REGION 'us-east-1' ",
+        "EXTENSION 'ext1'"
+    ));
 }
 
 #[test]
@@ -16990,7 +17101,7 @@ fn test_parse_semantic_view_table_factor() {
 
     for sql in invalid_sqls {
         let result = dialects.parse_sql_statements(sql);
-        assert!(result.is_err(), "Expected error for invalid SQL: {}", sql);
+        assert!(result.is_err(), "Expected error for invalid SQL: {sql}");
     }
 
     let ast_sql = r#"SELECT * FROM SEMANTIC_VIEW(

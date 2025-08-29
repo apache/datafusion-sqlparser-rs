@@ -491,6 +491,7 @@ define_keywords!(
     INTERSECTION,
     INTERVAL,
     INTO,
+    INVENTORY,
     INVOKER,
     IO,
     IS,

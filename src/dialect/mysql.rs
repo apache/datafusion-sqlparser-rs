@@ -71,6 +71,11 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    /// see <https://dev.mysql.com/doc/refman/8.4/en/string-functions.html#function_concat>
+    fn supports_string_literal_concatenation(&self) -> bool {
+        true
+    }
+
     fn ignores_wildcard_escapes(&self) -> bool {
         true
     }

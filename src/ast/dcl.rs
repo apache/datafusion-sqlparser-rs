@@ -31,6 +31,26 @@ use sqlparser_derive::{Visit, VisitMut};
 use super::{display_comma_separated, Expr, Ident, Password};
 use crate::ast::{display_separated, ObjectName};
 
+/// Represents whether ROLE or USER keyword was used in CREATE/ALTER statements.
+/// In PostgreSQL, CREATE USER and ALTER USER are equivalent to CREATE ROLE and ALTER ROLE,
+/// with CREATE USER having LOGIN enabled by default.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum RoleKeyword {
+    Role,
+    User,
+}
+
+impl fmt::Display for RoleKeyword {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            RoleKeyword::Role => write!(f, "ROLE"),
+            RoleKeyword::User => write!(f, "USER"),
+        }
+    }
+}
+
 /// An option in `ROLE` statement.
 ///
 /// <https://www.postgresql.org/docs/current/sql-createrole.html>

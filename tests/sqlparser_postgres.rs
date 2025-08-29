@@ -3900,6 +3900,7 @@ fn parse_create_role() {
                 user: _,
                 admin,
                 authorization_owner,
+                ..
             }],
         ) => {
             assert_eq_vec(&["magician"], names);
@@ -3976,6 +3977,7 @@ fn parse_alter_role() {
                 quote_style: None,
                 span: Span::empty(),
             },
+            keyword: RoleKeyword::Role,
             operation: AlterRoleOperation::RenameRole {
                 role_name: Ident {
                     value: "new_name".into(),
@@ -3995,6 +3997,7 @@ fn parse_alter_role() {
                 quote_style: None,
                 span: Span::empty(),
             },
+            keyword: RoleKeyword::Role,
             operation: AlterRoleOperation::WithOptions {
                 options: vec![
                     RoleOption::SuperUser(true),
@@ -4027,6 +4030,7 @@ fn parse_alter_role() {
                 quote_style: None,
                 span: Span::empty(),
             },
+            keyword: RoleKeyword::Role,
             operation: AlterRoleOperation::WithOptions {
                 options: vec![
                     RoleOption::SuperUser(false),
@@ -4051,6 +4055,7 @@ fn parse_alter_role() {
                 quote_style: None,
                 span: Span::empty(),
             },
+            keyword: RoleKeyword::Role,
             operation: AlterRoleOperation::Set {
                 config_name: ObjectName::from(vec![Ident {
                     value: "maintenance_work_mem".into(),
@@ -4072,6 +4077,7 @@ fn parse_alter_role() {
                 quote_style: None,
                 span: Span::empty(),
             },
+            keyword: RoleKeyword::Role,
             operation: AlterRoleOperation::Set {
                 config_name: ObjectName::from(vec![Ident {
                     value: "maintenance_work_mem".into(),
@@ -4099,6 +4105,7 @@ fn parse_alter_role() {
                 quote_style: None,
                 span: Span::empty(),
             },
+            keyword: RoleKeyword::Role,
             operation: AlterRoleOperation::Set {
                 config_name: ObjectName::from(vec![Ident {
                     value: "maintenance_work_mem".into(),
@@ -4126,6 +4133,7 @@ fn parse_alter_role() {
                 quote_style: None,
                 span: Span::empty(),
             },
+            keyword: RoleKeyword::Role,
             operation: AlterRoleOperation::Set {
                 config_name: ObjectName::from(vec![Ident {
                     value: "maintenance_work_mem".into(),
@@ -4151,6 +4159,7 @@ fn parse_alter_role() {
                 quote_style: None,
                 span: Span::empty(),
             },
+            keyword: RoleKeyword::Role,
             operation: AlterRoleOperation::Reset {
                 config_name: ResetConfig::ALL,
                 in_database: None
@@ -4167,6 +4176,7 @@ fn parse_alter_role() {
                 quote_style: None,
                 span: Span::empty(),
             },
+            keyword: RoleKeyword::Role,
             operation: AlterRoleOperation::Reset {
                 config_name: ResetConfig::ConfigName(ObjectName::from(vec![Ident {
                     value: "maintenance_work_mem".into(),
@@ -6574,5 +6584,127 @@ fn parse_create_server() {
             unreachable!()
         };
         assert_eq!(stmt, expected);
+    }
+}
+
+#[test]
+fn parse_create_user() {
+    let sql = "CREATE USER testuser";
+    match pg().parse_sql_statements(sql).as_deref() {
+        Ok(
+            [Statement::CreateRole {
+                names,
+                keyword,
+                login,
+                ..
+            }],
+        ) => {
+            assert_eq_vec(&["testuser"], names);
+            assert_eq!(*keyword, RoleKeyword::User);
+            assert_eq!(*login, Some(true));
+        }
+        _ => unreachable!(),
+    }
+    let stmt = pg().parse_sql_statements(sql).unwrap().pop().unwrap();
+    assert_eq!(stmt.to_string(), "CREATE USER testuser LOGIN");
+}
+
+#[test]
+fn parse_create_user_with_password() {
+    let sql = "CREATE USER testuser PASSWORD 'secret'";
+    match pg().parse_sql_statements(sql).as_deref() {
+        Ok(
+            [Statement::CreateRole {
+                names,
+                keyword,
+                login,
+                password,
+                ..
+            }],
+        ) => {
+            assert_eq_vec(&["testuser"], names);
+            assert_eq!(*keyword, RoleKeyword::User);
+            assert_eq!(*login, Some(true));
+            assert_eq!(
+                *password,
+                Some(Password::Password(Expr::Value(
+                    Value::SingleQuotedString("secret".to_string()).with_empty_span()
+                )))
+            );
+        }
+        _ => unreachable!(),
+    }
+    let stmt = pg().parse_sql_statements(sql).unwrap().pop().unwrap();
+    assert_eq!(
+        stmt.to_string(),
+        "CREATE USER testuser LOGIN PASSWORD 'secret'"
+    );
+}
+
+#[test]
+fn parse_create_user_nologin() {
+    let sql = "CREATE USER testuser NOLOGIN";
+    match pg().parse_sql_statements(sql).as_deref() {
+        Ok([Statement::CreateRole { keyword, login, .. }]) => {
+            assert_eq!(*keyword, RoleKeyword::User);
+            assert_eq!(*login, Some(false));
+        }
+        _ => unreachable!(),
+    }
+    let stmt = pg().parse_sql_statements(sql).unwrap().pop().unwrap();
+    assert_eq!(stmt.to_string(), sql);
+}
+
+#[test]
+fn parse_alter_user() {
+    let sql = "ALTER USER testuser WITH PASSWORD 'newsecret'";
+    match pg().parse_sql_statements(sql).as_deref() {
+        Ok(
+            [Statement::AlterRole {
+                name,
+                keyword,
+                operation,
+            }],
+        ) => {
+            assert_eq!(*name, Ident::new("testuser"));
+            assert_eq!(*keyword, RoleKeyword::User);
+            match operation {
+                AlterRoleOperation::WithOptions { options } => {
+                    assert_eq!(options.len(), 1);
+                    assert_eq!(
+                        options[0],
+                        RoleOption::Password(Password::Password(Expr::Value(
+                            Value::SingleQuotedString("newsecret".to_string()).with_empty_span()
+                        )))
+                    );
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_user_rename() {
+    let sql = "ALTER USER oldname RENAME TO newname";
+    match pg().parse_sql_statements(sql).as_deref() {
+        Ok(
+            [Statement::AlterRole {
+                name,
+                keyword,
+                operation,
+            }],
+        ) => {
+            assert_eq!(*name, Ident::new("oldname"));
+            assert_eq!(*keyword, RoleKeyword::User);
+            match operation {
+                AlterRoleOperation::RenameRole { role_name } => {
+                    assert_eq!(*role_name, Ident::new("newname"));
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
     }
 }

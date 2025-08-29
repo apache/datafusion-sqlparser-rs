@@ -856,6 +856,7 @@ define_keywords!(
     SETERROR,
     SETS,
     SETTINGS,
+    SHALLOW,
     SHARE,
     SHARED,
     SHARING,

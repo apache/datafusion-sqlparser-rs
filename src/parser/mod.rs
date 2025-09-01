@@ -9746,7 +9746,7 @@ impl<'a> Parser<'a> {
                 self.expect_keyword(Keyword::BY)?;
                 let columns = self.parse_parenthesized_column_list(IsOptional::Mandatory, false)?;
                 let include = self.parse_keyword(Keyword::INCLUDE);
-                CopyLegacyOption::PartitionBy(PartitionBy { columns, include })
+                CopyLegacyOption::PartitionBy(UnloadPartitionBy { columns, include })
             }
             Some(Keyword::REGION) => {
                 let _ = self.parse_keyword(Keyword::AS);
@@ -9755,13 +9755,8 @@ impl<'a> Parser<'a> {
             }
             Some(Keyword::ROWGROUPSIZE) => {
                 let _ = self.parse_keyword(Keyword::AS);
-                let size = self.parse_number_value()?.value;
-                let unit = match self.parse_one_of_keywords(&[Keyword::MB, Keyword::GB]) {
-                    Some(Keyword::MB) => Some(FileSizeUnit::MB),
-                    Some(Keyword::GB) => Some(FileSizeUnit::GB),
-                    _ => None,
-                };
-                CopyLegacyOption::RowGroupSize(FileSize { size, unit })
+                let file_size = self.parse_file_size()?;
+                CopyLegacyOption::RowGroupSize(file_size)
             }
             Some(Keyword::TIMEFORMAT) => {
                 let _ = self.parse_keyword(Keyword::AS);
@@ -9777,6 +9772,20 @@ impl<'a> Parser<'a> {
             _ => self.expected("option", self.peek_token())?,
         };
         Ok(ret)
+    }
+
+    fn parse_file_size(&mut self) -> Result<FileSize, ParserError> {
+        let size = self.parse_number_value()?.value;
+        let unit = self.maybe_parse_file_size_unit();
+        Ok(FileSize { size, unit })
+    }
+
+    fn maybe_parse_file_size_unit(&mut self) -> Option<FileSizeUnit> {
+        match self.parse_one_of_keywords(&[Keyword::MB, Keyword::GB]) {
+            Some(Keyword::MB) => Some(FileSizeUnit::MB),
+            Some(Keyword::GB) => Some(FileSizeUnit::GB),
+            _ => None,
+        }
     }
 
     fn parse_iam_role_kind(&mut self) -> Result<IamRoleKind, ParserError> {

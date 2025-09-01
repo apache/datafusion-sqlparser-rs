@@ -8868,12 +8868,12 @@ pub enum CopyLegacyOption {
     MaxFileSize(FileSize),
     /// NULL \[ AS \] 'null_string'
     Null(String),
-    /// PARALLEL
+    /// PARALLEL [ { ON | TRUE } | { OFF | FALSE } ]
     Parallel(Option<bool>),
     /// PARQUET
     Parquet,
     /// PARTITION BY ( column_name [, ... ] ) \[ INCLUDE \]
-    PartitionBy(PartitionBy),
+    PartitionBy(UnloadPartitionBy),
     /// REGION \[ AS \] 'aws-region' }
     Region(String),
     /// ROWGROUPSIZE \[ AS \] size \[ MB | GB \]
@@ -9010,12 +9010,12 @@ impl fmt::Display for FileSizeUnit {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct PartitionBy {
+pub struct UnloadPartitionBy {
     pub columns: Vec<Ident>,
     pub include: bool,
 }
 
-impl fmt::Display for PartitionBy {
+impl fmt::Display for UnloadPartitionBy {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,

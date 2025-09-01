@@ -40,12 +40,7 @@ impl Parser<'_> {
     }
 
     pub fn parse_alter_user(&mut self) -> Result<Statement, ParserError> {
-        if dialect_of!(self is PostgreSqlDialect) {
-            return self.parse_pg_alter_user();
-        }
-        Err(ParserError::ParserError(
-            "ALTER USER is only supported for PostgreSqlDialect".into(),
-        ))
+        self.parse_pg_alter_user()
     }
 
     /// Parse ALTER POLICY statement

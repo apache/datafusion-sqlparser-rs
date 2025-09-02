@@ -17150,3 +17150,13 @@ fn test_parse_semantic_view_table_factor() {
         _ => panic!("Expected Query statement"),
     }
 }
+
+#[test]
+fn parse_adjacent_string_literal_concatenation() {
+    let sql = r#"SELECT 'M' "y" 'S' "q" 'l'"#;
+    let dialects = all_dialects_where(|d| d.supports_string_literal_concatenation());
+    dialects.one_statement_parses_to(sql, r"SELECT 'MySql'");
+
+    let sql = "SELECT * FROM t WHERE col = 'Hello' \n ' ' \t 'World!'";
+    dialects.one_statement_parses_to(sql, r"SELECT * FROM t WHERE col = 'Hello World!'");
+}

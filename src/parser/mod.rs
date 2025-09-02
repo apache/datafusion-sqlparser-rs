@@ -9914,8 +9914,12 @@ impl<'a> Parser<'a> {
             // bigdecimal feature is enabled, and is otherwise a no-op
             // (i.e., it returns the input string).
             Token::Number(n, l) => ok_value(Value::Number(Self::parse(n, span.start)?, l)),
-            Token::SingleQuotedString(ref s) => ok_value(Value::SingleQuotedString(s.to_string())),
-            Token::DoubleQuotedString(ref s) => ok_value(Value::DoubleQuotedString(s.to_string())),
+            Token::SingleQuotedString(ref s) => ok_value(Value::SingleQuotedString(
+                self.maybe_concat_string_literal(s.to_string()),
+            )),
+            Token::DoubleQuotedString(ref s) => ok_value(Value::DoubleQuotedString(
+                self.maybe_concat_string_literal(s.to_string()),
+            )),
             Token::TripleSingleQuotedString(ref s) => {
                 ok_value(Value::TripleSingleQuotedString(s.to_string()))
             }
@@ -9983,6 +9987,18 @@ impl<'a> Parser<'a> {
                 },
             ),
         }
+    }
+
+    fn maybe_concat_string_literal(&mut self, mut str: String) -> String {
+        if self.dialect.supports_string_literal_concatenation() {
+            while let Token::SingleQuotedString(ref s) | Token::DoubleQuotedString(ref s) =
+                self.peek_token_ref().token
+            {
+                str.push_str(s.clone().as_str());
+                self.advance_token();
+            }
+        }
+        str
     }
 
     /// Parse an unsigned numeric literal

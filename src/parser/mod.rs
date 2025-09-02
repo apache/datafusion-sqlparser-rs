@@ -630,7 +630,10 @@ impl<'a> Parser<'a> {
                 Keyword::NOTIFY if self.dialect.supports_listen_notify() => self.parse_notify(),
                 // `PRAGMA` is sqlite specific https://www.sqlite.org/pragma.html
                 Keyword::PRAGMA => self.parse_pragma(),
-                Keyword::UNLOAD => self.parse_unload(),
+                Keyword::UNLOAD => {
+                    self.prev_token();
+                    self.parse_unload()
+                }
                 Keyword::RENAME => self.parse_rename(),
                 // `INSTALL` is duckdb specific https://duckdb.org/docs/extensions/overview
                 Keyword::INSTALL if dialect_of!(self is DuckDbDialect | GenericDialect) => {
@@ -9615,17 +9618,36 @@ impl<'a> Parser<'a> {
         let ret = match self.parse_one_of_keywords(&[
             Keyword::ACCEPTANYDATE,
             Keyword::ACCEPTINVCHARS,
+            Keyword::ADDQUOTES,
+            Keyword::ALLOWOVERWRITE,
             Keyword::BINARY,
             Keyword::BLANKSASNULL,
+            Keyword::BZIP2,
+            Keyword::CLEANPATH,
             Keyword::CSV,
             Keyword::DATEFORMAT,
             Keyword::DELIMITER,
             Keyword::EMPTYASNULL,
+            Keyword::ENCRYPTED,
+            Keyword::ESCAPE,
+            Keyword::EXTENSION,
+            Keyword::FIXEDWIDTH,
+            Keyword::GZIP,
+            Keyword::HEADER,
             Keyword::IAM_ROLE,
             Keyword::IGNOREHEADER,
+            Keyword::JSON,
+            Keyword::MANIFEST,
+            Keyword::MAXFILESIZE,
             Keyword::NULL,
+            Keyword::PARALLEL,
+            Keyword::PARQUET,
+            Keyword::PARTITION,
+            Keyword::REGION,
+            Keyword::ROWGROUPSIZE,
             Keyword::TIMEFORMAT,
             Keyword::TRUNCATECOLUMNS,
+            Keyword::ZSTD,
         ]) {
             Some(Keyword::ACCEPTANYDATE) => CopyLegacyOption::AcceptAnyDate,
             Some(Keyword::ACCEPTINVCHARS) => {
@@ -9637,8 +9659,12 @@ impl<'a> Parser<'a> {
                 };
                 CopyLegacyOption::AcceptInvChars(ch)
             }
+            Some(Keyword::ADDQUOTES) => CopyLegacyOption::AddQuotes,
+            Some(Keyword::ALLOWOVERWRITE) => CopyLegacyOption::AllowOverwrite,
             Some(Keyword::BINARY) => CopyLegacyOption::Binary,
             Some(Keyword::BLANKSASNULL) => CopyLegacyOption::BlankAsNull,
+            Some(Keyword::BZIP2) => CopyLegacyOption::Bzip2,
+            Some(Keyword::CLEANPATH) => CopyLegacyOption::CleanPath,
             Some(Keyword::CSV) => CopyLegacyOption::Csv({
                 let mut opts = vec![];
                 while let Some(opt) =
@@ -9662,15 +9688,75 @@ impl<'a> Parser<'a> {
                 CopyLegacyOption::Delimiter(self.parse_literal_char()?)
             }
             Some(Keyword::EMPTYASNULL) => CopyLegacyOption::EmptyAsNull,
+            Some(Keyword::ENCRYPTED) => {
+                let auto = self.parse_keyword(Keyword::AUTO);
+                CopyLegacyOption::Encrypted { auto }
+            }
+            Some(Keyword::ESCAPE) => CopyLegacyOption::Escape,
+            Some(Keyword::EXTENSION) => {
+                let ext = self.parse_literal_string()?;
+                CopyLegacyOption::Extension(ext)
+            }
+            Some(Keyword::FIXEDWIDTH) => {
+                let spec = self.parse_literal_string()?;
+                CopyLegacyOption::FixedWidth(spec)
+            }
+            Some(Keyword::GZIP) => CopyLegacyOption::Gzip,
+            Some(Keyword::HEADER) => CopyLegacyOption::Header,
             Some(Keyword::IAM_ROLE) => CopyLegacyOption::IamRole(self.parse_iam_role_kind()?),
             Some(Keyword::IGNOREHEADER) => {
                 let _ = self.parse_keyword(Keyword::AS);
                 let num_rows = self.parse_literal_uint()?;
                 CopyLegacyOption::IgnoreHeader(num_rows)
             }
+            Some(Keyword::JSON) => CopyLegacyOption::Json,
+            Some(Keyword::MANIFEST) => {
+                let verbose = self.parse_keyword(Keyword::VERBOSE);
+                CopyLegacyOption::Manifest { verbose }
+            }
+            Some(Keyword::MAXFILESIZE) => {
+                let _ = self.parse_keyword(Keyword::AS);
+                let size = self.parse_number_value()?.value;
+                let unit = match self.parse_one_of_keywords(&[Keyword::MB, Keyword::GB]) {
+                    Some(Keyword::MB) => Some(FileSizeUnit::MB),
+                    Some(Keyword::GB) => Some(FileSizeUnit::GB),
+                    _ => None,
+                };
+                CopyLegacyOption::MaxFileSize(FileSize { size, unit })
+            }
             Some(Keyword::NULL) => {
                 let _ = self.parse_keyword(Keyword::AS);
                 CopyLegacyOption::Null(self.parse_literal_string()?)
+            }
+            Some(Keyword::PARALLEL) => {
+                let enabled = match self.parse_one_of_keywords(&[
+                    Keyword::TRUE,
+                    Keyword::FALSE,
+                    Keyword::ON,
+                    Keyword::OFF,
+                ]) {
+                    Some(Keyword::TRUE) | Some(Keyword::ON) => Some(true),
+                    Some(Keyword::FALSE) | Some(Keyword::OFF) => Some(false),
+                    _ => None,
+                };
+                CopyLegacyOption::Parallel(enabled)
+            }
+            Some(Keyword::PARQUET) => CopyLegacyOption::Parquet,
+            Some(Keyword::PARTITION) => {
+                self.expect_keyword(Keyword::BY)?;
+                let columns = self.parse_parenthesized_column_list(IsOptional::Mandatory, false)?;
+                let include = self.parse_keyword(Keyword::INCLUDE);
+                CopyLegacyOption::PartitionBy(UnloadPartitionBy { columns, include })
+            }
+            Some(Keyword::REGION) => {
+                let _ = self.parse_keyword(Keyword::AS);
+                let region = self.parse_literal_string()?;
+                CopyLegacyOption::Region(region)
+            }
+            Some(Keyword::ROWGROUPSIZE) => {
+                let _ = self.parse_keyword(Keyword::AS);
+                let file_size = self.parse_file_size()?;
+                CopyLegacyOption::RowGroupSize(file_size)
             }
             Some(Keyword::TIMEFORMAT) => {
                 let _ = self.parse_keyword(Keyword::AS);
@@ -9682,9 +9768,24 @@ impl<'a> Parser<'a> {
                 CopyLegacyOption::TimeFormat(fmt)
             }
             Some(Keyword::TRUNCATECOLUMNS) => CopyLegacyOption::TruncateColumns,
+            Some(Keyword::ZSTD) => CopyLegacyOption::Zstd,
             _ => self.expected("option", self.peek_token())?,
         };
         Ok(ret)
+    }
+
+    fn parse_file_size(&mut self) -> Result<FileSize, ParserError> {
+        let size = self.parse_number_value()?.value;
+        let unit = self.maybe_parse_file_size_unit();
+        Ok(FileSize { size, unit })
+    }
+
+    fn maybe_parse_file_size_unit(&mut self) -> Option<FileSizeUnit> {
+        match self.parse_one_of_keywords(&[Keyword::MB, Keyword::GB]) {
+            Some(Keyword::MB) => Some(FileSizeUnit::MB),
+            Some(Keyword::GB) => Some(FileSizeUnit::GB),
+            _ => None,
+        }
     }
 
     fn parse_iam_role_kind(&mut self) -> Result<IamRoleKind, ParserError> {
@@ -16508,19 +16609,35 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_unload(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword(Keyword::UNLOAD)?;
         self.expect_token(&Token::LParen)?;
-        let query = self.parse_query()?;
+        let (query, query_text) = if matches!(self.peek_token().token, Token::SingleQuotedString(_))
+        {
+            (None, Some(self.parse_literal_string()?))
+        } else {
+            (Some(self.parse_query()?), None)
+        };
         self.expect_token(&Token::RParen)?;
 
         self.expect_keyword_is(Keyword::TO)?;
         let to = self.parse_identifier()?;
-
-        let with_options = self.parse_options(Keyword::WITH)?;
-
+        let auth = if self.parse_keyword(Keyword::IAM_ROLE) {
+            Some(self.parse_iam_role_kind()?)
+        } else {
+            None
+        };
+        let with = self.parse_options(Keyword::WITH)?;
+        let mut options = vec![];
+        while let Some(opt) = self.maybe_parse(|parser| parser.parse_copy_legacy_option())? {
+            options.push(opt);
+        }
         Ok(Statement::Unload {
             query,
+            query_text,
             to,
-            with: with_options,
+            auth,
+            with,
+            options,
         })
     }
 

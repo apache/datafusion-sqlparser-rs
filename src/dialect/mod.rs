@@ -476,8 +476,8 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    // Does the Dialect support concatenating of string literal
-    // Example: SELECT 'Hello ' "world" => SELECT 'Hello world'
+    /// Returns true if the dialect supports concatenating of string literal
+    /// Example: `SELECT 'Hello ' "world" => SELECT 'Hello world'`
     fn supports_string_literal_concatenation(&self) -> bool {
         false
     }

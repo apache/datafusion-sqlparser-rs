@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-//! This module defines
+//! This module defines:
 //! 1) a list of constants for every keyword
 //! 2) an `ALL_KEYWORDS` array with every keyword in it
 //!    This is not a list of *reserved* keywords: some of these can be

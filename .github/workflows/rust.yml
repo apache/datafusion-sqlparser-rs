@@ -17,13 +17,20 @@
 
 name: Rust
 
-on: [push, pull_request]
+on:
+  push:
+    # When PR is in the Merge Queue, GitHub will create a temporary branch - but we already have a
+    # CI running because of `merge_group`
+    # https://github.com/orgs/community/discussions/15254
+    branches-ignore:
+      - 'gh-readonly-queue/**'
+  pull_request:
+  merge_group:
 
 permissions:
   contents: read
 
 jobs:
-
   codestyle:
     runs-on: ubuntu-latest
     steps:

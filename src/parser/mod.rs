@@ -11801,7 +11801,7 @@ impl<'a> Parser<'a> {
             Some(With {
                 with_token: with_token.clone().into(),
                 recursive: self.parse_keyword(Keyword::RECURSIVE),
-                cte_tables: self.parse_comma_separated(Parser::parse_cte)?,
+                cte_tables: self.parse_comma_separated(Parser::parse_cte_or_cse)?,
             })
         } else {
             None
@@ -12258,6 +12258,33 @@ impl<'a> Parser<'a> {
             include_null_values,
             without_array_wrapper,
         })
+    }
+
+    /// Parse a CTE or CSE.
+    pub fn parse_cte_or_cse(&mut self) -> Result<CteOrCse, ParserError> {
+        Ok(if dialect_of!(self is ClickHouseDialect) {
+            if let Some(cse) = self.maybe_parse(|parser| {
+                // Parse a CSE (`<expr> AS <ident>`).
+                let expr = parser.parse_expr()?;
+                let _after_as = parser.parse_keyword(Keyword::AS);
+                let ident = parser.parse_identifier()?;
+                Ok(Cse { expr, ident })
+            })? {
+                CteOrCse::Cse(cse)
+            } else {
+                CteOrCse::Cte(self.parse_cte()?)
+            }
+        } else {
+            CteOrCse::Cte(self.parse_cte()?)
+        })
+    }
+
+    /// Parse a CSE (`<expr> AS <ident>`).
+    pub fn parse_cse(&mut self) -> Result<Cse, ParserError> {
+        let expr = self.parse_expr()?;
+        let _after_as = self.parse_keyword(Keyword::AS);
+        let ident = self.parse_identifier()?;
+        Ok(Cse { expr, ident })
     }
 
     /// Parse a CTE (`alias [( col1, col2, ... )] AS (subquery)`)

@@ -176,6 +176,23 @@ impl Spanned for With {
     }
 }
 
+impl Spanned for super::query::CteOrCse {
+    fn span(&self) -> Span {
+        match self {
+            super::query::CteOrCse::Cte(cte) => cte.span(),
+            super::query::CteOrCse::Cse(cse) => cse.span(),
+        }
+    }
+}
+
+impl Spanned for super::query::Cse {
+    fn span(&self) -> Span {
+        let super::query::Cse { expr, ident } = self;
+
+        union_spans(core::iter::once(expr.span()).chain(core::iter::once(ident.span)))
+    }
+}
+
 impl Spanned for Cte {
     fn span(&self) -> Span {
         let Cte {
@@ -2560,7 +2577,11 @@ pub mod tests {
 
         let query = test.0.parse_query().unwrap();
         let cte_span = query.clone().with.unwrap().cte_tables[0].span();
-        let cte_query_span = query.clone().with.unwrap().cte_tables[0].query.span();
+        let cte_query_span = query.clone().with.unwrap().cte_tables[0]
+            .cte()
+            .unwrap()
+            .query
+            .span();
         let body_span = query.body.span();
 
         // the WITH keyboard is part of the query

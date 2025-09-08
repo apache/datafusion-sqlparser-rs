@@ -603,7 +603,7 @@ pub struct With {
     /// Token for the "WITH" keyword
     pub with_token: AttachedToken,
     pub recursive: bool,
-    pub cte_tables: Vec<Cte>,
+    pub cte_tables: Vec<CteOrCse>,
 }
 
 impl fmt::Display for With {
@@ -641,6 +641,56 @@ impl fmt::Display for CteAsMaterialized {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CteOrCse {
+    Cte(Cte),
+    Cse(Cse),
+}
+
+impl CteOrCse {
+    pub fn cte(&self) -> Option<&Cte> {
+        match self {
+            CteOrCse::Cte(cte) => Some(cte),
+            CteOrCse::Cse(_) => None,
+        }
+    }
+
+    pub fn cse(&self) -> Option<&Cse> {
+        match self {
+            CteOrCse::Cte(_) => None,
+            CteOrCse::Cse(cse) => Some(cse),
+        }
+    }
+}
+
+impl fmt::Display for CteOrCse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CteOrCse::Cte(cte) => cte.fmt(f),
+            CteOrCse::Cse(cse) => cse.fmt(f),
+        }
+    }
+}
+
+/// A single CSE (used after `WITH`): `<expr> AS <ident>`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Cse {
+    pub expr: Expr,
+    pub ident: Ident,
+}
+
+impl fmt::Display for Cse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.expr.fmt(f)?;
+        f.write_str(" AS ")?;
+        self.ident.fmt(f)?;
+        Ok(())
+    }
+}
 /// A single CTE (used after `WITH`): `<alias> [(col1, col2, ...)] AS <materialized> ( <query> )`
 /// The names in the column list before `AS`, when specified, replace the names
 /// of the columns returned by the query. The parser does not validate that the

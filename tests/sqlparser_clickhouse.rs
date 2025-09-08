@@ -1729,6 +1729,24 @@ fn test_parse_not_null_in_column_options() {
     );
 }
 
+#[test]
+fn parse_cses() {
+    clickhouse().verified_stmt("WITH x AS (SELECT 1) UPDATE t SET bar = (SELECT * FROM x)");
+
+    let with = concat!(
+        "WITH",
+        " toIntervalSecond(300) AS bucket_size,",
+        " toDateTime64(1735751460, 9) AS start_time,",
+        " toDateTime64(1735755060, 9) AS end_time ",
+        "SELECT",
+        " toStartOfInterval(EventTime, bucket_size) AS bucket,",
+        " count() AS count ",
+        "FROM logs",
+    );
+
+    clickhouse().verified_query(with);
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects::new(vec![Box::new(ClickHouseDialect {})])
 }

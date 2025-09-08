@@ -12263,13 +12263,7 @@ impl<'a> Parser<'a> {
     /// Parse a CTE or CSE.
     pub fn parse_cte_or_cse(&mut self) -> Result<CteOrCse, ParserError> {
         Ok(if dialect_of!(self is ClickHouseDialect) {
-            if let Some(cse) = self.maybe_parse(|parser| {
-                // Parse a CSE (`<expr> AS <ident>`).
-                let expr = parser.parse_expr()?;
-                let _after_as = parser.parse_keyword(Keyword::AS);
-                let ident = parser.parse_identifier()?;
-                Ok(Cse { expr, ident })
-            })? {
+            if let Some(cse) = self.maybe_parse(Parser::parse_cse)? {
                 CteOrCse::Cse(cse)
             } else {
                 CteOrCse::Cte(self.parse_cte()?)

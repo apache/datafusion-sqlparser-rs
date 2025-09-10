@@ -5671,7 +5671,7 @@ fn parse_create_domain() {
 #[test]
 fn parse_create_simple_before_insert_trigger() {
     let sql = "CREATE TRIGGER check_insert BEFORE INSERT ON accounts FOR EACH ROW EXECUTE FUNCTION check_account_insert";
-    let expected = Statement::CreateTrigger {
+    let expected = Statement::CreateTrigger(CreateTrigger {
         or_alter: false,
         or_replace: false,
         is_constraint: false,
@@ -5695,7 +5695,7 @@ fn parse_create_simple_before_insert_trigger() {
         statements_as: false,
         statements: None,
         characteristics: None,
-    };
+    });
 
     assert_eq!(pg().verified_stmt(sql), expected);
 }
@@ -5703,7 +5703,7 @@ fn parse_create_simple_before_insert_trigger() {
 #[test]
 fn parse_create_after_update_trigger_with_condition() {
     let sql = "CREATE TRIGGER check_update AFTER UPDATE ON accounts FOR EACH ROW WHEN (NEW.balance > 10000) EXECUTE FUNCTION check_account_update";
-    let expected = Statement::CreateTrigger {
+    let expected = Statement::CreateTrigger(CreateTrigger {
         or_alter: false,
         or_replace: false,
         is_constraint: false,
@@ -5734,7 +5734,7 @@ fn parse_create_after_update_trigger_with_condition() {
         statements_as: false,
         statements: None,
         characteristics: None,
-    };
+    });
 
     assert_eq!(pg().verified_stmt(sql), expected);
 }
@@ -5742,7 +5742,7 @@ fn parse_create_after_update_trigger_with_condition() {
 #[test]
 fn parse_create_instead_of_delete_trigger() {
     let sql = "CREATE TRIGGER check_delete INSTEAD OF DELETE ON accounts FOR EACH ROW EXECUTE FUNCTION check_account_deletes";
-    let expected = Statement::CreateTrigger {
+    let expected = Statement::CreateTrigger(CreateTrigger {
         or_alter: false,
         or_replace: false,
         is_constraint: false,
@@ -5766,7 +5766,7 @@ fn parse_create_instead_of_delete_trigger() {
         statements_as: false,
         statements: None,
         characteristics: None,
-    };
+    });
 
     assert_eq!(pg().verified_stmt(sql), expected);
 }
@@ -5774,7 +5774,7 @@ fn parse_create_instead_of_delete_trigger() {
 #[test]
 fn parse_create_trigger_with_multiple_events_and_deferrable() {
     let sql = "CREATE CONSTRAINT TRIGGER check_multiple_events BEFORE INSERT OR UPDATE OR DELETE ON accounts DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION check_account_changes";
-    let expected = Statement::CreateTrigger {
+    let expected = Statement::CreateTrigger(CreateTrigger {
         or_alter: false,
         or_replace: false,
         is_constraint: true,
@@ -5806,7 +5806,7 @@ fn parse_create_trigger_with_multiple_events_and_deferrable() {
             initially: Some(DeferrableInitial::Deferred),
             enforced: None,
         }),
-    };
+    });
 
     assert_eq!(pg().verified_stmt(sql), expected);
 }
@@ -5814,7 +5814,7 @@ fn parse_create_trigger_with_multiple_events_and_deferrable() {
 #[test]
 fn parse_create_trigger_with_referencing() {
     let sql = "CREATE TRIGGER check_referencing BEFORE INSERT ON accounts REFERENCING NEW TABLE AS new_accounts OLD TABLE AS old_accounts FOR EACH ROW EXECUTE FUNCTION check_account_referencing";
-    let expected = Statement::CreateTrigger {
+    let expected = Statement::CreateTrigger(CreateTrigger {
         or_alter: false,
         or_replace: false,
         is_constraint: false,
@@ -5849,7 +5849,7 @@ fn parse_create_trigger_with_referencing() {
         statements_as: false,
         statements: None,
         characteristics: None,
-    };
+    });
 
     assert_eq!(pg().verified_stmt(sql), expected);
 }
@@ -5901,12 +5901,12 @@ fn parse_drop_trigger() {
             );
             assert_eq!(
                 pg().verified_stmt(sql),
-                Statement::DropTrigger {
+                Statement::DropTrigger(DropTrigger {
                     if_exists,
                     trigger_name: ObjectName::from(vec![Ident::new("check_update")]),
                     table_name: Some(ObjectName::from(vec![Ident::new("table_name")])),
                     option
-                }
+                })
             );
         }
     }
@@ -6130,7 +6130,7 @@ fn parse_trigger_related_functions() {
 
     assert_eq!(
         create_trigger,
-        Statement::CreateTrigger {
+        Statement::CreateTrigger(CreateTrigger {
             or_alter: false,
             or_replace: false,
             is_constraint: false,
@@ -6154,18 +6154,18 @@ fn parse_trigger_related_functions() {
             statements_as: false,
             statements: None,
             characteristics: None
-        }
+        })
     );
 
     // Check the fourth statement
     assert_eq!(
         drop_trigger,
-        Statement::DropTrigger {
+        Statement::DropTrigger(DropTrigger {
             if_exists: false,
             trigger_name: ObjectName::from(vec![Ident::new("emp_stamp")]),
             table_name: Some(ObjectName::from(vec![Ident::new("emp")])),
             option: None
-        }
+        })
     );
 }
 

@@ -12276,7 +12276,7 @@ impl<'a> Parser<'a> {
     /// Parse a [`Cse`] in a `WITH` clause.
     pub fn parse_cse(&mut self) -> Result<Cse, ParserError> {
         let expr = self.parse_expr()?;
-        let _after_as = self.parse_keyword(Keyword::AS);
+        self.expect_keyword_is(Keyword::AS)?;
         let ident = self.parse_identifier()?;
         Ok(Cse { expr, ident })
     }

@@ -677,7 +677,13 @@ impl fmt::Display for WithExpression {
     }
 }
 
-/// A single CSE (used after `WITH`): `<expr> AS <ident>`.
+/// A common scalar expression (CSE).
+///
+/// ```sql
+/// [WITH] <expr> AS <ident> [,]
+/// ```
+///
+/// See https://clickhouse.com/docs/sql-reference/statements/select/with#common-scalar-expressions
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -694,7 +700,12 @@ impl fmt::Display for Cse {
         Ok(())
     }
 }
-/// A single CTE (used after `WITH`): `<alias> [(col1, col2, ...)] AS <materialized> ( <query> )`
+/// A common table expression (CTE).
+///
+/// ```sql
+/// [WITH] <alias> [(col1, col2, ...)] AS <materialized> ( <query> ) [,]
+/// ```
+///
 /// The names in the column list before `AS`, when specified, replace the names
 /// of the columns returned by the query. The parser does not validate that the
 /// number of columns in the query matches the number of columns in the query.

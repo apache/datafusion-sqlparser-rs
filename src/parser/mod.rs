@@ -12273,7 +12273,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse a CSE (`<expr> AS <ident>`).
+    /// Parse a [`Cse`] in a `WITH` clause.
     pub fn parse_cse(&mut self) -> Result<Cse, ParserError> {
         let expr = self.parse_expr()?;
         let _after_as = self.parse_keyword(Keyword::AS);
@@ -12281,7 +12281,7 @@ impl<'a> Parser<'a> {
         Ok(Cse { expr, ident })
     }
 
-    /// Parse a CTE (`alias [( col1, col2, ... )] AS (subquery)`)
+    /// Parse a [`Cte`] in a `WITH` clause.
     pub fn parse_cte(&mut self) -> Result<Cte, ParserError> {
         let name = self.parse_identifier()?;
 

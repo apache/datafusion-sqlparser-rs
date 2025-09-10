@@ -596,6 +596,20 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports Common Scalar Expressions in `SELECT`.
+    ///
+    /// For example:
+    /// ```sql
+    /// WITH
+    ///   toDate('2000-01-01') AS start_date
+    /// SELECT * from tbl WHERE col1 > start_date;
+    /// ```
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/sql-reference/statements/select/with#common-scalar-expressions)
+    fn supports_common_scalar_expressions(&self) -> bool {
+        false
+    }
+
     /// Return true if the dialect supports specifying multiple options
     /// in a `CREATE TABLE` statement for the structure of the new table. For example:
     /// `CREATE TABLE t (a INT, b INT) AS SELECT 1 AS b, 2 AS a`

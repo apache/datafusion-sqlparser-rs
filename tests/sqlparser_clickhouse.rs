@@ -1730,7 +1730,7 @@ fn test_parse_not_null_in_column_options() {
 }
 
 #[test]
-fn parse_cses() {
+fn parse_cse() {
     clickhouse().verified_stmt("WITH x AS (SELECT 1) UPDATE t SET bar = (SELECT * FROM x)");
 
     let with = concat!(
@@ -1755,6 +1755,37 @@ fn parse_cses() {
         "WHERE c < today"
     );
     clickhouse().verified_query(mixed);
+
+    // valid
+    clickhouse()
+        .parse_sql_statements("WITH foo() AS bar SELECT 1")
+        .unwrap();
+
+    // ClickHouse allows these, but not sqlparser
+    clickhouse()
+        .parse_sql_statements("WITH foo, bar SELECT 1")
+        .expect_err("Expected: AS, found: ,");
+
+    clickhouse()
+        .parse_sql_statements("WITH foo(), bar SELECT 1")
+        .expect_err("Expected: identifier, found: )");
+
+    // invalid
+    clickhouse()
+        .parse_sql_statements("WITH foo bar SELECT 1")
+        .expect_err("Expected: ");
+
+    clickhouse()
+        .parse_sql_statements("WITH foo() bar SELECT 1")
+        .expect_err("Expected: ");
+
+    clickhouse()
+        .parse_sql_statements("WITH foo() bar() SELECT 1")
+        .expect_err("Expected: ");
+
+    clickhouse()
+        .parse_sql_statements("WITH foo() AS bar() SELECT 1")
+        .expect_err("Expected: ");
 }
 
 fn clickhouse() -> TestedDialects {

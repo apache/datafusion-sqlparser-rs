@@ -3914,9 +3914,9 @@ pub enum Statement {
     /// 3. [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_function_statement)
     /// 4. [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql)
     CreateFunction(CreateFunction),
-    /// CREATE TRIGGER statement. See struct `CreateTrigger` for details.
+    /// CREATE TRIGGER statement. See struct [CreateTrigger] for details.
     CreateTrigger(CreateTrigger),
-    /// DROP TRIGGER statement. See struct `DropTrigger` for details.
+    /// DROP TRIGGER statement. See struct [DropTrigger] for details.
     DropTrigger(DropTrigger),
     /// ```sql
     /// CREATE PROCEDURE

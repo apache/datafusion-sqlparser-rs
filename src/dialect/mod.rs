@@ -311,6 +311,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports a join specification on CROSS JOIN.
+    fn supports_cross_join_constraint(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports CONNECT BY.
     fn supports_connect_by(&self) -> bool {
         false

@@ -13317,15 +13317,24 @@ impl<'a> Parser<'a> {
             let global = self.parse_keyword(Keyword::GLOBAL);
             let join = if self.parse_keyword(Keyword::CROSS) {
                 let join_operator = if self.parse_keyword(Keyword::JOIN) {
-                    JoinOperator::CrossJoin
+                    JoinOperator::CrossJoin(JoinConstraint::None)
                 } else if self.parse_keyword(Keyword::APPLY) {
                     // MSSQL extension, similar to CROSS JOIN LATERAL
                     JoinOperator::CrossApply
                 } else {
                     return self.expected("JOIN or APPLY after CROSS", self.peek_token());
                 };
+                let relation = self.parse_table_factor()?;
+                let join_operator = if matches!(join_operator, JoinOperator::CrossJoin(_))
+                    && self.dialect.supports_cross_join_constraint()
+                {
+                    let constraint = self.parse_join_constraint(false)?;
+                    JoinOperator::CrossJoin(constraint)
+                } else {
+                    join_operator
+                };
                 Join {
-                    relation: self.parse_table_factor()?,
+                    relation,
                     global,
                     join_operator,
                 }

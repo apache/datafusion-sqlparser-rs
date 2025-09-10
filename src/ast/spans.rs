@@ -2226,7 +2226,7 @@ impl Spanned for JoinOperator {
             JoinOperator::Right(join_constraint) => join_constraint.span(),
             JoinOperator::RightOuter(join_constraint) => join_constraint.span(),
             JoinOperator::FullOuter(join_constraint) => join_constraint.span(),
-            JoinOperator::CrossJoin => Span::empty(),
+            JoinOperator::CrossJoin(join_constraint) => join_constraint.span(),
             JoinOperator::LeftSemi(join_constraint) => join_constraint.span(),
             JoinOperator::RightSemi(join_constraint) => join_constraint.span(),
             JoinOperator::LeftAnti(join_constraint) => join_constraint.span(),

@@ -12263,7 +12263,7 @@ impl<'a> Parser<'a> {
     /// Parse the expression in a `WITH` clause.
     pub fn parse_with_expression(&mut self) -> Result<WithExpression, ParserError> {
         Ok(if self.dialect.supports_common_scalar_expressions() {
-            if let Some(cse) = self.maybe_parse(Parser::parse_cse)? {
+            if let Some(cse) = self.maybe_parse(|parser| parser.parse_cse())? {
                 WithExpression::Cse(cse)
             } else {
                 WithExpression::Cte(self.parse_cte()?)

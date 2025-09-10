@@ -1743,8 +1743,18 @@ fn parse_cses() {
         " count() AS count ",
         "FROM logs",
     );
-
     clickhouse().verified_query(with);
+
+    let mixed = concat!(
+        "WITH",
+        " toDate(now()) AS today,",
+        " tbl (c) AS (SELECT toDate('2000-01-01')) ",
+        "SELECT",
+        " * ",
+        "FROM tbl ",
+        "WHERE c < today"
+    );
+    clickhouse().verified_query(mixed);
 }
 
 fn clickhouse() -> TestedDialects {

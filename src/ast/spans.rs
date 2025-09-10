@@ -176,11 +176,11 @@ impl Spanned for With {
     }
 }
 
-impl Spanned for super::query::CteOrCse {
+impl Spanned for super::query::WithExpression {
     fn span(&self) -> Span {
         match self {
-            super::query::CteOrCse::Cte(cte) => cte.span(),
-            super::query::CteOrCse::Cse(cse) => cse.span(),
+            super::query::WithExpression::Cte(cte) => cte.span(),
+            super::query::WithExpression::Cse(cse) => cse.span(),
         }
     }
 }

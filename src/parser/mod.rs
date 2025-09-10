@@ -11801,7 +11801,7 @@ impl<'a> Parser<'a> {
             Some(With {
                 with_token: with_token.clone().into(),
                 recursive: self.parse_keyword(Keyword::RECURSIVE),
-                cte_tables: self.parse_comma_separated(Parser::parse_cte_or_cse)?,
+                cte_tables: self.parse_comma_separated(Parser::parse_with_expression)?,
             })
         } else {
             None
@@ -12260,16 +12260,16 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse a CTE or CSE.
-    pub fn parse_cte_or_cse(&mut self) -> Result<CteOrCse, ParserError> {
+    /// Parse the expression in a `WITH` clause.
+    pub fn parse_with_expression(&mut self) -> Result<WithExpression, ParserError> {
         Ok(if dialect_of!(self is ClickHouseDialect) {
             if let Some(cse) = self.maybe_parse(Parser::parse_cse)? {
-                CteOrCse::Cse(cse)
+                WithExpression::Cse(cse)
             } else {
-                CteOrCse::Cte(self.parse_cte()?)
+                WithExpression::Cte(self.parse_cte()?)
             }
         } else {
-            CteOrCse::Cte(self.parse_cte()?)
+            WithExpression::Cte(self.parse_cte()?)
         })
     }
 

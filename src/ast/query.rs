@@ -603,7 +603,7 @@ pub struct With {
     /// Token for the "WITH" keyword
     pub with_token: AttachedToken,
     pub recursive: bool,
-    pub cte_tables: Vec<CteOrCse>,
+    pub cte_tables: Vec<WithExpression>,
 }
 
 impl fmt::Display for With {
@@ -641,35 +641,38 @@ impl fmt::Display for CteAsMaterialized {
     }
 }
 
+/// `WITH` clause in `SELECT`.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum CteOrCse {
+pub enum WithExpression {
+    /// Common table expression.
     Cte(Cte),
+    /// Common scalar expression.
     Cse(Cse),
 }
 
-impl CteOrCse {
+impl WithExpression {
     pub fn cte(&self) -> Option<&Cte> {
         match self {
-            CteOrCse::Cte(cte) => Some(cte),
-            CteOrCse::Cse(_) => None,
+            Self::Cte(cte) => Some(cte),
+            Self::Cse(_) => None,
         }
     }
 
     pub fn cse(&self) -> Option<&Cse> {
         match self {
-            CteOrCse::Cte(_) => None,
-            CteOrCse::Cse(cse) => Some(cse),
+            Self::Cte(_) => None,
+            Self::Cse(cse) => Some(cse),
         }
     }
 }
 
-impl fmt::Display for CteOrCse {
+impl fmt::Display for WithExpression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CteOrCse::Cte(cte) => cte.fmt(f),
-            CteOrCse::Cse(cse) => cse.fmt(f),
+            Self::Cte(cte) => cte.fmt(f),
+            Self::Cse(cse) => cse.fmt(f),
         }
     }
 }

@@ -17,8 +17,8 @@
 
 use crate::ast::helpers::attached_token::AttachedToken;
 use crate::ast::{
-    BeginEndStatements, ConditionalStatementBlock, ConditionalStatements, GranteesType,
-    IfStatement, Statement, TriggerObject,
+    BeginEndStatements, ConditionalStatementBlock, ConditionalStatements, CreateTrigger,
+    GranteesType, IfStatement, Statement, TriggerObject,
 };
 use crate::dialect::Dialect;
 use crate::keywords::{self, Keyword};
@@ -251,7 +251,7 @@ impl MsSqlDialect {
         parser.expect_keyword_is(Keyword::AS)?;
         let statements = Some(parser.parse_conditional_statements(&[Keyword::END])?);
 
-        Ok(Statement::CreateTrigger {
+        Ok(Statement::CreateTrigger(CreateTrigger {
             or_alter,
             or_replace: false,
             is_constraint: false,
@@ -269,7 +269,7 @@ impl MsSqlDialect {
             statements_as: true,
             statements,
             characteristics: None,
-        })
+        }))
     }
 
     /// Parse a sequence of statements, optionally separated by semicolon.

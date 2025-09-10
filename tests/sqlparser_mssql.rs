@@ -2384,7 +2384,7 @@ fn parse_create_trigger() {
     let create_stmt = ms().verified_stmt(create_trigger);
     assert_eq!(
         create_stmt,
-        Statement::CreateTrigger {
+        Statement::CreateTrigger(CreateTrigger {
             or_alter: true,
             or_replace: false,
             is_constraint: false,
@@ -2417,7 +2417,7 @@ fn parse_create_trigger() {
                 }],
             }),
             characteristics: None,
-        }
+        })
     );
 
     let multi_statement_as_trigger = "\
@@ -2476,12 +2476,12 @@ fn parse_drop_trigger() {
     let drop_stmt = ms().one_statement_parses_to(sql_drop_trigger, "");
     assert_eq!(
         drop_stmt,
-        Statement::DropTrigger {
+        Statement::DropTrigger(DropTrigger {
             if_exists: false,
             trigger_name: ObjectName::from(vec![Ident::new("emp_stamp")]),
             table_name: None,
             option: None,
-        }
+        })
     );
 }
 

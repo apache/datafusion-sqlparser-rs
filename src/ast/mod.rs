@@ -63,10 +63,10 @@ pub use self::ddl::{
     AlterType, AlterTypeAddValue, AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename,
     AlterTypeRenameValue, ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions,
     ColumnPolicy, ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain,
-    CreateFunction, CreateIndex, CreateTable, Deduplicate, DeferrableInitial, DropBehavior,
-    GeneratedAs, GeneratedExpressionMode, IdentityParameters, IdentityProperty,
-    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, IndexColumn,
-    IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition,
+    CreateFunction, CreateIndex, CreateTable, CreateTrigger, Deduplicate, DeferrableInitial,
+    DropBehavior, DropTrigger, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
+    IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
+    IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition,
     ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity, TableConstraint,
     TagsColumnOption, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
     ViewColumnDef,
@@ -3914,114 +3914,10 @@ pub enum Statement {
     /// 3. [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_function_statement)
     /// 4. [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql)
     CreateFunction(CreateFunction),
-    /// CREATE TRIGGER
-    ///
-    /// Examples:
-    ///
-    /// ```sql
-    /// CREATE TRIGGER trigger_name
-    /// BEFORE INSERT ON table_name
-    /// FOR EACH ROW
-    /// EXECUTE FUNCTION trigger_function();
-    /// ```
-    ///
-    /// Postgres: <https://www.postgresql.org/docs/current/sql-createtrigger.html>
-    /// SQL Server: <https://learn.microsoft.com/en-us/sql/t-sql/statements/create-trigger-transact-sql>
-    CreateTrigger {
-        /// True if this is a `CREATE OR ALTER TRIGGER` statement
-        ///
-        /// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-trigger-transact-sql?view=sql-server-ver16#arguments)
-        or_alter: bool,
-        /// The `OR REPLACE` clause is used to re-create the trigger if it already exists.
-        ///
-        /// Example:
-        /// ```sql
-        /// CREATE OR REPLACE TRIGGER trigger_name
-        /// AFTER INSERT ON table_name
-        /// FOR EACH ROW
-        /// EXECUTE FUNCTION trigger_function();
-        /// ```
-        or_replace: bool,
-        /// The `CONSTRAINT` keyword is used to create a trigger as a constraint.
-        is_constraint: bool,
-        /// The name of the trigger to be created.
-        name: ObjectName,
-        /// Determines whether the function is called before, after, or instead of the event.
-        ///
-        /// Example of BEFORE:
-        ///
-        /// ```sql
-        /// CREATE TRIGGER trigger_name
-        /// BEFORE INSERT ON table_name
-        /// FOR EACH ROW
-        /// EXECUTE FUNCTION trigger_function();
-        /// ```
-        ///
-        /// Example of AFTER:
-        ///
-        /// ```sql
-        /// CREATE TRIGGER trigger_name
-        /// AFTER INSERT ON table_name
-        /// FOR EACH ROW
-        /// EXECUTE FUNCTION trigger_function();
-        /// ```
-        ///
-        /// Example of INSTEAD OF:
-        ///
-        /// ```sql
-        /// CREATE TRIGGER trigger_name
-        /// INSTEAD OF INSERT ON table_name
-        /// FOR EACH ROW
-        /// EXECUTE FUNCTION trigger_function();
-        /// ```
-        period: TriggerPeriod,
-        /// Whether the trigger period was specified before the target table name.
-        ///
-        /// ```sql
-        /// -- period_before_table == true: Postgres, MySQL, and standard SQL
-        /// CREATE TRIGGER t BEFORE INSERT ON table_name ...;
-        /// -- period_before_table == false: MSSQL
-        /// CREATE TRIGGER t ON table_name BEFORE INSERT ...;
-        /// ```
-        period_before_table: bool,
-        /// Multiple events can be specified using OR, such as `INSERT`, `UPDATE`, `DELETE`, or `TRUNCATE`.
-        events: Vec<TriggerEvent>,
-        /// The table on which the trigger is to be created.
-        table_name: ObjectName,
-        /// The optional referenced table name that can be referenced via
-        /// the `FROM` keyword.
-        referenced_table_name: Option<ObjectName>,
-        /// This keyword immediately precedes the declaration of one or two relation names that provide access to the transition relations of the triggering statement.
-        referencing: Vec<TriggerReferencing>,
-        /// This specifies whether the trigger function should be fired once for
-        /// every row affected by the trigger event, or just once per SQL statement.
-        trigger_object: TriggerObject,
-        /// Whether to include the `EACH` term of the `FOR EACH`, as it is optional syntax.
-        include_each: bool,
-        ///  Triggering conditions
-        condition: Option<Expr>,
-        /// Execute logic block
-        exec_body: Option<TriggerExecBody>,
-        /// For MSSQL and dialects where statements are preceded by `AS`
-        statements_as: bool,
-        /// For SQL dialects with statement(s) for a body
-        statements: Option<ConditionalStatements>,
-        /// The characteristic of the trigger, which include whether the trigger is `DEFERRABLE`, `INITIALLY DEFERRED`, or `INITIALLY IMMEDIATE`,
-        characteristics: Option<ConstraintCharacteristics>,
-    },
-    /// DROP TRIGGER
-    ///
-    /// ```sql
-    /// DROP TRIGGER [ IF EXISTS ] name ON table_name [ CASCADE | RESTRICT ]
-    /// ```
-    ///
-    DropTrigger {
-        if_exists: bool,
-        trigger_name: ObjectName,
-        table_name: Option<ObjectName>,
-        /// `CASCADE` or `RESTRICT`
-        option: Option<ReferentialAction>,
-    },
+    /// CREATE TRIGGER statement. See struct `CreateTrigger` for details.
+    CreateTrigger(CreateTrigger),
+    /// DROP TRIGGER statement. See struct `DropTrigger` for details.
+    DropTrigger(DropTrigger),
     /// ```sql
     /// CREATE PROCEDURE
     /// ```
@@ -4984,97 +4880,8 @@ impl fmt::Display for Statement {
             }
             Statement::CreateFunction(create_function) => create_function.fmt(f),
             Statement::CreateDomain(create_domain) => create_domain.fmt(f),
-            Statement::CreateTrigger {
-                or_alter,
-                or_replace,
-                is_constraint,
-                name,
-                period_before_table,
-                period,
-                events,
-                table_name,
-                referenced_table_name,
-                referencing,
-                trigger_object,
-                condition,
-                include_each,
-                exec_body,
-                statements_as,
-                statements,
-                characteristics,
-            } => {
-                write!(
-                    f,
-                    "CREATE {or_alter}{or_replace}{is_constraint}TRIGGER {name} ",
-                    or_alter = if *or_alter { "OR ALTER " } else { "" },
-                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
-                    is_constraint = if *is_constraint { "CONSTRAINT " } else { "" },
-                )?;
-
-                if *period_before_table {
-                    write!(f, "{period}")?;
-                    if !events.is_empty() {
-                        write!(f, " {}", display_separated(events, " OR "))?;
-                    }
-                    write!(f, " ON {table_name}")?;
-                } else {
-                    write!(f, "ON {table_name}")?;
-                    write!(f, " {period}")?;
-                    if !events.is_empty() {
-                        write!(f, " {}", display_separated(events, ", "))?;
-                    }
-                }
-
-                if let Some(referenced_table_name) = referenced_table_name {
-                    write!(f, " FROM {referenced_table_name}")?;
-                }
-
-                if let Some(characteristics) = characteristics {
-                    write!(f, " {characteristics}")?;
-                }
-
-                if !referencing.is_empty() {
-                    write!(f, " REFERENCING {}", display_separated(referencing, " "))?;
-                }
-
-                if *include_each {
-                    write!(f, " FOR EACH {trigger_object}")?;
-                } else if exec_body.is_some() {
-                    write!(f, " FOR {trigger_object}")?;
-                }
-                if let Some(condition) = condition {
-                    write!(f, " WHEN {condition}")?;
-                }
-                if let Some(exec_body) = exec_body {
-                    write!(f, " EXECUTE {exec_body}")?;
-                }
-                if let Some(statements) = statements {
-                    if *statements_as {
-                        write!(f, " AS")?;
-                    }
-                    write!(f, " {statements}")?;
-                }
-                Ok(())
-            }
-            Statement::DropTrigger {
-                if_exists,
-                trigger_name,
-                table_name,
-                option,
-            } => {
-                write!(f, "DROP TRIGGER")?;
-                if *if_exists {
-                    write!(f, " IF EXISTS")?;
-                }
-                match &table_name {
-                    Some(table_name) => write!(f, " {trigger_name} ON {table_name}")?,
-                    None => write!(f, " {trigger_name}")?,
-                };
-                if let Some(option) = option {
-                    write!(f, " {option}")?;
-                }
-                Ok(())
-            }
+            Statement::CreateTrigger(create_trigger) => create_trigger.fmt(f),
+            Statement::DropTrigger(drop_trigger) => drop_trigger.fmt(f),
             Statement::CreateProcedure {
                 name,
                 or_alter,

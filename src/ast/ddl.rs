@@ -20,7 +20,7 @@
 
 #[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, string::String, vec::Vec};
-use core::fmt::{self, Write};
+use core::fmt::{self, Display, Write};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -30,14 +30,15 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
-    display_comma_separated, display_separated, ArgMode, CommentDef, CreateFunctionBody,
-    CreateFunctionUsing, CreateTableLikeKind, CreateTableOptions, DataType, Expr, FileFormat,
-    FunctionBehavior, FunctionCalledOnNull, FunctionDeterminismSpecifier, FunctionParallel,
-    HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat, Ident, InitializeKind,
-    MySQLColumnPosition, ObjectName, OnCommit, OneOrManyWithParens, OperateFunctionArg,
-    OrderByExpr, ProjectionSelect, Query, RefreshModeKind, RowAccessPolicy, SequenceOptions,
-    Spanned, SqlOption, StorageSerializationPolicy, TableVersion, Tag, Value, ValueWithSpan,
-    WrappedCollection,
+    display_comma_separated, display_separated, ArgMode, CommentDef, ConditionalStatements,
+    CreateFunctionBody, CreateFunctionUsing, CreateTableLikeKind, CreateTableOptions, DataType,
+    Expr, FileFormat, FunctionBehavior, FunctionCalledOnNull, FunctionDeterminismSpecifier,
+    FunctionParallel, HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat, Ident,
+    InitializeKind, MySQLColumnPosition, ObjectName, OnCommit, OneOrManyWithParens,
+    OperateFunctionArg, OrderByExpr, ProjectionSelect, Query, RefreshModeKind, RowAccessPolicy,
+    SequenceOptions, Spanned, SqlOption, StorageSerializationPolicy, TableVersion, Tag,
+    TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value,
+    ValueWithSpan, WrappedCollection,
 };
 use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
 use crate::keywords::Keyword;
@@ -3174,5 +3175,223 @@ impl Spanned for RenameTableNameKind {
             RenameTableNameKind::As(name) => name.span(),
             RenameTableNameKind::To(name) => name.span(),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// CREATE TRIGGER
+///
+/// Examples:
+///
+/// ```sql
+/// CREATE TRIGGER trigger_name
+/// BEFORE INSERT ON table_name
+/// FOR EACH ROW
+/// EXECUTE FUNCTION trigger_function();
+/// ```
+///
+/// Postgres: <https://www.postgresql.org/docs/current/sql-createtrigger.html>
+/// SQL Server: <https://learn.microsoft.com/en-us/sql/t-sql/statements/create-trigger-transact-sql>
+pub struct CreateTrigger {
+    /// True if this is a `CREATE OR ALTER TRIGGER` statement
+    ///
+    /// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-trigger-transact-sql?view=sql-server-ver16#arguments)
+    pub or_alter: bool,
+    /// The `OR REPLACE` clause is used to re-create the trigger if it already exists.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE OR REPLACE TRIGGER trigger_name
+    /// AFTER INSERT ON table_name
+    /// FOR EACH ROW
+    /// EXECUTE FUNCTION trigger_function();
+    /// ```
+    pub or_replace: bool,
+    /// The `CONSTRAINT` keyword is used to create a trigger as a constraint.
+    pub is_constraint: bool,
+    /// The name of the trigger to be created.
+    pub name: ObjectName,
+    /// Determines whether the function is called before, after, or instead of the event.
+    ///
+    /// Example of BEFORE:
+    ///
+    /// ```sql
+    /// CREATE TRIGGER trigger_name
+    /// BEFORE INSERT ON table_name
+    /// FOR EACH ROW
+    /// EXECUTE FUNCTION trigger_function();
+    /// ```
+    ///
+    /// Example of AFTER:
+    ///
+    /// ```sql
+    /// CREATE TRIGGER trigger_name
+    /// AFTER INSERT ON table_name
+    /// FOR EACH ROW
+    /// EXECUTE FUNCTION trigger_function();
+    /// ```
+    ///
+    /// Example of INSTEAD OF:
+    ///
+    /// ```sql
+    /// CREATE TRIGGER trigger_name
+    /// INSTEAD OF INSERT ON table_name
+    /// FOR EACH ROW
+    /// EXECUTE FUNCTION trigger_function();
+    /// ```
+    pub period: TriggerPeriod,
+    /// Whether the trigger period was specified before the target table name.
+    ///
+    /// ```sql
+    /// -- period_before_table == true: Postgres, MySQL, and standard SQL
+    /// CREATE TRIGGER t BEFORE INSERT ON table_name ...;
+    /// -- period_before_table == false: MSSQL
+    /// CREATE TRIGGER t ON table_name BEFORE INSERT ...;
+    /// ```
+    pub period_before_table: bool,
+    /// Multiple events can be specified using OR, such as `INSERT`, `UPDATE`, `DELETE`, or `TRUNCATE`.
+    pub events: Vec<TriggerEvent>,
+    /// The table on which the trigger is to be created.
+    pub table_name: ObjectName,
+    /// The optional referenced table name that can be referenced via
+    /// the `FROM` keyword.
+    pub referenced_table_name: Option<ObjectName>,
+    /// This keyword immediately precedes the declaration of one or two relation names that provide access to the transition relations of the triggering statement.
+    pub referencing: Vec<TriggerReferencing>,
+    /// This specifies whether the trigger function should be fired once for
+    /// every row affected by the trigger event, or just once per SQL statement.
+    pub trigger_object: TriggerObject,
+    /// Whether to include the `EACH` term of the `FOR EACH`, as it is optional syntax.
+    pub include_each: bool,
+    ///  Triggering conditions
+    pub condition: Option<Expr>,
+    /// Execute logic block
+    pub exec_body: Option<TriggerExecBody>,
+    /// For MSSQL and dialects where statements are preceded by `AS`
+    pub statements_as: bool,
+    /// For SQL dialects with statement(s) for a body
+    pub statements: Option<ConditionalStatements>,
+    /// The characteristic of the trigger, which include whether the trigger is `DEFERRABLE`, `INITIALLY DEFERRED`, or `INITIALLY IMMEDIATE`,
+    pub characteristics: Option<ConstraintCharacteristics>,
+}
+
+impl Display for CreateTrigger {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let CreateTrigger {
+            or_alter,
+            or_replace,
+            is_constraint,
+            name,
+            period_before_table,
+            period,
+            events,
+            table_name,
+            referenced_table_name,
+            referencing,
+            trigger_object,
+            condition,
+            include_each,
+            exec_body,
+            statements_as,
+            statements,
+            characteristics,
+        } = self;
+        write!(
+            f,
+            "CREATE {or_alter}{or_replace}{is_constraint}TRIGGER {name} ",
+            or_alter = if *or_alter { "OR ALTER " } else { "" },
+            or_replace = if *or_replace { "OR REPLACE " } else { "" },
+            is_constraint = if *is_constraint { "CONSTRAINT " } else { "" },
+        )?;
+
+        if *period_before_table {
+            write!(f, "{period}")?;
+            if !events.is_empty() {
+                write!(f, " {}", display_separated(events, " OR "))?;
+            }
+            write!(f, " ON {table_name}")?;
+        } else {
+            write!(f, "ON {table_name}")?;
+            write!(f, " {period}")?;
+            if !events.is_empty() {
+                write!(f, " {}", display_separated(events, ", "))?;
+            }
+        }
+
+        if let Some(referenced_table_name) = referenced_table_name {
+            write!(f, " FROM {referenced_table_name}")?;
+        }
+
+        if let Some(characteristics) = characteristics {
+            write!(f, " {characteristics}")?;
+        }
+
+        if !referencing.is_empty() {
+            write!(f, " REFERENCING {}", display_separated(referencing, " "))?;
+        }
+
+        if *include_each {
+            write!(f, " FOR EACH {trigger_object}")?;
+        } else if exec_body.is_some() {
+            write!(f, " FOR {trigger_object}")?;
+        }
+        if let Some(condition) = condition {
+            write!(f, " WHEN {condition}")?;
+        }
+        if let Some(exec_body) = exec_body {
+            write!(f, " EXECUTE {exec_body}")?;
+        }
+        if let Some(statements) = statements {
+            if *statements_as {
+                write!(f, " AS")?;
+            }
+            write!(f, " {statements}")?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// DROP TRIGGER
+///
+/// ```sql
+/// DROP TRIGGER [ IF EXISTS ] name ON table_name [ CASCADE | RESTRICT ]
+/// ```
+///
+pub struct DropTrigger {
+    /// Whether to include the `IF EXISTS` clause.
+    pub if_exists: bool,
+    /// The name of the trigger to be dropped.
+    pub trigger_name: ObjectName,
+    /// The name of the table from which the trigger is to be dropped.
+    pub table_name: Option<ObjectName>,
+    /// `CASCADE` or `RESTRICT`
+    pub option: Option<ReferentialAction>,
+}
+
+impl fmt::Display for DropTrigger {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let DropTrigger {
+            if_exists,
+            trigger_name,
+            table_name,
+            option,
+        } = self;
+        write!(f, "DROP TRIGGER")?;
+        if *if_exists {
+            write!(f, " IF EXISTS")?;
+        }
+        match &table_name {
+            Some(table_name) => write!(f, " {trigger_name} ON {table_name}")?,
+            None => write!(f, " {trigger_name}")?,
+        };
+        if let Some(option) = option {
+            write!(f, " {option}")?;
+        }
+        Ok(())
     }
 }

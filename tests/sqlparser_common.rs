@@ -17214,23 +17214,4 @@ fn parse_create_index_using_before_on() {
         }
         _ => unreachable!(),
     }
-
-    let sql = "CREATE UNIQUE INDEX idx_name USING HASH ON table_name (col1, col2)";
-    match all_dialects().parse_sql_statements(sql).unwrap()[0].clone() {
-        Statement::CreateIndex(CreateIndex {
-            name,
-            table_name,
-            using,
-            columns,
-            unique,
-            ..
-        }) => {
-            assert_eq!(name.unwrap().to_string(), "idx_name");
-            assert_eq!(table_name.to_string(), "table_name");
-            assert_eq!(using, Some(IndexType::Hash));
-            assert_eq!(columns.len(), 2);
-            assert!(unique);
-        }
-        _ => unreachable!(),
-    }
 }

@@ -7131,9 +7131,42 @@ fn parse_cross_join() {
         Join {
             relation: table_from_name(ObjectName::from(vec![Ident::new("t2")])),
             global: false,
-            join_operator: JoinOperator::CrossJoin,
+            join_operator: JoinOperator::CrossJoin(JoinConstraint::None),
         },
         only(only(select.from).joins),
+    );
+}
+
+#[test]
+fn parse_cross_join_constraint() {
+    fn join_with_constraint(constraint: JoinConstraint) -> Join {
+        Join {
+            relation: table_from_name(ObjectName::from(vec![Ident::new("t2")])),
+            global: false,
+            join_operator: JoinOperator::CrossJoin(constraint),
+        }
+    }
+
+    fn test_constraint(sql: &str, constraint: JoinConstraint) {
+        let dialect = all_dialects_where(|d| d.supports_cross_join_constraint());
+        let select = dialect.verified_only_select(sql);
+        assert_eq!(
+            join_with_constraint(constraint),
+            only(only(select.from).joins),
+        );
+    }
+
+    test_constraint(
+        "SELECT * FROM t1 CROSS JOIN t2 ON a = b",
+        JoinConstraint::On(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("a"))),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::Identifier(Ident::new("b"))),
+        }),
+    );
+    test_constraint(
+        "SELECT * FROM t1 CROSS JOIN t2 USING(a)",
+        JoinConstraint::Using(vec![ObjectName::from(vec![Ident::new("a")])]),
     );
 }
 

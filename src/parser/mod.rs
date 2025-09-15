@@ -7076,12 +7076,7 @@ impl<'a> Parser<'a> {
 
         let table_name = self.parse_object_name(false)?;
 
-        if let Some(second_using) = self.parse_using_index_type_clause()? {
-            if using.is_some() {
-                return Err(ParserError::ParserError("USING already specified".into()));
-            }
-            using = Some(second_using);
-        }
+        using = self.parse_optional_using_then_index_type()?.or(using);
 
         let columns = self.parse_parenthesized_index_column_list()?;
 

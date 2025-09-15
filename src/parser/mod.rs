@@ -7067,7 +7067,7 @@ impl<'a> Parser<'a> {
         let index_name = if if_not_exists || !self.parse_keyword(Keyword::ON) {
             let index_name = self.parse_object_name(false)?;
             // MySQL allows `USING index_type` either before or after `ON table_name`
-            using = self.parse_using_index_type_clause()?;
+            using = self.parse_optional_using_then_index_type()?;
             self.expect_keyword_is(Keyword::ON)?;
             Some(index_name)
         } else {
@@ -8588,14 +8588,6 @@ impl<'a> Parser<'a> {
             Ok(options)
         } else {
             Ok(vec![])
-        }
-    }
-
-    pub fn parse_using_index_type_clause(&mut self) -> Result<Option<IndexType>, ParserError> {
-        if self.parse_keyword(Keyword::USING) {
-            Ok(Some(self.parse_index_type()?))
-        } else {
-            Ok(None)
         }
     }
 

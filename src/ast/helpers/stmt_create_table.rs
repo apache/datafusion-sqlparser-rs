@@ -432,7 +432,7 @@ impl CreateTableBuilder {
     }
 
     pub fn build(self) -> Statement {
-        Statement::CreateTable(CreateTable {
+        CreateTable {
             or_replace: self.or_replace,
             temporary: self.temporary,
             external: self.external,
@@ -484,7 +484,8 @@ impl CreateTableBuilder {
             refresh_mode: self.refresh_mode,
             initialize: self.initialize,
             require_user: self.require_user,
-        })
+        }
+        .into()
     }
 }
 

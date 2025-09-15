@@ -120,6 +120,7 @@ pub mod helpers;
 mod operator;
 mod query;
 mod spans;
+mod statement_from_impls;
 pub use spans::Spanned;
 
 mod trigger;
@@ -3026,14 +3027,6 @@ impl Display for Set {
                 )
             }
         }
-    }
-}
-
-/// Convert a `Set` into a `Statement`.
-/// Convenience function, instead of writing `Statement::Set(Set::Set...{...})`
-impl From<Set> for Statement {
-    fn from(set: Set) -> Self {
-        Statement::Set(set)
     }
 }
 

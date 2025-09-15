@@ -17246,3 +17246,47 @@ fn parse_invisible_column() {
         _ => panic!("Unexpected statement {stmt}"),
     }
 }
+
+#[test]
+fn parse_create_index_using_before_on() {
+    let sql = "CREATE INDEX idx_name USING BTREE ON table_name (col1)";
+    // Can't use `verified_stmt` here as the USING will be placed after the `ON` clause
+    match all_dialects().parse_sql_statements(sql).unwrap()[0].clone() {
+        Statement::CreateIndex(CreateIndex {
+            name,
+            table_name,
+            using,
+            columns,
+            unique,
+            ..
+        }) => {
+            assert_eq!(name.unwrap().to_string(), "idx_name");
+            assert_eq!(table_name.to_string(), "table_name");
+            assert_eq!(using, Some(IndexType::BTree));
+            assert_eq!(columns.len(), 1);
+            assert!(!unique);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_index_using_multiple_clauses() {
+    let sql = "CREATE INDEX idx_name USING BTREE ON table_name USING HASH (col1)";
+    // Can't use `verified_stmt` here as the first USING will be ignored
+    match all_dialects().parse_sql_statements(sql).unwrap()[0].clone() {
+        Statement::CreateIndex(CreateIndex {
+            name,
+            table_name,
+            using,
+            columns,
+            ..
+        }) => {
+            assert_eq!(name.unwrap().to_string(), "idx_name");
+            assert_eq!(table_name.to_string(), "table_name");
+            assert_eq!(using, Some(IndexType::Hash));
+            assert_eq!(columns.len(), 1);
+        }
+        _ => unreachable!(),
+    }
+}

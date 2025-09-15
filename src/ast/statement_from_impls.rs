@@ -17,13 +17,20 @@
 
 //! Implementations of the `From` trait to convert from various
 //! AST nodes to `Statement` nodes.
-
 use crate::ast::{
     AlterSchema, AlterType, CaseStatement, CreateConnector, CreateDomain, CreateFunction,
     CreateIndex, CreateServerStatement, CreateTable, CreateTrigger, CreateUser, Delete,
     DenyStatement, DropDomain, DropTrigger, ExportData, Function, IfStatement, Insert,
     OpenStatement, PrintStatement, Query, RaiseStatement, RenameTable, ReturnStatement, Set,
     ShowCharset, ShowObjects, Statement, Use, VacuumStatement, WhileStatement,
+};
+#[cfg(not(feature = "std"))]
+use alloc::{
+    boxed::Box,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
 };
 
 impl From<Set> for Statement {

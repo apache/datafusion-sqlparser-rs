@@ -5564,12 +5564,12 @@ impl<'a> Parser<'a> {
                 Keyword::RESTRICT => ReferentialAction::Restrict,
                 _ => unreachable!(),
             });
-        Ok(Statement::DropTrigger {
+        Ok(Statement::DropTrigger(DropTrigger {
             if_exists,
             trigger_name,
             table_name,
             option,
-        })
+        }))
     }
 
     pub fn parse_create_trigger(
@@ -5627,7 +5627,7 @@ impl<'a> Parser<'a> {
             statements = Some(self.parse_conditional_statements(&[Keyword::END])?);
         }
 
-        Ok(Statement::CreateTrigger {
+        Ok(Statement::CreateTrigger(CreateTrigger {
             or_alter,
             or_replace,
             is_constraint,
@@ -5645,7 +5645,7 @@ impl<'a> Parser<'a> {
             statements_as: false,
             statements,
             characteristics,
-        })
+        }))
     }
 
     pub fn parse_trigger_period(&mut self) -> Result<TriggerPeriod, ParserError> {

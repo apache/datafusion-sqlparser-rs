@@ -3922,7 +3922,7 @@ fn parse_create_trigger() {
     let create_stmt = mysql().verified_stmt(sql_create_trigger);
     assert_eq!(
         create_stmt,
-        Statement::CreateTrigger {
+        Statement::CreateTrigger(CreateTrigger {
             or_alter: false,
             or_replace: false,
             is_constraint: false,
@@ -3946,7 +3946,7 @@ fn parse_create_trigger() {
             statements_as: false,
             statements: None,
             characteristics: None,
-        }
+        })
     );
 }
 
@@ -3962,12 +3962,12 @@ fn parse_drop_trigger() {
     let drop_stmt = mysql().one_statement_parses_to(sql_drop_trigger, "");
     assert_eq!(
         drop_stmt,
-        Statement::DropTrigger {
+        Statement::DropTrigger(DropTrigger {
             if_exists: false,
             trigger_name: ObjectName::from(vec![Ident::new("emp_stamp")]),
             table_name: None,
             option: None,
-        }
+        })
     );
 }
 

@@ -20,8 +20,8 @@
 use alloc::{
     boxed::Box,
     format,
-    vec,
     string::{String, ToString},
+    vec,
     vec::Vec,
 };
 use helpers::{

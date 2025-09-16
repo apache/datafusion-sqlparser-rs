@@ -226,12 +226,13 @@ impl MsSqlDialect {
             parser.prev_token();
         }
 
-        Ok(Statement::If(IfStatement {
+        Ok(IfStatement {
             if_block,
             else_block,
             elseif_blocks: Vec::new(),
             end_token: None,
-        }))
+        }
+        .into())
     }
 
     /// Parse `CREATE TRIGGER` for [MsSql]
@@ -251,7 +252,7 @@ impl MsSqlDialect {
         parser.expect_keyword_is(Keyword::AS)?;
         let statements = Some(parser.parse_conditional_statements(&[Keyword::END])?);
 
-        Ok(Statement::CreateTrigger(CreateTrigger {
+        Ok(CreateTrigger {
             or_alter,
             or_replace: false,
             is_constraint: false,
@@ -269,7 +270,8 @@ impl MsSqlDialect {
             statements_as: true,
             statements,
             characteristics: None,
-        }))
+        }
+        .into())
     }
 
     /// Parse a sequence of statements, optionally separated by semicolon.

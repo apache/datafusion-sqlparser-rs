@@ -70,6 +70,11 @@ impl Dialect for DuckDbDialect {
         true
     }
 
+    /// Returns true if this dialect allows the `EXTRACT` function to use single quotes in the part being extracted.
+    fn allow_extract_single_quotes(&self) -> bool {
+        true
+    }
+
     // DuckDB is compatible with PostgreSQL syntax for this statement,
     // although not all features may be implemented.
     fn supports_explain_with_utility_options(&self) -> bool {

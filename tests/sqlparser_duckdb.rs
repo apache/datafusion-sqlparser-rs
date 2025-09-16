@@ -869,3 +869,9 @@ fn test_duckdb_trim() {
         duckdb().parse_sql_statements(error_sql).unwrap_err()
     );
 }
+
+#[test]
+fn parse_extract_single_quotes() {
+    let sql = "SELECT EXTRACT('month' FROM my_timestamp) FROM my_table";
+    duckdb().verified_stmt(sql);
+}

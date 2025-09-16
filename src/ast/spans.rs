@@ -2247,6 +2247,7 @@ impl Spanned for JoinOperator {
 /// # partial span
 ///
 /// Missing spans:
+/// - [JoinConstraint::Auto]
 /// - [JoinConstraint::Natural]
 /// - [JoinConstraint::None]
 impl Spanned for JoinConstraint {
@@ -2254,6 +2255,7 @@ impl Spanned for JoinConstraint {
         match self {
             JoinConstraint::On(expr) => expr.span(),
             JoinConstraint::Using(vec) => union_spans(vec.iter().map(|i| i.span())),
+            JoinConstraint::Auto => Span::empty(),
             JoinConstraint::Natural => Span::empty(),
             JoinConstraint::None => Span::empty(),
         }

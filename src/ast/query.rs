@@ -2267,6 +2267,7 @@ impl fmt::Display for Join {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fn prefix(constraint: &JoinConstraint) -> &'static str {
             match constraint {
+                JoinConstraint::Auto => "AUTO ",
                 JoinConstraint::Natural => "NATURAL ",
                 _ => "",
             }
@@ -2385,7 +2386,8 @@ impl fmt::Display for Join {
                 suffix(constraint)
             )),
             JoinOperator::StraightJoin(constraint) => f.write_fmt(format_args!(
-                "STRAIGHT_JOIN {}{}",
+                "{}STRAIGHT_JOIN {}{}",
+                prefix(constraint),
                 self.relation,
                 suffix(constraint)
             )),
@@ -2442,6 +2444,7 @@ pub enum JoinOperator {
 pub enum JoinConstraint {
     On(Expr),
     Using(Vec<ObjectName>),
+    Auto,
     Natural,
     None,
 }

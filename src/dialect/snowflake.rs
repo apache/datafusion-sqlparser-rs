@@ -496,6 +496,7 @@ impl Dialect for SnowflakeDialect {
             | Keyword::FULL
             | Keyword::LEFT
             | Keyword::RIGHT
+            | Keyword::AUTO
             | Keyword::NATURAL
             | Keyword::USING
             | Keyword::ASOF

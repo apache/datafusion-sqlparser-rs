@@ -28,6 +28,7 @@
 // limitations under the License.
 use log::debug;
 
+use super::keywords;
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -241,6 +242,13 @@ impl Dialect for PostgreSqlDialect {
 
     fn supports_nested_comments(&self) -> bool {
         true
+    }
+
+    fn is_table_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+        if matches!(kw, Keyword::AUTO) {
+            return false;
+        }
+        !keywords::RESERVED_FOR_TABLE_ALIAS.contains(kw)
     }
 
     fn supports_string_escape_constant(&self) -> bool {

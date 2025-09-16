@@ -7485,6 +7485,57 @@ fn parse_natural_join() {
 }
 
 #[test]
+fn parse_auto_join() {
+    fn auto_join(f: impl Fn(JoinConstraint) -> JoinOperator, alias: Option<TableAlias>) -> Join {
+        Join {
+            relation: TableFactor::Table {
+                name: ObjectName::from(vec![Ident::new("t2")]),
+                alias,
+                args: None,
+                with_hints: vec![],
+                version: None,
+                partitions: vec![],
+                with_ordinality: false,
+                json_path: None,
+                sample: None,
+                index_hints: vec![],
+            },
+            global: false,
+            join_operator: f(JoinConstraint::Auto),
+        }
+    }
+
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 AUTO JOIN t2").from).joins,
+        vec![auto_join(JoinOperator::Join, None)]
+    );
+
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 AUTO INNER JOIN t2").from).joins,
+        vec![auto_join(JoinOperator::Inner, None)]
+    );
+
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 AUTO LEFT JOIN t2 AS t3").from).joins,
+        vec![auto_join(JoinOperator::Left, table_alias("t3"))]
+    );
+
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 AUTO LEFT OUTER JOIN t2").from).joins,
+        vec![auto_join(JoinOperator::LeftOuter, None)]
+    );
+
+    let sql = "SELECT * FROM t1 AUTO NATURAL JOIN t2";
+    assert_eq!(
+        ParserError::ParserError("AUTO NATURAL joins are not supported".to_string()),
+        parse_sql_statements(sql).unwrap_err(),
+    );
+
+    let stmt = verified_stmt("SELECT * FROM t1 AUTO JOIN t2");
+    assert_eq!(stmt.to_string(), "SELECT * FROM t1 AUTO JOIN t2");
+}
+
+#[test]
 fn parse_complex_join() {
     let sql = "SELECT c1, c2 FROM t1, t4 JOIN t2 ON t2.c = t1.c LEFT JOIN t3 USING(q, c) WHERE t4.c = t1.c";
     verified_only_select(sql);

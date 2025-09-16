@@ -13328,7 +13328,7 @@ impl<'a> Parser<'a> {
                 let join_operator = if matches!(join_operator, JoinOperator::CrossJoin(_))
                     && self.dialect.supports_cross_join_constraint()
                 {
-                    let constraint = self.parse_join_constraint(false)?;
+                    let constraint = self.parse_join_constraint(false, false)?;
                     JoinOperator::CrossJoin(constraint)
                 } else {
                     join_operator
@@ -13356,11 +13356,18 @@ impl<'a> Parser<'a> {
                     global,
                     join_operator: JoinOperator::AsOf {
                         match_condition,
-                        constraint: self.parse_join_constraint(false)?,
+                        constraint: self.parse_join_constraint(false, false)?,
                     },
                 }
             } else {
+                let auto = self.parse_keyword(Keyword::AUTO);
                 let natural = self.parse_keyword(Keyword::NATURAL);
+
+                if auto && natural {
+                    return Err(ParserError::ParserError(
+                        "AUTO NATURAL joins are not supported".to_string(),
+                    ));
+                }
                 let peek_keyword = if let Token::Word(w) = self.peek_token().token {
                     w.keyword
                 } else {
@@ -13451,6 +13458,9 @@ impl<'a> Parser<'a> {
                     _ if natural => {
                         return self.expected("a join type after NATURAL", self.peek_token());
                     }
+                    _ if auto => {
+                        return self.expected("a join type after AUTO", self.peek_token());
+                    }
                     _ => break,
                 };
                 let mut relation = self.parse_table_factor()?;
@@ -13467,7 +13477,7 @@ impl<'a> Parser<'a> {
                     };
                 }
 
-                let join_constraint = self.parse_join_constraint(natural)?;
+                let join_constraint = self.parse_join_constraint(natural, auto)?;
                 Join {
                     relation,
                     global,
@@ -14604,9 +14614,15 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_join_constraint(&mut self, natural: bool) -> Result<JoinConstraint, ParserError> {
+    pub fn parse_join_constraint(
+        &mut self,
+        natural: bool,
+        auto: bool,
+    ) -> Result<JoinConstraint, ParserError> {
         if natural {
             Ok(JoinConstraint::Natural)
+        } else if auto {
+            Ok(JoinConstraint::Auto)
         } else if self.parse_keyword(Keyword::ON) {
             let constraint = self.parse_expr()?;
             Ok(JoinConstraint::On(constraint))

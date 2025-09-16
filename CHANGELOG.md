@@ -27,7 +27,9 @@ Given that the parser produces a typed AST, any changes to the AST will
 technically be breaking and thus will result in a `0.(N+1)` version. 
 
 
-- Unreleased: Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
+- Unreleased:
+  - Add support for parsing and formatting `AUTO JOIN` syntax.
+  - Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 - `0.56.0`: [changelog/0.56.0.md](changelog/0.56.0.md)
 - `0.55.0`: [changelog/0.55.0.md](changelog/0.55.0.md)
 - `0.54.0`: [changelog/0.54.0.md](changelog/0.54.0.md)

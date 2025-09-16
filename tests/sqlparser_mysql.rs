@@ -1758,6 +1758,98 @@ fn parse_signed_data_types() {
 }
 
 #[test]
+fn parse_deprecated_mysql_unsigned_data_types() {
+    let sql = "CREATE TABLE foo (bar_decimal DECIMAL UNSIGNED, bar_decimal_prec DECIMAL(10) UNSIGNED, bar_decimal_scale DECIMAL(10,2) UNSIGNED, bar_dec DEC UNSIGNED, bar_dec_prec DEC(10) UNSIGNED, bar_dec_scale DEC(10,2) UNSIGNED, bar_float FLOAT UNSIGNED, bar_float_prec FLOAT(10) UNSIGNED, bar_float_scale FLOAT(10,2) UNSIGNED, bar_double DOUBLE UNSIGNED, bar_double_prec DOUBLE(10) UNSIGNED, bar_double_scale DOUBLE(10,2) UNSIGNED, bar_real REAL UNSIGNED, bar_double_precision DOUBLE PRECISION UNSIGNED)";
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![
+                    ColumnDef {
+                        name: Ident::new("bar_decimal"),
+                        data_type: DataType::DecimalUnsigned(ExactNumberInfo::None),
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_decimal_prec"),
+                        data_type: DataType::DecimalUnsigned(ExactNumberInfo::Precision(10)),
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_decimal_scale"),
+                        data_type: DataType::DecimalUnsigned(ExactNumberInfo::PrecisionAndScale(
+                            10, 2
+                        )),
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_dec"),
+                        data_type: DataType::DecUnsigned(ExactNumberInfo::None),
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_dec_prec"),
+                        data_type: DataType::DecUnsigned(ExactNumberInfo::Precision(10)),
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_dec_scale"),
+                        data_type: DataType::DecUnsigned(ExactNumberInfo::PrecisionAndScale(10, 2)),
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_float"),
+                        data_type: DataType::FloatUnsigned(ExactNumberInfo::None),
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_float_prec"),
+                        data_type: DataType::FloatUnsigned(ExactNumberInfo::Precision(10)),
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_float_scale"),
+                        data_type: DataType::FloatUnsigned(ExactNumberInfo::PrecisionAndScale(
+                            10, 2
+                        )),
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_double"),
+                        data_type: DataType::DoubleUnsigned(ExactNumberInfo::None),
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_double_prec"),
+                        data_type: DataType::DoubleUnsigned(ExactNumberInfo::Precision(10)),
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_double_scale"),
+                        data_type: DataType::DoubleUnsigned(ExactNumberInfo::PrecisionAndScale(
+                            10, 2
+                        )),
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_real"),
+                        data_type: DataType::RealUnsigned,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_double_precision"),
+                        data_type: DataType::DoublePrecisionUnsigned,
+                        options: vec![],
+                    },
+                ],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_simple_insert() {
     let sql = r"INSERT INTO tasks (title, priority) VALUES ('Test Some Inserts', 1), ('Test Entry 2', 2), ('Test Entry 3', 3)";
 

@@ -13,9 +13,7 @@
 //! SQL Parser for ALTER
 
 #[cfg(not(feature = "std"))]
-use alloc::vec;
-#[cfg(not(feature = "std"))]
-use alloc::{string::ToString};
+use alloc::{string::ToString, vec};
 
 use super::{Parser, ParserError};
 use crate::{

@@ -8144,10 +8144,7 @@ impl<'a> Parser<'a> {
                     Keyword::REPLACE,
                 ])?,
             )))
-        } else if dialect_of!(self is MySqlDialect | GenericDialect)
-            && self.parse_keyword(Keyword::INVISIBLE)
-        {
-            // Support INVISIBLE for MySQL
+        } else if self.parse_keyword(Keyword::INVISIBLE) {
             Ok(Some(ColumnOption::Invisible))
         } else {
             Ok(None)

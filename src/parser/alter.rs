@@ -14,6 +14,8 @@
 
 #[cfg(not(feature = "std"))]
 use alloc::vec;
+#[cfg(not(feature = "std"))]
+use alloc::{boxed::Box, string::ToString};
 
 use super::{Parser, ParserError};
 use crate::{
@@ -309,7 +311,7 @@ impl Parser<'_> {
         } else if self.parse_keyword(Keyword::DUO) {
             Ok(MfaMethodKind::Duo)
         } else {
-            return self.expected("PASSKEY, TOTP or DUO", self.peek_token());
+            self.expected("PASSKEY, TOTP or DUO", self.peek_token())
         }
     }
 

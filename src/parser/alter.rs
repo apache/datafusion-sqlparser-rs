@@ -15,7 +15,7 @@
 #[cfg(not(feature = "std"))]
 use alloc::vec;
 #[cfg(not(feature = "std"))]
-use alloc::{boxed::Box, string::ToString};
+use alloc::{string::ToString};
 
 use super::{Parser, ParserError};
 use crate::{

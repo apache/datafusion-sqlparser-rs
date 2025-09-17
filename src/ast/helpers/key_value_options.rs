@@ -19,9 +19,7 @@
 //! See [this page](https://docs.snowflake.com/en/sql-reference/commands-data-loading) for more details.
 
 #[cfg(not(feature = "std"))]
-use alloc::string::String;
-#[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
+use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt;
 use core::fmt::Formatter;
 

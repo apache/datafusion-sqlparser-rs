@@ -31,7 +31,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::display_separated;
+use crate::ast::{display_comma_separated, display_separated, Value};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -39,6 +39,13 @@ use crate::ast::display_separated;
 pub struct KeyValueOptions {
     pub options: Vec<KeyValueOption>,
     pub delimiter: KeyValueOptionsDelimiter,
+}
+
+impl KeyValueOptions {
+    /// Returns true iff the options list is empty
+    pub fn is_empty(&self) -> bool {
+        self.options.is_empty()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -52,20 +59,23 @@ pub enum KeyValueOptionsDelimiter {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum KeyValueOptionType {
-    STRING,
-    BOOLEAN,
-    ENUM,
-    NUMBER,
+pub struct KeyValueOption {
+    pub option_name: String,
+    pub option_value: KeyValueOptionKind,
 }
 
+/// An option can have a single value, multiple values or a nested list of values.
+///
+/// A value can be numeric, boolean, etc. Enum-style values are represented
+/// as Value::Placeholder. For example: MFA_METHOD=SMS will be represented as
+/// `Value::Placeholder("SMS".to_string)`.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct KeyValueOption {
-    pub option_name: String,
-    pub option_type: KeyValueOptionType,
-    pub value: String,
+pub enum KeyValueOptionKind {
+    Single(Value),
+    Multi(Vec<Value>),
+    KeyValueOptions(Box<KeyValueOptions>),
 }
 
 impl fmt::Display for KeyValueOptions {
@@ -80,12 +90,20 @@ impl fmt::Display for KeyValueOptions {
 
 impl fmt::Display for KeyValueOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.option_type {
-            KeyValueOptionType::STRING => {
-                write!(f, "{}='{}'", self.option_name, self.value)?;
+        match &self.option_value {
+            KeyValueOptionKind::Single(value) => {
+                write!(f, "{}={value}", self.option_name)?;
             }
-            KeyValueOptionType::ENUM | KeyValueOptionType::BOOLEAN | KeyValueOptionType::NUMBER => {
-                write!(f, "{}={}", self.option_name, self.value)?;
+            KeyValueOptionKind::Multi(values) => {
+                write!(
+                    f,
+                    "{}=({})",
+                    self.option_name,
+                    display_comma_separated(values)
+                )?;
+            }
+            KeyValueOptionKind::KeyValueOptions(options) => {
+                write!(f, "{}=({options})", self.option_name)?;
             }
         }
         Ok(())

@@ -19,7 +19,7 @@
 //! Test SQL syntax specific to Snowflake. The parser based on the
 //! generic dialect is also tested (on the inputs it can handle).
 
-use sqlparser::ast::helpers::key_value_options::{KeyValueOption, KeyValueOptionType};
+use sqlparser::ast::helpers::key_value_options::{KeyValueOption, KeyValueOptionKind};
 use sqlparser::ast::helpers::stmt_data_loading::{StageLoadSelectItem, StageLoadSelectItemKind};
 use sqlparser::ast::*;
 use sqlparser::dialect::{Dialect, GenericDialect, SnowflakeDialect};
@@ -2116,23 +2116,27 @@ fn test_create_stage_with_stage_params() {
             );
             assert!(stage_params.credentials.options.contains(&KeyValueOption {
                 option_name: "AWS_KEY_ID".to_string(),
-                option_type: KeyValueOptionType::STRING,
-                value: "1a2b3c".to_string()
+                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
+                    "1a2b3c".to_string()
+                )),
             }));
             assert!(stage_params.credentials.options.contains(&KeyValueOption {
                 option_name: "AWS_SECRET_KEY".to_string(),
-                option_type: KeyValueOptionType::STRING,
-                value: "4x5y6z".to_string()
+                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
+                    "4x5y6z".to_string()
+                )),
             }));
             assert!(stage_params.encryption.options.contains(&KeyValueOption {
                 option_name: "MASTER_KEY".to_string(),
-                option_type: KeyValueOptionType::STRING,
-                value: "key".to_string()
+                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
+                    "key".to_string()
+                )),
             }));
             assert!(stage_params.encryption.options.contains(&KeyValueOption {
                 option_name: "TYPE".to_string(),
-                option_type: KeyValueOptionType::STRING,
-                value: "AWS_SSE_KMS".to_string()
+                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
+                    "AWS_SSE_KMS".to_string()
+                )),
             }));
         }
         _ => unreachable!(),
@@ -2146,7 +2150,7 @@ fn test_create_stage_with_directory_table_params() {
     let sql = concat!(
         "CREATE OR REPLACE STAGE my_ext_stage ",
         "URL='s3://load/files/' ",
-        "DIRECTORY=(ENABLE=TRUE REFRESH_ON_CREATE=FALSE NOTIFICATION_INTEGRATION='some-string')"
+        "DIRECTORY=(ENABLE=true REFRESH_ON_CREATE=false NOTIFICATION_INTEGRATION='some-string')"
     );
 
     match snowflake().verified_stmt(sql) {
@@ -2156,18 +2160,17 @@ fn test_create_stage_with_directory_table_params() {
         } => {
             assert!(directory_table_params.options.contains(&KeyValueOption {
                 option_name: "ENABLE".to_string(),
-                option_type: KeyValueOptionType::BOOLEAN,
-                value: "TRUE".to_string()
+                option_value: KeyValueOptionKind::Single(Value::Boolean(true)),
             }));
             assert!(directory_table_params.options.contains(&KeyValueOption {
                 option_name: "REFRESH_ON_CREATE".to_string(),
-                option_type: KeyValueOptionType::BOOLEAN,
-                value: "FALSE".to_string()
+                option_value: KeyValueOptionKind::Single(Value::Boolean(false)),
             }));
             assert!(directory_table_params.options.contains(&KeyValueOption {
                 option_name: "NOTIFICATION_INTEGRATION".to_string(),
-                option_type: KeyValueOptionType::STRING,
-                value: "some-string".to_string()
+                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
+                    "some-string".to_string()
+                )),
             }));
         }
         _ => unreachable!(),
@@ -2187,18 +2190,17 @@ fn test_create_stage_with_file_format() {
         Statement::CreateStage { file_format, .. } => {
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "COMPRESSION".to_string(),
-                option_type: KeyValueOptionType::ENUM,
-                value: "AUTO".to_string()
+                option_value: KeyValueOptionKind::Single(Value::Placeholder("AUTO".to_string())),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "BINARY_FORMAT".to_string(),
-                option_type: KeyValueOptionType::ENUM,
-                value: "HEX".to_string()
+                option_value: KeyValueOptionKind::Single(Value::Placeholder("HEX".to_string())),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "ESCAPE".to_string(),
-                option_type: KeyValueOptionType::STRING,
-                value: r#"\\"#.to_string()
+                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
+                    r#"\\"#.to_string()
+                )),
             }));
         }
         _ => unreachable!(),
@@ -2214,19 +2216,19 @@ fn test_create_stage_with_copy_options() {
     let sql = concat!(
         "CREATE OR REPLACE STAGE my_ext_stage ",
         "URL='s3://load/files/' ",
-        "COPY_OPTIONS=(ON_ERROR=CONTINUE FORCE=TRUE)"
+        "COPY_OPTIONS=(ON_ERROR=CONTINUE FORCE=true)"
     );
     match snowflake().verified_stmt(sql) {
         Statement::CreateStage { copy_options, .. } => {
             assert!(copy_options.options.contains(&KeyValueOption {
                 option_name: "ON_ERROR".to_string(),
-                option_type: KeyValueOptionType::ENUM,
-                value: "CONTINUE".to_string()
+                option_value: KeyValueOptionKind::Single(Value::Placeholder(
+                    "CONTINUE".to_string()
+                )),
             }));
             assert!(copy_options.options.contains(&KeyValueOption {
                 option_name: "FORCE".to_string(),
-                option_type: KeyValueOptionType::BOOLEAN,
-                value: "TRUE".to_string()
+                option_value: KeyValueOptionKind::Single(Value::Boolean(true)),
             }));
         }
         _ => unreachable!(),
@@ -2357,23 +2359,27 @@ fn test_copy_into_with_stage_params() {
             );
             assert!(stage_params.credentials.options.contains(&KeyValueOption {
                 option_name: "AWS_KEY_ID".to_string(),
-                option_type: KeyValueOptionType::STRING,
-                value: "1a2b3c".to_string()
+                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
+                    "1a2b3c".to_string()
+                )),
             }));
             assert!(stage_params.credentials.options.contains(&KeyValueOption {
                 option_name: "AWS_SECRET_KEY".to_string(),
-                option_type: KeyValueOptionType::STRING,
-                value: "4x5y6z".to_string()
+                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
+                    "4x5y6z".to_string()
+                )),
             }));
             assert!(stage_params.encryption.options.contains(&KeyValueOption {
                 option_name: "MASTER_KEY".to_string(),
-                option_type: KeyValueOptionType::STRING,
-                value: "key".to_string()
+                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
+                    "key".to_string()
+                )),
             }));
             assert!(stage_params.encryption.options.contains(&KeyValueOption {
                 option_name: "TYPE".to_string(),
-                option_type: KeyValueOptionType::STRING,
-                value: "AWS_SSE_KMS".to_string()
+                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
+                    "AWS_SSE_KMS".to_string()
+                )),
             }));
         }
         _ => unreachable!(),
@@ -2524,18 +2530,17 @@ fn test_copy_into_file_format() {
         Statement::CopyIntoSnowflake { file_format, .. } => {
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "COMPRESSION".to_string(),
-                option_type: KeyValueOptionType::ENUM,
-                value: "AUTO".to_string()
+                option_value: KeyValueOptionKind::Single(Value::Placeholder("AUTO".to_string())),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "BINARY_FORMAT".to_string(),
-                option_type: KeyValueOptionType::ENUM,
-                value: "HEX".to_string()
+                option_value: KeyValueOptionKind::Single(Value::Placeholder("HEX".to_string())),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "ESCAPE".to_string(),
-                option_type: KeyValueOptionType::STRING,
-                value: r#"\\"#.to_string()
+                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
+                    r#"\\"#.to_string()
+                )),
             }));
         }
         _ => unreachable!(),
@@ -2563,18 +2568,17 @@ fn test_copy_into_file_format() {
         Statement::CopyIntoSnowflake { file_format, .. } => {
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "COMPRESSION".to_string(),
-                option_type: KeyValueOptionType::ENUM,
-                value: "AUTO".to_string()
+                option_value: KeyValueOptionKind::Single(Value::Placeholder("AUTO".to_string())),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "BINARY_FORMAT".to_string(),
-                option_type: KeyValueOptionType::ENUM,
-                value: "HEX".to_string()
+                option_value: KeyValueOptionKind::Single(Value::Placeholder("HEX".to_string())),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "ESCAPE".to_string(),
-                option_type: KeyValueOptionType::STRING,
-                value: r#"\\"#.to_string()
+                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
+                    r#"\\"#.to_string()
+                )),
             }));
         }
         _ => unreachable!(),
@@ -2588,20 +2592,20 @@ fn test_copy_into_copy_options() {
         "FROM 'gcs://mybucket/./../a.csv' ",
         "FILES = ('file1.json', 'file2.json') ",
         "PATTERN = '.*employees0[1-5].csv.gz' ",
-        "COPY_OPTIONS=(ON_ERROR=CONTINUE FORCE=TRUE)"
+        "COPY_OPTIONS=(ON_ERROR=CONTINUE FORCE=true)"
     );
 
     match snowflake().verified_stmt(sql) {
         Statement::CopyIntoSnowflake { copy_options, .. } => {
             assert!(copy_options.options.contains(&KeyValueOption {
                 option_name: "ON_ERROR".to_string(),
-                option_type: KeyValueOptionType::ENUM,
-                value: "CONTINUE".to_string()
+                option_value: KeyValueOptionKind::Single(Value::Placeholder(
+                    "CONTINUE".to_string()
+                )),
             }));
             assert!(copy_options.options.contains(&KeyValueOption {
                 option_name: "FORCE".to_string(),
-                option_type: KeyValueOptionType::BOOLEAN,
-                value: "TRUE".to_string()
+                option_value: KeyValueOptionKind::Single(Value::Boolean(true)),
             }));
         }
         _ => unreachable!(),
@@ -3863,17 +3867,20 @@ fn test_alter_session() {
         "sql parser error: expected at least one option"
     );
 
-    snowflake().verified_stmt("ALTER SESSION SET AUTOCOMMIT=TRUE");
-    snowflake().verified_stmt("ALTER SESSION SET AUTOCOMMIT=FALSE QUERY_TAG='tag'");
+    snowflake().one_statement_parses_to(
+        "ALTER SESSION SET AUTOCOMMIT=TRUE",
+        "ALTER SESSION SET AUTOCOMMIT=true",
+    );
+    snowflake().verified_stmt("ALTER SESSION SET AUTOCOMMIT=false QUERY_TAG='tag'");
     snowflake().verified_stmt("ALTER SESSION UNSET AUTOCOMMIT");
     snowflake().verified_stmt("ALTER SESSION UNSET AUTOCOMMIT, QUERY_TAG");
     snowflake().one_statement_parses_to(
         "ALTER SESSION SET A=false, B='tag';",
-        "ALTER SESSION SET A=FALSE B='tag'",
+        "ALTER SESSION SET A=false B='tag'",
     );
     snowflake().one_statement_parses_to(
         "ALTER SESSION SET A=true \nB='tag'",
-        "ALTER SESSION SET A=TRUE B='tag'",
+        "ALTER SESSION SET A=true B='tag'",
     );
     snowflake().one_statement_parses_to("ALTER SESSION UNSET a\nB", "ALTER SESSION UNSET a, B");
 }

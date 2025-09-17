@@ -18,8 +18,11 @@ use alloc::vec;
 use super::{Parser, ParserError};
 use crate::{
     ast::{
-        AlterConnectorOwner, AlterPolicyOperation, AlterRoleOperation, Expr, Password, ResetConfig,
-        RoleOption, SetConfigValue, Statement,
+        helpers::key_value_options::{KeyValueOptions, KeyValueOptionsDelimiter},
+        AlterConnectorOwner, AlterPolicyOperation, AlterRoleOperation, AlterUser,
+        AlterUserAddRoleDelegation, AlterUserModifyMfaMethod, AlterUserRemoveRoleDelegation,
+        AlterUserSetPolicy, Expr, MfaMethodKind, Password, ResetConfig, RoleOption, SetConfigValue,
+        Statement, UserPolicyKind,
     },
     dialect::{MsSqlDialect, PostgreSqlDialect},
     keywords::Keyword,
@@ -138,6 +141,176 @@ impl Parser<'_> {
             url,
             owner,
         })
+    }
+
+    /// Parse an `ALTER USER` statement
+    /// ```sql
+    /// ALTER USER [ IF EXISTS ] [ <name> ] [ OPTIONS ]
+    /// ```
+    pub fn parse_alter_user(&mut self) -> Result<Statement, ParserError> {
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let name = self.parse_identifier()?;
+        let rename_to = if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+        let reset_password = self.parse_keywords(&[Keyword::RESET, Keyword::PASSWORD]);
+        let abort_all_queries =
+            self.parse_keywords(&[Keyword::ABORT, Keyword::ALL, Keyword::QUERIES]);
+        let add_role_delegation = if self.parse_keywords(&[
+            Keyword::ADD,
+            Keyword::DELEGATED,
+            Keyword::AUTHORIZATION,
+            Keyword::OF,
+            Keyword::ROLE,
+        ]) {
+            let role = self.parse_identifier()?;
+            self.expect_keywords(&[Keyword::TO, Keyword::SECURITY, Keyword::INTEGRATION])?;
+            let integration = self.parse_identifier()?;
+            Some(AlterUserAddRoleDelegation { role, integration })
+        } else {
+            None
+        };
+        let remove_role_delegation = if self.parse_keywords(&[Keyword::REMOVE, Keyword::DELEGATED])
+        {
+            let role = if self.parse_keywords(&[Keyword::AUTHORIZATION, Keyword::OF, Keyword::ROLE])
+            {
+                Some(self.parse_identifier()?)
+            } else if self.parse_keyword(Keyword::AUTHORIZATIONS) {
+                None
+            } else {
+                return self.expected(
+                    "REMOVE DELEGATED AUTHORIZATION OF ROLE | REMOVE DELEGATED AUTHORIZATIONS",
+                    self.peek_token(),
+                );
+            };
+            self.expect_keywords(&[Keyword::FROM, Keyword::SECURITY, Keyword::INTEGRATION])?;
+            let integration = self.parse_identifier()?;
+            Some(AlterUserRemoveRoleDelegation { role, integration })
+        } else {
+            None
+        };
+        let enroll_mfa = self.parse_keywords(&[Keyword::ENROLL, Keyword::MFA]);
+        let set_default_mfa_method =
+            if self.parse_keywords(&[Keyword::SET, Keyword::DEFAULT_MFA_METHOD]) {
+                Some(self.parse_mfa_method()?)
+            } else {
+                None
+            };
+        let remove_mfa_method =
+            if self.parse_keywords(&[Keyword::REMOVE, Keyword::MFA, Keyword::METHOD]) {
+                Some(self.parse_mfa_method()?)
+            } else {
+                None
+            };
+        let modify_mfa_method =
+            if self.parse_keywords(&[Keyword::MODIFY, Keyword::MFA, Keyword::METHOD]) {
+                let method = self.parse_mfa_method()?;
+                self.expect_keywords(&[Keyword::SET, Keyword::COMMENT])?;
+                let comment = self.parse_literal_string()?;
+                Some(AlterUserModifyMfaMethod { method, comment })
+            } else {
+                None
+            };
+        let set_policy =
+            if self.parse_keywords(&[Keyword::SET, Keyword::AUTHENTICATION, Keyword::POLICY]) {
+                Some(AlterUserSetPolicy {
+                    policy_kind: UserPolicyKind::Authentication,
+                    policy: self.parse_identifier()?,
+                })
+            } else if self.parse_keywords(&[Keyword::SET, Keyword::PASSWORD, Keyword::POLICY]) {
+                Some(AlterUserSetPolicy {
+                    policy_kind: UserPolicyKind::Password,
+                    policy: self.parse_identifier()?,
+                })
+            } else if self.parse_keywords(&[Keyword::SET, Keyword::SESSION, Keyword::POLICY]) {
+                Some(AlterUserSetPolicy {
+                    policy_kind: UserPolicyKind::Session,
+                    policy: self.parse_identifier()?,
+                })
+            } else {
+                None
+            };
+
+        let unset_policy =
+            if self.parse_keywords(&[Keyword::UNSET, Keyword::AUTHENTICATION, Keyword::POLICY]) {
+                Some(UserPolicyKind::Authentication)
+            } else if self.parse_keywords(&[Keyword::UNSET, Keyword::PASSWORD, Keyword::POLICY]) {
+                Some(UserPolicyKind::Password)
+            } else if self.parse_keywords(&[Keyword::UNSET, Keyword::SESSION, Keyword::POLICY]) {
+                Some(UserPolicyKind::Session)
+            } else {
+                None
+            };
+
+        let set_tag = if self.parse_keywords(&[Keyword::SET, Keyword::TAG]) {
+            self.parse_key_value_options(false, &[])?
+        } else {
+            KeyValueOptions {
+                delimiter: KeyValueOptionsDelimiter::Comma,
+                options: vec![],
+            }
+        };
+
+        let unset_tag = if self.parse_keywords(&[Keyword::UNSET, Keyword::TAG]) {
+            self.parse_comma_separated(Parser::parse_identifier)?
+                .iter()
+                .map(|i| i.to_string())
+                .collect()
+        } else {
+            vec![]
+        };
+
+        let set_props = if self.parse_keyword(Keyword::SET) {
+            self.parse_key_value_options(false, &[])?
+        } else {
+            KeyValueOptions {
+                delimiter: KeyValueOptionsDelimiter::Comma,
+                options: vec![],
+            }
+        };
+
+        let unset_props = if self.parse_keyword(Keyword::UNSET) {
+            self.parse_comma_separated(Parser::parse_identifier)?
+                .iter()
+                .map(|i| i.to_string())
+                .collect()
+        } else {
+            vec![]
+        };
+
+        Ok(Statement::AlterUser(AlterUser {
+            if_exists,
+            name,
+            rename_to,
+            reset_password,
+            abort_all_queries,
+            add_role_delegation,
+            remove_role_delegation,
+            enroll_mfa,
+            set_default_mfa_method,
+            remove_mfa_method,
+            modify_mfa_method,
+            set_policy,
+            unset_policy,
+            set_tag,
+            unset_tag,
+            set_props,
+            unset_props,
+        }))
+    }
+
+    fn parse_mfa_method(&mut self) -> Result<MfaMethodKind, ParserError> {
+        if self.parse_keyword(Keyword::PASSKEY) {
+            Ok(MfaMethodKind::PassKey)
+        } else if self.parse_keyword(Keyword::TOTP) {
+            Ok(MfaMethodKind::Totp)
+        } else if self.parse_keyword(Keyword::DUO) {
+            Ok(MfaMethodKind::Duo)
+        } else {
+            return self.expected("PASSKEY, TOTP or DUO", self.peek_token());
+        }
     }
 
     fn parse_mssql_alter_role(&mut self) -> Result<Statement, ParserError> {

@@ -4310,6 +4310,11 @@ pub enum Statement {
     /// ```
     /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-user)
     CreateUser(CreateUser),
+    /// ```sql
+    /// ALTER USER \[ IF EXISTS \] \[ <name> \]
+    /// ```
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/alter-user)
+    AlterUser(AlterUser),
     /// Re-sorts rows and reclaims space in either a specified table or all tables in the current database
     ///
     /// ```sql
@@ -6183,6 +6188,7 @@ impl fmt::Display for Statement {
             Statement::CreateUser(s) => write!(f, "{s}"),
             Statement::AlterSchema(s) => write!(f, "{s}"),
             Statement::Vacuum(s) => write!(f, "{s}"),
+            Statement::AlterUser(s) => write!(f, "{s}"),
         }
     }
 }
@@ -10553,6 +10559,199 @@ impl fmt::Display for CreateUser {
                 write!(f, " WITH")?;
             }
             write!(f, " TAG ({})", self.tags)?;
+        }
+        Ok(())
+    }
+}
+
+/// Modifies the properties of a user
+///
+/// Syntax:
+/// ```sql
+/// ALTER USER [ IF EXISTS ] [ <name> ] [ OPTIONS ]
+/// ```
+///
+/// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/alter-user)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterUser {
+    pub if_exists: bool,
+    pub name: Ident,
+    pub rename_to: Option<Ident>,
+    pub reset_password: bool,
+    pub abort_all_queries: bool,
+    pub add_role_delegation: Option<AlterUserAddRoleDelegation>,
+    pub remove_role_delegation: Option<AlterUserRemoveRoleDelegation>,
+    pub enroll_mfa: bool,
+    pub set_default_mfa_method: Option<MfaMethodKind>,
+    pub remove_mfa_method: Option<MfaMethodKind>,
+    pub modify_mfa_method: Option<AlterUserModifyMfaMethod>,
+    pub set_policy: Option<AlterUserSetPolicy>,
+    pub unset_policy: Option<UserPolicyKind>,
+    pub set_tag: KeyValueOptions,
+    pub unset_tag: Vec<String>,
+    pub set_props: KeyValueOptions,
+    pub unset_props: Vec<String>,
+}
+
+/// ```sql
+/// ALTER USER [ IF EXISTS ] [ <name> ] ADD DELEGATED AUTHORIZATION OF ROLE <role_name> TO SECURITY INTEGRATION <integration_name>
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterUserAddRoleDelegation {
+    pub role: Ident,
+    pub integration: Ident,
+}
+
+/// ```sql
+/// ALTER USER [ IF EXISTS ] [ <name> ] REMOVE DELEGATED { AUTHORIZATION OF ROLE <role_name> | AUTHORIZATIONS } FROM SECURITY INTEGRATION <integration_name>
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterUserRemoveRoleDelegation {
+    pub role: Option<Ident>,
+    pub integration: Ident,
+}
+
+/// ```sql
+/// ALTER USER [ IF EXISTS ] [ <name> ] MODIFY MFA METHOD <mfa_method> SET COMMENT = '<string>'
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterUserModifyMfaMethod {
+    pub method: MfaMethodKind,
+    pub comment: String,
+}
+
+/// Types of MFA methods
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum MfaMethodKind {
+    PassKey,
+    Totp,
+    Duo,
+}
+
+impl fmt::Display for MfaMethodKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MfaMethodKind::PassKey => write!(f, "PASSKEY"),
+            MfaMethodKind::Totp => write!(f, "TOTP"),
+            MfaMethodKind::Duo => write!(f, "DUO"),
+        }
+    }
+}
+
+/// ```sql
+/// ALTER USER [ IF EXISTS ] [ <name> ] SET { AUTHENTICATION | PASSWORD | SESSION } POLICY <policy_name>
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterUserSetPolicy {
+    pub policy_kind: UserPolicyKind,
+    pub policy: Ident,
+}
+
+/// Types of user-based policies
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum UserPolicyKind {
+    Authentication,
+    Password,
+    Session,
+}
+
+impl fmt::Display for UserPolicyKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            UserPolicyKind::Authentication => write!(f, "AUTHENTICATION"),
+            UserPolicyKind::Password => write!(f, "PASSWORD"),
+            UserPolicyKind::Session => write!(f, "SESSION"),
+        }
+    }
+}
+
+impl fmt::Display for AlterUser {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ALTER")?;
+        write!(f, " USER")?;
+        if self.if_exists {
+            write!(f, " IF EXISTS")?;
+        }
+        write!(f, " {}", self.name)?;
+        if let Some(new_name) = &self.rename_to {
+            write!(f, " RENAME TO {new_name}")?;
+        }
+        if self.reset_password {
+            write!(f, " RESET PASSWORD")?;
+        }
+        if self.abort_all_queries {
+            write!(f, " ABORT ALL QUERIES")?;
+        }
+        if let Some(role_delegation) = &self.add_role_delegation {
+            let role = &role_delegation.role;
+            let integration = &role_delegation.integration;
+            write!(
+                f,
+                " ADD DELEGATED AUTHORIZATION OF ROLE {role} TO SECURITY INTEGRATION {integration}"
+            )?;
+        }
+        if let Some(role_delegation) = &self.remove_role_delegation {
+            write!(f, " REMOVE DELEGATED")?;
+            match &role_delegation.role {
+                Some(role) => write!(f, " AUTHORIZATION OF ROLE {role}")?,
+                None => write!(f, " AUTHORIZATIONS")?,
+            }
+            let integration = &role_delegation.integration;
+            write!(f, " FROM SECURITY INTEGRATION {integration}")?;
+        }
+        if self.enroll_mfa {
+            write!(f, " ENROLL MFA")?;
+        }
+        if let Some(method) = &self.set_default_mfa_method {
+            write!(f, " SET DEFAULT_MFA_METHOD {method}")?
+        }
+        if let Some(method) = &self.remove_mfa_method {
+            write!(f, " REMOVE MFA METHOD {method}")?;
+        }
+        if let Some(modify) = &self.modify_mfa_method {
+            let method = &modify.method;
+            let comment = &modify.comment;
+            write!(
+                f,
+                " MODIFY MFA METHOD {method} SET COMMENT '{}'",
+                value::escape_single_quote_string(comment)
+            )?;
+        }
+        if let Some(policy) = &self.set_policy {
+            let policy_kind = &policy.policy_kind;
+            let name = &policy.policy;
+            write!(f, " SET {policy_kind} POLICY {name}")?;
+        }
+        if let Some(policy_kind) = &self.unset_policy {
+            write!(f, " UNSET {policy_kind} POLICY")?;
+        }
+        if !self.set_tag.is_empty() {
+            write!(f, " SET TAG {}", self.set_tag)?;
+        }
+        if !self.unset_tag.is_empty() {
+            write!(f, " UNSET TAG {}", display_comma_separated(&self.unset_tag))?;
+        }
+        let has_props = !self.set_props.options.is_empty();
+        if has_props {
+            write!(f, " SET")?;
+            write!(f, " {}", &self.set_props)?;
+        }
+        if !self.unset_props.is_empty() {
+            write!(f, " UNSET {}", display_comma_separated(&self.unset_props))?;
         }
         Ok(())
     }

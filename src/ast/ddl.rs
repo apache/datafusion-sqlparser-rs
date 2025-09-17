@@ -1911,6 +1911,13 @@ pub enum ColumnOption {
     /// ```
     /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/creating-spatial-indexes.html
     Srid(Box<Expr>),
+    /// MySQL specific: Column is invisible via SELECT *
+    /// Syntax:
+    /// ```sql
+    /// CREATE TABLE t (foo INT, bar INT INVISIBLE);
+    /// ```
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/invisible-columns.html
+    Invisible,
 }
 
 impl fmt::Display for ColumnOption {
@@ -2028,6 +2035,9 @@ impl fmt::Display for ColumnOption {
             }
             Srid(srid) => {
                 write!(f, "SRID {srid}")
+            }
+            Invisible => {
+                write!(f, "INVISIBLE")
             }
         }
     }

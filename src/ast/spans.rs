@@ -918,6 +918,7 @@ impl Spanned for ColumnOption {
             ColumnOption::Policy(..) => Span::empty(),
             ColumnOption::Tags(..) => Span::empty(),
             ColumnOption::Srid(..) => Span::empty(),
+            ColumnOption::Invisible => Span::empty(),
         }
     }
 }

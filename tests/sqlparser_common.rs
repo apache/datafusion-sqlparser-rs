@@ -7570,7 +7570,7 @@ fn parse_ctes() {
 
     fn assert_ctes_in_select(expected: &[&str], sel: &Query) {
         for (i, exp) in expected.iter().enumerate() {
-            let Cte { alias, query, .. } = &sel.with.as_ref().unwrap().cte_tables[i];
+            let Cte { alias, query, .. } = &sel.with.as_ref().unwrap().cte_tables[i].cte().unwrap();
             assert_eq!(*exp, query.to_string());
             assert_eq!(
                 if i == 0 {
@@ -7613,7 +7613,10 @@ fn parse_ctes() {
     // CTE in a CTE...
     let sql = &format!("WITH outer_cte AS ({with}) SELECT * FROM outer_cte");
     let select = verified_query(sql);
-    assert_ctes_in_select(&cte_sqls, &only(&select.with.unwrap().cte_tables).query);
+    assert_ctes_in_select(
+        &cte_sqls,
+        &only(&select.with.unwrap().cte_tables).cte().unwrap().query,
+    );
 }
 
 #[test]
@@ -7630,6 +7633,8 @@ fn parse_cte_renamed_columns() {
             .unwrap()
             .cte_tables
             .first()
+            .unwrap()
+            .cte()
             .unwrap()
             .alias
             .columns
@@ -7661,7 +7666,7 @@ fn parse_recursive_cte() {
         materialized: None,
         closing_paren_token: AttachedToken::empty(),
     };
-    assert_eq!(with.cte_tables.first().unwrap(), &expected);
+    assert_eq!(with.cte_tables.first().unwrap().cte().unwrap(), &expected);
 }
 
 #[test]
@@ -17138,7 +17143,7 @@ fn test_parse_semantic_view_table_factor() {
     }
 
     let ast_sql = r#"SELECT * FROM SEMANTIC_VIEW(
-        my_model 
+        my_model
         DIMENSIONS DATE_PART('year', date_col), region_name
         METRICS orders.revenue, orders.count
         WHERE active = true

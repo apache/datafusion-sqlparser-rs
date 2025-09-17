@@ -80,6 +80,11 @@ impl Dialect for ClickHouseDialect {
         true
     }
 
+    /// See <https://clickhouse.com/docs/sql-reference/statements/select/with#common-scalar-expressions>.
+    fn supports_common_scalar_expressions(&self) -> bool {
+        true
+    }
+
     /// See <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by>
     fn supports_order_by_all(&self) -> bool {
         true

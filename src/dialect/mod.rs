@@ -1086,6 +1086,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports optimizer hints in multiline comments
+    /// e.g. `/*!50110 KEY_BLOCK_SIZE = 1024*/`
+    fn supports_multiline_comment_hints(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports treating the equals operator `=` within a `SelectItem`
     /// as an alias assignment operator, rather than a boolean expression.
     /// For example: the following statements are equivalent for such a dialect:

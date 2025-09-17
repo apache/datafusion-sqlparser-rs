@@ -88,6 +88,11 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    /// see <https://dev.mysql.com/doc/refman/8.4/en/comments.html>
+    fn supports_multiline_comment_hints(&self) -> bool {
+        true
+    }
+
     fn parse_infix(
         &self,
         parser: &mut crate::parser::Parser,

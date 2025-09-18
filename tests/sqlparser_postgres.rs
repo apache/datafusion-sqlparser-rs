@@ -6576,3 +6576,66 @@ fn parse_create_server() {
         assert_eq!(stmt, expected);
     }
 }
+
+#[test]
+fn parse_alter_schema() {
+    match pg_and_generic().verified_stmt("ALTER SCHEMA foo RENAME TO bar") {
+        Statement::AlterSchema(AlterSchema { operations, .. }) => {
+            assert_eq!(
+                operations,
+                vec![AlterSchemaOperation::Rename {
+                    name: ObjectName::from(vec!["bar".into()])
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match pg_and_generic().verified_stmt("ALTER SCHEMA foo OWNER TO bar") {
+        Statement::AlterSchema(AlterSchema { operations, .. }) => {
+            assert_eq!(
+                operations,
+                vec![AlterSchemaOperation::OwnerTo {
+                    owner: Owner::Ident("bar".into())
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match pg_and_generic().verified_stmt("ALTER SCHEMA foo OWNER TO CURRENT_ROLE") {
+        Statement::AlterSchema(AlterSchema { operations, .. }) => {
+            assert_eq!(
+                operations,
+                vec![AlterSchemaOperation::OwnerTo {
+                    owner: Owner::CurrentRole
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match pg_and_generic().verified_stmt("ALTER SCHEMA foo OWNER TO CURRENT_USER") {
+        Statement::AlterSchema(AlterSchema { operations, .. }) => {
+            assert_eq!(
+                operations,
+                vec![AlterSchemaOperation::OwnerTo {
+                    owner: Owner::CurrentUser
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match pg_and_generic().verified_stmt("ALTER SCHEMA foo OWNER TO SESSION_USER") {
+        Statement::AlterSchema(AlterSchema { operations, .. }) => {
+            assert_eq!(
+                operations,
+                vec![AlterSchemaOperation::OwnerTo {
+                    owner: Owner::SessionUser
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+}

@@ -17,7 +17,7 @@
 
 use crate::ast::{
     ddl::AlterSchema, query::SelectItemQualifiedWildcardKind, AlterSchemaOperation, ColumnOptions,
-    ExportData, TypedString,
+    ExportData, Owner, TypedString,
 };
 use core::iter;
 
@@ -2423,6 +2423,14 @@ impl Spanned for AlterSchemaOperation {
             AlterSchemaOperation::DropReplica { replica } => replica.span,
             AlterSchemaOperation::SetOptionsParens { options } => {
                 union_spans(options.iter().map(|i| i.span()))
+            }
+            AlterSchemaOperation::Rename { name } => name.span(),
+            AlterSchemaOperation::OwnerTo { owner } => {
+                if let Owner::Ident(ident) = owner {
+                    ident.span
+                } else {
+                    Span::empty()
+                }
             }
         }
     }

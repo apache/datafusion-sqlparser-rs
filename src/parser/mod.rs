@@ -9444,6 +9444,12 @@ impl<'a> Parser<'a> {
         } else if self.parse_keywords(&[Keyword::DROP, Keyword::REPLICA]) {
             let replica = self.parse_identifier()?;
             AlterSchemaOperation::DropReplica { replica }
+        } else if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            let new_name = self.parse_object_name(false)?;
+            AlterSchemaOperation::Rename { name: new_name }
+        } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            let owner = self.parse_owner()?;
+            AlterSchemaOperation::OwnerTo { owner }
         } else {
             return self.expected_ref("ALTER SCHEMA operation", self.peek_token_ref());
         };

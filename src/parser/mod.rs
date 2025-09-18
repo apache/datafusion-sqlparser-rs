@@ -5581,6 +5581,7 @@ impl<'a> Parser<'a> {
         is_constraint: bool,
     ) -> Result<Statement, ParserError> {
         if !dialect_of!(self is PostgreSqlDialect | SQLiteDialect | GenericDialect | MySqlDialect | MsSqlDialect)
+            || dialect_of!(self is SQLiteDialect) && (or_alter || or_replace || is_constraint)
         {
             self.prev_token();
             return self.expected("an object type after CREATE", self.peek_token());

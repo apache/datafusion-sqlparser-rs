@@ -641,7 +641,7 @@ fn test_create_trigger() {
             assert!(!is_constraint);
             assert_eq!(name.to_string(), "trg_inherit_asset_models");
             assert_eq!(period, TriggerPeriod::After);
-            assert_eq!(period_specified_before_table, true);
+            assert!(period_specified_before_table);
             assert_eq!(events, vec![TriggerEvent::Insert]);
             assert_eq!(table_name.to_string(), "assets");
             assert!(referenced_table_name.is_none());
@@ -686,7 +686,7 @@ fn test_create_trigger() {
             assert!(!is_constraint);
             assert_eq!(name.to_string(), "log_new_user");
             assert_eq!(period, TriggerPeriod::After);
-            assert_eq!(period_specified_before_table, true);
+            assert!(period_specified_before_table);
             assert_eq!(events, vec![TriggerEvent::Insert]);
             assert_eq!(table_name.to_string(), "users");
             assert!(referenced_table_name.is_none());
@@ -728,7 +728,7 @@ fn test_create_trigger() {
             assert!(!is_constraint);
             assert_eq!(name.to_string(), "cleanup_orders");
             assert_eq!(period, TriggerPeriod::After);
-            assert_eq!(period_specified_before_table, true);
+            assert!(period_specified_before_table);
             assert_eq!(events, vec![TriggerEvent::Delete]);
             assert_eq!(table_name.to_string(), "customers");
             assert!(referenced_table_name.is_none());
@@ -770,7 +770,7 @@ fn test_create_trigger() {
             assert!(!is_constraint);
             assert_eq!(name.to_string(), "trg_before_update");
             assert_eq!(period, TriggerPeriod::Before);
-            assert_eq!(period_specified_before_table, true);
+            assert!(period_specified_before_table);
             assert_eq!(events, vec![TriggerEvent::Update(Vec::new())]);
             assert_eq!(table_name.to_string(), "products");
             assert!(referenced_table_name.is_none());
@@ -813,7 +813,7 @@ fn test_create_trigger() {
             assert!(!is_constraint);
             assert_eq!(name.to_string(), "trg_instead_of_insert");
             assert_eq!(period, TriggerPeriod::InsteadOf);
-            assert_eq!(period_specified_before_table, true);
+            assert!(period_specified_before_table);
             assert_eq!(events, vec![TriggerEvent::Insert]);
             assert_eq!(table_name.to_string(), "my_view");
             assert!(referenced_table_name.is_none());
@@ -856,7 +856,7 @@ fn test_create_trigger() {
             assert!(!is_constraint);
             assert_eq!(name.to_string(), "temp_trigger");
             assert_eq!(period, TriggerPeriod::After);
-            assert_eq!(period_specified_before_table, true);
+            assert!(period_specified_before_table);
             assert_eq!(events, vec![TriggerEvent::Insert]);
             assert_eq!(table_name.to_string(), "temp_table");
             assert!(referenced_table_name.is_none());

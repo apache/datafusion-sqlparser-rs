@@ -610,6 +610,287 @@ fn test_update_delete_limit() {
     }
 }
 
+#[test]
+fn test_create_trigger() {
+    let statement1 = "CREATE TRIGGER trg_inherit_asset_models AFTER INSERT ON assets FOR EACH ROW BEGIN INSERT INTO users (name) SELECT pam.name FROM users AS pam; END";
+
+    match sqlite().verified_stmt(statement1) {
+        Statement::CreateTrigger(CreateTrigger {
+            or_alter,
+            temporary,
+            or_replace,
+            is_constraint,
+            name,
+            period,
+            period_specified_before_table,
+            events,
+            table_name,
+            referenced_table_name,
+            referencing,
+            trigger_object,
+            include_each,
+            condition,
+            exec_body: _,
+            statements_as,
+            statements: _,
+            characteristics,
+        }) => {
+            assert!(!or_alter);
+            assert!(!temporary);
+            assert!(!or_replace);
+            assert!(!is_constraint);
+            assert_eq!(name.to_string(), "trg_inherit_asset_models");
+            assert_eq!(period, TriggerPeriod::After);
+            assert_eq!(period_specified_before_table, true);
+            assert_eq!(events, vec![TriggerEvent::Insert]);
+            assert_eq!(table_name.to_string(), "assets");
+            assert!(referenced_table_name.is_none());
+            assert!(referencing.is_empty());
+            assert_eq!(trigger_object, Some(TriggerObject::Row));
+            assert!(include_each);
+            assert!(condition.is_none());
+            assert!(!statements_as);
+            assert!(characteristics.is_none());
+        }
+        _ => unreachable!("Expected CREATE TRIGGER statement"),
+    }
+
+    // Here we check that the variant of CREATE TRIGGER that omits the `FOR EACH ROW` clause,
+    // which in SQLite may be implicitly assumed, is parsed correctly.
+    let statement2 = "CREATE TRIGGER log_new_user AFTER INSERT ON users BEGIN INSERT INTO user_log (user_id, action, timestamp) VALUES (NEW.id, 'created', datetime('now')); END";
+
+    match sqlite().verified_stmt(statement2) {
+        Statement::CreateTrigger(CreateTrigger {
+            or_alter,
+            temporary,
+            or_replace,
+            is_constraint,
+            name,
+            period,
+            period_specified_before_table,
+            events,
+            table_name,
+            referenced_table_name,
+            referencing,
+            trigger_object,
+            include_each,
+            condition,
+            exec_body: _,
+            statements_as,
+            statements: _,
+            characteristics,
+        }) => {
+            assert!(!or_alter);
+            assert!(!temporary);
+            assert!(!or_replace);
+            assert!(!is_constraint);
+            assert_eq!(name.to_string(), "log_new_user");
+            assert_eq!(period, TriggerPeriod::After);
+            assert_eq!(period_specified_before_table, true);
+            assert_eq!(events, vec![TriggerEvent::Insert]);
+            assert_eq!(table_name.to_string(), "users");
+            assert!(referenced_table_name.is_none());
+            assert!(referencing.is_empty());
+            assert!(trigger_object.is_none());
+            assert!(!include_each);
+            assert!(condition.is_none());
+            assert!(!statements_as);
+            assert!(characteristics.is_none());
+        }
+        _ => unreachable!("Expected CREATE TRIGGER statement"),
+    }
+
+    let statement3 = "CREATE TRIGGER cleanup_orders AFTER DELETE ON customers BEGIN DELETE FROM orders WHERE customer_id = OLD.id; DELETE FROM invoices WHERE customer_id = OLD.id; END";
+    match sqlite().verified_stmt(statement3) {
+        Statement::CreateTrigger(CreateTrigger {
+            or_alter,
+            temporary,
+            or_replace,
+            is_constraint,
+            name,
+            period,
+            period_specified_before_table,
+            events,
+            table_name,
+            referenced_table_name,
+            referencing,
+            trigger_object,
+            include_each,
+            condition,
+            exec_body: _,
+            statements_as,
+            statements: _,
+            characteristics,
+        }) => {
+            assert!(!or_alter);
+            assert!(!temporary);
+            assert!(!or_replace);
+            assert!(!is_constraint);
+            assert_eq!(name.to_string(), "cleanup_orders");
+            assert_eq!(period, TriggerPeriod::After);
+            assert_eq!(period_specified_before_table, true);
+            assert_eq!(events, vec![TriggerEvent::Delete]);
+            assert_eq!(table_name.to_string(), "customers");
+            assert!(referenced_table_name.is_none());
+            assert!(referencing.is_empty());
+            assert!(trigger_object.is_none());
+            assert!(!include_each);
+            assert!(condition.is_none());
+            assert!(!statements_as);
+            assert!(characteristics.is_none());
+        }
+        _ => unreachable!("Expected CREATE TRIGGER statement"),
+    }
+
+    let statement4 = "CREATE TRIGGER trg_before_update BEFORE UPDATE ON products FOR EACH ROW WHEN NEW.price < 0 BEGIN SELECT RAISE(ABORT, 'Price cannot be negative'); END";
+    match sqlite().verified_stmt(statement4) {
+        Statement::CreateTrigger(CreateTrigger {
+            or_alter,
+            temporary,
+            or_replace,
+            is_constraint,
+            name,
+            period,
+            period_specified_before_table,
+            events,
+            table_name,
+            referenced_table_name,
+            referencing,
+            trigger_object,
+            include_each,
+            condition,
+            exec_body: _,
+            statements_as,
+            statements: _,
+            characteristics,
+        }) => {
+            assert!(!or_alter);
+            assert!(!temporary);
+            assert!(!or_replace);
+            assert!(!is_constraint);
+            assert_eq!(name.to_string(), "trg_before_update");
+            assert_eq!(period, TriggerPeriod::Before);
+            assert_eq!(period_specified_before_table, true);
+            assert_eq!(events, vec![TriggerEvent::Update(Vec::new())]);
+            assert_eq!(table_name.to_string(), "products");
+            assert!(referenced_table_name.is_none());
+            assert!(referencing.is_empty());
+            assert_eq!(trigger_object, Some(TriggerObject::Row));
+            assert!(include_each);
+            assert!(condition.is_some());
+            assert!(!statements_as);
+            assert!(characteristics.is_none());
+        }
+        _ => unreachable!("Expected CREATE TRIGGER statement"),
+    }
+
+    // We test a INSTEAD OF trigger on a view
+    let statement5 = "CREATE TRIGGER trg_instead_of_insert INSTEAD OF INSERT ON my_view BEGIN INSERT INTO my_table (col1, col2) VALUES (NEW.col1, NEW.col2); END";
+    match sqlite().verified_stmt(statement5) {
+        Statement::CreateTrigger(CreateTrigger {
+            or_alter,
+            temporary,
+            or_replace,
+            is_constraint,
+            name,
+            period,
+            period_specified_before_table,
+            events,
+            table_name,
+            referenced_table_name,
+            referencing,
+            trigger_object,
+            include_each,
+            condition,
+            exec_body: _,
+            statements_as,
+            statements: _,
+            characteristics,
+        }) => {
+            assert!(!or_alter);
+            assert!(!temporary);
+            assert!(!or_replace);
+            assert!(!is_constraint);
+            assert_eq!(name.to_string(), "trg_instead_of_insert");
+            assert_eq!(period, TriggerPeriod::InsteadOf);
+            assert_eq!(period_specified_before_table, true);
+            assert_eq!(events, vec![TriggerEvent::Insert]);
+            assert_eq!(table_name.to_string(), "my_view");
+            assert!(referenced_table_name.is_none());
+            assert!(referencing.is_empty());
+            assert!(trigger_object.is_none());
+            assert!(!include_each);
+            assert!(condition.is_none());
+            assert!(!statements_as);
+            assert!(characteristics.is_none());
+        }
+        _ => unreachable!("Expected CREATE TRIGGER statement"),
+    }
+
+    // We test a temporary trigger
+    let statement6 = "CREATE TEMPORARY TRIGGER temp_trigger AFTER INSERT ON temp_table BEGIN UPDATE log_table SET count = count + 1; END";
+    match sqlite().verified_stmt(statement6) {
+        Statement::CreateTrigger(CreateTrigger {
+            or_alter,
+            temporary,
+            or_replace,
+            is_constraint,
+            name,
+            period,
+            period_specified_before_table,
+            events,
+            table_name,
+            referenced_table_name,
+            referencing,
+            trigger_object,
+            include_each,
+            condition,
+            exec_body: _,
+            statements_as,
+            statements: _,
+            characteristics,
+        }) => {
+            assert!(!or_alter);
+            assert!(temporary);
+            assert!(!or_replace);
+            assert!(!is_constraint);
+            assert_eq!(name.to_string(), "temp_trigger");
+            assert_eq!(period, TriggerPeriod::After);
+            assert_eq!(period_specified_before_table, true);
+            assert_eq!(events, vec![TriggerEvent::Insert]);
+            assert_eq!(table_name.to_string(), "temp_table");
+            assert!(referenced_table_name.is_none());
+            assert!(referencing.is_empty());
+            assert!(trigger_object.is_none());
+            assert!(!include_each);
+            assert!(condition.is_none());
+            assert!(!statements_as);
+            assert!(characteristics.is_none());
+        }
+        _ => unreachable!("Expected CREATE TRIGGER statement"),
+    }
+}
+
+#[test]
+fn test_drop_trigger() {
+    let statement = "DROP TRIGGER IF EXISTS trg_inherit_asset_models";
+
+    match sqlite().verified_stmt(statement) {
+        Statement::DropTrigger(DropTrigger {
+            if_exists,
+            trigger_name,
+            table_name,
+            option,
+        }) => {
+            assert!(if_exists);
+            assert_eq!(trigger_name.to_string(), "trg_inherit_asset_models");
+            assert!(table_name.is_none());
+            assert!(option.is_none());
+        }
+        _ => unreachable!("Expected DROP TRIGGER statement"),
+    }
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

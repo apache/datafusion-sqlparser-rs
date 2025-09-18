@@ -3199,6 +3199,22 @@ pub struct CreateTrigger {
     ///
     /// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-trigger-transact-sql?view=sql-server-ver16#arguments)
     pub or_alter: bool,
+    /// True if this is a temporary trigger, which is supported in SQLite.
+    ///
+    /// The possible syntaxes are two:
+    ///
+    /// ```sql
+    /// CREATE TEMP TRIGGER trigger_name
+    /// ```
+    ///
+    /// or
+    ///
+    /// ```sql
+    /// CREATE TEMPORARY TRIGGER trigger_name
+    /// ```
+    ///
+    /// [Temporary Triggers in SQLite](https://sqlite.org/lang_createtrigger.html#temp_triggers_on_non_temp_tables)
+    pub temporary: bool,
     /// The `OR REPLACE` clause is used to re-create the trigger if it already exists.
     ///
     /// Example:
@@ -3243,14 +3259,16 @@ pub struct CreateTrigger {
     /// ```
     pub period: TriggerPeriod,
     /// Whether the trigger period was specified before the target table name.
+    /// This does not refer to whether the period is BEFORE, AFTER, or INSTEAD OF,
+    /// but rather the position of the period clause in relation to the table name.
     ///
     /// ```sql
-    /// -- period_before_table == true: Postgres, MySQL, and standard SQL
+    /// -- period_specified_before_table == true: Postgres, MySQL, and standard SQL
     /// CREATE TRIGGER t BEFORE INSERT ON table_name ...;
-    /// -- period_before_table == false: MSSQL
+    /// -- period_specified_before_table == false: MSSQL
     /// CREATE TRIGGER t ON table_name BEFORE INSERT ...;
     /// ```
-    pub period_before_table: bool,
+    pub period_specified_before_table: bool,
     /// Multiple events can be specified using OR, such as `INSERT`, `UPDATE`, `DELETE`, or `TRUNCATE`.
     pub events: Vec<TriggerEvent>,
     /// The table on which the trigger is to be created.
@@ -3262,7 +3280,9 @@ pub struct CreateTrigger {
     pub referencing: Vec<TriggerReferencing>,
     /// This specifies whether the trigger function should be fired once for
     /// every row affected by the trigger event, or just once per SQL statement.
-    pub trigger_object: TriggerObject,
+    /// This is optional in some SQL dialects, such as SQLite, and if not specified, in
+    /// those cases, the implied default is `FOR EACH ROW`.
+    pub trigger_object: Option<TriggerObject>,
     /// Whether to include the `EACH` term of the `FOR EACH`, as it is optional syntax.
     pub include_each: bool,
     ///  Triggering conditions
@@ -3281,10 +3301,11 @@ impl Display for CreateTrigger {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let CreateTrigger {
             or_alter,
+            temporary,
             or_replace,
             is_constraint,
             name,
-            period_before_table,
+            period_specified_before_table,
             period,
             events,
             table_name,
@@ -3300,13 +3321,14 @@ impl Display for CreateTrigger {
         } = self;
         write!(
             f,
-            "CREATE {or_alter}{or_replace}{is_constraint}TRIGGER {name} ",
+            "CREATE {temporary}{or_alter}{or_replace}{is_constraint}TRIGGER {name} ",
+            temporary = if *temporary { "TEMPORARY " } else { "" },
             or_alter = if *or_alter { "OR ALTER " } else { "" },
             or_replace = if *or_replace { "OR REPLACE " } else { "" },
             is_constraint = if *is_constraint { "CONSTRAINT " } else { "" },
         )?;
 
-        if *period_before_table {
+        if *period_specified_before_table {
             write!(f, "{period}")?;
             if !events.is_empty() {
                 write!(f, " {}", display_separated(events, " OR "))?;
@@ -3332,10 +3354,12 @@ impl Display for CreateTrigger {
             write!(f, " REFERENCING {}", display_separated(referencing, " "))?;
         }
 
-        if *include_each {
-            write!(f, " FOR EACH {trigger_object}")?;
-        } else if exec_body.is_some() {
-            write!(f, " FOR {trigger_object}")?;
+        if let Some(trigger_object) = trigger_object {
+            if *include_each {
+                write!(f, " FOR EACH {trigger_object}")?;
+            } else if exec_body.is_some() {
+                write!(f, " FOR {trigger_object}")?;
+            }
         }
         if let Some(condition) = condition {
             write!(f, " WHEN {condition}")?;

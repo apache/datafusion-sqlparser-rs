@@ -17138,7 +17138,7 @@ fn test_parse_semantic_view_table_factor() {
     }
 
     let ast_sql = r#"SELECT * FROM SEMANTIC_VIEW(
-        my_model 
+        my_model
         DIMENSIONS DATE_PART('year', date_col), region_name
         METRICS orders.revenue, orders.count
         WHERE active = true
@@ -17192,4 +17192,26 @@ fn parse_adjacent_string_literal_concatenation() {
 
     let sql = "SELECT * FROM t WHERE col = 'Hello' \n ' ' \t 'World!'";
     dialects.one_statement_parses_to(sql, r"SELECT * FROM t WHERE col = 'Hello World!'");
+}
+
+#[test]
+fn parse_create_index_using_before_on() {
+    let sql = "CREATE INDEX idx_name USING BTREE ON table_name (col1)";
+    match all_dialects().parse_sql_statements(sql).unwrap()[0].clone() {
+        Statement::CreateIndex(CreateIndex {
+            name,
+            table_name,
+            using,
+            columns,
+            unique,
+            ..
+        }) => {
+            assert_eq!(name.unwrap().to_string(), "idx_name");
+            assert_eq!(table_name.to_string(), "table_name");
+            assert_eq!(using, Some(IndexType::BTree));
+            assert_eq!(columns.len(), 1);
+            assert!(!unique);
+        }
+        _ => unreachable!(),
+    }
 }

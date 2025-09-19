@@ -10181,19 +10181,41 @@ impl<'a> Parser<'a> {
             Token::Word(w) => match w.keyword {
                 Keyword::BOOLEAN => Ok(DataType::Boolean),
                 Keyword::BOOL => Ok(DataType::Bool),
-                Keyword::FLOAT => Ok(DataType::Float(self.parse_optional_precision()?)),
-                Keyword::REAL => Ok(DataType::Real),
+                Keyword::FLOAT => {
+                    let precision = self.parse_exact_number_optional_precision_scale()?;
+
+                    if self.parse_keyword(Keyword::UNSIGNED) {
+                        Ok(DataType::FloatUnsigned(precision))
+                    } else {
+                        Ok(DataType::Float(precision))
+                    }
+                }
+                Keyword::REAL => {
+                    if self.parse_keyword(Keyword::UNSIGNED) {
+                        Ok(DataType::RealUnsigned)
+                    } else {
+                        Ok(DataType::Real)
+                    }
+                }
                 Keyword::FLOAT4 => Ok(DataType::Float4),
                 Keyword::FLOAT32 => Ok(DataType::Float32),
                 Keyword::FLOAT64 => Ok(DataType::Float64),
                 Keyword::FLOAT8 => Ok(DataType::Float8),
                 Keyword::DOUBLE => {
                     if self.parse_keyword(Keyword::PRECISION) {
-                        Ok(DataType::DoublePrecision)
+                        if self.parse_keyword(Keyword::UNSIGNED) {
+                            Ok(DataType::DoublePrecisionUnsigned)
+                        } else {
+                            Ok(DataType::DoublePrecision)
+                        }
                     } else {
-                        Ok(DataType::Double(
-                            self.parse_exact_number_optional_precision_scale()?,
-                        ))
+                        let precision = self.parse_exact_number_optional_precision_scale()?;
+
+                        if self.parse_keyword(Keyword::UNSIGNED) {
+                            Ok(DataType::DoubleUnsigned(precision))
+                        } else {
+                            Ok(DataType::Double(precision))
+                        }
                     }
                 }
                 Keyword::TINYINT => {
@@ -10420,12 +10442,24 @@ impl<'a> Parser<'a> {
                 Keyword::NUMERIC => Ok(DataType::Numeric(
                     self.parse_exact_number_optional_precision_scale()?,
                 )),
-                Keyword::DECIMAL => Ok(DataType::Decimal(
-                    self.parse_exact_number_optional_precision_scale()?,
-                )),
-                Keyword::DEC => Ok(DataType::Dec(
-                    self.parse_exact_number_optional_precision_scale()?,
-                )),
+                Keyword::DECIMAL => {
+                    let precision = self.parse_exact_number_optional_precision_scale()?;
+
+                    if self.parse_keyword(Keyword::UNSIGNED) {
+                        Ok(DataType::DecimalUnsigned(precision))
+                    } else {
+                        Ok(DataType::Decimal(precision))
+                    }
+                }
+                Keyword::DEC => {
+                    let precision = self.parse_exact_number_optional_precision_scale()?;
+
+                    if self.parse_keyword(Keyword::UNSIGNED) {
+                        Ok(DataType::DecUnsigned(precision))
+                    } else {
+                        Ok(DataType::Dec(precision))
+                    }
+                }
                 Keyword::BIGNUMERIC => Ok(DataType::BigNumeric(
                     self.parse_exact_number_optional_precision_scale()?,
                 )),

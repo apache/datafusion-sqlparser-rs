@@ -7897,10 +7897,17 @@ impl<'a> Parser<'a> {
         };
         let name = self.parse_identifier()?;
         let data_type = self.parse_data_type()?;
+        let default = if self.consume_token(&Token::Eq) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
         Ok(ProcedureParam {
             name,
             data_type,
             mode,
+            default,
         })
     }
 

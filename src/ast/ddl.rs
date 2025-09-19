@@ -1458,12 +1458,19 @@ pub struct ProcedureParam {
     pub name: Ident,
     pub data_type: DataType,
     pub mode: Option<ArgMode>,
+    pub default: Option<Expr>,
 }
 
 impl fmt::Display for ProcedureParam {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(mode) = &self.mode {
-            write!(f, "{mode} {} {}", self.name, self.data_type)
+            if let Some(default) = &self.default {
+                write!(f, "{mode} {} {} = {}", self.name, self.data_type, default)
+            } else {
+                write!(f, "{mode} {} {}", self.name, self.data_type)
+            }
+        } else if let Some(default) = &self.default {
+            write!(f, "{} {} = {}", self.name, self.data_type, default)
         } else {
             write!(f, "{} {}", self.name, self.data_type)
         }

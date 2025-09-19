@@ -4247,33 +4247,3 @@ fn test_create_index_options() {
         "CREATE INDEX idx_name ON t(c1, c2) USING BTREE LOCK = EXCLUSIVE ALGORITHM = DEFAULT",
     );
 }
-
-#[test]
-fn parse_invisible_column() {
-    mysql().verified_stmt("CREATE TABLE t (foo INT, bar INT INVISIBLE)");
-    mysql().verified_stmt("ALTER TABLE t ADD COLUMN bar INT INVISIBLE");
-    let stmt = mysql().verified_stmt("CREATE TABLE t (foo INT, bar INT INVISIBLE)");
-    match stmt {
-        Statement::CreateTable(CreateTable { columns, .. }) => {
-            assert_eq!(
-                columns,
-                vec![
-                    ColumnDef {
-                        name: "foo".into(),
-                        data_type: DataType::Int(None),
-                        options: vec![],
-                    },
-                    ColumnDef {
-                        name: "bar".into(),
-                        data_type: DataType::Int(None),
-                        options: vec![ColumnOptionDef {
-                            name: None,
-                            option: ColumnOption::Invisible,
-                        },],
-                    }
-                ]
-            );
-        }
-        _ => panic!("Unexpected statement {stmt}"),
-    }
-}

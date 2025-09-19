@@ -496,6 +496,8 @@ impl<'a> Parser<'a> {
                         break;
                     }
 
+                    // MSSQL: the `GO` keyword is a batch separator which also means it concludes the current statement
+                    // `GO` may not be followed by a semicolon, so turn off that expectation
                     if expecting_statement_delimiter && word.keyword == Keyword::GO {
                         expecting_statement_delimiter = false;
                     }
@@ -508,7 +510,8 @@ impl<'a> Parser<'a> {
             }
 
             let statement = self.parse_statement()?;
-            // Treat batch delimiter as an end of statement, so no additional statement delimiter expected here
+            // MSSQL: the `GO` keyword is a batch separator which also means it concludes the current statement
+            // `GO` may not be followed by a semicolon, so turn off that expectation
             expecting_statement_delimiter = !matches!(statement, Statement::Go(_));
             stmts.push(statement);
         }

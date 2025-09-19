@@ -7076,6 +7076,8 @@ impl<'a> Parser<'a> {
 
         let table_name = self.parse_object_name(false)?;
 
+        // MySQL allows having two `USING` clauses.
+        // In that case, the second clause overwrites the first.
         using = self.parse_optional_using_then_index_type()?.or(using);
 
         let columns = self.parse_parenthesized_index_column_list()?;

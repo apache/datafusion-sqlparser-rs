@@ -3084,6 +3084,7 @@ impl fmt::Display for CreateConnector {
 /// An `ALTER SCHEMA` (`Statement::AlterSchema`) operation.
 ///
 /// See [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_schema_collate_statement)
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterschema.html)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -3100,6 +3101,12 @@ pub enum AlterSchemaOperation {
     },
     SetOptionsParens {
         options: Vec<SqlOption>,
+    },
+    Rename {
+        name: ObjectName,
+    },
+    OwnerTo {
+        owner: Owner,
     },
 }
 
@@ -3120,6 +3127,8 @@ impl fmt::Display for AlterSchemaOperation {
             AlterSchemaOperation::SetOptionsParens { options } => {
                 write!(f, "SET OPTIONS ({})", display_comma_separated(options))
             }
+            AlterSchemaOperation::Rename { name } => write!(f, "RENAME TO {name}"),
+            AlterSchemaOperation::OwnerTo { owner } => write!(f, "OWNER TO {owner}"),
         }
     }
 }

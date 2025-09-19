@@ -156,6 +156,7 @@ fn parse_create_procedure() {
                     },
                     data_type: DataType::Int(None),
                     mode: None,
+                    default: None,
                 },
                 ProcedureParam {
                     name: Ident {
@@ -168,6 +169,7 @@ fn parse_create_procedure() {
                         unit: None
                     })),
                     mode: None,
+                    default: None,
                 }
             ]),
             name: ObjectName::from(vec![Ident {

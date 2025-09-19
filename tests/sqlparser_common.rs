@@ -17138,7 +17138,7 @@ fn test_parse_semantic_view_table_factor() {
     }
 
     let ast_sql = r#"SELECT * FROM SEMANTIC_VIEW(
-        my_model 
+        my_model
         DIMENSIONS DATE_PART('year', date_col), region_name
         METRICS orders.revenue, orders.count
         WHERE active = true
@@ -17192,4 +17192,57 @@ fn parse_adjacent_string_literal_concatenation() {
 
     let sql = "SELECT * FROM t WHERE col = 'Hello' \n ' ' \t 'World!'";
     dialects.one_statement_parses_to(sql, r"SELECT * FROM t WHERE col = 'Hello World!'");
+}
+
+#[test]
+fn parse_invisible_column() {
+    let sql = r#"CREATE TABLE t (foo INT, bar INT INVISIBLE)"#;
+    let stmt = verified_stmt(sql);
+    match stmt {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(
+                columns,
+                vec![
+                    ColumnDef {
+                        name: "foo".into(),
+                        data_type: DataType::Int(None),
+                        options: vec![]
+                    },
+                    ColumnDef {
+                        name: "bar".into(),
+                        data_type: DataType::Int(None),
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Invisible
+                        }]
+                    }
+                ]
+            );
+        }
+        _ => panic!("Unexpected statement {stmt}"),
+    }
+
+    let sql = r#"ALTER TABLE t ADD COLUMN bar INT INVISIBLE"#;
+    let stmt = verified_stmt(sql);
+    match stmt {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::AddColumn {
+                    column_keyword: true,
+                    if_not_exists: false,
+                    column_def: ColumnDef {
+                        name: "bar".into(),
+                        data_type: DataType::Int(None),
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Invisible
+                        }]
+                    },
+                    column_position: None
+                }]
+            );
+        }
+        _ => panic!("Unexpected statement {stmt}"),
+    }
 }

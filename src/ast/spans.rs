@@ -555,6 +555,7 @@ impl Spanned for Statement {
             Statement::CreateUser(..) => Span::empty(),
             Statement::AlterSchema(s) => s.span(),
             Statement::Vacuum(..) => Span::empty(),
+            Statement::AlterUser(..) => Span::empty(),
         }
     }
 }

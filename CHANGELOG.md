@@ -28,9 +28,4 @@ technically be breaking and thus will result in a `0.(N+1)` version.
 
 
 - Unreleased: Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
-- `0.56.0`: [changelog/0.56.0.md](changelog/0.56.0.md)
-- `0.55.0`: [changelog/0.55.0.md](changelog/0.55.0.md)
-- `0.54.0`: [changelog/0.54.0.md](changelog/0.54.0.md)
-- `0.53.0`: [changelog/0.53.0.md](changelog/0.53.0.md)
-- `0.52.0`: [changelog/0.52.0.md](changelog/0.52.0.md)
-- `0.51.0` and earlier: [changelog/0.51.0-pre.md](changelog/0.51.0-pre.md)
+- Past releases: See https://github.com/apache/datafusion-sqlparser-rs/tree/main/changelog

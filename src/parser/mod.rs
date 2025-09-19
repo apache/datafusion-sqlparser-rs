@@ -495,6 +495,12 @@ impl<'a> Parser<'a> {
                     if expecting_statement_delimiter && word.keyword == Keyword::END {
                         break;
                     }
+
+                    // MSSQL: the `GO` keyword is a batch separator which also means it concludes the current statement
+                    // `GO` may not be followed by a semicolon, so turn off that expectation
+                    if expecting_statement_delimiter && word.keyword == Keyword::GO {
+                        expecting_statement_delimiter = false;
+                    }
                 }
                 _ => {}
             }
@@ -504,8 +510,10 @@ impl<'a> Parser<'a> {
             }
 
             let statement = self.parse_statement()?;
+            // MSSQL: the `GO` keyword is a batch separator which also means it concludes the current statement
+            // `GO` may not be followed by a semicolon, so turn off that expectation
+            expecting_statement_delimiter = !matches!(statement, Statement::Go(_));
             stmts.push(statement);
-            expecting_statement_delimiter = true;
         }
         Ok(stmts)
     }
@@ -655,6 +663,10 @@ impl<'a> Parser<'a> {
                 Keyword::VACUUM => {
                     self.prev_token();
                     self.parse_vacuum()
+                }
+                Keyword::GO => {
+                    self.prev_token();
+                    self.parse_go()
                 }
                 _ => self.expected("an SQL statement", next_token),
             },
@@ -4107,6 +4119,17 @@ impl<'a> Parser<'a> {
             })
     }
 
+    /// Return nth previous token, possibly whitespace
+    /// (or [`Token::EOF`] when before the beginning of the stream).
+    pub(crate) fn peek_prev_nth_token_no_skip_ref(&self, n: usize) -> &TokenWithSpan {
+        // 0 = next token, -1 = current token, -2 = previous token
+        let peek_index = self.index.saturating_sub(1).saturating_sub(n);
+        if peek_index == 0 {
+            return &EOF_TOKEN;
+        }
+        self.tokens.get(peek_index).unwrap_or(&EOF_TOKEN)
+    }
+
     /// Return true if the next tokens exactly `expected`
     ///
     /// Does not advance the current token.
@@ -4221,6 +4244,29 @@ impl<'a> Parser<'a> {
             format!("Expected: {expected}, found: {found}"),
             found.span.start
         )
+    }
+
+    /// Look backwards in the token stream and expect that there was only whitespace tokens until the previous newline or beginning of string
+    pub(crate) fn prev_only_whitespace_until_newline(&mut self) -> bool {
+        let mut look_back_count = 1;
+        loop {
+            let prev_token = self.peek_prev_nth_token_no_skip_ref(look_back_count);
+            match prev_token.token {
+                Token::EOF => break true,
+                Token::Whitespace(ref w) => match w {
+                    Whitespace::Newline => break true,
+                    // special consideration required for single line comments since that string includes the newline
+                    Whitespace::SingleLineComment { comment, prefix: _ } => {
+                        if comment.ends_with('\n') {
+                            break true;
+                        }
+                        look_back_count += 1;
+                    }
+                    _ => look_back_count += 1,
+                },
+                _ => break false,
+            };
+        }
     }
 
     /// If the current token is the `expected` keyword, consume it and returns
@@ -17279,7 +17325,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// /// Parse a `EXPORT DATA` statement.
+    /// Parse a `EXPORT DATA` statement.
     ///
     /// See [Statement::ExportData]
     fn parse_export_data(&mut self) -> Result<Statement, ParserError> {
@@ -17335,6 +17381,71 @@ impl<'a> Parser<'a> {
             threshold,
             boost,
         }))
+    }
+
+    /// Parse [Statement::Go]
+    fn parse_go(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword_is(Keyword::GO)?;
+
+        // disambiguate between GO as batch delimiter & GO as identifier (etc)
+        // compare:
+        // ```sql
+        // select 1 go
+        // ```
+        // vs
+        // ```sql
+        // select 1
+        // go
+        // ```
+        if !self.prev_only_whitespace_until_newline() {
+            parser_err!(
+                "GO may only be preceded by whitespace on a line",
+                self.peek_token().span.start
+            )?;
+        }
+
+        let count = loop {
+            // using this peek function because we want to halt this statement parsing upon newline
+            let next_token = self.peek_token_no_skip();
+            match next_token.token {
+                Token::EOF => break None::<u64>,
+                Token::Whitespace(ref w) => match w {
+                    Whitespace::Newline => break None,
+                    _ => _ = self.next_token_no_skip(),
+                },
+                Token::Number(s, _) => {
+                    let value = Some(Self::parse::<u64>(s, next_token.span.start)?);
+                    self.advance_token();
+                    break value;
+                }
+                _ => self.expected("literal int or newline", next_token)?,
+            };
+        };
+
+        loop {
+            let next_token = self.peek_token_no_skip();
+            match next_token.token {
+                Token::EOF => break,
+                Token::Whitespace(ref w) => match w {
+                    Whitespace::Newline => break,
+                    Whitespace::SingleLineComment { comment, prefix: _ } => {
+                        if comment.ends_with('\n') {
+                            break;
+                        }
+                        _ = self.next_token_no_skip();
+                    }
+                    _ => _ = self.next_token_no_skip(),
+                },
+                _ => {
+                    parser_err!(
+                        "GO must be followed by a newline or EOF",
+                        self.peek_token().span.start
+                    )?;
+                }
+            };
+        }
+
+        Ok(Statement::Go(GoStatement { count }))
     }
 
     /// Consume the parser and return its underlying token buffer
@@ -17652,6 +17763,31 @@ mod tests {
                 ]
             ))
         })
+    }
+
+    #[test]
+    fn test_peek_prev_nth_token_no_skip_ref() {
+        all_dialects().run_parser_method(
+            "SELECT 1;\n-- a comment\nRAISERROR('test', 16, 0);",
+            |parser| {
+                parser.index = 1;
+                assert_eq!(parser.peek_prev_nth_token_no_skip_ref(0), &Token::EOF);
+                assert_eq!(parser.index, 1);
+                parser.index = 7;
+                assert_eq!(
+                    parser.token_at(parser.index - 1).token,
+                    Token::Word(Word {
+                        value: "RAISERROR".to_string(),
+                        quote_style: None,
+                        keyword: Keyword::RAISERROR,
+                    })
+                );
+                assert_eq!(
+                    parser.peek_prev_nth_token_no_skip_ref(2),
+                    &Token::Whitespace(Whitespace::Newline)
+                );
+            },
+        );
     }
 
     #[cfg(test)]

@@ -10739,7 +10739,7 @@ impl fmt::Display for AlterUser {
         if let Some(policy_kind) = &self.unset_policy {
             write!(f, " UNSET {policy_kind} POLICY")?;
         }
-        if !self.set_tag.is_empty() {
+        if !self.set_tag.options.is_empty() {
             write!(f, " SET TAG {}", self.set_tag)?;
         }
         if !self.unset_tag.is_empty() {

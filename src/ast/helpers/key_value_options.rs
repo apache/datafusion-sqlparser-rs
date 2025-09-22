@@ -39,13 +39,6 @@ pub struct KeyValueOptions {
     pub delimiter: KeyValueOptionsDelimiter,
 }
 
-impl KeyValueOptions {
-    /// Returns true iff the options list is empty
-    pub fn is_empty(&self) -> bool {
-        self.options.is_empty()
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

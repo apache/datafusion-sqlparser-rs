@@ -17562,20 +17562,20 @@ impl<'a> Parser<'a> {
                 // Can be a list of values or a list of key value properties.
                 // Try to parse a list of values and if that fails, try to parse
                 // a list of key-value properties.
-                match self.try_parse(|parser| {
+                match self.maybe_parse(|parser| {
                     parser.expect_token(&Token::LParen)?;
                     let values = parser.parse_comma_separated0(|p| p.parse_value(), Token::RParen);
                     parser.expect_token(&Token::RParen)?;
                     values
-                }) {
-                    Ok(values) => {
+                })? {
+                    Some(values) => {
                         let values = values.into_iter().map(|v| v.value).collect();
                         Ok(KeyValueOption {
                             option_name: key.value.clone(),
                             option_value: KeyValueOptionKind::Multi(values),
                         })
                     }
-                    _ => Ok(KeyValueOption {
+                    None => Ok(KeyValueOption {
                         option_name: key.value.clone(),
                         option_value: KeyValueOptionKind::KeyValueOptions(Box::new(
                             self.parse_key_value_options(true, &[])?,

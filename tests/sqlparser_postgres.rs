@@ -309,6 +309,15 @@ fn parse_create_sequence() {
         pg().parse_sql_statements("CREATE SEQUENCE foo INCREMENT 1 NO MINVALUE NO"),
         Err(ParserError::ParserError(_))
     ));
+
+    let sql9 = "CREATE SEQUENCE name6
+    AS INTEGER
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1";
+    pg().one_statement_parses_to(sql9, "CREATE SEQUENCE name6 AS INTEGER START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1");
 }
 
 #[test]

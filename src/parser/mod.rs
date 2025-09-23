@@ -17019,44 +17019,68 @@ impl<'a> Parser<'a> {
 
     fn parse_create_sequence_options(&mut self) -> Result<Vec<SequenceOptions>, ParserError> {
         let mut sequence_options = vec![];
-        //[ INCREMENT [ BY ] increment ]
-        if self.parse_keywords(&[Keyword::INCREMENT]) {
-            if self.parse_keywords(&[Keyword::BY]) {
-                sequence_options.push(SequenceOptions::IncrementBy(self.parse_number()?, true));
-            } else {
-                sequence_options.push(SequenceOptions::IncrementBy(self.parse_number()?, false));
-            }
-        }
-        //[ MINVALUE minvalue | NO MINVALUE ]
-        if self.parse_keyword(Keyword::MINVALUE) {
-            sequence_options.push(SequenceOptions::MinValue(Some(self.parse_number()?)));
-        } else if self.parse_keywords(&[Keyword::NO, Keyword::MINVALUE]) {
-            sequence_options.push(SequenceOptions::MinValue(None));
-        }
-        //[ MAXVALUE maxvalue | NO MAXVALUE ]
-        if self.parse_keywords(&[Keyword::MAXVALUE]) {
-            sequence_options.push(SequenceOptions::MaxValue(Some(self.parse_number()?)));
-        } else if self.parse_keywords(&[Keyword::NO, Keyword::MAXVALUE]) {
-            sequence_options.push(SequenceOptions::MaxValue(None));
-        }
 
-        //[ START [ WITH ] start ]
-        if self.parse_keywords(&[Keyword::START]) {
-            if self.parse_keywords(&[Keyword::WITH]) {
-                sequence_options.push(SequenceOptions::StartWith(self.parse_number()?, true));
-            } else {
-                sequence_options.push(SequenceOptions::StartWith(self.parse_number()?, false));
+        // To disallow duplicate options
+        let has_increment = false;
+        let has_minvalue = false;
+        let has_maxvalue = false;
+        let has_start = false;
+        let has_cache = false;
+        let has_cycle = false;
+
+        let mut should_continue_loop = true;
+        while should_continue_loop {
+            should_continue_loop = false;
+
+            //[ INCREMENT [ BY ] increment ]
+            if !has_increment && self.parse_keywords(&[Keyword::INCREMENT]) {
+                should_continue_loop = true;
+                if self.parse_keywords(&[Keyword::BY]) {
+                    sequence_options.push(SequenceOptions::IncrementBy(self.parse_number()?, true));
+                } else {
+                    sequence_options
+                        .push(SequenceOptions::IncrementBy(self.parse_number()?, false));
+                }
             }
-        }
-        //[ CACHE cache ]
-        if self.parse_keywords(&[Keyword::CACHE]) {
-            sequence_options.push(SequenceOptions::Cache(self.parse_number()?));
-        }
-        // [ [ NO ] CYCLE ]
-        if self.parse_keywords(&[Keyword::NO, Keyword::CYCLE]) {
-            sequence_options.push(SequenceOptions::Cycle(true));
-        } else if self.parse_keywords(&[Keyword::CYCLE]) {
-            sequence_options.push(SequenceOptions::Cycle(false));
+            //[ MINVALUE minvalue | NO MINVALUE ]
+            if !has_minvalue && self.parse_keyword(Keyword::MINVALUE) {
+                should_continue_loop = true;
+                sequence_options.push(SequenceOptions::MinValue(Some(self.parse_number()?)));
+            } else if !has_minvalue && self.parse_keywords(&[Keyword::NO, Keyword::MINVALUE]) {
+                should_continue_loop = true;
+                sequence_options.push(SequenceOptions::MinValue(None));
+            }
+            //[ MAXVALUE maxvalue | NO MAXVALUE ]
+            if !has_maxvalue && self.parse_keywords(&[Keyword::MAXVALUE]) {
+                should_continue_loop = true;
+                sequence_options.push(SequenceOptions::MaxValue(Some(self.parse_number()?)));
+            } else if !has_maxvalue && self.parse_keywords(&[Keyword::NO, Keyword::MAXVALUE]) {
+                should_continue_loop = true;
+                sequence_options.push(SequenceOptions::MaxValue(None));
+            }
+
+            //[ START [ WITH ] start ]
+            if !has_start && self.parse_keywords(&[Keyword::START]) {
+                should_continue_loop = true;
+                if self.parse_keywords(&[Keyword::WITH]) {
+                    sequence_options.push(SequenceOptions::StartWith(self.parse_number()?, true));
+                } else {
+                    sequence_options.push(SequenceOptions::StartWith(self.parse_number()?, false));
+                }
+            }
+            //[ CACHE cache ]
+            if !has_cache && self.parse_keywords(&[Keyword::CACHE]) {
+                should_continue_loop = true;
+                sequence_options.push(SequenceOptions::Cache(self.parse_number()?));
+            }
+            // [ [ NO ] CYCLE ]
+            if !has_cycle && self.parse_keywords(&[Keyword::NO, Keyword::CYCLE]) {
+                should_continue_loop = true;
+                sequence_options.push(SequenceOptions::Cycle(true));
+            } else if !has_cycle && self.parse_keywords(&[Keyword::CYCLE]) {
+                should_continue_loop = true;
+                sequence_options.push(SequenceOptions::Cycle(false));
+            }
         }
 
         Ok(sequence_options)

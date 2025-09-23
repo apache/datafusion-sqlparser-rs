@@ -8144,6 +8144,8 @@ impl<'a> Parser<'a> {
                     Keyword::REPLACE,
                 ])?,
             )))
+        } else if self.parse_keyword(Keyword::INVISIBLE) {
+            Ok(Some(ColumnOption::Invisible))
         } else {
             Ok(None)
         }

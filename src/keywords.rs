@@ -499,6 +499,7 @@ define_keywords!(
     INTERSECTION,
     INTERVAL,
     INTO,
+    INVISIBLE,
     INVOKER,
     IO,
     IS,

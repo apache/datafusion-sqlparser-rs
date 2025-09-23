@@ -17306,6 +17306,9 @@ fn test_parse_alter_user() {
         }
         _ => unreachable!(),
     }
+    verified_stmt("ALTER USER u1 ADD MFA METHOD OTP");
+    verified_stmt("ALTER USER u1 ADD MFA METHOD OTP COUNT = 8");
+
     let stmt = verified_stmt("ALTER USER u1 SET AUTHENTICATION POLICY p1");
     match stmt {
         Statement::AlterUser(alter) => {

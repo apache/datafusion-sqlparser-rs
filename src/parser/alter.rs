@@ -20,9 +20,9 @@ use crate::{
     ast::{
         helpers::key_value_options::{KeyValueOptions, KeyValueOptionsDelimiter},
         AlterConnectorOwner, AlterPolicyOperation, AlterRoleOperation, AlterUser,
-        AlterUserAddRoleDelegation, AlterUserModifyMfaMethod, AlterUserRemoveRoleDelegation,
-        AlterUserSetPolicy, Expr, MfaMethodKind, Password, ResetConfig, RoleOption, SetConfigValue,
-        Statement, UserPolicyKind,
+        AlterUserAddMfaMethodOtp, AlterUserAddRoleDelegation, AlterUserModifyMfaMethod,
+        AlterUserRemoveRoleDelegation, AlterUserSetPolicy, Expr, MfaMethodKind, Password,
+        ResetConfig, RoleOption, SetConfigValue, Statement, UserPolicyKind,
     },
     dialect::{MsSqlDialect, PostgreSqlDialect},
     keywords::Keyword,
@@ -213,6 +213,18 @@ impl Parser<'_> {
             } else {
                 None
             };
+        let add_mfa_method_otp =
+            if self.parse_keywords(&[Keyword::ADD, Keyword::MFA, Keyword::METHOD, Keyword::OTP]) {
+                let count = if self.parse_keyword(Keyword::COUNT) {
+                    self.expect_token(&Token::Eq)?;
+                    Some(self.parse_value()?.into())
+                } else {
+                    None
+                };
+                Some(AlterUserAddMfaMethodOtp { count })
+            } else {
+                None
+            };
         let set_policy =
             if self.parse_keywords(&[Keyword::SET, Keyword::AUTHENTICATION, Keyword::POLICY]) {
                 Some(AlterUserSetPolicy {
@@ -292,6 +304,7 @@ impl Parser<'_> {
             set_default_mfa_method,
             remove_mfa_method,
             modify_mfa_method,
+            add_mfa_method_otp,
             set_policy,
             unset_policy,
             set_tag,

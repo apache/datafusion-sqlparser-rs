@@ -10578,6 +10578,7 @@ impl fmt::Display for CreateUser {
 pub struct AlterUser {
     pub if_exists: bool,
     pub name: Ident,
+    /// The following fields are Snowflake-specific: <https://docs.snowflake.com/en/sql-reference/sql/alter-user#syntax>
     pub rename_to: Option<Ident>,
     pub reset_password: bool,
     pub abort_all_queries: bool,
@@ -10587,6 +10588,7 @@ pub struct AlterUser {
     pub set_default_mfa_method: Option<MfaMethodKind>,
     pub remove_mfa_method: Option<MfaMethodKind>,
     pub modify_mfa_method: Option<AlterUserModifyMfaMethod>,
+    pub add_mfa_method_otp: Option<AlterUserAddMfaMethodOtp>,
     pub set_policy: Option<AlterUserSetPolicy>,
     pub unset_policy: Option<UserPolicyKind>,
     pub set_tag: KeyValueOptions,
@@ -10615,6 +10617,16 @@ pub struct AlterUserAddRoleDelegation {
 pub struct AlterUserRemoveRoleDelegation {
     pub role: Option<Ident>,
     pub integration: Ident,
+}
+
+/// ```sql
+/// ADD MFA METHOD OTP [ COUNT = number ]
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterUserAddMfaMethodOtp {
+    pub count: Option<Value>,
 }
 
 /// ```sql
@@ -10730,6 +10742,12 @@ impl fmt::Display for AlterUser {
                 " MODIFY MFA METHOD {method} SET COMMENT '{}'",
                 value::escape_single_quote_string(comment)
             )?;
+        }
+        if let Some(add_mfa_method_otp) = &self.add_mfa_method_otp {
+            write!(f, " ADD MFA METHOD OTP")?;
+            if let Some(count) = &add_mfa_method_otp.count {
+                write!(f, " COUNT = {count}")?;
+            }
         }
         if let Some(policy) = &self.set_policy {
             let policy_kind = &policy.policy_kind;

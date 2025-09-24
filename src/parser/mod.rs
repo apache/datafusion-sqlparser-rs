@@ -7123,6 +7123,13 @@ impl<'a> Parser<'a> {
         // parse it anyway (as we do inside `ALTER TABLE` and `CREATE TABLE` parsing).
         let index_options = self.parse_index_options()?;
 
+        if index_options
+            .iter()
+            .any(|opt| matches!(opt, IndexOption::Using(_)))
+        {
+            using = None;
+        };
+
         // MySQL allows `ALGORITHM` and `LOCK` options. Unlike in `ALTER TABLE`, they need not be comma separated.
         let mut alter_options = Vec::new();
         while self

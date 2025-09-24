@@ -17248,10 +17248,10 @@ fn parse_invisible_column() {
 }
 
 #[test]
-fn parse_create_index_using_before_on() {
+fn parse_create_index_different_using_positions() {
     let sql = "CREATE INDEX idx_name USING BTREE ON table_name (col1)";
-    // Can't use `verified_stmt` here as the USING will be placed after the `ON` clause
-    match all_dialects().parse_sql_statements(sql).unwrap()[0].clone() {
+    let expected = "CREATE INDEX idx_name ON table_name USING BTREE (col1)";
+    match all_dialects().one_statement_parses_to(sql, expected) {
         Statement::CreateIndex(CreateIndex {
             name,
             table_name,
@@ -17268,24 +17268,23 @@ fn parse_create_index_using_before_on() {
         }
         _ => unreachable!(),
     }
-}
 
-#[test]
-fn parse_create_index_using_multiple_clauses() {
-    let sql = "CREATE INDEX idx_name USING BTREE ON table_name USING HASH (col1)";
-    // Can't use `verified_stmt` here as the first USING will be ignored
-    match all_dialects().parse_sql_statements(sql).unwrap()[0].clone() {
+    let sql = "CREATE INDEX idx_name USING BTREE ON table_name (col1) USING HASH";
+    let expected = "CREATE INDEX idx_name ON table_name(col1) USING HASH";
+    match all_dialects().one_statement_parses_to(sql, expected) {
         Statement::CreateIndex(CreateIndex {
             name,
             table_name,
-            using,
             columns,
+            index_options,
             ..
         }) => {
             assert_eq!(name.unwrap().to_string(), "idx_name");
             assert_eq!(table_name.to_string(), "table_name");
-            assert_eq!(using, Some(IndexType::Hash));
             assert_eq!(columns.len(), 1);
+            assert!(index_options
+                .iter()
+                .any(|o| o == &IndexOption::Using(IndexType::Hash)));
         }
         _ => unreachable!(),
     }

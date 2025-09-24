@@ -3219,7 +3219,7 @@ pub struct CreateTrigger {
     ///
     /// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-trigger-transact-sql?view=sql-server-ver16#arguments)
     pub or_alter: bool,
-    /// True if this is a temporary trigger, which is supported in SQLite.
+    /// True if this is a temporary trigger.
     ///
     /// The possible syntaxes are two:
     ///

@@ -3283,12 +3283,12 @@ pub struct CreateTrigger {
     /// but rather the position of the period clause in relation to the table name.
     ///
     /// ```sql
-    /// -- period_specified_before_table == true: Postgres, MySQL, and standard SQL
+    /// -- period_before_table == true: Postgres, MySQL, and standard SQL
     /// CREATE TRIGGER t BEFORE INSERT ON table_name ...;
-    /// -- period_specified_before_table == false: MSSQL
+    /// -- period_before_table == false: MSSQL
     /// CREATE TRIGGER t ON table_name BEFORE INSERT ...;
     /// ```
-    pub period_specified_before_table: bool,
+    pub period_before_table: bool,
     /// Multiple events can be specified using OR, such as `INSERT`, `UPDATE`, `DELETE`, or `TRUNCATE`.
     pub events: Vec<TriggerEvent>,
     /// The table on which the trigger is to be created.
@@ -3323,7 +3323,7 @@ impl Display for CreateTrigger {
             or_replace,
             is_constraint,
             name,
-            period_specified_before_table,
+            period_before_table,
             period,
             events,
             table_name,
@@ -3345,7 +3345,7 @@ impl Display for CreateTrigger {
             is_constraint = if *is_constraint { "CONSTRAINT " } else { "" },
         )?;
 
-        if *period_specified_before_table {
+        if *period_before_table {
             write!(f, "{period}")?;
             if !events.is_empty() {
                 write!(f, " {}", display_separated(events, " OR "))?;

@@ -2391,7 +2391,7 @@ fn parse_create_trigger() {
             is_constraint: false,
             name: ObjectName::from(vec![Ident::new("reminder1")]),
             period: TriggerPeriod::After,
-            period_specified_before_table: false,
+            period_before_table: false,
             events: vec![TriggerEvent::Insert, TriggerEvent::Update(vec![]),],
             table_name: ObjectName::from(vec![Ident::new("Sales"), Ident::new("Customer")]),
             referenced_table_name: None,

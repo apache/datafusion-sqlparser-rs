@@ -259,7 +259,7 @@ impl MsSqlDialect {
             is_constraint: false,
             name,
             period,
-            period_specified_before_table: false,
+            period_before_table: false,
             events,
             table_name,
             referenced_table_name: None,

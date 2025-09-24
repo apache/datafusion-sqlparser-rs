@@ -3929,7 +3929,7 @@ fn parse_create_trigger() {
             is_constraint: false,
             name: ObjectName::from(vec![Ident::new("emp_stamp")]),
             period: TriggerPeriod::Before,
-            period_specified_before_table: true,
+            period_before_table: true,
             events: vec![TriggerEvent::Insert],
             table_name: ObjectName::from(vec![Ident::new("emp")]),
             referenced_table_name: None,

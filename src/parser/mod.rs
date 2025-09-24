@@ -5651,7 +5651,7 @@ impl<'a> Parser<'a> {
             is_constraint,
             name,
             period,
-            period_specified_before_table: true,
+            period_before_table: true,
             events,
             table_name,
             referenced_table_name,

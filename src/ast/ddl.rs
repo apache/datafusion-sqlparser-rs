@@ -3221,7 +3221,7 @@ pub struct CreateTrigger {
     pub or_alter: bool,
     /// True if this is a temporary trigger.
     ///
-    /// The possible syntaxes are two:
+    /// Examples:
     ///
     /// ```sql
     /// CREATE TEMP TRIGGER trigger_name
@@ -3230,10 +3230,11 @@ pub struct CreateTrigger {
     /// or
     ///
     /// ```sql
-    /// CREATE TEMPORARY TRIGGER trigger_name
+    /// CREATE TEMPORARY TRIGGER trigger_name;
+    /// CREATE TEMP TRIGGER trigger_name;
     /// ```
     ///
-    /// [Temporary Triggers in SQLite](https://sqlite.org/lang_createtrigger.html#temp_triggers_on_non_temp_tables)
+    /// [SQLite](https://sqlite.org/lang_createtrigger.html#temp_triggers_on_non_temp_tables)
     pub temporary: bool,
     /// The `OR REPLACE` clause is used to re-create the trigger if it already exists.
     ///

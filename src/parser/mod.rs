@@ -7123,6 +7123,8 @@ impl<'a> Parser<'a> {
         // parse it anyway (as we do inside `ALTER TABLE` and `CREATE TABLE` parsing).
         let index_options = self.parse_index_options()?;
 
+        // Only keep the latest USING, we don't take the IndexOption out of the vec and place the
+        // value in the `using` var because we try to keep the order of the options as they appear.
         if index_options
             .iter()
             .any(|opt| matches!(opt, IndexOption::Using(_)))

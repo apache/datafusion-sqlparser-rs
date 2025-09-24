@@ -3934,8 +3934,7 @@ fn parse_create_trigger() {
             table_name: ObjectName::from(vec![Ident::new("emp")]),
             referenced_table_name: None,
             referencing: vec![],
-            trigger_object: Some(TriggerObject::Row),
-            include_each: true,
+            trigger_object: Some(TriggerObjectKind::ForEach(TriggerObject::Row)),
             condition: None,
             exec_body: Some(TriggerExecBody {
                 exec_type: TriggerExecBodyType::Function,

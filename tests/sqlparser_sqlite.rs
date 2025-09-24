@@ -628,7 +628,6 @@ fn test_create_trigger() {
             referenced_table_name,
             referencing,
             trigger_object,
-            include_each,
             condition,
             exec_body: _,
             statements_as,
@@ -646,8 +645,10 @@ fn test_create_trigger() {
             assert_eq!(table_name.to_string(), "assets");
             assert!(referenced_table_name.is_none());
             assert!(referencing.is_empty());
-            assert_eq!(trigger_object, Some(TriggerObject::Row));
-            assert!(include_each);
+            assert_eq!(
+                trigger_object,
+                Some(TriggerObjectKind::ForEach(TriggerObject::Row))
+            );
             assert!(condition.is_none());
             assert!(!statements_as);
             assert!(characteristics.is_none());
@@ -673,7 +674,6 @@ fn test_create_trigger() {
             referenced_table_name,
             referencing,
             trigger_object,
-            include_each,
             condition,
             exec_body: _,
             statements_as,
@@ -692,7 +692,6 @@ fn test_create_trigger() {
             assert!(referenced_table_name.is_none());
             assert!(referencing.is_empty());
             assert!(trigger_object.is_none());
-            assert!(!include_each);
             assert!(condition.is_none());
             assert!(!statements_as);
             assert!(characteristics.is_none());
@@ -715,7 +714,6 @@ fn test_create_trigger() {
             referenced_table_name,
             referencing,
             trigger_object,
-            include_each,
             condition,
             exec_body: _,
             statements_as,
@@ -734,7 +732,6 @@ fn test_create_trigger() {
             assert!(referenced_table_name.is_none());
             assert!(referencing.is_empty());
             assert!(trigger_object.is_none());
-            assert!(!include_each);
             assert!(condition.is_none());
             assert!(!statements_as);
             assert!(characteristics.is_none());
@@ -757,7 +754,6 @@ fn test_create_trigger() {
             referenced_table_name,
             referencing,
             trigger_object,
-            include_each,
             condition,
             exec_body: _,
             statements_as,
@@ -775,8 +771,10 @@ fn test_create_trigger() {
             assert_eq!(table_name.to_string(), "products");
             assert!(referenced_table_name.is_none());
             assert!(referencing.is_empty());
-            assert_eq!(trigger_object, Some(TriggerObject::Row));
-            assert!(include_each);
+            assert_eq!(
+                trigger_object,
+                Some(TriggerObjectKind::ForEach(TriggerObject::Row))
+            );
             assert!(condition.is_some());
             assert!(!statements_as);
             assert!(characteristics.is_none());
@@ -800,7 +798,6 @@ fn test_create_trigger() {
             referenced_table_name,
             referencing,
             trigger_object,
-            include_each,
             condition,
             exec_body: _,
             statements_as,
@@ -819,7 +816,6 @@ fn test_create_trigger() {
             assert!(referenced_table_name.is_none());
             assert!(referencing.is_empty());
             assert!(trigger_object.is_none());
-            assert!(!include_each);
             assert!(condition.is_none());
             assert!(!statements_as);
             assert!(characteristics.is_none());
@@ -843,7 +839,6 @@ fn test_create_trigger() {
             referenced_table_name,
             referencing,
             trigger_object,
-            include_each,
             condition,
             exec_body: _,
             statements_as,
@@ -862,7 +857,6 @@ fn test_create_trigger() {
             assert!(referenced_table_name.is_none());
             assert!(referencing.is_empty());
             assert!(trigger_object.is_none());
-            assert!(!include_each);
             assert!(condition.is_none());
             assert!(!statements_as);
             assert!(characteristics.is_none());

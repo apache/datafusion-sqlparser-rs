@@ -5683,8 +5683,7 @@ fn parse_create_simple_before_insert_trigger() {
         table_name: ObjectName::from(vec![Ident::new("accounts")]),
         referenced_table_name: None,
         referencing: vec![],
-        trigger_object: Some(TriggerObject::Row),
-        include_each: true,
+        trigger_object: Some(TriggerObjectKind::ForEach(TriggerObject::Row)),
         condition: None,
         exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
@@ -5716,8 +5715,7 @@ fn parse_create_after_update_trigger_with_condition() {
         table_name: ObjectName::from(vec![Ident::new("accounts")]),
         referenced_table_name: None,
         referencing: vec![],
-        trigger_object: Some(TriggerObject::Row),
-        include_each: true,
+        trigger_object: Some(TriggerObjectKind::ForEach(TriggerObject::Row)),
         condition: Some(Expr::Nested(Box::new(Expr::BinaryOp {
             left: Box::new(Expr::CompoundIdentifier(vec![
                 Ident::new("NEW"),
@@ -5756,8 +5754,7 @@ fn parse_create_instead_of_delete_trigger() {
         table_name: ObjectName::from(vec![Ident::new("accounts")]),
         referenced_table_name: None,
         referencing: vec![],
-        trigger_object: Some(TriggerObject::Row),
-        include_each: true,
+        trigger_object: Some(TriggerObjectKind::ForEach(TriggerObject::Row)),
         condition: None,
         exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
@@ -5793,8 +5790,7 @@ fn parse_create_trigger_with_multiple_events_and_deferrable() {
         table_name: ObjectName::from(vec![Ident::new("accounts")]),
         referenced_table_name: None,
         referencing: vec![],
-        trigger_object: Some(TriggerObject::Row),
-        include_each: true,
+        trigger_object: Some(TriggerObjectKind::ForEach(TriggerObject::Row)),
         condition: None,
         exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
@@ -5841,8 +5837,7 @@ fn parse_create_trigger_with_referencing() {
                 transition_relation_name: ObjectName::from(vec![Ident::new("old_accounts")]),
             },
         ],
-        trigger_object: Some(TriggerObject::Row),
-        include_each: true,
+        trigger_object: Some(TriggerObjectKind::ForEach(TriggerObject::Row)),
         condition: None,
         exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
@@ -6147,8 +6142,7 @@ fn parse_trigger_related_functions() {
             table_name: ObjectName::from(vec![Ident::new("emp")]),
             referenced_table_name: None,
             referencing: vec![],
-            trigger_object: Some(TriggerObject::Row),
-            include_each: true,
+            trigger_object: Some(TriggerObjectKind::ForEach(TriggerObject::Row)),
             condition: None,
             exec_body: Some(TriggerExecBody {
                 exec_type: TriggerExecBodyType::Function,

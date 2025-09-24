@@ -3181,6 +3181,26 @@ impl Spanned for RenameTableNameKind {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Whether the syntax used for the trigger object (ROW or STATEMENT) is `FOR` or `FOR EACH`.
+pub enum TriggerObjectKind {
+    /// The `FOR` syntax is used.
+    For(TriggerObject),
+    /// The `FOR EACH` syntax is used.
+    ForEach(TriggerObject),
+}
+
+impl Display for TriggerObjectKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TriggerObjectKind::For(obj) => write!(f, "FOR {obj}"),
+            TriggerObjectKind::ForEach(obj) => write!(f, "FOR EACH {obj}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// CREATE TRIGGER
 ///
 /// Examples:
@@ -3282,9 +3302,7 @@ pub struct CreateTrigger {
     /// every row affected by the trigger event, or just once per SQL statement.
     /// This is optional in some SQL dialects, such as SQLite, and if not specified, in
     /// those cases, the implied default is `FOR EACH ROW`.
-    pub trigger_object: Option<TriggerObject>,
-    /// Whether to include the `EACH` term of the `FOR EACH`, as it is optional syntax.
-    pub include_each: bool,
+    pub trigger_object: Option<TriggerObjectKind>,
     ///  Triggering conditions
     pub condition: Option<Expr>,
     /// Execute logic block
@@ -3313,7 +3331,6 @@ impl Display for CreateTrigger {
             referencing,
             trigger_object,
             condition,
-            include_each,
             exec_body,
             statements_as,
             statements,
@@ -3355,11 +3372,7 @@ impl Display for CreateTrigger {
         }
 
         if let Some(trigger_object) = trigger_object {
-            if *include_each {
-                write!(f, " FOR EACH {trigger_object}")?;
-            } else if exec_body.is_some() {
-                write!(f, " FOR {trigger_object}")?;
-            }
+            write!(f, " {trigger_object}")?;
         }
         if let Some(condition) = condition {
             write!(f, " WHEN {condition}")?;

@@ -5609,23 +5609,26 @@ impl<'a> Parser<'a> {
             }
         }
 
-        let (include_each, trigger_object) = if self.parse_keyword(Keyword::FOR) {
-            (
-                self.parse_keyword(Keyword::EACH),
-                Some(
-                    match self.expect_one_of_keywords(&[Keyword::ROW, Keyword::STATEMENT])? {
-                        Keyword::ROW => TriggerObject::Row,
-                        Keyword::STATEMENT => TriggerObject::Statement,
-                        _ => unreachable!(),
-                    },
-                ),
-            )
+        let trigger_object = if self.parse_keyword(Keyword::FOR) {
+            let include_each = self.parse_keyword(Keyword::EACH);
+            let trigger_object =
+                match self.expect_one_of_keywords(&[Keyword::ROW, Keyword::STATEMENT])? {
+                    Keyword::ROW => TriggerObject::Row,
+                    Keyword::STATEMENT => TriggerObject::Statement,
+                    _ => unreachable!(),
+                };
+
+            Some(if include_each {
+                TriggerObjectKind::ForEach(trigger_object)
+            } else {
+                TriggerObjectKind::For(trigger_object)
+            })
         } else {
             if !dialect_of!(self is SQLiteDialect ) {
                 self.expect_keyword_is(Keyword::FOR)?;
             }
 
-            (false, None)
+            None
         };
 
         let condition = self
@@ -5654,7 +5657,6 @@ impl<'a> Parser<'a> {
             referenced_table_name,
             referencing,
             trigger_object,
-            include_each,
             condition,
             exec_body,
             statements_as: false,

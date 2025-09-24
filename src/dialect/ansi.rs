@@ -33,4 +33,9 @@ impl Dialect for AnsiDialect {
     fn require_interval_qualifier(&self) -> bool {
         true
     }
+
+    // The SQL standard explictly states that block comments nest.
+    fn supports_nested_comments(&self) -> bool {
+        true
+    }
 }

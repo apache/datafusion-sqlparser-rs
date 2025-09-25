@@ -540,6 +540,7 @@ impl Spanned for Statement {
             Statement::RaisError { .. } => Span::empty(),
             Statement::Print { .. } => Span::empty(),
             Statement::Return { .. } => Span::empty(),
+            Statement::Go { .. } => Span::empty(),
             Statement::List(..) | Statement::Remove(..) => Span::empty(),
             Statement::ExportData(ExportData {
                 options,

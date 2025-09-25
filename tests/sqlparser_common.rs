@@ -16761,11 +16761,13 @@ fn parse_create_user() {
     verified_stmt("CREATE OR REPLACE USER u1");
     verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1");
     verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret'");
-    verified_stmt(
+    let dialects = all_dialects_where(|d| d.supports_boolean_literals());
+    dialects.one_statement_parses_to(
         "CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=TRUE",
+        "CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=true",
     );
-    verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=TRUE TYPE=SERVICE TAG (t1='v1')");
-    let create = verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=TRUE TYPE=SERVICE WITH TAG (t1='v1', t2='v2')");
+    dialects.verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=true TYPE=SERVICE TAG (t1='v1')");
+    let create = dialects.verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=false TYPE=SERVICE WITH TAG (t1='v1', t2='v2')");
     match create {
         Statement::CreateUser(stmt) => {
             assert_eq!(stmt.name, Ident::new("u1"));
@@ -16778,18 +16780,19 @@ fn parse_create_user() {
                     options: vec![
                         KeyValueOption {
                             option_name: "PASSWORD".to_string(),
-                            value: "secret".to_string(),
-                            option_type: KeyValueOptionType::STRING
+                            option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
+                                "secret".to_string()
+                            )),
                         },
                         KeyValueOption {
                             option_name: "MUST_CHANGE_PASSWORD".to_string(),
-                            value: "TRUE".to_string(),
-                            option_type: KeyValueOptionType::BOOLEAN
+                            option_value: KeyValueOptionKind::Single(Value::Boolean(false)),
                         },
                         KeyValueOption {
                             option_name: "TYPE".to_string(),
-                            value: "SERVICE".to_string(),
-                            option_type: KeyValueOptionType::ENUM
+                            option_value: KeyValueOptionKind::Single(Value::Placeholder(
+                                "SERVICE".to_string()
+                            )),
                         },
                     ],
                 },
@@ -16802,13 +16805,15 @@ fn parse_create_user() {
                     options: vec![
                         KeyValueOption {
                             option_name: "t1".to_string(),
-                            value: "v1".to_string(),
-                            option_type: KeyValueOptionType::STRING
+                            option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
+                                "v1".to_string()
+                            )),
                         },
                         KeyValueOption {
                             option_name: "t2".to_string(),
-                            value: "v2".to_string(),
-                            option_type: KeyValueOptionType::STRING
+                            option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
+                                "v2".to_string()
+                            )),
                         },
                     ]
                 }
@@ -17245,4 +17250,212 @@ fn parse_invisible_column() {
         }
         _ => panic!("Unexpected statement {stmt}"),
     }
+}
+
+#[test]
+fn test_parse_alter_user() {
+    verified_stmt("ALTER USER u1");
+    verified_stmt("ALTER USER IF EXISTS u1");
+    let stmt = verified_stmt("ALTER USER IF EXISTS u1 RENAME TO u2");
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert!(alter.if_exists);
+            assert_eq!(alter.name, Ident::new("u1"));
+            assert_eq!(alter.rename_to, Some(Ident::new("u2")));
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("ALTER USER IF EXISTS u1 RESET PASSWORD");
+    verified_stmt("ALTER USER IF EXISTS u1 ABORT ALL QUERIES");
+    verified_stmt(
+        "ALTER USER IF EXISTS u1 ADD DELEGATED AUTHORIZATION OF ROLE r1 TO SECURITY INTEGRATION i1",
+    );
+    verified_stmt("ALTER USER IF EXISTS u1 REMOVE DELEGATED AUTHORIZATION OF ROLE r1 FROM SECURITY INTEGRATION i1");
+    verified_stmt(
+        "ALTER USER IF EXISTS u1 REMOVE DELEGATED AUTHORIZATIONS FROM SECURITY INTEGRATION i1",
+    );
+    verified_stmt("ALTER USER IF EXISTS u1 ENROLL MFA");
+    let stmt = verified_stmt("ALTER USER u1 SET DEFAULT_MFA_METHOD PASSKEY");
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert_eq!(alter.set_default_mfa_method, Some(MfaMethodKind::PassKey))
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("ALTER USER u1 SET DEFAULT_MFA_METHOD TOTP");
+    verified_stmt("ALTER USER u1 SET DEFAULT_MFA_METHOD DUO");
+    let stmt = verified_stmt("ALTER USER u1 REMOVE MFA METHOD PASSKEY");
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert_eq!(alter.remove_mfa_method, Some(MfaMethodKind::PassKey))
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("ALTER USER u1 REMOVE MFA METHOD TOTP");
+    verified_stmt("ALTER USER u1 REMOVE MFA METHOD DUO");
+    let stmt = verified_stmt("ALTER USER u1 MODIFY MFA METHOD PASSKEY SET COMMENT 'abc'");
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert_eq!(
+                alter.modify_mfa_method,
+                Some(AlterUserModifyMfaMethod {
+                    method: MfaMethodKind::PassKey,
+                    comment: "abc".to_string()
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("ALTER USER u1 ADD MFA METHOD OTP");
+    verified_stmt("ALTER USER u1 ADD MFA METHOD OTP COUNT = 8");
+
+    let stmt = verified_stmt("ALTER USER u1 SET AUTHENTICATION POLICY p1");
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert_eq!(
+                alter.set_policy,
+                Some(AlterUserSetPolicy {
+                    policy_kind: UserPolicyKind::Authentication,
+                    policy: Ident::new("p1")
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("ALTER USER u1 SET PASSWORD POLICY p1");
+    verified_stmt("ALTER USER u1 SET SESSION POLICY p1");
+    let stmt = verified_stmt("ALTER USER u1 UNSET AUTHENTICATION POLICY");
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert_eq!(alter.unset_policy, Some(UserPolicyKind::Authentication));
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("ALTER USER u1 UNSET PASSWORD POLICY");
+    verified_stmt("ALTER USER u1 UNSET SESSION POLICY");
+
+    let stmt = verified_stmt("ALTER USER u1 SET TAG k1='v1'");
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert_eq!(
+                alter.set_tag.options,
+                vec![KeyValueOption {
+                    option_name: "k1".to_string(),
+                    option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
+                        "v1".to_string()
+                    )),
+                },]
+            );
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("ALTER USER u1 SET TAG k1='v1', k2='v2'");
+    let stmt = verified_stmt("ALTER USER u1 UNSET TAG k1");
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert_eq!(alter.unset_tag, vec!["k1".to_string()]);
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("ALTER USER u1 UNSET TAG k1, k2, k3");
+
+    let dialects = all_dialects_where(|d| d.supports_boolean_literals());
+    dialects.one_statement_parses_to(
+        "ALTER USER u1 SET PASSWORD='secret', MUST_CHANGE_PASSWORD=TRUE, MINS_TO_UNLOCK=10",
+        "ALTER USER u1 SET PASSWORD='secret', MUST_CHANGE_PASSWORD=true, MINS_TO_UNLOCK=10",
+    );
+
+    let stmt = dialects.verified_stmt(
+        "ALTER USER u1 SET PASSWORD='secret', MUST_CHANGE_PASSWORD=true, MINS_TO_UNLOCK=10",
+    );
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert_eq!(
+                alter.set_props,
+                KeyValueOptions {
+                    delimiter: KeyValueOptionsDelimiter::Comma,
+                    options: vec![
+                        KeyValueOption {
+                            option_name: "PASSWORD".to_string(),
+                            option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
+                                "secret".to_string()
+                            )),
+                        },
+                        KeyValueOption {
+                            option_name: "MUST_CHANGE_PASSWORD".to_string(),
+                            option_value: KeyValueOptionKind::Single(Value::Boolean(true)),
+                        },
+                        KeyValueOption {
+                            option_name: "MINS_TO_UNLOCK".to_string(),
+                            option_value: KeyValueOptionKind::Single(number("10")),
+                        },
+                    ]
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    let stmt = verified_stmt("ALTER USER u1 UNSET PASSWORD");
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert_eq!(alter.unset_props, vec!["PASSWORD".to_string()]);
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("ALTER USER u1 UNSET PASSWORD, MUST_CHANGE_PASSWORD, MINS_TO_UNLOCK");
+
+    let stmt = verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL')");
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert_eq!(
+                alter.set_props.options,
+                vec![KeyValueOption {
+                    option_name: "DEFAULT_SECONDARY_ROLES".to_string(),
+                    option_value: KeyValueOptionKind::Multi(vec![Value::SingleQuotedString(
+                        "ALL".to_string()
+                    )])
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=()");
+    verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('R1', 'R2', 'R3')");
+    verified_stmt("ALTER USER u1 SET PASSWORD='secret', DEFAULT_SECONDARY_ROLES=('ALL')");
+    verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL'), PASSWORD='secret'");
+    let stmt = verified_stmt(
+        "ALTER USER u1 SET WORKLOAD_IDENTITY=(TYPE=AWS, ARN='arn:aws:iam::123456789:r1/')",
+    );
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert_eq!(
+                alter.set_props.options,
+                vec![KeyValueOption {
+                    option_name: "WORKLOAD_IDENTITY".to_string(),
+                    option_value: KeyValueOptionKind::KeyValueOptions(Box::new(KeyValueOptions {
+                        delimiter: KeyValueOptionsDelimiter::Comma,
+                        options: vec![
+                            KeyValueOption {
+                                option_name: "TYPE".to_string(),
+                                option_value: KeyValueOptionKind::Single(Value::Placeholder(
+                                    "AWS".to_string()
+                                )),
+                            },
+                            KeyValueOption {
+                                option_name: "ARN".to_string(),
+                                option_value: KeyValueOptionKind::Single(
+                                    Value::SingleQuotedString(
+                                        "arn:aws:iam::123456789:r1/".to_string()
+                                    )
+                                ),
+                            },
+                        ]
+                    }))
+                }]
+            )
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL'), PASSWORD='secret', WORKLOAD_IDENTITY=(TYPE=AWS, ARN='arn:aws:iam::123456789:r1/')");
 }

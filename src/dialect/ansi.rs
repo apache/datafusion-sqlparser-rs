@@ -34,7 +34,7 @@ impl Dialect for AnsiDialect {
         true
     }
 
-    // The SQL standard explictly states that block comments nest.
+    /// The SQL standard explicitly states that block comments nest.
     fn supports_nested_comments(&self) -> bool {
         true
     }

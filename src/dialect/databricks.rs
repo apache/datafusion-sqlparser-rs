@@ -65,7 +65,7 @@ impl Dialect for DatabricksDialect {
         true
     }
 
-    /// https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-comment
+    /// See <https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-comment>
     fn supports_nested_comments(&self) -> bool {
         true
     }

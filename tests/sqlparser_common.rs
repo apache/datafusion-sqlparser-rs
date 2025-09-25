@@ -17270,7 +17270,7 @@ fn parse_create_index_different_using_positions() {
     }
 
     let sql = "CREATE INDEX idx_name USING BTREE ON table_name (col1) USING HASH";
-    let expected = "CREATE INDEX idx_name ON table_name(col1) USING HASH";
+    let expected = "CREATE INDEX idx_name ON table_name USING BTREE (col1) USING HASH";
     match all_dialects().one_statement_parses_to(sql, expected) {
         Statement::CreateIndex(CreateIndex {
             name,

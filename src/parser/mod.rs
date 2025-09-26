@@ -4750,9 +4750,9 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::DOMAIN) {
             self.parse_create_domain()
         } else if self.parse_keyword(Keyword::TRIGGER) {
-            self.parse_create_trigger(or_alter, or_replace, false)
+            self.parse_create_trigger(temporary, or_alter, or_replace, false)
         } else if self.parse_keywords(&[Keyword::CONSTRAINT, Keyword::TRIGGER]) {
-            self.parse_create_trigger(or_alter, or_replace, true)
+            self.parse_create_trigger(temporary, or_alter, or_replace, true)
         } else if self.parse_keyword(Keyword::MACRO) {
             self.parse_create_macro(or_replace, temporary)
         } else if self.parse_keyword(Keyword::SECRET) {
@@ -5548,7 +5548,8 @@ impl<'a> Parser<'a> {
     /// DROP TRIGGER [ IF EXISTS ] name ON table_name [ CASCADE | RESTRICT ]
     /// ```
     pub fn parse_drop_trigger(&mut self) -> Result<Statement, ParserError> {
-        if !dialect_of!(self is PostgreSqlDialect | GenericDialect | MySqlDialect | MsSqlDialect) {
+        if !dialect_of!(self is PostgreSqlDialect | SQLiteDialect | GenericDialect | MySqlDialect | MsSqlDialect)
+        {
             self.prev_token();
             return self.expected("an object type after DROP", self.peek_token());
         }
@@ -5576,11 +5577,13 @@ impl<'a> Parser<'a> {
 
     pub fn parse_create_trigger(
         &mut self,
+        temporary: bool,
         or_alter: bool,
         or_replace: bool,
         is_constraint: bool,
     ) -> Result<Statement, ParserError> {
-        if !dialect_of!(self is PostgreSqlDialect | GenericDialect | MySqlDialect | MsSqlDialect) {
+        if !dialect_of!(self is PostgreSqlDialect | SQLiteDialect | GenericDialect | MySqlDialect | MsSqlDialect)
+        {
             self.prev_token();
             return self.expected("an object type after CREATE", self.peek_token());
         }
@@ -5607,14 +5610,27 @@ impl<'a> Parser<'a> {
             }
         }
 
-        self.expect_keyword_is(Keyword::FOR)?;
-        let include_each = self.parse_keyword(Keyword::EACH);
-        let trigger_object =
-            match self.expect_one_of_keywords(&[Keyword::ROW, Keyword::STATEMENT])? {
-                Keyword::ROW => TriggerObject::Row,
-                Keyword::STATEMENT => TriggerObject::Statement,
-                _ => unreachable!(),
-            };
+        let trigger_object = if self.parse_keyword(Keyword::FOR) {
+            let include_each = self.parse_keyword(Keyword::EACH);
+            let trigger_object =
+                match self.expect_one_of_keywords(&[Keyword::ROW, Keyword::STATEMENT])? {
+                    Keyword::ROW => TriggerObject::Row,
+                    Keyword::STATEMENT => TriggerObject::Statement,
+                    _ => unreachable!(),
+                };
+
+            Some(if include_each {
+                TriggerObjectKind::ForEach(trigger_object)
+            } else {
+                TriggerObjectKind::For(trigger_object)
+            })
+        } else {
+            if !dialect_of!(self is SQLiteDialect ) {
+                self.expect_keyword_is(Keyword::FOR)?;
+            }
+
+            None
+        };
 
         let condition = self
             .parse_keyword(Keyword::WHEN)
@@ -5629,8 +5645,9 @@ impl<'a> Parser<'a> {
             statements = Some(self.parse_conditional_statements(&[Keyword::END])?);
         }
 
-        Ok(Statement::CreateTrigger(CreateTrigger {
+        Ok(CreateTrigger {
             or_alter,
+            temporary,
             or_replace,
             is_constraint,
             name,
@@ -5641,13 +5658,13 @@ impl<'a> Parser<'a> {
             referenced_table_name,
             referencing,
             trigger_object,
-            include_each,
             condition,
             exec_body,
             statements_as: false,
             statements,
             characteristics,
-        }))
+        }
+        .into())
     }
 
     pub fn parse_trigger_period(&mut self) -> Result<TriggerPeriod, ParserError> {

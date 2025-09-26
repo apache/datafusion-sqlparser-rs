@@ -2419,7 +2419,7 @@ mod tests {
     use crate::dialect::{
         BigQueryDialect, ClickHouseDialect, HiveDialect, MsSqlDialect, MySqlDialect, SQLiteDialect,
     };
-    use crate::test_utils::all_dialects_where;
+    use crate::test_utils::{all_dialects_except, all_dialects_where};
     use core::fmt::Debug;
 
     #[test]
@@ -3169,90 +3169,79 @@ mod tests {
 
     #[test]
     fn tokenize_nested_multiline_comment() {
-        let dialect = GenericDialect {};
-        let test_cases = vec![
-            (
-                "0/*multi-line\n* \n/* comment \n /*comment*/*/ */ /comment*/1",
-                vec![
-                    Token::Number("0".to_string(), false),
-                    Token::Whitespace(Whitespace::MultiLineComment(
-                        "multi-line\n* \n/* comment \n /*comment*/*/ ".into(),
-                    )),
-                    Token::Whitespace(Whitespace::Space),
-                    Token::Div,
-                    Token::Word(Word {
-                        value: "comment".to_string(),
-                        quote_style: None,
-                        keyword: Keyword::COMMENT,
-                    }),
-                    Token::Mul,
-                    Token::Div,
-                    Token::Number("1".to_string(), false),
-                ],
-            ),
-            (
-                "0/*multi-line\n* \n/* comment \n /*comment/**/ */ /comment*/*/1",
-                vec![
-                    Token::Number("0".to_string(), false),
-                    Token::Whitespace(Whitespace::MultiLineComment(
-                        "multi-line\n* \n/* comment \n /*comment/**/ */ /comment*/".into(),
-                    )),
-                    Token::Number("1".to_string(), false),
-                ],
-            ),
-            (
-                "SELECT 1/* a /* b */ c */0",
-                vec![
-                    Token::make_keyword("SELECT"),
-                    Token::Whitespace(Whitespace::Space),
-                    Token::Number("1".to_string(), false),
-                    Token::Whitespace(Whitespace::MultiLineComment(" a /* b */ c ".to_string())),
-                    Token::Number("0".to_string(), false),
-                ],
-            ),
-        ];
+        all_dialects_where(|d| d.supports_nested_comments()).tokenizes_to(
+            "0/*multi-line\n* \n/* comment \n /*comment*/*/ */ /comment*/1",
+            vec![
+                Token::Number("0".to_string(), false),
+                Token::Whitespace(Whitespace::MultiLineComment(
+                    "multi-line\n* \n/* comment \n /*comment*/*/ ".into(),
+                )),
+                Token::Whitespace(Whitespace::Space),
+                Token::Div,
+                Token::Word(Word {
+                    value: "comment".to_string(),
+                    quote_style: None,
+                    keyword: Keyword::COMMENT,
+                }),
+                Token::Mul,
+                Token::Div,
+                Token::Number("1".to_string(), false),
+            ],
+        );
 
-        for (sql, expected) in test_cases {
-            let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
-            compare(expected, tokens);
-        }
+        all_dialects_where(|d| d.supports_nested_comments()).tokenizes_to(
+            "0/*multi-line\n* \n/* comment \n /*comment/**/ */ /comment*/*/1",
+            vec![
+                Token::Number("0".to_string(), false),
+                Token::Whitespace(Whitespace::MultiLineComment(
+                    "multi-line\n* \n/* comment \n /*comment/**/ */ /comment*/".into(),
+                )),
+                Token::Number("1".to_string(), false),
+            ],
+        );
+
+        all_dialects_where(|d| d.supports_nested_comments()).tokenizes_to(
+            "SELECT 1/* a /* b */ c */0",
+            vec![
+                Token::make_keyword("SELECT"),
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("1".to_string(), false),
+                Token::Whitespace(Whitespace::MultiLineComment(" a /* b */ c ".to_string())),
+                Token::Number("0".to_string(), false),
+            ],
+        );
     }
 
     #[test]
     fn tokenize_nested_multiline_comment_empty() {
-        let sql = "select 1/*/**/*/0";
-
-        let dialect = GenericDialect {};
-        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
-        let expected = vec![
-            Token::make_keyword("select"),
-            Token::Whitespace(Whitespace::Space),
-            Token::Number("1".to_string(), false),
-            Token::Whitespace(Whitespace::MultiLineComment("/**/".to_string())),
-            Token::Number("0".to_string(), false),
-        ];
-
-        compare(expected, tokens);
+        all_dialects_where(|d| d.supports_nested_comments()).tokenizes_to(
+            "select 1/*/**/*/0",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("1".to_string(), false),
+                Token::Whitespace(Whitespace::MultiLineComment("/**/".to_string())),
+                Token::Number("0".to_string(), false),
+            ],
+        );
     }
 
     #[test]
     fn tokenize_nested_comments_if_not_supported() {
-        let dialect = SQLiteDialect {};
-        let sql = "SELECT 1/*/* nested comment */*/0";
-        let tokens = Tokenizer::new(&dialect, sql).tokenize();
-        let expected = vec![
-            Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
-            Token::Number("1".to_string(), false),
-            Token::Whitespace(Whitespace::MultiLineComment(
-                "/* nested comment ".to_string(),
-            )),
-            Token::Mul,
-            Token::Div,
-            Token::Number("0".to_string(), false),
-        ];
-
-        compare(expected, tokens.unwrap());
+        all_dialects_except(|d| d.supports_nested_comments()).tokenizes_to(
+            "SELECT 1/*/* nested comment */*/0",
+            vec![
+                Token::make_keyword("SELECT"),
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("1".to_string(), false),
+                Token::Whitespace(Whitespace::MultiLineComment(
+                    "/* nested comment ".to_string(),
+                )),
+                Token::Mul,
+                Token::Div,
+                Token::Number("0".to_string(), false),
+            ],
+        );
     }
 
     #[test]

@@ -34,7 +34,7 @@ use IsOptional::*;
 
 use crate::ast::helpers::{
     key_value_options::{
-        KeyValueOption, KeyValueOptionType, KeyValueOptions, KeyValueOptionsDelimiter,
+        KeyValueOption, KeyValueOptionKind, KeyValueOptions, KeyValueOptionsDelimiter,
     },
     stmt_create_table::{CreateTableBuilder, CreateTableConfiguration},
 };
@@ -4796,10 +4796,12 @@ impl<'a> Parser<'a> {
     fn parse_create_user(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let name = self.parse_identifier()?;
-        let options = self.parse_key_value_options(false, &[Keyword::WITH, Keyword::TAG])?;
+        let options = self
+            .parse_key_value_options(false, &[Keyword::WITH, Keyword::TAG])?
+            .options;
         let with_tags = self.parse_keyword(Keyword::WITH);
         let tags = if self.parse_keyword(Keyword::TAG) {
-            self.parse_key_value_options(true, &[])?
+            self.parse_key_value_options(true, &[])?.options
         } else {
             vec![]
         };
@@ -9282,6 +9284,7 @@ impl<'a> Parser<'a> {
             Keyword::CONNECTOR,
             Keyword::ICEBERG,
             Keyword::SCHEMA,
+            Keyword::USER,
         ])?;
         match object_type {
             Keyword::SCHEMA => {
@@ -9317,6 +9320,7 @@ impl<'a> Parser<'a> {
             Keyword::ROLE => self.parse_alter_role(),
             Keyword::POLICY => self.parse_alter_policy(),
             Keyword::CONNECTOR => self.parse_alter_connector(),
+            Keyword::USER => self.parse_alter_user(),
             // unreachable because expect_one_of_keywords used above
             _ => unreachable!(),
         }
@@ -17493,8 +17497,9 @@ impl<'a> Parser<'a> {
         &mut self,
         parenthesized: bool,
         end_words: &[Keyword],
-    ) -> Result<Vec<KeyValueOption>, ParserError> {
+    ) -> Result<KeyValueOptions, ParserError> {
         let mut options: Vec<KeyValueOption> = Vec::new();
+        let mut delimiter = KeyValueOptionsDelimiter::Space;
         if parenthesized {
             self.expect_token(&Token::LParen)?;
         }
@@ -17508,9 +17513,12 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Token::EOF => break,
-                Token::Comma => continue,
+                Token::Comma => {
+                    delimiter = KeyValueOptionsDelimiter::Comma;
+                    continue;
+                }
                 Token::Word(w) if !end_words.contains(&w.keyword) => {
-                    options.push(self.parse_key_value_option(w)?)
+                    options.push(self.parse_key_value_option(&w)?)
                 }
                 Token::Word(w) if end_words.contains(&w.keyword) => {
                     self.prev_token();
@@ -17519,40 +17527,67 @@ impl<'a> Parser<'a> {
                 _ => return self.expected("another option, EOF, Comma or ')'", self.peek_token()),
             };
         }
-        Ok(options)
+
+        Ok(KeyValueOptions { delimiter, options })
     }
 
     /// Parses a `KEY = VALUE` construct based on the specified key
     pub(crate) fn parse_key_value_option(
         &mut self,
-        key: Word,
+        key: &Word,
     ) -> Result<KeyValueOption, ParserError> {
         self.expect_token(&Token::Eq)?;
-        match self.next_token().token {
-            Token::SingleQuotedString(value) => Ok(KeyValueOption {
-                option_name: key.value,
-                option_type: KeyValueOptionType::STRING,
-                value,
+        match self.peek_token().token {
+            Token::SingleQuotedString(_) => Ok(KeyValueOption {
+                option_name: key.value.clone(),
+                option_value: KeyValueOptionKind::Single(self.parse_value()?.into()),
             }),
             Token::Word(word)
                 if word.keyword == Keyword::TRUE || word.keyword == Keyword::FALSE =>
             {
                 Ok(KeyValueOption {
-                    option_name: key.value,
-                    option_type: KeyValueOptionType::BOOLEAN,
-                    value: word.value.to_uppercase(),
+                    option_name: key.value.clone(),
+                    option_value: KeyValueOptionKind::Single(self.parse_value()?.into()),
                 })
             }
-            Token::Word(word) => Ok(KeyValueOption {
-                option_name: key.value,
-                option_type: KeyValueOptionType::ENUM,
-                value: word.value,
+            Token::Number(..) => Ok(KeyValueOption {
+                option_name: key.value.clone(),
+                option_value: KeyValueOptionKind::Single(self.parse_value()?.into()),
             }),
-            Token::Number(n, _) => Ok(KeyValueOption {
-                option_name: key.value,
-                option_type: KeyValueOptionType::NUMBER,
-                value: n,
-            }),
+            Token::Word(word) => {
+                self.next_token();
+                Ok(KeyValueOption {
+                    option_name: key.value.clone(),
+                    option_value: KeyValueOptionKind::Single(Value::Placeholder(
+                        word.value.clone(),
+                    )),
+                })
+            }
+            Token::LParen => {
+                // Can be a list of values or a list of key value properties.
+                // Try to parse a list of values and if that fails, try to parse
+                // a list of key-value properties.
+                match self.maybe_parse(|parser| {
+                    parser.expect_token(&Token::LParen)?;
+                    let values = parser.parse_comma_separated0(|p| p.parse_value(), Token::RParen);
+                    parser.expect_token(&Token::RParen)?;
+                    values
+                })? {
+                    Some(values) => {
+                        let values = values.into_iter().map(|v| v.value).collect();
+                        Ok(KeyValueOption {
+                            option_name: key.value.clone(),
+                            option_value: KeyValueOptionKind::Multi(values),
+                        })
+                    }
+                    None => Ok(KeyValueOption {
+                        option_name: key.value.clone(),
+                        option_value: KeyValueOptionKind::KeyValueOptions(Box::new(
+                            self.parse_key_value_options(true, &[])?,
+                        )),
+                    }),
+                }
+            }
             _ => self.expected("expected option value", self.peek_token()),
         }
     }

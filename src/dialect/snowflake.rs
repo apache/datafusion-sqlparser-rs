@@ -18,7 +18,7 @@
 #[cfg(not(feature = "std"))]
 use crate::alloc::string::ToString;
 use crate::ast::helpers::key_value_options::{
-    KeyValueOption, KeyValueOptionType, KeyValueOptions, KeyValueOptionsDelimiter,
+    KeyValueOption, KeyValueOptionKind, KeyValueOptions, KeyValueOptionsDelimiter,
 };
 use crate::ast::helpers::stmt_create_database::CreateDatabaseBuilder;
 use crate::ast::helpers::stmt_create_table::CreateTableBuilder;
@@ -30,7 +30,7 @@ use crate::ast::{
     CopyIntoSnowflakeKind, CreateTableLikeKind, DollarQuotedString, Ident, IdentityParameters,
     IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
     InitializeKind, ObjectName, ObjectNamePart, RefreshModeKind, RowAccessPolicy, ShowObjects,
-    SqlOption, Statement, StorageSerializationPolicy, TagsColumnOption, WrappedCollection,
+    SqlOption, Statement, StorageSerializationPolicy, TagsColumnOption, Value, WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
@@ -1004,19 +1004,19 @@ pub fn parse_create_stage(
     // [ directoryTableParams ]
     if parser.parse_keyword(Keyword::DIRECTORY) {
         parser.expect_token(&Token::Eq)?;
-        directory_table_params = parser.parse_key_value_options(true, &[])?;
+        directory_table_params = parser.parse_key_value_options(true, &[])?.options;
     }
 
     // [ file_format]
     if parser.parse_keyword(Keyword::FILE_FORMAT) {
         parser.expect_token(&Token::Eq)?;
-        file_format = parser.parse_key_value_options(true, &[])?;
+        file_format = parser.parse_key_value_options(true, &[])?.options;
     }
 
     // [ copy_options ]
     if parser.parse_keyword(Keyword::COPY_OPTIONS) {
         parser.expect_token(&Token::Eq)?;
-        copy_options = parser.parse_key_value_options(true, &[])?;
+        copy_options = parser.parse_key_value_options(true, &[])?.options;
     }
 
     // [ comment ]
@@ -1182,7 +1182,7 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
         // FILE_FORMAT
         if parser.parse_keyword(Keyword::FILE_FORMAT) {
             parser.expect_token(&Token::Eq)?;
-            file_format = parser.parse_key_value_options(true, &[])?;
+            file_format = parser.parse_key_value_options(true, &[])?.options;
         // PARTITION BY
         } else if parser.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
             partition = Some(Box::new(parser.parse_expr()?))
@@ -1220,14 +1220,14 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
         // COPY OPTIONS
         } else if parser.parse_keyword(Keyword::COPY_OPTIONS) {
             parser.expect_token(&Token::Eq)?;
-            copy_options = parser.parse_key_value_options(true, &[])?;
+            copy_options = parser.parse_key_value_options(true, &[])?.options;
         } else {
             match parser.next_token().token {
                 Token::SemiColon | Token::EOF => break,
                 Token::Comma => continue,
                 // In `COPY INTO <location>` the copy options do not have a shared key
                 // like in `COPY INTO <table>`
-                Token::Word(key) => copy_options.push(parser.parse_key_value_option(key)?),
+                Token::Word(key) => copy_options.push(parser.parse_key_value_option(&key)?),
                 _ => return parser.expected("another copy option, ; or EOF'", parser.peek_token()),
             }
         }
@@ -1387,7 +1387,7 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
     if parser.parse_keyword(Keyword::CREDENTIALS) {
         parser.expect_token(&Token::Eq)?;
         credentials = KeyValueOptions {
-            options: parser.parse_key_value_options(true, &[])?,
+            options: parser.parse_key_value_options(true, &[])?.options,
             delimiter: KeyValueOptionsDelimiter::Space,
         };
     }
@@ -1396,7 +1396,7 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
     if parser.parse_keyword(Keyword::ENCRYPTION) {
         parser.expect_token(&Token::Eq)?;
         encryption = KeyValueOptions {
-            options: parser.parse_key_value_options(true, &[])?,
+            options: parser.parse_key_value_options(true, &[])?.options,
             delimiter: KeyValueOptionsDelimiter::Space,
         };
     }
@@ -1431,13 +1431,12 @@ fn parse_session_options(
             Token::Word(key) => {
                 parser.advance_token();
                 if set {
-                    let option = parser.parse_key_value_option(key)?;
+                    let option = parser.parse_key_value_option(&key)?;
                     options.push(option);
                 } else {
                     options.push(KeyValueOption {
                         option_name: key.value,
-                        option_type: KeyValueOptionType::STRING,
-                        value: empty(),
+                        option_value: KeyValueOptionKind::Single(Value::Placeholder(empty())),
                     });
                 }
             }

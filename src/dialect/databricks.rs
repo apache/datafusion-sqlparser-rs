@@ -65,7 +65,7 @@ impl Dialect for DatabricksDialect {
         true
     }
 
-    // See https://docs.databricks.com/en/sql/language-manual/sql-ref-syntax-qry-select-groupby.html
+    /// See https://docs.databricks.com/en/sql/language-manual/sql-ref-syntax-qry-select-groupby.html
     fn supports_group_by_with_modifier(&self) -> bool {
         true
     }

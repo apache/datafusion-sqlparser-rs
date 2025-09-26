@@ -2361,6 +2361,8 @@ pub struct CreateIndex {
     pub name: Option<ObjectName>,
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     pub table_name: ObjectName,
+    /// Index type used in the statement. Can also be found inside [`CreateIndex::index_options`]
+    /// depending on the position of the option within the statement.
     pub using: Option<IndexType>,
     pub columns: Vec<IndexColumn>,
     pub unique: bool,

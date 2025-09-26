@@ -7063,19 +7063,24 @@ impl<'a> Parser<'a> {
     pub fn parse_create_index(&mut self, unique: bool) -> Result<Statement, ParserError> {
         let concurrently = self.parse_keyword(Keyword::CONCURRENTLY);
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+
+        let mut using = None;
+
         let index_name = if if_not_exists || !self.parse_keyword(Keyword::ON) {
             let index_name = self.parse_object_name(false)?;
+            // MySQL allows `USING index_type` either before or after `ON table_name`
+            using = self.parse_optional_using_then_index_type()?;
             self.expect_keyword_is(Keyword::ON)?;
             Some(index_name)
         } else {
             None
         };
+
         let table_name = self.parse_object_name(false)?;
-        let using = if self.parse_keyword(Keyword::USING) {
-            Some(self.parse_index_type()?)
-        } else {
-            None
-        };
+
+        // MySQL allows having two `USING` clauses.
+        // In that case, the second clause overwrites the first.
+        using = self.parse_optional_using_then_index_type()?.or(using);
 
         let columns = self.parse_parenthesized_index_column_list()?;
 

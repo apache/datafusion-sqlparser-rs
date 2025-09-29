@@ -156,7 +156,7 @@ impl Dialect for GenericDialect {
         true
     }
 
-    fn supports_c_style_comments(&self) -> bool {
+    fn supports_c_style_hints(&self) -> bool {
         true
     }
 

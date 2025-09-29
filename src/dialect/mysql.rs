@@ -85,7 +85,7 @@ impl Dialect for MySqlDialect {
     }
 
     /// see <https://dev.mysql.com/doc/refman/8.4/en/comments.html>
-    fn supports_c_style_comments(&self) -> bool {
+    fn supports_c_style_hints(&self) -> bool {
         true
     }
 

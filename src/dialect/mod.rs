@@ -900,7 +900,7 @@ pub trait Dialect: Debug + Any {
 
     /// Returns true if the dialect supports hint and C-style comments
     /// e.g. `/*! hint */`
-    fn supports_c_style_comments(&self) -> bool {
+    fn supports_c_style_hints(&self) -> bool {
         false
     }
 

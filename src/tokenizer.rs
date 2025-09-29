@@ -810,6 +810,8 @@ pub struct Tokenizer<'a> {
     /// If true (the default), the tokenizer will un-escape literal
     /// SQL strings See [`Tokenizer::with_unescape`] for more details.
     unescape: bool,
+    /// Tokens injected back into the stream (e.g. from MySQL C-style hints)
+    pending_tokens: Vec<Token>,
 }
 
 impl<'a> Tokenizer<'a> {
@@ -834,6 +836,7 @@ impl<'a> Tokenizer<'a> {
             dialect,
             query,
             unescape: true,
+            pending_tokens: Vec::new(),
         }
     }
 
@@ -936,10 +939,16 @@ impl<'a> Tokenizer<'a> {
 
     /// Get the next token or return None
     fn next_token(
-        &self,
+        &mut self,
         chars: &mut State,
         prev_token: Option<&Token>,
     ) -> Result<Option<Token>, TokenizerError> {
+        // Return any previously injected tokens first
+        {
+            if let Some(tok) = self.pending_tokens.pop() {
+                return Ok(Some(tok));
+            }
+        }
         match chars.peek() {
             Some(&ch) => match ch {
                 ' ' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Space)),
@@ -2102,14 +2111,14 @@ impl<'a> Tokenizer<'a> {
     }
 
     fn tokenize_multiline_comment(
-        &self,
+        &mut self,
         chars: &mut State,
     ) -> Result<Option<Token>, TokenizerError> {
         let mut s = String::new();
         let mut nested = 1;
         let mut c_style_comments = false;
         let supports_nested_comments = self.dialect.supports_nested_comments();
-        let supports_c_style_comments = self.dialect.supports_c_style_comments();
+        let supports_c_style_comments = self.dialect.supports_c_style_hints();
         loop {
             match chars.next() {
                 Some('/') if matches!(chars.peek(), Some('*')) && supports_nested_comments => {
@@ -2120,27 +2129,11 @@ impl<'a> Tokenizer<'a> {
                 }
                 Some('!') if supports_c_style_comments => {
                     c_style_comments = true;
-                    // consume the optional version digits and whitespace
+                    // consume only version digits (leave following whitespace/content intact)
                     while let Some(&c) = chars.peek() {
-                        if c.is_ascii_digit() || c.is_whitespace() {
+                        if c.is_ascii_digit() {
                             chars.next();
                         } else {
-                            break;
-                        }
-                    }
-                }
-                // consume all leading whitespaces until the '*/' character if in a C-style comment
-                Some(ch) if ch.is_whitespace() && c_style_comments => {
-                    let mut tmp_s = String::new();
-                    while let Some(c) = chars.next() {
-                        if c.is_whitespace() {
-                            tmp_s.push(c);
-                        } else if c == '*' && chars.peek() == Some(&'/') {
-                            chars.next(); // consume the '/'
-                            return Ok(Some(Token::make_word(&s, None)));
-                        } else {
-                            tmp_s.push(c);
-                            s.push_str(&tmp_s);
                             break;
                         }
                     }
@@ -2150,7 +2143,7 @@ impl<'a> Tokenizer<'a> {
                     nested -= 1;
                     if nested == 0 {
                         if c_style_comments {
-                            break Ok(Some(Token::make_word(&s, None)));
+                            break self.inject_tokens_from_c_style_hints_and_return_first(s);
                         }
                         break Ok(Some(Token::Whitespace(Whitespace::MultiLineComment(s))));
                     }
@@ -2168,6 +2161,26 @@ impl<'a> Tokenizer<'a> {
                 }
             }
         }
+    }
+
+    /// Tokenize the given string using the same dialect/unescape settings and inject
+    /// the resulting tokens back into this tokenizer so they are returned before
+    /// any further characters from the main stream. Returns the first injected token.
+    fn inject_tokens_from_c_style_hints_and_return_first(
+        &mut self,
+        inner_sql: String,
+    ) -> Result<Option<Token>, TokenizerError> {
+        let trimmed = inner_sql.trim();
+        if trimmed.is_empty() {
+            return Ok(None);
+        }
+        let mut inner = Tokenizer::new(self.dialect, trimmed).with_unescape(self.unescape);
+        let tokens = inner.tokenize()?;
+        // push in reverse so we can pop from the end efficiently
+        for t in tokens.into_iter().rev() {
+            self.pending_tokens.push(t);
+        }
+        Ok(self.pending_tokens.pop())
     }
 
     fn parse_quoted_ident(&self, chars: &mut State, quote_end: char) -> (String, Option<char>) {
@@ -4121,17 +4134,22 @@ mod tests {
 
     #[test]
     fn tokenize_multiline_comment_with_c_style_comment_and_version() {
-        let sql = String::from("0/*!8000000 word */1");
-
+        let sql_multi = String::from("0 /*!50110 KEY_BLOCK_SIZE = 1024*/ 1");
         let dialect = MySqlDialect {};
-        let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
+        let tokens = Tokenizer::new(&dialect, &sql_multi).tokenize().unwrap();
         let expected = vec![
             Token::Number("0".to_string(), false),
+            Token::Whitespace(Whitespace::Space),
             Token::Word(Word {
-                value: "word".to_string(),
+                value: "KEY_BLOCK_SIZE".to_string(),
                 quote_style: None,
-                keyword: Keyword::NoKeyword,
+                keyword: Keyword::KEY_BLOCK_SIZE,
             }),
+            Token::Whitespace(Whitespace::Space),
+            Token::Eq,
+            Token::Whitespace(Whitespace::Space),
+            Token::Number("1024".to_string(), false),
+            Token::Whitespace(Whitespace::Space),
             Token::Number("1".to_string(), false),
         ];
         compare(expected, tokens);

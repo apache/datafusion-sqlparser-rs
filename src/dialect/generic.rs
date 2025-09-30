@@ -38,6 +38,8 @@ impl Dialect for GenericDialect {
             || ch == '$'
             || ch == '#'
             || ch == '_'
+
+        obvious failure
     }
 
     fn supports_unicode_string_literal(&self) -> bool {

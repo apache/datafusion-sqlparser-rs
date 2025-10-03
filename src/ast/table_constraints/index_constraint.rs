@@ -21,6 +21,9 @@ use crate::ast::{display_comma_separated, Ident, IndexColumn, IndexOption, Index
 use crate::tokenizer::Span;
 use core::fmt;
 
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 

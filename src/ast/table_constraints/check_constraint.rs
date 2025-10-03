@@ -21,6 +21,9 @@ use crate::ast::{Expr, Ident};
 use crate::tokenizer::Span;
 use core::fmt;
 
+#[cfg(not(feature = "std"))]
+use alloc::boxed::Box;
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 

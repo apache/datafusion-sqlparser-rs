@@ -118,6 +118,11 @@ mod dcl;
 mod ddl;
 mod dml;
 pub mod helpers;
+pub mod table_constraints;
+pub use table_constraints::{
+    CheckConstraint, ForeignKeyConstraint, FullTextOrSpatialConstraint, IndexConstraint,
+    PrimaryKeyConstraint, UniqueConstraint,
+};
 mod operator;
 mod query;
 mod spans;

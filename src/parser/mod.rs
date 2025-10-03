@@ -8398,16 +8398,19 @@ impl<'a> Parser<'a> {
                 let columns = self.parse_parenthesized_index_column_list()?;
                 let index_options = self.parse_index_options()?;
                 let characteristics = self.parse_constraint_characteristics()?;
-                Ok(Some(TableConstraint::Unique {
-                    name,
-                    index_name,
-                    index_type_display,
-                    index_type,
-                    columns,
-                    index_options,
-                    characteristics,
-                    nulls_distinct,
-                }))
+                Ok(Some(
+                    UniqueConstraint {
+                        name,
+                        index_name,
+                        index_type_display,
+                        index_type,
+                        columns,
+                        index_options,
+                        characteristics,
+                        nulls_distinct,
+                    }
+                    .into(),
+                ))
             }
             Token::Word(w) if w.keyword == Keyword::PRIMARY => {
                 // after `PRIMARY` always stay `KEY`
@@ -8420,14 +8423,17 @@ impl<'a> Parser<'a> {
                 let columns = self.parse_parenthesized_index_column_list()?;
                 let index_options = self.parse_index_options()?;
                 let characteristics = self.parse_constraint_characteristics()?;
-                Ok(Some(TableConstraint::PrimaryKey {
-                    name,
-                    index_name,
-                    index_type,
-                    columns,
-                    index_options,
-                    characteristics,
-                }))
+                Ok(Some(
+                    PrimaryKeyConstraint {
+                        name,
+                        index_name,
+                        index_type,
+                        columns,
+                        index_options,
+                        characteristics,
+                    }
+                    .into(),
+                ))
             }
             Token::Word(w) if w.keyword == Keyword::FOREIGN => {
                 self.expect_keyword_is(Keyword::KEY)?;
@@ -8452,16 +8458,19 @@ impl<'a> Parser<'a> {
 
                 let characteristics = self.parse_constraint_characteristics()?;
 
-                Ok(Some(TableConstraint::ForeignKey {
-                    name,
-                    index_name,
-                    columns,
-                    foreign_table,
-                    referred_columns,
-                    on_delete,
-                    on_update,
-                    characteristics,
-                }))
+                Ok(Some(
+                    ForeignKeyConstraint {
+                        name,
+                        index_name,
+                        columns,
+                        foreign_table,
+                        referred_columns,
+                        on_delete,
+                        on_update,
+                        characteristics,
+                    }
+                    .into(),
+                ))
             }
             Token::Word(w) if w.keyword == Keyword::CHECK => {
                 self.expect_token(&Token::LParen)?;
@@ -8476,11 +8485,14 @@ impl<'a> Parser<'a> {
                     None
                 };
 
-                Ok(Some(TableConstraint::Check {
-                    name,
-                    expr,
-                    enforced,
-                }))
+                Ok(Some(
+                    CheckConstraint {
+                        name,
+                        expr,
+                        enforced,
+                    }
+                    .into(),
+                ))
             }
             Token::Word(w)
                 if (w.keyword == Keyword::INDEX || w.keyword == Keyword::KEY)
@@ -8498,13 +8510,16 @@ impl<'a> Parser<'a> {
                 let columns = self.parse_parenthesized_index_column_list()?;
                 let index_options = self.parse_index_options()?;
 
-                Ok(Some(TableConstraint::Index {
-                    display_as_key,
-                    name,
-                    index_type,
-                    columns,
-                    index_options,
-                }))
+                Ok(Some(
+                    IndexConstraint {
+                        display_as_key,
+                        name,
+                        index_type,
+                        columns,
+                        index_options,
+                    }
+                    .into(),
+                ))
             }
             Token::Word(w)
                 if (w.keyword == Keyword::FULLTEXT || w.keyword == Keyword::SPATIAL)
@@ -8528,12 +8543,15 @@ impl<'a> Parser<'a> {
 
                 let columns = self.parse_parenthesized_index_column_list()?;
 
-                Ok(Some(TableConstraint::FulltextOrSpatial {
-                    fulltext,
-                    index_type_display,
-                    opt_index_name,
-                    columns,
-                }))
+                Ok(Some(
+                    FullTextOrSpatialConstraint {
+                        fulltext,
+                        index_type_display,
+                        opt_index_name,
+                        columns,
+                    }
+                    .into(),
+                ))
             }
             _ => {
                 if name.is_some() {
@@ -18136,85 +18154,91 @@ mod tests {
         test_parse_table_constraint!(
             dialect,
             "INDEX (c1)",
-            TableConstraint::Index {
+            IndexConstraint {
                 display_as_key: false,
                 name: None,
                 index_type: None,
                 columns: vec![mk_expected_col("c1")],
                 index_options: vec![],
             }
+            .into()
         );
 
         test_parse_table_constraint!(
             dialect,
             "KEY (c1)",
-            TableConstraint::Index {
+            IndexConstraint {
                 display_as_key: true,
                 name: None,
                 index_type: None,
                 columns: vec![mk_expected_col("c1")],
                 index_options: vec![],
             }
+            .into()
         );
 
         test_parse_table_constraint!(
             dialect,
             "INDEX 'index' (c1, c2)",
-            TableConstraint::Index {
+            TableConstraint::Index(IndexConstraint {
                 display_as_key: false,
                 name: Some(Ident::with_quote('\'', "index")),
                 index_type: None,
                 columns: vec![mk_expected_col("c1"), mk_expected_col("c2")],
                 index_options: vec![],
-            }
+            })
         );
 
         test_parse_table_constraint!(
             dialect,
             "INDEX USING BTREE (c1)",
-            TableConstraint::Index {
+            IndexConstraint {
                 display_as_key: false,
                 name: None,
                 index_type: Some(IndexType::BTree),
                 columns: vec![mk_expected_col("c1")],
                 index_options: vec![],
             }
+            .into()
         );
 
         test_parse_table_constraint!(
             dialect,
             "INDEX USING HASH (c1)",
-            TableConstraint::Index {
+            IndexConstraint {
                 display_as_key: false,
                 name: None,
                 index_type: Some(IndexType::Hash),
                 columns: vec![mk_expected_col("c1")],
                 index_options: vec![],
             }
+            .into()
         );
 
         test_parse_table_constraint!(
             dialect,
             "INDEX idx_name USING BTREE (c1)",
-            TableConstraint::Index {
+            IndexConstraint {
                 display_as_key: false,
                 name: Some(Ident::new("idx_name")),
                 index_type: Some(IndexType::BTree),
                 columns: vec![mk_expected_col("c1")],
                 index_options: vec![],
             }
+            .into()
         );
 
         test_parse_table_constraint!(
             dialect,
             "INDEX idx_name USING HASH (c1)",
-            TableConstraint::Index {
+            IndexConstraint {
                 display_as_key: false,
                 name: Some(Ident::new("idx_name")),
                 index_type: Some(IndexType::Hash),
                 columns: vec![mk_expected_col("c1")],
                 index_options: vec![],
             }
+            .into()
         );
     }
 

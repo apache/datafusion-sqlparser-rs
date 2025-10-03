@@ -3818,7 +3818,7 @@ fn parse_create_table() {
             assert_eq!(
                 constraints,
                 vec![
-                    TableConstraint::ForeignKey {
+                    ForeignKeyConstraint {
                         name: Some("fkey".into()),
                         index_name: None,
                         columns: vec!["lat".into()],
@@ -3827,8 +3827,9 @@ fn parse_create_table() {
                         on_delete: Some(ReferentialAction::Restrict),
                         on_update: None,
                         characteristics: None,
-                    },
-                    TableConstraint::ForeignKey {
+                    }
+                    .into(),
+                    ForeignKeyConstraint {
                         name: Some("fkey2".into()),
                         index_name: None,
                         columns: vec!["lat".into()],
@@ -3837,8 +3838,9 @@ fn parse_create_table() {
                         on_delete: Some(ReferentialAction::NoAction),
                         on_update: Some(ReferentialAction::Restrict),
                         characteristics: None,
-                    },
-                    TableConstraint::ForeignKey {
+                    }
+                    .into(),
+                    ForeignKeyConstraint {
                         name: None,
                         index_name: None,
                         columns: vec!["lat".into()],
@@ -3847,8 +3849,9 @@ fn parse_create_table() {
                         on_delete: Some(ReferentialAction::Cascade),
                         on_update: Some(ReferentialAction::SetDefault),
                         characteristics: None,
-                    },
-                    TableConstraint::ForeignKey {
+                    }
+                    .into(),
+                    ForeignKeyConstraint {
                         name: None,
                         index_name: None,
                         columns: vec!["lng".into()],
@@ -3857,7 +3860,8 @@ fn parse_create_table() {
                         on_delete: None,
                         on_update: Some(ReferentialAction::SetNull),
                         characteristics: None,
-                    },
+                    }
+                    .into(),
                 ]
             );
             assert_eq!(table_options, CreateTableOptions::None);
@@ -3945,7 +3949,7 @@ fn parse_create_table_with_constraint_characteristics() {
             assert_eq!(
                 constraints,
                 vec![
-                    TableConstraint::ForeignKey {
+                    ForeignKeyConstraint {
                         name: Some("fkey".into()),
                         index_name: None,
                         columns: vec!["lat".into()],
@@ -3958,8 +3962,9 @@ fn parse_create_table_with_constraint_characteristics() {
                             initially: Some(DeferrableInitial::Deferred),
                             enforced: None
                         }),
-                    },
-                    TableConstraint::ForeignKey {
+                    }
+                    .into(),
+                    ForeignKeyConstraint {
                         name: Some("fkey2".into()),
                         index_name: None,
                         columns: vec!["lat".into()],
@@ -3972,8 +3977,9 @@ fn parse_create_table_with_constraint_characteristics() {
                             initially: Some(DeferrableInitial::Immediate),
                             enforced: None,
                         }),
-                    },
-                    TableConstraint::ForeignKey {
+                    }
+                    .into(),
+                    ForeignKeyConstraint {
                         name: None,
                         index_name: None,
                         columns: vec!["lat".into()],
@@ -3986,8 +3992,9 @@ fn parse_create_table_with_constraint_characteristics() {
                             initially: Some(DeferrableInitial::Deferred),
                             enforced: Some(false),
                         }),
-                    },
-                    TableConstraint::ForeignKey {
+                    }
+                    .into(),
+                    ForeignKeyConstraint {
                         name: None,
                         index_name: None,
                         columns: vec!["lng".into()],
@@ -4000,7 +4007,8 @@ fn parse_create_table_with_constraint_characteristics() {
                             initially: Some(DeferrableInitial::Immediate),
                             enforced: Some(true),
                         }),
-                    },
+                    }
+                    .into(),
                 ]
             );
             assert_eq!(table_options, CreateTableOptions::None);

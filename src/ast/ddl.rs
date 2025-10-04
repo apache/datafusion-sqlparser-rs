@@ -1919,7 +1919,7 @@ pub fn display_constraint_name(name: &'_ Option<Ident>) -> impl fmt::Display + '
 /// * `Some(inner)` => create display struct for `"{prefix}{inner}{postfix}"`
 /// * `_` => do nothing
 #[must_use]
-pub fn display_option<'a, T: fmt::Display>(
+pub(crate) fn display_option<'a, T: fmt::Display>(
     prefix: &'a str,
     postfix: &'a str,
     option: &'a Option<T>,

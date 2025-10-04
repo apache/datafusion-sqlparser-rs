@@ -1902,7 +1902,7 @@ pub enum GeneratedExpressionMode {
 }
 
 #[must_use]
-pub fn display_constraint_name(name: &'_ Option<Ident>) -> impl fmt::Display + '_ {
+pub(crate) fn display_constraint_name(name: &'_ Option<Ident>) -> impl fmt::Display + '_ {
     struct ConstraintName<'a>(&'a Option<Ident>);
     impl fmt::Display for ConstraintName<'_> {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

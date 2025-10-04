@@ -69,4 +69,9 @@ impl Dialect for DatabricksDialect {
     fn supports_nested_comments(&self) -> bool {
         true
     }
+
+    /// See <https://docs.databricks.com/en/sql/language-manual/sql-ref-syntax-qry-select-groupby.html>
+    fn supports_group_by_with_modifier(&self) -> bool {
+        true
+    }
 }

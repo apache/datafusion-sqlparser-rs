@@ -1941,7 +1941,7 @@ pub(crate) fn display_option<'a, T: fmt::Display>(
 /// * `Some(inner)` => create display struct for `" {inner}"`
 /// * `_` => do nothing
 #[must_use]
-pub fn display_option_spaced<T: fmt::Display>(option: &Option<T>) -> impl fmt::Display + '_ {
+pub(crate) fn display_option_spaced<T: fmt::Display>(option: &Option<T>) -> impl fmt::Display + '_ {
     display_option(" ", "", option)
 }
 

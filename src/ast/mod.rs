@@ -68,7 +68,7 @@ pub use self::ddl::{
     DropBehavior, DropTrigger, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
     IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
     IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition,
-    ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity, TableConstraint,
+    ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity,
     TagsColumnOption, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
     ViewColumnDef,
 };
@@ -121,7 +121,7 @@ pub mod helpers;
 pub mod table_constraints;
 pub use table_constraints::{
     CheckConstraint, ForeignKeyConstraint, FullTextOrSpatialConstraint, IndexConstraint,
-    PrimaryKeyConstraint, UniqueConstraint,
+    PrimaryKeyConstraint, TableConstraint, UniqueConstraint,
 };
 mod operator;
 mod query;

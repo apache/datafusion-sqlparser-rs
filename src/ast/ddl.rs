@@ -31,10 +31,7 @@ use sqlparser_derive::{Visit, VisitMut};
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
     display_comma_separated, display_separated,
-    table_constraints::{
-        CheckConstraint, ForeignKeyConstraint, FullTextOrSpatialConstraint, IndexConstraint,
-        PrimaryKeyConstraint, UniqueConstraint,
-    },
+    table_constraints::TableConstraint,
     ArgMode, CommentDef, ConditionalStatements, CreateFunctionBody, CreateFunctionUsing,
     CreateTableLikeKind, CreateTableOptions, DataType, Expr, FileFormat, FunctionBehavior,
     FunctionCalledOnNull, FunctionDeterminismSpecifier, FunctionParallel, HiveDistributionStyle,
@@ -1033,123 +1030,6 @@ impl fmt::Display for AlterColumnOperation {
     }
 }
 
-/// A table-level constraint, specified in a `CREATE TABLE` or an
-/// `ALTER TABLE ADD <constraint>` statement.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum TableConstraint {
-    /// MySQL [definition][1] for `UNIQUE` constraints statements:\
-    /// * `[CONSTRAINT [<name>]] UNIQUE <index_type_display> [<index_name>] [index_type] (<columns>) <index_options>`
-    ///
-    /// where:
-    /// * [index_type][2] is `USING {BTREE | HASH}`
-    /// * [index_options][3] is `{index_type | COMMENT 'string' | ... %currently unsupported stmts% } ...`
-    /// * [index_type_display][4] is `[INDEX | KEY]`
-    ///
-    /// [1]: https://dev.mysql.com/doc/refman/8.3/en/create-table.html
-    /// [2]: IndexType
-    /// [3]: IndexOption
-    /// [4]: KeyOrIndexDisplay
-    Unique(UniqueConstraint),
-    /// MySQL [definition][1] for `PRIMARY KEY` constraints statements:\
-    /// * `[CONSTRAINT [<name>]] PRIMARY KEY [index_name] [index_type] (<columns>) <index_options>`
-    ///
-    /// Actually the specification have no `[index_name]` but the next query will complete successfully:
-    /// ```sql
-    /// CREATE TABLE unspec_table (
-    ///   xid INT NOT NULL,
-    ///   CONSTRAINT p_name PRIMARY KEY index_name USING BTREE (xid)
-    /// );
-    /// ```
-    ///
-    /// where:
-    /// * [index_type][2] is `USING {BTREE | HASH}`
-    /// * [index_options][3] is `{index_type | COMMENT 'string' | ... %currently unsupported stmts% } ...`
-    ///
-    /// [1]: https://dev.mysql.com/doc/refman/8.3/en/create-table.html
-    /// [2]: IndexType
-    /// [3]: IndexOption
-    PrimaryKey(PrimaryKeyConstraint),
-    /// A referential integrity constraint (`[ CONSTRAINT <name> ] FOREIGN KEY (<columns>)
-    /// REFERENCES <foreign_table> (<referred_columns>)
-    /// { [ON DELETE <referential_action>] [ON UPDATE <referential_action>] |
-    ///   [ON UPDATE <referential_action>] [ON DELETE <referential_action>]
-    /// }`).
-    ForeignKey(ForeignKeyConstraint),
-    /// `[ CONSTRAINT <name> ] CHECK (<expr>) [[NOT] ENFORCED]`
-    Check(CheckConstraint),
-    /// MySQLs [index definition][1] for index creation. Not present on ANSI so, for now, the usage
-    /// is restricted to MySQL, as no other dialects that support this syntax were found.
-    ///
-    /// `{INDEX | KEY} [index_name] [index_type] (key_part,...) [index_option]...`
-    ///
-    /// [1]: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
-    Index(IndexConstraint),
-    /// MySQLs [fulltext][1] definition. Since the [`SPATIAL`][2] definition is exactly the same,
-    /// and MySQL displays both the same way, it is part of this definition as well.
-    ///
-    /// Supported syntax:
-    ///
-    /// ```markdown
-    /// {FULLTEXT | SPATIAL} [INDEX | KEY] [index_name] (key_part,...)
-    ///
-    /// key_part: col_name
-    /// ```
-    ///
-    /// [1]: https://dev.mysql.com/doc/refman/8.0/en/fulltext-natural-language.html
-    /// [2]: https://dev.mysql.com/doc/refman/8.0/en/spatial-types.html
-    FulltextOrSpatial(FullTextOrSpatialConstraint),
-}
-
-impl From<UniqueConstraint> for TableConstraint {
-    fn from(constraint: UniqueConstraint) -> Self {
-        TableConstraint::Unique(constraint)
-    }
-}
-
-impl From<PrimaryKeyConstraint> for TableConstraint {
-    fn from(constraint: PrimaryKeyConstraint) -> Self {
-        TableConstraint::PrimaryKey(constraint)
-    }
-}
-
-impl From<ForeignKeyConstraint> for TableConstraint {
-    fn from(constraint: ForeignKeyConstraint) -> Self {
-        TableConstraint::ForeignKey(constraint)
-    }
-}
-
-impl From<CheckConstraint> for TableConstraint {
-    fn from(constraint: CheckConstraint) -> Self {
-        TableConstraint::Check(constraint)
-    }
-}
-
-impl From<IndexConstraint> for TableConstraint {
-    fn from(constraint: IndexConstraint) -> Self {
-        TableConstraint::Index(constraint)
-    }
-}
-
-impl From<FullTextOrSpatialConstraint> for TableConstraint {
-    fn from(constraint: FullTextOrSpatialConstraint) -> Self {
-        TableConstraint::FulltextOrSpatial(constraint)
-    }
-}
-
-impl fmt::Display for TableConstraint {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            TableConstraint::Unique(constraint) => constraint.fmt(f),
-            TableConstraint::PrimaryKey(constraint) => constraint.fmt(f),
-            TableConstraint::ForeignKey(constraint) => constraint.fmt(f),
-            TableConstraint::Check(constraint) => constraint.fmt(f),
-            TableConstraint::Index(constraint) => constraint.fmt(f),
-            TableConstraint::FulltextOrSpatial(constraint) => constraint.fmt(f),
-        }
-    }
-}
 
 /// Representation whether a definition can can contains the KEY or INDEX keywords with the same
 /// meaning.

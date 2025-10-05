@@ -68,9 +68,8 @@ pub use self::ddl::{
     DropBehavior, DropTrigger, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
     IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
     IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition,
-    ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity,
-    TagsColumnOption, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
-    ViewColumnDef,
+    ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity, TagsColumnOption,
+    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{Delete, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -157,14 +156,14 @@ where
     }
 }
 
-pub fn display_separated<'a, T>(slice: &'a [T], sep: &'static str) -> DisplaySeparated<'a, T>
+pub(crate) fn display_separated<'a, T>(slice: &'a [T], sep: &'static str) -> DisplaySeparated<'a, T>
 where
     T: fmt::Display,
 {
     DisplaySeparated { slice, sep }
 }
 
-pub fn display_comma_separated<T>(slice: &[T]) -> DisplaySeparated<'_, T>
+pub(crate) fn display_comma_separated<T>(slice: &[T]) -> DisplaySeparated<'_, T>
 where
     T: fmt::Display,
 {

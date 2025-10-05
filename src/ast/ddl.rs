@@ -30,9 +30,8 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
-    display_comma_separated, display_separated,
-    table_constraints::TableConstraint,
-    ArgMode, CommentDef, ConditionalStatements, CreateFunctionBody, CreateFunctionUsing,
+    display_comma_separated, display_separated, table_constraints::TableConstraint, ArgMode,
+    CommentDef, ConditionalStatements, CreateFunctionBody, CreateFunctionUsing,
     CreateTableLikeKind, CreateTableOptions, DataType, Expr, FileFormat, FunctionBehavior,
     FunctionCalledOnNull, FunctionDeterminismSpecifier, FunctionParallel, HiveDistributionStyle,
     HiveFormat, HiveIOFormat, HiveRowFormat, Ident, InitializeKind, MySQLColumnPosition,
@@ -1029,7 +1028,6 @@ impl fmt::Display for AlterColumnOperation {
         }
     }
 }
-
 
 /// Representation whether a definition can can contains the KEY or INDEX keywords with the same
 /// meaning.

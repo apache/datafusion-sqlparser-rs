@@ -904,7 +904,7 @@ fn parse_create_table_with_variant_default_expressions() {
 #[test]
 fn parse_create_view_with_fields_data_types() {
     match clickhouse().verified_stmt(r#"CREATE VIEW v (i "int", f "String") AS SELECT * FROM t"#) {
-        Statement::CreateView { name, columns, .. } => {
+        Statement::CreateView(CreateView { name, columns, .. }) => {
             assert_eq!(name, ObjectName::from(vec!["v".into()]));
             assert_eq!(
                 columns,

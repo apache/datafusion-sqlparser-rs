@@ -348,31 +348,7 @@ impl Spanned for Statement {
             },
             Statement::Update(update) => update.span(),
             Statement::Delete(delete) => delete.span(),
-            Statement::CreateView {
-                or_alter: _,
-                or_replace: _,
-                materialized: _,
-                secure: _,
-                name,
-                columns,
-                query,
-                options,
-                cluster_by,
-                comment: _,
-                with_no_schema_binding: _,
-                if_not_exists: _,
-                temporary: _,
-                to,
-                name_before_not_exists: _,
-                params: _,
-            } => union_spans(
-                core::iter::once(name.span())
-                    .chain(columns.iter().map(|i| i.span()))
-                    .chain(core::iter::once(query.span()))
-                    .chain(core::iter::once(options.span()))
-                    .chain(cluster_by.iter().map(|i| i.span))
-                    .chain(to.iter().map(|i| i.span())),
-            ),
+            Statement::CreateView(create_view) => create_view.span(),
             Statement::CreateTable(create_table) => create_table.span(),
             Statement::CreateVirtualTable {
                 name,

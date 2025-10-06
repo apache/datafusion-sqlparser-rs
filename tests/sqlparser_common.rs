@@ -7607,7 +7607,7 @@ fn parse_ctes() {
     // CTE in a view
     let sql = &format!("CREATE VIEW v AS {with}");
     match verified_stmt(sql) {
-        Statement::CreateView { query, .. } => assert_ctes_in_select(&cte_sqls, &query),
+        Statement::CreateView(create_view) => assert_ctes_in_select(&cte_sqls, &create_view.query),
         _ => panic!("Expected: CREATE VIEW"),
     }
     // CTE in a CTE...
@@ -8095,7 +8095,7 @@ fn parse_drop_database_if_exists() {
 fn parse_create_view() {
     let sql = "CREATE VIEW myschema.myview AS SELECT foo FROM bar";
     match verified_stmt(sql) {
-        Statement::CreateView {
+        Statement::CreateView(CreateView {
             or_alter,
             name,
             columns,
@@ -8112,7 +8112,7 @@ fn parse_create_view() {
             params,
             name_before_not_exists: _,
             secure: _,
-        } => {
+        }) => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
@@ -8138,7 +8138,7 @@ fn parse_create_view() {
 fn parse_create_view_with_options() {
     let sql = "CREATE VIEW v WITH (foo = 'bar', a = 123) AS SELECT 1";
     match verified_stmt(sql) {
-        Statement::CreateView { options, .. } => {
+        Statement::CreateView(create_view) => {
             assert_eq!(
                 CreateTableOptions::With(vec![
                     SqlOption::KeyValue {
@@ -8152,7 +8152,7 @@ fn parse_create_view_with_options() {
                         value: Expr::value(number("123")),
                     },
                 ]),
-                options
+                create_view.options
             );
         }
         _ => unreachable!(),
@@ -8165,24 +8165,21 @@ fn parse_create_view_with_columns() {
     // TODO: why does this fail for ClickHouseDialect? (#1449)
     // match all_dialects().verified_stmt(sql) {
     match all_dialects_except(|d| d.is::<ClickHouseDialect>()).verified_stmt(sql) {
-        Statement::CreateView {
-            or_alter,
-            name,
-            columns,
-            or_replace,
-            options,
-            query,
-            materialized,
-            cluster_by,
-            comment,
-            with_no_schema_binding: late_binding,
-            if_not_exists,
-            temporary,
-            to,
-            params,
-            name_before_not_exists: _,
-            secure: _,
-        } => {
+        Statement::CreateView(create_view) => {
+            let or_alter = create_view.or_alter;
+            let name = create_view.name;
+            let columns = create_view.columns;
+            let or_replace = create_view.or_replace;
+            let options = create_view.options;
+            let query = create_view.query;
+            let materialized = create_view.materialized;
+            let cluster_by = create_view.cluster_by;
+            let comment = create_view.comment;
+            let late_binding = create_view.with_no_schema_binding;
+            let if_not_exists = create_view.if_not_exists;
+            let temporary = create_view.temporary;
+            let to = create_view.to;
+            let params = create_view.params;
             assert_eq!(or_alter, false);
             assert_eq!("v", name.to_string());
             assert_eq!(
@@ -8216,7 +8213,7 @@ fn parse_create_view_with_columns() {
 fn parse_create_view_temporary() {
     let sql = "CREATE TEMPORARY VIEW myschema.myview AS SELECT foo FROM bar";
     match verified_stmt(sql) {
-        Statement::CreateView {
+        Statement::CreateView(CreateView {
             or_alter,
             name,
             columns,
@@ -8233,7 +8230,7 @@ fn parse_create_view_temporary() {
             params,
             name_before_not_exists: _,
             secure: _,
-        } => {
+        }) => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
@@ -8257,7 +8254,7 @@ fn parse_create_view_temporary() {
 fn parse_create_or_replace_view() {
     let sql = "CREATE OR REPLACE VIEW v AS SELECT 1";
     match verified_stmt(sql) {
-        Statement::CreateView {
+        Statement::CreateView(CreateView {
             or_alter,
             name,
             columns,
@@ -8274,7 +8271,7 @@ fn parse_create_or_replace_view() {
             params,
             name_before_not_exists: _,
             secure: _,
-        } => {
+        }) => {
             assert_eq!(or_alter, false);
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
@@ -8302,7 +8299,7 @@ fn parse_create_or_replace_materialized_view() {
     // https://docs.snowflake.com/en/sql-reference/sql/create-materialized-view.html
     let sql = "CREATE OR REPLACE MATERIALIZED VIEW v AS SELECT 1";
     match verified_stmt(sql) {
-        Statement::CreateView {
+        Statement::CreateView(CreateView {
             or_alter,
             name,
             columns,
@@ -8319,7 +8316,7 @@ fn parse_create_or_replace_materialized_view() {
             params,
             name_before_not_exists: _,
             secure: _,
-        } => {
+        }) => {
             assert_eq!(or_alter, false);
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
@@ -8343,7 +8340,7 @@ fn parse_create_or_replace_materialized_view() {
 fn parse_create_materialized_view() {
     let sql = "CREATE MATERIALIZED VIEW myschema.myview AS SELECT foo FROM bar";
     match verified_stmt(sql) {
-        Statement::CreateView {
+        Statement::CreateView(CreateView {
             or_alter,
             name,
             or_replace,
@@ -8360,7 +8357,7 @@ fn parse_create_materialized_view() {
             params,
             name_before_not_exists: _,
             secure: _,
-        } => {
+        }) => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
@@ -8384,7 +8381,7 @@ fn parse_create_materialized_view() {
 fn parse_create_materialized_view_with_cluster_by() {
     let sql = "CREATE MATERIALIZED VIEW myschema.myview CLUSTER BY (foo) AS SELECT foo FROM bar";
     match verified_stmt(sql) {
-        Statement::CreateView {
+        Statement::CreateView(CreateView {
             or_alter,
             name,
             or_replace,
@@ -8401,7 +8398,7 @@ fn parse_create_materialized_view_with_cluster_by() {
             params,
             name_before_not_exists: _,
             secure: _,
-        } => {
+        }) => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);

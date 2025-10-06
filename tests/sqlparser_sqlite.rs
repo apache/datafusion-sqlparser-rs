@@ -166,7 +166,7 @@ fn parse_create_virtual_table() {
 fn parse_create_view_temporary_if_not_exists() {
     let sql = "CREATE TEMPORARY VIEW IF NOT EXISTS myschema.myview AS SELECT foo FROM bar";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::CreateView {
+        Statement::CreateView(CreateView {
             name,
             columns,
             query,
@@ -179,7 +179,7 @@ fn parse_create_view_temporary_if_not_exists() {
             if_not_exists,
             temporary,
             ..
-        } => {
+        }) => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());

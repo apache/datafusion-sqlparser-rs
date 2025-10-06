@@ -31,13 +31,13 @@ use sqlparser_derive::{Visit, VisitMut};
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
     display_comma_separated, display_separated, ArgMode, CommentDef, ConditionalStatements,
-    CreateFunctionBody, CreateFunctionUsing, CreateTableLikeKind, CreateTableOptions, DataType,
-    Expr, FileFormat, FunctionBehavior, FunctionCalledOnNull, FunctionDeterminismSpecifier,
-    FunctionParallel, HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat, Ident,
-    InitializeKind, MySQLColumnPosition, ObjectName, OnCommit, OneOrManyWithParens,
-    OperateFunctionArg, OrderByExpr, ProjectionSelect, Query, RefreshModeKind, RowAccessPolicy,
-    SequenceOptions, Spanned, SqlOption, StorageSerializationPolicy, TableVersion, Tag,
-    TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value,
+    CreateFunctionBody, CreateFunctionUsing, CreateTableLikeKind, CreateTableOptions,
+    CreateViewParams, DataType, Expr, FileFormat, FunctionBehavior, FunctionCalledOnNull,
+    FunctionDeterminismSpecifier, FunctionParallel, HiveDistributionStyle, HiveFormat,
+    HiveIOFormat, HiveRowFormat, Ident, InitializeKind, MySQLColumnPosition, ObjectName, OnCommit,
+    OneOrManyWithParens, OperateFunctionArg, OrderByExpr, ProjectionSelect, Query, RefreshModeKind,
+    RowAccessPolicy, SequenceOptions, Spanned, SqlOption, StorageSerializationPolicy, TableVersion,
+    Tag, TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value,
     ValueWithSpan, WrappedCollection,
 };
 use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
@@ -3525,5 +3525,141 @@ impl fmt::Display for Msck {
 impl Spanned for Msck {
     fn span(&self) -> Span {
         self.table_name.span()
+    }
+}
+
+/// CREATE VIEW statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateView {
+    /// True if this is a `CREATE OR ALTER VIEW` statement
+    ///
+    /// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-view-transact-sql)
+    pub or_alter: bool,
+    pub or_replace: bool,
+    pub materialized: bool,
+    /// Snowflake: SECURE view modifier
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-view#syntax>
+    pub secure: bool,
+    /// View name
+    pub name: ObjectName,
+    /// If `if_not_exists` is true, this flag is set to true if the view name comes before the `IF NOT EXISTS` clause.
+    /// Example:
+    /// ```sql
+    /// CREATE VIEW myview IF NOT EXISTS AS SELECT 1`
+    ///  ```
+    /// Otherwise, the flag is set to false if the view name comes after the clause
+    /// Example:
+    /// ```sql
+    /// CREATE VIEW IF NOT EXISTS myview AS SELECT 1`
+    ///  ```
+    pub name_before_not_exists: bool,
+    pub columns: Vec<ViewColumnDef>,
+    pub query: Box<Query>,
+    pub options: CreateTableOptions,
+    pub cluster_by: Vec<Ident>,
+    /// Snowflake: Views can have comments in Snowflake.
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-view#syntax>
+    pub comment: Option<String>,
+    /// if true, has RedShift [`WITH NO SCHEMA BINDING`] clause <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_VIEW.html>
+    pub with_no_schema_binding: bool,
+    /// if true, has SQLite `IF NOT EXISTS` clause <https://www.sqlite.org/lang_createview.html>
+    pub if_not_exists: bool,
+    /// if true, has SQLite `TEMP` or `TEMPORARY` clause <https://www.sqlite.org/lang_createview.html>
+    pub temporary: bool,
+    /// if not None, has Clickhouse `TO` clause, specify the table into which to insert results
+    /// <https://clickhouse.com/docs/en/sql-reference/statements/create/view#materialized-view>
+    pub to: Option<ObjectName>,
+    /// MySQL: Optional parameters for the view algorithm, definer, and security context
+    pub params: Option<CreateViewParams>,
+}
+
+impl fmt::Display for CreateView {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CREATE {or_alter}{or_replace}",
+            or_alter = if self.or_alter { "OR ALTER " } else { "" },
+            or_replace = if self.or_replace { "OR REPLACE " } else { "" },
+        )?;
+        if let Some(ref params) = self.params {
+            params.fmt(f)?;
+        }
+        write!(
+            f,
+            "{secure}{materialized}{temporary}VIEW {if_not_and_name}{to}",
+            if_not_and_name = if self.if_not_exists {
+                if self.name_before_not_exists {
+                    format!("{} IF NOT EXISTS", self.name)
+                } else {
+                    format!("IF NOT EXISTS {}", self.name)
+                }
+            } else {
+                format!("{}", self.name)
+            },
+            secure = if self.secure { "SECURE " } else { "" },
+            materialized = if self.materialized {
+                "MATERIALIZED "
+            } else {
+                ""
+            },
+            temporary = if self.temporary { "TEMPORARY " } else { "" },
+            to = self
+                .to
+                .as_ref()
+                .map(|to| format!(" TO {to}"))
+                .unwrap_or_default()
+        )?;
+        if !self.columns.is_empty() {
+            write!(f, " ({})", display_comma_separated(&self.columns))?;
+        }
+        if matches!(self.options, CreateTableOptions::With(_)) {
+            write!(f, " {}", self.options)?;
+        }
+        if let Some(ref comment) = self.comment {
+            write!(f, " COMMENT = '{}'", escape_single_quote_string(comment))?;
+        }
+        if !self.cluster_by.is_empty() {
+            write!(
+                f,
+                " CLUSTER BY ({})",
+                display_comma_separated(&self.cluster_by)
+            )?;
+        }
+        if matches!(self.options, CreateTableOptions::Options(_)) {
+            write!(f, " {}", self.options)?;
+        }
+        f.write_str(" AS")?;
+        SpaceOrNewline.fmt(f)?;
+        self.query.fmt(f)?;
+        if self.with_no_schema_binding {
+            write!(f, " WITH NO SCHEMA BINDING")?;
+        }
+        Ok(())
+    }
+}
+
+impl Spanned for CreateView {
+    fn span(&self) -> Span {
+        let name_span = self.name.span();
+        let query_span = self.query.span();
+        let options_span = self.options.span();
+
+        // Union all the relevant spans
+        let mut spans = vec![name_span, query_span, options_span];
+
+        // Add column spans
+        spans.extend(self.columns.iter().map(|col| col.span()));
+
+        // Add cluster_by spans
+        spans.extend(self.cluster_by.iter().map(|ident| ident.span));
+
+        // Add to span if present
+        if let Some(ref to) = self.to {
+            spans.push(to.span());
+        }
+
+        Span::union_iter(spans)
     }
 }

@@ -53,11 +53,11 @@ fn parse_sf_create_secure_view_and_materialized_view() {
         "CREATE OR REPLACE SECURE MATERIALIZED VIEW v AS SELECT 1",
     ] {
         match snowflake().verified_stmt(sql) {
-            Statement::CreateView {
+            Statement::CreateView(CreateView {
                 secure,
                 materialized,
                 ..
-            } => {
+            }) => {
                 assert!(secure);
                 if sql.contains("MATERIALIZED") {
                     assert!(materialized);
@@ -1047,7 +1047,7 @@ fn parse_sf_create_or_replace_with_comment_for_snowflake() {
         test_utils::TestedDialects::new(vec![Box::new(SnowflakeDialect {}) as Box<dyn Dialect>]);
 
     match dialect.verified_stmt(sql) {
-        Statement::CreateView {
+        Statement::CreateView(CreateView {
             name,
             columns,
             or_replace,
@@ -1060,7 +1060,7 @@ fn parse_sf_create_or_replace_with_comment_for_snowflake() {
             if_not_exists,
             temporary,
             ..
-        } => {
+        }) => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
             assert_eq!(options, CreateTableOptions::None);
@@ -3281,7 +3281,7 @@ fn parse_view_column_descriptions() {
     let sql = "CREATE OR REPLACE VIEW v (a COMMENT 'Comment', b) AS SELECT a, b FROM table1";
 
     match snowflake().verified_stmt(sql) {
-        Statement::CreateView { name, columns, .. } => {
+        Statement::CreateView(CreateView { name, columns, .. }) => {
             assert_eq!(name.to_string(), "v");
             assert_eq!(
                 columns,

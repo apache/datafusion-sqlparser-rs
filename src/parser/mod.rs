@@ -5929,7 +5929,7 @@ impl<'a> Parser<'a> {
                 Keyword::BINDING,
             ]);
 
-        Ok(Statement::CreateView {
+        Ok(CreateView {
             or_alter,
             name,
             columns,
@@ -5946,7 +5946,8 @@ impl<'a> Parser<'a> {
             to,
             params: create_view_params,
             name_before_not_exists,
-        })
+        }
+        .into())
     }
 
     /// Parse optional parameters for the `CREATE VIEW` statement supported by [MySQL].

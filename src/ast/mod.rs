@@ -64,13 +64,13 @@ pub use self::ddl::{
     AlterType, AlterTypeAddValue, AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename,
     AlterTypeRenameValue, ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions,
     ColumnPolicy, ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain,
-    CreateFunction, CreateIndex, CreateTable, CreateTrigger, Deduplicate, DeferrableInitial,
-    DropBehavior, DropTrigger, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
-    IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
-    IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption, Owner,
-    Partition, ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity,
-    TableConstraint, TagsColumnOption, Truncate, UserDefinedTypeCompositeAttributeDef,
-    UserDefinedTypeRepresentation, ViewColumnDef,
+    CreateFunction, CreateIndex, CreateTable, CreateTrigger, CreateView, Deduplicate,
+    DeferrableInitial, DropBehavior, DropTrigger, GeneratedAs, GeneratedExpressionMode,
+    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
+    IdentityPropertyOrder, IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck,
+    NullsDistinctOption, Owner, Partition, ProcedureParam, ReferentialAction, RenameTableNameKind,
+    ReplicaIdentity, TableConstraint, TagsColumnOption, Truncate,
+    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{Delete, Insert, Update};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -3249,48 +3249,7 @@ pub enum Statement {
     /// ```sql
     /// CREATE VIEW
     /// ```
-    CreateView {
-        /// True if this is a `CREATE OR ALTER VIEW` statement
-        ///
-        /// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-view-transact-sql)
-        or_alter: bool,
-        or_replace: bool,
-        materialized: bool,
-        /// Snowflake: SECURE view modifier
-        /// <https://docs.snowflake.com/en/sql-reference/sql/create-view#syntax>
-        secure: bool,
-        /// View name
-        name: ObjectName,
-        /// If `if_not_exists` is true, this flag is set to true if the view name comes before the `IF NOT EXISTS` clause.
-        /// Example:
-        /// ```sql
-        /// CREATE VIEW myview IF NOT EXISTS AS SELECT 1`
-        ///  ```
-        /// Otherwise, the flag is set to false if the view name comes after the clause
-        /// Example:
-        /// ```sql
-        /// CREATE VIEW IF NOT EXISTS myview AS SELECT 1`
-        ///  ```
-        name_before_not_exists: bool,
-        columns: Vec<ViewColumnDef>,
-        query: Box<Query>,
-        options: CreateTableOptions,
-        cluster_by: Vec<Ident>,
-        /// Snowflake: Views can have comments in Snowflake.
-        /// <https://docs.snowflake.com/en/sql-reference/sql/create-view#syntax>
-        comment: Option<String>,
-        /// if true, has RedShift [`WITH NO SCHEMA BINDING`] clause <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_VIEW.html>
-        with_no_schema_binding: bool,
-        /// if true, has SQLite `IF NOT EXISTS` clause <https://www.sqlite.org/lang_createview.html>
-        if_not_exists: bool,
-        /// if true, has SQLite `TEMP` or `TEMPORARY` clause <https://www.sqlite.org/lang_createview.html>
-        temporary: bool,
-        /// if not None, has Clickhouse `TO` clause, specify the table into which to insert results
-        /// <https://clickhouse.com/docs/en/sql-reference/statements/create/view#materialized-view>
-        to: Option<ObjectName>,
-        /// MySQL: Optional parameters for the view algorithm, definer, and security context
-        params: Option<CreateViewParams>,
-    },
+    CreateView(CreateView),
     /// ```sql
     /// CREATE TABLE
     /// ```
@@ -4817,80 +4776,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateView {
-                or_alter,
-                name,
-                or_replace,
-                columns,
-                query,
-                materialized,
-                secure,
-                options,
-                cluster_by,
-                comment,
-                with_no_schema_binding,
-                if_not_exists,
-                temporary,
-                to,
-                params,
-                name_before_not_exists,
-            } => {
-                write!(
-                    f,
-                    "CREATE {or_alter}{or_replace}",
-                    or_alter = if *or_alter { "OR ALTER " } else { "" },
-                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
-                )?;
-                if let Some(params) = params {
-                    params.fmt(f)?;
-                }
-                write!(
-                    f,
-                    "{secure}{materialized}{temporary}VIEW {if_not_and_name}{to}",
-                    if_not_and_name = if *if_not_exists {
-                        if *name_before_not_exists {
-                            format!("{name} IF NOT EXISTS")
-                        } else {
-                            format!("IF NOT EXISTS {name}")
-                        }
-                    } else {
-                        format!("{name}")
-                    },
-                    secure = if *secure { "SECURE " } else { "" },
-                    materialized = if *materialized { "MATERIALIZED " } else { "" },
-                    temporary = if *temporary { "TEMPORARY " } else { "" },
-                    to = to
-                        .as_ref()
-                        .map(|to| format!(" TO {to}"))
-                        .unwrap_or_default()
-                )?;
-                if !columns.is_empty() {
-                    write!(f, " ({})", display_comma_separated(columns))?;
-                }
-                if matches!(options, CreateTableOptions::With(_)) {
-                    write!(f, " {options}")?;
-                }
-                if let Some(comment) = comment {
-                    write!(
-                        f,
-                        " COMMENT = '{}'",
-                        value::escape_single_quote_string(comment)
-                    )?;
-                }
-                if !cluster_by.is_empty() {
-                    write!(f, " CLUSTER BY ({})", display_comma_separated(cluster_by))?;
-                }
-                if matches!(options, CreateTableOptions::Options(_)) {
-                    write!(f, " {options}")?;
-                }
-                f.write_str(" AS")?;
-                SpaceOrNewline.fmt(f)?;
-                query.fmt(f)?;
-                if *with_no_schema_binding {
-                    write!(f, " WITH NO SCHEMA BINDING")?;
-                }
-                Ok(())
-            }
+            Statement::CreateView(create_view) => create_view.fmt(f),
             Statement::CreateTable(create_table) => create_table.fmt(f),
             Statement::LoadData {
                 local,
@@ -10833,6 +10719,12 @@ impl From<Insert> for Statement {
 impl From<Update> for Statement {
     fn from(u: Update) -> Self {
         Self::Update(u)
+    }
+}
+
+impl From<CreateView> for Statement {
+    fn from(cv: CreateView) -> Self {
+        Self::CreateView(cv)
     }
 }
 

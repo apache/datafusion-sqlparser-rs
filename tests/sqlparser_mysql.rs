@@ -3855,7 +3855,7 @@ fn parse_revoke() {
 fn parse_create_view_algorithm_param() {
     let sql = "CREATE ALGORITHM = MERGE VIEW foo AS SELECT 1";
     let stmt = mysql().verified_stmt(sql);
-    if let Statement::CreateView {
+    if let Statement::CreateView(CreateView {
         params:
             Some(CreateViewParams {
                 algorithm,
@@ -3863,7 +3863,7 @@ fn parse_create_view_algorithm_param() {
                 security,
             }),
         ..
-    } = stmt
+    }) = stmt
     {
         assert_eq!(algorithm, Some(CreateViewAlgorithm::Merge));
         assert!(definer.is_none());
@@ -3879,7 +3879,7 @@ fn parse_create_view_algorithm_param() {
 fn parse_create_view_definer_param() {
     let sql = "CREATE DEFINER = 'jeffrey'@'localhost' VIEW foo AS SELECT 1";
     let stmt = mysql().verified_stmt(sql);
-    if let Statement::CreateView {
+    if let Statement::CreateView(CreateView {
         params:
             Some(CreateViewParams {
                 algorithm,
@@ -3887,7 +3887,7 @@ fn parse_create_view_definer_param() {
                 security,
             }),
         ..
-    } = stmt
+    }) = stmt
     {
         assert!(algorithm.is_none());
         if let Some(GranteeName::UserHost { user, host }) = definer {
@@ -3908,7 +3908,7 @@ fn parse_create_view_definer_param() {
 fn parse_create_view_security_param() {
     let sql = "CREATE SQL SECURITY DEFINER VIEW foo AS SELECT 1";
     let stmt = mysql().verified_stmt(sql);
-    if let Statement::CreateView {
+    if let Statement::CreateView(CreateView {
         params:
             Some(CreateViewParams {
                 algorithm,
@@ -3916,7 +3916,7 @@ fn parse_create_view_security_param() {
                 security,
             }),
         ..
-    } = stmt
+    }) = stmt
     {
         assert!(algorithm.is_none());
         assert!(definer.is_none());
@@ -3931,7 +3931,7 @@ fn parse_create_view_security_param() {
 fn parse_create_view_multiple_params() {
     let sql = "CREATE ALGORITHM = UNDEFINED DEFINER = `root`@`%` SQL SECURITY INVOKER VIEW foo AS SELECT 1";
     let stmt = mysql().verified_stmt(sql);
-    if let Statement::CreateView {
+    if let Statement::CreateView(CreateView {
         params:
             Some(CreateViewParams {
                 algorithm,
@@ -3939,7 +3939,7 @@ fn parse_create_view_multiple_params() {
                 security,
             }),
         ..
-    } = stmt
+    }) = stmt
     {
         assert_eq!(algorithm, Some(CreateViewAlgorithm::Undefined));
         if let Some(GranteeName::UserHost { user, host }) = definer {

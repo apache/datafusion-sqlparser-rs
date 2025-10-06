@@ -9359,7 +9359,7 @@ impl<'a> Parser<'a> {
             self.get_current_token().clone()
         };
 
-        Ok(Statement::AlterTable {
+        Ok(AlterTable {
             name: table_name,
             if_exists,
             only,
@@ -9368,7 +9368,8 @@ impl<'a> Parser<'a> {
             on_cluster,
             iceberg,
             end_token: AttachedToken(end_token),
-        })
+        }
+        .into())
     }
 
     pub fn parse_alter_view(&mut self) -> Result<Statement, ParserError> {

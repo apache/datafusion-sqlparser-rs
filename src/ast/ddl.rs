@@ -30,15 +30,16 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
-    display_comma_separated, display_separated, ArgMode, CommentDef, ConditionalStatements,
-    CreateFunctionBody, CreateFunctionUsing, CreateTableLikeKind, CreateTableOptions,
-    CreateViewParams, DataType, Expr, FileFormat, FunctionBehavior, FunctionCalledOnNull,
-    FunctionDeterminismSpecifier, FunctionParallel, HiveDistributionStyle, HiveFormat,
-    HiveIOFormat, HiveRowFormat, Ident, InitializeKind, MySQLColumnPosition, ObjectName, OnCommit,
-    OneOrManyWithParens, OperateFunctionArg, OrderByExpr, ProjectionSelect, Query, RefreshModeKind,
-    RowAccessPolicy, SequenceOptions, Spanned, SqlOption, StorageSerializationPolicy, TableVersion,
-    Tag, TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value,
-    ValueWithSpan, WrappedCollection,
+    display_comma_separated, display_separated, ArgMode, AttachedToken, CommentDef,
+    ConditionalStatements, CreateFunctionBody, CreateFunctionUsing, CreateTableLikeKind,
+    CreateTableOptions, CreateViewParams, DataType, Expr, FileFormat, FunctionBehavior,
+    FunctionCalledOnNull, FunctionDeterminismSpecifier, FunctionParallel, HiveDistributionStyle,
+    HiveFormat, HiveIOFormat, HiveRowFormat, HiveSetLocation, Ident, InitializeKind,
+    MySQLColumnPosition, ObjectName, OnCommit, OneOrManyWithParens, OperateFunctionArg,
+    OrderByExpr, ProjectionSelect, Query, RefreshModeKind, RowAccessPolicy, SequenceOptions,
+    Spanned, SqlOption, StorageSerializationPolicy, TableVersion, Tag, TriggerEvent,
+    TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value, ValueWithSpan,
+    WrappedCollection,
 };
 use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
 use crate::keywords::Keyword;
@@ -3747,5 +3748,54 @@ impl fmt::Display for DropExtension {
 impl Spanned for DropExtension {
     fn span(&self) -> Span {
         Span::empty()
+    }
+}
+
+/// ALTER TABLE statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterTable {
+    /// Table name
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub name: ObjectName,
+    pub if_exists: bool,
+    pub only: bool,
+    pub operations: Vec<AlterTableOperation>,
+    pub location: Option<HiveSetLocation>,
+    /// ClickHouse dialect supports `ON CLUSTER` clause for ALTER TABLE
+    /// For example: `ALTER TABLE table_name ON CLUSTER cluster_name ADD COLUMN c UInt32`
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/update)
+    pub on_cluster: Option<Ident>,
+    /// Snowflake "ICEBERG" clause for Iceberg tables
+    /// <https://docs.snowflake.com/en/sql-reference/sql/alter-iceberg-table>
+    pub iceberg: bool,
+    /// Token that represents the end of the statement (semicolon or EOF)
+    pub end_token: AttachedToken,
+}
+
+impl fmt::Display for AlterTable {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.iceberg {
+            write!(f, "ALTER ICEBERG TABLE ")?;
+        } else {
+            write!(f, "ALTER TABLE ")?;
+        }
+
+        if self.if_exists {
+            write!(f, "IF EXISTS ")?;
+        }
+        if self.only {
+            write!(f, "ONLY ")?;
+        }
+        write!(f, "{} ", &self.name)?;
+        if let Some(cluster) = &self.on_cluster {
+            write!(f, "ON CLUSTER {cluster} ")?;
+        }
+        write!(f, "{}", display_comma_separated(&self.operations))?;
+        if let Some(loc) = &self.location {
+            write!(f, " {loc}")?
+        }
+        Ok(())
     }
 }

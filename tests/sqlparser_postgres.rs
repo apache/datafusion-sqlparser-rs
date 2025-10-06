@@ -605,7 +605,7 @@ fn parse_alter_table_constraints_unique_nulls_distinct() {
     match pg_and_generic()
         .verified_stmt("ALTER TABLE t ADD CONSTRAINT b UNIQUE NULLS NOT DISTINCT (c)")
     {
-        Statement::AlterTable { operations, .. } => match &operations[0] {
+        Statement::AlterTable(alter_table) => match &alter_table.operations[0] {
             AlterTableOperation::AddConstraint {
                 constraint: TableConstraint::Unique { nulls_distinct, .. },
                 ..
@@ -828,13 +828,13 @@ fn parse_alter_table_alter_column_add_generated() {
 #[test]
 fn parse_alter_table_add_columns() {
     match pg().verified_stmt("ALTER TABLE IF EXISTS ONLY tab ADD COLUMN a TEXT, ADD COLUMN b INT") {
-        Statement::AlterTable {
+        Statement::AlterTable(AlterTable {
             name,
             if_exists,
             only,
             operations,
             ..
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "tab");
             assert!(if_exists);
             assert!(only);
@@ -908,13 +908,13 @@ fn parse_alter_table_owner_to() {
 
     for case in test_cases {
         match pg_and_generic().verified_stmt(case.sql) {
-            Statement::AlterTable {
+            Statement::AlterTable(AlterTable {
                 name,
                 if_exists: _,
                 only: _,
                 operations,
                 ..
-            } => {
+            }) => {
                 assert_eq!(name.to_string(), "tab");
                 assert_eq!(
                     operations,
@@ -6360,7 +6360,7 @@ fn parse_varbit_datatype() {
 #[test]
 fn parse_alter_table_replica_identity() {
     match pg_and_generic().verified_stmt("ALTER TABLE foo REPLICA IDENTITY FULL") {
-        Statement::AlterTable { operations, .. } => {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
             assert_eq!(
                 operations,
                 vec![AlterTableOperation::ReplicaIdentity {
@@ -6372,7 +6372,7 @@ fn parse_alter_table_replica_identity() {
     }
 
     match pg_and_generic().verified_stmt("ALTER TABLE foo REPLICA IDENTITY USING INDEX foo_idx") {
-        Statement::AlterTable { operations, .. } => {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
             assert_eq!(
                 operations,
                 vec![AlterTableOperation::ReplicaIdentity {
@@ -6420,7 +6420,7 @@ fn parse_alter_table_constraint_not_valid() {
     match pg_and_generic().verified_stmt(
         "ALTER TABLE foo ADD CONSTRAINT bar FOREIGN KEY (baz) REFERENCES other(ref) NOT VALID",
     ) {
-        Statement::AlterTable { operations, .. } => {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
             assert_eq!(
                 operations,
                 vec![AlterTableOperation::AddConstraint {
@@ -6445,7 +6445,7 @@ fn parse_alter_table_constraint_not_valid() {
 #[test]
 fn parse_alter_table_validate_constraint() {
     match pg_and_generic().verified_stmt("ALTER TABLE foo VALIDATE CONSTRAINT bar") {
-        Statement::AlterTable { operations, .. } => {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
             assert_eq!(
                 operations,
                 vec![AlterTableOperation::ValidateConstraint { name: "bar".into() }]

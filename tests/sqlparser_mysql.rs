@@ -2727,7 +2727,7 @@ fn parse_delete_with_limit() {
 #[test]
 fn parse_alter_table_add_column() {
     match mysql().verified_stmt("ALTER TABLE tab ADD COLUMN b INT FIRST") {
-        Statement::AlterTable {
+        Statement::AlterTable(AlterTable {
             name,
             if_exists,
             only,
@@ -2736,7 +2736,7 @@ fn parse_alter_table_add_column() {
             location: _,
             on_cluster: _,
             end_token: _,
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "tab");
             assert!(!if_exists);
             assert!(!iceberg);
@@ -2759,13 +2759,13 @@ fn parse_alter_table_add_column() {
     }
 
     match mysql().verified_stmt("ALTER TABLE tab ADD COLUMN b INT AFTER foo") {
-        Statement::AlterTable {
+        Statement::AlterTable(AlterTable {
             name,
             if_exists,
             only,
             operations,
             ..
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "tab");
             assert!(!if_exists);
             assert!(!only);
@@ -2796,13 +2796,13 @@ fn parse_alter_table_add_columns() {
     match mysql()
         .verified_stmt("ALTER TABLE tab ADD COLUMN a TEXT FIRST, ADD COLUMN b INT AFTER foo")
     {
-        Statement::AlterTable {
+        Statement::AlterTable(AlterTable {
             name,
             if_exists,
             only,
             operations,
             ..
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "tab");
             assert!(!if_exists);
             assert!(!only);
@@ -3024,7 +3024,7 @@ fn parse_alter_table_with_algorithm() {
         "ALTER TABLE users DROP COLUMN password_digest, ALGORITHM = COPY, RENAME COLUMN name TO username";
     let stmt = mysql_and_generic().verified_stmt(sql);
     match stmt {
-        Statement::AlterTable { operations, .. } => {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
             assert_eq!(
                 operations,
                 vec![
@@ -3072,7 +3072,7 @@ fn parse_alter_table_with_lock() {
         "ALTER TABLE users DROP COLUMN password_digest, LOCK = EXCLUSIVE, RENAME COLUMN name TO username";
     let stmt = mysql_and_generic().verified_stmt(sql);
     match stmt {
-        Statement::AlterTable { operations, .. } => {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
             assert_eq!(
                 operations,
                 vec![

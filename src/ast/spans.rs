@@ -16,8 +16,8 @@
 // under the License.
 
 use crate::ast::{
-    ddl::AlterSchema, query::SelectItemQualifiedWildcardKind, AlterSchemaOperation, ColumnOptions,
-    ExportData, Owner, TypedString,
+    ddl::AlterSchema, query::SelectItemQualifiedWildcardKind, AlterSchemaOperation, AlterTable,
+    ColumnOptions, ExportData, Owner, TypedString,
 };
 use core::iter;
 
@@ -367,21 +367,7 @@ impl Spanned for Statement {
             Statement::CreateSecret { .. } => Span::empty(),
             Statement::CreateServer { .. } => Span::empty(),
             Statement::CreateConnector { .. } => Span::empty(),
-            Statement::AlterTable {
-                name,
-                if_exists: _,
-                only: _,
-                operations,
-                location: _,
-                on_cluster,
-                iceberg: _,
-                end_token,
-            } => union_spans(
-                core::iter::once(name.span())
-                    .chain(operations.iter().map(|i| i.span()))
-                    .chain(on_cluster.iter().map(|i| i.span))
-                    .chain(core::iter::once(end_token.0.span)),
-            ),
+            Statement::AlterTable(alter_table) => alter_table.span(),
             Statement::AlterIndex { name, operation } => name.span().union(&operation.span()),
             Statement::AlterView {
                 name,
@@ -2412,6 +2398,17 @@ impl Spanned for AlterSchema {
     fn span(&self) -> Span {
         union_spans(
             core::iter::once(self.name.span()).chain(self.operations.iter().map(|i| i.span())),
+        )
+    }
+}
+
+impl Spanned for AlterTable {
+    fn span(&self) -> Span {
+        union_spans(
+            core::iter::once(self.name.span())
+                .chain(self.operations.iter().map(|i| i.span()))
+                .chain(self.on_cluster.iter().map(|i| i.span))
+                .chain(core::iter::once(self.end_token.0.span)),
         )
     }
 }

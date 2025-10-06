@@ -60,17 +60,18 @@ pub use self::dcl::{
 };
 pub use self::ddl::{
     AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterPolicyOperation,
-    AlterSchema, AlterSchemaOperation, AlterTableAlgorithm, AlterTableLock, AlterTableOperation,
-    AlterType, AlterTypeAddValue, AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename,
-    AlterTypeRenameValue, ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions,
-    ColumnPolicy, ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain,
-    CreateExtension, CreateFunction, CreateIndex, CreateTable, CreateTrigger, CreateView,
-    Deduplicate, DeferrableInitial, DropBehavior, DropExtension, DropTrigger, GeneratedAs,
-    GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
-    IdentityPropertyKind, IdentityPropertyOrder, IndexColumn, IndexOption, IndexType,
-    KeyOrIndexDisplay, Msck, NullsDistinctOption, Owner, Partition, ProcedureParam,
-    ReferentialAction, RenameTableNameKind, ReplicaIdentity, TableConstraint, TagsColumnOption,
-    Truncate, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
+    AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm, AlterTableLock,
+    AlterTableOperation, AlterType, AlterTypeAddValue, AlterTypeAddValuePosition,
+    AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue, ClusteredBy, ColumnDef,
+    ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy, ColumnPolicyProperty,
+    ConstraintCharacteristics, CreateConnector, CreateDomain, CreateExtension, CreateFunction,
+    CreateIndex, CreateTable, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
+    DropBehavior, DropExtension, DropTrigger, GeneratedAs, GeneratedExpressionMode,
+    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
+    IdentityPropertyOrder, IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck,
+    NullsDistinctOption, Owner, Partition, ProcedureParam, ReferentialAction, RenameTableNameKind,
+    ReplicaIdentity, TableConstraint, TagsColumnOption, Truncate,
+    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{Delete, Insert, Update};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -3311,24 +3312,7 @@ pub enum Statement {
     /// ```sql
     /// ALTER TABLE
     /// ```
-    AlterTable {
-        /// Table name
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        name: ObjectName,
-        if_exists: bool,
-        only: bool,
-        operations: Vec<AlterTableOperation>,
-        location: Option<HiveSetLocation>,
-        /// ClickHouse dialect supports `ON CLUSTER` clause for ALTER TABLE
-        /// For example: `ALTER TABLE table_name ON CLUSTER cluster_name ADD COLUMN c UInt32`
-        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/update)
-        on_cluster: Option<Ident>,
-        /// Snowflake "ICEBERG" clause for Iceberg tables
-        /// <https://docs.snowflake.com/en/sql-reference/sql/alter-iceberg-table>
-        iceberg: bool,
-        /// Token that represents the end of the statement (semicolon or EOF)
-        end_token: AttachedToken,
-    },
+    AlterTable(AlterTable),
     /// ```sql
     /// ALTER SCHEMA
     /// ```
@@ -3537,10 +3521,9 @@ pub enum Statement {
     CreateExtension(CreateExtension),
     /// ```sql
     /// DROP EXTENSION [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
-    ///
+    /// ```
     /// Note: this is a PostgreSQL-specific statement.
     /// https://www.postgresql.org/docs/current/sql-dropextension.html
-    /// ```
     DropExtension(DropExtension),
     /// ```sql
     /// FETCH
@@ -4879,42 +4862,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::CreateConnector(create_connector) => create_connector.fmt(f),
-            Statement::AlterTable {
-                name,
-                if_exists,
-                only,
-                operations,
-                location,
-                on_cluster,
-                iceberg,
-                end_token: _,
-            } => {
-                if *iceberg {
-                    write!(f, "ALTER ICEBERG TABLE ")?;
-                } else {
-                    write!(f, "ALTER TABLE ")?;
-                }
-
-                if *if_exists {
-                    write!(f, "IF EXISTS ")?;
-                }
-                if *only {
-                    write!(f, "ONLY ")?;
-                }
-                write!(f, "{name} ")?;
-                if let Some(cluster) = on_cluster {
-                    write!(f, "ON CLUSTER {cluster} ")?;
-                }
-                write!(
-                    f,
-                    "{operations}",
-                    operations = display_comma_separated(operations)
-                )?;
-                if let Some(loc) = location {
-                    write!(f, " {loc}")?
-                }
-                Ok(())
-            }
+            Statement::AlterTable(alter_table) => write!(f, "{alter_table}"),
             Statement::AlterIndex { name, operation } => {
                 write!(f, "ALTER INDEX {name} {operation}")
             }
@@ -10567,6 +10515,12 @@ impl From<CreateView> for Statement {
 impl From<CreateRole> for Statement {
     fn from(cr: CreateRole) -> Self {
         Self::CreateRole(cr)
+    }
+}
+
+impl From<AlterTable> for Statement {
+    fn from(at: AlterTable) -> Self {
+        Self::AlterTable(at)
     }
 }
 

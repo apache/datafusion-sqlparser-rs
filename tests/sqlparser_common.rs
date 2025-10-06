@@ -4838,9 +4838,9 @@ fn test_alter_table_with_on_cluster() {
     match all_dialects()
         .verified_stmt("ALTER TABLE t ON CLUSTER 'cluster' ADD CONSTRAINT bar PRIMARY KEY (baz)")
     {
-        Statement::AlterTable {
+        Statement::AlterTable(AlterTable {
             name, on_cluster, ..
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "t");
             assert_eq!(on_cluster, Some(Ident::with_quote('\'', "cluster")));
         }
@@ -4850,9 +4850,9 @@ fn test_alter_table_with_on_cluster() {
     match all_dialects()
         .verified_stmt("ALTER TABLE t ON CLUSTER cluster_name ADD CONSTRAINT bar PRIMARY KEY (baz)")
     {
-        Statement::AlterTable {
+        Statement::AlterTable(AlterTable {
             name, on_cluster, ..
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "t");
             assert_eq!(on_cluster, Some(Ident::new("cluster_name")));
         }
@@ -17223,9 +17223,9 @@ fn parse_invisible_column() {
     let sql = r#"ALTER TABLE t ADD COLUMN bar INT INVISIBLE"#;
     let stmt = verified_stmt(sql);
     match stmt {
-        Statement::AlterTable { operations, .. } => {
+        Statement::AlterTable(alter_table) => {
             assert_eq!(
-                operations,
+                alter_table.operations,
                 vec![AlterTableOperation::AddColumn {
                     column_keyword: true,
                     if_not_exists: false,

@@ -3715,9 +3715,9 @@ impl Spanned for CreateExtension {
 
 /// DROP EXTENSION statement  
 /// Note: this is a PostgreSQL-specific statement
-/// 
+///
 /// # References
-/// 
+///
 /// PostgreSQL Documentation:
 /// <https://www.postgresql.org/docs/current/sql-dropextension.html>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

@@ -69,8 +69,8 @@ pub use self::ddl::{
     IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
     IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition,
     ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity, TableConstraint,
-    TagsColumnOption, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
-    ViewColumnDef,
+    TagsColumnOption, Truncate, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{Delete, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -3133,23 +3133,7 @@ pub enum Statement {
     /// TRUNCATE
     /// ```
     /// Truncate (Hive)
-    Truncate {
-        table_names: Vec<TruncateTableTarget>,
-        partitions: Option<Vec<Expr>>,
-        /// TABLE - optional keyword;
-        table: bool,
-        /// Postgres-specific option
-        /// [ RESTART IDENTITY | CONTINUE IDENTITY ]
-        identity: Option<TruncateIdentityOption>,
-        /// Postgres-specific option
-        /// [ CASCADE | RESTRICT ]
-        cascade: Option<CascadeOption>,
-        /// ClickHouse-specific option
-        /// [ ON CLUSTER cluster_name ]
-        ///
-        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/truncate/)
-        on_cluster: Option<Ident>,
-    },
+    Truncate(Truncate),
     /// ```sql
     /// MSCK
     /// ```
@@ -4373,6 +4357,12 @@ impl From<Analyze> for Statement {
     }
 }
 
+impl From<ddl::Truncate> for Statement {
+    fn from(truncate: ddl::Truncate) -> Self {
+        Statement::Truncate(truncate)
+    }
+}
+
 /// ```sql
 /// {COPY | REVOKE} CURRENT GRANTS
 /// ```
@@ -4589,45 +4579,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Truncate {
-                table_names,
-                partitions,
-                table,
-                identity,
-                cascade,
-                on_cluster,
-            } => {
-                let table = if *table { "TABLE " } else { "" };
-
-                write!(
-                    f,
-                    "TRUNCATE {table}{table_names}",
-                    table_names = display_comma_separated(table_names)
-                )?;
-
-                if let Some(identity) = identity {
-                    match identity {
-                        TruncateIdentityOption::Restart => write!(f, " RESTART IDENTITY")?,
-                        TruncateIdentityOption::Continue => write!(f, " CONTINUE IDENTITY")?,
-                    }
-                }
-                if let Some(cascade) = cascade {
-                    match cascade {
-                        CascadeOption::Cascade => write!(f, " CASCADE")?,
-                        CascadeOption::Restrict => write!(f, " RESTRICT")?,
-                    }
-                }
-
-                if let Some(ref parts) = partitions {
-                    if !parts.is_empty() {
-                        write!(f, " PARTITION ({})", display_comma_separated(parts))?;
-                    }
-                }
-                if let Some(on_cluster) = on_cluster {
-                    write!(f, " ON CLUSTER {on_cluster}")?;
-                }
-                Ok(())
-            }
+            Statement::Truncate(truncate) => truncate.fmt(f),
             Statement::Case(stmt) => {
                 write!(f, "{stmt}")
             }

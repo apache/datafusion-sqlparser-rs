@@ -299,19 +299,7 @@ impl Spanned for Statement {
     fn span(&self) -> Span {
         match self {
             Statement::Analyze(analyze) => analyze.span(),
-            Statement::Truncate {
-                table_names,
-                partitions,
-                table: _,
-                identity: _,
-                cascade: _,
-                on_cluster: _,
-            } => union_spans(
-                table_names
-                    .iter()
-                    .map(|i| i.name.span())
-                    .chain(partitions.iter().flat_map(|i| i.iter().map(|k| k.span()))),
-            ),
+            Statement::Truncate(truncate) => truncate.span(),
             Statement::Msck {
                 table_name,
                 repair: _,

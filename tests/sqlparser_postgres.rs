@@ -4956,14 +4956,14 @@ fn parse_truncate() {
         only: false,
     }];
     assert_eq!(
-        Statement::Truncate {
+        Statement::Truncate(Truncate {
             table_names,
             partitions: None,
             table: false,
             identity: None,
             cascade: None,
             on_cluster: None,
-        },
+        }),
         truncate
     );
 }
@@ -4980,14 +4980,14 @@ fn parse_truncate_with_options() {
     }];
 
     assert_eq!(
-        Statement::Truncate {
+        Statement::Truncate(Truncate {
             table_names,
             partitions: None,
             table: true,
             identity: Some(TruncateIdentityOption::Restart),
             cascade: Some(CascadeOption::Cascade),
             on_cluster: None,
-        },
+        }),
         truncate
     );
 }
@@ -5013,14 +5013,14 @@ fn parse_truncate_with_table_list() {
     ];
 
     assert_eq!(
-        Statement::Truncate {
+        Statement::Truncate(Truncate {
             table_names,
             partitions: None,
             table: true,
             identity: Some(TruncateIdentityOption::Restart),
             cascade: Some(CascadeOption::Cascade),
             on_cluster: None,
-        },
+        }),
         truncate
     );
 }

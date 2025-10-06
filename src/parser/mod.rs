@@ -1024,14 +1024,15 @@ impl<'a> Parser<'a> {
 
         let on_cluster = self.parse_optional_on_cluster()?;
 
-        Ok(Statement::Truncate {
+        Ok(Truncate {
             table_names,
             partitions,
             table,
             identity,
             cascade,
             on_cluster,
-        })
+        }
+        .into())
     }
 
     fn parse_cascade_option(&mut self) -> Option<CascadeOption> {
@@ -1176,7 +1177,8 @@ impl<'a> Parser<'a> {
             cache_metadata,
             noscan,
             compute_statistics,
-        }.into())
+        }
+        .into())
     }
 
     /// Parse a new expression including wildcard & qualified wildcard.

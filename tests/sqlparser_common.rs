@@ -13343,8 +13343,8 @@ fn test_extract_seconds_single_quote_err() {
 fn test_truncate_table_with_on_cluster() {
     let sql = "TRUNCATE TABLE t ON CLUSTER cluster_name";
     match all_dialects().verified_stmt(sql) {
-        Statement::Truncate { on_cluster, .. } => {
-            assert_eq!(on_cluster, Some(Ident::new("cluster_name")));
+        Statement::Truncate(truncate) => {
+            assert_eq!(truncate.on_cluster, Some(Ident::new("cluster_name")));
         }
         _ => panic!("Expected: TRUNCATE TABLE statement"),
     }
@@ -16399,14 +16399,14 @@ fn parse_truncate_only() {
     ];
 
     assert_eq!(
-        Statement::Truncate {
+        Statement::Truncate(Truncate {
             table_names,
             partitions: None,
             table: true,
             identity: None,
             cascade: None,
             on_cluster: None,
-        },
+        }),
         truncate
     );
 }

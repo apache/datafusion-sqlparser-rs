@@ -3416,3 +3416,74 @@ impl fmt::Display for DropTrigger {
         Ok(())
     }
 }
+
+/// A `TRUNCATE` statement.
+///
+/// ```sql
+/// TRUNCATE TABLE table_names [PARTITION (partitions)] [RESTART IDENTITY | CONTINUE IDENTITY] [CASCADE | RESTRICT] [ON CLUSTER cluster_name]
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Truncate {
+    /// Table names to truncate
+    pub table_names: Vec<super::TruncateTableTarget>,
+    /// Optional partition specification
+    pub partitions: Option<Vec<Expr>>,
+    /// TABLE - optional keyword
+    pub table: bool,
+    /// Postgres-specific option: [ RESTART IDENTITY | CONTINUE IDENTITY ]
+    pub identity: Option<super::TruncateIdentityOption>,
+    /// Postgres-specific option: [ CASCADE | RESTRICT ]
+    pub cascade: Option<super::CascadeOption>,
+    /// ClickHouse-specific option: [ ON CLUSTER cluster_name ]
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/truncate/)
+    pub on_cluster: Option<Ident>,
+}
+
+impl fmt::Display for Truncate {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let table = if self.table { "TABLE " } else { "" };
+
+        write!(
+            f,
+            "TRUNCATE {table}{table_names}",
+            table_names = display_comma_separated(&self.table_names)
+        )?;
+
+        if let Some(identity) = &self.identity {
+            match identity {
+                super::TruncateIdentityOption::Restart => write!(f, " RESTART IDENTITY")?,
+                super::TruncateIdentityOption::Continue => write!(f, " CONTINUE IDENTITY")?,
+            }
+        }
+        if let Some(cascade) = &self.cascade {
+            match cascade {
+                super::CascadeOption::Cascade => write!(f, " CASCADE")?,
+                super::CascadeOption::Restrict => write!(f, " RESTRICT")?,
+            }
+        }
+
+        if let Some(ref parts) = &self.partitions {
+            if !parts.is_empty() {
+                write!(f, " PARTITION ({})", display_comma_separated(parts))?;
+            }
+        }
+        if let Some(on_cluster) = &self.on_cluster {
+            write!(f, " ON CLUSTER {on_cluster}")?;
+        }
+        Ok(())
+    }
+}
+
+impl Spanned for Truncate {
+    fn span(&self) -> Span {
+        Span::union_iter(
+            self.table_names.iter().map(|i| i.name.span()).chain(
+                self.partitions
+                    .iter()
+                    .flat_map(|i| i.iter().map(|k| k.span())),
+            ),
+        )
+    }
+}

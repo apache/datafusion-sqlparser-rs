@@ -9406,21 +9406,17 @@ fn parse_drop_index() {
 fn parse_create_role() {
     let sql = "CREATE ROLE consultant";
     match verified_stmt(sql) {
-        Statement::CreateRole { names, .. } => {
-            assert_eq_vec(&["consultant"], &names);
+        Statement::CreateRole(create_role) => {
+            assert_eq_vec(&["consultant"], &create_role.names);
         }
         _ => unreachable!(),
     }
 
     let sql = "CREATE ROLE IF NOT EXISTS mysql_a, mysql_b";
     match verified_stmt(sql) {
-        Statement::CreateRole {
-            names,
-            if_not_exists,
-            ..
-        } => {
-            assert_eq_vec(&["mysql_a", "mysql_b"], &names);
-            assert!(if_not_exists);
+        Statement::CreateRole(create_role) => {
+            assert_eq_vec(&["mysql_a", "mysql_b"], &create_role.names);
+            assert!(create_role.if_not_exists);
         }
         _ => unreachable!(),
     }

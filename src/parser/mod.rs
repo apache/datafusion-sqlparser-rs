@@ -6210,7 +6210,7 @@ impl<'a> Parser<'a> {
             }?
         }
 
-        Ok(Statement::CreateRole {
+        Ok(CreateRole {
             names,
             if_not_exists,
             login,
@@ -6229,7 +6229,8 @@ impl<'a> Parser<'a> {
             user,
             admin,
             authorization_owner,
-        })
+        }
+        .into())
     }
 
     pub fn parse_owner(&mut self) -> Result<Owner, ParserError> {

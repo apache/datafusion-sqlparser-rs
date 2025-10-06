@@ -56,7 +56,7 @@ pub use self::data_type::{
     ExactNumberInfo, IntervalFields, StructBracketKind, TimezoneInfo,
 };
 pub use self::dcl::{
-    AlterRoleOperation, ResetConfig, RoleOption, SecondaryRoles, SetConfigValue, Use,
+    AlterRoleOperation, CreateRole, ResetConfig, RoleOption, SecondaryRoles, SetConfigValue, Use,
 };
 pub use self::ddl::{
     AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterPolicyOperation,
@@ -3273,28 +3273,7 @@ pub enum Statement {
     /// CREATE ROLE
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createrole.html)
-    CreateRole {
-        names: Vec<ObjectName>,
-        if_not_exists: bool,
-        // Postgres
-        login: Option<bool>,
-        inherit: Option<bool>,
-        bypassrls: Option<bool>,
-        password: Option<Password>,
-        superuser: Option<bool>,
-        create_db: Option<bool>,
-        create_role: Option<bool>,
-        replication: Option<bool>,
-        connection_limit: Option<Expr>,
-        valid_until: Option<Expr>,
-        in_role: Vec<Ident>,
-        in_group: Vec<Ident>,
-        role: Vec<Ident>,
-        user: Vec<Ident>,
-        admin: Vec<Ident>,
-        // MSSQL
-        authorization_owner: Option<ObjectName>,
-    },
+    CreateRole(CreateRole),
     /// ```sql
     /// CREATE SECRET
     /// ```
@@ -4870,98 +4849,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateRole {
-                names,
-                if_not_exists,
-                inherit,
-                login,
-                bypassrls,
-                password,
-                create_db,
-                create_role,
-                superuser,
-                replication,
-                connection_limit,
-                valid_until,
-                in_role,
-                in_group,
-                role,
-                user,
-                admin,
-                authorization_owner,
-            } => {
-                write!(
-                    f,
-                    "CREATE ROLE {if_not_exists}{names}{superuser}{create_db}{create_role}{inherit}{login}{replication}{bypassrls}",
-                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                    names = display_separated(names, ", "),
-                    superuser = match *superuser {
-                        Some(true) => " SUPERUSER",
-                        Some(false) => " NOSUPERUSER",
-                        None => ""
-                    },
-                    create_db = match *create_db {
-                        Some(true) => " CREATEDB",
-                        Some(false) => " NOCREATEDB",
-                        None => ""
-                    },
-                    create_role = match *create_role {
-                        Some(true) => " CREATEROLE",
-                        Some(false) => " NOCREATEROLE",
-                        None => ""
-                    },
-                    inherit = match *inherit {
-                        Some(true) => " INHERIT",
-                        Some(false) => " NOINHERIT",
-                        None => ""
-                    },
-                    login = match *login {
-                        Some(true) => " LOGIN",
-                        Some(false) => " NOLOGIN",
-                        None => ""
-                    },
-                    replication = match *replication {
-                        Some(true) => " REPLICATION",
-                        Some(false) => " NOREPLICATION",
-                        None => ""
-                    },
-                    bypassrls = match *bypassrls {
-                        Some(true) => " BYPASSRLS",
-                        Some(false) => " NOBYPASSRLS",
-                        None => ""
-                    }
-                )?;
-                if let Some(limit) = connection_limit {
-                    write!(f, " CONNECTION LIMIT {limit}")?;
-                }
-                match password {
-                    Some(Password::Password(pass)) => write!(f, " PASSWORD {pass}"),
-                    Some(Password::NullPassword) => write!(f, " PASSWORD NULL"),
-                    None => Ok(()),
-                }?;
-                if let Some(until) = valid_until {
-                    write!(f, " VALID UNTIL {until}")?;
-                }
-                if !in_role.is_empty() {
-                    write!(f, " IN ROLE {}", display_comma_separated(in_role))?;
-                }
-                if !in_group.is_empty() {
-                    write!(f, " IN GROUP {}", display_comma_separated(in_group))?;
-                }
-                if !role.is_empty() {
-                    write!(f, " ROLE {}", display_comma_separated(role))?;
-                }
-                if !user.is_empty() {
-                    write!(f, " USER {}", display_comma_separated(user))?;
-                }
-                if !admin.is_empty() {
-                    write!(f, " ADMIN {}", display_comma_separated(admin))?;
-                }
-                if let Some(owner) = authorization_owner {
-                    write!(f, " AUTHORIZATION {owner}")?;
-                }
-                Ok(())
-            }
+            Statement::CreateRole(create_role) => write!(f, "{create_role}"),
             Statement::CreateSecret {
                 or_replace,
                 temporary,
@@ -10725,6 +10613,12 @@ impl From<Update> for Statement {
 impl From<CreateView> for Statement {
     fn from(cv: CreateView) -> Self {
         Self::CreateView(cv)
+    }
+}
+
+impl From<CreateRole> for Statement {
+    fn from(cr: CreateRole) -> Self {
+        Self::CreateRole(cr)
     }
 }
 

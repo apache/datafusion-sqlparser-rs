@@ -772,14 +772,10 @@ fn parse_mssql_bin_literal() {
 fn parse_mssql_create_role() {
     let sql = "CREATE ROLE mssql AUTHORIZATION helena";
     match ms().verified_stmt(sql) {
-        Statement::CreateRole {
-            names,
-            authorization_owner,
-            ..
-        } => {
-            assert_eq_vec(&["mssql"], &names);
+        Statement::CreateRole(create_role) => {
+            assert_eq_vec(&["mssql"], &create_role.names);
             assert_eq!(
-                authorization_owner,
+                create_role.authorization_owner,
                 Some(ObjectName::from(vec![Ident {
                     value: "helena".into(),
                     quote_style: None,

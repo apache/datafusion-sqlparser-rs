@@ -19,7 +19,7 @@
 //! (commonly referred to as Data Definition Language, or DDL)
 
 #[cfg(not(feature = "std"))]
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{boxed::Box, format, string::String, vec, vec::Vec};
 use core::fmt::{self, Display, Write};
 
 #[cfg(feature = "serde")]

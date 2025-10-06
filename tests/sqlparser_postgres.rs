@@ -3832,47 +3832,29 @@ fn parse_custom_operator() {
 fn parse_create_role() {
     let sql = "CREATE ROLE IF NOT EXISTS mysql_a, mysql_b";
     match pg().verified_stmt(sql) {
-        Statement::CreateRole {
-            names,
-            if_not_exists,
-            ..
-        } => {
-            assert_eq_vec(&["mysql_a", "mysql_b"], &names);
-            assert!(if_not_exists);
+        Statement::CreateRole(create_role) => {
+            assert_eq_vec(&["mysql_a", "mysql_b"], &create_role.names);
+            assert!(create_role.if_not_exists);
         }
         _ => unreachable!(),
     }
 
     let sql = "CREATE ROLE abc LOGIN PASSWORD NULL";
     match pg().parse_sql_statements(sql).as_deref() {
-        Ok(
-            [Statement::CreateRole {
-                names,
-                login,
-                password,
-                ..
-            }],
-        ) => {
-            assert_eq_vec(&["abc"], names);
-            assert_eq!(*login, Some(true));
-            assert_eq!(*password, Some(Password::NullPassword));
+        Ok([Statement::CreateRole(create_role)]) => {
+            assert_eq_vec(&["abc"], &create_role.names);
+            assert_eq!(create_role.login, Some(true));
+            assert_eq!(create_role.password, Some(Password::NullPassword));
         }
         err => panic!("Failed to parse CREATE ROLE test case: {err:?}"),
     }
 
     let sql = "CREATE ROLE abc WITH LOGIN PASSWORD NULL";
     match pg().parse_sql_statements(sql).as_deref() {
-        Ok(
-            [Statement::CreateRole {
-                names,
-                login,
-                password,
-                ..
-            }],
-        ) => {
-            assert_eq_vec(&["abc"], names);
-            assert_eq!(*login, Some(true));
-            assert_eq!(*password, Some(Password::NullPassword));
+        Ok([Statement::CreateRole(create_role)]) => {
+            assert_eq_vec(&["abc"], &create_role.names);
+            assert_eq!(create_role.login, Some(true));
+            assert_eq!(create_role.password, Some(Password::NullPassword));
         }
         err => panic!("Failed to parse CREATE ROLE test case: {err:?}"),
     }
@@ -3880,69 +3862,44 @@ fn parse_create_role() {
     let sql = "CREATE ROLE magician WITH SUPERUSER CREATEROLE NOCREATEDB BYPASSRLS INHERIT PASSWORD 'abcdef' LOGIN VALID UNTIL '2025-01-01' IN ROLE role1, role2 ROLE role3 ADMIN role4, role5 REPLICATION";
     // Roundtrip order of optional parameters is not preserved
     match pg().parse_sql_statements(sql).as_deref() {
-        Ok(
-            [Statement::CreateRole {
-                names,
-                if_not_exists,
-                bypassrls,
-                login,
-                inherit,
-                password,
-                superuser,
-                create_db,
-                create_role,
-                replication,
-                connection_limit,
-                valid_until,
-                in_role,
-                in_group,
-                role,
-                user: _,
-                admin,
-                authorization_owner,
-            }],
-        ) => {
-            assert_eq_vec(&["magician"], names);
-            assert!(!*if_not_exists);
-            assert_eq!(*login, Some(true));
-            assert_eq!(*inherit, Some(true));
-            assert_eq!(*bypassrls, Some(true));
+        Ok([Statement::CreateRole(create_role)]) => {
+            assert_eq_vec(&["magician"], &create_role.names);
+            assert!(!create_role.if_not_exists);
+            assert_eq!(create_role.login, Some(true));
+            assert_eq!(create_role.inherit, Some(true));
+            assert_eq!(create_role.bypassrls, Some(true));
             assert_eq!(
-                *password,
+                create_role.password,
                 Some(Password::Password(Expr::Value(
                     (Value::SingleQuotedString("abcdef".into())).with_empty_span()
                 )))
             );
-            assert_eq!(*superuser, Some(true));
-            assert_eq!(*create_db, Some(false));
-            assert_eq!(*create_role, Some(true));
-            assert_eq!(*replication, Some(true));
-            assert_eq!(*connection_limit, None);
+            assert_eq!(create_role.superuser, Some(true));
+            assert_eq!(create_role.create_db, Some(false));
+            assert_eq!(create_role.create_role, Some(true));
+            assert_eq!(create_role.replication, Some(true));
+            assert_eq!(create_role.connection_limit, None);
             assert_eq!(
-                *valid_until,
+                create_role.valid_until,
                 Some(Expr::Value(
                     (Value::SingleQuotedString("2025-01-01".into())).with_empty_span()
                 ))
             );
-            assert_eq_vec(&["role1", "role2"], in_role);
-            assert!(in_group.is_empty());
-            assert_eq_vec(&["role3"], role);
-            assert_eq_vec(&["role4", "role5"], admin);
-            assert_eq!(*authorization_owner, None);
+            assert_eq_vec(&["role1", "role2"], &create_role.in_role);
+            assert!(create_role.in_group.is_empty());
+            assert_eq_vec(&["role3"], &create_role.role);
+            assert_eq_vec(&["role4", "role5"], &create_role.admin);
+            assert_eq!(create_role.authorization_owner, None);
         }
         err => panic!("Failed to parse CREATE ROLE test case: {err:?}"),
     }
 
     let sql = "CREATE ROLE abc WITH USER foo, bar ROLE baz ";
     match pg().parse_sql_statements(sql).as_deref() {
-        Ok(
-            [Statement::CreateRole {
-                names, user, role, ..
-            }],
-        ) => {
-            assert_eq_vec(&["abc"], names);
-            assert_eq_vec(&["foo", "bar"], user);
-            assert_eq_vec(&["baz"], role);
+        Ok([Statement::CreateRole(create_role)]) => {
+            assert_eq_vec(&["abc"], &create_role.names);
+            assert_eq_vec(&["foo", "bar"], &create_role.user);
+            assert_eq_vec(&["baz"], &create_role.role);
         }
         err => panic!("Failed to parse CREATE ROLE test case: {err:?}"),
     }

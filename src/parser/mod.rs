@@ -7180,13 +7180,14 @@ impl<'a> Parser<'a> {
             (None, None, false)
         };
 
-        Ok(Statement::CreateExtension {
+        Ok(CreateExtension {
             name,
             if_not_exists,
             schema,
             version,
             cascade,
-        })
+        }
+        .into())
     }
 
     /// Parse a PostgreSQL-specific [Statement::DropExtension] statement.
@@ -7195,7 +7196,7 @@ impl<'a> Parser<'a> {
         let names = self.parse_comma_separated(|p| p.parse_identifier())?;
         let cascade_or_restrict =
             self.parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT]);
-        Ok(Statement::DropExtension {
+        Ok(Statement::DropExtension(DropExtension {
             names,
             if_exists,
             cascade_or_restrict: cascade_or_restrict
@@ -7205,7 +7206,7 @@ impl<'a> Parser<'a> {
                     _ => self.expected("CASCADE or RESTRICT", self.peek_token()),
                 })
                 .transpose()?,
-        })
+        }))
     }
 
     //TODO: Implement parsing for Skewed

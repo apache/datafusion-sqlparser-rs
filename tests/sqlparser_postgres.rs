@@ -673,93 +673,93 @@ fn parse_create_extension() {
 fn parse_drop_extension() {
     assert_eq!(
         pg_and_generic().verified_stmt("DROP EXTENSION extension_name"),
-        Statement::DropExtension {
+        Statement::DropExtension(DropExtension {
             names: vec!["extension_name".into()],
             if_exists: false,
             cascade_or_restrict: None,
-        }
+        })
     );
     assert_eq!(
         pg_and_generic().verified_stmt("DROP EXTENSION extension_name CASCADE"),
-        Statement::DropExtension {
+        Statement::DropExtension(DropExtension {
             names: vec!["extension_name".into()],
             if_exists: false,
             cascade_or_restrict: Some(ReferentialAction::Cascade),
-        }
+        })
     );
 
     assert_eq!(
         pg_and_generic().verified_stmt("DROP EXTENSION extension_name RESTRICT"),
-        Statement::DropExtension {
+        Statement::DropExtension(DropExtension {
             names: vec!["extension_name".into()],
             if_exists: false,
             cascade_or_restrict: Some(ReferentialAction::Restrict),
-        }
+        })
     );
 
     assert_eq!(
         pg_and_generic().verified_stmt("DROP EXTENSION extension_name, extension_name2 CASCADE"),
-        Statement::DropExtension {
+        Statement::DropExtension(DropExtension {
             names: vec!["extension_name".into(), "extension_name2".into()],
             if_exists: false,
             cascade_or_restrict: Some(ReferentialAction::Cascade),
-        }
+        })
     );
 
     assert_eq!(
         pg_and_generic().verified_stmt("DROP EXTENSION extension_name, extension_name2 RESTRICT"),
-        Statement::DropExtension {
+        Statement::DropExtension(DropExtension {
             names: vec!["extension_name".into(), "extension_name2".into()],
             if_exists: false,
             cascade_or_restrict: Some(ReferentialAction::Restrict),
-        }
+        })
     );
 
     assert_eq!(
         pg_and_generic().verified_stmt("DROP EXTENSION IF EXISTS extension_name"),
-        Statement::DropExtension {
+        Statement::DropExtension(DropExtension {
             names: vec!["extension_name".into()],
             if_exists: true,
             cascade_or_restrict: None,
-        }
+        })
     );
 
     assert_eq!(
         pg_and_generic().verified_stmt("DROP EXTENSION IF EXISTS extension_name CASCADE"),
-        Statement::DropExtension {
+        Statement::DropExtension(DropExtension {
             names: vec!["extension_name".into()],
             if_exists: true,
             cascade_or_restrict: Some(ReferentialAction::Cascade),
-        }
+        })
     );
 
     assert_eq!(
         pg_and_generic().verified_stmt("DROP EXTENSION IF EXISTS extension_name RESTRICT"),
-        Statement::DropExtension {
+        Statement::DropExtension(DropExtension {
             names: vec!["extension_name".into()],
             if_exists: true,
             cascade_or_restrict: Some(ReferentialAction::Restrict),
-        }
+        })
     );
 
     assert_eq!(
         pg_and_generic()
             .verified_stmt("DROP EXTENSION IF EXISTS extension_name1, extension_name2 CASCADE"),
-        Statement::DropExtension {
+        Statement::DropExtension(DropExtension {
             names: vec!["extension_name1".into(), "extension_name2".into()],
             if_exists: true,
             cascade_or_restrict: Some(ReferentialAction::Cascade),
-        }
+        })
     );
 
     assert_eq!(
         pg_and_generic()
             .verified_stmt("DROP EXTENSION IF EXISTS extension_name1, extension_name2 RESTRICT"),
-        Statement::DropExtension {
+        Statement::DropExtension(DropExtension {
             names: vec!["extension_name1".into(), "extension_name2".into()],
             if_exists: true,
             cascade_or_restrict: Some(ReferentialAction::Restrict),
-        }
+        })
     );
 }
 

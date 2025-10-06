@@ -3663,3 +3663,85 @@ impl Spanned for CreateView {
         Span::union_iter(spans)
     }
 }
+
+/// CREATE EXTENSION statement
+/// Note: this is a PostgreSQL-specific statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateExtension {
+    pub name: Ident,
+    pub if_not_exists: bool,
+    pub cascade: bool,
+    pub schema: Option<Ident>,
+    pub version: Option<Ident>,
+}
+
+impl fmt::Display for CreateExtension {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CREATE EXTENSION {if_not_exists}{name}",
+            if_not_exists = if self.if_not_exists {
+                "IF NOT EXISTS "
+            } else {
+                ""
+            },
+            name = self.name
+        )?;
+        if self.cascade || self.schema.is_some() || self.version.is_some() {
+            write!(f, " WITH")?;
+
+            if let Some(name) = &self.schema {
+                write!(f, " SCHEMA {name}")?;
+            }
+            if let Some(version) = &self.version {
+                write!(f, " VERSION {version}")?;
+            }
+            if self.cascade {
+                write!(f, " CASCADE")?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl Spanned for CreateExtension {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}
+
+/// DROP EXTENSION statement  
+/// Note: this is a PostgreSQL-specific statement
+/// https://www.postgresql.org/docs/current/sql-dropextension.html
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DropExtension {
+    pub names: Vec<Ident>,
+    pub if_exists: bool,
+    /// `CASCADE` or `RESTRICT`
+    pub cascade_or_restrict: Option<ReferentialAction>,
+}
+
+impl fmt::Display for DropExtension {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "DROP EXTENSION")?;
+        if self.if_exists {
+            write!(f, " IF EXISTS")?;
+        }
+        write!(f, " {}", display_comma_separated(&self.names))?;
+        if let Some(cascade_or_restrict) = &self.cascade_or_restrict {
+            write!(f, " {cascade_or_restrict}")?;
+        }
+        Ok(())
+    }
+}
+
+impl Spanned for DropExtension {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}

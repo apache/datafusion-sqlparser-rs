@@ -64,13 +64,13 @@ pub use self::ddl::{
     AlterType, AlterTypeAddValue, AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename,
     AlterTypeRenameValue, ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions,
     ColumnPolicy, ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain,
-    CreateFunction, CreateIndex, CreateTable, CreateTrigger, CreateView, Deduplicate,
-    DeferrableInitial, DropBehavior, DropTrigger, GeneratedAs, GeneratedExpressionMode,
-    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
-    IdentityPropertyOrder, IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck,
-    NullsDistinctOption, Owner, Partition, ProcedureParam, ReferentialAction, RenameTableNameKind,
-    ReplicaIdentity, TableConstraint, TagsColumnOption, Truncate,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
+    CreateExtension, CreateFunction, CreateIndex, CreateTable, CreateTrigger, CreateView,
+    Deduplicate, DeferrableInitial, DropBehavior, DropExtension, DropTrigger, GeneratedAs,
+    GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
+    IdentityPropertyKind, IdentityPropertyOrder, IndexColumn, IndexOption, IndexType,
+    KeyOrIndexDisplay, Msck, NullsDistinctOption, Owner, Partition, ProcedureParam,
+    ReferentialAction, RenameTableNameKind, ReplicaIdentity, TableConstraint, TagsColumnOption,
+    Truncate, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{Delete, Insert, Update};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -3534,25 +3534,14 @@ pub enum Statement {
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement,
-    CreateExtension {
-        name: Ident,
-        if_not_exists: bool,
-        cascade: bool,
-        schema: Option<Ident>,
-        version: Option<Ident>,
-    },
+    CreateExtension(CreateExtension),
     /// ```sql
     /// DROP EXTENSION [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
     ///
     /// Note: this is a PostgreSQL-specific statement.
     /// https://www.postgresql.org/docs/current/sql-dropextension.html
     /// ```
-    DropExtension {
-        names: Vec<Ident>,
-        if_exists: bool,
-        /// `CASCADE` or `RESTRICT`
-        cascade_or_restrict: Option<ReferentialAction>,
-    },
+    DropExtension(DropExtension),
     /// ```sql
     /// FETCH
     /// ```
@@ -4806,49 +4795,8 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::CreateIndex(create_index) => create_index.fmt(f),
-            Statement::CreateExtension {
-                name,
-                if_not_exists,
-                cascade,
-                schema,
-                version,
-            } => {
-                write!(
-                    f,
-                    "CREATE EXTENSION {if_not_exists}{name}",
-                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" }
-                )?;
-                if *cascade || schema.is_some() || version.is_some() {
-                    write!(f, " WITH")?;
-
-                    if let Some(name) = schema {
-                        write!(f, " SCHEMA {name}")?;
-                    }
-                    if let Some(version) = version {
-                        write!(f, " VERSION {version}")?;
-                    }
-                    if *cascade {
-                        write!(f, " CASCADE")?;
-                    }
-                }
-
-                Ok(())
-            }
-            Statement::DropExtension {
-                names,
-                if_exists,
-                cascade_or_restrict,
-            } => {
-                write!(f, "DROP EXTENSION")?;
-                if *if_exists {
-                    write!(f, " IF EXISTS")?;
-                }
-                write!(f, " {}", display_comma_separated(names))?;
-                if let Some(cascade_or_restrict) = cascade_or_restrict {
-                    write!(f, " {cascade_or_restrict}")?;
-                }
-                Ok(())
-            }
+            Statement::CreateExtension(create_extension) => write!(f, "{create_extension}"),
+            Statement::DropExtension(drop_extension) => write!(f, "{drop_extension}"),
             Statement::CreateRole(create_role) => write!(f, "{create_role}"),
             Statement::CreateSecret {
                 or_replace,
@@ -10619,6 +10567,18 @@ impl From<CreateView> for Statement {
 impl From<CreateRole> for Statement {
     fn from(cr: CreateRole) -> Self {
         Self::CreateRole(cr)
+    }
+}
+
+impl From<CreateExtension> for Statement {
+    fn from(ce: CreateExtension) -> Self {
+        Self::CreateExtension(ce)
+    }
+}
+
+impl From<DropExtension> for Statement {
+    fn from(de: DropExtension) -> Self {
+        Self::DropExtension(de)
     }
 }
 

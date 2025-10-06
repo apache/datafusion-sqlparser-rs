@@ -2008,7 +2008,7 @@ fn parse_pg_returning() {
              RETURNING temp_lo AS lo, temp_hi AS hi, prcp",
     );
     match stmt {
-        Statement::Update { returning, .. } => {
+        Statement::Update(Update { returning, .. }) => {
             assert_eq!(
                 Some(vec![
                     SelectItem::ExprWithAlias {

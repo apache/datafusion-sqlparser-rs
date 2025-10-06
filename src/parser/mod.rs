@@ -15640,7 +15640,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        Ok(Statement::Update {
+        Ok(Update {
             table,
             assignments,
             from,
@@ -15648,7 +15648,8 @@ impl<'a> Parser<'a> {
             returning,
             or,
             limit,
-        })
+        }
+        .into())
     }
 
     /// Parse a `var = expr` assignment, used in an UPDATE statement

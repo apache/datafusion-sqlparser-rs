@@ -377,12 +377,12 @@ fn parse_insert_sqlite() {
 fn parse_update() {
     let sql = "UPDATE t SET a = 1, b = 2, c = 3 WHERE d";
     match verified_stmt(sql) {
-        Statement::Update {
+        Statement::Update(Update {
             table,
             assignments,
             selection,
             ..
-        } => {
+        }) => {
             assert_eq!(table.to_string(), "t".to_string());
             assert_eq!(
                 assignments,
@@ -439,7 +439,7 @@ fn parse_update_set_from() {
     let stmt = dialects.verified_stmt(sql);
     assert_eq!(
         stmt,
-        Statement::Update {
+        Statement::Update(Update {
             table: TableWithJoins {
                 relation: table_from_name(ObjectName::from(vec![Ident::new("t1")])),
                 joins: vec![],
@@ -516,7 +516,7 @@ fn parse_update_set_from() {
             returning: None,
             or: None,
             limit: None
-        }
+        })
     );
 
     let sql = "UPDATE T SET a = b FROM U, (SELECT foo FROM V) AS W WHERE 1 = 1";
@@ -527,7 +527,7 @@ fn parse_update_set_from() {
 fn parse_update_with_table_alias() {
     let sql = "UPDATE users AS u SET u.username = 'new_user' WHERE u.username = 'old_user'";
     match verified_stmt(sql) {
-        Statement::Update {
+        Statement::Update(Update {
             table,
             assignments,
             from: _from,
@@ -535,7 +535,7 @@ fn parse_update_with_table_alias() {
             returning,
             or: None,
             limit: None,
-        } => {
+        }) => {
             assert_eq!(
                 TableWithJoins {
                     relation: TableFactor::Table {
@@ -591,7 +591,7 @@ fn parse_update_with_table_alias() {
 #[test]
 fn parse_update_or() {
     let expect_or_clause = |sql: &str, expected_action: SqliteOnConflict| match verified_stmt(sql) {
-        Statement::Update { or, .. } => assert_eq!(or, Some(expected_action)),
+        Statement::Update(Update { or, .. }) => assert_eq!(or, Some(expected_action)),
         other => unreachable!("Expected update with or, got {:?}", other),
     };
     expect_or_clause(

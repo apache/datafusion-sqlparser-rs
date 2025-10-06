@@ -43,7 +43,7 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::{
-    display_utils::{indented_list, SpaceOrNewline},
+    display_utils::SpaceOrNewline,
     tokenizer::{Span, Token},
 };
 use crate::{
@@ -72,7 +72,7 @@ pub use self::ddl::{
     TableConstraint, TagsColumnOption, Truncate, UserDefinedTypeCompositeAttributeDef,
     UserDefinedTypeRepresentation, ViewColumnDef,
 };
-pub use self::dml::{Delete, Insert};
+pub use self::dml::{Delete, Insert, Update};
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
     AfterMatchSkip, ConnectBy, Cte, CteAsMaterialized, Distinct, EmptyMatchesMode,
@@ -3241,22 +3241,7 @@ pub enum Statement {
     /// ```sql
     /// UPDATE
     /// ```
-    Update {
-        /// TABLE
-        table: TableWithJoins,
-        /// Column assignments
-        assignments: Vec<Assignment>,
-        /// Table which provide value to be set
-        from: Option<UpdateTableFromKind>,
-        /// WHERE
-        selection: Option<Expr>,
-        /// RETURNING
-        returning: Option<Vec<SelectItem>>,
-        /// SQLite-specific conflict resolution clause
-        or: Option<SqliteOnConflict>,
-        /// LIMIT
-        limit: Option<Expr>,
-    },
+    Update(Update),
     /// ```sql
     /// DELETE
     /// ```
@@ -4676,53 +4661,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Update {
-                table,
-                assignments,
-                from,
-                selection,
-                returning,
-                or,
-                limit,
-            } => {
-                f.write_str("UPDATE ")?;
-                if let Some(or) = or {
-                    or.fmt(f)?;
-                    f.write_str(" ")?;
-                }
-                table.fmt(f)?;
-                if let Some(UpdateTableFromKind::BeforeSet(from)) = from {
-                    SpaceOrNewline.fmt(f)?;
-                    f.write_str("FROM")?;
-                    indented_list(f, from)?;
-                }
-                if !assignments.is_empty() {
-                    SpaceOrNewline.fmt(f)?;
-                    f.write_str("SET")?;
-                    indented_list(f, assignments)?;
-                }
-                if let Some(UpdateTableFromKind::AfterSet(from)) = from {
-                    SpaceOrNewline.fmt(f)?;
-                    f.write_str("FROM")?;
-                    indented_list(f, from)?;
-                }
-                if let Some(selection) = selection {
-                    SpaceOrNewline.fmt(f)?;
-                    f.write_str("WHERE")?;
-                    SpaceOrNewline.fmt(f)?;
-                    Indent(selection).fmt(f)?;
-                }
-                if let Some(returning) = returning {
-                    SpaceOrNewline.fmt(f)?;
-                    f.write_str("RETURNING")?;
-                    indented_list(f, returning)?;
-                }
-                if let Some(limit) = limit {
-                    SpaceOrNewline.fmt(f)?;
-                    write!(f, "LIMIT {limit}")?;
-                }
-                Ok(())
-            }
+            Statement::Update(update) => update.fmt(f),
             Statement::Delete(delete) => delete.fmt(f),
             Statement::Open(open) => open.fmt(f),
             Statement::Close { cursor } => {
@@ -10888,6 +10827,12 @@ impl From<Box<Query>> for Statement {
 impl From<Insert> for Statement {
     fn from(i: Insert) -> Self {
         Self::Insert(i)
+    }
+}
+
+impl From<Update> for Statement {
+    fn from(u: Update) -> Self {
+        Self::Update(u)
     }
 }
 

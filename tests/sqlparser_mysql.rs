@@ -2601,7 +2601,7 @@ fn parse_insert_with_numeric_prefix_column_name() {
 fn parse_update_with_joins() {
     let sql = "UPDATE orders AS o JOIN customers AS c ON o.customer_id = c.id SET o.completed = true WHERE c.firstname = 'Peter'";
     match mysql().verified_stmt(sql) {
-        Statement::Update {
+        Statement::Update(Update {
             table,
             assignments,
             from: _from,
@@ -2609,7 +2609,7 @@ fn parse_update_with_joins() {
             returning,
             or: None,
             limit: None,
-        } => {
+        }) => {
             assert_eq!(
                 TableWithJoins {
                     relation: TableFactor::Table {
@@ -4177,7 +4177,7 @@ fn test_variable_assignment_using_colon_equal() {
     let stmt = mysql().verified_stmt(sql_update);
 
     match stmt {
-        Statement::Update { assignments, .. } => {
+        Statement::Update(Update { assignments, .. }) => {
             assert_eq!(
                 assignments,
                 vec![Assignment {

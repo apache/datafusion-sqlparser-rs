@@ -40,8 +40,8 @@ use super::{
     RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
     ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
     SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
-    TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use, Value, Values, ViewColumnDef,
-    WhileStatement, WildcardAdditionalOptions, With, WithFill,
+    TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Value, Values,
+    ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -346,21 +346,7 @@ impl Spanned for Statement {
                 CloseCursor::All => Span::empty(),
                 CloseCursor::Specific { name } => name.span,
             },
-            Statement::Update {
-                table,
-                assignments,
-                from,
-                selection,
-                returning,
-                or: _,
-                limit: _,
-            } => union_spans(
-                core::iter::once(table.span())
-                    .chain(assignments.iter().map(|i| i.span()))
-                    .chain(from.iter().map(|i| i.span()))
-                    .chain(selection.iter().map(|i| i.span()))
-                    .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span()))),
-            ),
+            Statement::Update(update) => update.span(),
             Statement::Delete(delete) => delete.span(),
             Statement::CreateView {
                 or_alter: _,
@@ -992,6 +978,29 @@ impl Spanned for Delete {
                 .chain(selection.iter().map(|i| i.span()))
                 .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
                 .chain(order_by.iter().map(|i| i.span()))
+                .chain(limit.iter().map(|i| i.span())),
+        )
+    }
+}
+
+impl Spanned for Update {
+    fn span(&self) -> Span {
+        let Update {
+            table,
+            assignments,
+            from,
+            selection,
+            returning,
+            or: _,
+            limit,
+        } = self;
+
+        union_spans(
+            core::iter::once(table.span())
+                .chain(assignments.iter().map(|i| i.span()))
+                .chain(from.iter().map(|i| i.span()))
+                .chain(selection.iter().map(|i| i.span()))
+                .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
                 .chain(limit.iter().map(|i| i.span())),
         )
     }

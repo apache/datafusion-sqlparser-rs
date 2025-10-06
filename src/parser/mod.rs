@@ -982,11 +982,12 @@ impl<'a> Parser<'a> {
                 Ok(pa)
             })?
             .unwrap_or_default();
-        Ok(Statement::Msck {
+        Ok(Msck {
             repair,
             table_name,
             partition_action,
-        })
+        }
+        .into())
     }
 
     pub fn parse_truncate(&mut self) -> Result<Statement, ParserError> {

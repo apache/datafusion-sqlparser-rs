@@ -67,9 +67,9 @@ pub use self::ddl::{
     CreateFunction, CreateIndex, CreateTable, CreateTrigger, Deduplicate, DeferrableInitial,
     DropBehavior, DropTrigger, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
     IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
-    IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition,
-    ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity, TableConstraint,
-    TagsColumnOption, Truncate, UserDefinedTypeCompositeAttributeDef,
+    IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption, Owner,
+    Partition, ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity,
+    TableConstraint, TagsColumnOption, Truncate, UserDefinedTypeCompositeAttributeDef,
     UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{Delete, Insert};
@@ -3138,12 +3138,7 @@ pub enum Statement {
     /// MSCK
     /// ```
     /// Msck (Hive)
-    Msck {
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_name: ObjectName,
-        repair: bool,
-        partition_action: Option<AddDropSync>,
-    },
+    Msck(Msck),
     /// ```sql
     /// SELECT
     /// ```
@@ -4363,6 +4358,12 @@ impl From<ddl::Truncate> for Statement {
     }
 }
 
+impl From<ddl::Msck> for Statement {
+    fn from(msck: ddl::Msck) -> Self {
+        Statement::Msck(msck)
+    }
+}
+
 /// ```sql
 /// {COPY | REVOKE} CURRENT GRANTS
 /// ```
@@ -4563,22 +4564,7 @@ impl fmt::Display for Statement {
                 }
                 write!(f, " {source}")
             }
-            Statement::Msck {
-                table_name,
-                repair,
-                partition_action,
-            } => {
-                write!(
-                    f,
-                    "MSCK {repair}TABLE {table}",
-                    repair = if *repair { "REPAIR " } else { "" },
-                    table = table_name
-                )?;
-                if let Some(pa) = partition_action {
-                    write!(f, " {pa}")?;
-                }
-                Ok(())
-            }
+            Statement::Msck(msck) => msck.fmt(f),
             Statement::Truncate(truncate) => truncate.fmt(f),
             Statement::Case(stmt) => {
                 write!(f, "{stmt}")

@@ -300,11 +300,7 @@ impl Spanned for Statement {
         match self {
             Statement::Analyze(analyze) => analyze.span(),
             Statement::Truncate(truncate) => truncate.span(),
-            Statement::Msck {
-                table_name,
-                repair: _,
-                partition_action: _,
-            } => table_name.span(),
+            Statement::Msck(msck) => msck.span(),
             Statement::Query(query) => query.span(),
             Statement::Insert(insert) => insert.span(),
             Statement::Install { extension_name } => extension_name.span,

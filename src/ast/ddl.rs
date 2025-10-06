@@ -3487,3 +3487,43 @@ impl Spanned for Truncate {
         )
     }
 }
+
+/// An `MSCK` statement.
+///
+/// ```sql
+/// MSCK [REPAIR] TABLE table_name [ADD|DROP|SYNC PARTITIONS]
+/// ```
+/// MSCK (Hive) - MetaStore Check command
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Msck {
+    /// Table name to check
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub table_name: ObjectName,
+    /// Whether to repair the table
+    pub repair: bool,
+    /// Partition action (ADD, DROP, or SYNC)
+    pub partition_action: Option<super::AddDropSync>,
+}
+
+impl fmt::Display for Msck {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "MSCK {repair}TABLE {table}",
+            repair = if self.repair { "REPAIR " } else { "" },
+            table = self.table_name
+        )?;
+        if let Some(pa) = &self.partition_action {
+            write!(f, " {pa}")?;
+        }
+        Ok(())
+    }
+}
+
+impl Spanned for Msck {
+    fn span(&self) -> Span {
+        self.table_name.span()
+    }
+}

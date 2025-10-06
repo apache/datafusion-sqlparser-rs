@@ -3641,30 +3641,6 @@ impl fmt::Display for CreateView {
     }
 }
 
-impl Spanned for CreateView {
-    fn span(&self) -> Span {
-        let name_span = self.name.span();
-        let query_span = self.query.span();
-        let options_span = self.options.span();
-
-        // Union all the relevant spans
-        let mut spans = vec![name_span, query_span, options_span];
-
-        // Add column spans
-        spans.extend(self.columns.iter().map(|col| col.span()));
-
-        // Add cluster_by spans
-        spans.extend(self.cluster_by.iter().map(|ident| ident.span));
-
-        // Add to span if present
-        if let Some(ref to) = self.to {
-            spans.push(to.span());
-        }
-
-        Span::union_iter(spans)
-    }
-}
-
 /// CREATE EXTENSION statement
 /// Note: this is a PostgreSQL-specific statement
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

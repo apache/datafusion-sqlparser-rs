@@ -17,7 +17,7 @@
 
 use crate::ast::{
     ddl::AlterSchema, query::SelectItemQualifiedWildcardKind, AlterSchemaOperation, AlterTable,
-    ColumnOptions, ExportData, Owner, TypedString,
+    ColumnOptions, CreateView, ExportData, Owner, TypedString,
 };
 use core::iter;
 
@@ -2398,6 +2398,19 @@ impl Spanned for AlterSchema {
     fn span(&self) -> Span {
         union_spans(
             core::iter::once(self.name.span()).chain(self.operations.iter().map(|i| i.span())),
+        )
+    }
+}
+
+impl Spanned for CreateView {
+    fn span(&self) -> Span {
+        union_spans(
+            core::iter::once(self.name.span())
+                .chain(self.columns.iter().map(|i| i.span()))
+                .chain(core::iter::once(self.query.span()))
+                .chain(core::iter::once(self.options.span()))
+                .chain(self.cluster_by.iter().map(|i| i.span))
+                .chain(self.to.iter().map(|i| i.span())),
         )
     }
 }

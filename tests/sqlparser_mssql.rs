@@ -198,10 +198,8 @@ fn parse_mssql_create_procedure() {
     let _ = ms().verified_stmt("CREATE PROCEDURE [foo] AS BEGIN SELECT [foo], CASE WHEN [foo] IS NULL THEN 'empty' ELSE 'notempty' END AS [foo]; END");
     // Multiple statements
     let _ = ms().verified_stmt("CREATE PROCEDURE [foo] AS BEGIN UPDATE bar SET col = 'test'; SELECT [foo] FROM BAR WHERE [FOO] > 10; END");
-}
 
-#[test]
-fn parse_mssql_create_procedure_with_parameter_default_value() {
+    // parameters with default values
     let sql = r#"CREATE PROCEDURE foo (IN @a INTEGER = 1, OUT @b TEXT = '2', INOUT @c DATETIME = NULL, @d BOOL = 0) AS BEGIN SELECT 1; END"#;
     let _ = ms().verified_stmt(sql);
 }

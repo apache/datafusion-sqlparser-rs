@@ -16535,10 +16535,8 @@ fn parse_create_procedure_with_parameter_modes() {
         }
         _ => unreachable!(),
     }
-}
 
-#[test]
-fn create_procedure_with_parameter_default_value() {
+    // parameters with default values
     let sql = r#"CREATE PROCEDURE test_proc (IN a INTEGER = 1, OUT b TEXT = '2', INOUT c TIMESTAMP = NULL, d BOOL = 0) AS BEGIN SELECT 1; END"#;
     match verified_stmt(sql) {
         Statement::CreateProcedure {
@@ -16549,29 +16547,17 @@ fn create_procedure_with_parameter_default_value() {
         } => {
             assert_eq!(or_alter, false);
             assert_eq!(name.to_string(), "test_proc");
-            let fake_span = Span {
-                start: Location { line: 0, column: 0 },
-                end: Location { line: 0, column: 0 },
-            };
             assert_eq!(
                 params,
                 Some(vec![
                     ProcedureParam {
-                        name: Ident {
-                            value: "a".into(),
-                            quote_style: None,
-                            span: fake_span,
-                        },
+                        name: Ident::new("a"),
                         data_type: DataType::Integer(None),
                         mode: Some(ArgMode::In),
                         default: Some(Expr::Value((number("1")).with_empty_span())),
                     },
                     ProcedureParam {
-                        name: Ident {
-                            value: "b".into(),
-                            quote_style: None,
-                            span: fake_span,
-                        },
+                        name: Ident::new("b"),
                         data_type: DataType::Text,
                         mode: Some(ArgMode::Out),
                         default: Some(Expr::Value(
@@ -16579,21 +16565,13 @@ fn create_procedure_with_parameter_default_value() {
                         )),
                     },
                     ProcedureParam {
-                        name: Ident {
-                            value: "c".into(),
-                            quote_style: None,
-                            span: fake_span,
-                        },
+                        name: Ident::new("c"),
                         data_type: DataType::Timestamp(None, TimezoneInfo::None),
                         mode: Some(ArgMode::InOut),
                         default: Some(Expr::Value(Value::Null.with_empty_span())),
                     },
                     ProcedureParam {
-                        name: Ident {
-                            value: "d".into(),
-                            quote_style: None,
-                            span: fake_span,
-                        },
+                        name: Ident::new("d"),
                         data_type: DataType::Bool,
                         mode: None,
                         default: Some(Expr::Value((number("0")).with_empty_span())),

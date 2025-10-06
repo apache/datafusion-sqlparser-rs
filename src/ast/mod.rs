@@ -66,7 +66,7 @@ pub use self::ddl::{
     ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy, ColumnPolicyProperty,
     ConstraintCharacteristics, CreateConnector, CreateDomain, CreateExtension, CreateFunction,
     CreateIndex, CreateTable, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
-    DropBehavior, DropExtension, DropTrigger, GeneratedAs, GeneratedExpressionMode,
+    DropBehavior, DropExtension, DropFunction, DropTrigger, GeneratedAs, GeneratedExpressionMode,
     IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
     IdentityPropertyOrder, IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck,
     NullsDistinctOption, Owner, Partition, ProcedureParam, ReferentialAction, RenameTableNameKind,
@@ -3448,13 +3448,7 @@ pub enum Statement {
     /// ```sql
     /// DROP FUNCTION
     /// ```
-    DropFunction {
-        if_exists: bool,
-        /// One or more function to drop
-        func_desc: Vec<FunctionDesc>,
-        /// `CASCADE` or `RESTRICT`
-        drop_behavior: Option<DropBehavior>,
-    },
+    DropFunction(DropFunction),
     /// ```sql
     /// DROP DOMAIN
     /// ```
@@ -3523,7 +3517,7 @@ pub enum Statement {
     /// DROP EXTENSION [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
     /// ```
     /// Note: this is a PostgreSQL-specific statement.
-    /// https://www.postgresql.org/docs/current/sql-dropextension.html
+    /// <https://www.postgresql.org/docs/current/sql-dropextension.html>
     DropExtension(DropExtension),
     /// ```sql
     /// FETCH
@@ -4965,22 +4959,7 @@ impl fmt::Display for Statement {
                 };
                 Ok(())
             }
-            Statement::DropFunction {
-                if_exists,
-                func_desc,
-                drop_behavior,
-            } => {
-                write!(
-                    f,
-                    "DROP FUNCTION{} {}",
-                    if *if_exists { " IF EXISTS" } else { "" },
-                    display_comma_separated(func_desc),
-                )?;
-                if let Some(op) = drop_behavior {
-                    write!(f, " {op}")?;
-                }
-                Ok(())
-            }
+            Statement::DropFunction(drop_function) => write!(f, "{drop_function}"),
             Statement::DropDomain(DropDomain {
                 if_exists,
                 name,
@@ -10521,6 +10500,12 @@ impl From<CreateRole> for Statement {
 impl From<AlterTable> for Statement {
     fn from(at: AlterTable) -> Self {
         Self::AlterTable(at)
+    }
+}
+
+impl From<DropFunction> for Statement {
+    fn from(df: DropFunction) -> Self {
+        Self::DropFunction(df)
     }
 }
 

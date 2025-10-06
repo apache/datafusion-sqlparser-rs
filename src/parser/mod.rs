@@ -6508,11 +6508,11 @@ impl<'a> Parser<'a> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let func_desc = self.parse_comma_separated(Parser::parse_function_desc)?;
         let drop_behavior = self.parse_optional_drop_behavior();
-        Ok(Statement::DropFunction {
+        Ok(Statement::DropFunction(DropFunction {
             if_exists,
             func_desc,
             drop_behavior,
-        })
+        }))
     }
 
     /// ```sql

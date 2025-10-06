@@ -4488,7 +4488,7 @@ fn parse_drop_function() {
     let sql = "DROP FUNCTION IF EXISTS test_func";
     assert_eq!(
         pg().verified_stmt(sql),
-        Statement::DropFunction {
+        Statement::DropFunction(DropFunction {
             if_exists: true,
             func_desc: vec![FunctionDesc {
                 name: ObjectName::from(vec![Ident {
@@ -4499,13 +4499,13 @@ fn parse_drop_function() {
                 args: None
             }],
             drop_behavior: None
-        }
+        })
     );
 
     let sql = "DROP FUNCTION IF EXISTS test_func(a INTEGER, IN b INTEGER = 1)";
     assert_eq!(
         pg().verified_stmt(sql),
-        Statement::DropFunction {
+        Statement::DropFunction(DropFunction {
             if_exists: true,
             func_desc: vec![FunctionDesc {
                 name: ObjectName::from(vec![Ident {
@@ -4526,13 +4526,13 @@ fn parse_drop_function() {
                 ]),
             }],
             drop_behavior: None
-        }
+        })
     );
 
     let sql = "DROP FUNCTION IF EXISTS test_func1(a INTEGER, IN b INTEGER = 1), test_func2(a VARCHAR, IN b INTEGER = 1)";
     assert_eq!(
         pg().verified_stmt(sql),
-        Statement::DropFunction {
+        Statement::DropFunction(DropFunction {
             if_exists: true,
             func_desc: vec![
                 FunctionDesc {
@@ -4573,7 +4573,7 @@ fn parse_drop_function() {
                 }
             ],
             drop_behavior: None
-        }
+        })
     );
 }
 

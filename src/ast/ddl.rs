@@ -33,13 +33,13 @@ use crate::ast::{
     display_comma_separated, display_separated, ArgMode, AttachedToken, CommentDef,
     ConditionalStatements, CreateFunctionBody, CreateFunctionUsing, CreateTableLikeKind,
     CreateTableOptions, CreateViewParams, DataType, Expr, FileFormat, FunctionBehavior,
-    FunctionCalledOnNull, FunctionDeterminismSpecifier, FunctionParallel, HiveDistributionStyle,
-    HiveFormat, HiveIOFormat, HiveRowFormat, HiveSetLocation, Ident, InitializeKind,
-    MySQLColumnPosition, ObjectName, OnCommit, OneOrManyWithParens, OperateFunctionArg,
-    OrderByExpr, ProjectionSelect, Query, RefreshModeKind, RowAccessPolicy, SequenceOptions,
-    Spanned, SqlOption, StorageSerializationPolicy, TableVersion, Tag, TriggerEvent,
-    TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value, ValueWithSpan,
-    WrappedCollection,
+    FunctionCalledOnNull, FunctionDesc, FunctionDeterminismSpecifier, FunctionParallel,
+    HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat, HiveSetLocation, Ident,
+    InitializeKind, MySQLColumnPosition, ObjectName, OnCommit, OneOrManyWithParens,
+    OperateFunctionArg, OrderByExpr, ProjectionSelect, Query, RefreshModeKind, RowAccessPolicy,
+    SequenceOptions, Spanned, SqlOption, StorageSerializationPolicy, TableVersion, Tag,
+    TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value,
+    ValueWithSpan, WrappedCollection,
 };
 use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
 use crate::keywords::Keyword;
@@ -3797,5 +3797,38 @@ impl fmt::Display for AlterTable {
             write!(f, " {loc}")?
         }
         Ok(())
+    }
+}
+
+/// DROP FUNCTION statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DropFunction {
+    pub if_exists: bool,
+    /// One or more functions to drop
+    pub func_desc: Vec<FunctionDesc>,
+    /// `CASCADE` or `RESTRICT`
+    pub drop_behavior: Option<DropBehavior>,
+}
+
+impl fmt::Display for DropFunction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "DROP FUNCTION{} {}",
+            if self.if_exists { " IF EXISTS" } else { "" },
+            display_comma_separated(&self.func_desc),
+        )?;
+        if let Some(op) = &self.drop_behavior {
+            write!(f, " {op}")?;
+        }
+        Ok(())
+    }
+}
+
+impl Spanned for DropFunction {
+    fn span(&self) -> Span {
+        Span::empty()
     }
 }

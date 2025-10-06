@@ -25,23 +25,23 @@ use crate::tokenizer::Span;
 
 use super::{
     dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation,
-    AlterIndexOperation, AlterTableOperation, Array, Assignment, AssignmentTarget, AttachedToken,
-    BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef, ColumnOption,
-    ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements, ConflictTarget, ConnectBy,
-    ConstraintCharacteristics, CopySource, CreateIndex, CreateTable, CreateTableOptions, Cte,
-    Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, FromTable,
-    Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
-    FunctionArguments, GroupByExpr, HavingBound, IfStatement, IlikeSelectItem, IndexColumn, Insert,
-    Interpolate, InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem,
-    LateralView, LimitClause, MatchRecognizePattern, Measure, NamedParenthesizedList,
-    NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
-    OnInsert, OpenStatement, OrderBy, OrderByExpr, OrderByKind, Partition, PivotValueSource,
-    ProjectionSelect, Query, RaiseStatement, RaiseStatementValue, ReferentialAction,
-    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
-    SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
-    TableConstraint, TableFactor, TableObject, TableOptionsClustered, TableWithJoins,
-    UpdateTableFromKind, Use, Value, Values, ViewColumnDef, WhileStatement,
-    WildcardAdditionalOptions, With, WithFill,
+    AlterIndexOperation, AlterTableOperation, Analyze, Array, Assignment, AssignmentTarget,
+    AttachedToken, BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef,
+    ColumnOption, ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements,
+    ConflictTarget, ConnectBy, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
+    CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr,
+    ExprWithAlias, Fetch, FromTable, Function, FunctionArg, FunctionArgExpr,
+    FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
+    IfStatement, IlikeSelectItem, IndexColumn, Insert, Interpolate, InterpolateExpr, Join,
+    JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
+    MatchRecognizePattern, Measure, NamedParenthesizedList, NamedWindowDefinition, ObjectName,
+    ObjectNamePart, Offset, OnConflict, OnConflictAction, OnInsert, OpenStatement, OrderBy,
+    OrderByExpr, OrderByKind, Partition, PivotValueSource, ProjectionSelect, Query, RaiseStatement,
+    RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
+    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
+    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
+    TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use, Value, Values, ViewColumnDef,
+    WhileStatement, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -298,20 +298,7 @@ impl Spanned for Values {
 impl Spanned for Statement {
     fn span(&self) -> Span {
         match self {
-            Statement::Analyze {
-                table_name,
-                partitions,
-                for_columns: _,
-                columns,
-                cache_metadata: _,
-                noscan: _,
-                compute_statistics: _,
-                has_table_keyword: _,
-            } => union_spans(
-                core::iter::once(table_name.span())
-                    .chain(partitions.iter().flat_map(|i| i.iter().map(|k| k.span())))
-                    .chain(columns.iter().map(|i| i.span)),
-            ),
+            Statement::Analyze(analyze) => analyze.span(),
             Statement::Truncate {
                 table_names,
                 partitions,
@@ -941,6 +928,20 @@ impl Spanned for ConstraintCharacteristics {
         } = self;
 
         Span::empty()
+    }
+}
+
+impl Spanned for Analyze {
+    fn span(&self) -> Span {
+        union_spans(
+            core::iter::once(self.table_name.span())
+                .chain(
+                    self.partitions
+                        .iter()
+                        .flat_map(|i| i.iter().map(|k| k.span())),
+                )
+                .chain(self.columns.iter().map(|i| i.span)),
+        )
     }
 }
 

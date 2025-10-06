@@ -1167,7 +1167,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        Ok(Statement::Analyze {
+        Ok(Analyze {
             has_table_keyword,
             table_name,
             for_columns,
@@ -1176,7 +1176,7 @@ impl<'a> Parser<'a> {
             cache_metadata,
             noscan,
             compute_statistics,
-        })
+        }.into())
     }
 
     /// Parse a new expression including wildcard & qualified wildcard.

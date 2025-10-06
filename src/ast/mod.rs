@@ -3060,6 +3060,59 @@ impl Display for ExceptionWhen {
     }
 }
 
+/// ANALYZE TABLE statement (Hive-specific)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Analyze {
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub table_name: ObjectName,
+    pub partitions: Option<Vec<Expr>>,
+    pub for_columns: bool,
+    pub columns: Vec<Ident>,
+    pub cache_metadata: bool,
+    pub noscan: bool,
+    pub compute_statistics: bool,
+    pub has_table_keyword: bool,
+}
+
+impl fmt::Display for Analyze {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "ANALYZE{}{table_name}",
+            if self.has_table_keyword {
+                " TABLE "
+            } else {
+                " "
+            },
+            table_name = self.table_name
+        )?;
+        if let Some(ref parts) = self.partitions {
+            if !parts.is_empty() {
+                write!(f, " PARTITION ({})", display_comma_separated(parts))?;
+            }
+        }
+
+        if self.compute_statistics {
+            write!(f, " COMPUTE STATISTICS")?;
+        }
+        if self.noscan {
+            write!(f, " NOSCAN")?;
+        }
+        if self.cache_metadata {
+            write!(f, " CACHE METADATA")?;
+        }
+        if self.for_columns {
+            write!(f, " FOR COLUMNS")?;
+            if !self.columns.is_empty() {
+                write!(f, " {}", display_comma_separated(&self.columns))?;
+            }
+        }
+        Ok(())
+    }
+}
+
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -3074,17 +3127,7 @@ pub enum Statement {
     /// ANALYZE
     /// ```
     /// Analyze (Hive)
-    Analyze {
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_name: ObjectName,
-        partitions: Option<Vec<Expr>>,
-        for_columns: bool,
-        columns: Vec<Ident>,
-        cache_metadata: bool,
-        noscan: bool,
-        compute_statistics: bool,
-        has_table_keyword: bool,
-    },
+    Analyze(Analyze),
     Set(Set),
     /// ```sql
     /// TRUNCATE
@@ -4324,6 +4367,12 @@ pub enum Statement {
     Vacuum(VacuumStatement),
 }
 
+impl From<Analyze> for Statement {
+    fn from(analyze: Analyze) -> Self {
+        Statement::Analyze(analyze)
+    }
+}
+
 /// ```sql
 /// {COPY | REVOKE} CURRENT GRANTS
 /// ```
@@ -4633,44 +4682,7 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::Analyze {
-                table_name,
-                partitions,
-                for_columns,
-                columns,
-                cache_metadata,
-                noscan,
-                compute_statistics,
-                has_table_keyword,
-            } => {
-                write!(
-                    f,
-                    "ANALYZE{}{table_name}",
-                    if *has_table_keyword { " TABLE " } else { " " }
-                )?;
-                if let Some(ref parts) = partitions {
-                    if !parts.is_empty() {
-                        write!(f, " PARTITION ({})", display_comma_separated(parts))?;
-                    }
-                }
-
-                if *compute_statistics {
-                    write!(f, " COMPUTE STATISTICS")?;
-                }
-                if *noscan {
-                    write!(f, " NOSCAN")?;
-                }
-                if *cache_metadata {
-                    write!(f, " CACHE METADATA")?;
-                }
-                if *for_columns {
-                    write!(f, " FOR COLUMNS")?;
-                    if !columns.is_empty() {
-                        write!(f, " {}", display_comma_separated(columns))?;
-                    }
-                }
-                Ok(())
-            }
+            Statement::Analyze(analyze) => analyze.fmt(f),
             Statement::Insert(insert) => insert.fmt(f),
             Statement::Install {
                 extension_name: name,

@@ -3715,7 +3715,11 @@ impl Spanned for CreateExtension {
 
 /// DROP EXTENSION statement  
 /// Note: this is a PostgreSQL-specific statement
-/// https://www.postgresql.org/docs/current/sql-dropextension.html
+/// 
+/// # References
+/// 
+/// PostgreSQL Documentation:
+/// <https://www.postgresql.org/docs/current/sql-dropextension.html>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

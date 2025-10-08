@@ -156,6 +156,7 @@ fn parse_create_procedure() {
                     },
                     data_type: DataType::Int(None),
                     mode: None,
+                    default: None,
                 },
                 ProcedureParam {
                     name: Ident {
@@ -168,6 +169,7 @@ fn parse_create_procedure() {
                         unit: None
                     })),
                     mode: None,
+                    default: None,
                 }
             ]),
             name: ObjectName::from(vec![Ident {
@@ -196,6 +198,10 @@ fn parse_mssql_create_procedure() {
     let _ = ms().verified_stmt("CREATE PROCEDURE [foo] AS BEGIN SELECT [foo], CASE WHEN [foo] IS NULL THEN 'empty' ELSE 'notempty' END AS [foo]; END");
     // Multiple statements
     let _ = ms().verified_stmt("CREATE PROCEDURE [foo] AS BEGIN UPDATE bar SET col = 'test'; SELECT [foo] FROM BAR WHERE [FOO] > 10; END");
+
+    // parameters with default values
+    let sql = r#"CREATE PROCEDURE foo (IN @a INTEGER = 1, OUT @b TEXT = '2', INOUT @c DATETIME = NULL, @d BOOL = 0) AS BEGIN SELECT 1; END"#;
+    let _ = ms().verified_stmt(sql);
 }
 
 #[test]

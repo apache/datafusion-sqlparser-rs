@@ -34,7 +34,7 @@ use IsOptional::*;
 
 use crate::ast::helpers::{
     key_value_options::{
-        KeyValueOption, KeyValueOptionType, KeyValueOptions, KeyValueOptionsDelimiter,
+        KeyValueOption, KeyValueOptionKind, KeyValueOptions, KeyValueOptionsDelimiter,
     },
     stmt_create_table::{CreateTableBuilder, CreateTableConfiguration},
 };
@@ -4796,10 +4796,12 @@ impl<'a> Parser<'a> {
     fn parse_create_user(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let name = self.parse_identifier()?;
-        let options = self.parse_key_value_options(false, &[Keyword::WITH, Keyword::TAG])?;
+        let options = self
+            .parse_key_value_options(false, &[Keyword::WITH, Keyword::TAG])?
+            .options;
         let with_tags = self.parse_keyword(Keyword::WITH);
         let tags = if self.parse_keyword(Keyword::TAG) {
-            self.parse_key_value_options(true, &[])?
+            self.parse_key_value_options(true, &[])?.options
         } else {
             vec![]
         };
@@ -7078,19 +7080,24 @@ impl<'a> Parser<'a> {
     pub fn parse_create_index(&mut self, unique: bool) -> Result<Statement, ParserError> {
         let concurrently = self.parse_keyword(Keyword::CONCURRENTLY);
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+
+        let mut using = None;
+
         let index_name = if if_not_exists || !self.parse_keyword(Keyword::ON) {
             let index_name = self.parse_object_name(false)?;
+            // MySQL allows `USING index_type` either before or after `ON table_name`
+            using = self.parse_optional_using_then_index_type()?;
             self.expect_keyword_is(Keyword::ON)?;
             Some(index_name)
         } else {
             None
         };
+
         let table_name = self.parse_object_name(false)?;
-        let using = if self.parse_keyword(Keyword::USING) {
-            Some(self.parse_index_type()?)
-        } else {
-            None
-        };
+
+        // MySQL allows having two `USING` clauses.
+        // In that case, the second clause overwrites the first.
+        using = self.parse_optional_using_then_index_type()?.or(using);
 
         let columns = self.parse_parenthesized_index_column_list()?;
 
@@ -7914,10 +7921,17 @@ impl<'a> Parser<'a> {
         };
         let name = self.parse_identifier()?;
         let data_type = self.parse_data_type()?;
+        let default = if self.consume_token(&Token::Eq) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
         Ok(ProcedureParam {
             name,
             data_type,
             mode,
+            default,
         })
     }
 
@@ -8161,6 +8175,8 @@ impl<'a> Parser<'a> {
                     Keyword::REPLACE,
                 ])?,
             )))
+        } else if self.parse_keyword(Keyword::INVISIBLE) {
+            Ok(Some(ColumnOption::Invisible))
         } else {
             Ok(None)
         }
@@ -8406,16 +8422,19 @@ impl<'a> Parser<'a> {
                 let columns = self.parse_parenthesized_index_column_list()?;
                 let index_options = self.parse_index_options()?;
                 let characteristics = self.parse_constraint_characteristics()?;
-                Ok(Some(TableConstraint::Unique {
-                    name,
-                    index_name,
-                    index_type_display,
-                    index_type,
-                    columns,
-                    index_options,
-                    characteristics,
-                    nulls_distinct,
-                }))
+                Ok(Some(
+                    UniqueConstraint {
+                        name,
+                        index_name,
+                        index_type_display,
+                        index_type,
+                        columns,
+                        index_options,
+                        characteristics,
+                        nulls_distinct,
+                    }
+                    .into(),
+                ))
             }
             Token::Word(w) if w.keyword == Keyword::PRIMARY => {
                 // after `PRIMARY` always stay `KEY`
@@ -8428,14 +8447,17 @@ impl<'a> Parser<'a> {
                 let columns = self.parse_parenthesized_index_column_list()?;
                 let index_options = self.parse_index_options()?;
                 let characteristics = self.parse_constraint_characteristics()?;
-                Ok(Some(TableConstraint::PrimaryKey {
-                    name,
-                    index_name,
-                    index_type,
-                    columns,
-                    index_options,
-                    characteristics,
-                }))
+                Ok(Some(
+                    PrimaryKeyConstraint {
+                        name,
+                        index_name,
+                        index_type,
+                        columns,
+                        index_options,
+                        characteristics,
+                    }
+                    .into(),
+                ))
             }
             Token::Word(w) if w.keyword == Keyword::FOREIGN => {
                 self.expect_keyword_is(Keyword::KEY)?;
@@ -8460,16 +8482,19 @@ impl<'a> Parser<'a> {
 
                 let characteristics = self.parse_constraint_characteristics()?;
 
-                Ok(Some(TableConstraint::ForeignKey {
-                    name,
-                    index_name,
-                    columns,
-                    foreign_table,
-                    referred_columns,
-                    on_delete,
-                    on_update,
-                    characteristics,
-                }))
+                Ok(Some(
+                    ForeignKeyConstraint {
+                        name,
+                        index_name,
+                        columns,
+                        foreign_table,
+                        referred_columns,
+                        on_delete,
+                        on_update,
+                        characteristics,
+                    }
+                    .into(),
+                ))
             }
             Token::Word(w) if w.keyword == Keyword::CHECK => {
                 self.expect_token(&Token::LParen)?;
@@ -8484,11 +8509,14 @@ impl<'a> Parser<'a> {
                     None
                 };
 
-                Ok(Some(TableConstraint::Check {
-                    name,
-                    expr,
-                    enforced,
-                }))
+                Ok(Some(
+                    CheckConstraint {
+                        name,
+                        expr,
+                        enforced,
+                    }
+                    .into(),
+                ))
             }
             Token::Word(w)
                 if (w.keyword == Keyword::INDEX || w.keyword == Keyword::KEY)
@@ -8506,13 +8534,16 @@ impl<'a> Parser<'a> {
                 let columns = self.parse_parenthesized_index_column_list()?;
                 let index_options = self.parse_index_options()?;
 
-                Ok(Some(TableConstraint::Index {
-                    display_as_key,
-                    name,
-                    index_type,
-                    columns,
-                    index_options,
-                }))
+                Ok(Some(
+                    IndexConstraint {
+                        display_as_key,
+                        name,
+                        index_type,
+                        columns,
+                        index_options,
+                    }
+                    .into(),
+                ))
             }
             Token::Word(w)
                 if (w.keyword == Keyword::FULLTEXT || w.keyword == Keyword::SPATIAL)
@@ -8536,12 +8567,15 @@ impl<'a> Parser<'a> {
 
                 let columns = self.parse_parenthesized_index_column_list()?;
 
-                Ok(Some(TableConstraint::FulltextOrSpatial {
-                    fulltext,
-                    index_type_display,
-                    opt_index_name,
-                    columns,
-                }))
+                Ok(Some(
+                    FullTextOrSpatialConstraint {
+                        fulltext,
+                        index_type_display,
+                        opt_index_name,
+                        columns,
+                    }
+                    .into(),
+                ))
             }
             _ => {
                 if name.is_some() {
@@ -9292,6 +9326,7 @@ impl<'a> Parser<'a> {
             Keyword::CONNECTOR,
             Keyword::ICEBERG,
             Keyword::SCHEMA,
+            Keyword::USER,
         ])?;
         match object_type {
             Keyword::SCHEMA => {
@@ -9327,6 +9362,7 @@ impl<'a> Parser<'a> {
             Keyword::ROLE => self.parse_alter_role(),
             Keyword::POLICY => self.parse_alter_policy(),
             Keyword::CONNECTOR => self.parse_alter_connector(),
+            Keyword::USER => self.parse_alter_user(),
             // unreachable because expect_one_of_keywords used above
             _ => unreachable!(),
         }
@@ -9461,6 +9497,12 @@ impl<'a> Parser<'a> {
         } else if self.parse_keywords(&[Keyword::DROP, Keyword::REPLICA]) {
             let replica = self.parse_identifier()?;
             AlterSchemaOperation::DropReplica { replica }
+        } else if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            let new_name = self.parse_object_name(false)?;
+            AlterSchemaOperation::Rename { name: new_name }
+        } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            let owner = self.parse_owner()?;
+            AlterSchemaOperation::OwnerTo { owner }
         } else {
             return self.expected_ref("ALTER SCHEMA operation", self.peek_token_ref());
         };
@@ -10198,19 +10240,41 @@ impl<'a> Parser<'a> {
             Token::Word(w) => match w.keyword {
                 Keyword::BOOLEAN => Ok(DataType::Boolean),
                 Keyword::BOOL => Ok(DataType::Bool),
-                Keyword::FLOAT => Ok(DataType::Float(self.parse_optional_precision()?)),
-                Keyword::REAL => Ok(DataType::Real),
+                Keyword::FLOAT => {
+                    let precision = self.parse_exact_number_optional_precision_scale()?;
+
+                    if self.parse_keyword(Keyword::UNSIGNED) {
+                        Ok(DataType::FloatUnsigned(precision))
+                    } else {
+                        Ok(DataType::Float(precision))
+                    }
+                }
+                Keyword::REAL => {
+                    if self.parse_keyword(Keyword::UNSIGNED) {
+                        Ok(DataType::RealUnsigned)
+                    } else {
+                        Ok(DataType::Real)
+                    }
+                }
                 Keyword::FLOAT4 => Ok(DataType::Float4),
                 Keyword::FLOAT32 => Ok(DataType::Float32),
                 Keyword::FLOAT64 => Ok(DataType::Float64),
                 Keyword::FLOAT8 => Ok(DataType::Float8),
                 Keyword::DOUBLE => {
                     if self.parse_keyword(Keyword::PRECISION) {
-                        Ok(DataType::DoublePrecision)
+                        if self.parse_keyword(Keyword::UNSIGNED) {
+                            Ok(DataType::DoublePrecisionUnsigned)
+                        } else {
+                            Ok(DataType::DoublePrecision)
+                        }
                     } else {
-                        Ok(DataType::Double(
-                            self.parse_exact_number_optional_precision_scale()?,
-                        ))
+                        let precision = self.parse_exact_number_optional_precision_scale()?;
+
+                        if self.parse_keyword(Keyword::UNSIGNED) {
+                            Ok(DataType::DoubleUnsigned(precision))
+                        } else {
+                            Ok(DataType::Double(precision))
+                        }
                     }
                 }
                 Keyword::TINYINT => {
@@ -10437,12 +10501,24 @@ impl<'a> Parser<'a> {
                 Keyword::NUMERIC => Ok(DataType::Numeric(
                     self.parse_exact_number_optional_precision_scale()?,
                 )),
-                Keyword::DECIMAL => Ok(DataType::Decimal(
-                    self.parse_exact_number_optional_precision_scale()?,
-                )),
-                Keyword::DEC => Ok(DataType::Dec(
-                    self.parse_exact_number_optional_precision_scale()?,
-                )),
+                Keyword::DECIMAL => {
+                    let precision = self.parse_exact_number_optional_precision_scale()?;
+
+                    if self.parse_keyword(Keyword::UNSIGNED) {
+                        Ok(DataType::DecimalUnsigned(precision))
+                    } else {
+                        Ok(DataType::Decimal(precision))
+                    }
+                }
+                Keyword::DEC => {
+                    let precision = self.parse_exact_number_optional_precision_scale()?;
+
+                    if self.parse_keyword(Keyword::UNSIGNED) {
+                        Ok(DataType::DecUnsigned(precision))
+                    } else {
+                        Ok(DataType::Dec(precision))
+                    }
+                }
                 Keyword::BIGNUMERIC => Ok(DataType::BigNumeric(
                     self.parse_exact_number_optional_precision_scale()?,
                 )),
@@ -17463,8 +17539,9 @@ impl<'a> Parser<'a> {
         &mut self,
         parenthesized: bool,
         end_words: &[Keyword],
-    ) -> Result<Vec<KeyValueOption>, ParserError> {
+    ) -> Result<KeyValueOptions, ParserError> {
         let mut options: Vec<KeyValueOption> = Vec::new();
+        let mut delimiter = KeyValueOptionsDelimiter::Space;
         if parenthesized {
             self.expect_token(&Token::LParen)?;
         }
@@ -17478,9 +17555,12 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Token::EOF => break,
-                Token::Comma => continue,
+                Token::Comma => {
+                    delimiter = KeyValueOptionsDelimiter::Comma;
+                    continue;
+                }
                 Token::Word(w) if !end_words.contains(&w.keyword) => {
-                    options.push(self.parse_key_value_option(w)?)
+                    options.push(self.parse_key_value_option(&w)?)
                 }
                 Token::Word(w) if end_words.contains(&w.keyword) => {
                     self.prev_token();
@@ -17489,40 +17569,67 @@ impl<'a> Parser<'a> {
                 _ => return self.expected("another option, EOF, Comma or ')'", self.peek_token()),
             };
         }
-        Ok(options)
+
+        Ok(KeyValueOptions { delimiter, options })
     }
 
     /// Parses a `KEY = VALUE` construct based on the specified key
     pub(crate) fn parse_key_value_option(
         &mut self,
-        key: Word,
+        key: &Word,
     ) -> Result<KeyValueOption, ParserError> {
         self.expect_token(&Token::Eq)?;
-        match self.next_token().token {
-            Token::SingleQuotedString(value) => Ok(KeyValueOption {
-                option_name: key.value,
-                option_type: KeyValueOptionType::STRING,
-                value,
+        match self.peek_token().token {
+            Token::SingleQuotedString(_) => Ok(KeyValueOption {
+                option_name: key.value.clone(),
+                option_value: KeyValueOptionKind::Single(self.parse_value()?.into()),
             }),
             Token::Word(word)
                 if word.keyword == Keyword::TRUE || word.keyword == Keyword::FALSE =>
             {
                 Ok(KeyValueOption {
-                    option_name: key.value,
-                    option_type: KeyValueOptionType::BOOLEAN,
-                    value: word.value.to_uppercase(),
+                    option_name: key.value.clone(),
+                    option_value: KeyValueOptionKind::Single(self.parse_value()?.into()),
                 })
             }
-            Token::Word(word) => Ok(KeyValueOption {
-                option_name: key.value,
-                option_type: KeyValueOptionType::ENUM,
-                value: word.value,
+            Token::Number(..) => Ok(KeyValueOption {
+                option_name: key.value.clone(),
+                option_value: KeyValueOptionKind::Single(self.parse_value()?.into()),
             }),
-            Token::Number(n, _) => Ok(KeyValueOption {
-                option_name: key.value,
-                option_type: KeyValueOptionType::NUMBER,
-                value: n,
-            }),
+            Token::Word(word) => {
+                self.next_token();
+                Ok(KeyValueOption {
+                    option_name: key.value.clone(),
+                    option_value: KeyValueOptionKind::Single(Value::Placeholder(
+                        word.value.clone(),
+                    )),
+                })
+            }
+            Token::LParen => {
+                // Can be a list of values or a list of key value properties.
+                // Try to parse a list of values and if that fails, try to parse
+                // a list of key-value properties.
+                match self.maybe_parse(|parser| {
+                    parser.expect_token(&Token::LParen)?;
+                    let values = parser.parse_comma_separated0(|p| p.parse_value(), Token::RParen);
+                    parser.expect_token(&Token::RParen)?;
+                    values
+                })? {
+                    Some(values) => {
+                        let values = values.into_iter().map(|v| v.value).collect();
+                        Ok(KeyValueOption {
+                            option_name: key.value.clone(),
+                            option_value: KeyValueOptionKind::Multi(values),
+                        })
+                    }
+                    None => Ok(KeyValueOption {
+                        option_name: key.value.clone(),
+                        option_value: KeyValueOptionKind::KeyValueOptions(Box::new(
+                            self.parse_key_value_options(true, &[])?,
+                        )),
+                    }),
+                }
+            }
             _ => self.expected("expected option value", self.peek_token()),
         }
     }
@@ -18071,85 +18178,91 @@ mod tests {
         test_parse_table_constraint!(
             dialect,
             "INDEX (c1)",
-            TableConstraint::Index {
+            IndexConstraint {
                 display_as_key: false,
                 name: None,
                 index_type: None,
                 columns: vec![mk_expected_col("c1")],
                 index_options: vec![],
             }
+            .into()
         );
 
         test_parse_table_constraint!(
             dialect,
             "KEY (c1)",
-            TableConstraint::Index {
+            IndexConstraint {
                 display_as_key: true,
                 name: None,
                 index_type: None,
                 columns: vec![mk_expected_col("c1")],
                 index_options: vec![],
             }
+            .into()
         );
 
         test_parse_table_constraint!(
             dialect,
             "INDEX 'index' (c1, c2)",
-            TableConstraint::Index {
+            TableConstraint::Index(IndexConstraint {
                 display_as_key: false,
                 name: Some(Ident::with_quote('\'', "index")),
                 index_type: None,
                 columns: vec![mk_expected_col("c1"), mk_expected_col("c2")],
                 index_options: vec![],
-            }
+            })
         );
 
         test_parse_table_constraint!(
             dialect,
             "INDEX USING BTREE (c1)",
-            TableConstraint::Index {
+            IndexConstraint {
                 display_as_key: false,
                 name: None,
                 index_type: Some(IndexType::BTree),
                 columns: vec![mk_expected_col("c1")],
                 index_options: vec![],
             }
+            .into()
         );
 
         test_parse_table_constraint!(
             dialect,
             "INDEX USING HASH (c1)",
-            TableConstraint::Index {
+            IndexConstraint {
                 display_as_key: false,
                 name: None,
                 index_type: Some(IndexType::Hash),
                 columns: vec![mk_expected_col("c1")],
                 index_options: vec![],
             }
+            .into()
         );
 
         test_parse_table_constraint!(
             dialect,
             "INDEX idx_name USING BTREE (c1)",
-            TableConstraint::Index {
+            IndexConstraint {
                 display_as_key: false,
                 name: Some(Ident::new("idx_name")),
                 index_type: Some(IndexType::BTree),
                 columns: vec![mk_expected_col("c1")],
                 index_options: vec![],
             }
+            .into()
         );
 
         test_parse_table_constraint!(
             dialect,
             "INDEX idx_name USING HASH (c1)",
-            TableConstraint::Index {
+            IndexConstraint {
                 display_as_key: false,
                 name: Some(Ident::new("idx_name")),
                 index_type: Some(IndexType::Hash),
                 columns: vec![mk_expected_col("c1")],
                 index_options: vec![],
             }
+            .into()
         );
     }
 

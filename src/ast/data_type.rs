@@ -131,6 +131,11 @@ pub enum DataType {
     ///
     /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type
     Decimal(ExactNumberInfo),
+    /// [MySQL] unsigned decimal with optional precision and scale, e.g. DECIMAL UNSIGNED or DECIMAL(10,2) UNSIGNED.
+    /// Note: Using UNSIGNED with DECIMAL is deprecated in recent versions of MySQL.
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/numeric-type-syntax.html
+    DecimalUnsigned(ExactNumberInfo),
     /// [BigNumeric] type used in BigQuery.
     ///
     /// [BigNumeric]: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#bignumeric_literals
@@ -143,8 +148,19 @@ pub enum DataType {
     ///
     /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type
     Dec(ExactNumberInfo),
-    /// Floating point with optional precision, e.g. FLOAT(8).
-    Float(Option<u64>),
+    /// [MySQL] unsigned decimal (DEC alias) with optional precision and scale, e.g. DEC UNSIGNED or DEC(10,2) UNSIGNED.
+    /// Note: Using UNSIGNED with DEC is deprecated in recent versions of MySQL.
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/numeric-type-syntax.html
+    DecUnsigned(ExactNumberInfo),
+    /// Floating point with optional precision and scale, e.g. FLOAT, FLOAT(8), or FLOAT(8,2).
+    Float(ExactNumberInfo),
+    /// [MySQL] unsigned floating point with optional precision and scale, e.g.
+    /// FLOAT UNSIGNED, FLOAT(10) UNSIGNED or FLOAT(10,2) UNSIGNED.
+    /// Note: Using UNSIGNED with FLOAT is deprecated in recent versions of MySQL.
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/numeric-type-syntax.html
+    FloatUnsigned(ExactNumberInfo),
     /// Tiny integer with optional display width, e.g. TINYINT or TINYINT(3).
     TinyInt(Option<u64>),
     /// Unsigned tiny integer with optional display width,
@@ -302,17 +318,32 @@ pub enum DataType {
     Float64,
     /// Floating point, e.g. REAL.
     Real,
+    /// [MySQL] unsigned real, e.g. REAL UNSIGNED.
+    /// Note: Using UNSIGNED with REAL is deprecated in recent versions of MySQL.
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/numeric-type-syntax.html
+    RealUnsigned,
     /// Float8 is an alias for Double in [PostgreSQL].
     ///
     /// [PostgreSQL]: https://www.postgresql.org/docs/current/datatype.html
     Float8,
     /// Double
     Double(ExactNumberInfo),
+    /// [MySQL] unsigned double precision with optional precision, e.g. DOUBLE UNSIGNED or DOUBLE(10,2) UNSIGNED.
+    /// Note: Using UNSIGNED with DOUBLE is deprecated in recent versions of MySQL.
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/numeric-type-syntax.html
+    DoubleUnsigned(ExactNumberInfo),
     /// Double Precision, see [SQL Standard], [PostgreSQL].
     ///
     /// [SQL Standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#approximate-numeric-type
     /// [PostgreSQL]: https://www.postgresql.org/docs/current/datatype-numeric.html
     DoublePrecision,
+    /// [MySQL] unsigned double precision, e.g. DOUBLE PRECISION UNSIGNED.
+    /// Note: Using UNSIGNED with DOUBLE PRECISION is deprecated in recent versions of MySQL.
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/numeric-type-syntax.html
+    DoublePrecisionUnsigned,
     /// Bool is an alias for Boolean, see [PostgreSQL].
     ///
     /// [PostgreSQL]: https://www.postgresql.org/docs/current/datatype.html
@@ -497,12 +528,19 @@ impl fmt::Display for DataType {
             DataType::Decimal(info) => {
                 write!(f, "DECIMAL{info}")
             }
+            DataType::DecimalUnsigned(info) => {
+                write!(f, "DECIMAL{info} UNSIGNED")
+            }
             DataType::Dec(info) => {
                 write!(f, "DEC{info}")
             }
+            DataType::DecUnsigned(info) => {
+                write!(f, "DEC{info} UNSIGNED")
+            }
             DataType::BigNumeric(info) => write!(f, "BIGNUMERIC{info}"),
             DataType::BigDecimal(info) => write!(f, "BIGDECIMAL{info}"),
-            DataType::Float(size) => format_type_with_optional_length(f, "FLOAT", size, false),
+            DataType::Float(info) => write!(f, "FLOAT{info}"),
+            DataType::FloatUnsigned(info) => write!(f, "FLOAT{info} UNSIGNED"),
             DataType::TinyInt(zerofill) => {
                 format_type_with_optional_length(f, "TINYINT", zerofill, false)
             }
@@ -616,12 +654,15 @@ impl fmt::Display for DataType {
                 write!(f, "UNSIGNED INTEGER")
             }
             DataType::Real => write!(f, "REAL"),
+            DataType::RealUnsigned => write!(f, "REAL UNSIGNED"),
             DataType::Float4 => write!(f, "FLOAT4"),
             DataType::Float32 => write!(f, "Float32"),
             DataType::Float64 => write!(f, "FLOAT64"),
             DataType::Double(info) => write!(f, "DOUBLE{info}"),
+            DataType::DoubleUnsigned(info) => write!(f, "DOUBLE{info} UNSIGNED"),
             DataType::Float8 => write!(f, "FLOAT8"),
             DataType::DoublePrecision => write!(f, "DOUBLE PRECISION"),
+            DataType::DoublePrecisionUnsigned => write!(f, "DOUBLE PRECISION UNSIGNED"),
             DataType::Bool => write!(f, "BOOL"),
             DataType::Boolean => write!(f, "BOOLEAN"),
             DataType::Date => write!(f, "DATE"),

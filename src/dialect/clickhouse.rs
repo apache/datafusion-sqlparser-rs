@@ -94,4 +94,10 @@ impl Dialect for ClickHouseDialect {
     fn supports_group_by_with_modifier(&self) -> bool {
         true
     }
+
+    /// Supported since 2020.
+    /// See <https://clickhouse.com/docs/whats-new/changelog/2020#backward-incompatible-change-2>
+    fn supports_nested_comments(&self) -> bool {
+        true
+    }
 }

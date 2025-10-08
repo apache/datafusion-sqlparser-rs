@@ -3818,7 +3818,7 @@ fn parse_create_table() {
             assert_eq!(
                 constraints,
                 vec![
-                    TableConstraint::ForeignKey {
+                    ForeignKeyConstraint {
                         name: Some("fkey".into()),
                         index_name: None,
                         columns: vec!["lat".into()],
@@ -3827,8 +3827,9 @@ fn parse_create_table() {
                         on_delete: Some(ReferentialAction::Restrict),
                         on_update: None,
                         characteristics: None,
-                    },
-                    TableConstraint::ForeignKey {
+                    }
+                    .into(),
+                    ForeignKeyConstraint {
                         name: Some("fkey2".into()),
                         index_name: None,
                         columns: vec!["lat".into()],
@@ -3837,8 +3838,9 @@ fn parse_create_table() {
                         on_delete: Some(ReferentialAction::NoAction),
                         on_update: Some(ReferentialAction::Restrict),
                         characteristics: None,
-                    },
-                    TableConstraint::ForeignKey {
+                    }
+                    .into(),
+                    ForeignKeyConstraint {
                         name: None,
                         index_name: None,
                         columns: vec!["lat".into()],
@@ -3847,8 +3849,9 @@ fn parse_create_table() {
                         on_delete: Some(ReferentialAction::Cascade),
                         on_update: Some(ReferentialAction::SetDefault),
                         characteristics: None,
-                    },
-                    TableConstraint::ForeignKey {
+                    }
+                    .into(),
+                    ForeignKeyConstraint {
                         name: None,
                         index_name: None,
                         columns: vec!["lng".into()],
@@ -3857,7 +3860,8 @@ fn parse_create_table() {
                         on_delete: None,
                         on_update: Some(ReferentialAction::SetNull),
                         characteristics: None,
-                    },
+                    }
+                    .into(),
                 ]
             );
             assert_eq!(table_options, CreateTableOptions::None);
@@ -3945,7 +3949,7 @@ fn parse_create_table_with_constraint_characteristics() {
             assert_eq!(
                 constraints,
                 vec![
-                    TableConstraint::ForeignKey {
+                    ForeignKeyConstraint {
                         name: Some("fkey".into()),
                         index_name: None,
                         columns: vec!["lat".into()],
@@ -3958,8 +3962,9 @@ fn parse_create_table_with_constraint_characteristics() {
                             initially: Some(DeferrableInitial::Deferred),
                             enforced: None
                         }),
-                    },
-                    TableConstraint::ForeignKey {
+                    }
+                    .into(),
+                    ForeignKeyConstraint {
                         name: Some("fkey2".into()),
                         index_name: None,
                         columns: vec!["lat".into()],
@@ -3972,8 +3977,9 @@ fn parse_create_table_with_constraint_characteristics() {
                             initially: Some(DeferrableInitial::Immediate),
                             enforced: None,
                         }),
-                    },
-                    TableConstraint::ForeignKey {
+                    }
+                    .into(),
+                    ForeignKeyConstraint {
                         name: None,
                         index_name: None,
                         columns: vec!["lat".into()],
@@ -3986,8 +3992,9 @@ fn parse_create_table_with_constraint_characteristics() {
                             initially: Some(DeferrableInitial::Deferred),
                             enforced: Some(false),
                         }),
-                    },
-                    TableConstraint::ForeignKey {
+                    }
+                    .into(),
+                    ForeignKeyConstraint {
                         name: None,
                         index_name: None,
                         columns: vec!["lng".into()],
@@ -4000,7 +4007,8 @@ fn parse_create_table_with_constraint_characteristics() {
                             initially: Some(DeferrableInitial::Immediate),
                             enforced: Some(true),
                         }),
-                    },
+                    }
+                    .into(),
                 ]
             );
             assert_eq!(table_options, CreateTableOptions::None);
@@ -16497,7 +16505,8 @@ fn parse_create_procedure_with_parameter_modes() {
                             span: fake_span,
                         },
                         data_type: DataType::Integer(None),
-                        mode: Some(ArgMode::In)
+                        mode: Some(ArgMode::In),
+                        default: None,
                     },
                     ProcedureParam {
                         name: Ident {
@@ -16506,7 +16515,8 @@ fn parse_create_procedure_with_parameter_modes() {
                             span: fake_span,
                         },
                         data_type: DataType::Text,
-                        mode: Some(ArgMode::Out)
+                        mode: Some(ArgMode::Out),
+                        default: None,
                     },
                     ProcedureParam {
                         name: Ident {
@@ -16515,7 +16525,8 @@ fn parse_create_procedure_with_parameter_modes() {
                             span: fake_span,
                         },
                         data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                        mode: Some(ArgMode::InOut)
+                        mode: Some(ArgMode::InOut),
+                        default: None,
                     },
                     ProcedureParam {
                         name: Ident {
@@ -16524,9 +16535,56 @@ fn parse_create_procedure_with_parameter_modes() {
                             span: fake_span,
                         },
                         data_type: DataType::Bool,
-                        mode: None
+                        mode: None,
+                        default: None,
                     },
                 ])
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // parameters with default values
+    let sql = r#"CREATE PROCEDURE test_proc (IN a INTEGER = 1, OUT b TEXT = '2', INOUT c TIMESTAMP = NULL, d BOOL = 0) AS BEGIN SELECT 1; END"#;
+    match verified_stmt(sql) {
+        Statement::CreateProcedure {
+            or_alter,
+            name,
+            params,
+            ..
+        } => {
+            assert_eq!(or_alter, false);
+            assert_eq!(name.to_string(), "test_proc");
+            assert_eq!(
+                params,
+                Some(vec![
+                    ProcedureParam {
+                        name: Ident::new("a"),
+                        data_type: DataType::Integer(None),
+                        mode: Some(ArgMode::In),
+                        default: Some(Expr::Value((number("1")).with_empty_span())),
+                    },
+                    ProcedureParam {
+                        name: Ident::new("b"),
+                        data_type: DataType::Text,
+                        mode: Some(ArgMode::Out),
+                        default: Some(Expr::Value(
+                            Value::SingleQuotedString("2".into()).with_empty_span()
+                        )),
+                    },
+                    ProcedureParam {
+                        name: Ident::new("c"),
+                        data_type: DataType::Timestamp(None, TimezoneInfo::None),
+                        mode: Some(ArgMode::InOut),
+                        default: Some(Expr::Value(Value::Null.with_empty_span())),
+                    },
+                    ProcedureParam {
+                        name: Ident::new("d"),
+                        data_type: DataType::Bool,
+                        mode: None,
+                        default: Some(Expr::Value((number("0")).with_empty_span())),
+                    }
+                ]),
             );
         }
         _ => unreachable!(),
@@ -16761,11 +16819,13 @@ fn parse_create_user() {
     verified_stmt("CREATE OR REPLACE USER u1");
     verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1");
     verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret'");
-    verified_stmt(
+    let dialects = all_dialects_where(|d| d.supports_boolean_literals());
+    dialects.one_statement_parses_to(
         "CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=TRUE",
+        "CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=true",
     );
-    verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=TRUE TYPE=SERVICE TAG (t1='v1')");
-    let create = verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=TRUE TYPE=SERVICE WITH TAG (t1='v1', t2='v2')");
+    dialects.verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=true TYPE=SERVICE TAG (t1='v1')");
+    let create = dialects.verified_stmt("CREATE OR REPLACE USER IF NOT EXISTS u1 PASSWORD='secret' MUST_CHANGE_PASSWORD=false TYPE=SERVICE WITH TAG (t1='v1', t2='v2')");
     match create {
         Statement::CreateUser(stmt) => {
             assert_eq!(stmt.name, Ident::new("u1"));
@@ -16778,18 +16838,19 @@ fn parse_create_user() {
                     options: vec![
                         KeyValueOption {
                             option_name: "PASSWORD".to_string(),
-                            value: "secret".to_string(),
-                            option_type: KeyValueOptionType::STRING
+                            option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
+                                "secret".to_string()
+                            )),
                         },
                         KeyValueOption {
                             option_name: "MUST_CHANGE_PASSWORD".to_string(),
-                            value: "TRUE".to_string(),
-                            option_type: KeyValueOptionType::BOOLEAN
+                            option_value: KeyValueOptionKind::Single(Value::Boolean(false)),
                         },
                         KeyValueOption {
                             option_name: "TYPE".to_string(),
-                            value: "SERVICE".to_string(),
-                            option_type: KeyValueOptionType::ENUM
+                            option_value: KeyValueOptionKind::Single(Value::Placeholder(
+                                "SERVICE".to_string()
+                            )),
                         },
                     ],
                 },
@@ -16802,13 +16863,15 @@ fn parse_create_user() {
                     options: vec![
                         KeyValueOption {
                             option_name: "t1".to_string(),
-                            value: "v1".to_string(),
-                            option_type: KeyValueOptionType::STRING
+                            option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
+                                "v1".to_string()
+                            )),
                         },
                         KeyValueOption {
                             option_name: "t2".to_string(),
-                            value: "v2".to_string(),
-                            option_type: KeyValueOptionType::STRING
+                            option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
+                                "v2".to_string()
+                            )),
                         },
                     ]
                 }
@@ -17138,7 +17201,7 @@ fn test_parse_semantic_view_table_factor() {
     }
 
     let ast_sql = r#"SELECT * FROM SEMANTIC_VIEW(
-        my_model 
+        my_model
         DIMENSIONS DATE_PART('year', date_col), region_name
         METRICS orders.revenue, orders.count
         WHERE active = true
@@ -17192,4 +17255,308 @@ fn parse_adjacent_string_literal_concatenation() {
 
     let sql = "SELECT * FROM t WHERE col = 'Hello' \n ' ' \t 'World!'";
     dialects.one_statement_parses_to(sql, r"SELECT * FROM t WHERE col = 'Hello World!'");
+}
+
+#[test]
+fn parse_invisible_column() {
+    let sql = r#"CREATE TABLE t (foo INT, bar INT INVISIBLE)"#;
+    let stmt = verified_stmt(sql);
+    match stmt {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(
+                columns,
+                vec![
+                    ColumnDef {
+                        name: "foo".into(),
+                        data_type: DataType::Int(None),
+                        options: vec![]
+                    },
+                    ColumnDef {
+                        name: "bar".into(),
+                        data_type: DataType::Int(None),
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Invisible
+                        }]
+                    }
+                ]
+            );
+        }
+        _ => panic!("Unexpected statement {stmt}"),
+    }
+
+    let sql = r#"ALTER TABLE t ADD COLUMN bar INT INVISIBLE"#;
+    let stmt = verified_stmt(sql);
+    match stmt {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::AddColumn {
+                    column_keyword: true,
+                    if_not_exists: false,
+                    column_def: ColumnDef {
+                        name: "bar".into(),
+                        data_type: DataType::Int(None),
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Invisible
+                        }]
+                    },
+                    column_position: None
+                }]
+            );
+        }
+        _ => panic!("Unexpected statement {stmt}"),
+    }
+}
+
+#[test]
+fn parse_create_index_different_using_positions() {
+    let sql = "CREATE INDEX idx_name USING BTREE ON table_name (col1)";
+    let expected = "CREATE INDEX idx_name ON table_name USING BTREE (col1)";
+    match all_dialects().one_statement_parses_to(sql, expected) {
+        Statement::CreateIndex(CreateIndex {
+            name,
+            table_name,
+            using,
+            columns,
+            unique,
+            ..
+        }) => {
+            assert_eq!(name.unwrap().to_string(), "idx_name");
+            assert_eq!(table_name.to_string(), "table_name");
+            assert_eq!(using, Some(IndexType::BTree));
+            assert_eq!(columns.len(), 1);
+            assert!(!unique);
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "CREATE INDEX idx_name USING BTREE ON table_name (col1) USING HASH";
+    let expected = "CREATE INDEX idx_name ON table_name USING BTREE (col1) USING HASH";
+    match all_dialects().one_statement_parses_to(sql, expected) {
+        Statement::CreateIndex(CreateIndex {
+            name,
+            table_name,
+            columns,
+            index_options,
+            ..
+        }) => {
+            assert_eq!(name.unwrap().to_string(), "idx_name");
+            assert_eq!(table_name.to_string(), "table_name");
+            assert_eq!(columns.len(), 1);
+            assert!(index_options
+                .iter()
+                .any(|o| o == &IndexOption::Using(IndexType::Hash)));
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_parse_alter_user() {
+    verified_stmt("ALTER USER u1");
+    verified_stmt("ALTER USER IF EXISTS u1");
+    let stmt = verified_stmt("ALTER USER IF EXISTS u1 RENAME TO u2");
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert!(alter.if_exists);
+            assert_eq!(alter.name, Ident::new("u1"));
+            assert_eq!(alter.rename_to, Some(Ident::new("u2")));
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("ALTER USER IF EXISTS u1 RESET PASSWORD");
+    verified_stmt("ALTER USER IF EXISTS u1 ABORT ALL QUERIES");
+    verified_stmt(
+        "ALTER USER IF EXISTS u1 ADD DELEGATED AUTHORIZATION OF ROLE r1 TO SECURITY INTEGRATION i1",
+    );
+    verified_stmt("ALTER USER IF EXISTS u1 REMOVE DELEGATED AUTHORIZATION OF ROLE r1 FROM SECURITY INTEGRATION i1");
+    verified_stmt(
+        "ALTER USER IF EXISTS u1 REMOVE DELEGATED AUTHORIZATIONS FROM SECURITY INTEGRATION i1",
+    );
+    verified_stmt("ALTER USER IF EXISTS u1 ENROLL MFA");
+    let stmt = verified_stmt("ALTER USER u1 SET DEFAULT_MFA_METHOD PASSKEY");
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert_eq!(alter.set_default_mfa_method, Some(MfaMethodKind::PassKey))
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("ALTER USER u1 SET DEFAULT_MFA_METHOD TOTP");
+    verified_stmt("ALTER USER u1 SET DEFAULT_MFA_METHOD DUO");
+    let stmt = verified_stmt("ALTER USER u1 REMOVE MFA METHOD PASSKEY");
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert_eq!(alter.remove_mfa_method, Some(MfaMethodKind::PassKey))
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("ALTER USER u1 REMOVE MFA METHOD TOTP");
+    verified_stmt("ALTER USER u1 REMOVE MFA METHOD DUO");
+    let stmt = verified_stmt("ALTER USER u1 MODIFY MFA METHOD PASSKEY SET COMMENT 'abc'");
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert_eq!(
+                alter.modify_mfa_method,
+                Some(AlterUserModifyMfaMethod {
+                    method: MfaMethodKind::PassKey,
+                    comment: "abc".to_string()
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("ALTER USER u1 ADD MFA METHOD OTP");
+    verified_stmt("ALTER USER u1 ADD MFA METHOD OTP COUNT = 8");
+
+    let stmt = verified_stmt("ALTER USER u1 SET AUTHENTICATION POLICY p1");
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert_eq!(
+                alter.set_policy,
+                Some(AlterUserSetPolicy {
+                    policy_kind: UserPolicyKind::Authentication,
+                    policy: Ident::new("p1")
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("ALTER USER u1 SET PASSWORD POLICY p1");
+    verified_stmt("ALTER USER u1 SET SESSION POLICY p1");
+    let stmt = verified_stmt("ALTER USER u1 UNSET AUTHENTICATION POLICY");
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert_eq!(alter.unset_policy, Some(UserPolicyKind::Authentication));
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("ALTER USER u1 UNSET PASSWORD POLICY");
+    verified_stmt("ALTER USER u1 UNSET SESSION POLICY");
+
+    let stmt = verified_stmt("ALTER USER u1 SET TAG k1='v1'");
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert_eq!(
+                alter.set_tag.options,
+                vec![KeyValueOption {
+                    option_name: "k1".to_string(),
+                    option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
+                        "v1".to_string()
+                    )),
+                },]
+            );
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("ALTER USER u1 SET TAG k1='v1', k2='v2'");
+    let stmt = verified_stmt("ALTER USER u1 UNSET TAG k1");
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert_eq!(alter.unset_tag, vec!["k1".to_string()]);
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("ALTER USER u1 UNSET TAG k1, k2, k3");
+
+    let dialects = all_dialects_where(|d| d.supports_boolean_literals());
+    dialects.one_statement_parses_to(
+        "ALTER USER u1 SET PASSWORD='secret', MUST_CHANGE_PASSWORD=TRUE, MINS_TO_UNLOCK=10",
+        "ALTER USER u1 SET PASSWORD='secret', MUST_CHANGE_PASSWORD=true, MINS_TO_UNLOCK=10",
+    );
+
+    let stmt = dialects.verified_stmt(
+        "ALTER USER u1 SET PASSWORD='secret', MUST_CHANGE_PASSWORD=true, MINS_TO_UNLOCK=10",
+    );
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert_eq!(
+                alter.set_props,
+                KeyValueOptions {
+                    delimiter: KeyValueOptionsDelimiter::Comma,
+                    options: vec![
+                        KeyValueOption {
+                            option_name: "PASSWORD".to_string(),
+                            option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
+                                "secret".to_string()
+                            )),
+                        },
+                        KeyValueOption {
+                            option_name: "MUST_CHANGE_PASSWORD".to_string(),
+                            option_value: KeyValueOptionKind::Single(Value::Boolean(true)),
+                        },
+                        KeyValueOption {
+                            option_name: "MINS_TO_UNLOCK".to_string(),
+                            option_value: KeyValueOptionKind::Single(number("10")),
+                        },
+                    ]
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    let stmt = verified_stmt("ALTER USER u1 UNSET PASSWORD");
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert_eq!(alter.unset_props, vec!["PASSWORD".to_string()]);
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("ALTER USER u1 UNSET PASSWORD, MUST_CHANGE_PASSWORD, MINS_TO_UNLOCK");
+
+    let stmt = verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL')");
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert_eq!(
+                alter.set_props.options,
+                vec![KeyValueOption {
+                    option_name: "DEFAULT_SECONDARY_ROLES".to_string(),
+                    option_value: KeyValueOptionKind::Multi(vec![Value::SingleQuotedString(
+                        "ALL".to_string()
+                    )])
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=()");
+    verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('R1', 'R2', 'R3')");
+    verified_stmt("ALTER USER u1 SET PASSWORD='secret', DEFAULT_SECONDARY_ROLES=('ALL')");
+    verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL'), PASSWORD='secret'");
+    let stmt = verified_stmt(
+        "ALTER USER u1 SET WORKLOAD_IDENTITY=(TYPE=AWS, ARN='arn:aws:iam::123456789:r1/')",
+    );
+    match stmt {
+        Statement::AlterUser(alter) => {
+            assert_eq!(
+                alter.set_props.options,
+                vec![KeyValueOption {
+                    option_name: "WORKLOAD_IDENTITY".to_string(),
+                    option_value: KeyValueOptionKind::KeyValueOptions(Box::new(KeyValueOptions {
+                        delimiter: KeyValueOptionsDelimiter::Comma,
+                        options: vec![
+                            KeyValueOption {
+                                option_name: "TYPE".to_string(),
+                                option_value: KeyValueOptionKind::Single(Value::Placeholder(
+                                    "AWS".to_string()
+                                )),
+                            },
+                            KeyValueOption {
+                                option_name: "ARN".to_string(),
+                                option_value: KeyValueOptionKind::Single(
+                                    Value::SingleQuotedString(
+                                        "arn:aws:iam::123456789:r1/".to_string()
+                                    )
+                                ),
+                            },
+                        ]
+                    }))
+                }]
+            )
+        }
+        _ => unreachable!(),
+    }
+    verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL'), PASSWORD='secret', WORKLOAD_IDENTITY=(TYPE=AWS, ARN='arn:aws:iam::123456789:r1/')");
 }

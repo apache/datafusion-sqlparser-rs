@@ -19,8 +19,8 @@
 
 use crate::ast::{
     display_comma_separated, display_separated, ConstraintCharacteristics, Expr, Ident,
-    IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, ObjectName,
-    ReferentialAction,
+    IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, MatchKind, NullsDistinctOption,
+    ObjectName, ReferentialAction,
 };
 use crate::tokenizer::Span;
 use core::fmt;
@@ -189,7 +189,7 @@ impl crate::ast::Spanned for CheckConstraint {
 }
 
 /// A referential integrity constraint (`[ CONSTRAINT <name> ] FOREIGN KEY (<columns>)
-/// REFERENCES <foreign_table> (<referred_columns>)
+/// REFERENCES <foreign_table> (<referred_columns>) [ MATCH { FULL | PARTIAL | SIMPLE } ]
 /// { [ON DELETE <referential_action>] [ON UPDATE <referential_action>] |
 ///   [ON UPDATE <referential_action>] [ON DELETE <referential_action>]
 /// }`).
@@ -206,6 +206,7 @@ pub struct ForeignKeyConstraint {
     pub referred_columns: Vec<Ident>,
     pub on_delete: Option<ReferentialAction>,
     pub on_update: Option<ReferentialAction>,
+    pub match_kind: Option<MatchKind>,
     pub characteristics: Option<ConstraintCharacteristics>,
 }
 
@@ -222,6 +223,9 @@ impl fmt::Display for ForeignKeyConstraint {
         )?;
         if !self.referred_columns.is_empty() {
             write!(f, "({})", display_comma_separated(&self.referred_columns))?;
+        }
+        if let Some(match_kind) = &self.match_kind {
+            write!(f, " {match_kind}")?;
         }
         if let Some(action) = &self.on_delete {
             write!(f, " ON DELETE {action}")?;

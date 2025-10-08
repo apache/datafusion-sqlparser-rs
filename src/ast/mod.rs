@@ -655,6 +655,40 @@ pub enum CastKind {
     DoubleColon,
 }
 
+/// The MATCH option for foreign key constraints.
+///
+/// Specifies how to match composite foreign keys against the referenced table.
+/// A value inserted into the referencing column(s) is matched against the values
+/// of the referenced table and referenced columns using the given match type.
+///
+/// See: <https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-PARMS-REFERENCES>
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum MatchKind {
+    /// `MATCH FULL` - Will not allow one column of a multicolumn foreign key to be null
+    /// unless all foreign key columns are null; if they are all null, the row is not
+    /// required to have a match in the referenced table.
+    Full,
+    /// `MATCH PARTIAL` - Not yet implemented by most databases (part of SQL standard).
+    /// Would allow partial matches in multicolumn foreign keys.
+    Partial,
+    /// `MATCH SIMPLE` - The default behavior. Allows any of the foreign key columns
+    /// to be null; if any of them are null, the row is not required to have a match
+    /// in the referenced table.
+    Simple,
+}
+
+impl fmt::Display for MatchKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MatchKind::Full => write!(f, "MATCH FULL"),
+            MatchKind::Partial => write!(f, "MATCH PARTIAL"),
+            MatchKind::Simple => write!(f, "MATCH SIMPLE"),
+        }
+    }
+}
+
 /// `EXTRACT` syntax variants.
 ///
 /// In Snowflake dialect, the `EXTRACT` expression can support either the `from` syntax

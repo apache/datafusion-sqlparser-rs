@@ -822,19 +822,7 @@ impl Spanned for ColumnOption {
             ColumnOption::Ephemeral(expr) => expr.as_ref().map_or(Span::empty(), |e| e.span()),
             ColumnOption::Alias(expr) => expr.span(),
             ColumnOption::Unique { .. } => Span::empty(),
-            ColumnOption::ForeignKey {
-                foreign_table,
-                referred_columns,
-                on_delete,
-                on_update,
-                characteristics,
-            } => union_spans(
-                core::iter::once(foreign_table.span())
-                    .chain(referred_columns.iter().map(|i| i.span))
-                    .chain(on_delete.iter().map(|i| i.span()))
-                    .chain(on_update.iter().map(|i| i.span()))
-                    .chain(characteristics.iter().map(|i| i.span())),
-            ),
+            ColumnOption::ForeignKey(constraint) => constraint.span(),
             ColumnOption::Check(expr) => expr.span(),
             ColumnOption::DialectSpecific(_) => Span::empty(),
             ColumnOption::CharacterSet(object_name) => object_name.span(),

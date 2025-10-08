@@ -6481,6 +6481,7 @@ fn parse_alter_table_constraint_not_valid() {
                         referred_columns: vec!["ref".into()],
                         on_delete: None,
                         on_update: None,
+                        match_kind: None,
                         characteristics: None,
                     }
                     .into(),
@@ -6644,5 +6645,146 @@ fn parse_alter_schema() {
             );
         }
         _ => unreachable!(),
+    }
+}
+
+#[test]
+/// Test to verify whether `MATCH FULL` syntax for foreign keys is parsed correctly.
+fn parse_foreign_key_match_full() {
+    let sql = "CREATE TABLE orders (order_id INT PRIMARY KEY REFERENCES another_table (id) MATCH FULL, customer_id INT, FOREIGN KEY (customer_id) REFERENCES customers(customer_id) MATCH FULL)";
+    let statement = pg_and_generic().verified_stmt(sql);
+    match statement {
+        Statement::CreateTable(CreateTable {
+            columns,
+            constraints,
+            ..
+        }) => {
+            // Check column-level foreign key with MATCH FULL
+            assert_eq!(columns[0].name.value, "order_id");
+            match &columns[0].options[1].option {
+                ColumnOption::ForeignKey(constraint) => {
+                    assert_eq!(constraint.foreign_table.to_string(), "another_table");
+                    assert_eq!(constraint.match_kind, Some(MatchKind::Full));
+                }
+                _ => panic!("Expected ColumnOption::ForeignKey"),
+            }
+
+            // Check table-level foreign key constraint with MATCH FULL
+            match &constraints[0] {
+                TableConstraint::ForeignKey(constraint) => {
+                    assert_eq!(constraint.foreign_table.to_string(), "customers");
+                    assert_eq!(constraint.match_kind, Some(MatchKind::Full));
+                }
+                _ => panic!("Expected TableConstraint::ForeignKey"),
+            }
+        }
+        _ => unreachable!("{:?} should parse to Statement::CreateTable", sql),
+    }
+}
+
+#[test]
+/// Test to verify whether `MATCH SIMPLE` syntax for foreign keys is parsed correctly.
+fn parse_foreign_key_match_simple() {
+    let sql = "CREATE TABLE orders (order_id INT PRIMARY KEY REFERENCES another_table (id) MATCH SIMPLE, customer_id INT, FOREIGN KEY (customer_id) REFERENCES customers(customer_id) MATCH SIMPLE)";
+    let statement = pg_and_generic().verified_stmt(sql);
+    match statement {
+        Statement::CreateTable(CreateTable {
+            columns,
+            constraints,
+            ..
+        }) => {
+            // Check column-level foreign key with MATCH SIMPLE
+            assert_eq!(columns[0].name.value, "order_id");
+            match &columns[0].options[1].option {
+                ColumnOption::ForeignKey(constraint) => {
+                    assert_eq!(constraint.foreign_table.to_string(), "another_table");
+                    assert_eq!(constraint.match_kind, Some(MatchKind::Simple));
+                }
+                _ => panic!("Expected ColumnOption::ForeignKey"),
+            }
+
+            // Check table-level foreign key constraint with MATCH SIMPLE
+            match &constraints[0] {
+                TableConstraint::ForeignKey(constraint) => {
+                    assert_eq!(constraint.foreign_table.to_string(), "customers");
+                    assert_eq!(constraint.match_kind, Some(MatchKind::Simple));
+                }
+                _ => panic!("Expected TableConstraint::ForeignKey"),
+            }
+        }
+        _ => unreachable!("{:?} should parse to Statement::CreateTable", sql),
+    }
+}
+
+#[test]
+/// Test to verify whether `MATCH PARTIAL` syntax for foreign keys is parsed correctly.
+fn parse_foreign_key_match_partial() {
+    let sql = "CREATE TABLE orders (order_id INT PRIMARY KEY REFERENCES another_table (id) MATCH PARTIAL, customer_id INT, FOREIGN KEY (customer_id) REFERENCES customers(customer_id) MATCH PARTIAL)";
+    let statement = pg_and_generic().verified_stmt(sql);
+    match statement {
+        Statement::CreateTable(CreateTable {
+            columns,
+            constraints,
+            ..
+        }) => {
+            // Check column-level foreign key with MATCH PARTIAL
+            assert_eq!(columns[0].name.value, "order_id");
+            match &columns[0].options[1].option {
+                ColumnOption::ForeignKey(constraint) => {
+                    assert_eq!(constraint.foreign_table.to_string(), "another_table");
+                    assert_eq!(constraint.match_kind, Some(MatchKind::Partial));
+                }
+                _ => panic!("Expected ColumnOption::ForeignKey"),
+            }
+
+            // Check table-level foreign key constraint with MATCH PARTIAL
+            match &constraints[0] {
+                TableConstraint::ForeignKey(constraint) => {
+                    assert_eq!(constraint.foreign_table.to_string(), "customers");
+                    assert_eq!(constraint.match_kind, Some(MatchKind::Partial));
+                }
+                _ => panic!("Expected TableConstraint::ForeignKey"),
+            }
+        }
+        _ => unreachable!("{:?} should parse to Statement::CreateTable", sql),
+    }
+}
+
+#[test]
+/// Test to verify foreign key MATCH syntax combined with ON DELETE/ON UPDATE actions
+fn parse_foreign_key_match_with_actions() {
+    let sql = "CREATE TABLE orders (order_id INT REFERENCES another_table (id) MATCH FULL ON DELETE CASCADE ON UPDATE RESTRICT, customer_id INT, CONSTRAINT fk_customer FOREIGN KEY (customer_id) REFERENCES customers(customer_id) MATCH SIMPLE ON DELETE SET NULL ON UPDATE CASCADE)";
+
+    let statement = pg_and_generic().verified_stmt(sql);
+    match statement {
+        Statement::CreateTable(CreateTable {
+            columns,
+            constraints,
+            ..
+        }) => {
+            // Check column-level foreign key with MATCH FULL and actions
+            match &columns[0].options[0].option {
+                ColumnOption::ForeignKey(constraint) => {
+                    assert_eq!(constraint.foreign_table.to_string(), "another_table");
+                    assert_eq!(constraint.match_kind, Some(MatchKind::Full));
+                    assert_eq!(constraint.on_delete, Some(ReferentialAction::Cascade));
+                    assert_eq!(constraint.on_update, Some(ReferentialAction::Restrict));
+                }
+                _ => panic!("Expected ColumnOption::ForeignKey"),
+            }
+
+            // Check table-level foreign key constraint with MATCH SIMPLE and actions
+            match &constraints[0] {
+                TableConstraint::ForeignKey(constraint) => {
+                    assert_eq!(constraint.name.as_ref().unwrap().value, "fk_customer");
+                    assert_eq!(constraint.foreign_table.to_string(), "customers");
+                    assert_eq!(constraint.match_kind, Some(MatchKind::Simple));
+                    assert_eq!(constraint.on_delete, Some(ReferentialAction::SetNull));
+                    assert_eq!(constraint.on_update, Some(ReferentialAction::Cascade));
+                }
+                _ => panic!("Expected TableConstraint::ForeignKey"),
+            }
+        }
+        _ => unreachable!("{:?} should parse to Statement::CreateTable", sql),
     }
 }

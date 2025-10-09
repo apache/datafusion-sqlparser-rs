@@ -8071,11 +8071,14 @@ impl<'a> Parser<'a> {
             // since `CHECK` requires parentheses, we can parse the inner expression in ParserState::Normal
             let expr: Expr = self.with_state(ParserState::Normal, |p| p.parse_expr())?;
             self.expect_token(&Token::RParen)?;
-            Ok(Some(CheckConstraint {
-                name: None, // Column-level check constraints don't have names
-                expr: Box::new(expr),
-                enforced: None, // Could be extended later to support MySQL ENFORCED/NOT ENFORCED
-            }.into()))
+            Ok(Some(
+                CheckConstraint {
+                    name: None, // Column-level check constraints don't have names
+                    expr: Box::new(expr),
+                    enforced: None, // Could be extended later to support MySQL ENFORCED/NOT ENFORCED
+                }
+                .into(),
+            ))
         } else if self.parse_keyword(Keyword::AUTO_INCREMENT)
             && dialect_of!(self is MySqlDialect | GenericDialect)
         {

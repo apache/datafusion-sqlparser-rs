@@ -30,8 +30,9 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
-    display_comma_separated, display_separated, table_constraints::{CheckConstraint, TableConstraint}, ArgMode,
-    CommentDef, ConditionalStatements, CreateFunctionBody, CreateFunctionUsing,
+    display_comma_separated, display_separated,
+    table_constraints::{CheckConstraint, TableConstraint},
+    ArgMode, CommentDef, ConditionalStatements, CreateFunctionBody, CreateFunctionUsing,
     CreateTableLikeKind, CreateTableOptions, DataType, Expr, FileFormat, FunctionBehavior,
     FunctionCalledOnNull, FunctionDeterminismSpecifier, FunctionParallel, HiveDistributionStyle,
     HiveFormat, HiveIOFormat, HiveRowFormat, Ident, InitializeKind, MySQLColumnPosition,

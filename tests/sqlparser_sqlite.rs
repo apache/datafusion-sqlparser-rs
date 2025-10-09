@@ -217,10 +217,14 @@ fn parse_create_table_auto_increment() {
                     options: vec![
                         ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::Unique {
-                                is_primary: true,
-                                characteristics: None
-                            },
+                            option: ColumnOption::PrimaryKey(PrimaryKeyConstraint {
+                                name: None,
+                                index_name: None,
+                                index_type: None,
+                                columns: vec!["bar".into()],
+                                index_options: vec![],
+                                characteristics: None,
+                            }),
                         },
                         ColumnOptionDef {
                             name: None,
@@ -245,10 +249,14 @@ fn parse_create_table_primary_key_asc_desc() {
         options: vec![
             ColumnOptionDef {
                 name: None,
-                option: ColumnOption::Unique {
-                    is_primary: true,
+                option: ColumnOption::PrimaryKey(PrimaryKeyConstraint {
+                    name: None,
+                    index_name: None,
+                    index_type: None,
+                    columns: vec!["bar".into()],
+                    index_options: vec![],
                     characteristics: None,
-                },
+                }),
             },
             ColumnOptionDef {
                 name: None,

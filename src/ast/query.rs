@@ -2506,6 +2506,16 @@ pub struct OrderByExpr {
     pub with_fill: Option<WithFill>,
 }
 
+impl From<Ident> for OrderByExpr {
+    fn from(ident: Ident) -> Self {
+        OrderByExpr {
+            expr: Expr::Identifier(ident),
+            options: OrderByOptions::default(),
+            with_fill: None,
+        }
+    }
+}
+
 impl fmt::Display for OrderByExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}{}", self.expr, self.options)?;
@@ -2574,7 +2584,7 @@ impl fmt::Display for InterpolateExpr {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct OrderByOptions {

@@ -835,7 +835,7 @@ impl Spanned for ColumnOption {
                     .chain(on_update.iter().map(|i| i.span()))
                     .chain(characteristics.iter().map(|i| i.span())),
             ),
-            ColumnOption::Check(expr) => expr.span(),
+            ColumnOption::Check(constraint) => constraint.span(),
             ColumnOption::DialectSpecific(_) => Span::empty(),
             ColumnOption::CharacterSet(object_name) => object_name.span(),
             ColumnOption::Collation(object_name) => object_name.span(),

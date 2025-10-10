@@ -166,7 +166,7 @@ fn parse_create_virtual_table() {
 fn parse_create_view_temporary_if_not_exists() {
     let sql = "CREATE TEMPORARY VIEW IF NOT EXISTS myschema.myview AS SELECT foo FROM bar";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::CreateView {
+        Statement::CreateView(CreateView {
             name,
             columns,
             query,
@@ -179,7 +179,7 @@ fn parse_create_view_temporary_if_not_exists() {
             if_not_exists,
             temporary,
             ..
-        } => {
+        }) => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
@@ -467,7 +467,7 @@ fn parse_update_tuple_row_values() {
     // See https://github.com/sqlparser-rs/sqlparser-rs/issues/1311
     assert_eq!(
         sqlite().verified_stmt("UPDATE x SET (a, b) = (1, 2)"),
-        Statement::Update {
+        Statement::Update(Update {
             or: None,
             assignments: vec![Assignment {
                 target: AssignmentTarget::Tuple(vec![
@@ -487,7 +487,7 @@ fn parse_update_tuple_row_values() {
             from: None,
             returning: None,
             limit: None
-        }
+        })
     );
 }
 
@@ -596,7 +596,7 @@ fn test_regexp_operator() {
 #[test]
 fn test_update_delete_limit() {
     match sqlite().verified_stmt("UPDATE foo SET bar = 1 LIMIT 99") {
-        Statement::Update { limit, .. } => {
+        Statement::Update(Update { limit, .. }) => {
             assert_eq!(limit, Some(Expr::value(number("99"))));
         }
         _ => unreachable!(),

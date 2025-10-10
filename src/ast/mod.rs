@@ -43,7 +43,7 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::{
-    display_utils::{indented_list, SpaceOrNewline},
+    display_utils::SpaceOrNewline,
     tokenizer::{Span, Token},
 };
 use crate::{
@@ -56,22 +56,24 @@ pub use self::data_type::{
     ExactNumberInfo, IntervalFields, StructBracketKind, TimezoneInfo,
 };
 pub use self::dcl::{
-    AlterRoleOperation, ResetConfig, RoleOption, SecondaryRoles, SetConfigValue, Use,
+    AlterRoleOperation, CreateRole, ResetConfig, RoleOption, SecondaryRoles, SetConfigValue, Use,
 };
 pub use self::ddl::{
     AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterPolicyOperation,
-    AlterSchema, AlterSchemaOperation, AlterTableAlgorithm, AlterTableLock, AlterTableOperation,
-    AlterType, AlterTypeAddValue, AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename,
-    AlterTypeRenameValue, ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions,
-    ColumnPolicy, ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain,
-    CreateFunction, CreateIndex, CreateTable, CreateTrigger, Deduplicate, DeferrableInitial,
-    DropBehavior, DropTrigger, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
-    IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
-    IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition,
-    ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity, TagsColumnOption,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
+    AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm, AlterTableLock,
+    AlterTableOperation, AlterType, AlterTypeAddValue, AlterTypeAddValuePosition,
+    AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue, ClusteredBy, ColumnDef,
+    ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy, ColumnPolicyProperty,
+    ConstraintCharacteristics, CreateConnector, CreateDomain, CreateExtension, CreateFunction,
+    CreateIndex, CreateTable, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
+    DropBehavior, DropExtension, DropFunction, DropTrigger, GeneratedAs, GeneratedExpressionMode,
+    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
+    IdentityPropertyOrder, IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck,
+    NullsDistinctOption, Owner, Partition, ProcedureParam, ReferentialAction, RenameTableNameKind,
+    ReplicaIdentity, TagsColumnOption, Truncate, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeRepresentation, ViewColumnDef,
 };
-pub use self::dml::{Delete, Insert};
+pub use self::dml::{Delete, Insert, Update};
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
     AfterMatchSkip, ConnectBy, Cte, CteAsMaterialized, Distinct, EmptyMatchesMode,
@@ -3064,6 +3066,59 @@ impl Display for ExceptionWhen {
     }
 }
 
+/// ANALYZE TABLE statement (Hive-specific)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Analyze {
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub table_name: ObjectName,
+    pub partitions: Option<Vec<Expr>>,
+    pub for_columns: bool,
+    pub columns: Vec<Ident>,
+    pub cache_metadata: bool,
+    pub noscan: bool,
+    pub compute_statistics: bool,
+    pub has_table_keyword: bool,
+}
+
+impl fmt::Display for Analyze {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "ANALYZE{}{table_name}",
+            if self.has_table_keyword {
+                " TABLE "
+            } else {
+                " "
+            },
+            table_name = self.table_name
+        )?;
+        if let Some(ref parts) = self.partitions {
+            if !parts.is_empty() {
+                write!(f, " PARTITION ({})", display_comma_separated(parts))?;
+            }
+        }
+
+        if self.compute_statistics {
+            write!(f, " COMPUTE STATISTICS")?;
+        }
+        if self.noscan {
+            write!(f, " NOSCAN")?;
+        }
+        if self.cache_metadata {
+            write!(f, " CACHE METADATA")?;
+        }
+        if self.for_columns {
+            write!(f, " FOR COLUMNS")?;
+            if !self.columns.is_empty() {
+                write!(f, " {}", display_comma_separated(&self.columns))?;
+            }
+        }
+        Ok(())
+    }
+}
+
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -3078,49 +3133,18 @@ pub enum Statement {
     /// ANALYZE
     /// ```
     /// Analyze (Hive)
-    Analyze {
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_name: ObjectName,
-        partitions: Option<Vec<Expr>>,
-        for_columns: bool,
-        columns: Vec<Ident>,
-        cache_metadata: bool,
-        noscan: bool,
-        compute_statistics: bool,
-        has_table_keyword: bool,
-    },
+    Analyze(Analyze),
     Set(Set),
     /// ```sql
     /// TRUNCATE
     /// ```
     /// Truncate (Hive)
-    Truncate {
-        table_names: Vec<TruncateTableTarget>,
-        partitions: Option<Vec<Expr>>,
-        /// TABLE - optional keyword;
-        table: bool,
-        /// Postgres-specific option
-        /// [ RESTART IDENTITY | CONTINUE IDENTITY ]
-        identity: Option<TruncateIdentityOption>,
-        /// Postgres-specific option
-        /// [ CASCADE | RESTRICT ]
-        cascade: Option<CascadeOption>,
-        /// ClickHouse-specific option
-        /// [ ON CLUSTER cluster_name ]
-        ///
-        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/truncate/)
-        on_cluster: Option<Ident>,
-    },
+    Truncate(Truncate),
     /// ```sql
     /// MSCK
     /// ```
     /// Msck (Hive)
-    Msck {
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_name: ObjectName,
-        repair: bool,
-        partition_action: Option<AddDropSync>,
-    },
+    Msck(Msck),
     /// ```sql
     /// SELECT
     /// ```
@@ -3223,22 +3247,7 @@ pub enum Statement {
     /// ```sql
     /// UPDATE
     /// ```
-    Update {
-        /// TABLE
-        table: TableWithJoins,
-        /// Column assignments
-        assignments: Vec<Assignment>,
-        /// Table which provide value to be set
-        from: Option<UpdateTableFromKind>,
-        /// WHERE
-        selection: Option<Expr>,
-        /// RETURNING
-        returning: Option<Vec<SelectItem>>,
-        /// SQLite-specific conflict resolution clause
-        or: Option<SqliteOnConflict>,
-        /// LIMIT
-        limit: Option<Expr>,
-    },
+    Update(Update),
     /// ```sql
     /// DELETE
     /// ```
@@ -3246,48 +3255,7 @@ pub enum Statement {
     /// ```sql
     /// CREATE VIEW
     /// ```
-    CreateView {
-        /// True if this is a `CREATE OR ALTER VIEW` statement
-        ///
-        /// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-view-transact-sql)
-        or_alter: bool,
-        or_replace: bool,
-        materialized: bool,
-        /// Snowflake: SECURE view modifier
-        /// <https://docs.snowflake.com/en/sql-reference/sql/create-view#syntax>
-        secure: bool,
-        /// View name
-        name: ObjectName,
-        /// If `if_not_exists` is true, this flag is set to true if the view name comes before the `IF NOT EXISTS` clause.
-        /// Example:
-        /// ```sql
-        /// CREATE VIEW myview IF NOT EXISTS AS SELECT 1`
-        ///  ```
-        /// Otherwise, the flag is set to false if the view name comes after the clause
-        /// Example:
-        /// ```sql
-        /// CREATE VIEW IF NOT EXISTS myview AS SELECT 1`
-        ///  ```
-        name_before_not_exists: bool,
-        columns: Vec<ViewColumnDef>,
-        query: Box<Query>,
-        options: CreateTableOptions,
-        cluster_by: Vec<Ident>,
-        /// Snowflake: Views can have comments in Snowflake.
-        /// <https://docs.snowflake.com/en/sql-reference/sql/create-view#syntax>
-        comment: Option<String>,
-        /// if true, has RedShift [`WITH NO SCHEMA BINDING`] clause <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_VIEW.html>
-        with_no_schema_binding: bool,
-        /// if true, has SQLite `IF NOT EXISTS` clause <https://www.sqlite.org/lang_createview.html>
-        if_not_exists: bool,
-        /// if true, has SQLite `TEMP` or `TEMPORARY` clause <https://www.sqlite.org/lang_createview.html>
-        temporary: bool,
-        /// if not None, has Clickhouse `TO` clause, specify the table into which to insert results
-        /// <https://clickhouse.com/docs/en/sql-reference/statements/create/view#materialized-view>
-        to: Option<ObjectName>,
-        /// MySQL: Optional parameters for the view algorithm, definer, and security context
-        params: Option<CreateViewParams>,
-    },
+    CreateView(CreateView),
     /// ```sql
     /// CREATE TABLE
     /// ```
@@ -3311,28 +3279,7 @@ pub enum Statement {
     /// CREATE ROLE
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createrole.html)
-    CreateRole {
-        names: Vec<ObjectName>,
-        if_not_exists: bool,
-        // Postgres
-        login: Option<bool>,
-        inherit: Option<bool>,
-        bypassrls: Option<bool>,
-        password: Option<Password>,
-        superuser: Option<bool>,
-        create_db: Option<bool>,
-        create_role: Option<bool>,
-        replication: Option<bool>,
-        connection_limit: Option<Expr>,
-        valid_until: Option<Expr>,
-        in_role: Vec<Ident>,
-        in_group: Vec<Ident>,
-        role: Vec<Ident>,
-        user: Vec<Ident>,
-        admin: Vec<Ident>,
-        // MSSQL
-        authorization_owner: Option<ObjectName>,
-    },
+    CreateRole(CreateRole),
     /// ```sql
     /// CREATE SECRET
     /// ```
@@ -3370,24 +3317,7 @@ pub enum Statement {
     /// ```sql
     /// ALTER TABLE
     /// ```
-    AlterTable {
-        /// Table name
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        name: ObjectName,
-        if_exists: bool,
-        only: bool,
-        operations: Vec<AlterTableOperation>,
-        location: Option<HiveSetLocation>,
-        /// ClickHouse dialect supports `ON CLUSTER` clause for ALTER TABLE
-        /// For example: `ALTER TABLE table_name ON CLUSTER cluster_name ADD COLUMN c UInt32`
-        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/update)
-        on_cluster: Option<Ident>,
-        /// Snowflake "ICEBERG" clause for Iceberg tables
-        /// <https://docs.snowflake.com/en/sql-reference/sql/alter-iceberg-table>
-        iceberg: bool,
-        /// Token that represents the end of the statement (semicolon or EOF)
-        end_token: AttachedToken,
-    },
+    AlterTable(AlterTable),
     /// ```sql
     /// ALTER SCHEMA
     /// ```
@@ -3523,13 +3453,7 @@ pub enum Statement {
     /// ```sql
     /// DROP FUNCTION
     /// ```
-    DropFunction {
-        if_exists: bool,
-        /// One or more function to drop
-        func_desc: Vec<FunctionDesc>,
-        /// `CASCADE` or `RESTRICT`
-        drop_behavior: Option<DropBehavior>,
-    },
+    DropFunction(DropFunction),
     /// ```sql
     /// DROP DOMAIN
     /// ```
@@ -3593,25 +3517,13 @@ pub enum Statement {
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement,
-    CreateExtension {
-        name: Ident,
-        if_not_exists: bool,
-        cascade: bool,
-        schema: Option<Ident>,
-        version: Option<Ident>,
-    },
+    CreateExtension(CreateExtension),
     /// ```sql
     /// DROP EXTENSION [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
-    ///
-    /// Note: this is a PostgreSQL-specific statement.
-    /// https://www.postgresql.org/docs/current/sql-dropextension.html
     /// ```
-    DropExtension {
-        names: Vec<Ident>,
-        if_exists: bool,
-        /// `CASCADE` or `RESTRICT`
-        cascade_or_restrict: Option<ReferentialAction>,
-    },
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-dropextension.html>
+    DropExtension(DropExtension),
     /// ```sql
     /// FETCH
     /// ```
@@ -4328,6 +4240,24 @@ pub enum Statement {
     Vacuum(VacuumStatement),
 }
 
+impl From<Analyze> for Statement {
+    fn from(analyze: Analyze) -> Self {
+        Statement::Analyze(analyze)
+    }
+}
+
+impl From<ddl::Truncate> for Statement {
+    fn from(truncate: ddl::Truncate) -> Self {
+        Statement::Truncate(truncate)
+    }
+}
+
+impl From<ddl::Msck> for Statement {
+    fn from(msck: ddl::Msck) -> Self {
+        Statement::Msck(msck)
+    }
+}
+
 /// ```sql
 /// {COPY | REVOKE} CURRENT GRANTS
 /// ```
@@ -4528,61 +4458,8 @@ impl fmt::Display for Statement {
                 }
                 write!(f, " {source}")
             }
-            Statement::Msck {
-                table_name,
-                repair,
-                partition_action,
-            } => {
-                write!(
-                    f,
-                    "MSCK {repair}TABLE {table}",
-                    repair = if *repair { "REPAIR " } else { "" },
-                    table = table_name
-                )?;
-                if let Some(pa) = partition_action {
-                    write!(f, " {pa}")?;
-                }
-                Ok(())
-            }
-            Statement::Truncate {
-                table_names,
-                partitions,
-                table,
-                identity,
-                cascade,
-                on_cluster,
-            } => {
-                let table = if *table { "TABLE " } else { "" };
-
-                write!(
-                    f,
-                    "TRUNCATE {table}{table_names}",
-                    table_names = display_comma_separated(table_names)
-                )?;
-
-                if let Some(identity) = identity {
-                    match identity {
-                        TruncateIdentityOption::Restart => write!(f, " RESTART IDENTITY")?,
-                        TruncateIdentityOption::Continue => write!(f, " CONTINUE IDENTITY")?,
-                    }
-                }
-                if let Some(cascade) = cascade {
-                    match cascade {
-                        CascadeOption::Cascade => write!(f, " CASCADE")?,
-                        CascadeOption::Restrict => write!(f, " RESTRICT")?,
-                    }
-                }
-
-                if let Some(ref parts) = partitions {
-                    if !parts.is_empty() {
-                        write!(f, " PARTITION ({})", display_comma_separated(parts))?;
-                    }
-                }
-                if let Some(on_cluster) = on_cluster {
-                    write!(f, " ON CLUSTER {on_cluster}")?;
-                }
-                Ok(())
-            }
+            Statement::Msck(msck) => msck.fmt(f),
+            Statement::Truncate(truncate) => truncate.fmt(f),
             Statement::Case(stmt) => {
                 write!(f, "{stmt}")
             }
@@ -4637,44 +4514,7 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::Analyze {
-                table_name,
-                partitions,
-                for_columns,
-                columns,
-                cache_metadata,
-                noscan,
-                compute_statistics,
-                has_table_keyword,
-            } => {
-                write!(
-                    f,
-                    "ANALYZE{}{table_name}",
-                    if *has_table_keyword { " TABLE " } else { " " }
-                )?;
-                if let Some(ref parts) = partitions {
-                    if !parts.is_empty() {
-                        write!(f, " PARTITION ({})", display_comma_separated(parts))?;
-                    }
-                }
-
-                if *compute_statistics {
-                    write!(f, " COMPUTE STATISTICS")?;
-                }
-                if *noscan {
-                    write!(f, " NOSCAN")?;
-                }
-                if *cache_metadata {
-                    write!(f, " CACHE METADATA")?;
-                }
-                if *for_columns {
-                    write!(f, " FOR COLUMNS")?;
-                    if !columns.is_empty() {
-                        write!(f, " {}", display_comma_separated(columns))?;
-                    }
-                }
-                Ok(())
-            }
+            Statement::Analyze(analyze) => analyze.fmt(f),
             Statement::Insert(insert) => insert.fmt(f),
             Statement::Install {
                 extension_name: name,
@@ -4730,53 +4570,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Update {
-                table,
-                assignments,
-                from,
-                selection,
-                returning,
-                or,
-                limit,
-            } => {
-                f.write_str("UPDATE ")?;
-                if let Some(or) = or {
-                    or.fmt(f)?;
-                    f.write_str(" ")?;
-                }
-                table.fmt(f)?;
-                if let Some(UpdateTableFromKind::BeforeSet(from)) = from {
-                    SpaceOrNewline.fmt(f)?;
-                    f.write_str("FROM")?;
-                    indented_list(f, from)?;
-                }
-                if !assignments.is_empty() {
-                    SpaceOrNewline.fmt(f)?;
-                    f.write_str("SET")?;
-                    indented_list(f, assignments)?;
-                }
-                if let Some(UpdateTableFromKind::AfterSet(from)) = from {
-                    SpaceOrNewline.fmt(f)?;
-                    f.write_str("FROM")?;
-                    indented_list(f, from)?;
-                }
-                if let Some(selection) = selection {
-                    SpaceOrNewline.fmt(f)?;
-                    f.write_str("WHERE")?;
-                    SpaceOrNewline.fmt(f)?;
-                    Indent(selection).fmt(f)?;
-                }
-                if let Some(returning) = returning {
-                    SpaceOrNewline.fmt(f)?;
-                    f.write_str("RETURNING")?;
-                    indented_list(f, returning)?;
-                }
-                if let Some(limit) = limit {
-                    SpaceOrNewline.fmt(f)?;
-                    write!(f, "LIMIT {limit}")?;
-                }
-                Ok(())
-            }
+            Statement::Update(update) => update.fmt(f),
             Statement::Delete(delete) => delete.fmt(f),
             Statement::Open(open) => open.fmt(f),
             Statement::Close { cursor } => {
@@ -4932,80 +4726,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateView {
-                or_alter,
-                name,
-                or_replace,
-                columns,
-                query,
-                materialized,
-                secure,
-                options,
-                cluster_by,
-                comment,
-                with_no_schema_binding,
-                if_not_exists,
-                temporary,
-                to,
-                params,
-                name_before_not_exists,
-            } => {
-                write!(
-                    f,
-                    "CREATE {or_alter}{or_replace}",
-                    or_alter = if *or_alter { "OR ALTER " } else { "" },
-                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
-                )?;
-                if let Some(params) = params {
-                    params.fmt(f)?;
-                }
-                write!(
-                    f,
-                    "{secure}{materialized}{temporary}VIEW {if_not_and_name}{to}",
-                    if_not_and_name = if *if_not_exists {
-                        if *name_before_not_exists {
-                            format!("{name} IF NOT EXISTS")
-                        } else {
-                            format!("IF NOT EXISTS {name}")
-                        }
-                    } else {
-                        format!("{name}")
-                    },
-                    secure = if *secure { "SECURE " } else { "" },
-                    materialized = if *materialized { "MATERIALIZED " } else { "" },
-                    temporary = if *temporary { "TEMPORARY " } else { "" },
-                    to = to
-                        .as_ref()
-                        .map(|to| format!(" TO {to}"))
-                        .unwrap_or_default()
-                )?;
-                if !columns.is_empty() {
-                    write!(f, " ({})", display_comma_separated(columns))?;
-                }
-                if matches!(options, CreateTableOptions::With(_)) {
-                    write!(f, " {options}")?;
-                }
-                if let Some(comment) = comment {
-                    write!(
-                        f,
-                        " COMMENT = '{}'",
-                        value::escape_single_quote_string(comment)
-                    )?;
-                }
-                if !cluster_by.is_empty() {
-                    write!(f, " CLUSTER BY ({})", display_comma_separated(cluster_by))?;
-                }
-                if matches!(options, CreateTableOptions::Options(_)) {
-                    write!(f, " {options}")?;
-                }
-                f.write_str(" AS")?;
-                SpaceOrNewline.fmt(f)?;
-                query.fmt(f)?;
-                if *with_no_schema_binding {
-                    write!(f, " WITH NO SCHEMA BINDING")?;
-                }
-                Ok(())
-            }
+            Statement::CreateView(create_view) => create_view.fmt(f),
             Statement::CreateTable(create_table) => create_table.fmt(f),
             Statement::LoadData {
                 local,
@@ -5056,141 +4777,9 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::CreateIndex(create_index) => create_index.fmt(f),
-            Statement::CreateExtension {
-                name,
-                if_not_exists,
-                cascade,
-                schema,
-                version,
-            } => {
-                write!(
-                    f,
-                    "CREATE EXTENSION {if_not_exists}{name}",
-                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" }
-                )?;
-                if *cascade || schema.is_some() || version.is_some() {
-                    write!(f, " WITH")?;
-
-                    if let Some(name) = schema {
-                        write!(f, " SCHEMA {name}")?;
-                    }
-                    if let Some(version) = version {
-                        write!(f, " VERSION {version}")?;
-                    }
-                    if *cascade {
-                        write!(f, " CASCADE")?;
-                    }
-                }
-
-                Ok(())
-            }
-            Statement::DropExtension {
-                names,
-                if_exists,
-                cascade_or_restrict,
-            } => {
-                write!(f, "DROP EXTENSION")?;
-                if *if_exists {
-                    write!(f, " IF EXISTS")?;
-                }
-                write!(f, " {}", display_comma_separated(names))?;
-                if let Some(cascade_or_restrict) = cascade_or_restrict {
-                    write!(f, " {cascade_or_restrict}")?;
-                }
-                Ok(())
-            }
-            Statement::CreateRole {
-                names,
-                if_not_exists,
-                inherit,
-                login,
-                bypassrls,
-                password,
-                create_db,
-                create_role,
-                superuser,
-                replication,
-                connection_limit,
-                valid_until,
-                in_role,
-                in_group,
-                role,
-                user,
-                admin,
-                authorization_owner,
-            } => {
-                write!(
-                    f,
-                    "CREATE ROLE {if_not_exists}{names}{superuser}{create_db}{create_role}{inherit}{login}{replication}{bypassrls}",
-                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                    names = display_separated(names, ", "),
-                    superuser = match *superuser {
-                        Some(true) => " SUPERUSER",
-                        Some(false) => " NOSUPERUSER",
-                        None => ""
-                    },
-                    create_db = match *create_db {
-                        Some(true) => " CREATEDB",
-                        Some(false) => " NOCREATEDB",
-                        None => ""
-                    },
-                    create_role = match *create_role {
-                        Some(true) => " CREATEROLE",
-                        Some(false) => " NOCREATEROLE",
-                        None => ""
-                    },
-                    inherit = match *inherit {
-                        Some(true) => " INHERIT",
-                        Some(false) => " NOINHERIT",
-                        None => ""
-                    },
-                    login = match *login {
-                        Some(true) => " LOGIN",
-                        Some(false) => " NOLOGIN",
-                        None => ""
-                    },
-                    replication = match *replication {
-                        Some(true) => " REPLICATION",
-                        Some(false) => " NOREPLICATION",
-                        None => ""
-                    },
-                    bypassrls = match *bypassrls {
-                        Some(true) => " BYPASSRLS",
-                        Some(false) => " NOBYPASSRLS",
-                        None => ""
-                    }
-                )?;
-                if let Some(limit) = connection_limit {
-                    write!(f, " CONNECTION LIMIT {limit}")?;
-                }
-                match password {
-                    Some(Password::Password(pass)) => write!(f, " PASSWORD {pass}"),
-                    Some(Password::NullPassword) => write!(f, " PASSWORD NULL"),
-                    None => Ok(()),
-                }?;
-                if let Some(until) = valid_until {
-                    write!(f, " VALID UNTIL {until}")?;
-                }
-                if !in_role.is_empty() {
-                    write!(f, " IN ROLE {}", display_comma_separated(in_role))?;
-                }
-                if !in_group.is_empty() {
-                    write!(f, " IN GROUP {}", display_comma_separated(in_group))?;
-                }
-                if !role.is_empty() {
-                    write!(f, " ROLE {}", display_comma_separated(role))?;
-                }
-                if !user.is_empty() {
-                    write!(f, " USER {}", display_comma_separated(user))?;
-                }
-                if !admin.is_empty() {
-                    write!(f, " ADMIN {}", display_comma_separated(admin))?;
-                }
-                if let Some(owner) = authorization_owner {
-                    write!(f, " AUTHORIZATION {owner}")?;
-                }
-                Ok(())
-            }
+            Statement::CreateExtension(create_extension) => write!(f, "{create_extension}"),
+            Statement::DropExtension(drop_extension) => write!(f, "{drop_extension}"),
+            Statement::CreateRole(create_role) => write!(f, "{create_role}"),
             Statement::CreateSecret {
                 or_replace,
                 temporary,
@@ -5272,42 +4861,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::CreateConnector(create_connector) => create_connector.fmt(f),
-            Statement::AlterTable {
-                name,
-                if_exists,
-                only,
-                operations,
-                location,
-                on_cluster,
-                iceberg,
-                end_token: _,
-            } => {
-                if *iceberg {
-                    write!(f, "ALTER ICEBERG TABLE ")?;
-                } else {
-                    write!(f, "ALTER TABLE ")?;
-                }
-
-                if *if_exists {
-                    write!(f, "IF EXISTS ")?;
-                }
-                if *only {
-                    write!(f, "ONLY ")?;
-                }
-                write!(f, "{name} ")?;
-                if let Some(cluster) = on_cluster {
-                    write!(f, "ON CLUSTER {cluster} ")?;
-                }
-                write!(
-                    f,
-                    "{operations}",
-                    operations = display_comma_separated(operations)
-                )?;
-                if let Some(loc) = location {
-                    write!(f, " {loc}")?
-                }
-                Ok(())
-            }
+            Statement::AlterTable(alter_table) => write!(f, "{alter_table}"),
             Statement::AlterIndex { name, operation } => {
                 write!(f, "ALTER INDEX {name} {operation}")
             }
@@ -5410,22 +4964,7 @@ impl fmt::Display for Statement {
                 };
                 Ok(())
             }
-            Statement::DropFunction {
-                if_exists,
-                func_desc,
-                drop_behavior,
-            } => {
-                write!(
-                    f,
-                    "DROP FUNCTION{} {}",
-                    if *if_exists { " IF EXISTS" } else { "" },
-                    display_comma_separated(func_desc),
-                )?;
-                if let Some(op) = drop_behavior {
-                    write!(f, " {op}")?;
-                }
-                Ok(())
-            }
+            Statement::DropFunction(drop_function) => write!(f, "{drop_function}"),
             Statement::DropDomain(DropDomain {
                 if_exists,
                 name,
@@ -10942,6 +10481,48 @@ impl From<Box<Query>> for Statement {
 impl From<Insert> for Statement {
     fn from(i: Insert) -> Self {
         Self::Insert(i)
+    }
+}
+
+impl From<Update> for Statement {
+    fn from(u: Update) -> Self {
+        Self::Update(u)
+    }
+}
+
+impl From<CreateView> for Statement {
+    fn from(cv: CreateView) -> Self {
+        Self::CreateView(cv)
+    }
+}
+
+impl From<CreateRole> for Statement {
+    fn from(cr: CreateRole) -> Self {
+        Self::CreateRole(cr)
+    }
+}
+
+impl From<AlterTable> for Statement {
+    fn from(at: AlterTable) -> Self {
+        Self::AlterTable(at)
+    }
+}
+
+impl From<DropFunction> for Statement {
+    fn from(df: DropFunction) -> Self {
+        Self::DropFunction(df)
+    }
+}
+
+impl From<CreateExtension> for Statement {
+    fn from(ce: CreateExtension) -> Self {
+        Self::CreateExtension(ce)
+    }
+}
+
+impl From<DropExtension> for Statement {
+    fn from(de: DropExtension) -> Self {
+        Self::DropExtension(de)
     }
 }
 

@@ -662,16 +662,11 @@ pub enum CastKind {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ConstraintReferenceMatchKind {
-    /// `MATCH FULL` - Will not allow one column of a multicolumn foreign key to be null
-    /// unless all foreign key columns are null; if they are all null, the row is not
-    /// required to have a match in the referenced table.
+    /// `MATCH FULL`
     Full,
-    /// `MATCH PARTIAL` - Not yet implemented by most databases (part of SQL standard).
-    /// Would allow partial matches in multicolumn foreign keys.
+    /// `MATCH PARTIAL`
     Partial,
-    /// `MATCH SIMPLE` - The default behavior. Allows any of the foreign key columns
-    /// to be null; if any of them are null, the row is not required to have a match
-    /// in the referenced table.
+    /// `MATCH SIMPLE`
     Simple,
 }
 

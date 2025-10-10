@@ -6649,7 +6649,6 @@ fn parse_alter_schema() {
 }
 
 #[test]
-/// Test to verify whether `MATCH FULL` syntax for foreign keys is parsed correctly.
 fn parse_foreign_key_match_full() {
     let sql = "CREATE TABLE orders (order_id INT PRIMARY KEY REFERENCES another_table (id) MATCH FULL, customer_id INT, FOREIGN KEY (customer_id) REFERENCES customers(customer_id) MATCH FULL)";
     let statement = pg_and_generic().verified_stmt(sql);

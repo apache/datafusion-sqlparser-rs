@@ -6663,7 +6663,10 @@ fn parse_foreign_key_match_full() {
             match &columns[0].options[1].option {
                 ColumnOption::ForeignKey(constraint) => {
                     assert_eq!(constraint.foreign_table.to_string(), "another_table");
-                    assert_eq!(constraint.match_kind, Some(ConstraintReferenceMatchKind::Full));
+                    assert_eq!(
+                        constraint.match_kind,
+                        Some(ConstraintReferenceMatchKind::Full)
+                    );
                 }
                 _ => panic!("Expected ColumnOption::ForeignKey"),
             }
@@ -6672,7 +6675,10 @@ fn parse_foreign_key_match_full() {
             match &constraints[0] {
                 TableConstraint::ForeignKey(constraint) => {
                     assert_eq!(constraint.foreign_table.to_string(), "customers");
-                    assert_eq!(constraint.match_kind, Some(ConstraintReferenceMatchKind::Full));
+                    assert_eq!(
+                        constraint.match_kind,
+                        Some(ConstraintReferenceMatchKind::Full)
+                    );
                 }
                 _ => panic!("Expected TableConstraint::ForeignKey"),
             }
@@ -6696,7 +6702,10 @@ fn parse_foreign_key_match_simple() {
             match &columns[0].options[1].option {
                 ColumnOption::ForeignKey(constraint) => {
                     assert_eq!(constraint.foreign_table.to_string(), "another_table");
-                    assert_eq!(constraint.match_kind, Some(ConstraintReferenceMatchKind::Simple));
+                    assert_eq!(
+                        constraint.match_kind,
+                        Some(ConstraintReferenceMatchKind::Simple)
+                    );
                 }
                 _ => panic!("Expected ColumnOption::ForeignKey"),
             }
@@ -6705,7 +6714,10 @@ fn parse_foreign_key_match_simple() {
             match &constraints[0] {
                 TableConstraint::ForeignKey(constraint) => {
                     assert_eq!(constraint.foreign_table.to_string(), "customers");
-                    assert_eq!(constraint.match_kind, Some(ConstraintReferenceMatchKind::Simple));
+                    assert_eq!(
+                        constraint.match_kind,
+                        Some(ConstraintReferenceMatchKind::Simple)
+                    );
                 }
                 _ => panic!("Expected TableConstraint::ForeignKey"),
             }
@@ -6728,7 +6740,10 @@ fn parse_foreign_key_match_partial() {
             match &columns[0].options[1].option {
                 ColumnOption::ForeignKey(constraint) => {
                     assert_eq!(constraint.foreign_table.to_string(), "another_table");
-                    assert_eq!(constraint.match_kind, Some(ConstraintReferenceMatchKind::Partial));
+                    assert_eq!(
+                        constraint.match_kind,
+                        Some(ConstraintReferenceMatchKind::Partial)
+                    );
                 }
                 _ => panic!("Expected ColumnOption::ForeignKey"),
             }
@@ -6736,7 +6751,10 @@ fn parse_foreign_key_match_partial() {
             match &constraints[0] {
                 TableConstraint::ForeignKey(constraint) => {
                     assert_eq!(constraint.foreign_table.to_string(), "customers");
-                    assert_eq!(constraint.match_kind, Some(ConstraintReferenceMatchKind::Partial));
+                    assert_eq!(
+                        constraint.match_kind,
+                        Some(ConstraintReferenceMatchKind::Partial)
+                    );
                 }
                 _ => panic!("Expected TableConstraint::ForeignKey"),
             }

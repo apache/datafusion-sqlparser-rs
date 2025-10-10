@@ -18,9 +18,9 @@
 //! SQL Abstract Syntax Tree (AST) types for table constraints
 
 use crate::ast::{
-    display_comma_separated, display_separated, ConstraintCharacteristics, Expr, Ident,
-    IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, ConstraintReferenceMatchKind, NullsDistinctOption,
-    ObjectName, ReferentialAction,
+    display_comma_separated, display_separated, ConstraintCharacteristics,
+    ConstraintReferenceMatchKind, Expr, Ident, IndexColumn, IndexOption, IndexType,
+    KeyOrIndexDisplay, NullsDistinctOption, ObjectName, ReferentialAction,
 };
 use crate::tokenizer::Span;
 use core::fmt;

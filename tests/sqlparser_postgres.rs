@@ -6734,7 +6734,6 @@ fn parse_foreign_key_match_partial() {
                 _ => panic!("Expected ColumnOption::ForeignKey"),
             }
 
-            // Check table-level foreign key constraint with MATCH PARTIAL
             match &constraints[0] {
                 TableConstraint::ForeignKey(constraint) => {
                     assert_eq!(constraint.foreign_table.to_string(), "customers");

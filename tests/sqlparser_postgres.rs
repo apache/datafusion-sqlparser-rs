@@ -6725,7 +6725,6 @@ fn parse_foreign_key_match_partial() {
             constraints,
             ..
         }) => {
-            // Check column-level foreign key with MATCH PARTIAL
             assert_eq!(columns[0].name.value, "order_id");
             match &columns[0].options[1].option {
                 ColumnOption::ForeignKey(constraint) => {

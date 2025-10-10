@@ -7919,7 +7919,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
-        let name = self.parse_identifier()?;
+        let col_name = self.parse_identifier()?;
         let data_type = if self.is_column_type_sqlite_unspecified() {
             DataType::Unspecified
         } else {
@@ -7929,7 +7929,7 @@ impl<'a> Parser<'a> {
         loop {
             if self.parse_keyword(Keyword::CONSTRAINT) {
                 let name = Some(self.parse_identifier()?);
-                if let Some(option) = self.parse_optional_column_option()? {
+                if let Some(option) = self.parse_optional_column_option(&col_name)? {
                     options.push(ColumnOptionDef { name, option });
                 } else {
                     return self.expected(
@@ -7937,14 +7937,14 @@ impl<'a> Parser<'a> {
                         self.peek_token(),
                     );
                 }
-            } else if let Some(option) = self.parse_optional_column_option()? {
+            } else if let Some(option) = self.parse_optional_column_option(&col_name)? {
                 options.push(ColumnOptionDef { name: None, option });
             } else {
                 break;
             };
         }
         Ok(ColumnDef {
-            name,
+            name: col_name,
             data_type,
             options,
         })
@@ -7973,7 +7973,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_optional_column_option(&mut self) -> Result<Option<ColumnOption>, ParserError> {
+    pub fn parse_optional_column_option(
+        &mut self,
+        column_name: &Ident,
+    ) -> Result<Option<ColumnOption>, ParserError> {
         if let Some(option) = self.dialect.parse_column_option(self)? {
             return option;
         }
@@ -7981,12 +7984,15 @@ impl<'a> Parser<'a> {
         self.with_state(
             ColumnDefinition,
             |parser| -> Result<Option<ColumnOption>, ParserError> {
-                parser.parse_optional_column_option_inner()
+                parser.parse_optional_column_option_inner(column_name)
             },
         )
     }
 
-    fn parse_optional_column_option_inner(&mut self) -> Result<Option<ColumnOption>, ParserError> {
+    fn parse_optional_column_option_inner(
+        &mut self,
+        column_name: &Ident,
+    ) -> Result<Option<ColumnOption>, ParserError> {
         if self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET]) {
             Ok(Some(ColumnOption::CharacterSet(
                 self.parse_object_name(false)?,
@@ -8029,16 +8035,32 @@ impl<'a> Parser<'a> {
             }
         } else if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY]) {
             let characteristics = self.parse_constraint_characteristics()?;
-            Ok(Some(ColumnOption::Unique {
-                is_primary: true,
-                characteristics,
-            }))
+            Ok(Some(
+                PrimaryKeyConstraint {
+                    name: None,
+                    index_name: None,
+                    index_type: None,
+                    columns: vec![column_name.clone().into()],
+                    index_options: vec![],
+                    characteristics,
+                }
+                .into(),
+            ))
         } else if self.parse_keyword(Keyword::UNIQUE) {
             let characteristics = self.parse_constraint_characteristics()?;
-            Ok(Some(ColumnOption::Unique {
-                is_primary: false,
-                characteristics,
-            }))
+            Ok(Some(
+                UniqueConstraint {
+                    name: None,
+                    index_name: None,
+                    index_type_display: KeyOrIndexDisplay::None,
+                    index_type: None,
+                    columns: vec![column_name.clone().into()],
+                    index_options: vec![],
+                    characteristics,
+                    nulls_distinct: NullsDistinctOption::None,
+                }
+                .into(),
+            ))
         } else if self.parse_keyword(Keyword::REFERENCES) {
             let foreign_table = self.parse_object_name(false)?;
             // PostgreSQL allows omitting the column list and
@@ -9046,7 +9068,7 @@ impl<'a> Parser<'a> {
             let new_name = self.parse_identifier()?;
             let data_type = self.parse_data_type()?;
             let mut options = vec![];
-            while let Some(option) = self.parse_optional_column_option()? {
+            while let Some(option) = self.parse_optional_column_option(&new_name)? {
                 options.push(option);
             }
 
@@ -9064,7 +9086,7 @@ impl<'a> Parser<'a> {
             let col_name = self.parse_identifier()?;
             let data_type = self.parse_data_type()?;
             let mut options = vec![];
-            while let Some(option) = self.parse_optional_column_option()? {
+            while let Some(option) = self.parse_optional_column_option(&col_name)? {
                 options.push(option);
             }
 
@@ -11325,7 +11347,7 @@ impl<'a> Parser<'a> {
     /// Parses a column definition within a view.
     fn parse_view_column(&mut self) -> Result<ViewColumnDef, ParserError> {
         let name = self.parse_identifier()?;
-        let options = self.parse_view_column_options()?;
+        let options = self.parse_view_column_options(&name)?;
         let data_type = if dialect_of!(self is ClickHouseDialect) {
             Some(self.parse_data_type()?)
         } else {
@@ -11338,10 +11360,13 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_view_column_options(&mut self) -> Result<Option<ColumnOptions>, ParserError> {
+    fn parse_view_column_options(
+        &mut self,
+        column_name: &Ident,
+    ) -> Result<Option<ColumnOptions>, ParserError> {
         let mut options = Vec::new();
         loop {
-            let option = self.parse_optional_column_option()?;
+            let option = self.parse_optional_column_option(column_name)?;
             if let Some(option) = option {
                 options.push(option);
             } else {

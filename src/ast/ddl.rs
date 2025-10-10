@@ -30,8 +30,9 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
-    display_comma_separated, display_separated, table_constraints::TableConstraint, ArgMode,
-    CommentDef, ConditionalStatements, CreateFunctionBody, CreateFunctionUsing,
+    display_comma_separated, display_separated,
+    table_constraints::{PrimaryKeyConstraint, TableConstraint, UniqueConstraint},
+    ArgMode, CommentDef, ConditionalStatements, CreateFunctionBody, CreateFunctionUsing,
     CreateTableLikeKind, CreateTableOptions, DataType, Expr, FileFormat, FunctionBehavior,
     FunctionCalledOnNull, FunctionDeterminismSpecifier, FunctionParallel, HiveDistributionStyle,
     HiveFormat, HiveIOFormat, HiveRowFormat, Ident, InitializeKind, MySQLColumnPosition,
@@ -51,6 +52,22 @@ use crate::tokenizer::{Span, Token};
 pub struct IndexColumn {
     pub column: OrderByExpr,
     pub operator_class: Option<Ident>,
+}
+
+impl From<Ident> for IndexColumn {
+    fn from(c: Ident) -> Self {
+        Self {
+            column: OrderByExpr::from(c),
+            operator_class: None,
+        }
+    }
+}
+
+impl<'a> From<&'a str> for IndexColumn {
+    fn from(c: &'a str) -> Self {
+        let ident = Ident::new(c);
+        ident.into()
+    }
 }
 
 impl fmt::Display for IndexColumn {
@@ -1553,11 +1570,10 @@ pub enum ColumnOption {
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/create/table#default_values)
     Alias(Expr),
 
-    /// `{ PRIMARY KEY | UNIQUE } [<constraint_characteristics>]`
-    Unique {
-        is_primary: bool,
-        characteristics: Option<ConstraintCharacteristics>,
-    },
+    /// `PRIMARY KEY [<constraint_characteristics>]`
+    PrimaryKey(PrimaryKeyConstraint),
+    /// `UNIQUE [<constraint_characteristics>]`
+    Unique(UniqueConstraint),
     /// A referential integrity constraint (`[FOREIGN KEY REFERENCES
     /// <foreign_table> (<referred_columns>)
     /// { [ON DELETE <referential_action>] [ON UPDATE <referential_action>] |
@@ -1642,6 +1658,18 @@ pub enum ColumnOption {
     Invisible,
 }
 
+impl From<UniqueConstraint> for ColumnOption {
+    fn from(c: UniqueConstraint) -> Self {
+        ColumnOption::Unique(c)
+    }
+}
+
+impl From<PrimaryKeyConstraint> for ColumnOption {
+    fn from(c: PrimaryKeyConstraint) -> Self {
+        ColumnOption::PrimaryKey(c)
+    }
+}
+
 impl fmt::Display for ColumnOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use ColumnOption::*;
@@ -1658,12 +1686,16 @@ impl fmt::Display for ColumnOption {
                 }
             }
             Alias(expr) => write!(f, "ALIAS {expr}"),
-            Unique {
-                is_primary,
-                characteristics,
-            } => {
-                write!(f, "{}", if *is_primary { "PRIMARY KEY" } else { "UNIQUE" })?;
-                if let Some(characteristics) = characteristics {
+            PrimaryKey(constraint) => {
+                write!(f, "PRIMARY KEY")?;
+                if let Some(characteristics) = &constraint.characteristics {
+                    write!(f, " {characteristics}")?;
+                }
+                Ok(())
+            }
+            Unique(constraint) => {
+                write!(f, "UNIQUE")?;
+                if let Some(characteristics) = &constraint.characteristics {
                     write!(f, " {characteristics}")?;
                 }
                 Ok(())

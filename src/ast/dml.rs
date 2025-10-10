@@ -29,7 +29,7 @@ use crate::display_utils::{indented_list, Indent, SpaceOrNewline};
 use super::{
     display_comma_separated, query::InputFormatClause, Assignment, Expr, FromTable, Ident,
     InsertAliases, MysqlInsertPriority, ObjectName, OnInsert, OrderByExpr, Query, SelectItem,
-    Setting, SqliteOnConflict, TableObject, TableWithJoins,
+    Setting, SqliteOnConflict, TableObject, TableWithJoins, UpdateTableFromKind,
 };
 
 /// INSERT statement.
@@ -236,6 +236,69 @@ impl Display for Delete {
             f.write_str("LIMIT")?;
             SpaceOrNewline.fmt(f)?;
             Indent(limit).fmt(f)?;
+        }
+        Ok(())
+    }
+}
+
+/// UPDATE statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Update {
+    /// TABLE
+    pub table: TableWithJoins,
+    /// Column assignments
+    pub assignments: Vec<Assignment>,
+    /// Table which provide value to be set
+    pub from: Option<UpdateTableFromKind>,
+    /// WHERE
+    pub selection: Option<Expr>,
+    /// RETURNING
+    pub returning: Option<Vec<SelectItem>>,
+    /// SQLite-specific conflict resolution clause
+    pub or: Option<SqliteOnConflict>,
+    /// LIMIT
+    pub limit: Option<Expr>,
+}
+
+impl Display for Update {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("UPDATE ")?;
+        if let Some(or) = &self.or {
+            or.fmt(f)?;
+            f.write_str(" ")?;
+        }
+        self.table.fmt(f)?;
+        if let Some(UpdateTableFromKind::BeforeSet(from)) = &self.from {
+            SpaceOrNewline.fmt(f)?;
+            f.write_str("FROM")?;
+            indented_list(f, from)?;
+        }
+        if !self.assignments.is_empty() {
+            SpaceOrNewline.fmt(f)?;
+            f.write_str("SET")?;
+            indented_list(f, &self.assignments)?;
+        }
+        if let Some(UpdateTableFromKind::AfterSet(from)) = &self.from {
+            SpaceOrNewline.fmt(f)?;
+            f.write_str("FROM")?;
+            indented_list(f, from)?;
+        }
+        if let Some(selection) = &self.selection {
+            SpaceOrNewline.fmt(f)?;
+            f.write_str("WHERE")?;
+            SpaceOrNewline.fmt(f)?;
+            Indent(selection).fmt(f)?;
+        }
+        if let Some(returning) = &self.returning {
+            SpaceOrNewline.fmt(f)?;
+            f.write_str("RETURNING")?;
+            indented_list(f, returning)?;
+        }
+        if let Some(limit) = &self.limit {
+            SpaceOrNewline.fmt(f)?;
+            write!(f, "LIMIT {limit}")?;
         }
         Ok(())
     }

@@ -332,13 +332,13 @@ fn parse_create_view_with_options() {
         "AS SELECT column_1, column_2, column_3 FROM myproject.mydataset.mytable",
     );
     match bigquery().verified_stmt(sql) {
-        Statement::CreateView {
+        Statement::CreateView(CreateView {
             name,
             query,
             options,
             columns,
             ..
-        } => {
+        }) => {
             assert_eq!(
                 name,
                 ObjectName::from(vec![
@@ -401,7 +401,7 @@ fn parse_create_view_with_options() {
 fn parse_create_view_if_not_exists() {
     let sql = "CREATE VIEW IF NOT EXISTS mydataset.newview AS SELECT foo FROM bar";
     match bigquery().verified_stmt(sql) {
-        Statement::CreateView {
+        Statement::CreateView(CreateView {
             name,
             columns,
             query,
@@ -414,7 +414,7 @@ fn parse_create_view_if_not_exists() {
             if_not_exists,
             temporary,
             ..
-        } => {
+        }) => {
             assert_eq!("mydataset.newview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
@@ -435,12 +435,12 @@ fn parse_create_view_if_not_exists() {
 fn parse_create_view_with_unquoted_hyphen() {
     let sql = "CREATE VIEW IF NOT EXISTS my-pro-ject.mydataset.myview AS SELECT 1";
     match bigquery().verified_stmt(sql) {
-        Statement::CreateView {
+        Statement::CreateView(CreateView {
             name,
             query,
             if_not_exists,
             ..
-        } => {
+        }) => {
             assert_eq!("my-pro-ject.mydataset.myview", name.to_string());
             assert_eq!("SELECT 1", query.to_string());
             assert!(if_not_exists);

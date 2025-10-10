@@ -28,8 +28,9 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use super::{display_comma_separated, Expr, Ident, Password};
+use super::{display_comma_separated, Expr, Ident, Password, Spanned};
 use crate::ast::{display_separated, ObjectName};
+use crate::tokenizer::Span;
 
 /// An option in `ROLE` statement.
 ///
@@ -250,5 +251,115 @@ impl fmt::Display for SecondaryRoles {
             SecondaryRoles::None => write!(f, "NONE"),
             SecondaryRoles::List(roles) => write!(f, "{}", display_comma_separated(roles)),
         }
+    }
+}
+
+/// CREATE ROLE statement
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createrole.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateRole {
+    pub names: Vec<ObjectName>,
+    pub if_not_exists: bool,
+    // Postgres
+    pub login: Option<bool>,
+    pub inherit: Option<bool>,
+    pub bypassrls: Option<bool>,
+    pub password: Option<Password>,
+    pub superuser: Option<bool>,
+    pub create_db: Option<bool>,
+    pub create_role: Option<bool>,
+    pub replication: Option<bool>,
+    pub connection_limit: Option<Expr>,
+    pub valid_until: Option<Expr>,
+    pub in_role: Vec<Ident>,
+    pub in_group: Vec<Ident>,
+    pub role: Vec<Ident>,
+    pub user: Vec<Ident>,
+    pub admin: Vec<Ident>,
+    // MSSQL
+    pub authorization_owner: Option<ObjectName>,
+}
+
+impl fmt::Display for CreateRole {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CREATE ROLE {if_not_exists}{names}{superuser}{create_db}{create_role}{inherit}{login}{replication}{bypassrls}",
+            if_not_exists = if self.if_not_exists { "IF NOT EXISTS " } else { "" },
+            names = display_separated(&self.names, ", "),
+            superuser = match self.superuser {
+                Some(true) => " SUPERUSER",
+                Some(false) => " NOSUPERUSER",
+                None => ""
+            },
+            create_db = match self.create_db {
+                Some(true) => " CREATEDB",
+                Some(false) => " NOCREATEDB",
+                None => ""
+            },
+            create_role = match self.create_role {
+                Some(true) => " CREATEROLE",
+                Some(false) => " NOCREATEROLE",
+                None => ""
+            },
+            inherit = match self.inherit {
+                Some(true) => " INHERIT",
+                Some(false) => " NOINHERIT",
+                None => ""
+            },
+            login = match self.login {
+                Some(true) => " LOGIN",
+                Some(false) => " NOLOGIN",
+                None => ""
+            },
+            replication = match self.replication {
+                Some(true) => " REPLICATION",
+                Some(false) => " NOREPLICATION",
+                None => ""
+            },
+            bypassrls = match self.bypassrls {
+                Some(true) => " BYPASSRLS",
+                Some(false) => " NOBYPASSRLS",
+                None => ""
+            }
+        )?;
+        if let Some(limit) = &self.connection_limit {
+            write!(f, " CONNECTION LIMIT {limit}")?;
+        }
+        match &self.password {
+            Some(Password::Password(pass)) => write!(f, " PASSWORD {pass}")?,
+            Some(Password::NullPassword) => write!(f, " PASSWORD NULL")?,
+            None => {}
+        };
+        if let Some(until) = &self.valid_until {
+            write!(f, " VALID UNTIL {until}")?;
+        }
+        if !self.in_role.is_empty() {
+            write!(f, " IN ROLE {}", display_comma_separated(&self.in_role))?;
+        }
+        if !self.in_group.is_empty() {
+            write!(f, " IN GROUP {}", display_comma_separated(&self.in_group))?;
+        }
+        if !self.role.is_empty() {
+            write!(f, " ROLE {}", display_comma_separated(&self.role))?;
+        }
+        if !self.user.is_empty() {
+            write!(f, " USER {}", display_comma_separated(&self.user))?;
+        }
+        if !self.admin.is_empty() {
+            write!(f, " ADMIN {}", display_comma_separated(&self.admin))?;
+        }
+        if let Some(owner) = &self.authorization_owner {
+            write!(f, " AUTHORIZATION {owner}")?;
+        }
+        Ok(())
+    }
+}
+
+impl Spanned for CreateRole {
+    fn span(&self) -> Span {
+        Span::empty()
     }
 }

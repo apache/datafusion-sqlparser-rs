@@ -19,7 +19,7 @@
 //! (commonly referred to as Data Definition Language, or DDL)
 
 #[cfg(not(feature = "std"))]
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{boxed::Box, format, string::String, vec, vec::Vec};
 use core::fmt::{self, Display, Write};
 
 #[cfg(feature = "serde")]
@@ -30,15 +30,16 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
-    display_comma_separated, display_separated, table_constraints::TableConstraint, ArgMode,
-    CommentDef, ConditionalStatements, CreateFunctionBody, CreateFunctionUsing,
-    CreateTableLikeKind, CreateTableOptions, DataType, Expr, FileFormat, FunctionBehavior,
-    FunctionCalledOnNull, FunctionDeterminismSpecifier, FunctionParallel, HiveDistributionStyle,
-    HiveFormat, HiveIOFormat, HiveRowFormat, Ident, InitializeKind, MySQLColumnPosition,
-    ObjectName, OnCommit, OneOrManyWithParens, OperateFunctionArg, OrderByExpr, ProjectionSelect,
-    Query, RefreshModeKind, RowAccessPolicy, SequenceOptions, Spanned, SqlOption,
-    StorageSerializationPolicy, TableVersion, Tag, TriggerEvent, TriggerExecBody, TriggerObject,
-    TriggerPeriod, TriggerReferencing, Value, ValueWithSpan, WrappedCollection,
+    display_comma_separated, display_separated, ArgMode, AttachedToken, CommentDef,
+    ConditionalStatements, CreateFunctionBody, CreateFunctionUsing, CreateTableLikeKind,
+    CreateTableOptions, CreateViewParams, DataType, Expr, FileFormat, FunctionBehavior,
+    FunctionCalledOnNull, FunctionDesc, FunctionDeterminismSpecifier, FunctionParallel,
+    HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat, HiveSetLocation, Ident,
+    InitializeKind, MySQLColumnPosition, ObjectName, OnCommit, OneOrManyWithParens,
+    OperateFunctionArg, OrderByExpr, ProjectionSelect, Query, RefreshModeKind, RowAccessPolicy,
+    SequenceOptions, Spanned, SqlOption, StorageSerializationPolicy, TableConstraint, TableVersion,
+    Tag, TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value,
+    ValueWithSpan, WrappedCollection,
 };
 use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
 use crate::keywords::Keyword;
@@ -3174,5 +3175,396 @@ impl fmt::Display for DropTrigger {
             write!(f, " {option}")?;
         }
         Ok(())
+    }
+}
+
+/// A `TRUNCATE` statement.
+///
+/// ```sql
+/// TRUNCATE TABLE table_names [PARTITION (partitions)] [RESTART IDENTITY | CONTINUE IDENTITY] [CASCADE | RESTRICT] [ON CLUSTER cluster_name]
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Truncate {
+    /// Table names to truncate
+    pub table_names: Vec<super::TruncateTableTarget>,
+    /// Optional partition specification
+    pub partitions: Option<Vec<Expr>>,
+    /// TABLE - optional keyword
+    pub table: bool,
+    /// Postgres-specific option: [ RESTART IDENTITY | CONTINUE IDENTITY ]
+    pub identity: Option<super::TruncateIdentityOption>,
+    /// Postgres-specific option: [ CASCADE | RESTRICT ]
+    pub cascade: Option<super::CascadeOption>,
+    /// ClickHouse-specific option: [ ON CLUSTER cluster_name ]
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/truncate/)
+    pub on_cluster: Option<Ident>,
+}
+
+impl fmt::Display for Truncate {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let table = if self.table { "TABLE " } else { "" };
+
+        write!(
+            f,
+            "TRUNCATE {table}{table_names}",
+            table_names = display_comma_separated(&self.table_names)
+        )?;
+
+        if let Some(identity) = &self.identity {
+            match identity {
+                super::TruncateIdentityOption::Restart => write!(f, " RESTART IDENTITY")?,
+                super::TruncateIdentityOption::Continue => write!(f, " CONTINUE IDENTITY")?,
+            }
+        }
+        if let Some(cascade) = &self.cascade {
+            match cascade {
+                super::CascadeOption::Cascade => write!(f, " CASCADE")?,
+                super::CascadeOption::Restrict => write!(f, " RESTRICT")?,
+            }
+        }
+
+        if let Some(ref parts) = &self.partitions {
+            if !parts.is_empty() {
+                write!(f, " PARTITION ({})", display_comma_separated(parts))?;
+            }
+        }
+        if let Some(on_cluster) = &self.on_cluster {
+            write!(f, " ON CLUSTER {on_cluster}")?;
+        }
+        Ok(())
+    }
+}
+
+impl Spanned for Truncate {
+    fn span(&self) -> Span {
+        Span::union_iter(
+            self.table_names.iter().map(|i| i.name.span()).chain(
+                self.partitions
+                    .iter()
+                    .flat_map(|i| i.iter().map(|k| k.span())),
+            ),
+        )
+    }
+}
+
+/// An `MSCK` statement.
+///
+/// ```sql
+/// MSCK [REPAIR] TABLE table_name [ADD|DROP|SYNC PARTITIONS]
+/// ```
+/// MSCK (Hive) - MetaStore Check command
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Msck {
+    /// Table name to check
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub table_name: ObjectName,
+    /// Whether to repair the table
+    pub repair: bool,
+    /// Partition action (ADD, DROP, or SYNC)
+    pub partition_action: Option<super::AddDropSync>,
+}
+
+impl fmt::Display for Msck {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "MSCK {repair}TABLE {table}",
+            repair = if self.repair { "REPAIR " } else { "" },
+            table = self.table_name
+        )?;
+        if let Some(pa) = &self.partition_action {
+            write!(f, " {pa}")?;
+        }
+        Ok(())
+    }
+}
+
+impl Spanned for Msck {
+    fn span(&self) -> Span {
+        self.table_name.span()
+    }
+}
+
+/// CREATE VIEW statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateView {
+    /// True if this is a `CREATE OR ALTER VIEW` statement
+    ///
+    /// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-view-transact-sql)
+    pub or_alter: bool,
+    pub or_replace: bool,
+    pub materialized: bool,
+    /// Snowflake: SECURE view modifier
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-view#syntax>
+    pub secure: bool,
+    /// View name
+    pub name: ObjectName,
+    /// If `if_not_exists` is true, this flag is set to true if the view name comes before the `IF NOT EXISTS` clause.
+    /// Example:
+    /// ```sql
+    /// CREATE VIEW myview IF NOT EXISTS AS SELECT 1`
+    ///  ```
+    /// Otherwise, the flag is set to false if the view name comes after the clause
+    /// Example:
+    /// ```sql
+    /// CREATE VIEW IF NOT EXISTS myview AS SELECT 1`
+    ///  ```
+    pub name_before_not_exists: bool,
+    pub columns: Vec<ViewColumnDef>,
+    pub query: Box<Query>,
+    pub options: CreateTableOptions,
+    pub cluster_by: Vec<Ident>,
+    /// Snowflake: Views can have comments in Snowflake.
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-view#syntax>
+    pub comment: Option<String>,
+    /// if true, has RedShift [`WITH NO SCHEMA BINDING`] clause <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_VIEW.html>
+    pub with_no_schema_binding: bool,
+    /// if true, has SQLite `IF NOT EXISTS` clause <https://www.sqlite.org/lang_createview.html>
+    pub if_not_exists: bool,
+    /// if true, has SQLite `TEMP` or `TEMPORARY` clause <https://www.sqlite.org/lang_createview.html>
+    pub temporary: bool,
+    /// if not None, has Clickhouse `TO` clause, specify the table into which to insert results
+    /// <https://clickhouse.com/docs/en/sql-reference/statements/create/view#materialized-view>
+    pub to: Option<ObjectName>,
+    /// MySQL: Optional parameters for the view algorithm, definer, and security context
+    pub params: Option<CreateViewParams>,
+}
+
+impl fmt::Display for CreateView {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CREATE {or_alter}{or_replace}",
+            or_alter = if self.or_alter { "OR ALTER " } else { "" },
+            or_replace = if self.or_replace { "OR REPLACE " } else { "" },
+        )?;
+        if let Some(ref params) = self.params {
+            params.fmt(f)?;
+        }
+        write!(
+            f,
+            "{secure}{materialized}{temporary}VIEW {if_not_and_name}{to}",
+            if_not_and_name = if self.if_not_exists {
+                if self.name_before_not_exists {
+                    format!("{} IF NOT EXISTS", self.name)
+                } else {
+                    format!("IF NOT EXISTS {}", self.name)
+                }
+            } else {
+                format!("{}", self.name)
+            },
+            secure = if self.secure { "SECURE " } else { "" },
+            materialized = if self.materialized {
+                "MATERIALIZED "
+            } else {
+                ""
+            },
+            temporary = if self.temporary { "TEMPORARY " } else { "" },
+            to = self
+                .to
+                .as_ref()
+                .map(|to| format!(" TO {to}"))
+                .unwrap_or_default()
+        )?;
+        if !self.columns.is_empty() {
+            write!(f, " ({})", display_comma_separated(&self.columns))?;
+        }
+        if matches!(self.options, CreateTableOptions::With(_)) {
+            write!(f, " {}", self.options)?;
+        }
+        if let Some(ref comment) = self.comment {
+            write!(f, " COMMENT = '{}'", escape_single_quote_string(comment))?;
+        }
+        if !self.cluster_by.is_empty() {
+            write!(
+                f,
+                " CLUSTER BY ({})",
+                display_comma_separated(&self.cluster_by)
+            )?;
+        }
+        if matches!(self.options, CreateTableOptions::Options(_)) {
+            write!(f, " {}", self.options)?;
+        }
+        f.write_str(" AS")?;
+        SpaceOrNewline.fmt(f)?;
+        self.query.fmt(f)?;
+        if self.with_no_schema_binding {
+            write!(f, " WITH NO SCHEMA BINDING")?;
+        }
+        Ok(())
+    }
+}
+
+/// CREATE EXTENSION statement
+/// Note: this is a PostgreSQL-specific statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateExtension {
+    pub name: Ident,
+    pub if_not_exists: bool,
+    pub cascade: bool,
+    pub schema: Option<Ident>,
+    pub version: Option<Ident>,
+}
+
+impl fmt::Display for CreateExtension {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CREATE EXTENSION {if_not_exists}{name}",
+            if_not_exists = if self.if_not_exists {
+                "IF NOT EXISTS "
+            } else {
+                ""
+            },
+            name = self.name
+        )?;
+        if self.cascade || self.schema.is_some() || self.version.is_some() {
+            write!(f, " WITH")?;
+
+            if let Some(name) = &self.schema {
+                write!(f, " SCHEMA {name}")?;
+            }
+            if let Some(version) = &self.version {
+                write!(f, " VERSION {version}")?;
+            }
+            if self.cascade {
+                write!(f, " CASCADE")?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl Spanned for CreateExtension {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}
+
+/// DROP EXTENSION statement  
+/// Note: this is a PostgreSQL-specific statement
+///
+/// # References
+///
+/// PostgreSQL Documentation:
+/// <https://www.postgresql.org/docs/current/sql-dropextension.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DropExtension {
+    pub names: Vec<Ident>,
+    pub if_exists: bool,
+    /// `CASCADE` or `RESTRICT`
+    pub cascade_or_restrict: Option<ReferentialAction>,
+}
+
+impl fmt::Display for DropExtension {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "DROP EXTENSION")?;
+        if self.if_exists {
+            write!(f, " IF EXISTS")?;
+        }
+        write!(f, " {}", display_comma_separated(&self.names))?;
+        if let Some(cascade_or_restrict) = &self.cascade_or_restrict {
+            write!(f, " {cascade_or_restrict}")?;
+        }
+        Ok(())
+    }
+}
+
+impl Spanned for DropExtension {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}
+
+/// ALTER TABLE statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterTable {
+    /// Table name
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub name: ObjectName,
+    pub if_exists: bool,
+    pub only: bool,
+    pub operations: Vec<AlterTableOperation>,
+    pub location: Option<HiveSetLocation>,
+    /// ClickHouse dialect supports `ON CLUSTER` clause for ALTER TABLE
+    /// For example: `ALTER TABLE table_name ON CLUSTER cluster_name ADD COLUMN c UInt32`
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/update)
+    pub on_cluster: Option<Ident>,
+    /// Snowflake "ICEBERG" clause for Iceberg tables
+    /// <https://docs.snowflake.com/en/sql-reference/sql/alter-iceberg-table>
+    pub iceberg: bool,
+    /// Token that represents the end of the statement (semicolon or EOF)
+    pub end_token: AttachedToken,
+}
+
+impl fmt::Display for AlterTable {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.iceberg {
+            write!(f, "ALTER ICEBERG TABLE ")?;
+        } else {
+            write!(f, "ALTER TABLE ")?;
+        }
+
+        if self.if_exists {
+            write!(f, "IF EXISTS ")?;
+        }
+        if self.only {
+            write!(f, "ONLY ")?;
+        }
+        write!(f, "{} ", &self.name)?;
+        if let Some(cluster) = &self.on_cluster {
+            write!(f, "ON CLUSTER {cluster} ")?;
+        }
+        write!(f, "{}", display_comma_separated(&self.operations))?;
+        if let Some(loc) = &self.location {
+            write!(f, " {loc}")?
+        }
+        Ok(())
+    }
+}
+
+/// DROP FUNCTION statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DropFunction {
+    pub if_exists: bool,
+    /// One or more functions to drop
+    pub func_desc: Vec<FunctionDesc>,
+    /// `CASCADE` or `RESTRICT`
+    pub drop_behavior: Option<DropBehavior>,
+}
+
+impl fmt::Display for DropFunction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "DROP FUNCTION{} {}",
+            if self.if_exists { " IF EXISTS" } else { "" },
+            display_comma_separated(&self.func_desc),
+        )?;
+        if let Some(op) = &self.drop_behavior {
+            write!(f, " {op}")?;
+        }
+        Ok(())
+    }
+}
+
+impl Spanned for DropFunction {
+    fn span(&self) -> Span {
+        Span::empty()
     }
 }

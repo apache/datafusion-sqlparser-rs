@@ -6746,7 +6746,6 @@ fn parse_foreign_key_match_partial() {
 }
 
 #[test]
-/// Test to verify foreign key MATCH syntax combined with ON DELETE/ON UPDATE actions
 fn parse_foreign_key_match_with_actions() {
     let sql = "CREATE TABLE orders (order_id INT REFERENCES another_table (id) MATCH FULL ON DELETE CASCADE ON UPDATE RESTRICT, customer_id INT, CONSTRAINT fk_customer FOREIGN KEY (customer_id) REFERENCES customers(customer_id) MATCH SIMPLE ON DELETE SET NULL ON UPDATE CASCADE)";
 

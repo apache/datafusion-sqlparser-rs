@@ -18,7 +18,7 @@
 [package]
 name = "sqlparser_derive"
 description = "Procedural (proc) macros for sqlparser"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["sqlparser-rs authors"]
 homepage = "https://github.com/sqlparser-rs/sqlparser-rs"
 documentation = "https://docs.rs/sqlparser_derive/"

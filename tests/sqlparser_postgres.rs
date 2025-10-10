@@ -6716,7 +6716,6 @@ fn parse_foreign_key_match_simple() {
 }
 
 #[test]
-/// Test to verify whether `MATCH PARTIAL` syntax for foreign keys is parsed correctly.
 fn parse_foreign_key_match_partial() {
     let sql = "CREATE TABLE orders (order_id INT PRIMARY KEY REFERENCES another_table (id) MATCH PARTIAL, customer_id INT, FOREIGN KEY (customer_id) REFERENCES customers(customer_id) MATCH PARTIAL)";
     let statement = pg_and_generic().verified_stmt(sql);

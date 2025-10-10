@@ -589,83 +589,12 @@ impl Spanned for ColumnOptionDef {
 impl Spanned for TableConstraint {
     fn span(&self) -> Span {
         match self {
-            TableConstraint::Unique {
-                name,
-                index_name,
-                index_type_display: _,
-                index_type: _,
-                columns,
-                index_options: _,
-                characteristics,
-                nulls_distinct: _,
-            } => union_spans(
-                name.iter()
-                    .map(|i| i.span)
-                    .chain(index_name.iter().map(|i| i.span))
-                    .chain(columns.iter().map(|i| i.span()))
-                    .chain(characteristics.iter().map(|i| i.span())),
-            ),
-            TableConstraint::PrimaryKey {
-                name,
-                index_name,
-                index_type: _,
-                columns,
-                index_options: _,
-                characteristics,
-            } => union_spans(
-                name.iter()
-                    .map(|i| i.span)
-                    .chain(index_name.iter().map(|i| i.span))
-                    .chain(columns.iter().map(|i| i.span()))
-                    .chain(characteristics.iter().map(|i| i.span())),
-            ),
-            TableConstraint::ForeignKey {
-                name,
-                columns,
-                index_name,
-                foreign_table,
-                referred_columns,
-                on_delete,
-                on_update,
-                characteristics,
-            } => union_spans(
-                name.iter()
-                    .map(|i| i.span)
-                    .chain(index_name.iter().map(|i| i.span))
-                    .chain(columns.iter().map(|i| i.span))
-                    .chain(core::iter::once(foreign_table.span()))
-                    .chain(referred_columns.iter().map(|i| i.span))
-                    .chain(on_delete.iter().map(|i| i.span()))
-                    .chain(on_update.iter().map(|i| i.span()))
-                    .chain(characteristics.iter().map(|i| i.span())),
-            ),
-            TableConstraint::Check {
-                name,
-                expr,
-                enforced: _,
-            } => expr.span().union_opt(&name.as_ref().map(|i| i.span)),
-            TableConstraint::Index {
-                display_as_key: _,
-                name,
-                index_type: _,
-                columns,
-                index_options: _,
-            } => union_spans(
-                name.iter()
-                    .map(|i| i.span)
-                    .chain(columns.iter().map(|i| i.span())),
-            ),
-            TableConstraint::FulltextOrSpatial {
-                fulltext: _,
-                index_type_display: _,
-                opt_index_name,
-                columns,
-            } => union_spans(
-                opt_index_name
-                    .iter()
-                    .map(|i| i.span)
-                    .chain(columns.iter().map(|i| i.span())),
-            ),
+            TableConstraint::Unique(constraint) => constraint.span(),
+            TableConstraint::PrimaryKey(constraint) => constraint.span(),
+            TableConstraint::ForeignKey(constraint) => constraint.span(),
+            TableConstraint::Check(constraint) => constraint.span(),
+            TableConstraint::Index(constraint) => constraint.span(),
+            TableConstraint::FulltextOrSpatial(constraint) => constraint.span(),
         }
     }
 }

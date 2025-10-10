@@ -684,7 +684,7 @@ fn table_constraint_unique_primary_ctor(
         })
         .collect();
     match unique_index_type_display {
-        Some(index_type_display) => TableConstraint::Unique {
+        Some(index_type_display) => UniqueConstraint {
             name,
             index_name,
             index_type_display,
@@ -693,15 +693,17 @@ fn table_constraint_unique_primary_ctor(
             index_options,
             characteristics,
             nulls_distinct: NullsDistinctOption::None,
-        },
-        None => TableConstraint::PrimaryKey {
+        }
+        .into(),
+        None => PrimaryKeyConstraint {
             name,
             index_name,
             index_type,
             columns,
             index_options,
             characteristics,
-        },
+        }
+        .into(),
     }
 }
 

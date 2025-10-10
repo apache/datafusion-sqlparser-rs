@@ -3818,7 +3818,7 @@ fn parse_create_table() {
             assert_eq!(
                 constraints,
                 vec![
-                    TableConstraint::ForeignKey {
+                    ForeignKeyConstraint {
                         name: Some("fkey".into()),
                         index_name: None,
                         columns: vec!["lat".into()],
@@ -3827,8 +3827,9 @@ fn parse_create_table() {
                         on_delete: Some(ReferentialAction::Restrict),
                         on_update: None,
                         characteristics: None,
-                    },
-                    TableConstraint::ForeignKey {
+                    }
+                    .into(),
+                    ForeignKeyConstraint {
                         name: Some("fkey2".into()),
                         index_name: None,
                         columns: vec!["lat".into()],
@@ -3837,8 +3838,9 @@ fn parse_create_table() {
                         on_delete: Some(ReferentialAction::NoAction),
                         on_update: Some(ReferentialAction::Restrict),
                         characteristics: None,
-                    },
-                    TableConstraint::ForeignKey {
+                    }
+                    .into(),
+                    ForeignKeyConstraint {
                         name: None,
                         index_name: None,
                         columns: vec!["lat".into()],
@@ -3847,8 +3849,9 @@ fn parse_create_table() {
                         on_delete: Some(ReferentialAction::Cascade),
                         on_update: Some(ReferentialAction::SetDefault),
                         characteristics: None,
-                    },
-                    TableConstraint::ForeignKey {
+                    }
+                    .into(),
+                    ForeignKeyConstraint {
                         name: None,
                         index_name: None,
                         columns: vec!["lng".into()],
@@ -3857,7 +3860,8 @@ fn parse_create_table() {
                         on_delete: None,
                         on_update: Some(ReferentialAction::SetNull),
                         characteristics: None,
-                    },
+                    }
+                    .into(),
                 ]
             );
             assert_eq!(table_options, CreateTableOptions::None);
@@ -3945,7 +3949,7 @@ fn parse_create_table_with_constraint_characteristics() {
             assert_eq!(
                 constraints,
                 vec![
-                    TableConstraint::ForeignKey {
+                    ForeignKeyConstraint {
                         name: Some("fkey".into()),
                         index_name: None,
                         columns: vec!["lat".into()],
@@ -3958,8 +3962,9 @@ fn parse_create_table_with_constraint_characteristics() {
                             initially: Some(DeferrableInitial::Deferred),
                             enforced: None
                         }),
-                    },
-                    TableConstraint::ForeignKey {
+                    }
+                    .into(),
+                    ForeignKeyConstraint {
                         name: Some("fkey2".into()),
                         index_name: None,
                         columns: vec!["lat".into()],
@@ -3972,8 +3977,9 @@ fn parse_create_table_with_constraint_characteristics() {
                             initially: Some(DeferrableInitial::Immediate),
                             enforced: None,
                         }),
-                    },
-                    TableConstraint::ForeignKey {
+                    }
+                    .into(),
+                    ForeignKeyConstraint {
                         name: None,
                         index_name: None,
                         columns: vec!["lat".into()],
@@ -3986,8 +3992,9 @@ fn parse_create_table_with_constraint_characteristics() {
                             initially: Some(DeferrableInitial::Deferred),
                             enforced: Some(false),
                         }),
-                    },
-                    TableConstraint::ForeignKey {
+                    }
+                    .into(),
+                    ForeignKeyConstraint {
                         name: None,
                         index_name: None,
                         columns: vec!["lng".into()],
@@ -4000,7 +4007,8 @@ fn parse_create_table_with_constraint_characteristics() {
                             initially: Some(DeferrableInitial::Immediate),
                             enforced: Some(true),
                         }),
-                    },
+                    }
+                    .into(),
                 ]
             );
             assert_eq!(table_options, CreateTableOptions::None);
@@ -16490,7 +16498,8 @@ fn parse_create_procedure_with_parameter_modes() {
                             span: fake_span,
                         },
                         data_type: DataType::Integer(None),
-                        mode: Some(ArgMode::In)
+                        mode: Some(ArgMode::In),
+                        default: None,
                     },
                     ProcedureParam {
                         name: Ident {
@@ -16499,7 +16508,8 @@ fn parse_create_procedure_with_parameter_modes() {
                             span: fake_span,
                         },
                         data_type: DataType::Text,
-                        mode: Some(ArgMode::Out)
+                        mode: Some(ArgMode::Out),
+                        default: None,
                     },
                     ProcedureParam {
                         name: Ident {
@@ -16508,7 +16518,8 @@ fn parse_create_procedure_with_parameter_modes() {
                             span: fake_span,
                         },
                         data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                        mode: Some(ArgMode::InOut)
+                        mode: Some(ArgMode::InOut),
+                        default: None,
                     },
                     ProcedureParam {
                         name: Ident {
@@ -16517,9 +16528,56 @@ fn parse_create_procedure_with_parameter_modes() {
                             span: fake_span,
                         },
                         data_type: DataType::Bool,
-                        mode: None
+                        mode: None,
+                        default: None,
                     },
                 ])
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // parameters with default values
+    let sql = r#"CREATE PROCEDURE test_proc (IN a INTEGER = 1, OUT b TEXT = '2', INOUT c TIMESTAMP = NULL, d BOOL = 0) AS BEGIN SELECT 1; END"#;
+    match verified_stmt(sql) {
+        Statement::CreateProcedure {
+            or_alter,
+            name,
+            params,
+            ..
+        } => {
+            assert_eq!(or_alter, false);
+            assert_eq!(name.to_string(), "test_proc");
+            assert_eq!(
+                params,
+                Some(vec![
+                    ProcedureParam {
+                        name: Ident::new("a"),
+                        data_type: DataType::Integer(None),
+                        mode: Some(ArgMode::In),
+                        default: Some(Expr::Value((number("1")).with_empty_span())),
+                    },
+                    ProcedureParam {
+                        name: Ident::new("b"),
+                        data_type: DataType::Text,
+                        mode: Some(ArgMode::Out),
+                        default: Some(Expr::Value(
+                            Value::SingleQuotedString("2".into()).with_empty_span()
+                        )),
+                    },
+                    ProcedureParam {
+                        name: Ident::new("c"),
+                        data_type: DataType::Timestamp(None, TimezoneInfo::None),
+                        mode: Some(ArgMode::InOut),
+                        default: Some(Expr::Value(Value::Null.with_empty_span())),
+                    },
+                    ProcedureParam {
+                        name: Ident::new("d"),
+                        data_type: DataType::Bool,
+                        mode: None,
+                        default: Some(Expr::Value((number("0")).with_empty_span())),
+                    }
+                ]),
             );
         }
         _ => unreachable!(),

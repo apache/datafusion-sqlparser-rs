@@ -460,17 +460,17 @@ pub fn index_column(stmt: Statement) -> Expr {
         }
         Statement::CreateTable(CreateTable { constraints, .. }) => {
             match constraints.first().unwrap() {
-                TableConstraint::Index { columns, .. } => {
-                    columns.first().unwrap().column.expr.clone()
+                TableConstraint::Index(constraint) => {
+                    constraint.columns.first().unwrap().column.expr.clone()
                 }
-                TableConstraint::Unique { columns, .. } => {
-                    columns.first().unwrap().column.expr.clone()
+                TableConstraint::Unique(constraint) => {
+                    constraint.columns.first().unwrap().column.expr.clone()
                 }
-                TableConstraint::PrimaryKey { columns, .. } => {
-                    columns.first().unwrap().column.expr.clone()
+                TableConstraint::PrimaryKey(constraint) => {
+                    constraint.columns.first().unwrap().column.expr.clone()
                 }
-                TableConstraint::FulltextOrSpatial { columns, .. } => {
-                    columns.first().unwrap().column.expr.clone()
+                TableConstraint::FulltextOrSpatial(constraint) => {
+                    constraint.columns.first().unwrap().column.expr.clone()
                 }
                 _ => panic!("Expected an index, unique, primary, full text, or spatial constraint (foreign key does not support general key part expressions)"),
             }
@@ -478,19 +478,18 @@ pub fn index_column(stmt: Statement) -> Expr {
         Statement::AlterTable(alter_table) => match alter_table.operations.first().unwrap() {
             AlterTableOperation::AddConstraint { constraint, .. } => {
                 match constraint {
-                    TableConstraint::Index { columns, .. } => {
-                        columns.first().unwrap().column.expr.clone()
+                    TableConstraint::Index(constraint) => {
+                        constraint.columns.first().unwrap().column.expr.clone()
                     }
-                    TableConstraint::Unique { columns, .. } => {
-                        columns.first().unwrap().column.expr.clone()
+                    TableConstraint::Unique(constraint) => {
+                        constraint.columns.first().unwrap().column.expr.clone()
                     }
-                    TableConstraint::PrimaryKey { columns, .. } => {
-                        columns.first().unwrap().column.expr.clone()
+                    TableConstraint::PrimaryKey(constraint) => {
+                        constraint.columns.first().unwrap().column.expr.clone()
                     }
-                    TableConstraint::FulltextOrSpatial {
-                        columns,
-                        ..
-                    } => columns.first().unwrap().column.expr.clone(),
+                    TableConstraint::FulltextOrSpatial(constraint) => {
+                        constraint.columns.first().unwrap().column.expr.clone()
+                    }
                     _ => panic!("Expected an index, unique, primary, full text, or spatial constraint (foreign key does not support general key part expressions)"),
                 }
             }

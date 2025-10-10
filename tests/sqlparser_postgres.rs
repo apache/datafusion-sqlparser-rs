@@ -607,9 +607,10 @@ fn parse_alter_table_constraints_unique_nulls_distinct() {
     {
         Statement::AlterTable(alter_table) => match &alter_table.operations[0] {
             AlterTableOperation::AddConstraint {
-                constraint: TableConstraint::Unique { nulls_distinct, .. },
+                constraint: TableConstraint::Unique(constraint),
                 ..
             } => {
+                let nulls_distinct = &constraint.nulls_distinct;
                 assert_eq!(nulls_distinct, &NullsDistinctOption::NotDistinct)
             }
             _ => unreachable!(),
@@ -5535,7 +5536,7 @@ fn parse_create_domain() {
         data_type: DataType::Integer(None),
         collation: None,
         default: None,
-        constraints: vec![TableConstraint::Check {
+        constraints: vec![CheckConstraint {
             name: None,
             expr: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("VALUE"))),
@@ -5543,7 +5544,8 @@ fn parse_create_domain() {
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
             enforced: None,
-        }],
+        }
+        .into()],
     });
 
     assert_eq!(pg().verified_stmt(sql1), expected);
@@ -5554,7 +5556,7 @@ fn parse_create_domain() {
         data_type: DataType::Integer(None),
         collation: Some(Ident::with_quote('"', "en_US")),
         default: None,
-        constraints: vec![TableConstraint::Check {
+        constraints: vec![CheckConstraint {
             name: None,
             expr: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("VALUE"))),
@@ -5562,7 +5564,8 @@ fn parse_create_domain() {
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
             enforced: None,
-        }],
+        }
+        .into()],
     });
 
     assert_eq!(pg().verified_stmt(sql2), expected);
@@ -5573,7 +5576,7 @@ fn parse_create_domain() {
         data_type: DataType::Integer(None),
         collation: None,
         default: Some(Expr::Value(test_utils::number("1").into())),
-        constraints: vec![TableConstraint::Check {
+        constraints: vec![CheckConstraint {
             name: None,
             expr: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("VALUE"))),
@@ -5581,7 +5584,8 @@ fn parse_create_domain() {
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
             enforced: None,
-        }],
+        }
+        .into()],
     });
 
     assert_eq!(pg().verified_stmt(sql3), expected);
@@ -5592,7 +5596,7 @@ fn parse_create_domain() {
         data_type: DataType::Integer(None),
         collation: Some(Ident::with_quote('"', "en_US")),
         default: Some(Expr::Value(test_utils::number("1").into())),
-        constraints: vec![TableConstraint::Check {
+        constraints: vec![CheckConstraint {
             name: None,
             expr: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("VALUE"))),
@@ -5600,7 +5604,8 @@ fn parse_create_domain() {
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
             enforced: None,
-        }],
+        }
+        .into()],
     });
 
     assert_eq!(pg().verified_stmt(sql4), expected);
@@ -5611,7 +5616,7 @@ fn parse_create_domain() {
         data_type: DataType::Integer(None),
         collation: None,
         default: None,
-        constraints: vec![TableConstraint::Check {
+        constraints: vec![CheckConstraint {
             name: Some(Ident::new("my_constraint")),
             expr: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("VALUE"))),
@@ -5619,7 +5624,8 @@ fn parse_create_domain() {
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
             enforced: None,
-        }],
+        }
+        .into()],
     });
 
     assert_eq!(pg().verified_stmt(sql5), expected);
@@ -6424,7 +6430,7 @@ fn parse_alter_table_constraint_not_valid() {
             assert_eq!(
                 operations,
                 vec![AlterTableOperation::AddConstraint {
-                    constraint: TableConstraint::ForeignKey {
+                    constraint: ForeignKeyConstraint {
                         name: Some("bar".into()),
                         index_name: None,
                         columns: vec!["baz".into()],
@@ -6433,7 +6439,8 @@ fn parse_alter_table_constraint_not_valid() {
                         on_delete: None,
                         on_update: None,
                         characteristics: None,
-                    },
+                    }
+                    .into(),
                     not_valid: true,
                 }]
             );

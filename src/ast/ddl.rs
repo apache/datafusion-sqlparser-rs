@@ -37,8 +37,8 @@ use crate::ast::{
     HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat, HiveSetLocation, Ident,
     InitializeKind, MySQLColumnPosition, ObjectName, OnCommit, OneOrManyWithParens,
     OperateFunctionArg, OrderByExpr, ProjectionSelect, Query, RefreshModeKind, RowAccessPolicy,
-    SequenceOptions, Spanned, SqlOption, StorageSerializationPolicy, TableVersion, Tag,
-    TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value,
+    SequenceOptions, Spanned, SqlOption, StorageSerializationPolicy, TableConstraint, TableVersion,
+    Tag, TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value,
     ValueWithSpan, WrappedCollection,
 };
 use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
@@ -1030,291 +1030,6 @@ impl fmt::Display for AlterColumnOperation {
     }
 }
 
-/// A table-level constraint, specified in a `CREATE TABLE` or an
-/// `ALTER TABLE ADD <constraint>` statement.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum TableConstraint {
-    /// MySQL [definition][1] for `UNIQUE` constraints statements:\
-    /// * `[CONSTRAINT [<name>]] UNIQUE <index_type_display> [<index_name>] [index_type] (<columns>) <index_options>`
-    ///
-    /// where:
-    /// * [index_type][2] is `USING {BTREE | HASH}`
-    /// * [index_options][3] is `{index_type | COMMENT 'string' | ... %currently unsupported stmts% } ...`
-    /// * [index_type_display][4] is `[INDEX | KEY]`
-    ///
-    /// [1]: https://dev.mysql.com/doc/refman/8.3/en/create-table.html
-    /// [2]: IndexType
-    /// [3]: IndexOption
-    /// [4]: KeyOrIndexDisplay
-    Unique {
-        /// Constraint name.
-        ///
-        /// Can be not the same as `index_name`
-        name: Option<Ident>,
-        /// Index name
-        index_name: Option<Ident>,
-        /// Whether the type is followed by the keyword `KEY`, `INDEX`, or no keyword at all.
-        index_type_display: KeyOrIndexDisplay,
-        /// Optional `USING` of [index type][1] statement before columns.
-        ///
-        /// [1]: IndexType
-        index_type: Option<IndexType>,
-        /// Identifiers of the columns that are unique.
-        columns: Vec<IndexColumn>,
-        index_options: Vec<IndexOption>,
-        characteristics: Option<ConstraintCharacteristics>,
-        /// Optional Postgres nulls handling: `[ NULLS [ NOT ] DISTINCT ]`
-        nulls_distinct: NullsDistinctOption,
-    },
-    /// MySQL [definition][1] for `PRIMARY KEY` constraints statements:\
-    /// * `[CONSTRAINT [<name>]] PRIMARY KEY [index_name] [index_type] (<columns>) <index_options>`
-    ///
-    /// Actually the specification have no `[index_name]` but the next query will complete successfully:
-    /// ```sql
-    /// CREATE TABLE unspec_table (
-    ///   xid INT NOT NULL,
-    ///   CONSTRAINT p_name PRIMARY KEY index_name USING BTREE (xid)
-    /// );
-    /// ```
-    ///
-    /// where:
-    /// * [index_type][2] is `USING {BTREE | HASH}`
-    /// * [index_options][3] is `{index_type | COMMENT 'string' | ... %currently unsupported stmts% } ...`
-    ///
-    /// [1]: https://dev.mysql.com/doc/refman/8.3/en/create-table.html
-    /// [2]: IndexType
-    /// [3]: IndexOption
-    PrimaryKey {
-        /// Constraint name.
-        ///
-        /// Can be not the same as `index_name`
-        name: Option<Ident>,
-        /// Index name
-        index_name: Option<Ident>,
-        /// Optional `USING` of [index type][1] statement before columns.
-        ///
-        /// [1]: IndexType
-        index_type: Option<IndexType>,
-        /// Identifiers of the columns that form the primary key.
-        columns: Vec<IndexColumn>,
-        index_options: Vec<IndexOption>,
-        characteristics: Option<ConstraintCharacteristics>,
-    },
-    /// A referential integrity constraint (`[ CONSTRAINT <name> ] FOREIGN KEY (<columns>)
-    /// REFERENCES <foreign_table> (<referred_columns>)
-    /// { [ON DELETE <referential_action>] [ON UPDATE <referential_action>] |
-    ///   [ON UPDATE <referential_action>] [ON DELETE <referential_action>]
-    /// }`).
-    ForeignKey {
-        name: Option<Ident>,
-        /// MySQL-specific field
-        /// <https://dev.mysql.com/doc/refman/8.4/en/create-table-foreign-keys.html>
-        index_name: Option<Ident>,
-        columns: Vec<Ident>,
-        foreign_table: ObjectName,
-        referred_columns: Vec<Ident>,
-        on_delete: Option<ReferentialAction>,
-        on_update: Option<ReferentialAction>,
-        characteristics: Option<ConstraintCharacteristics>,
-    },
-    /// `[ CONSTRAINT <name> ] CHECK (<expr>) [[NOT] ENFORCED]`
-    Check {
-        name: Option<Ident>,
-        expr: Box<Expr>,
-        /// MySQL-specific syntax
-        /// <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
-        enforced: Option<bool>,
-    },
-    /// MySQLs [index definition][1] for index creation. Not present on ANSI so, for now, the usage
-    /// is restricted to MySQL, as no other dialects that support this syntax were found.
-    ///
-    /// `{INDEX | KEY} [index_name] [index_type] (key_part,...) [index_option]...`
-    ///
-    /// [1]: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
-    Index {
-        /// Whether this index starts with KEY (true) or INDEX (false), to maintain the same syntax.
-        display_as_key: bool,
-        /// Index name.
-        name: Option<Ident>,
-        /// Optional [index type][1].
-        ///
-        /// [1]: IndexType
-        index_type: Option<IndexType>,
-        /// Referred column identifier list.
-        columns: Vec<IndexColumn>,
-        /// Optional index options such as `USING`; see [`IndexOption`].
-        index_options: Vec<IndexOption>,
-    },
-    /// MySQLs [fulltext][1] definition. Since the [`SPATIAL`][2] definition is exactly the same,
-    /// and MySQL displays both the same way, it is part of this definition as well.
-    ///
-    /// Supported syntax:
-    ///
-    /// ```markdown
-    /// {FULLTEXT | SPATIAL} [INDEX | KEY] [index_name] (key_part,...)
-    ///
-    /// key_part: col_name
-    /// ```
-    ///
-    /// [1]: https://dev.mysql.com/doc/refman/8.0/en/fulltext-natural-language.html
-    /// [2]: https://dev.mysql.com/doc/refman/8.0/en/spatial-types.html
-    FulltextOrSpatial {
-        /// Whether this is a `FULLTEXT` (true) or `SPATIAL` (false) definition.
-        fulltext: bool,
-        /// Whether the type is followed by the keyword `KEY`, `INDEX`, or no keyword at all.
-        index_type_display: KeyOrIndexDisplay,
-        /// Optional index name.
-        opt_index_name: Option<Ident>,
-        /// Referred column identifier list.
-        columns: Vec<IndexColumn>,
-    },
-}
-
-impl fmt::Display for TableConstraint {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            TableConstraint::Unique {
-                name,
-                index_name,
-                index_type_display,
-                index_type,
-                columns,
-                index_options,
-                characteristics,
-                nulls_distinct,
-            } => {
-                write!(
-                    f,
-                    "{}UNIQUE{nulls_distinct}{index_type_display:>}{}{} ({})",
-                    display_constraint_name(name),
-                    display_option_spaced(index_name),
-                    display_option(" USING ", "", index_type),
-                    display_comma_separated(columns),
-                )?;
-
-                if !index_options.is_empty() {
-                    write!(f, " {}", display_separated(index_options, " "))?;
-                }
-
-                write!(f, "{}", display_option_spaced(characteristics))?;
-                Ok(())
-            }
-            TableConstraint::PrimaryKey {
-                name,
-                index_name,
-                index_type,
-                columns,
-                index_options,
-                characteristics,
-            } => {
-                write!(
-                    f,
-                    "{}PRIMARY KEY{}{} ({})",
-                    display_constraint_name(name),
-                    display_option_spaced(index_name),
-                    display_option(" USING ", "", index_type),
-                    display_comma_separated(columns),
-                )?;
-
-                if !index_options.is_empty() {
-                    write!(f, " {}", display_separated(index_options, " "))?;
-                }
-
-                write!(f, "{}", display_option_spaced(characteristics))?;
-                Ok(())
-            }
-            TableConstraint::ForeignKey {
-                name,
-                index_name,
-                columns,
-                foreign_table,
-                referred_columns,
-                on_delete,
-                on_update,
-                characteristics,
-            } => {
-                write!(
-                    f,
-                    "{}FOREIGN KEY{} ({}) REFERENCES {}",
-                    display_constraint_name(name),
-                    display_option_spaced(index_name),
-                    display_comma_separated(columns),
-                    foreign_table,
-                )?;
-                if !referred_columns.is_empty() {
-                    write!(f, "({})", display_comma_separated(referred_columns))?;
-                }
-                if let Some(action) = on_delete {
-                    write!(f, " ON DELETE {action}")?;
-                }
-                if let Some(action) = on_update {
-                    write!(f, " ON UPDATE {action}")?;
-                }
-                if let Some(characteristics) = characteristics {
-                    write!(f, " {characteristics}")?;
-                }
-                Ok(())
-            }
-            TableConstraint::Check {
-                name,
-                expr,
-                enforced,
-            } => {
-                write!(f, "{}CHECK ({})", display_constraint_name(name), expr)?;
-                if let Some(b) = enforced {
-                    write!(f, " {}", if *b { "ENFORCED" } else { "NOT ENFORCED" })
-                } else {
-                    Ok(())
-                }
-            }
-            TableConstraint::Index {
-                display_as_key,
-                name,
-                index_type,
-                columns,
-                index_options,
-            } => {
-                write!(f, "{}", if *display_as_key { "KEY" } else { "INDEX" })?;
-                if let Some(name) = name {
-                    write!(f, " {name}")?;
-                }
-                if let Some(index_type) = index_type {
-                    write!(f, " USING {index_type}")?;
-                }
-                write!(f, " ({})", display_comma_separated(columns))?;
-                if !index_options.is_empty() {
-                    write!(f, " {}", display_comma_separated(index_options))?;
-                }
-                Ok(())
-            }
-            Self::FulltextOrSpatial {
-                fulltext,
-                index_type_display,
-                opt_index_name,
-                columns,
-            } => {
-                if *fulltext {
-                    write!(f, "FULLTEXT")?;
-                } else {
-                    write!(f, "SPATIAL")?;
-                }
-
-                write!(f, "{index_type_display:>}")?;
-
-                if let Some(name) = opt_index_name {
-                    write!(f, " {name}")?;
-                }
-
-                write!(f, " ({})", display_comma_separated(columns))?;
-
-                Ok(())
-            }
-        }
-    }
-}
-
 /// Representation whether a definition can can contains the KEY or INDEX keywords with the same
 /// meaning.
 ///
@@ -1459,12 +1174,19 @@ pub struct ProcedureParam {
     pub name: Ident,
     pub data_type: DataType,
     pub mode: Option<ArgMode>,
+    pub default: Option<Expr>,
 }
 
 impl fmt::Display for ProcedureParam {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(mode) = &self.mode {
-            write!(f, "{mode} {} {}", self.name, self.data_type)
+            if let Some(default) = &self.default {
+                write!(f, "{mode} {} {} = {}", self.name, self.data_type, default)
+            } else {
+                write!(f, "{mode} {} {}", self.name, self.data_type)
+            }
+        } else if let Some(default) = &self.default {
+            write!(f, "{} {} = {}", self.name, self.data_type, default)
         } else {
             write!(f, "{} {}", self.name, self.data_type)
         }
@@ -2066,7 +1788,7 @@ pub enum GeneratedExpressionMode {
 }
 
 #[must_use]
-fn display_constraint_name(name: &'_ Option<Ident>) -> impl fmt::Display + '_ {
+pub(crate) fn display_constraint_name(name: &'_ Option<Ident>) -> impl fmt::Display + '_ {
     struct ConstraintName<'a>(&'a Option<Ident>);
     impl fmt::Display for ConstraintName<'_> {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -2083,7 +1805,7 @@ fn display_constraint_name(name: &'_ Option<Ident>) -> impl fmt::Display + '_ {
 /// * `Some(inner)` => create display struct for `"{prefix}{inner}{postfix}"`
 /// * `_` => do nothing
 #[must_use]
-fn display_option<'a, T: fmt::Display>(
+pub(crate) fn display_option<'a, T: fmt::Display>(
     prefix: &'a str,
     postfix: &'a str,
     option: &'a Option<T>,
@@ -2105,7 +1827,7 @@ fn display_option<'a, T: fmt::Display>(
 /// * `Some(inner)` => create display struct for `" {inner}"`
 /// * `_` => do nothing
 #[must_use]
-fn display_option_spaced<T: fmt::Display>(option: &Option<T>) -> impl fmt::Display + '_ {
+pub(crate) fn display_option_spaced<T: fmt::Display>(option: &Option<T>) -> impl fmt::Display + '_ {
     display_option(" ", "", option)
 }
 

@@ -670,12 +670,12 @@ pub enum ConstraintReferenceMatchKind {
     Simple,
 }
 
-impl fmt::Display for MatchKind {
+impl fmt::Display for ConstraintReferenceMatchKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            MatchKind::Full => write!(f, "MATCH FULL"),
-            MatchKind::Partial => write!(f, "MATCH PARTIAL"),
-            MatchKind::Simple => write!(f, "MATCH SIMPLE"),
+            Self::Full => write!(f, "MATCH FULL"),
+            Self::Partial => write!(f, "MATCH PARTIAL"),
+            Self::Simple => write!(f, "MATCH SIMPLE"),
         }
     }
 }

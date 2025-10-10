@@ -8357,13 +8357,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_match_kind(&mut self) -> Result<MatchKind, ParserError> {
+    pub fn parse_match_kind(&mut self) -> Result<ConstraintReferenceMatchKind, ParserError> {
         if self.parse_keyword(Keyword::FULL) {
-            Ok(MatchKind::Full)
+            Ok(ConstraintReferenceMatchKind::Full)
         } else if self.parse_keyword(Keyword::PARTIAL) {
-            Ok(MatchKind::Partial)
+            Ok(ConstraintReferenceMatchKind::Partial)
         } else if self.parse_keyword(Keyword::SIMPLE) {
-            Ok(MatchKind::Simple)
+            Ok(ConstraintReferenceMatchKind::Simple)
         } else {
             self.expected("one of FULL, PARTIAL or SIMPLE", self.peek_token())
         }

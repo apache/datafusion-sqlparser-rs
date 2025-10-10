@@ -19,7 +19,7 @@
 
 use crate::ast::{
     display_comma_separated, display_separated, ConstraintCharacteristics, Expr, Ident,
-    IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, MatchKind, NullsDistinctOption,
+    IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, ConstraintReferenceMatchKind, NullsDistinctOption,
     ObjectName, ReferentialAction,
 };
 use crate::tokenizer::Span;
@@ -206,7 +206,7 @@ pub struct ForeignKeyConstraint {
     pub referred_columns: Vec<Ident>,
     pub on_delete: Option<ReferentialAction>,
     pub on_update: Option<ReferentialAction>,
-    pub match_kind: Option<MatchKind>,
+    pub match_kind: Option<ConstraintReferenceMatchKind>,
     pub characteristics: Option<ConstraintCharacteristics>,
 }
 

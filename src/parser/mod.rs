@@ -5625,9 +5625,7 @@ impl<'a> Parser<'a> {
                 TriggerObjectKind::For(trigger_object)
             })
         } else {
-            if !dialect_of!(self is SQLiteDialect ) {
-                self.expect_keyword_is(Keyword::FOR)?;
-            }
+            let _ = self.parse_keyword(Keyword::FOR);
 
             None
         };

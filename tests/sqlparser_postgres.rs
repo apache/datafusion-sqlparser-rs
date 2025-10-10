@@ -5869,7 +5869,7 @@ fn parse_create_trigger_invalid_cases() {
     let invalid_cases = vec![
         (
             "CREATE TRIGGER check_update BEFORE UPDATE ON accounts FUNCTION check_account_update",
-            "Expected: FOR, found: FUNCTION"
+            "Expected: an SQL statement, found: FUNCTION"
         ),
         (
             "CREATE TRIGGER check_update TOMORROW UPDATE ON accounts EXECUTE FUNCTION check_account_update",

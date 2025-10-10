@@ -655,11 +655,7 @@ pub enum CastKind {
     DoubleColon,
 }
 
-/// The MATCH option for foreign key constraints.
-///
-/// Specifies how to match composite foreign keys against the referenced table.
-/// A value inserted into the referencing column(s) is matched against the values
-/// of the referenced table and referenced columns using the given match type.
+/// `MATCH` type for constraint references
 ///
 /// See: <https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-PARMS-REFERENCES>
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

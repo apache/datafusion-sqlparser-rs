@@ -6682,7 +6682,6 @@ fn parse_foreign_key_match_full() {
 }
 
 #[test]
-/// Test to verify whether `MATCH SIMPLE` syntax for foreign keys is parsed correctly.
 fn parse_foreign_key_match_simple() {
     let sql = "CREATE TABLE orders (order_id INT PRIMARY KEY REFERENCES another_table (id) MATCH SIMPLE, customer_id INT, FOREIGN KEY (customer_id) REFERENCES customers(customer_id) MATCH SIMPLE)";
     let statement = pg_and_generic().verified_stmt(sql);

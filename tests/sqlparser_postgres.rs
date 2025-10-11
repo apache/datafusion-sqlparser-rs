@@ -605,7 +605,7 @@ fn parse_alter_table_constraints_unique_nulls_distinct() {
     match pg_and_generic()
         .verified_stmt("ALTER TABLE t ADD CONSTRAINT b UNIQUE NULLS NOT DISTINCT (c)")
     {
-        Statement::AlterTable { operations, .. } => match &operations[0] {
+        Statement::AlterTable(alter_table) => match &alter_table.operations[0] {
             AlterTableOperation::AddConstraint {
                 constraint: TableConstraint::Unique(constraint),
                 ..
@@ -674,93 +674,93 @@ fn parse_create_extension() {
 fn parse_drop_extension() {
     assert_eq!(
         pg_and_generic().verified_stmt("DROP EXTENSION extension_name"),
-        Statement::DropExtension {
+        Statement::DropExtension(DropExtension {
             names: vec!["extension_name".into()],
             if_exists: false,
             cascade_or_restrict: None,
-        }
+        })
     );
     assert_eq!(
         pg_and_generic().verified_stmt("DROP EXTENSION extension_name CASCADE"),
-        Statement::DropExtension {
+        Statement::DropExtension(DropExtension {
             names: vec!["extension_name".into()],
             if_exists: false,
             cascade_or_restrict: Some(ReferentialAction::Cascade),
-        }
+        })
     );
 
     assert_eq!(
         pg_and_generic().verified_stmt("DROP EXTENSION extension_name RESTRICT"),
-        Statement::DropExtension {
+        Statement::DropExtension(DropExtension {
             names: vec!["extension_name".into()],
             if_exists: false,
             cascade_or_restrict: Some(ReferentialAction::Restrict),
-        }
+        })
     );
 
     assert_eq!(
         pg_and_generic().verified_stmt("DROP EXTENSION extension_name, extension_name2 CASCADE"),
-        Statement::DropExtension {
+        Statement::DropExtension(DropExtension {
             names: vec!["extension_name".into(), "extension_name2".into()],
             if_exists: false,
             cascade_or_restrict: Some(ReferentialAction::Cascade),
-        }
+        })
     );
 
     assert_eq!(
         pg_and_generic().verified_stmt("DROP EXTENSION extension_name, extension_name2 RESTRICT"),
-        Statement::DropExtension {
+        Statement::DropExtension(DropExtension {
             names: vec!["extension_name".into(), "extension_name2".into()],
             if_exists: false,
             cascade_or_restrict: Some(ReferentialAction::Restrict),
-        }
+        })
     );
 
     assert_eq!(
         pg_and_generic().verified_stmt("DROP EXTENSION IF EXISTS extension_name"),
-        Statement::DropExtension {
+        Statement::DropExtension(DropExtension {
             names: vec!["extension_name".into()],
             if_exists: true,
             cascade_or_restrict: None,
-        }
+        })
     );
 
     assert_eq!(
         pg_and_generic().verified_stmt("DROP EXTENSION IF EXISTS extension_name CASCADE"),
-        Statement::DropExtension {
+        Statement::DropExtension(DropExtension {
             names: vec!["extension_name".into()],
             if_exists: true,
             cascade_or_restrict: Some(ReferentialAction::Cascade),
-        }
+        })
     );
 
     assert_eq!(
         pg_and_generic().verified_stmt("DROP EXTENSION IF EXISTS extension_name RESTRICT"),
-        Statement::DropExtension {
+        Statement::DropExtension(DropExtension {
             names: vec!["extension_name".into()],
             if_exists: true,
             cascade_or_restrict: Some(ReferentialAction::Restrict),
-        }
+        })
     );
 
     assert_eq!(
         pg_and_generic()
             .verified_stmt("DROP EXTENSION IF EXISTS extension_name1, extension_name2 CASCADE"),
-        Statement::DropExtension {
+        Statement::DropExtension(DropExtension {
             names: vec!["extension_name1".into(), "extension_name2".into()],
             if_exists: true,
             cascade_or_restrict: Some(ReferentialAction::Cascade),
-        }
+        })
     );
 
     assert_eq!(
         pg_and_generic()
             .verified_stmt("DROP EXTENSION IF EXISTS extension_name1, extension_name2 RESTRICT"),
-        Statement::DropExtension {
+        Statement::DropExtension(DropExtension {
             names: vec!["extension_name1".into(), "extension_name2".into()],
             if_exists: true,
             cascade_or_restrict: Some(ReferentialAction::Restrict),
-        }
+        })
     );
 }
 
@@ -829,13 +829,13 @@ fn parse_alter_table_alter_column_add_generated() {
 #[test]
 fn parse_alter_table_add_columns() {
     match pg().verified_stmt("ALTER TABLE IF EXISTS ONLY tab ADD COLUMN a TEXT, ADD COLUMN b INT") {
-        Statement::AlterTable {
+        Statement::AlterTable(AlterTable {
             name,
             if_exists,
             only,
             operations,
             ..
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "tab");
             assert!(if_exists);
             assert!(only);
@@ -909,13 +909,13 @@ fn parse_alter_table_owner_to() {
 
     for case in test_cases {
         match pg_and_generic().verified_stmt(case.sql) {
-            Statement::AlterTable {
+            Statement::AlterTable(AlterTable {
                 name,
                 if_exists: _,
                 only: _,
                 operations,
                 ..
-            } => {
+            }) => {
                 assert_eq!(name.to_string(), "tab");
                 assert_eq!(
                     operations,
@@ -2009,7 +2009,7 @@ fn parse_pg_returning() {
              RETURNING temp_lo AS lo, temp_hi AS hi, prcp",
     );
     match stmt {
-        Statement::Update { returning, .. } => {
+        Statement::Update(Update { returning, .. }) => {
             assert_eq!(
                 Some(vec![
                     SelectItem::ExprWithAlias {
@@ -3833,47 +3833,29 @@ fn parse_custom_operator() {
 fn parse_create_role() {
     let sql = "CREATE ROLE IF NOT EXISTS mysql_a, mysql_b";
     match pg().verified_stmt(sql) {
-        Statement::CreateRole {
-            names,
-            if_not_exists,
-            ..
-        } => {
-            assert_eq_vec(&["mysql_a", "mysql_b"], &names);
-            assert!(if_not_exists);
+        Statement::CreateRole(create_role) => {
+            assert_eq_vec(&["mysql_a", "mysql_b"], &create_role.names);
+            assert!(create_role.if_not_exists);
         }
         _ => unreachable!(),
     }
 
     let sql = "CREATE ROLE abc LOGIN PASSWORD NULL";
     match pg().parse_sql_statements(sql).as_deref() {
-        Ok(
-            [Statement::CreateRole {
-                names,
-                login,
-                password,
-                ..
-            }],
-        ) => {
-            assert_eq_vec(&["abc"], names);
-            assert_eq!(*login, Some(true));
-            assert_eq!(*password, Some(Password::NullPassword));
+        Ok([Statement::CreateRole(create_role)]) => {
+            assert_eq_vec(&["abc"], &create_role.names);
+            assert_eq!(create_role.login, Some(true));
+            assert_eq!(create_role.password, Some(Password::NullPassword));
         }
         err => panic!("Failed to parse CREATE ROLE test case: {err:?}"),
     }
 
     let sql = "CREATE ROLE abc WITH LOGIN PASSWORD NULL";
     match pg().parse_sql_statements(sql).as_deref() {
-        Ok(
-            [Statement::CreateRole {
-                names,
-                login,
-                password,
-                ..
-            }],
-        ) => {
-            assert_eq_vec(&["abc"], names);
-            assert_eq!(*login, Some(true));
-            assert_eq!(*password, Some(Password::NullPassword));
+        Ok([Statement::CreateRole(create_role)]) => {
+            assert_eq_vec(&["abc"], &create_role.names);
+            assert_eq!(create_role.login, Some(true));
+            assert_eq!(create_role.password, Some(Password::NullPassword));
         }
         err => panic!("Failed to parse CREATE ROLE test case: {err:?}"),
     }
@@ -3881,69 +3863,44 @@ fn parse_create_role() {
     let sql = "CREATE ROLE magician WITH SUPERUSER CREATEROLE NOCREATEDB BYPASSRLS INHERIT PASSWORD 'abcdef' LOGIN VALID UNTIL '2025-01-01' IN ROLE role1, role2 ROLE role3 ADMIN role4, role5 REPLICATION";
     // Roundtrip order of optional parameters is not preserved
     match pg().parse_sql_statements(sql).as_deref() {
-        Ok(
-            [Statement::CreateRole {
-                names,
-                if_not_exists,
-                bypassrls,
-                login,
-                inherit,
-                password,
-                superuser,
-                create_db,
-                create_role,
-                replication,
-                connection_limit,
-                valid_until,
-                in_role,
-                in_group,
-                role,
-                user: _,
-                admin,
-                authorization_owner,
-            }],
-        ) => {
-            assert_eq_vec(&["magician"], names);
-            assert!(!*if_not_exists);
-            assert_eq!(*login, Some(true));
-            assert_eq!(*inherit, Some(true));
-            assert_eq!(*bypassrls, Some(true));
+        Ok([Statement::CreateRole(create_role)]) => {
+            assert_eq_vec(&["magician"], &create_role.names);
+            assert!(!create_role.if_not_exists);
+            assert_eq!(create_role.login, Some(true));
+            assert_eq!(create_role.inherit, Some(true));
+            assert_eq!(create_role.bypassrls, Some(true));
             assert_eq!(
-                *password,
+                create_role.password,
                 Some(Password::Password(Expr::Value(
                     (Value::SingleQuotedString("abcdef".into())).with_empty_span()
                 )))
             );
-            assert_eq!(*superuser, Some(true));
-            assert_eq!(*create_db, Some(false));
-            assert_eq!(*create_role, Some(true));
-            assert_eq!(*replication, Some(true));
-            assert_eq!(*connection_limit, None);
+            assert_eq!(create_role.superuser, Some(true));
+            assert_eq!(create_role.create_db, Some(false));
+            assert_eq!(create_role.create_role, Some(true));
+            assert_eq!(create_role.replication, Some(true));
+            assert_eq!(create_role.connection_limit, None);
             assert_eq!(
-                *valid_until,
+                create_role.valid_until,
                 Some(Expr::Value(
                     (Value::SingleQuotedString("2025-01-01".into())).with_empty_span()
                 ))
             );
-            assert_eq_vec(&["role1", "role2"], in_role);
-            assert!(in_group.is_empty());
-            assert_eq_vec(&["role3"], role);
-            assert_eq_vec(&["role4", "role5"], admin);
-            assert_eq!(*authorization_owner, None);
+            assert_eq_vec(&["role1", "role2"], &create_role.in_role);
+            assert!(create_role.in_group.is_empty());
+            assert_eq_vec(&["role3"], &create_role.role);
+            assert_eq_vec(&["role4", "role5"], &create_role.admin);
+            assert_eq!(create_role.authorization_owner, None);
         }
         err => panic!("Failed to parse CREATE ROLE test case: {err:?}"),
     }
 
     let sql = "CREATE ROLE abc WITH USER foo, bar ROLE baz ";
     match pg().parse_sql_statements(sql).as_deref() {
-        Ok(
-            [Statement::CreateRole {
-                names, user, role, ..
-            }],
-        ) => {
-            assert_eq_vec(&["abc"], names);
-            assert_eq_vec(&["foo", "bar"], user);
-            assert_eq_vec(&["baz"], role);
+        Ok([Statement::CreateRole(create_role)]) => {
+            assert_eq_vec(&["abc"], &create_role.names);
+            assert_eq_vec(&["foo", "bar"], &create_role.user);
+            assert_eq_vec(&["baz"], &create_role.role);
         }
         err => panic!("Failed to parse CREATE ROLE test case: {err:?}"),
     }
@@ -4532,7 +4489,7 @@ fn parse_drop_function() {
     let sql = "DROP FUNCTION IF EXISTS test_func";
     assert_eq!(
         pg().verified_stmt(sql),
-        Statement::DropFunction {
+        Statement::DropFunction(DropFunction {
             if_exists: true,
             func_desc: vec![FunctionDesc {
                 name: ObjectName::from(vec![Ident {
@@ -4543,13 +4500,13 @@ fn parse_drop_function() {
                 args: None
             }],
             drop_behavior: None
-        }
+        })
     );
 
     let sql = "DROP FUNCTION IF EXISTS test_func(a INTEGER, IN b INTEGER = 1)";
     assert_eq!(
         pg().verified_stmt(sql),
-        Statement::DropFunction {
+        Statement::DropFunction(DropFunction {
             if_exists: true,
             func_desc: vec![FunctionDesc {
                 name: ObjectName::from(vec![Ident {
@@ -4570,13 +4527,13 @@ fn parse_drop_function() {
                 ]),
             }],
             drop_behavior: None
-        }
+        })
     );
 
     let sql = "DROP FUNCTION IF EXISTS test_func1(a INTEGER, IN b INTEGER = 1), test_func2(a VARCHAR, IN b INTEGER = 1)";
     assert_eq!(
         pg().verified_stmt(sql),
-        Statement::DropFunction {
+        Statement::DropFunction(DropFunction {
             if_exists: true,
             func_desc: vec![
                 FunctionDesc {
@@ -4617,7 +4574,7 @@ fn parse_drop_function() {
                 }
             ],
             drop_behavior: None
-        }
+        })
     );
 }
 
@@ -4957,14 +4914,14 @@ fn parse_truncate() {
         only: false,
     }];
     assert_eq!(
-        Statement::Truncate {
+        Statement::Truncate(Truncate {
             table_names,
             partitions: None,
             table: false,
             identity: None,
             cascade: None,
             on_cluster: None,
-        },
+        }),
         truncate
     );
 }
@@ -4981,14 +4938,14 @@ fn parse_truncate_with_options() {
     }];
 
     assert_eq!(
-        Statement::Truncate {
+        Statement::Truncate(Truncate {
             table_names,
             partitions: None,
             table: true,
             identity: Some(TruncateIdentityOption::Restart),
             cascade: Some(CascadeOption::Cascade),
             on_cluster: None,
-        },
+        }),
         truncate
     );
 }
@@ -5014,14 +4971,14 @@ fn parse_truncate_with_table_list() {
     ];
 
     assert_eq!(
-        Statement::Truncate {
+        Statement::Truncate(Truncate {
             table_names,
             partitions: None,
             table: true,
             identity: Some(TruncateIdentityOption::Restart),
             cascade: Some(CascadeOption::Cascade),
             on_cluster: None,
-        },
+        }),
         truncate
     );
 }
@@ -5679,6 +5636,7 @@ fn parse_create_simple_before_insert_trigger() {
     let sql = "CREATE TRIGGER check_insert BEFORE INSERT ON accounts FOR EACH ROW EXECUTE FUNCTION check_account_insert";
     let expected = Statement::CreateTrigger(CreateTrigger {
         or_alter: false,
+        temporary: false,
         or_replace: false,
         is_constraint: false,
         name: ObjectName::from(vec![Ident::new("check_insert")]),
@@ -5688,8 +5646,7 @@ fn parse_create_simple_before_insert_trigger() {
         table_name: ObjectName::from(vec![Ident::new("accounts")]),
         referenced_table_name: None,
         referencing: vec![],
-        trigger_object: TriggerObject::Row,
-        include_each: true,
+        trigger_object: Some(TriggerObjectKind::ForEach(TriggerObject::Row)),
         condition: None,
         exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
@@ -5711,6 +5668,7 @@ fn parse_create_after_update_trigger_with_condition() {
     let sql = "CREATE TRIGGER check_update AFTER UPDATE ON accounts FOR EACH ROW WHEN (NEW.balance > 10000) EXECUTE FUNCTION check_account_update";
     let expected = Statement::CreateTrigger(CreateTrigger {
         or_alter: false,
+        temporary: false,
         or_replace: false,
         is_constraint: false,
         name: ObjectName::from(vec![Ident::new("check_update")]),
@@ -5720,8 +5678,7 @@ fn parse_create_after_update_trigger_with_condition() {
         table_name: ObjectName::from(vec![Ident::new("accounts")]),
         referenced_table_name: None,
         referencing: vec![],
-        trigger_object: TriggerObject::Row,
-        include_each: true,
+        trigger_object: Some(TriggerObjectKind::ForEach(TriggerObject::Row)),
         condition: Some(Expr::Nested(Box::new(Expr::BinaryOp {
             left: Box::new(Expr::CompoundIdentifier(vec![
                 Ident::new("NEW"),
@@ -5750,6 +5707,7 @@ fn parse_create_instead_of_delete_trigger() {
     let sql = "CREATE TRIGGER check_delete INSTEAD OF DELETE ON accounts FOR EACH ROW EXECUTE FUNCTION check_account_deletes";
     let expected = Statement::CreateTrigger(CreateTrigger {
         or_alter: false,
+        temporary: false,
         or_replace: false,
         is_constraint: false,
         name: ObjectName::from(vec![Ident::new("check_delete")]),
@@ -5759,8 +5717,7 @@ fn parse_create_instead_of_delete_trigger() {
         table_name: ObjectName::from(vec![Ident::new("accounts")]),
         referenced_table_name: None,
         referencing: vec![],
-        trigger_object: TriggerObject::Row,
-        include_each: true,
+        trigger_object: Some(TriggerObjectKind::ForEach(TriggerObject::Row)),
         condition: None,
         exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
@@ -5782,6 +5739,7 @@ fn parse_create_trigger_with_multiple_events_and_deferrable() {
     let sql = "CREATE CONSTRAINT TRIGGER check_multiple_events BEFORE INSERT OR UPDATE OR DELETE ON accounts DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION check_account_changes";
     let expected = Statement::CreateTrigger(CreateTrigger {
         or_alter: false,
+        temporary: false,
         or_replace: false,
         is_constraint: true,
         name: ObjectName::from(vec![Ident::new("check_multiple_events")]),
@@ -5795,8 +5753,7 @@ fn parse_create_trigger_with_multiple_events_and_deferrable() {
         table_name: ObjectName::from(vec![Ident::new("accounts")]),
         referenced_table_name: None,
         referencing: vec![],
-        trigger_object: TriggerObject::Row,
-        include_each: true,
+        trigger_object: Some(TriggerObjectKind::ForEach(TriggerObject::Row)),
         condition: None,
         exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
@@ -5822,6 +5779,7 @@ fn parse_create_trigger_with_referencing() {
     let sql = "CREATE TRIGGER check_referencing BEFORE INSERT ON accounts REFERENCING NEW TABLE AS new_accounts OLD TABLE AS old_accounts FOR EACH ROW EXECUTE FUNCTION check_account_referencing";
     let expected = Statement::CreateTrigger(CreateTrigger {
         or_alter: false,
+        temporary: false,
         or_replace: false,
         is_constraint: false,
         name: ObjectName::from(vec![Ident::new("check_referencing")]),
@@ -5842,8 +5800,7 @@ fn parse_create_trigger_with_referencing() {
                 transition_relation_name: ObjectName::from(vec![Ident::new("old_accounts")]),
             },
         ],
-        trigger_object: TriggerObject::Row,
-        include_each: true,
+        trigger_object: Some(TriggerObjectKind::ForEach(TriggerObject::Row)),
         condition: None,
         exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
@@ -5869,7 +5826,7 @@ fn parse_create_trigger_invalid_cases() {
     let invalid_cases = vec![
         (
             "CREATE TRIGGER check_update BEFORE UPDATE ON accounts FUNCTION check_account_update",
-            "Expected: FOR, found: FUNCTION"
+            "Expected: an SQL statement, found: FUNCTION"
         ),
         (
             "CREATE TRIGGER check_update TOMORROW UPDATE ON accounts EXECUTE FUNCTION check_account_update",
@@ -6138,6 +6095,7 @@ fn parse_trigger_related_functions() {
         create_trigger,
         Statement::CreateTrigger(CreateTrigger {
             or_alter: false,
+            temporary: false,
             or_replace: false,
             is_constraint: false,
             name: ObjectName::from(vec![Ident::new("emp_stamp")]),
@@ -6147,8 +6105,7 @@ fn parse_trigger_related_functions() {
             table_name: ObjectName::from(vec![Ident::new("emp")]),
             referenced_table_name: None,
             referencing: vec![],
-            trigger_object: TriggerObject::Row,
-            include_each: true,
+            trigger_object: Some(TriggerObjectKind::ForEach(TriggerObject::Row)),
             condition: None,
             exec_body: Some(TriggerExecBody {
                 exec_type: TriggerExecBodyType::Function,
@@ -6409,7 +6366,7 @@ fn parse_varbit_datatype() {
 #[test]
 fn parse_alter_table_replica_identity() {
     match pg_and_generic().verified_stmt("ALTER TABLE foo REPLICA IDENTITY FULL") {
-        Statement::AlterTable { operations, .. } => {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
             assert_eq!(
                 operations,
                 vec![AlterTableOperation::ReplicaIdentity {
@@ -6421,7 +6378,7 @@ fn parse_alter_table_replica_identity() {
     }
 
     match pg_and_generic().verified_stmt("ALTER TABLE foo REPLICA IDENTITY USING INDEX foo_idx") {
-        Statement::AlterTable { operations, .. } => {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
             assert_eq!(
                 operations,
                 vec![AlterTableOperation::ReplicaIdentity {
@@ -6469,7 +6426,7 @@ fn parse_alter_table_constraint_not_valid() {
     match pg_and_generic().verified_stmt(
         "ALTER TABLE foo ADD CONSTRAINT bar FOREIGN KEY (baz) REFERENCES other(ref) NOT VALID",
     ) {
-        Statement::AlterTable { operations, .. } => {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
             assert_eq!(
                 operations,
                 vec![AlterTableOperation::AddConstraint {
@@ -6496,7 +6453,7 @@ fn parse_alter_table_constraint_not_valid() {
 #[test]
 fn parse_alter_table_validate_constraint() {
     match pg_and_generic().verified_stmt("ALTER TABLE foo VALIDATE CONSTRAINT bar") {
-        Statement::AlterTable { operations, .. } => {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
             assert_eq!(
                 operations,
                 vec![AlterTableOperation::ValidateConstraint { name: "bar".into() }]

@@ -243,12 +243,10 @@ fn parse_alter_table_attach_and_detach_partition() {
         match clickhouse_and_generic()
             .verified_stmt(format!("ALTER TABLE t0 {operation} PARTITION part").as_str())
         {
-            Statement::AlterTable {
-                name, operations, ..
-            } => {
-                pretty_assertions::assert_eq!("t0", name.to_string());
+            Statement::AlterTable(alter_table) => {
+                pretty_assertions::assert_eq!("t0", alter_table.name.to_string());
                 pretty_assertions::assert_eq!(
-                    operations[0],
+                    alter_table.operations[0],
                     if operation == &"ATTACH" {
                         AlterTableOperation::AttachPartition {
                             partition: Partition::Expr(Identifier(Ident::new("part"))),
@@ -266,9 +264,9 @@ fn parse_alter_table_attach_and_detach_partition() {
         match clickhouse_and_generic()
             .verified_stmt(format!("ALTER TABLE t1 {operation} PART part").as_str())
         {
-            Statement::AlterTable {
+            Statement::AlterTable(AlterTable {
                 name, operations, ..
-            } => {
+            }) => {
                 pretty_assertions::assert_eq!("t1", name.to_string());
                 pretty_assertions::assert_eq!(
                     operations[0],
@@ -308,9 +306,9 @@ fn parse_alter_table_add_projection() {
         "ALTER TABLE t0 ADD PROJECTION IF NOT EXISTS my_name",
         " (SELECT a, b GROUP BY a ORDER BY b)",
     )) {
-        Statement::AlterTable {
+        Statement::AlterTable(AlterTable {
             name, operations, ..
-        } => {
+        }) => {
             assert_eq!(name, ObjectName::from(vec!["t0".into()]));
             assert_eq!(1, operations.len());
             assert_eq!(
@@ -380,9 +378,9 @@ fn parse_alter_table_add_projection() {
 fn parse_alter_table_drop_projection() {
     match clickhouse_and_generic().verified_stmt("ALTER TABLE t0 DROP PROJECTION IF EXISTS my_name")
     {
-        Statement::AlterTable {
+        Statement::AlterTable(AlterTable {
             name, operations, ..
-        } => {
+        }) => {
             assert_eq!(name, ObjectName::from(vec!["t0".into()]));
             assert_eq!(1, operations.len());
             assert_eq!(
@@ -413,9 +411,9 @@ fn parse_alter_table_clear_and_materialize_projection() {
             format!("ALTER TABLE t0 {keyword} PROJECTION IF EXISTS my_name IN PARTITION p0",)
                 .as_str(),
         ) {
-            Statement::AlterTable {
+            Statement::AlterTable(AlterTable {
                 name, operations, ..
-            } => {
+            }) => {
                 assert_eq!(name, ObjectName::from(vec!["t0".into()]));
                 assert_eq!(1, operations.len());
                 assert_eq!(
@@ -904,7 +902,7 @@ fn parse_create_table_with_variant_default_expressions() {
 #[test]
 fn parse_create_view_with_fields_data_types() {
     match clickhouse().verified_stmt(r#"CREATE VIEW v (i "int", f "String") AS SELECT * FROM t"#) {
-        Statement::CreateView { name, columns, .. } => {
+        Statement::CreateView(CreateView { name, columns, .. }) => {
             assert_eq!(name, ObjectName::from(vec!["v".into()]));
             assert_eq!(
                 columns,
@@ -1518,7 +1516,7 @@ fn parse_freeze_and_unfreeze_partition() {
             Value::SingleQuotedString("2024-08-14".to_string()).with_empty_span(),
         ));
         match clickhouse_and_generic().verified_stmt(&sql) {
-            Statement::AlterTable { operations, .. } => {
+            Statement::AlterTable(AlterTable { operations, .. }) => {
                 assert_eq!(operations.len(), 1);
                 let expected_operation = if operation_name == &"FREEZE" {
                     AlterTableOperation::FreezePartition {
@@ -1542,7 +1540,7 @@ fn parse_freeze_and_unfreeze_partition() {
         let sql =
             format!("ALTER TABLE t {operation_name} PARTITION '2024-08-14' WITH NAME 'hello'");
         match clickhouse_and_generic().verified_stmt(&sql) {
-            Statement::AlterTable { operations, .. } => {
+            Statement::AlterTable(AlterTable { operations, .. }) => {
                 assert_eq!(operations.len(), 1);
                 let expected_partition = Partition::Expr(Expr::Value(
                     Value::SingleQuotedString("2024-08-14".to_string()).with_empty_span(),

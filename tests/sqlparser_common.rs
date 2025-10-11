@@ -3793,7 +3793,7 @@ fn parse_create_table() {
                             option: ColumnOption::ForeignKey(ForeignKeyConstraint {
                                 name: None,
                                 index_name: None,
-                                columns: vec!["ref".into()],
+                                columns: vec![],
                                 foreign_table: ObjectName::from(vec!["othertable".into()]),
                                 referred_columns: vec!["a".into(), "b".into()],
                                 on_delete: None,
@@ -3811,7 +3811,7 @@ fn parse_create_table() {
                             option: ColumnOption::ForeignKey(ForeignKeyConstraint {
                                 name: None,
                                 index_name: None,
-                                columns: vec!["ref2".into()],
+                                columns: vec![],
                                 foreign_table: ObjectName::from(vec!["othertable2".into()]),
                                 referred_columns: vec![],
                                 on_delete: Some(ReferentialAction::Cascade),

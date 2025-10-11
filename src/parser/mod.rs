@@ -7950,7 +7950,7 @@ impl<'a> Parser<'a> {
         loop {
             if self.parse_keyword(Keyword::CONSTRAINT) {
                 let name = Some(self.parse_identifier()?);
-                if let Some(option) = self.parse_optional_column_option(&col_name)? {
+                if let Some(option) = self.parse_optional_column_option()? {
                     options.push(ColumnOptionDef { name, option });
                 } else {
                     return self.expected(
@@ -7958,7 +7958,7 @@ impl<'a> Parser<'a> {
                         self.peek_token(),
                     );
                 }
-            } else if let Some(option) = self.parse_optional_column_option(&col_name)? {
+            } else if let Some(option) = self.parse_optional_column_option()? {
                 options.push(ColumnOptionDef { name: None, option });
             } else {
                 break;
@@ -7994,10 +7994,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_optional_column_option(
-        &mut self,
-        column_ident: &Ident,
-    ) -> Result<Option<ColumnOption>, ParserError> {
+    pub fn parse_optional_column_option(&mut self) -> Result<Option<ColumnOption>, ParserError> {
         if let Some(option) = self.dialect.parse_column_option(self)? {
             return option;
         }
@@ -8005,15 +8002,12 @@ impl<'a> Parser<'a> {
         self.with_state(
             ColumnDefinition,
             |parser| -> Result<Option<ColumnOption>, ParserError> {
-                parser.parse_optional_column_option_inner(column_ident)
+                parser.parse_optional_column_option_inner()
             },
         )
     }
 
-    fn parse_optional_column_option_inner(
-        &mut self,
-        column_ident: &Ident,
-    ) -> Result<Option<ColumnOption>, ParserError> {
+    fn parse_optional_column_option_inner(&mut self) -> Result<Option<ColumnOption>, ParserError> {
         if self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET]) {
             Ok(Some(ColumnOption::CharacterSet(
                 self.parse_object_name(false)?,
@@ -8095,7 +8089,7 @@ impl<'a> Parser<'a> {
                 ForeignKeyConstraint {
                     name: None,       // Column-level constraints don't have names
                     index_name: None, // Not applicable for column-level constraints
-                    columns: vec![column_ident.clone()],
+                    columns: vec![],  // Not applicable for column-level constraints
                     foreign_table,
                     referred_columns,
                     on_delete,
@@ -9103,7 +9097,7 @@ impl<'a> Parser<'a> {
             let new_name = self.parse_identifier()?;
             let data_type = self.parse_data_type()?;
             let mut options = vec![];
-            while let Some(option) = self.parse_optional_column_option(&new_name)? {
+            while let Some(option) = self.parse_optional_column_option()? {
                 options.push(option);
             }
 
@@ -9121,7 +9115,7 @@ impl<'a> Parser<'a> {
             let col_name = self.parse_identifier()?;
             let data_type = self.parse_data_type()?;
             let mut options = vec![];
-            while let Some(option) = self.parse_optional_column_option(&col_name)? {
+            while let Some(option) = self.parse_optional_column_option()? {
                 options.push(option);
             }
 
@@ -11383,7 +11377,7 @@ impl<'a> Parser<'a> {
     /// Parses a column definition within a view.
     fn parse_view_column(&mut self) -> Result<ViewColumnDef, ParserError> {
         let name = self.parse_identifier()?;
-        let options = self.parse_view_column_options(&name)?;
+        let options = self.parse_view_column_options()?;
         let data_type = if dialect_of!(self is ClickHouseDialect) {
             Some(self.parse_data_type()?)
         } else {
@@ -11398,11 +11392,10 @@ impl<'a> Parser<'a> {
 
     fn parse_view_column_options(
         &mut self,
-        column_ident: &Ident,
     ) -> Result<Option<ColumnOptions>, ParserError> {
         let mut options = Vec::new();
         loop {
-            let option = self.parse_optional_column_option(column_ident)?;
+            let option = self.parse_optional_column_option()?;
             if let Some(option) = option {
                 options.push(option);
             } else {

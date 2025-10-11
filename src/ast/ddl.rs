@@ -2925,6 +2925,26 @@ impl Spanned for RenameTableNameKind {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Whether the syntax used for the trigger object (ROW or STATEMENT) is `FOR` or `FOR EACH`.
+pub enum TriggerObjectKind {
+    /// The `FOR` syntax is used.
+    For(TriggerObject),
+    /// The `FOR EACH` syntax is used.
+    ForEach(TriggerObject),
+}
+
+impl Display for TriggerObjectKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TriggerObjectKind::For(obj) => write!(f, "FOR {obj}"),
+            TriggerObjectKind::ForEach(obj) => write!(f, "FOR EACH {obj}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// CREATE TRIGGER
 ///
 /// Examples:
@@ -2943,6 +2963,23 @@ pub struct CreateTrigger {
     ///
     /// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-trigger-transact-sql?view=sql-server-ver16#arguments)
     pub or_alter: bool,
+    /// True if this is a temporary trigger.
+    ///
+    /// Examples:
+    ///
+    /// ```sql
+    /// CREATE TEMP TRIGGER trigger_name
+    /// ```
+    ///
+    /// or
+    ///
+    /// ```sql
+    /// CREATE TEMPORARY TRIGGER trigger_name;
+    /// CREATE TEMP TRIGGER trigger_name;
+    /// ```
+    ///
+    /// [SQLite](https://sqlite.org/lang_createtrigger.html#temp_triggers_on_non_temp_tables)
+    pub temporary: bool,
     /// The `OR REPLACE` clause is used to re-create the trigger if it already exists.
     ///
     /// Example:
@@ -2987,6 +3024,8 @@ pub struct CreateTrigger {
     /// ```
     pub period: TriggerPeriod,
     /// Whether the trigger period was specified before the target table name.
+    /// This does not refer to whether the period is BEFORE, AFTER, or INSTEAD OF,
+    /// but rather the position of the period clause in relation to the table name.
     ///
     /// ```sql
     /// -- period_before_table == true: Postgres, MySQL, and standard SQL
@@ -3006,9 +3045,9 @@ pub struct CreateTrigger {
     pub referencing: Vec<TriggerReferencing>,
     /// This specifies whether the trigger function should be fired once for
     /// every row affected by the trigger event, or just once per SQL statement.
-    pub trigger_object: TriggerObject,
-    /// Whether to include the `EACH` term of the `FOR EACH`, as it is optional syntax.
-    pub include_each: bool,
+    /// This is optional in some SQL dialects, such as SQLite, and if not specified, in
+    /// those cases, the implied default is `FOR EACH ROW`.
+    pub trigger_object: Option<TriggerObjectKind>,
     ///  Triggering conditions
     pub condition: Option<Expr>,
     /// Execute logic block
@@ -3025,6 +3064,7 @@ impl Display for CreateTrigger {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let CreateTrigger {
             or_alter,
+            temporary,
             or_replace,
             is_constraint,
             name,
@@ -3036,7 +3076,6 @@ impl Display for CreateTrigger {
             referencing,
             trigger_object,
             condition,
-            include_each,
             exec_body,
             statements_as,
             statements,
@@ -3044,7 +3083,8 @@ impl Display for CreateTrigger {
         } = self;
         write!(
             f,
-            "CREATE {or_alter}{or_replace}{is_constraint}TRIGGER {name} ",
+            "CREATE {temporary}{or_alter}{or_replace}{is_constraint}TRIGGER {name} ",
+            temporary = if *temporary { "TEMPORARY " } else { "" },
             or_alter = if *or_alter { "OR ALTER " } else { "" },
             or_replace = if *or_replace { "OR REPLACE " } else { "" },
             is_constraint = if *is_constraint { "CONSTRAINT " } else { "" },
@@ -3076,10 +3116,8 @@ impl Display for CreateTrigger {
             write!(f, " REFERENCING {}", display_separated(referencing, " "))?;
         }
 
-        if *include_each {
-            write!(f, " FOR EACH {trigger_object}")?;
-        } else if exec_body.is_some() {
-            write!(f, " FOR {trigger_object}")?;
+        if let Some(trigger_object) = trigger_object {
+            write!(f, " {trigger_object}")?;
         }
         if let Some(condition) = condition {
             write!(f, " WHEN {condition}")?;

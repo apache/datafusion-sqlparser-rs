@@ -2388,6 +2388,7 @@ fn parse_create_trigger() {
         create_stmt,
         Statement::CreateTrigger(CreateTrigger {
             or_alter: true,
+            temporary: false,
             or_replace: false,
             is_constraint: false,
             name: ObjectName::from(vec![Ident::new("reminder1")]),
@@ -2397,8 +2398,7 @@ fn parse_create_trigger() {
             table_name: ObjectName::from(vec![Ident::new("Sales"), Ident::new("Customer")]),
             referenced_table_name: None,
             referencing: vec![],
-            trigger_object: TriggerObject::Statement,
-            include_each: false,
+            trigger_object: None,
             condition: None,
             exec_body: None,
             statements_as: true,

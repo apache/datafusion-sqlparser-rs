@@ -70,8 +70,8 @@ pub use self::ddl::{
     IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
     IdentityPropertyOrder, IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck,
     NullsDistinctOption, Owner, Partition, ProcedureParam, ReferentialAction, RenameTableNameKind,
-    ReplicaIdentity, TagsColumnOption, Truncate, UserDefinedTypeCompositeAttributeDef,
-    UserDefinedTypeRepresentation, ViewColumnDef,
+    ReplicaIdentity, TagsColumnOption, TriggerObjectKind, Truncate,
+    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{Delete, Insert, Update};
 pub use self::operator::{BinaryOperator, UnaryOperator};

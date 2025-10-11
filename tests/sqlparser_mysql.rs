@@ -4018,6 +4018,7 @@ fn parse_create_trigger() {
         create_stmt,
         Statement::CreateTrigger(CreateTrigger {
             or_alter: false,
+            temporary: false,
             or_replace: false,
             is_constraint: false,
             name: ObjectName::from(vec![Ident::new("emp_stamp")]),
@@ -4027,8 +4028,7 @@ fn parse_create_trigger() {
             table_name: ObjectName::from(vec![Ident::new("emp")]),
             referenced_table_name: None,
             referencing: vec![],
-            trigger_object: TriggerObject::Row,
-            include_each: true,
+            trigger_object: Some(TriggerObjectKind::ForEach(TriggerObject::Row)),
             condition: None,
             exec_body: Some(TriggerExecBody {
                 exec_type: TriggerExecBodyType::Function,

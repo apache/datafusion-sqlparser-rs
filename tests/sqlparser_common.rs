@@ -3790,13 +3790,17 @@ fn parse_create_table() {
                         data_type: DataType::Int(None),
                         options: vec![ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::ForeignKey {
+                            option: ColumnOption::ForeignKey(ForeignKeyConstraint {
+                                name: None,
+                                index_name: None,
+                                columns: vec![],
                                 foreign_table: ObjectName::from(vec!["othertable".into()]),
                                 referred_columns: vec!["a".into(), "b".into()],
                                 on_delete: None,
                                 on_update: None,
+                                match_kind: None,
                                 characteristics: None,
-                            },
+                            }),
                         }],
                     },
                     ColumnDef {
@@ -3804,13 +3808,17 @@ fn parse_create_table() {
                         data_type: DataType::Int(None),
                         options: vec![ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::ForeignKey {
+                            option: ColumnOption::ForeignKey(ForeignKeyConstraint {
+                                name: None,
+                                index_name: None,
+                                columns: vec![],
                                 foreign_table: ObjectName::from(vec!["othertable2".into()]),
                                 referred_columns: vec![],
                                 on_delete: Some(ReferentialAction::Cascade),
                                 on_update: Some(ReferentialAction::NoAction),
+                                match_kind: None,
                                 characteristics: None,
-                            },
+                            }),
                         },],
                     },
                 ]
@@ -3826,6 +3834,7 @@ fn parse_create_table() {
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::Restrict),
                         on_update: None,
+                        match_kind: None,
                         characteristics: None,
                     }
                     .into(),
@@ -3837,6 +3846,7 @@ fn parse_create_table() {
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::NoAction),
                         on_update: Some(ReferentialAction::Restrict),
+                        match_kind: None,
                         characteristics: None,
                     }
                     .into(),
@@ -3848,6 +3858,7 @@ fn parse_create_table() {
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::Cascade),
                         on_update: Some(ReferentialAction::SetDefault),
+                        match_kind: None,
                         characteristics: None,
                     }
                     .into(),
@@ -3859,6 +3870,7 @@ fn parse_create_table() {
                         referred_columns: vec!["longitude".into()],
                         on_delete: None,
                         on_update: Some(ReferentialAction::SetNull),
+                        match_kind: None,
                         characteristics: None,
                     }
                     .into(),
@@ -3957,6 +3969,7 @@ fn parse_create_table_with_constraint_characteristics() {
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::Restrict),
                         on_update: None,
+                        match_kind: None,
                         characteristics: Some(ConstraintCharacteristics {
                             deferrable: Some(true),
                             initially: Some(DeferrableInitial::Deferred),
@@ -3972,6 +3985,7 @@ fn parse_create_table_with_constraint_characteristics() {
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::NoAction),
                         on_update: Some(ReferentialAction::Restrict),
+                        match_kind: None,
                         characteristics: Some(ConstraintCharacteristics {
                             deferrable: Some(true),
                             initially: Some(DeferrableInitial::Immediate),
@@ -3987,6 +4001,7 @@ fn parse_create_table_with_constraint_characteristics() {
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::Cascade),
                         on_update: Some(ReferentialAction::SetDefault),
+                        match_kind: None,
                         characteristics: Some(ConstraintCharacteristics {
                             deferrable: Some(false),
                             initially: Some(DeferrableInitial::Deferred),
@@ -4002,6 +4017,7 @@ fn parse_create_table_with_constraint_characteristics() {
                         referred_columns: vec!["longitude".into()],
                         on_delete: None,
                         on_update: Some(ReferentialAction::SetNull),
+                        match_kind: None,
                         characteristics: Some(ConstraintCharacteristics {
                             deferrable: Some(false),
                             initially: Some(DeferrableInitial::Immediate),

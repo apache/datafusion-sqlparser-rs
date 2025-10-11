@@ -6438,6 +6438,7 @@ fn parse_alter_table_constraint_not_valid() {
                         referred_columns: vec!["ref".into()],
                         on_delete: None,
                         on_update: None,
+                        match_kind: None,
                         characteristics: None,
                     }
                     .into(),
@@ -6602,4 +6603,52 @@ fn parse_alter_schema() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_foreign_key_match() {
+    let test_cases = [
+        ("MATCH FULL", ConstraintReferenceMatchKind::Full),
+        ("MATCH SIMPLE", ConstraintReferenceMatchKind::Simple),
+        ("MATCH PARTIAL", ConstraintReferenceMatchKind::Partial),
+    ];
+
+    for (match_clause, expected_kind) in test_cases {
+        // Test column-level foreign key
+        let sql = format!("CREATE TABLE t (id INT REFERENCES other_table (id) {match_clause})");
+        let statement = pg_and_generic().verified_stmt(&sql);
+        match statement {
+            Statement::CreateTable(CreateTable { columns, .. }) => {
+                match &columns[0].options[0].option {
+                    ColumnOption::ForeignKey(constraint) => {
+                        assert_eq!(constraint.match_kind, Some(expected_kind));
+                    }
+                    _ => panic!("Expected ColumnOption::ForeignKey"),
+                }
+            }
+            _ => unreachable!("{:?} should parse to Statement::CreateTable", sql),
+        }
+
+        // Test table-level foreign key constraint
+        let sql = format!(
+            "CREATE TABLE t (id INT, FOREIGN KEY (id) REFERENCES other_table(id) {match_clause})"
+        );
+        let statement = pg_and_generic().verified_stmt(&sql);
+        match statement {
+            Statement::CreateTable(CreateTable { constraints, .. }) => match &constraints[0] {
+                TableConstraint::ForeignKey(constraint) => {
+                    assert_eq!(constraint.match_kind, Some(expected_kind));
+                }
+                _ => panic!("Expected TableConstraint::ForeignKey"),
+            },
+            _ => unreachable!("{:?} should parse to Statement::CreateTable", sql),
+        }
+    }
+}
+
+#[test]
+fn parse_foreign_key_match_with_actions() {
+    let sql = "CREATE TABLE orders (order_id INT REFERENCES another_table (id) MATCH FULL ON DELETE CASCADE ON UPDATE RESTRICT, customer_id INT, CONSTRAINT fk_customer FOREIGN KEY (customer_id) REFERENCES customers(customer_id) MATCH SIMPLE ON DELETE SET NULL ON UPDATE CASCADE)";
+
+    pg_and_generic().verified_stmt(sql);
 }

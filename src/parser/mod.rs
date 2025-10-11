@@ -11390,9 +11390,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_view_column_options(
-        &mut self,
-    ) -> Result<Option<ColumnOptions>, ParserError> {
+    fn parse_view_column_options(&mut self) -> Result<Option<ColumnOptions>, ParserError> {
         let mut options = Vec::new();
         loop {
             let option = self.parse_optional_column_option()?;

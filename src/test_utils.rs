@@ -343,21 +343,12 @@ pub fn expr_from_projection(item: &SelectItem) -> &Expr {
 
 pub fn alter_table_op_with_name(stmt: Statement, expected_name: &str) -> AlterTableOperation {
     match stmt {
-        Statement::AlterTable {
-            name,
-            if_exists,
-            only: is_only,
-            operations,
-            on_cluster: _,
-            location: _,
-            iceberg,
-            end_token: _,
-        } => {
-            assert_eq!(name.to_string(), expected_name);
-            assert!(!if_exists);
-            assert!(!is_only);
-            assert!(!iceberg);
-            only(operations)
+        Statement::AlterTable(alter_table) => {
+            assert_eq!(alter_table.name.to_string(), expected_name);
+            assert!(!alter_table.if_exists);
+            assert!(!alter_table.only);
+            assert!(!alter_table.iceberg);
+            only(alter_table.operations)
         }
         _ => panic!("Expected ALTER TABLE statement"),
     }
@@ -484,7 +475,7 @@ pub fn index_column(stmt: Statement) -> Expr {
                 _ => panic!("Expected an index, unique, primary, full text, or spatial constraint (foreign key does not support general key part expressions)"),
             }
         }
-        Statement::AlterTable { operations, .. } => match operations.first().unwrap() {
+        Statement::AlterTable(alter_table) => match alter_table.operations.first().unwrap() {
             AlterTableOperation::AddConstraint { constraint, .. } => {
                 match constraint {
                     TableConstraint::Index(constraint) => {

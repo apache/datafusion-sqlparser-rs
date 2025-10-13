@@ -982,11 +982,12 @@ impl<'a> Parser<'a> {
                 Ok(pa)
             })?
             .unwrap_or_default();
-        Ok(Statement::Msck {
+        Ok(Msck {
             repair,
             table_name,
             partition_action,
-        })
+        }
+        .into())
     }
 
     pub fn parse_truncate(&mut self) -> Result<Statement, ParserError> {
@@ -1024,14 +1025,15 @@ impl<'a> Parser<'a> {
 
         let on_cluster = self.parse_optional_on_cluster()?;
 
-        Ok(Statement::Truncate {
+        Ok(Truncate {
             table_names,
             partitions,
             table,
             identity,
             cascade,
             on_cluster,
-        })
+        }
+        .into())
     }
 
     fn parse_cascade_option(&mut self) -> Option<CascadeOption> {
@@ -1167,7 +1169,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        Ok(Statement::Analyze {
+        Ok(Analyze {
             has_table_keyword,
             table_name,
             for_columns,
@@ -1176,7 +1178,8 @@ impl<'a> Parser<'a> {
             cache_metadata,
             noscan,
             compute_statistics,
-        })
+        }
+        .into())
     }
 
     /// Parse a new expression including wildcard & qualified wildcard.
@@ -4750,9 +4753,9 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::DOMAIN) {
             self.parse_create_domain()
         } else if self.parse_keyword(Keyword::TRIGGER) {
-            self.parse_create_trigger(or_alter, or_replace, false)
+            self.parse_create_trigger(temporary, or_alter, or_replace, false)
         } else if self.parse_keywords(&[Keyword::CONSTRAINT, Keyword::TRIGGER]) {
-            self.parse_create_trigger(or_alter, or_replace, true)
+            self.parse_create_trigger(temporary, or_alter, or_replace, true)
         } else if self.parse_keyword(Keyword::MACRO) {
             self.parse_create_macro(or_replace, temporary)
         } else if self.parse_keyword(Keyword::SECRET) {
@@ -5548,7 +5551,8 @@ impl<'a> Parser<'a> {
     /// DROP TRIGGER [ IF EXISTS ] name ON table_name [ CASCADE | RESTRICT ]
     /// ```
     pub fn parse_drop_trigger(&mut self) -> Result<Statement, ParserError> {
-        if !dialect_of!(self is PostgreSqlDialect | GenericDialect | MySqlDialect | MsSqlDialect) {
+        if !dialect_of!(self is PostgreSqlDialect | SQLiteDialect | GenericDialect | MySqlDialect | MsSqlDialect)
+        {
             self.prev_token();
             return self.expected("an object type after DROP", self.peek_token());
         }
@@ -5576,11 +5580,13 @@ impl<'a> Parser<'a> {
 
     pub fn parse_create_trigger(
         &mut self,
+        temporary: bool,
         or_alter: bool,
         or_replace: bool,
         is_constraint: bool,
     ) -> Result<Statement, ParserError> {
-        if !dialect_of!(self is PostgreSqlDialect | GenericDialect | MySqlDialect | MsSqlDialect) {
+        if !dialect_of!(self is PostgreSqlDialect | SQLiteDialect | GenericDialect | MySqlDialect | MsSqlDialect)
+        {
             self.prev_token();
             return self.expected("an object type after CREATE", self.peek_token());
         }
@@ -5607,14 +5613,25 @@ impl<'a> Parser<'a> {
             }
         }
 
-        self.expect_keyword_is(Keyword::FOR)?;
-        let include_each = self.parse_keyword(Keyword::EACH);
-        let trigger_object =
-            match self.expect_one_of_keywords(&[Keyword::ROW, Keyword::STATEMENT])? {
-                Keyword::ROW => TriggerObject::Row,
-                Keyword::STATEMENT => TriggerObject::Statement,
-                _ => unreachable!(),
-            };
+        let trigger_object = if self.parse_keyword(Keyword::FOR) {
+            let include_each = self.parse_keyword(Keyword::EACH);
+            let trigger_object =
+                match self.expect_one_of_keywords(&[Keyword::ROW, Keyword::STATEMENT])? {
+                    Keyword::ROW => TriggerObject::Row,
+                    Keyword::STATEMENT => TriggerObject::Statement,
+                    _ => unreachable!(),
+                };
+
+            Some(if include_each {
+                TriggerObjectKind::ForEach(trigger_object)
+            } else {
+                TriggerObjectKind::For(trigger_object)
+            })
+        } else {
+            let _ = self.parse_keyword(Keyword::FOR);
+
+            None
+        };
 
         let condition = self
             .parse_keyword(Keyword::WHEN)
@@ -5629,8 +5646,9 @@ impl<'a> Parser<'a> {
             statements = Some(self.parse_conditional_statements(&[Keyword::END])?);
         }
 
-        Ok(Statement::CreateTrigger(CreateTrigger {
+        Ok(CreateTrigger {
             or_alter,
+            temporary,
             or_replace,
             is_constraint,
             name,
@@ -5641,13 +5659,13 @@ impl<'a> Parser<'a> {
             referenced_table_name,
             referencing,
             trigger_object,
-            include_each,
             condition,
             exec_body,
             statements_as: false,
             statements,
             characteristics,
-        }))
+        }
+        .into())
     }
 
     pub fn parse_trigger_period(&mut self) -> Result<TriggerPeriod, ParserError> {
@@ -5926,7 +5944,7 @@ impl<'a> Parser<'a> {
                 Keyword::BINDING,
             ]);
 
-        Ok(Statement::CreateView {
+        Ok(CreateView {
             or_alter,
             name,
             columns,
@@ -5943,7 +5961,8 @@ impl<'a> Parser<'a> {
             to,
             params: create_view_params,
             name_before_not_exists,
-        })
+        }
+        .into())
     }
 
     /// Parse optional parameters for the `CREATE VIEW` statement supported by [MySQL].
@@ -6206,7 +6225,7 @@ impl<'a> Parser<'a> {
             }?
         }
 
-        Ok(Statement::CreateRole {
+        Ok(CreateRole {
             names,
             if_not_exists,
             login,
@@ -6225,7 +6244,8 @@ impl<'a> Parser<'a> {
             user,
             admin,
             authorization_owner,
-        })
+        }
+        .into())
     }
 
     pub fn parse_owner(&mut self) -> Result<Owner, ParserError> {
@@ -6503,11 +6523,11 @@ impl<'a> Parser<'a> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let func_desc = self.parse_comma_separated(Parser::parse_function_desc)?;
         let drop_behavior = self.parse_optional_drop_behavior();
-        Ok(Statement::DropFunction {
+        Ok(Statement::DropFunction(DropFunction {
             if_exists,
             func_desc,
             drop_behavior,
-        })
+        }))
     }
 
     /// ```sql
@@ -7175,13 +7195,14 @@ impl<'a> Parser<'a> {
             (None, None, false)
         };
 
-        Ok(Statement::CreateExtension {
+        Ok(CreateExtension {
             name,
             if_not_exists,
             schema,
             version,
             cascade,
-        })
+        }
+        .into())
     }
 
     /// Parse a PostgreSQL-specific [Statement::DropExtension] statement.
@@ -7190,7 +7211,7 @@ impl<'a> Parser<'a> {
         let names = self.parse_comma_separated(|p| p.parse_identifier())?;
         let cascade_or_restrict =
             self.parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT]);
-        Ok(Statement::DropExtension {
+        Ok(Statement::DropExtension(DropExtension {
             names,
             if_exists,
             cascade_or_restrict: cascade_or_restrict
@@ -7200,7 +7221,7 @@ impl<'a> Parser<'a> {
                     _ => self.expected("CASCADE or RESTRICT", self.peek_token()),
                 })
                 .transpose()?,
-        })
+        }))
     }
 
     //TODO: Implement parsing for Skewed
@@ -9400,7 +9421,7 @@ impl<'a> Parser<'a> {
             self.get_current_token().clone()
         };
 
-        Ok(Statement::AlterTable {
+        Ok(AlterTable {
             name: table_name,
             if_exists,
             only,
@@ -9409,7 +9430,8 @@ impl<'a> Parser<'a> {
             on_cluster,
             iceberg,
             end_token: AttachedToken(end_token),
-        })
+        }
+        .into())
     }
 
     pub fn parse_alter_view(&mut self) -> Result<Statement, ParserError> {
@@ -15687,7 +15709,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        Ok(Statement::Update {
+        Ok(Update {
             table,
             assignments,
             from,
@@ -15695,7 +15717,8 @@ impl<'a> Parser<'a> {
             returning,
             or,
             limit,
-        })
+        }
+        .into())
     }
 
     /// Parse a `var = expr` assignment, used in an UPDATE statement

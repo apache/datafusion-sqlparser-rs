@@ -539,7 +539,17 @@ impl<'a> Parser<'a> {
             return statement;
         }
 
-        let next_token = self.next_token();
+        let mut next_token = self.next_token();
+        let leading_comment: Option<Comment> = if let Token::LeadingComment(_) = &next_token.token {
+            let Token::LeadingComment(comment) = next_token.token else {
+                unreachable!()
+            };
+            next_token = self.next_token();
+            Some(comment)
+        } else {
+            None
+        };
+
         match &next_token.token {
             Token::Word(w) => match w.keyword {
                 Keyword::KILL => self.parse_kill(),
@@ -591,7 +601,7 @@ impl<'a> Parser<'a> {
                 Keyword::REPLACE => self.parse_replace(),
                 Keyword::UNCACHE => self.parse_uncache_table(),
                 Keyword::UPDATE => self.parse_update(),
-                Keyword::ALTER => self.parse_alter(),
+                Keyword::ALTER => self.parse_alter(leading_comment),
                 Keyword::CALL => self.parse_call(),
                 Keyword::COPY => self.parse_copy(),
                 Keyword::OPEN => {
@@ -7878,6 +7888,8 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_columns(&mut self) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
+        todo!("Add parsing for the Leading comment of the column, if any.");
+
         let mut columns = vec![];
         let mut constraints = vec![];
         if !self.consume_token(&Token::LParen) || self.consume_token(&Token::RParen) {
@@ -9349,7 +9361,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_alter(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_alter(&mut self, leading_comment: Option<Comment>) -> Result<Statement, ParserError> {
         let object_type = self.expect_one_of_keywords(&[
             Keyword::VIEW,
             Keyword::TYPE,
@@ -9370,10 +9382,10 @@ impl<'a> Parser<'a> {
             }
             Keyword::VIEW => self.parse_alter_view(),
             Keyword::TYPE => self.parse_alter_type(),
-            Keyword::TABLE => self.parse_alter_table(false),
+            Keyword::TABLE => self.parse_alter_table(leading_comment, false),
             Keyword::ICEBERG => {
                 self.expect_keyword(Keyword::TABLE)?;
-                self.parse_alter_table(true)
+                self.parse_alter_table(leading_comment, true)
             }
             Keyword::INDEX => {
                 let index_name = self.parse_object_name(false)?;
@@ -9403,7 +9415,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a [Statement::AlterTable]
-    pub fn parse_alter_table(&mut self, iceberg: bool) -> Result<Statement, ParserError> {
+    pub fn parse_alter_table(&mut self, leading_comment: Option<Comment>, iceberg: bool) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let only = self.parse_keyword(Keyword::ONLY); // [ ONLY ]
         let table_name = self.parse_object_name(false)?;
@@ -9438,6 +9450,7 @@ impl<'a> Parser<'a> {
             on_cluster,
             iceberg,
             end_token: AttachedToken(end_token),
+            leading_comment
         }
         .into())
     }

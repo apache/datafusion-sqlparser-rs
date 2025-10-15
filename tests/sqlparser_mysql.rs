@@ -2738,6 +2738,7 @@ fn parse_alter_table_add_column() {
             location: _,
             on_cluster: _,
             end_token: _,
+            leading_comment: _,
         }) => {
             assert_eq!(name.to_string(), "tab");
             assert!(!if_exists);

@@ -44,7 +44,7 @@ use crate::ast::{
 };
 use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
 use crate::keywords::Keyword;
-use crate::tokenizer::{Span, Token};
+use crate::tokenizer::{Comment, Span, Token};
 
 /// Index column type.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -1202,6 +1202,8 @@ pub struct ColumnDef {
     pub name: Ident,
     pub data_type: DataType,
     pub options: Vec<ColumnOptionDef>,
+    /// Leading comment for the column.
+    pub leading_comment: Option<Comment>,
 }
 
 impl fmt::Display for ColumnDef {
@@ -2281,6 +2283,8 @@ pub struct CreateTable {
     /// Snowflake "REQUIRE USER" clause for dybamic tables
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-dynamic-table>
     pub require_user: bool,
+    /// Leading comment for the table.
+    pub leading_comment: Option<Comment>,
 }
 
 impl fmt::Display for CreateTable {
@@ -3510,10 +3514,16 @@ pub struct AlterTable {
     pub iceberg: bool,
     /// Token that represents the end of the statement (semicolon or EOF)
     pub end_token: AttachedToken,
+    /// Leading comment which appears before the `ALTER` keyword
+    pub leading_comment: Option<Comment>,
 }
 
 impl fmt::Display for AlterTable {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(comment) = &self.leading_comment {
+            write!(f, "{comment}\n")?;
+        }
+
         if self.iceberg {
             write!(f, "ALTER ICEBERG TABLE ")?;
         } else {

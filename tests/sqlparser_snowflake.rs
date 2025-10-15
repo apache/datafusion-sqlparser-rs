@@ -565,10 +565,10 @@ fn test_snowflake_single_line_tokenize() {
         Token::make_keyword("CREATE"),
         Token::Whitespace(Whitespace::Space),
         Token::make_keyword("TABLE"),
-        Token::Whitespace(Whitespace::SingleLineComment {
+        Token::Whitespace(Comment::SingleLineComment {
             prefix: "#".to_string(),
             comment: " this is a comment \n".to_string(),
-        }),
+        }.into()),
         Token::make_word("table_1", None),
     ];
 
@@ -582,10 +582,10 @@ fn test_snowflake_single_line_tokenize() {
         Token::Whitespace(Whitespace::Space),
         Token::make_keyword("TABLE"),
         Token::Whitespace(Whitespace::Space),
-        Token::Whitespace(Whitespace::SingleLineComment {
+        Token::Whitespace(Comment::SingleLineComment {
             prefix: "//".to_string(),
             comment: " this is a comment \n".to_string(),
-        }),
+        }.into()),
         Token::make_word("table_1", None),
     ];
 

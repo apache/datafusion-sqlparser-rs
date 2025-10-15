@@ -26,7 +26,7 @@ use crate::ast::helpers::stmt_data_loading::{
     FileStagingCommand, StageLoadSelectItem, StageLoadSelectItemKind, StageParamsObject,
 };
 use crate::ast::{
-    AlterTableOperation, CatalogSyncNamespaceMode, ColumnOption, ColumnPolicy, ColumnPolicyProperty, ContactEntry,
+    AlterTable, AlterTableOperation, CatalogSyncNamespaceMode, ColumnOption, ColumnPolicy, ColumnPolicyProperty, ContactEntry,
     CopyIntoSnowflakeKind, CreateTableLikeKind, DollarQuotedString, Ident, IdentityParameters,
     IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
     InitializeKind, ObjectName, ObjectNamePart, RefreshModeKind, RowAccessPolicy, ShowObjects,
@@ -34,6 +34,7 @@ use crate::ast::{
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
+use crate::ast::helpers::attached_token::AttachedToken;
 use crate::parser::{IsOptional, Parser, ParserError};
 use crate::tokenizer::Token;
 #[cfg(not(feature = "std"))]
@@ -612,22 +613,40 @@ fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statem
 /// Parse snowflake alter dynamic table.
 /// <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
 fn parse_alter_dynamic_table(parser: &mut Parser) -> Result<Statement, ParserError> {
-    let table_name = parser.parse_object_name(false)?;
+    // Use parse_object_name(true) to support IDENTIFIER() function
+    let table_name = parser.parse_object_name(true)?;
 
-    // Parse the operation (currently only REFRESH is supported)
-    if parser.parse_keyword(Keyword::REFRESH) {
-        Ok(Statement::AlterTable {
-            name: table_name,
-            if_exists: false,
-            only: false,
-            operations: vec![AlterTableOperation::Refresh],
-            location: None,
-            on_cluster: None,
-            iceberg: false,
-        })
+    // Parse the operation (REFRESH, SUSPEND, or RESUME)
+    let operation = if parser.parse_keyword(Keyword::REFRESH) {
+        AlterTableOperation::Refresh
+    } else if parser.parse_keyword(Keyword::SUSPEND) {
+        AlterTableOperation::Suspend
+    } else if parser.parse_keyword(Keyword::RESUME) {
+        AlterTableOperation::Resume
     } else {
-        parser.expected("REFRESH after ALTER DYNAMIC TABLE", parser.peek_token())
-    }
+        return parser.expected(
+            "REFRESH, SUSPEND, or RESUME after ALTER DYNAMIC TABLE",
+            parser.peek_token(),
+        );
+    };
+
+    let end_token = if parser.peek_token_ref().token == Token::SemiColon {
+        parser.peek_token_ref().clone()
+    } else {
+        parser.get_current_token().clone()
+    };
+
+    Ok(Statement::AlterTable(AlterTable {
+        name: table_name,
+        if_exists: false,
+        only: false,
+        operations: vec![operation],
+        location: None,
+        on_cluster: None,
+        iceberg: false,
+        dynamic: true,
+        end_token: AttachedToken(end_token),
+    }))
 }
 
 /// Parse snowflake alter session.

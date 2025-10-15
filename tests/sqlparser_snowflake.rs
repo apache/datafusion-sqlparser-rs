@@ -4664,54 +4664,9 @@ fn test_drop_constraints() {
 }
 
 #[test]
-fn test_snowflake_alter_dynamic_table_refresh() {
-    // Test with simple table name
-    let sql = "ALTER DYNAMIC TABLE MY_DYNAMIC_TABLE REFRESH";
-    let result = snowflake().parse_sql_statements(sql);
-
-    assert!(
-        result.is_ok(),
-        "Expected ALTER DYNAMIC TABLE to parse successfully"
-    );
-
-    match result.unwrap().first().unwrap() {
-        Statement::AlterTable {
-            name, operations, ..
-        } => {
-            assert_eq!(name.to_string(), "MY_DYNAMIC_TABLE");
-            assert_eq!(operations.len(), 1);
-            match &operations[0] {
-                AlterTableOperation::Refresh => {
-                    // Success!
-                }
-                _ => panic!("Expected Refresh operation"),
-            }
-        }
-        _ => panic!("Expected AlterTable statement"),
-    }
-
-    // Test with qualified table name
-    let sql3 = "ALTER DYNAMIC TABLE my_database.my_schema.my_dynamic_table REFRESH";
-    let result3 = snowflake().parse_sql_statements(sql3);
-
-    assert!(
-        result3.is_ok(),
-        "Expected ALTER DYNAMIC TABLE to parse successfully"
-    );
-
-    match result3.unwrap().first().unwrap() {
-        Statement::AlterTable {
-            name, operations, ..
-        } => {
-            assert_eq!(name.to_string(), "my_database.my_schema.my_dynamic_table");
-            assert_eq!(operations.len(), 1);
-            match &operations[0] {
-                AlterTableOperation::Refresh => {
-                    // Success!
-                }
-                _ => panic!("Expected Refresh operation"),
-            }
-        }
-        _ => panic!("Expected AlterTable statement"),
-    }
+fn test_alter_dynamic_table() {
+    snowflake().verified_stmt("ALTER DYNAMIC TABLE MY_DYNAMIC_TABLE REFRESH");
+    snowflake().verified_stmt("ALTER DYNAMIC TABLE my_database.my_schema.my_dynamic_table REFRESH");
+    snowflake().verified_stmt("ALTER DYNAMIC TABLE my_dyn_table SUSPEND");
+    snowflake().verified_stmt("ALTER DYNAMIC TABLE my_dyn_table RESUME");
 }

@@ -369,6 +369,14 @@ pub enum AlterTableOperation {
     ///
     /// Note: this is Snowflake specific for dynamic tables <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
     Refresh,
+    /// `SUSPEND`
+    ///
+    /// Note: this is Snowflake specific for dynamic tables <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
+    Suspend,
+    /// `RESUME`
+    ///
+    /// Note: this is Snowflake specific for dynamic tables <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
+    Resume,
     /// `ALGORITHM [=] { DEFAULT | INSTANT | INPLACE | COPY }`
     ///
     /// [MySQL]-specific table alter algorithm.
@@ -851,6 +859,12 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::Refresh => {
                 write!(f, "REFRESH")
+            }
+            AlterTableOperation::Suspend => {
+                write!(f, "SUSPEND")
+            }
+            AlterTableOperation::Resume => {
+                write!(f, "RESUME")
             }
             AlterTableOperation::AutoIncrement { equals, value } => {
                 write!(
@@ -3558,6 +3572,9 @@ pub struct AlterTable {
     /// Snowflake "ICEBERG" clause for Iceberg tables
     /// <https://docs.snowflake.com/en/sql-reference/sql/alter-iceberg-table>
     pub iceberg: bool,
+    /// Snowflake "DYNAMIC" clause for Dynamic tables
+    /// <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
+    pub dynamic: bool,
     /// Token that represents the end of the statement (semicolon or EOF)
     pub end_token: AttachedToken,
 }
@@ -3566,6 +3583,8 @@ impl fmt::Display for AlterTable {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.iceberg {
             write!(f, "ALTER ICEBERG TABLE ")?;
+        } else if self.dynamic {
+            write!(f, "ALTER DYNAMIC TABLE ")?;
         } else {
             write!(f, "ALTER TABLE ")?;
         }

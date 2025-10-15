@@ -9462,6 +9462,7 @@ impl<'a> Parser<'a> {
             location,
             on_cluster,
             iceberg,
+            dynamic: false,
             end_token: AttachedToken(end_token),
         }
         .into())

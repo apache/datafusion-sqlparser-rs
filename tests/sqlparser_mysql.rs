@@ -2747,6 +2747,7 @@ fn parse_alter_table_add_column() {
             only,
             operations,
             iceberg,
+            dynamic: _,
             location: _,
             on_cluster: _,
             end_token: _,

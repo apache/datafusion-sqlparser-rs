@@ -7940,7 +7940,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
-        let name = self.parse_identifier()?;
+        let col_name = self.parse_identifier()?;
         let data_type = if self.is_column_type_sqlite_unspecified() {
             DataType::Unspecified
         } else {
@@ -7965,7 +7965,7 @@ impl<'a> Parser<'a> {
             };
         }
         Ok(ColumnDef {
-            name,
+            name: col_name,
             data_type,
             options,
         })
@@ -8065,10 +8065,15 @@ impl<'a> Parser<'a> {
             // PostgreSQL allows omitting the column list and
             // uses the primary key column of the foreign table by default
             let referred_columns = self.parse_parenthesized_column_list(Optional, false)?;
+            let mut match_kind = None;
             let mut on_delete = None;
             let mut on_update = None;
             loop {
-                if on_delete.is_none() && self.parse_keywords(&[Keyword::ON, Keyword::DELETE]) {
+                if match_kind.is_none() && self.parse_keyword(Keyword::MATCH) {
+                    match_kind = Some(self.parse_match_kind()?);
+                } else if on_delete.is_none()
+                    && self.parse_keywords(&[Keyword::ON, Keyword::DELETE])
+                {
                     on_delete = Some(self.parse_referential_action()?);
                 } else if on_update.is_none()
                     && self.parse_keywords(&[Keyword::ON, Keyword::UPDATE])
@@ -8080,13 +8085,20 @@ impl<'a> Parser<'a> {
             }
             let characteristics = self.parse_constraint_characteristics()?;
 
-            Ok(Some(ColumnOption::ForeignKey {
-                foreign_table,
-                referred_columns,
-                on_delete,
-                on_update,
-                characteristics,
-            }))
+            Ok(Some(
+                ForeignKeyConstraint {
+                    name: None,       // Column-level constraints don't have names
+                    index_name: None, // Not applicable for column-level constraints
+                    columns: vec![],  // Not applicable for column-level constraints
+                    foreign_table,
+                    referred_columns,
+                    on_delete,
+                    on_update,
+                    match_kind,
+                    characteristics,
+                }
+                .into(),
+            ))
         } else if self.parse_keyword(Keyword::CHECK) {
             self.expect_token(&Token::LParen)?;
             // since `CHECK` requires parentheses, we can parse the inner expression in ParserState::Normal
@@ -8367,6 +8379,18 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse_match_kind(&mut self) -> Result<ConstraintReferenceMatchKind, ParserError> {
+        if self.parse_keyword(Keyword::FULL) {
+            Ok(ConstraintReferenceMatchKind::Full)
+        } else if self.parse_keyword(Keyword::PARTIAL) {
+            Ok(ConstraintReferenceMatchKind::Partial)
+        } else if self.parse_keyword(Keyword::SIMPLE) {
+            Ok(ConstraintReferenceMatchKind::Simple)
+        } else {
+            self.expected("one of FULL, PARTIAL or SIMPLE", self.peek_token())
+        }
+    }
+
     pub fn parse_constraint_characteristics(
         &mut self,
     ) -> Result<Option<ConstraintCharacteristics>, ParserError> {
@@ -8477,10 +8501,15 @@ impl<'a> Parser<'a> {
                 self.expect_keyword_is(Keyword::REFERENCES)?;
                 let foreign_table = self.parse_object_name(false)?;
                 let referred_columns = self.parse_parenthesized_column_list(Optional, false)?;
+                let mut match_kind = None;
                 let mut on_delete = None;
                 let mut on_update = None;
                 loop {
-                    if on_delete.is_none() && self.parse_keywords(&[Keyword::ON, Keyword::DELETE]) {
+                    if match_kind.is_none() && self.parse_keyword(Keyword::MATCH) {
+                        match_kind = Some(self.parse_match_kind()?);
+                    } else if on_delete.is_none()
+                        && self.parse_keywords(&[Keyword::ON, Keyword::DELETE])
+                    {
                         on_delete = Some(self.parse_referential_action()?);
                     } else if on_update.is_none()
                         && self.parse_keywords(&[Keyword::ON, Keyword::UPDATE])
@@ -8502,6 +8531,7 @@ impl<'a> Parser<'a> {
                         referred_columns,
                         on_delete,
                         on_update,
+                        match_kind,
                         characteristics,
                     }
                     .into(),

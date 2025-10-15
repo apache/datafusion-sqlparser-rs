@@ -30,14 +30,15 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
-    display_comma_separated, display_separated, ArgMode, AttachedToken, CommentDef,
-    ConditionalStatements, CreateFunctionBody, CreateFunctionUsing, CreateTableLikeKind,
-    CreateTableOptions, CreateViewParams, DataType, Expr, FileFormat, FunctionBehavior,
-    FunctionCalledOnNull, FunctionDesc, FunctionDeterminismSpecifier, FunctionParallel,
-    HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat, HiveSetLocation, Ident,
-    InitializeKind, MySQLColumnPosition, ObjectName, OnCommit, OneOrManyWithParens,
-    OperateFunctionArg, OrderByExpr, ProjectionSelect, Query, RefreshModeKind, RowAccessPolicy,
-    SequenceOptions, Spanned, SqlOption, StorageSerializationPolicy, TableConstraint, TableVersion,
+    display_comma_separated, display_separated,
+    table_constraints::{ForeignKeyConstraint, TableConstraint},
+    ArgMode, AttachedToken, CommentDef, ConditionalStatements, CreateFunctionBody,
+    CreateFunctionUsing, CreateTableLikeKind, CreateTableOptions, CreateViewParams, DataType, Expr,
+    FileFormat, FunctionBehavior, FunctionCalledOnNull, FunctionDesc, FunctionDeterminismSpecifier,
+    FunctionParallel, HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat,
+    HiveSetLocation, Ident, InitializeKind, MySQLColumnPosition, ObjectName, OnCommit,
+    OneOrManyWithParens, OperateFunctionArg, OrderByExpr, ProjectionSelect, Query, RefreshModeKind,
+    RowAccessPolicy, SequenceOptions, Spanned, SqlOption, StorageSerializationPolicy, TableVersion,
     Tag, TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value,
     ValueWithSpan, WrappedCollection,
 };
@@ -1559,20 +1560,14 @@ pub enum ColumnOption {
         is_primary: bool,
         characteristics: Option<ConstraintCharacteristics>,
     },
-    /// A referential integrity constraint (`[FOREIGN KEY REFERENCES
-    /// <foreign_table> (<referred_columns>)
+    /// A referential integrity constraint (`REFERENCES <foreign_table> (<referred_columns>)
+    /// [ MATCH { FULL | PARTIAL | SIMPLE } ]
     /// { [ON DELETE <referential_action>] [ON UPDATE <referential_action>] |
     ///   [ON UPDATE <referential_action>] [ON DELETE <referential_action>]
-    /// }
+    /// }         
     /// [<constraint_characteristics>]
     /// `).
-    ForeignKey {
-        foreign_table: ObjectName,
-        referred_columns: Vec<Ident>,
-        on_delete: Option<ReferentialAction>,
-        on_update: Option<ReferentialAction>,
-        characteristics: Option<ConstraintCharacteristics>,
-    },
+    ForeignKey(ForeignKeyConstraint),
     /// `CHECK (<expr>)`
     Check(Expr),
     /// Dialect-specific options, such as:
@@ -1643,6 +1638,12 @@ pub enum ColumnOption {
     Invisible,
 }
 
+impl From<ForeignKeyConstraint> for ColumnOption {
+    fn from(fk: ForeignKeyConstraint) -> Self {
+        ColumnOption::ForeignKey(fk)
+    }
+}
+
 impl fmt::Display for ColumnOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use ColumnOption::*;
@@ -1669,24 +1670,25 @@ impl fmt::Display for ColumnOption {
                 }
                 Ok(())
             }
-            ForeignKey {
-                foreign_table,
-                referred_columns,
-                on_delete,
-                on_update,
-                characteristics,
-            } => {
-                write!(f, "REFERENCES {foreign_table}")?;
-                if !referred_columns.is_empty() {
-                    write!(f, " ({})", display_comma_separated(referred_columns))?;
+            ForeignKey(constraint) => {
+                write!(f, "REFERENCES {}", constraint.foreign_table)?;
+                if !constraint.referred_columns.is_empty() {
+                    write!(
+                        f,
+                        " ({})",
+                        display_comma_separated(&constraint.referred_columns)
+                    )?;
                 }
-                if let Some(action) = on_delete {
+                if let Some(match_kind) = &constraint.match_kind {
+                    write!(f, " {match_kind}")?;
+                }
+                if let Some(action) = &constraint.on_delete {
                     write!(f, " ON DELETE {action}")?;
                 }
-                if let Some(action) = on_update {
+                if let Some(action) = &constraint.on_update {
                     write!(f, " ON UPDATE {action}")?;
                 }
-                if let Some(characteristics) = characteristics {
+                if let Some(characteristics) = &constraint.characteristics {
                     write!(f, " {characteristics}")?;
                 }
                 Ok(())

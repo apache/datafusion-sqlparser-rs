@@ -657,6 +657,31 @@ pub enum CastKind {
     DoubleColon,
 }
 
+/// `MATCH` type for constraint references
+///
+/// See: <https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-PARMS-REFERENCES>
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ConstraintReferenceMatchKind {
+    /// `MATCH FULL`
+    Full,
+    /// `MATCH PARTIAL`
+    Partial,
+    /// `MATCH SIMPLE`
+    Simple,
+}
+
+impl fmt::Display for ConstraintReferenceMatchKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Full => write!(f, "MATCH FULL"),
+            Self::Partial => write!(f, "MATCH PARTIAL"),
+            Self::Simple => write!(f, "MATCH SIMPLE"),
+        }
+    }
+}
+
 /// `EXTRACT` syntax variants.
 ///
 /// In Snowflake dialect, the `EXTRACT` expression can support either the `from` syntax

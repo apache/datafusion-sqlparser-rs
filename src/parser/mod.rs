@@ -7952,13 +7952,19 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
-        let leading_comment = match self.peek_token().token {
-            Token::LeadingComment(_) => {
-                let Token::LeadingComment(c) = self.next_token().token else { unreachable!() };
-                Some(c)
-            }
-            _ => None,
+
+        let mut next_token = self.next_token();
+        let leading_comment: Option<Comment> = if let Token::LeadingComment(_) = &next_token.token {
+            let Token::LeadingComment(comment) = next_token.token else {
+                unreachable!()
+            };
+            next_token = self.next_token();
+            Some(comment)
+        } else {
+            None
         };
+
+
         let col_name = self.parse_identifier()?;
         let data_type = if self.is_column_type_sqlite_unspecified() {
             DataType::Unspecified

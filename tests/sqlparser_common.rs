@@ -3791,7 +3791,11 @@ fn parse_create_table() {
                             },
                             ColumnOptionDef {
                                 name: None,
-                                option: ColumnOption::Check(verified_expr("constrained > 0")),
+                                option: ColumnOption::Check(CheckConstraint {
+                                    name: None,
+                                    expr: Box::new(verified_expr("constrained > 0")),
+                                    enforced: None,
+                                }),
                             },
                         ],
                     },

@@ -7888,7 +7888,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_columns(&mut self) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
-        todo!("Add parsing for the Leading comment of the column, if any.");
+        //todo!("Add parsing for the Leading comment of the column, if any.");
 
         let mut columns = vec![];
         let mut constraints = vec![];
@@ -7952,6 +7952,13 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
+        let leading_comment = match self.peek_token().token {
+            Token::LeadingComment(_) => {
+                let Token::LeadingComment(c) = self.next_token().token else { unreachable!() };
+                Some(c)
+            }
+            _ => None,
+        };
         let col_name = self.parse_identifier()?;
         let data_type = if self.is_column_type_sqlite_unspecified() {
             DataType::Unspecified
@@ -7959,6 +7966,7 @@ impl<'a> Parser<'a> {
             self.parse_data_type()?
         };
         let mut options = vec![];
+        
         loop {
             if self.parse_keyword(Keyword::CONSTRAINT) {
                 let name = Some(self.parse_identifier()?);
@@ -7980,6 +7988,7 @@ impl<'a> Parser<'a> {
             name: col_name,
             data_type,
             options,
+            leading_comment,
         })
     }
 

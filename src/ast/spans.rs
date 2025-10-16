@@ -553,6 +553,7 @@ impl Spanned for CreateTable {
             refresh_mode: _,
             initialize: _,
             require_user: _,
+            leading_comment: _,                 // Option<Comment>
         } = self;
 
         union_spans(
@@ -572,6 +573,7 @@ impl Spanned for ColumnDef {
             name,
             data_type: _, // enum
             options,
+            leading_comment: _,
         } = self;
 
         union_spans(core::iter::once(name.span).chain(options.iter().map(|i| i.span())))

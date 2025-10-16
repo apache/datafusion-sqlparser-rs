@@ -32,6 +32,7 @@ use crate::ast::{
 };
 
 use crate::parser::ParserError;
+use crate::tokenizer::Comment;
 
 /// Builder for create table statement variant ([1]).
 ///
@@ -115,6 +116,7 @@ pub struct CreateTableBuilder {
     pub refresh_mode: Option<RefreshModeKind>,
     pub initialize: Option<InitializeKind>,
     pub require_user: bool,
+    pub leading_comment: Option<Comment>,
 }
 
 impl CreateTableBuilder {
@@ -171,6 +173,7 @@ impl CreateTableBuilder {
             refresh_mode: None,
             initialize: None,
             require_user: false,
+            leading_comment: None,
         }
     }
     pub fn or_replace(mut self, or_replace: bool) -> Self {
@@ -484,6 +487,7 @@ impl CreateTableBuilder {
             refresh_mode: self.refresh_mode,
             initialize: self.initialize,
             require_user: self.require_user,
+            leading_comment: self.leading_comment,
         }
         .into()
     }
@@ -548,6 +552,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 refresh_mode,
                 initialize,
                 require_user,
+                leading_comment,
             }) => Ok(Self {
                 or_replace,
                 temporary,
@@ -600,6 +605,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 refresh_mode,
                 initialize,
                 require_user,
+                leading_comment,
             }),
             _ => Err(ParserError::ParserError(format!(
                 "Expected create table statement, but received: {stmt}"

@@ -1568,7 +1568,7 @@ fn test_mssql_cursor() {
         CLOSE Employee_Cursor; \
         DEALLOCATE Employee_Cursor\
     ";
-    let _ = ms().statements_parse_to(full_cursor_usage, "");
+    let _ = ms().statements_parse_to(full_cursor_usage, 6, "");
 }
 
 #[test]
@@ -2524,4 +2524,185 @@ DECLARE @Y AS NVARCHAR(MAX)='y'
     let stmts = tsql().parse_sql_statements(sql).unwrap();
     assert_eq!(stmts.len(), 2);
     assert!(stmts.iter().all(|s| matches!(s, Statement::Declare { .. })));
+}
+
+#[test]
+fn parse_mssql_go_keyword() {
+    let single_go_keyword = "USE some_database;\nGO";
+    let stmts = ms().statements_parse_to(single_go_keyword, 2, "USE some_database\nGO");
+    assert_eq!(stmts[1], Statement::Go(GoStatement { count: None }));
+
+    let go_with_count = "SELECT 1;\nGO 5";
+    let stmts = ms().statements_parse_to(go_with_count, 2, "SELECT 1\nGO 5");
+    assert_eq!(stmts[1], Statement::Go(GoStatement { count: Some(5) }));
+
+    let go_statement_delimiter = "SELECT 1\nGO";
+    let stmts = ms().statements_parse_to(go_statement_delimiter, 2, "SELECT 1; \nGO");
+    assert_eq!(stmts[1], Statement::Go(GoStatement { count: None }));
+
+    let bare_go = "GO";
+    let stmt = ms().one_statement_parses_to(bare_go, "GO");
+    assert_eq!(stmt, Statement::Go(GoStatement { count: None }));
+
+    let go_then_statements = "/* whitespace */ GO\nRAISERROR('This is a test', 16, 1);";
+    let stmts = ms().statements_parse_to(
+        go_then_statements,
+        2,
+        "GO\nRAISERROR('This is a test', 16, 1)",
+    );
+    assert_eq!(stmts[0], Statement::Go(GoStatement { count: None }));
+    assert_eq!(
+        stmts[1],
+        Statement::RaisError {
+            message: Box::new(Expr::Value(
+                (Value::SingleQuotedString("This is a test".to_string())).with_empty_span()
+            )),
+            severity: Box::new(Expr::Value(number("16").with_empty_span())),
+            state: Box::new(Expr::Value(number("1").with_empty_span())),
+            arguments: vec![],
+            options: vec![],
+        }
+    );
+
+    let multiple_gos = "SELECT 1;\nGO 5\nSELECT 2;\n  GO";
+    let stmts = ms().statements_parse_to(multiple_gos, 4, "SELECT 1\nGO 5\nSELECT 2\nGO");
+    assert_eq!(stmts[1], Statement::Go(GoStatement { count: Some(5) }));
+    assert_eq!(stmts[3], Statement::Go(GoStatement { count: None }));
+
+    let single_line_comment_preceding_go = "USE some_database; -- okay\nGO";
+    let stmts =
+        ms().statements_parse_to(single_line_comment_preceding_go, 2, "USE some_database\nGO");
+    assert_eq!(stmts[1], Statement::Go(GoStatement { count: None }));
+
+    let multi_line_comment_preceding_go = "USE some_database; /* okay */\nGO";
+    let stmts =
+        ms().statements_parse_to(multi_line_comment_preceding_go, 2, "USE some_database\nGO");
+    assert_eq!(stmts[1], Statement::Go(GoStatement { count: None }));
+
+    let single_line_comment_following_go = "USE some_database;\nGO -- okay";
+    let stmts =
+        ms().statements_parse_to(single_line_comment_following_go, 2, "USE some_database\nGO");
+    assert_eq!(stmts[1], Statement::Go(GoStatement { count: None }));
+
+    let multi_line_comment_following = "USE some_database;\nGO/* okay */42";
+    let stmts =
+        ms().statements_parse_to(multi_line_comment_following, 2, "USE some_database\nGO 42");
+    assert_eq!(stmts[1], Statement::Go(GoStatement { count: Some(42) }));
+
+    let cte_following_go =
+        "USE some_database;\nGO\n;WITH cte AS (\nSELECT 1 x\n)\nSELECT * FROM cte;";
+    let stmts = ms().parse_sql_statements(cte_following_go).unwrap();
+    assert_eq!(stmts.len(), 3);
+    assert_eq!(stmts[1], Statement::Go(GoStatement { count: None }));
+
+    let actually_column_alias = "SELECT NULL GO";
+    let stmt = ms().one_statement_parses_to(actually_column_alias, "SELECT NULL AS GO");
+    match &stmt {
+        Statement::Query(query) => {
+            let select = query.body.as_select().unwrap();
+            assert_eq!(
+                only(select.clone().projection),
+                SelectItem::ExprWithAlias {
+                    expr: Expr::Value(Value::Null.with_empty_span()),
+                    alias: Ident::new("GO"),
+                }
+            );
+        }
+        _ => panic!("Expected Query statement"),
+    }
+
+    let invalid_go_position = "SELECT 1; GO";
+    let err = ms().parse_sql_statements(invalid_go_position);
+    assert_eq!(
+        err.unwrap_err().to_string(),
+        "sql parser error: GO may only be preceded by whitespace on a line"
+    );
+
+    let invalid_go_count = "SELECT 1\nGO x";
+    let err = ms().parse_sql_statements(invalid_go_count);
+    assert_eq!(
+        err.unwrap_err().to_string(),
+        "sql parser error: Expected: literal int or newline, found: x"
+    );
+
+    let invalid_go_delimiter = "SELECT 1\nGO;";
+    let err = ms().parse_sql_statements(invalid_go_delimiter);
+    assert_eq!(
+        err.unwrap_err().to_string(),
+        "sql parser error: Expected: literal int or newline, found: ;"
+    );
+}
+
+#[test]
+fn test_mssql_if_and_go() {
+    let sql = r#"
+        IF 1 = 2
+            SELECT 3;
+        GO
+    "#;
+    let statements = ms().parse_sql_statements(sql).unwrap();
+    assert_eq!(2, statements.len());
+    assert_eq!(
+        statements[0],
+        Statement::If(IfStatement {
+            if_block: ConditionalStatementBlock {
+                start_token: AttachedToken(TokenWithSpan::wrap(sqlparser::tokenizer::Token::Word(
+                    sqlparser::tokenizer::Word {
+                        value: "IF".to_string(),
+                        quote_style: None,
+                        keyword: Keyword::IF
+                    }
+                ))),
+                condition: Some(Expr::BinaryOp {
+                    left: Box::new(Expr::Value((number("1")).with_empty_span())),
+                    op: sqlparser::ast::BinaryOperator::Eq,
+                    right: Box::new(Expr::Value((number("2")).with_empty_span())),
+                }),
+                then_token: None,
+                conditional_statements: ConditionalStatements::Sequence {
+                    statements: vec![Statement::Query(Box::new(Query {
+                        with: None,
+                        limit_clause: None,
+                        fetch: None,
+                        locks: vec![],
+                        for_clause: None,
+                        order_by: None,
+                        settings: None,
+                        format_clause: None,
+                        pipe_operators: vec![],
+                        body: Box::new(SetExpr::Select(Box::new(Select {
+                            select_token: AttachedToken::empty(),
+                            distinct: None,
+                            top: None,
+                            top_before_distinct: false,
+                            projection: vec![SelectItem::UnnamedExpr(Expr::Value(
+                                (number("3")).with_empty_span()
+                            ))],
+                            exclude: None,
+                            into: None,
+                            from: vec![],
+                            lateral_views: vec![],
+                            prewhere: None,
+                            selection: None,
+                            group_by: GroupByExpr::Expressions(vec![], vec![]),
+                            cluster_by: vec![],
+                            distribute_by: vec![],
+                            sort_by: vec![],
+                            having: None,
+                            named_window: vec![],
+                            window_before_qualify: false,
+                            qualify: None,
+                            value_table_mode: None,
+                            connect_by: None,
+                            flavor: SelectFlavor::Standard,
+                        }))),
+                    }))],
+                },
+            },
+            elseif_blocks: vec![],
+            else_block: None,
+            end_token: None,
+        })
+    );
+    assert_eq!(statements[1], Statement::Go(GoStatement { count: None }));
 }

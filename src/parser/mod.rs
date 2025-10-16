@@ -8050,16 +8050,32 @@ impl<'a> Parser<'a> {
             }
         } else if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY]) {
             let characteristics = self.parse_constraint_characteristics()?;
-            Ok(Some(ColumnOption::Unique {
-                is_primary: true,
-                characteristics,
-            }))
+            Ok(Some(
+                PrimaryKeyConstraint {
+                    name: None,
+                    index_name: None,
+                    index_type: None,
+                    columns: vec![],
+                    index_options: vec![],
+                    characteristics,
+                }
+                .into(),
+            ))
         } else if self.parse_keyword(Keyword::UNIQUE) {
             let characteristics = self.parse_constraint_characteristics()?;
-            Ok(Some(ColumnOption::Unique {
-                is_primary: false,
-                characteristics,
-            }))
+            Ok(Some(
+                UniqueConstraint {
+                    name: None,
+                    index_name: None,
+                    index_type_display: KeyOrIndexDisplay::None,
+                    index_type: None,
+                    columns: vec![],
+                    index_options: vec![],
+                    characteristics,
+                    nulls_distinct: NullsDistinctOption::None,
+                }
+                .into(),
+            ))
         } else if self.parse_keyword(Keyword::REFERENCES) {
             let foreign_table = self.parse_object_name(false)?;
             // PostgreSQL allows omitting the column list and

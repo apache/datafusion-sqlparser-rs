@@ -182,6 +182,10 @@ visit_noop!(bigdecimal::BigDecimal);
 /// ```
 pub trait Visitor {
     /// Type returned when the recursion returns early.
+    ///
+    /// Important note: The `Break` type should be kept as small as possible to prevent
+    /// stack overflow during recursion. If you need to return an error, consider
+    /// boxing it with `Box` to minimize stack usage.
     type Break;
 
     /// Invoked for any queries that appear in the AST before visiting children
@@ -290,6 +294,10 @@ pub trait Visitor {
 /// ```
 pub trait VisitorMut {
     /// Type returned when the recursion returns early.
+    ///
+    /// Important note: The `Break` type should be kept as small as possible to prevent
+    /// stack overflow during recursion. If you need to return an error, consider
+    /// boxing it with `Box` to minimize stack usage.
     type Break;
 
     /// Invoked for any queries that appear in the AST before visiting children

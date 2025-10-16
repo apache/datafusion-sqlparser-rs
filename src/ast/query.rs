@@ -603,7 +603,7 @@ pub struct With {
     /// Token for the "WITH" keyword
     pub with_token: AttachedToken,
     pub recursive: bool,
-    pub cte_tables: Vec<Cte>,
+    pub cte_tables: Vec<WithExpression>,
 }
 
 impl fmt::Display for With {
@@ -641,7 +641,71 @@ impl fmt::Display for CteAsMaterialized {
     }
 }
 
-/// A single CTE (used after `WITH`): `<alias> [(col1, col2, ...)] AS <materialized> ( <query> )`
+/// `WITH` clause in `SELECT`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum WithExpression {
+    /// Common table expression.
+    Cte(Cte),
+    /// Common scalar expression.
+    Cse(Cse),
+}
+
+impl WithExpression {
+    pub fn cte(&self) -> Option<&Cte> {
+        match self {
+            Self::Cte(cte) => Some(cte),
+            Self::Cse(_) => None,
+        }
+    }
+
+    pub fn cse(&self) -> Option<&Cse> {
+        match self {
+            Self::Cte(_) => None,
+            Self::Cse(cse) => Some(cse),
+        }
+    }
+}
+
+impl fmt::Display for WithExpression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Cte(cte) => cte.fmt(f),
+            Self::Cse(cse) => cse.fmt(f),
+        }
+    }
+}
+
+/// A common scalar expression (CSE).
+///
+/// ```sql
+/// [WITH] <expr> AS <ident> [,]
+/// ```
+///
+/// See https://clickhouse.com/docs/sql-reference/statements/select/with#common-scalar-expressions
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Cse {
+    pub expr: Expr,
+    pub ident: Ident,
+}
+
+impl fmt::Display for Cse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.expr.fmt(f)?;
+        f.write_str(" AS ")?;
+        self.ident.fmt(f)?;
+        Ok(())
+    }
+}
+/// A common table expression (CTE).
+///
+/// ```sql
+/// [WITH] <alias> [(col1, col2, ...)] AS <materialized> ( <query> ) [,]
+/// ```
+///
 /// The names in the column list before `AS`, when specified, replace the names
 /// of the columns returned by the query. The parser does not validate that the
 /// number of columns in the query matches the number of columns in the query.

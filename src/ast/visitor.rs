@@ -124,10 +124,6 @@ visit_noop!(bigdecimal::BigDecimal);
 /// node and `post_visit_` methods are invoked after visiting all
 /// children of the node.
 ///
-/// Important note: The `Break` type should be kept as small as possible to prevent
-/// stack overflow during recursion. If you need to return an error, consider
-/// boxing it with `Box` to minimize stack usage.
-///
 /// # See also
 ///
 /// These methods provide a more concise way of visiting nodes of a certain type:
@@ -186,6 +182,10 @@ visit_noop!(bigdecimal::BigDecimal);
 /// ```
 pub trait Visitor {
     /// Type returned when the recursion returns early.
+    ///
+    /// Important note: The `Break` type should be kept as small as possible to prevent
+    /// stack overflow during recursion. If you need to return an error, consider
+    /// boxing it with `Box` to minimize stack usage.
     type Break;
 
     /// Invoked for any queries that appear in the AST before visiting children
@@ -255,10 +255,6 @@ pub trait Visitor {
 /// node and `post_visit_` methods are invoked after visiting all
 /// children of the node.
 ///
-/// Important note: The `Break` type should be kept as small as possible to prevent
-/// stack overflow during recursion. If you need to return an error, consider
-/// boxing it with `Box` to minimize stack usage.
-///
 /// # See also
 ///
 /// These methods provide a more concise way of visiting nodes of a certain type:
@@ -298,6 +294,10 @@ pub trait Visitor {
 /// ```
 pub trait VisitorMut {
     /// Type returned when the recursion returns early.
+    ///
+    /// Important note: The `Break` type should be kept as small as possible to prevent
+    /// stack overflow during recursion. If you need to return an error, consider
+    /// boxing it with `Box` to minimize stack usage.
     type Break;
 
     /// Invoked for any queries that appear in the AST before visiting children

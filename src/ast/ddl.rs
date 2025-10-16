@@ -31,7 +31,7 @@ use sqlparser_derive::{Visit, VisitMut};
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
     display_comma_separated, display_separated,
-    table_constraints::{ForeignKeyConstraint, TableConstraint},
+    table_constraints::{CheckConstraint, ForeignKeyConstraint, TableConstraint},
     ArgMode, AttachedToken, CommentDef, ConditionalStatements, CreateFunctionBody,
     CreateFunctionUsing, CreateTableLikeKind, CreateTableOptions, CreateViewParams, DataType, Expr,
     FileFormat, FunctionBehavior, FunctionCalledOnNull, FunctionDesc, FunctionDeterminismSpecifier,
@@ -1569,7 +1569,7 @@ pub enum ColumnOption {
     /// `).
     ForeignKey(ForeignKeyConstraint),
     /// `CHECK (<expr>)`
-    Check(Expr),
+    Check(CheckConstraint),
     /// Dialect-specific options, such as:
     /// - MySQL's `AUTO_INCREMENT` or SQLite's `AUTOINCREMENT`
     /// - ...
@@ -1638,6 +1638,11 @@ pub enum ColumnOption {
     Invisible,
 }
 
+impl From<CheckConstraint> for ColumnOption {
+    fn from(c: CheckConstraint) -> Self {
+        ColumnOption::Check(c)
+    }
+}
 impl From<ForeignKeyConstraint> for ColumnOption {
     fn from(fk: ForeignKeyConstraint) -> Self {
         ColumnOption::ForeignKey(fk)
@@ -1693,7 +1698,7 @@ impl fmt::Display for ColumnOption {
                 }
                 Ok(())
             }
-            Check(expr) => write!(f, "CHECK ({expr})"),
+            Check(constraint) => write!(f, "{constraint}"),
             DialectSpecific(val) => write!(f, "{}", display_separated(val, " ")),
             CharacterSet(n) => write!(f, "CHARACTER SET {n}"),
             Collation(n) => write!(f, "COLLATE {n}"),

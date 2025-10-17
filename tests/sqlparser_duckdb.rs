@@ -64,6 +64,7 @@ fn test_struct() {
             name: "s".into(),
             data_type: struct_type1.clone(),
             options: vec![],
+            leading_comment: None,
         }]
     );
 
@@ -78,6 +79,7 @@ fn test_struct() {
                 None
             )),
             options: vec![],
+            leading_comment: None,
         }]
     );
 
@@ -126,6 +128,7 @@ fn test_struct() {
                 None
             )),
             options: vec![],
+            leading_comment: None,
         }]
     );
 
@@ -709,7 +712,8 @@ fn test_duckdb_union_datatype() {
                         field_name: "a".into(),
                         field_type: DataType::Int(None)
                     }]),
-                    options: Default::default()
+                    options: Default::default(),
+                    leading_comment: None,
                 },
                 ColumnDef {
                     name: "two".into(),
@@ -723,7 +727,8 @@ fn test_duckdb_union_datatype() {
                             field_type: DataType::Int(None)
                         }
                     ]),
-                    options: Default::default()
+                    options: Default::default(),
+                    leading_comment: None,
                 },
                 ColumnDef {
                     name: "nested".into(),
@@ -734,7 +739,8 @@ fn test_duckdb_union_datatype() {
                             field_type: DataType::Int(None)
                         }])
                     }]),
-                    options: Default::default()
+                    options: Default::default(),
+                    leading_comment: None,
                 }
             ],
             constraints: Default::default(),
@@ -782,6 +788,7 @@ fn test_duckdb_union_datatype() {
             refresh_mode: None,
             initialize: None,
             require_user: Default::default(),
+            leading_comment: None,
         }),
         stmt
     );

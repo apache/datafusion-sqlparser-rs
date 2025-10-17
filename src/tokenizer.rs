@@ -106,6 +106,8 @@ pub enum Token {
     HexStringLiteral(String),
     /// Comma
     Comma,
+    /// Comment (single line or multi line) that are associated with a statement or relevant sub-portion of a statement
+    LeadingComment(Comment),
     /// Whitespace (space, tab, etc)
     Whitespace(Whitespace),
     /// Double equals sign `==`
@@ -279,6 +281,14 @@ pub enum Token {
     CustomBinaryOperator(String),
 }
 
+/// Decide whether a comment is a LeadingComment or an InterstitialComment based on the previous token.
+fn dispatch_comment_kind(prev_token: Option<&Token>, comment: Comment) -> Token {
+    match prev_token {
+        None | Some(Token::Comma) | Some(Token::SemiColon) => Token::LeadingComment(comment),
+        _ => Token::Whitespace(comment.into()),
+    }
+}
+
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -304,6 +314,7 @@ impl fmt::Display for Token {
             Token::TripleSingleQuotedRawStringLiteral(ref s) => write!(f, "R'''{s}'''"),
             Token::TripleDoubleQuotedRawStringLiteral(ref s) => write!(f, "R\"\"\"{s}\"\"\""),
             Token::Comma => f.write_str(","),
+            Token::LeadingComment(c) => write!(f, "{c}"),
             Token::Whitespace(ws) => write!(f, "{ws}"),
             Token::DoubleEq => f.write_str("=="),
             Token::Spaceship => f.write_str("<=>"),
@@ -452,12 +463,47 @@ impl Word {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum Comment {
+    SingleLineComment { comment: String, prefix: String },
+    MultiLineComment(String),
+}
+
+impl fmt::Display for Comment {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Comment::SingleLineComment { comment, prefix } => write!(f, "{}{}", prefix, comment),
+            Comment::MultiLineComment(comment) => write!(f, "/*{}*/", comment),
+        }
+    }
+}
+
+impl From<Comment> for Whitespace {
+    fn from(comment: Comment) -> Self {
+        Whitespace::InterstitialComment(comment)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum Whitespace {
     Space,
     Newline,
     Tab,
-    SingleLineComment { comment: String, prefix: String },
-    MultiLineComment(String),
+    /// A comment which is not positioned before a statement or relevant sub-portion
+    /// of a statement, but rather appears between other tokens.
+    ///
+    /// For example, in the following SQL:
+    ///
+    /// ```sql
+    /// CREATE
+    /// -- This is an interstitial comment
+    /// TABLE
+    /// -- Another
+    /// -- interstitial comment
+    /// my_table (id INT);
+    /// ```
+    InterstitialComment(Comment),
 }
 
 impl fmt::Display for Whitespace {
@@ -466,8 +512,7 @@ impl fmt::Display for Whitespace {
             Whitespace::Space => f.write_str(" "),
             Whitespace::Newline => f.write_str("\n"),
             Whitespace::Tab => f.write_str("\t"),
-            Whitespace::SingleLineComment { prefix, comment } => write!(f, "{prefix}{comment}"),
-            Whitespace::MultiLineComment(s) => write!(f, "/*{s}*/"),
+            Whitespace::InterstitialComment(comment) => write!(f, "{}", comment),
         }
     }
 }
@@ -1332,8 +1377,9 @@ impl<'a> Tokenizer<'a> {
                             if is_comment {
                                 chars.next(); // consume second '-'
                                 let comment = self.tokenize_single_line_comment(chars);
-                                return Ok(Some(Token::Whitespace(
-                                    Whitespace::SingleLineComment {
+                                return Ok(Some(dispatch_comment_kind(
+                                    prev_token,
+                                    Comment::SingleLineComment {
                                         prefix: "--".to_owned(),
                                         comment,
                                     },
@@ -1358,15 +1404,20 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some('*') => {
                             chars.next(); // consume the '*', starting a multi-line comment
-                            self.tokenize_multiline_comment(chars)
+                            Ok(self
+                                .tokenize_multiline_comment(chars)?
+                                .map(|comment| dispatch_comment_kind(prev_token, comment)))
                         }
                         Some('/') if dialect_of!(self is SnowflakeDialect) => {
                             chars.next(); // consume the second '/', starting a snowflake single-line comment
                             let comment = self.tokenize_single_line_comment(chars);
-                            Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
-                                prefix: "//".to_owned(),
-                                comment,
-                            })))
+                            Ok(Some(dispatch_comment_kind(
+                                prev_token,
+                                Comment::SingleLineComment {
+                                    prefix: "//".to_owned(),
+                                    comment,
+                                },
+                            )))
                         }
                         Some('/') if dialect_of!(self is DuckDbDialect | GenericDialect) => {
                             self.consume_and_return(chars, Token::DuckIntDiv)
@@ -1568,10 +1619,14 @@ impl<'a> Tokenizer<'a> {
                 {
                     chars.next(); // consume the '#', starting a snowflake single-line comment
                     let comment = self.tokenize_single_line_comment(chars);
-                    Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "#".to_owned(),
-                        comment,
-                    })))
+
+                    Ok(Some(dispatch_comment_kind(
+                        prev_token,
+                        Comment::SingleLineComment {
+                            prefix: "#".to_owned(),
+                            comment,
+                        },
+                    )))
                 }
                 '~' => {
                     chars.next(); // consume
@@ -2104,7 +2159,7 @@ impl<'a> Tokenizer<'a> {
     fn tokenize_multiline_comment(
         &self,
         chars: &mut State,
-    ) -> Result<Option<Token>, TokenizerError> {
+    ) -> Result<Option<Comment>, TokenizerError> {
         let mut s = String::new();
         let mut nested = 1;
         let supports_nested_comments = self.dialect.supports_nested_comments();
@@ -2121,7 +2176,7 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume the '/'
                     nested -= 1;
                     if nested == 0 {
-                        break Ok(Some(Token::Whitespace(Whitespace::MultiLineComment(s))));
+                        break Ok(Some(Comment::MultiLineComment(s).into()));
                     }
                     s.push('*');
                     s.push('/');
@@ -3083,10 +3138,13 @@ mod tests {
                 String::from("0--this is a comment\n1"),
                 vec![
                     Token::Number("0".to_string(), false),
-                    Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "--".to_string(),
-                        comment: "this is a comment\n".to_string(),
-                    }),
+                    Token::Whitespace(
+                        Comment::SingleLineComment {
+                            prefix: "--".to_string(),
+                            comment: "this is a comment\n".to_string(),
+                        }
+                        .into(),
+                    ),
                     Token::Number("1".to_string(), false),
                 ],
             ),
@@ -3094,20 +3152,26 @@ mod tests {
                 String::from("0--this is a comment\r1"),
                 vec![
                     Token::Number("0".to_string(), false),
-                    Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "--".to_string(),
-                        comment: "this is a comment\r1".to_string(),
-                    }),
+                    Token::Whitespace(
+                        Comment::SingleLineComment {
+                            prefix: "--".to_string(),
+                            comment: "this is a comment\r1".to_string(),
+                        }
+                        .into(),
+                    ),
                 ],
             ),
             (
                 String::from("0--this is a comment\r\n1"),
                 vec![
                     Token::Number("0".to_string(), false),
-                    Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "--".to_string(),
-                        comment: "this is a comment\r\n".to_string(),
-                    }),
+                    Token::Whitespace(
+                        Comment::SingleLineComment {
+                            prefix: "--".to_string(),
+                            comment: "this is a comment\r\n".to_string(),
+                        }
+                        .into(),
+                    ),
                     Token::Number("1".to_string(), false),
                 ],
             ),
@@ -3129,25 +3193,43 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
             Token::Number("1".to_string(), false),
-            Token::Whitespace(Whitespace::SingleLineComment {
-                prefix: "--".to_string(),
-                comment: "\r".to_string(),
-            }),
+            Token::Whitespace(
+                Comment::SingleLineComment {
+                    prefix: "--".to_string(),
+                    comment: "\r".to_string(),
+                }
+                .into(),
+            ),
             Token::Number("0".to_string(), false),
         ];
         compare(expected, tokens);
     }
 
     #[test]
-    fn tokenize_comment_at_eof() {
+    fn tokenize_leading_inline_comment_at_eof() {
         let sql = String::from("--this is a comment");
 
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
-        let expected = vec![Token::Whitespace(Whitespace::SingleLineComment {
-            prefix: "--".to_string(),
-            comment: "this is a comment".to_string(),
-        })];
+        let expected = vec![Token::LeadingComment(
+            Comment::SingleLineComment {
+                prefix: "--".to_string(),
+                comment: "this is a comment".to_string(),
+            }
+            .into(),
+        )];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_leading_multiline_comment_at_eof() {
+        let sql = String::from("/* this is a comment */");
+
+        let dialect = GenericDialect {};
+        let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
+        let expected = vec![Token::LeadingComment(Comment::MultiLineComment(
+            " this is a comment ".to_string(),
+        ))];
         compare(expected, tokens);
     }
 
@@ -3159,9 +3241,9 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
             Token::Number("0".to_string(), false),
-            Token::Whitespace(Whitespace::MultiLineComment(
-                "multi-line\n* /comment".to_string(),
-            )),
+            Token::Whitespace(
+                Comment::MultiLineComment("multi-line\n* /comment".to_string()).into(),
+            ),
             Token::Number("1".to_string(), false),
         ];
         compare(expected, tokens);
@@ -3173,9 +3255,12 @@ mod tests {
             "0/*multi-line\n* \n/* comment \n /*comment*/*/ */ /comment*/1",
             vec![
                 Token::Number("0".to_string(), false),
-                Token::Whitespace(Whitespace::MultiLineComment(
-                    "multi-line\n* \n/* comment \n /*comment*/*/ ".into(),
-                )),
+                Token::Whitespace(
+                    Comment::MultiLineComment(
+                        "multi-line\n* \n/* comment \n /*comment*/*/ ".into(),
+                    )
+                    .into(),
+                ),
                 Token::Whitespace(Whitespace::Space),
                 Token::Div,
                 Token::Word(Word {
@@ -3193,9 +3278,12 @@ mod tests {
             "0/*multi-line\n* \n/* comment \n /*comment/**/ */ /comment*/*/1",
             vec![
                 Token::Number("0".to_string(), false),
-                Token::Whitespace(Whitespace::MultiLineComment(
-                    "multi-line\n* \n/* comment \n /*comment/**/ */ /comment*/".into(),
-                )),
+                Token::Whitespace(
+                    Comment::MultiLineComment(
+                        "multi-line\n* \n/* comment \n /*comment/**/ */ /comment*/".into(),
+                    )
+                    .into(),
+                ),
                 Token::Number("1".to_string(), false),
             ],
         );
@@ -3206,7 +3294,7 @@ mod tests {
                 Token::make_keyword("SELECT"),
                 Token::Whitespace(Whitespace::Space),
                 Token::Number("1".to_string(), false),
-                Token::Whitespace(Whitespace::MultiLineComment(" a /* b */ c ".to_string())),
+                Token::Whitespace(Comment::MultiLineComment(" a /* b */ c ".to_string()).into()),
                 Token::Number("0".to_string(), false),
             ],
         );
@@ -3220,7 +3308,7 @@ mod tests {
                 Token::make_keyword("select"),
                 Token::Whitespace(Whitespace::Space),
                 Token::Number("1".to_string(), false),
-                Token::Whitespace(Whitespace::MultiLineComment("/**/".to_string())),
+                Token::Whitespace(Comment::MultiLineComment("/**/".to_string()).into()),
                 Token::Number("0".to_string(), false),
             ],
         );
@@ -3234,9 +3322,9 @@ mod tests {
                 Token::make_keyword("SELECT"),
                 Token::Whitespace(Whitespace::Space),
                 Token::Number("1".to_string(), false),
-                Token::Whitespace(Whitespace::MultiLineComment(
-                    "/* nested comment ".to_string(),
-                )),
+                Token::Whitespace(
+                    Comment::MultiLineComment("/* nested comment ".to_string()).into(),
+                ),
                 Token::Mul,
                 Token::Div,
                 Token::Number("0".to_string(), false),
@@ -3252,7 +3340,7 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
             Token::Whitespace(Whitespace::Newline),
-            Token::Whitespace(Whitespace::MultiLineComment("* Comment *".to_string())),
+            Token::Whitespace(Comment::MultiLineComment("* Comment *".to_string()).into()),
             Token::Whitespace(Whitespace::Newline),
         ];
         compare(expected, tokens);
@@ -3936,10 +4024,13 @@ mod tests {
                 vec![
                     Token::make_keyword("SELECT"),
                     Token::Whitespace(Whitespace::Space),
-                    Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "--".to_string(),
-                        comment: " 'abc'".to_string(),
-                    }),
+                    Token::Whitespace(
+                        Comment::SingleLineComment {
+                            prefix: "--".to_string(),
+                            comment: " 'abc'".to_string(),
+                        }
+                        .into(),
+                    ),
                 ],
             );
 
@@ -3963,10 +4054,13 @@ mod tests {
                 vec![
                     Token::make_keyword("SELECT"),
                     Token::Whitespace(Whitespace::Space),
-                    Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "--".to_string(),
-                        comment: "'abc'".to_string(),
-                    }),
+                    Token::Whitespace(
+                        Comment::SingleLineComment {
+                            prefix: "--".to_string(),
+                            comment: "'abc'".to_string(),
+                        }
+                        .into(),
+                    ),
                 ],
             );
 
@@ -3976,10 +4070,13 @@ mod tests {
                 vec![
                     Token::make_keyword("SELECT"),
                     Token::Whitespace(Whitespace::Space),
-                    Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "--".to_string(),
-                        comment: " 'abc'".to_string(),
-                    }),
+                    Token::Whitespace(
+                        Comment::SingleLineComment {
+                            prefix: "--".to_string(),
+                            comment: " 'abc'".to_string(),
+                        }
+                        .into(),
+                    ),
                 ],
             );
 
@@ -3989,10 +4086,13 @@ mod tests {
                 vec![
                     Token::make_keyword("SELECT"),
                     Token::Whitespace(Whitespace::Space),
-                    Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "--".to_string(),
-                        comment: "".to_string(),
-                    }),
+                    Token::Whitespace(
+                        Comment::SingleLineComment {
+                            prefix: "--".to_string(),
+                            comment: "".to_string(),
+                        }
+                        .into(),
+                    ),
                 ],
             );
     }

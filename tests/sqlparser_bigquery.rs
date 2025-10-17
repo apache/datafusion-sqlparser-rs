@@ -466,7 +466,8 @@ fn parse_create_table_with_unquoted_hyphen() {
                 vec![ColumnDef {
                     name: Ident::new("x"),
                     data_type: DataType::Int64,
-                    options: vec![]
+                    options: vec![],
+                    leading_comment: None,
                 },],
                 columns
             );
@@ -519,7 +520,8 @@ fn parse_create_table_with_options() {
                                     ),
                                 },])
                             },
-                        ]
+                        ],
+                        leading_comment: None,
                     },
                     ColumnDef {
                         name: Ident::new("y"),
@@ -534,7 +536,8 @@ fn parse_create_table_with_options() {
                                     )
                                 ),
                             },])
-                        }]
+                        }],
+                        leading_comment: None,
                     },
                 ],
                 columns
@@ -620,6 +623,7 @@ fn parse_nested_data_types() {
                             StructBracketKind::AngleBrackets
                         ),
                         options: vec![],
+                        leading_comment: None,
                     },
                     ColumnDef {
                         name: Ident::new("y"),
@@ -634,6 +638,7 @@ fn parse_nested_data_types() {
                             ),
                         ))),
                         options: vec![],
+                        leading_comment: None,
                     },
                 ]
             );

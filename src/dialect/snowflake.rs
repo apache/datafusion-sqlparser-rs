@@ -35,7 +35,7 @@ use crate::ast::{
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{IsOptional, Parser, ParserError};
-use crate::tokenizer::Token;
+use crate::tokenizer::{Comment, Token};
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
 #[cfg(not(feature = "std"))]
@@ -210,6 +210,7 @@ impl Dialect for SnowflakeDialect {
     }
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
+        let leading_comment = parser.parse_leading_comment();
         if parser.parse_keyword(Keyword::BEGIN) {
             return Some(parser.parse_begin_exception_end());
         }
@@ -261,7 +262,7 @@ impl Dialect for SnowflakeDialect {
                 return Some(parse_create_stage(or_replace, temporary, parser));
             } else if parser.parse_keyword(Keyword::TABLE) {
                 return Some(parse_create_table(
-                    or_replace, global, temporary, volatile, transient, iceberg, dynamic, parser,
+                    or_replace, global, temporary, volatile, transient, iceberg, dynamic, parser,leading_comment
                 ));
             } else if parser.parse_keyword(Keyword::DATABASE) {
                 return Some(parse_create_database(or_replace, transient, parser));
@@ -630,6 +631,7 @@ pub fn parse_create_table(
     iceberg: bool,
     dynamic: bool,
     parser: &mut Parser,
+    leading_comment: Option<Comment>
 ) -> Result<Statement, ParserError> {
     let if_not_exists = parser.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
     let table_name = parser.parse_object_name(false)?;
@@ -643,6 +645,7 @@ pub fn parse_create_table(
         .iceberg(iceberg)
         .global(global)
         .dynamic(dynamic)
+        .leading_comment(leading_comment)
         .hive_formats(Some(Default::default()));
 
     // Snowflake does not enforce order of the parameters in the statement. The parser needs to

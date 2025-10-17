@@ -529,6 +529,17 @@ impl<'a> Parser<'a> {
         Parser::new(dialect).try_with_sql(sql)?.parse_statements()
     }
 
+    /// Parses a single leading comment (if any)
+    pub fn parse_leading_comment(&mut self) -> Option<Comment> {
+        if let Token::LeadingComment(ref comment) = self.peek_token_ref().token {
+        let comment = comment.clone();
+            self.advance_token();
+            Some(comment)
+        } else {
+            None
+        }
+    }
+
     /// Parse a single top-level statement (such as SELECT, INSERT, CREATE, etc.),
     /// stopping before the statement separator, if any.
     pub fn parse_statement(&mut self) -> Result<Statement, ParserError> {
@@ -538,17 +549,9 @@ impl<'a> Parser<'a> {
         if let Some(statement) = self.dialect.parse_statement(self) {
             return statement;
         }
-
-        let mut next_token = self.next_token();
-        let leading_comment: Option<Comment> = if let Token::LeadingComment(_) = &next_token.token {
-            let Token::LeadingComment(comment) = next_token.token else {
-                unreachable!()
-            };
-            next_token = self.next_token();
-            Some(comment)
-        } else {
-            None
-        };
+        let leading_comment: Option<Comment> = self.parse_leading_comment();
+        let next_token = self.next_token();
+        
 
         match &next_token.token {
             Token::Word(w) => match w.keyword {
@@ -590,7 +593,7 @@ impl<'a> Parser<'a> {
                     self.parse_detach_duckdb_database()
                 }
                 Keyword::MSCK => self.parse_msck(),
-                Keyword::CREATE => self.parse_create(),
+                Keyword::CREATE => self.parse_create(leading_comment),
                 Keyword::CACHE => self.parse_cache_table(),
                 Keyword::DROP => self.parse_drop(),
                 Keyword::DISCARD => self.parse_discard(),
@@ -4727,7 +4730,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a SQL CREATE statement
-    pub fn parse_create(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_create(&mut self, leading_comment: Option<Comment>) -> Result<Statement, ParserError> {
         let or_replace = self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
         let or_alter = self.parse_keywords(&[Keyword::OR, Keyword::ALTER]);
         let local = self.parse_one_of_keywords(&[Keyword::LOCAL]).is_some();
@@ -4747,7 +4750,7 @@ impl<'a> Parser<'a> {
             && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
         let create_view_params = self.parse_create_view_params()?;
         if self.parse_keyword(Keyword::TABLE) {
-            self.parse_create_table(or_replace, temporary, global, transient)
+            self.parse_create_table(or_replace, temporary, global, transient, leading_comment)
         } else if self.peek_keyword(Keyword::MATERIALIZED)
             || self.peek_keyword(Keyword::VIEW)
             || self.peek_keywords(&[Keyword::SECURE, Keyword::MATERIALIZED, Keyword::VIEW])
@@ -4757,7 +4760,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::POLICY) {
             self.parse_create_policy()
         } else if self.parse_keyword(Keyword::EXTERNAL) {
-            self.parse_create_external_table(or_replace)
+            self.parse_create_external_table(or_replace, leading_comment)
         } else if self.parse_keyword(Keyword::FUNCTION) {
             self.parse_create_function(or_alter, or_replace, temporary)
         } else if self.parse_keyword(Keyword::DOMAIN) {
@@ -5806,6 +5809,7 @@ impl<'a> Parser<'a> {
     pub fn parse_create_external_table(
         &mut self,
         or_replace: bool,
+        leading_comment: Option<Comment>
     ) -> Result<Statement, ParserError> {
         self.expect_keyword_is(Keyword::TABLE)?;
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
@@ -5841,6 +5845,7 @@ impl<'a> Parser<'a> {
             .external(true)
             .file_format(file_format)
             .location(location)
+            .leading_comment(leading_comment)
             .build())
     }
 
@@ -7404,6 +7409,7 @@ impl<'a> Parser<'a> {
         temporary: bool,
         global: Option<bool>,
         transient: bool,
+        leading_comment: Option<Comment>
     ) -> Result<Statement, ParserError> {
         let allow_unquoted_hyphen = dialect_of!(self is BigQueryDialect);
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
@@ -7513,6 +7519,7 @@ impl<'a> Parser<'a> {
             .table_options(create_table_config.table_options)
             .primary_key(primary_key)
             .strict(strict)
+            .leading_comment(leading_comment)
             .build())
     }
 
@@ -7888,8 +7895,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_columns(&mut self) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
-        //todo!("Add parsing for the Leading comment of the column, if any.");
-
+        
         let mut columns = vec![];
         let mut constraints = vec![];
         if !self.consume_token(&Token::LParen) || self.consume_token(&Token::RParen) {
@@ -7953,16 +7959,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
 
-        let mut next_token = self.next_token();
-        let leading_comment: Option<Comment> = if let Token::LeadingComment(_) = &next_token.token {
-            let Token::LeadingComment(comment) = next_token.token else {
-                unreachable!()
-            };
-            next_token = self.next_token();
-            Some(comment)
-        } else {
-            None
-        };
+        let leading_comment: Option<Comment> = self.parse_leading_comment();
 
 
         let col_name = self.parse_identifier()?;

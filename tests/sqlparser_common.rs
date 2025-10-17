@@ -39,7 +39,7 @@ use sqlparser::dialect::{
 };
 use sqlparser::keywords::{Keyword, ALL_KEYWORDS};
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
-use sqlparser::tokenizer::Tokenizer;
+use sqlparser::tokenizer::{Comment, Tokenizer};
 use sqlparser::tokenizer::{Location, Span};
 use test_utils::{
     all_dialects, all_dialects_where, all_dialects_with_options, alter_table_op, assert_eq_vec,
@@ -52,7 +52,6 @@ mod test_utils;
 
 #[cfg(test)]
 use pretty_assertions::assert_eq;
-use sqlparser::ast::ColumnOption::Comment;
 use sqlparser::ast::DateTimeField::Seconds;
 use sqlparser::ast::Expr::{Identifier, UnaryOp};
 use sqlparser::ast::Value::Number;
@@ -4281,6 +4280,63 @@ fn parse_create_table_with_multiple_on_delete_fails() {
     )
     .expect_err("should have failed");
 }
+
+#[test]
+fn parse_create_table_with_leading_comment() {
+    let single_line_sql = r#"-- a single line leading comment
+    CREATE TABLE user (
+    -- a column single line comment
+    id int PRIMARY KEY
+)"#;
+    let single_line_ast = one_statement_parses_to(single_line_sql, "");
+    match single_line_ast {
+        Statement::CreateTable (
+            CreateTable {
+                leading_comment: Some(Comment::SingleLineComment { comment, prefix }), 
+                columns ,
+                ..
+            },
+        ) => {
+            assert_eq!(comment, " a single line leading comment\n");
+            assert_eq!(prefix, "--");
+            let [ColumnDef{
+                    leading_comment: Some(Comment::SingleLineComment {comment, prefix}),
+                    ..
+                }] = columns.as_slice() else { unreachable!("unexpected column array: {columns:?}")};
+            assert_eq!(comment, " a column single line comment\n");
+            assert_eq!(prefix, "--");
+        }
+        _ => unreachable!(),
+    };
+    let multi_line_sql = r#"/* a multi line
+    leading comment */
+     CREATE TABLE user (
+     /* a column multiline
+     comment */
+    id int PRIMARY KEY
+)"#;
+    let multi_line_ast = one_statement_parses_to(multi_line_sql, "");
+    match multi_line_ast {
+        Statement::CreateTable(
+            CreateTable {
+                leading_comment: Some(Comment::MultiLineComment(comment)),
+                columns,
+                ..
+            }
+        ) => {
+            assert_eq!(comment," a multi line\n    leading comment ");
+             let [ColumnDef{
+                    leading_comment: Some(Comment::MultiLineComment(comment)),
+                    ..
+                }] = columns.as_slice() else { unreachable!("unexpected column array: {columns:?}")};
+            assert_eq!(comment," a column multiline\n    comment");
+        }
+        _ => unreachable!(),
+    };
+
+}
+
+
 
 #[test]
 fn parse_assert() {
@@ -12193,7 +12249,7 @@ fn test_parse_inline_comment() {
                     data_type: DataType::Int(None),
                     options: vec![ColumnOptionDef {
                         name: None,
-                        option: Comment("comment without equal".to_string()),
+                        option: ColumnOption::Comment("comment without equal".to_string()),
                     }],
                     leading_comment: None, 
                 }]
@@ -14991,6 +15047,7 @@ fn parse_update_from_before_select() {
 fn parse_overlaps() {
     verified_stmt("SELECT (DATE '2016-01-10', DATE '2016-02-01') OVERLAPS (DATE '2016-01-20', DATE '2016-02-10')");
 }
+
 
 #[test]
 fn parse_column_definition_trailing_commas() {

@@ -50,6 +50,7 @@ use crate::tokenizer::Comment;
 ///        name: Ident::new("c1"),
 ///        data_type: DataType::Int(None),
 ///        options: vec![],
+///        leading_comment: None,
 /// }]);
 /// // You can access internal elements with ease
 /// assert!(builder.if_not_exists);
@@ -431,6 +432,11 @@ impl CreateTableBuilder {
 
     pub fn require_user(mut self, require_user: bool) -> Self {
         self.require_user = require_user;
+        self
+    }
+
+    pub fn leading_comment(mut self, leading_comment: Option<Comment>) -> Self {
+        self.leading_comment = leading_comment;
         self
     }
 

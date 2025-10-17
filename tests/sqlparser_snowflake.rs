@@ -372,6 +372,7 @@ fn test_snowflake_create_table_column_comment() {
                         name: None,
                         option: ColumnOption::Comment("some comment".to_string())
                     }],
+                    leading_comment: None, 
                 }],
                 columns
             )
@@ -619,7 +620,8 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                                     order: Some(IdentityPropertyOrder::Order),
                                 }
                             ))
-                        }]
+                        }],
+                        leading_comment: None, 
                     },
                     ColumnDef {
                         name: "b".into(),
@@ -637,7 +639,8 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                                     order: Some(IdentityPropertyOrder::NoOrder),
                                 }
                             ))
-                        }]
+                        }],
+                        leading_comment: None, 
                     },
                     ColumnDef {
                         name: "c".into(),
@@ -650,7 +653,8 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                                     order: None,
                                 }
                             ))
-                        }]
+                        }],
+                        leading_comment: None, 
                     },
                     ColumnDef {
                         name: "d".into(),
@@ -674,7 +678,8 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                                     order: Some(IdentityPropertyOrder::Order),
                                 }
                             ))
-                        }]
+                        }],
+                        leading_comment: None, 
                     },
                 ]
             );
@@ -697,7 +702,8 @@ fn test_snowflake_create_table_with_collated_column() {
                         option: ColumnOption::Collation(ObjectName::from(vec![Ident::with_quote(
                             '\'', "de_DE"
                         )])),
-                    }]
+                    }],
+                    leading_comment: None, 
                 },]
             );
         }
@@ -746,6 +752,7 @@ fn test_snowflake_create_table_with_columns_masking_policy() {
                                 }
                             ))
                         }],
+                        leading_comment: None, 
                     },]
                 );
             }
@@ -780,6 +787,7 @@ fn test_snowflake_create_table_with_columns_projection_policy() {
                                 }
                             ))
                         }],
+                        leading_comment: None, 
                     },]
                 );
             }
@@ -823,6 +831,7 @@ fn test_snowflake_create_table_with_columns_tags() {
                                 ]
                             }),
                         }],
+                        leading_comment: None, 
                     },]
                 );
             }
@@ -884,6 +893,7 @@ fn test_snowflake_create_table_with_several_column_options() {
                                 }),
                             }
                         ],
+                        leading_comment: None, 
                     },
                     ColumnDef {
                         name: "b".into(),
@@ -922,6 +932,7 @@ fn test_snowflake_create_table_with_several_column_options() {
                                 }),
                             }
                         ],
+                        leading_comment: None, 
                     },
                 ]
             );

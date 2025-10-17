@@ -359,6 +359,7 @@ fn data_type_timestamp_ntz() {
                     name: "x".into(),
                     data_type: DataType::TimestampNtz,
                     options: vec![],
+                    leading_comment: None,
                 }]
             );
         }

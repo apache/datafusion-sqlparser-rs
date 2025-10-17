@@ -534,6 +534,7 @@ fn column_def(name: Ident, data_type: DataType) -> ColumnDef {
         name,
         data_type,
         options: vec![],
+        leading_comment: None,
     }
 }
 
@@ -625,6 +626,7 @@ fn parse_create_table_with_nullable() {
                             name: None,
                             option: ColumnOption::Null
                         }],
+                        leading_comment: None,
                     }
                 ]
             );
@@ -665,6 +667,7 @@ fn parse_create_table_with_nested_data_types() {
                             )
                         ]),
                         options: vec![],
+                        leading_comment: None,
                     },
                     ColumnDef {
                         name: Ident::new("k"),
@@ -683,6 +686,7 @@ fn parse_create_table_with_nested_data_types() {
                             ])
                         ))),
                         options: vec![],
+                        leading_comment: None,
                     },
                     ColumnDef {
                         name: Ident::new("l"),
@@ -701,6 +705,7 @@ fn parse_create_table_with_nested_data_types() {
                             },
                         ]),
                         options: vec![],
+                        leading_comment: None,
                     },
                     ColumnDef {
                         name: Ident::new("m"),
@@ -709,6 +714,7 @@ fn parse_create_table_with_nested_data_types() {
                             Box::new(DataType::UInt16)
                         ),
                         options: vec![],
+                        leading_comment: None,
                     },
                 ]
             );
@@ -740,11 +746,13 @@ fn parse_create_table_with_primary_key() {
                         name: Ident::with_quote('`', "i"),
                         data_type: DataType::Int(None),
                         options: vec![],
+                        leading_comment: None,
                     },
                     ColumnDef {
                         name: Ident::with_quote('`', "k"),
                         data_type: DataType::Int(None),
                         options: vec![],
+                        leading_comment: None,
                     },
                 ],
                 columns
@@ -839,6 +847,7 @@ fn parse_create_table_with_variant_default_expressions() {
                                 within_group: vec![],
                             }))
                         }],
+                        leading_comment: None,
                     },
                     ColumnDef {
                         name: Ident::new("b"),
@@ -860,6 +869,7 @@ fn parse_create_table_with_variant_default_expressions() {
                                 within_group: vec![],
                             })))
                         }],
+                        leading_comment: None,
                     },
                     ColumnDef {
                         name: Ident::new("c"),
@@ -868,6 +878,7 @@ fn parse_create_table_with_variant_default_expressions() {
                             name: None,
                             option: ColumnOption::Ephemeral(None)
                         }],
+                        leading_comment: None,
                     },
                     ColumnDef {
                         name: Ident::new("d"),
@@ -891,6 +902,7 @@ fn parse_create_table_with_variant_default_expressions() {
                                 within_group: vec![],
                             }))
                         }],
+                        leading_comment: None,
                     }
                 ]
             )

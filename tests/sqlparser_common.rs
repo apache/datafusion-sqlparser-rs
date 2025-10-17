@@ -3739,6 +3739,7 @@ fn parse_create_table() {
                             name: None,
                             option: ColumnOption::NotNull,
                         }],
+                        leading_comment: None, 
                     },
                     ColumnDef {
                         name: "lat".into(),
@@ -3747,11 +3748,13 @@ fn parse_create_table() {
                             name: None,
                             option: ColumnOption::Null,
                         }],
+                        leading_comment: None, 
                     },
                     ColumnDef {
                         name: "lng".into(),
                         data_type: DataType::Double(ExactNumberInfo::None),
                         options: vec![],
+                        leading_comment: None, 
                     },
                     ColumnDef {
                         name: "constrained".into(),
@@ -3788,6 +3791,7 @@ fn parse_create_table() {
                                 }),
                             },
                         ],
+                        leading_comment: None, 
                     },
                     ColumnDef {
                         name: "ref".into(),
@@ -3806,6 +3810,7 @@ fn parse_create_table() {
                                 characteristics: None,
                             }),
                         }],
+                        leading_comment: None, 
                     },
                     ColumnDef {
                         name: "ref2".into(),
@@ -3824,6 +3829,7 @@ fn parse_create_table() {
                                 characteristics: None,
                             }),
                         },],
+                        leading_comment: None, 
                     },
                 ]
             );
@@ -3946,6 +3952,7 @@ fn parse_create_table_with_constraint_characteristics() {
                             name: None,
                             option: ColumnOption::NotNull,
                         }],
+                        leading_comment: None, 
                     },
                     ColumnDef {
                         name: "lat".into(),
@@ -3954,11 +3961,13 @@ fn parse_create_table_with_constraint_characteristics() {
                             name: None,
                             option: ColumnOption::Null,
                         }],
+                        leading_comment: None, 
                     },
                     ColumnDef {
                         name: "lng".into(),
                         data_type: DataType::Double(ExactNumberInfo::None),
                         options: vec![],
+                        leading_comment: None, 
                     },
                 ]
             );
@@ -4110,7 +4119,8 @@ fn parse_create_table_column_constraint_characteristics() {
                                 is_primary: false,
                                 characteristics: expected_value
                             }
-                        }]
+                        }],
+                        leading_comment: None, 
                     }],
                     "{message}"
                 )
@@ -4219,11 +4229,13 @@ fn parse_create_table_hive_array() {
                             name: Ident::new("name"),
                             data_type: DataType::Int(None),
                             options: vec![],
+                            leading_comment: None, 
                         },
                         ColumnDef {
                             name: Ident::new("val"),
                             data_type: DataType::Array(expected),
                             options: vec![],
+                            leading_comment: None, 
                         },
                     ],
                 )
@@ -4595,6 +4607,7 @@ fn parse_create_external_table() {
                             name: None,
                             option: ColumnOption::NotNull,
                         }],
+                        leading_comment: None, 
                     },
                     ColumnDef {
                         name: "lat".into(),
@@ -4603,11 +4616,13 @@ fn parse_create_external_table() {
                             name: None,
                             option: ColumnOption::Null,
                         }],
+                        leading_comment: None, 
                     },
                     ColumnDef {
                         name: "lng".into(),
                         data_type: DataType::Double(ExactNumberInfo::None),
                         options: vec![],
+                        leading_comment: None, 
                     },
                 ]
             );
@@ -4663,6 +4678,7 @@ fn parse_create_or_replace_external_table() {
                         name: None,
                         option: ColumnOption::NotNull,
                     }],
+                        leading_comment: None, 
                 },]
             );
             assert!(constraints.is_empty());
@@ -12178,7 +12194,8 @@ fn test_parse_inline_comment() {
                     options: vec![ColumnOptionDef {
                         name: None,
                         option: Comment("comment without equal".to_string()),
-                    }]
+                    }],
+                    leading_comment: None, 
                 }]
             );
             assert_eq!(
@@ -14868,6 +14885,7 @@ fn parse_create_table_with_enum_types() {
                             Some(8)
                         ),
                         options: vec![],
+                        leading_comment: None, 
                     },
                     ColumnDef {
                         name: Ident::new("bar"),
@@ -14889,6 +14907,7 @@ fn parse_create_table_with_enum_types() {
                             Some(16)
                         ),
                         options: vec![],
+                        leading_comment: None, 
                     },
                     ColumnDef {
                         name: Ident::new("baz"),
@@ -14900,6 +14919,7 @@ fn parse_create_table_with_enum_types() {
                             None
                         ),
                         options: vec![],
+                        leading_comment: None, 
                     }
                 ],
                 columns
@@ -17282,7 +17302,8 @@ fn parse_invisible_column() {
                     ColumnDef {
                         name: "foo".into(),
                         data_type: DataType::Int(None),
-                        options: vec![]
+                        options: vec![],
+                        leading_comment: None, 
                     },
                     ColumnDef {
                         name: "bar".into(),
@@ -17290,7 +17311,8 @@ fn parse_invisible_column() {
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Invisible
-                        }]
+                        }],
+                        leading_comment: None, 
                     }
                 ]
             );
@@ -17313,7 +17335,8 @@ fn parse_invisible_column() {
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Invisible
-                        }]
+                        }],
+                        leading_comment: None, 
                     },
                     column_position: None
                 }]

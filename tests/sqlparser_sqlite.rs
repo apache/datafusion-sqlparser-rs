@@ -639,7 +639,7 @@ fn test_create_trigger() {
             assert!(!or_replace);
             assert!(!is_constraint);
             assert_eq!(name.to_string(), "trg_inherit_asset_models");
-            assert_eq!(period, TriggerPeriod::After);
+            assert_eq!(period, Some(TriggerPeriod::After));
             assert!(period_before_table);
             assert_eq!(events, vec![TriggerEvent::Insert]);
             assert_eq!(table_name.to_string(), "assets");
@@ -685,7 +685,7 @@ fn test_create_trigger() {
             assert!(!or_replace);
             assert!(!is_constraint);
             assert_eq!(name.to_string(), "log_new_user");
-            assert_eq!(period, TriggerPeriod::After);
+            assert_eq!(period, Some(TriggerPeriod::After));
             assert!(period_before_table);
             assert_eq!(events, vec![TriggerEvent::Insert]);
             assert_eq!(table_name.to_string(), "users");
@@ -725,7 +725,7 @@ fn test_create_trigger() {
             assert!(!or_replace);
             assert!(!is_constraint);
             assert_eq!(name.to_string(), "cleanup_orders");
-            assert_eq!(period, TriggerPeriod::After);
+            assert_eq!(period, Some(TriggerPeriod::After));
             assert!(period_before_table);
             assert_eq!(events, vec![TriggerEvent::Delete]);
             assert_eq!(table_name.to_string(), "customers");
@@ -765,7 +765,7 @@ fn test_create_trigger() {
             assert!(!or_replace);
             assert!(!is_constraint);
             assert_eq!(name.to_string(), "trg_before_update");
-            assert_eq!(period, TriggerPeriod::Before);
+            assert_eq!(period, Some(TriggerPeriod::Before));
             assert!(period_before_table);
             assert_eq!(events, vec![TriggerEvent::Update(Vec::new())]);
             assert_eq!(table_name.to_string(), "products");
@@ -809,7 +809,7 @@ fn test_create_trigger() {
             assert!(!or_replace);
             assert!(!is_constraint);
             assert_eq!(name.to_string(), "trg_instead_of_insert");
-            assert_eq!(period, TriggerPeriod::InsteadOf);
+            assert_eq!(period, Some(TriggerPeriod::InsteadOf));
             assert!(period_before_table);
             assert_eq!(events, vec![TriggerEvent::Insert]);
             assert_eq!(table_name.to_string(), "my_view");
@@ -850,13 +850,57 @@ fn test_create_trigger() {
             assert!(!or_replace);
             assert!(!is_constraint);
             assert_eq!(name.to_string(), "temp_trigger");
-            assert_eq!(period, TriggerPeriod::After);
+            assert_eq!(period, Some(TriggerPeriod::After));
             assert!(period_before_table);
             assert_eq!(events, vec![TriggerEvent::Insert]);
             assert_eq!(table_name.to_string(), "temp_table");
             assert!(referenced_table_name.is_none());
             assert!(referencing.is_empty());
             assert!(trigger_object.is_none());
+            assert!(condition.is_none());
+            assert!(!statements_as);
+            assert!(characteristics.is_none());
+        }
+        _ => unreachable!("Expected CREATE TRIGGER statement"),
+    }
+
+    // We test a trigger defined without a period (BEFORE/AFTER/INSTEAD OF)
+    let statement7 = "CREATE TRIGGER trg_inherit_asset_models INSERT ON assets FOR EACH ROW BEGIN INSERT INTO users (name) SELECT pam.name FROM users AS pam; END";
+    match sqlite().verified_stmt(statement7) {
+        Statement::CreateTrigger(CreateTrigger {
+            or_alter,
+            temporary,
+            or_replace,
+            is_constraint,
+            name,
+            period,
+            period_before_table,
+            events,
+            table_name,
+            referenced_table_name,
+            referencing,
+            trigger_object,
+            condition,
+            exec_body: _,
+            statements_as,
+            statements: _,
+            characteristics,
+        }) => {
+            assert!(!or_alter);
+            assert!(!temporary);
+            assert!(!or_replace);
+            assert!(!is_constraint);
+            assert_eq!(name.to_string(), "trg_inherit_asset_models");
+            assert_eq!(period, None);
+            assert!(period_before_table);
+            assert_eq!(events, vec![TriggerEvent::Insert]);
+            assert_eq!(table_name.to_string(), "assets");
+            assert!(referenced_table_name.is_none());
+            assert!(referencing.is_empty());
+            assert_eq!(
+                trigger_object,
+                Some(TriggerObjectKind::ForEach(TriggerObject::Row))
+            );
             assert!(condition.is_none());
             assert!(!statements_as);
             assert!(characteristics.is_none());

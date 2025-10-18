@@ -258,7 +258,7 @@ impl MsSqlDialect {
             or_replace: false,
             is_constraint: false,
             name,
-            period,
+            period: Some(period),
             period_before_table: false,
             events,
             table_name,

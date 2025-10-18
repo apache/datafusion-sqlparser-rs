@@ -3029,7 +3029,9 @@ pub struct CreateTrigger {
     /// FOR EACH ROW
     /// EXECUTE FUNCTION trigger_function();
     /// ```
-    pub period: TriggerPeriod,
+    ///
+    /// This may be omitted in SQLite, the effect is equivalent to BEFORE.
+    pub period: Option<TriggerPeriod>,
     /// Whether the trigger period was specified before the target table name.
     /// This does not refer to whether the period is BEFORE, AFTER, or INSTEAD OF,
     /// but rather the position of the period clause in relation to the table name.
@@ -3098,14 +3100,18 @@ impl Display for CreateTrigger {
         )?;
 
         if *period_before_table {
-            write!(f, "{period}")?;
-            if !events.is_empty() {
-                write!(f, " {}", display_separated(events, " OR "))?;
+            if let Some(p) = period {
+                write!(f, "{p} ")?;
             }
-            write!(f, " ON {table_name}")?;
-        } else {
+            if !events.is_empty() {
+                write!(f, "{} ", display_separated(events, " OR "))?;
+            }
             write!(f, "ON {table_name}")?;
-            write!(f, " {period}")?;
+        } else {
+            write!(f, "ON {table_name} ")?;
+            if let Some(p) = period {
+                write!(f, "{p}")?;
+            }
             if !events.is_empty() {
                 write!(f, " {}", display_separated(events, ", "))?;
             }

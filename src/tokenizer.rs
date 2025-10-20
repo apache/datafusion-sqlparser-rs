@@ -1385,13 +1385,18 @@ impl<'a> Tokenizer<'a> {
                             if is_comment {
                                 chars.next(); // consume second '-'
                                 let comment = self.tokenize_single_line_comment(chars);
-                                return Ok(Some(dispatch_comment_kind(
-                                    prev_nontrivial_token,
-                                    Comment::SingleLineComment {
-                                        prefix: "--".to_owned(),
-                                        comment,
-                                    },
-                                )));
+                                if chars.peek() == None {
+                                    return Ok(Some(Token::Whitespace(Whitespace::InterstitialComment(Comment::SingleLineComment { comment, prefix: "--".to_owned() }))));
+                                } else {
+                                    return Ok(Some(dispatch_comment_kind(
+                                        prev_nontrivial_token,
+                                        Comment::SingleLineComment {
+                                            prefix: "--".to_owned(),
+                                            comment,
+                                        },
+                                    )));
+                                }
+
                             }
 
                             self.start_binop(chars, "-", Token::Minus)

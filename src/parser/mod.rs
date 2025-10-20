@@ -551,7 +551,6 @@ impl<'a> Parser<'a> {
         }
         let leading_comment: Option<Comment> = self.parse_leading_comment();
         let next_token = self.next_token();
-        
 
         match &next_token.token {
             Token::Word(w) => match w.keyword {

@@ -282,8 +282,8 @@ pub enum Token {
 }
 
 /// Decide whether a comment is a LeadingComment or an InterstitialComment based on the previous token.
-fn dispatch_comment_kind(prev_token: Option<&Token>, comment: Comment) -> Token {
-    match prev_token {
+fn dispatch_comment_kind(prev_nontrivial_token: Option<Token>, comment: Comment) -> Token {
+    match prev_nontrivial_token {
         None | Some(Token::Comma) | Some(Token::SemiColon) => Token::LeadingComment(comment),
         _ => Token::Whitespace(comment.into()),
     }
@@ -942,9 +942,16 @@ impl<'a> Tokenizer<'a> {
             col: 1,
         };
 
+        let mut prev_nontrivial_token: Option<Token>= None;
+
         let mut location = state.location();
-        while let Some(token) = self.next_token(&mut state, buf.last().map(|t| &t.token))? {
+        while let Some(token) = self.next_token(&mut state, buf.last().map(|t| &t.token),prev_nontrivial_token.clone())? {
             let span = location.span_to(state.location());
+
+            if !matches!(token, Token::Whitespace(_)) {
+                let token = token.clone();
+                prev_nontrivial_token = Some(token.to_owned());
+            }
 
             buf.push(TokenWithSpan { token, span });
 
@@ -984,6 +991,7 @@ impl<'a> Tokenizer<'a> {
         &self,
         chars: &mut State,
         prev_token: Option<&Token>,
+        prev_nontrivial_token: Option<Token>,
     ) -> Result<Option<Token>, TokenizerError> {
         match chars.peek() {
             Some(&ch) => match ch {
@@ -1378,7 +1386,7 @@ impl<'a> Tokenizer<'a> {
                                 chars.next(); // consume second '-'
                                 let comment = self.tokenize_single_line_comment(chars);
                                 return Ok(Some(dispatch_comment_kind(
-                                    prev_token,
+                                    prev_nontrivial_token,
                                     Comment::SingleLineComment {
                                         prefix: "--".to_owned(),
                                         comment,
@@ -1406,13 +1414,13 @@ impl<'a> Tokenizer<'a> {
                             chars.next(); // consume the '*', starting a multi-line comment
                             Ok(self
                                 .tokenize_multiline_comment(chars)?
-                                .map(|comment| dispatch_comment_kind(prev_token, comment)))
+                                .map(|comment| dispatch_comment_kind(prev_nontrivial_token, comment)))
                         }
                         Some('/') if dialect_of!(self is SnowflakeDialect) => {
                             chars.next(); // consume the second '/', starting a snowflake single-line comment
                             let comment = self.tokenize_single_line_comment(chars);
                             Ok(Some(dispatch_comment_kind(
-                                prev_token,
+                                prev_nontrivial_token,
                                 Comment::SingleLineComment {
                                     prefix: "//".to_owned(),
                                     comment,
@@ -1621,7 +1629,7 @@ impl<'a> Tokenizer<'a> {
                     let comment = self.tokenize_single_line_comment(chars);
 
                     Ok(Some(dispatch_comment_kind(
-                        prev_token,
+                        prev_nontrivial_token,
                         Comment::SingleLineComment {
                             prefix: "#".to_owned(),
                             comment,
@@ -3340,7 +3348,7 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
             Token::Whitespace(Whitespace::Newline),
-            Token::Whitespace(Comment::MultiLineComment("* Comment *".to_string()).into()),
+            Token::LeadingComment(Comment::MultiLineComment("* Comment *".to_string()).into()),
             Token::Whitespace(Whitespace::Newline),
         ];
         compare(expected, tokens);

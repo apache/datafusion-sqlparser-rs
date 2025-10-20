@@ -2528,6 +2528,7 @@ ALTER TABLE users
   varchar; -- hi there"#;
 
         let r = Parser::parse_sql(&crate::dialect::PostgreSqlDialect {}, sql).unwrap();
+        
         assert_eq!(1, r.len());
 
         let stmt_span = r[0].span();

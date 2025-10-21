@@ -3763,10 +3763,14 @@ fn parse_create_table() {
                             },
                             ColumnOptionDef {
                                 name: Some("pkey".into()),
-                                option: ColumnOption::Unique {
-                                    is_primary: true,
-                                    characteristics: None
-                                },
+                                option: ColumnOption::PrimaryKey(PrimaryKeyConstraint {
+                                    name: None,
+                                    index_name: None,
+                                    index_type: None,
+                                    columns: vec![],
+                                    index_options: vec![],
+                                    characteristics: None,
+                                }),
                             },
                             ColumnOptionDef {
                                 name: None,
@@ -3774,10 +3778,16 @@ fn parse_create_table() {
                             },
                             ColumnOptionDef {
                                 name: None,
-                                option: ColumnOption::Unique {
-                                    is_primary: false,
-                                    characteristics: None
-                                },
+                                option: ColumnOption::Unique(UniqueConstraint {
+                                    name: None,
+                                    index_name: None,
+                                    index_type_display: KeyOrIndexDisplay::None,
+                                    index_type: None,
+                                    columns: vec![],
+                                    index_options: vec![],
+                                    characteristics: None,
+                                    nulls_distinct: NullsDistinctOption::None,
+                                }),
                             },
                             ColumnOptionDef {
                                 name: None,
@@ -4106,10 +4116,16 @@ fn parse_create_table_column_constraint_characteristics() {
                         data_type: DataType::Int(None),
                         options: vec![ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::Unique {
-                                is_primary: false,
-                                characteristics: expected_value
-                            }
+                            option: ColumnOption::Unique(UniqueConstraint {
+                                name: None,
+                                index_name: None,
+                                index_type_display: KeyOrIndexDisplay::None,
+                                index_type: None,
+                                columns: vec![],
+                                index_options: vec![],
+                                characteristics: expected_value,
+                                nulls_distinct: NullsDistinctOption::None,
+                            })
                         }]
                     }],
                     "{message}"

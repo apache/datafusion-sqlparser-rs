@@ -5830,7 +5830,7 @@ fn parse_create_trigger_invalid_cases() {
         ),
         (
             "CREATE TRIGGER check_update TOMORROW UPDATE ON accounts EXECUTE FUNCTION check_account_update",
-            "Expected: one of FOR or BEFORE or AFTER or INSTEAD, found: TOMORROW"
+            "Expected: one of INSERT or UPDATE or DELETE or TRUNCATE, found: TOMORROW"
         ),
         (
             "CREATE TRIGGER check_update BEFORE SAVE ON accounts EXECUTE FUNCTION check_account_update",

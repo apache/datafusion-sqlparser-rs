@@ -5592,20 +5592,7 @@ impl<'a> Parser<'a> {
         }
 
         let name = self.parse_object_name(false)?;
-        let period = if dialect_of!(self is SQLiteDialect)
-            && self
-                .peek_one_of_keywords(&[
-                    Keyword::INSERT,
-                    Keyword::UPDATE,
-                    Keyword::DELETE,
-                    Keyword::TRUNCATE,
-                ])
-                .is_some()
-        {
-            None // SQLite: period can be skipped (equivalent to BEFORE)
-        } else {
-            Some(self.parse_trigger_period()?)
-        };
+        let period = self.maybe_parse(|parser| parser.parse_trigger_period())?;
 
         let events = self.parse_keyword_separated(Keyword::OR, Parser::parse_trigger_event)?;
         self.expect_keyword_is(Keyword::ON)?;

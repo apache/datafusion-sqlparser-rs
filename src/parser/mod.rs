@@ -549,7 +549,9 @@ impl<'a> Parser<'a> {
         if let Some(statement) = self.dialect.parse_statement(self) {
             return statement;
         }
+
         let leading_comment: Option<Comment> = self.parse_leading_comment();
+
         let next_token = self.next_token();
 
         match &next_token.token {
@@ -673,7 +675,7 @@ impl<'a> Parser<'a> {
             Token::LParen => {
                 self.prev_token();
                 self.parse_query().map(Statement::Query)
-            }
+            },
             _ => self.expected("an SQL statement", next_token),
         }
     }
@@ -7241,10 +7243,7 @@ impl<'a> Parser<'a> {
     //TODO: Implement parsing for Skewed
     pub fn parse_hive_distribution(&mut self) -> Result<HiveDistributionStyle, ParserError> {
         if self.parse_keywords(&[Keyword::PARTITIONED, Keyword::BY]) {
-            self.expect_token(&Token::LParen)?;
-            let columns = self.parse_comma_separated(Parser::parse_column_def)?;
-            self.expect_token(&Token::RParen)?;
-            Ok(HiveDistributionStyle::PARTITIONED { columns })
+            Ok(HiveDistributionStyle::PARTITIONED { columns: self.parse_returns_table_columns()? })
         } else {
             Ok(HiveDistributionStyle::NONE)
         }
@@ -7902,10 +7901,11 @@ impl<'a> Parser<'a> {
         }
 
         loop {
+            let leading_comment: Option<Comment> = self.parse_leading_comment();
             if let Some(constraint) = self.parse_optional_table_constraint()? {
                 constraints.push(constraint);
             } else if let Token::Word(_) = self.peek_token().token {
-                columns.push(self.parse_column_def()?);
+                columns.push(self.parse_column_def(leading_comment)?);
             } else {
                 return self.expected("column name or constraint definition", self.peek_token());
             }
@@ -7956,11 +7956,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
-
-        let leading_comment: Option<Comment> = self.parse_leading_comment();
-
-
+    pub fn parse_column_def(&mut self, leading_comment: Option<Comment>) -> Result<ColumnDef, ParserError> {
         let col_name = self.parse_identifier()?;
         let data_type = if self.is_column_type_sqlite_unspecified() {
             DataType::Unspecified
@@ -8935,7 +8931,7 @@ impl<'a> Parser<'a> {
                         false
                     };
 
-                    let column_def = self.parse_column_def()?;
+                    let column_def = self.parse_column_def(None)?;
 
                     let column_position = self.parse_column_position()?;
 
@@ -10646,10 +10642,7 @@ impl<'a> Parser<'a> {
                     ))
                 }
                 Keyword::NESTED if dialect_is!(dialect is ClickHouseDialect | GenericDialect) => {
-                    self.expect_token(&Token::LParen)?;
-                    let field_defs = self.parse_comma_separated(Parser::parse_column_def)?;
-                    self.expect_token(&Token::RParen)?;
-                    Ok(DataType::Nested(field_defs))
+                    Ok(DataType::Nested(self.parse_returns_table_columns()?))
                 }
                 Keyword::TUPLE if dialect_is!(dialect is ClickHouseDialect | GenericDialect) => {
                     self.prev_token();
@@ -10716,7 +10709,8 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_returns_table_column(&mut self) -> Result<ColumnDef, ParserError> {
-        self.parse_column_def()
+        let leading_comment: Option<Comment> = self.parse_leading_comment();
+        self.parse_column_def(leading_comment)
     }
 
     fn parse_returns_table_columns(&mut self) -> Result<Vec<ColumnDef>, ParserError> {

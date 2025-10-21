@@ -282,7 +282,10 @@ pub enum Token {
 }
 
 /// Decide whether a comment is a LeadingComment or an InterstitialComment based on the previous token.
-fn dispatch_comment_kind(prev_nontrivial_token: Option<Token>, comment: Comment) -> Token {
+fn dispatch_comment_kind(prev_nontrivial_token: Option<Token>, comment: Comment, peeked_char: Option<&char>) -> Token {
+    if peeked_char.is_none() {
+        return Token::Whitespace(comment.into());
+    }
     match prev_nontrivial_token {
         None | Some(Token::LParen) | Some(Token::Comma) | Some(Token::SemiColon) => Token::LeadingComment(comment),
         _ => Token::Whitespace(comment.into()),
@@ -1385,18 +1388,14 @@ impl<'a> Tokenizer<'a> {
                             if is_comment {
                                 chars.next(); // consume second '-'
                                 let comment = self.tokenize_single_line_comment(chars);
-                                if chars.peek() == None {
-                                    return Ok(Some(Token::Whitespace(Whitespace::InterstitialComment(Comment::SingleLineComment { comment, prefix: "--".to_owned() }))));
-                                } else {
-                                    return Ok(Some(dispatch_comment_kind(
+                                return Ok(Some(dispatch_comment_kind(
                                         prev_nontrivial_token,
                                         Comment::SingleLineComment {
                                             prefix: "--".to_owned(),
                                             comment,
                                         },
+                                        chars.peek()
                                     )));
-                                }
-
                             }
 
                             self.start_binop(chars, "-", Token::Minus)
@@ -1419,7 +1418,7 @@ impl<'a> Tokenizer<'a> {
                             chars.next(); // consume the '*', starting a multi-line comment
                             Ok(self
                                 .tokenize_multiline_comment(chars)?
-                                .map(|comment| dispatch_comment_kind(prev_nontrivial_token, comment)))
+                                .map(|comment| dispatch_comment_kind(prev_nontrivial_token, comment, chars.peek())))
                         }
                         Some('/') if dialect_of!(self is SnowflakeDialect) => {
                             chars.next(); // consume the second '/', starting a snowflake single-line comment
@@ -1430,6 +1429,7 @@ impl<'a> Tokenizer<'a> {
                                     prefix: "//".to_owned(),
                                     comment,
                                 },
+                                chars.peek()
                             )))
                         }
                         Some('/') if dialect_of!(self is DuckDbDialect | GenericDialect) => {
@@ -1639,6 +1639,7 @@ impl<'a> Tokenizer<'a> {
                             prefix: "#".to_owned(),
                             comment,
                         },
+                        chars.peek()
                     )))
                 }
                 '~' => {
@@ -3224,13 +3225,13 @@ mod tests {
 
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
-        let expected = vec![Token::Whitespace(
-            Whitespace::InterstitialComment(Comment::SingleLineComment{
+        let expected = vec![Token::Whitespace(Whitespace::InterstitialComment(
+                       Comment::SingleLineComment{
                 prefix: "--".to_string(),
                 comment: "this is a comment".to_string(),
-            })
-            .into(),
-        )];
+            })),
+        ];
+
         compare(expected, tokens);
     }
 
@@ -3240,9 +3241,9 @@ mod tests {
 
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
-        let expected = vec![Token::LeadingComment(Comment::MultiLineComment(
+        let expected = vec![Token::Whitespace(Whitespace::InterstitialComment(Comment::MultiLineComment(
             " this is a comment ".to_string(),
-        ))];
+        )))];
         compare(expected, tokens);
     }
 

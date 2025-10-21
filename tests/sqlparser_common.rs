@@ -4284,11 +4284,9 @@ fn parse_create_table_with_multiple_on_delete_fails() {
 #[test]
 fn parse_create_table_with_leading_comment() {
     let single_line_sql = r#"-- a single line leading comment
-    CREATE TABLE user (
-    -- a column single line comment
-    id int PRIMARY KEY
-)"#;
-    let single_line_ast = one_statement_parses_to(single_line_sql, "");
+CREATE TABLE user (-- a column single line comment
+id INT PRIMARY KEY)"#;
+    let single_line_ast = verified_stmt(single_line_sql);
     match single_line_ast {
         Statement::CreateTable (
             CreateTable {
@@ -4309,13 +4307,9 @@ fn parse_create_table_with_leading_comment() {
         _ => unreachable!(),
     };
     let multi_line_sql = r#"/* a multi line
-    leading comment */
-     CREATE TABLE user (
-     /* a column multiline
-     comment */
-    id int PRIMARY KEY
-)"#;
-    let multi_line_ast = one_statement_parses_to(multi_line_sql, "");
+leading comment */CREATE TABLE user (/* a column multiline
+comment */id INT PRIMARY KEY)"#;
+    let multi_line_ast = verified_stmt(multi_line_sql);
     match multi_line_ast {
         Statement::CreateTable(
             CreateTable {
@@ -4324,19 +4318,73 @@ fn parse_create_table_with_leading_comment() {
                 ..
             }
         ) => {
-            assert_eq!(comment," a multi line\n    leading comment ");
+            assert_eq!(comment," a multi line\nleading comment ");
              let [ColumnDef{
                     leading_comment: Some(Comment::MultiLineComment(comment)),
                     ..
                 }] = columns.as_slice() else { unreachable!("unexpected column array: {columns:?}")};
-            assert_eq!(comment," a column multiline\n    comment");
+            assert_eq!(comment," a column multiline\ncomment ");
         }
         _ => unreachable!(),
     };
 
 }
 
+#[test]
+fn parse_alter_table_with_leading_comment() {
+    let single_line_sql = r#"-- a single line leading comment
+ALTER TABLE user (ADD COLUMN -- a column single line comment
+id INT PRIMARY KEY)"#;
+    let single_line_ast = verified_stmt(single_line_sql);
+    match single_line_ast {
+        Statement::AlterTable (
+            AlterTable {
+                leading_comment: Some(Comment::SingleLineComment { comment, prefix }), 
+                operations ,
+                ..
+            },
+        ) => {
+            assert_eq!(comment, " a single line leading comment\n");
+            assert_eq!(prefix, "--");
+            let [AlterTableOperation::AddColumn {
+                    column_def: ColumnDef{
+                        leading_comment: Some(Comment::SingleLineComment {comment, prefix}),
+                        ..
+                    },
+                    ..
+            }] = operations.as_slice() else { unreachable!("unexpected operation array: {operations:?}")};
+            assert_eq!(comment, " a column single line comment\n");
+            assert_eq!(prefix, "--");
+        }
+        _ => unreachable!(),
+    };
+    let multi_line_sql = r#"/* a multi line
+leading comment */ALTER TABLE user (ADD COLUMN /* a column multiline
+comment */id INT PRIMARY KEY)"#;
+    let multi_line_ast = verified_stmt(multi_line_sql);
+    match multi_line_ast {
+        Statement::AlterTable(
+            AlterTable {
+                leading_comment: Some(Comment::MultiLineComment(comment)),
+                operations,
+                ..
+            },
+            ..
+        ) => {
+            assert_eq!(comment," a multi line\nleading comment ");
+             let [AlterTableOperation::AddColumn{
+                    column_def: ColumnDef {
+                        leading_comment: Some(Comment::MultiLineComment(comment)),
+                    ..
+                    },
+                    ..
+                }] = operations.as_slice() else { unreachable!("unexpected operation array: {operations:?}")};
+            assert_eq!(comment," a column multiline\ncomment ");
+        }
+        _ => unreachable!(),
+    };
 
+}
 
 #[test]
 fn parse_assert() {

@@ -1208,6 +1208,9 @@ pub struct ColumnDef {
 
 impl fmt::Display for ColumnDef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(leading_comment) = &self.leading_comment {
+            write!(f,"{leading_comment}")?;
+        }
         if self.data_type == DataType::Unspecified {
             write!(f, "{}", self.name)?;
         } else {
@@ -2301,6 +2304,9 @@ impl fmt::Display for CreateTable {
         //   `CREATE TABLE t AS SELECT a from t2`
         // Columns provided for CREATE TABLE AS:
         //   `CREATE TABLE t (a INT) AS SELECT a from t2`
+        if let Some(leading_comment) = &self.leading_comment {
+            write!(f,"{leading_comment}")?;
+        }
         write!(
             f,
             "CREATE {or_replace}{external}{global}{temporary}{transient}{volatile}{dynamic}{iceberg}TABLE {if_not_exists}{name}",
@@ -3526,7 +3532,7 @@ pub struct AlterTable {
 impl fmt::Display for AlterTable {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(comment) = &self.leading_comment {
-            write!(f, "{comment}\n")?;
+            write!(f, "{comment}")?;
         }
 
         if self.iceberg {

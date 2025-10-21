@@ -262,7 +262,7 @@ impl Dialect for SnowflakeDialect {
                 return Some(parse_create_stage(or_replace, temporary, parser));
             } else if parser.parse_keyword(Keyword::TABLE) {
                 return Some(parse_create_table(
-                    or_replace, global, temporary, volatile, transient, iceberg, dynamic, parser,leading_comment
+                    or_replace, global, temporary, volatile, transient, iceberg, dynamic, parser, leading_comment
                 ));
             } else if parser.parse_keyword(Keyword::DATABASE) {
                 return Some(parse_create_database(or_replace, transient, parser));

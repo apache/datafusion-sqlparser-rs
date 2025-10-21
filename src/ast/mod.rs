@@ -8287,18 +8287,18 @@ impl fmt::Display for CopyLegacyOption {
             CompUpdate { preset, enabled } => {
                 write!(f, "COMPUPDATE")?;
                 if *preset {
-                    write!(f, " PRESET")
-                } else {
+                    write!(f, " PRESET")?;
+                } else if let Some(enabled) = enabled {
                     write!(
                         f,
                         "{}",
-                        match *enabled {
-                            Some(true) => " TRUE",
-                            Some(false) => " FALSE",
-                            _ => "",
+                        match enabled {
+                            true => " TRUE",
+                            false => " FALSE",
                         }
-                    )
+                    )?;
                 }
+                Ok(())
             }
             Csv(opts) => {
                 write!(f, "CSV")?;

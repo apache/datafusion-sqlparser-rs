@@ -9793,7 +9793,6 @@ impl<'a> Parser<'a> {
                     Keyword::ON,
                     Keyword::OFF,
                 ]) {
-                    Some(Keyword::PRESET) => None,
                     Some(Keyword::TRUE) | Some(Keyword::ON) => Some(true),
                     Some(Keyword::FALSE) | Some(Keyword::OFF) => Some(false),
                     _ => None,

@@ -743,8 +743,12 @@ impl std::error::Error for TokenizerError {}
 
 struct State<'a> {
     peekable: Peekable<Chars<'a>>,
-    pub line: u64,
-    pub col: u64,
+    /// Reference to the original source string being tokenized
+    source: &'a str,
+    line: u64,
+    col: u64,
+    /// Byte position in the source string
+    byte_pos: usize,
 }
 
 impl State<'_> {
@@ -759,6 +763,8 @@ impl State<'_> {
                 } else {
                     self.col += 1;
                 }
+                // Update byte position (characters can be multi-byte in UTF-8)
+                self.byte_pos += s.len_utf8();
                 Some(s)
             }
         }
@@ -767,6 +773,16 @@ impl State<'_> {
     /// return the next character but do not advance the stream
     pub fn peek(&mut self) -> Option<&char> {
         self.peekable.peek()
+    }
+
+    /// Return the character `n` positions ahead without advancing the stream.
+    /// For example, `peek_nth(0)` returns the current character (same as peek),
+    /// and `peek_nth(1)` returns the next character.
+    pub fn peek_nth(&self, n: usize) -> Option<char> {
+        if self.byte_pos >= self.source.len() {
+            return None;
+        }
+        self.source[self.byte_pos..].chars().nth(n)
     }
 
     pub fn location(&self) -> Location {
@@ -893,8 +909,10 @@ impl<'a> Tokenizer<'a> {
     ) -> Result<(), TokenizerError> {
         let mut state = State {
             peekable: self.query.chars().peekable(),
+            source: self.query,
             line: 1,
             col: 1,
+            byte_pos: 0,
         };
 
         let mut location = state.location();
@@ -908,22 +926,24 @@ impl<'a> Tokenizer<'a> {
         Ok(())
     }
 
-    // Tokenize the identifier or keywords in `ch`
+    /// Tokenize an identifier or keyword after consuming the first character(s).
+    /// `consumed_byte_len` is the total byte length of the character(s) already consumed.
     fn tokenize_identifier_or_keyword(
         &self,
-        ch: impl IntoIterator<Item = char>,
-        chars: &mut State,
+        consumed_byte_len: usize,
+        chars: &mut State<'a>,
     ) -> Result<Option<Token>, TokenizerError> {
         chars.next(); // consume the first char
-        let ch: String = ch.into_iter().collect();
-        let word = self.tokenize_word(ch, chars);
+        let word = self.tokenize_word(consumed_byte_len, chars);
 
         // TODO: implement parsing of exponent here
         if word.chars().all(|x| x.is_ascii_digit() || x == '.') {
             let mut inner_state = State {
                 peekable: word.chars().peekable(),
+                source: &word,
                 line: 0,
                 col: 0,
+                byte_pos: 0,
             };
             let mut s = peeking_take_while(&mut inner_state, |ch| matches!(ch, '0'..='9' | '.'));
             let s2 = peeking_take_while(chars, |ch| matches!(ch, '0'..='9' | '.'));
@@ -937,7 +957,7 @@ impl<'a> Tokenizer<'a> {
     /// Get the next token or return None
     fn next_token(
         &self,
-        chars: &mut State,
+        chars: &mut State<'a>,
         prev_token: Option<&Token>,
     ) -> Result<Option<Token>, TokenizerError> {
         match chars.peek() {
@@ -988,7 +1008,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         _ => {
                             // regular identifier starting with an "b" or "B"
-                            let s = self.tokenize_word(b, chars);
+                            let s = self.tokenize_word(b.len_utf8(), chars);
                             Ok(Some(Token::make_word(&s, None)))
                         }
                     }
@@ -1015,7 +1035,7 @@ impl<'a> Tokenizer<'a> {
                             ),
                         _ => {
                             // regular identifier starting with an "r" or "R"
-                            let s = self.tokenize_word(b, chars);
+                            let s = self.tokenize_word(b.len_utf8(), chars);
                             Ok(Some(Token::make_word(&s, None)))
                         }
                     }
@@ -1034,7 +1054,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         _ => {
                             // regular identifier starting with an "N"
-                            let s = self.tokenize_word(n, chars);
+                            let s = self.tokenize_word(n.len_utf8(), chars);
                             Ok(Some(Token::make_word(&s, None)))
                         }
                     }
@@ -1051,7 +1071,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         _ => {
                             // regular identifier starting with an "E" or "e"
-                            let s = self.tokenize_word(x, chars);
+                            let s = self.tokenize_word(x.len_utf8(), chars);
                             Ok(Some(Token::make_word(&s, None)))
                         }
                     }
@@ -1070,7 +1090,7 @@ impl<'a> Tokenizer<'a> {
                         }
                     }
                     // regular identifier starting with an "U" or "u"
-                    let s = self.tokenize_word(x, chars);
+                    let s = self.tokenize_word(x.len_utf8(), chars);
                     Ok(Some(Token::make_word(&s, None)))
                 }
                 // The spec only allows an uppercase 'X' to introduce a hex
@@ -1085,7 +1105,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         _ => {
                             // regular identifier starting with an "X"
-                            let s = self.tokenize_word(x, chars);
+                            let s = self.tokenize_word(x.len_utf8(), chars);
                             Ok(Some(Token::make_word(&s, None)))
                         }
                     }
@@ -1382,7 +1402,8 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some(s) if s.is_whitespace() => Ok(Some(Token::Mod)),
                         Some(sch) if self.dialect.is_identifier_start('%') => {
-                            self.tokenize_identifier_or_keyword([ch, *sch], chars)
+                            let consumed_byte_len = ch.len_utf8() + sch.len_utf8();
+                            self.tokenize_identifier_or_keyword(consumed_byte_len, chars)
                         }
                         _ => self.start_binop(chars, "%", Token::Mod),
                     }
@@ -1610,7 +1631,8 @@ impl<'a> Tokenizer<'a> {
                             self.consume_for_binop(chars, "##", Token::DoubleSharp)
                         }
                         Some(sch) if self.dialect.is_identifier_start('#') => {
-                            self.tokenize_identifier_or_keyword([ch, *sch], chars)
+                            let consumed_byte_len = ch.len_utf8() + sch.len_utf8();
+                            self.tokenize_identifier_or_keyword(consumed_byte_len, chars)
                         }
                         _ => self.start_binop(chars, "#", Token::Sharp),
                     }
@@ -1635,7 +1657,9 @@ impl<'a> Tokenizer<'a> {
                             match chars.peek() {
                                 Some(' ') => Ok(Some(Token::AtAt)),
                                 Some(tch) if self.dialect.is_identifier_start('@') => {
-                                    self.tokenize_identifier_or_keyword([ch, '@', *tch], chars)
+                                    let consumed_byte_len =
+                                        ch.len_utf8() + '@'.len_utf8() + tch.len_utf8();
+                                    self.tokenize_identifier_or_keyword(consumed_byte_len, chars)
                                 }
                                 _ => Ok(Some(Token::AtAt)),
                             }
@@ -1654,7 +1678,8 @@ impl<'a> Tokenizer<'a> {
                         Some('\"') => Ok(Some(Token::AtSign)),
                         Some('`') => Ok(Some(Token::AtSign)),
                         Some(sch) if self.dialect.is_identifier_start('@') => {
-                            self.tokenize_identifier_or_keyword([ch, *sch], chars)
+                            let consumed_byte_len = ch.len_utf8() + sch.len_utf8();
+                            self.tokenize_identifier_or_keyword(consumed_byte_len, chars)
                         }
                         _ => Ok(Some(Token::AtSign)),
                     }
@@ -1695,7 +1720,8 @@ impl<'a> Tokenizer<'a> {
 
                 // identifier or keyword
                 ch if self.dialect.is_identifier_start(ch) => {
-                    self.tokenize_identifier_or_keyword([ch], chars)
+                    let consumed_byte_len = ch.len_utf8();
+                    self.tokenize_identifier_or_keyword(consumed_byte_len, chars)
                 }
                 '$' => Ok(Some(self.tokenize_dollar_preceded_value(chars)?)),
 
@@ -1876,13 +1902,36 @@ impl<'a> Tokenizer<'a> {
         comment
     }
 
-    /// Tokenize an identifier or keyword, after the first char is already consumed.
-    fn tokenize_word(&self, first_chars: impl Into<String>, chars: &mut State) -> String {
-        let mut s = first_chars.into();
-        s.push_str(&peeking_take_while(chars, |ch| {
-            self.dialect.is_identifier_part(ch)
-        }));
-        s
+    /// Tokenize an identifier or keyword, after the first char(s) have already been consumed.
+    /// `consumed_byte_len` is the byte length of the consumed character(s).
+    fn tokenize_word(&self, consumed_byte_len: usize, chars: &mut State<'a>) -> String {
+        // Overflow check: ensure we can safely subtract
+        if consumed_byte_len > chars.byte_pos {
+            return String::new();
+        }
+
+        // Calculate where the first character started
+        let first_char_byte_pos = chars.byte_pos - consumed_byte_len;
+
+        // Use the zero-copy version and convert to String
+        self.tokenize_word_borrowed(first_char_byte_pos, chars)
+            .to_string()
+    }
+
+    /// Tokenize an identifier or keyword, returning a borrowed slice when possible.
+    /// The first character position must be provided (before it was consumed).
+    /// Returns a slice with the same lifetime as the State's source.
+    fn tokenize_word_borrowed(&self, first_char_byte_pos: usize, chars: &mut State<'a>) -> &'a str {
+        // Consume the rest of the word
+        peeking_take_while_ref(chars, |ch| self.dialect.is_identifier_part(ch));
+
+        // Boundary check: ensure first_char_byte_pos is valid
+        if first_char_byte_pos > chars.byte_pos || first_char_byte_pos > chars.source.len() {
+            return "";
+        }
+
+        // Return a slice from the first char to the current position
+        &chars.source[first_char_byte_pos..chars.byte_pos]
     }
 
     /// Read a quoted identifier
@@ -2176,35 +2225,82 @@ impl<'a> Tokenizer<'a> {
 /// Read from `chars` until `predicate` returns `false` or EOF is hit.
 /// Return the characters read as String, and keep the first non-matching
 /// char available as `chars.next()`.
-fn peeking_take_while(chars: &mut State, mut predicate: impl FnMut(char) -> bool) -> String {
-    let mut s = String::new();
+fn peeking_take_while(chars: &mut State, predicate: impl FnMut(char) -> bool) -> String {
+    peeking_take_while_ref(chars, predicate).to_string()
+}
+
+/// Borrow a slice from the original string until `predicate` returns `false` or EOF is hit.
+/// Returns a borrowed slice of the source string containing the matched characters.
+/// This is the zero-copy version of `peeking_take_while`.
+fn peeking_take_while_ref<'a>(
+    chars: &mut State<'a>,
+    mut predicate: impl FnMut(char) -> bool,
+) -> &'a str {
+    // Record the starting byte position
+    let start_pos = chars.byte_pos;
+
+    // Consume characters while predicate is true
     while let Some(&ch) = chars.peek() {
         if predicate(ch) {
-            chars.next(); // consume
-            s.push(ch);
+            chars.next(); // consume (this updates byte_pos)
         } else {
             break;
         }
     }
-    s
+
+    // Get the ending byte position
+    let end_pos = chars.byte_pos;
+
+    // Sanity check: ensure we don't exceed buffer length while slicing
+    if start_pos > end_pos || end_pos > chars.source.len() {
+        return "";
+    }
+
+    // Return the slice from the original source
+    &chars.source[start_pos..end_pos]
+}
+
+/// Borrow a slice from the original string until `predicate` returns `false` or EOF is hit.
+/// This version also passes the next character to the predicate for lookahead, taking
+/// both the current char and optional next char. Returns a borrowed slice of the source
+/// string containing the matched characters.
+///
+/// This is a zero-copy version of `peeking_next_take_while`.
+fn peeking_take_while_next_ref<'a>(
+    chars: &mut State<'a>,
+    mut predicate: impl FnMut(char, Option<char>) -> bool,
+) -> &'a str {
+    // Record the starting byte position
+    let start_pos = chars.byte_pos;
+
+    // Consume characters while predicate is true
+    while let Some(&ch) = chars.peek() {
+        let next_char = chars.peek_nth(1);
+        if predicate(ch, next_char) {
+            chars.next(); // consume (this updates byte_pos)
+        } else {
+            break;
+        }
+    }
+
+    // Get the ending byte position
+    let end_pos = chars.byte_pos;
+
+    // Sanity check: ensure we don't exceed buffer length while slicing
+    if start_pos > end_pos || end_pos > chars.source.len() {
+        return "";
+    }
+
+    // Return the slice from the original source
+    &chars.source[start_pos..end_pos]
 }
 
 /// Same as peeking_take_while, but also passes the next character to the predicate.
 fn peeking_next_take_while(
     chars: &mut State,
-    mut predicate: impl FnMut(char, Option<char>) -> bool,
+    predicate: impl FnMut(char, Option<char>) -> bool,
 ) -> String {
-    let mut s = String::new();
-    while let Some(&ch) = chars.peek() {
-        let next_char = chars.peekable.clone().nth(1);
-        if predicate(ch, next_char) {
-            chars.next(); // consume
-            s.push(ch);
-        } else {
-            break;
-        }
-    }
-    s
+    peeking_take_while_next_ref(chars, predicate).to_string()
 }
 
 fn unescape_single_quoted_string(chars: &mut State<'_>) -> Option<String> {
@@ -3496,8 +3592,10 @@ mod tests {
         let s = format!("'{s}'");
         let mut state = State {
             peekable: s.chars().peekable(),
+            source: &s,
             line: 0,
             col: 0,
+            byte_pos: 0,
         };
 
         assert_eq!(

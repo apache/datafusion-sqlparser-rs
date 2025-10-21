@@ -128,11 +128,11 @@ impl Dialect for MsSqlDialect {
         &[GranteesType::Public]
     }
 
-    fn is_column_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+    fn is_column_alias(&self, kw: &Keyword, _parser: &Parser) -> bool {
         !keywords::RESERVED_FOR_COLUMN_ALIAS.contains(kw) && !RESERVED_FOR_COLUMN_ALIAS.contains(kw)
     }
 
-    fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
+    fn parse_statement(&self, parser: &Parser) -> Option<Result<Statement, ParserError>> {
         if parser.peek_keyword(Keyword::IF) {
             Some(self.parse_if_stmt(parser))
         } else if parser.parse_keywords(&[Keyword::CREATE, Keyword::TRIGGER]) {
@@ -157,7 +157,7 @@ impl MsSqlDialect {
     /// [ ELSE
     ///     { sql_statement | statement_block } ]
     /// ```
-    fn parse_if_stmt(&self, parser: &mut Parser) -> Result<Statement, ParserError> {
+    fn parse_if_stmt(&self, parser: &Parser) -> Result<Statement, ParserError> {
         let if_token = parser.expect_keyword(Keyword::IF)?;
 
         let condition = parser.parse_expr()?;
@@ -240,7 +240,7 @@ impl MsSqlDialect {
     /// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-trigger-transact-sql
     fn parse_create_trigger(
         &self,
-        parser: &mut Parser,
+        parser: &Parser,
         or_alter: bool,
     ) -> Result<Statement, ParserError> {
         let name = parser.parse_object_name(false)?;
@@ -279,7 +279,7 @@ impl MsSqlDialect {
     /// Stops parsing when reaching EOF or the given keyword.
     fn parse_statement_list(
         &self,
-        parser: &mut Parser,
+        parser: &Parser,
         terminal_keyword: Option<Keyword>,
     ) -> Result<Vec<Statement>, ParserError> {
         let mut stmts = Vec::new();

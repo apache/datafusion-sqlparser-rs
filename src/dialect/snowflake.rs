@@ -211,7 +211,7 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
-    fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
+    fn parse_statement(&self, parser: &Parser) -> Option<Result<Statement, ParserError>> {
         if parser.parse_keyword(Keyword::BEGIN) {
             return Some(parser.parse_begin_exception_end());
         }
@@ -318,7 +318,7 @@ impl Dialect for SnowflakeDialect {
 
     fn parse_column_option(
         &self,
-        parser: &mut Parser,
+        parser: &Parser,
     ) -> Result<Option<Result<Option<ColumnOption>, ParserError>>, ParserError> {
         parser.maybe_parse(|parser| {
             let with = parser.parse_keyword(Keyword::WITH);
@@ -391,7 +391,7 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
-    fn is_column_alias(&self, kw: &Keyword, parser: &mut Parser) -> bool {
+    fn is_column_alias(&self, kw: &Keyword, parser: &Parser) -> bool {
         match kw {
             // The following keywords can be considered an alias as long as 
             // they are not followed by other tokens that may change their meaning
@@ -437,7 +437,7 @@ impl Dialect for SnowflakeDialect {
         }
     }
 
-    fn is_table_alias(&self, kw: &Keyword, parser: &mut Parser) -> bool {
+    fn is_table_alias(&self, kw: &Keyword, parser: &Parser) -> bool {
         match kw {
             // The following keywords can be considered an alias as long as
             // they are not followed by other tokens that may change their meaning
@@ -521,7 +521,7 @@ impl Dialect for SnowflakeDialect {
         }
     }
 
-    fn is_table_factor(&self, kw: &Keyword, parser: &mut Parser) -> bool {
+    fn is_table_factor(&self, kw: &Keyword, parser: &Parser) -> bool {
         match kw {
             Keyword::LIMIT if peek_for_limit_options(parser) => false,
             // Table function
@@ -591,7 +591,7 @@ fn peek_for_limit_options(parser: &Parser) -> bool {
     }
 }
 
-fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statement, ParserError> {
+fn parse_file_staging_command(kw: Keyword, parser: &Parser) -> Result<Statement, ParserError> {
     let stage = parse_snowflake_stage_name(parser)?;
     let pattern = if parser.parse_keyword(Keyword::PATTERN) {
         parser.expect_token(&Token::Eq)?;
@@ -613,7 +613,7 @@ fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statem
 
 /// Parse snowflake alter dynamic table.
 /// <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
-fn parse_alter_dynamic_table(parser: &mut Parser) -> Result<Statement, ParserError> {
+fn parse_alter_dynamic_table(parser: &Parser) -> Result<Statement, ParserError> {
     // Use parse_object_name(true) to support IDENTIFIER() function
     let table_name = parser.parse_object_name(true)?;
 
@@ -651,7 +651,7 @@ fn parse_alter_dynamic_table(parser: &mut Parser) -> Result<Statement, ParserErr
 
 /// Parse snowflake alter session.
 /// <https://docs.snowflake.com/en/sql-reference/sql/alter-session>
-fn parse_alter_session(parser: &mut Parser, set: bool) -> Result<Statement, ParserError> {
+fn parse_alter_session(parser: &Parser, set: bool) -> Result<Statement, ParserError> {
     let session_options = parse_session_options(parser, set)?;
     Ok(Statement::AlterSession {
         set,
@@ -674,7 +674,7 @@ pub fn parse_create_table(
     transient: bool,
     iceberg: bool,
     dynamic: bool,
-    parser: &mut Parser,
+    parser: &Parser,
 ) -> Result<Statement, ParserError> {
     let if_not_exists = parser.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
     let table_name = parser.parse_object_name(false)?;
@@ -912,7 +912,7 @@ pub fn parse_create_table(
 pub fn parse_create_database(
     or_replace: bool,
     transient: bool,
-    parser: &mut Parser,
+    parser: &Parser,
 ) -> Result<Statement, ParserError> {
     let if_not_exists = parser.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
     let name = parser.parse_object_name(false)?;
@@ -1017,7 +1017,7 @@ pub fn parse_create_database(
 }
 
 pub fn parse_storage_serialization_policy(
-    parser: &mut Parser,
+    parser: &Parser,
 ) -> Result<StorageSerializationPolicy, ParserError> {
     let next_token = parser.next_token();
     match &next_token.token {
@@ -1033,7 +1033,7 @@ pub fn parse_storage_serialization_policy(
 pub fn parse_create_stage(
     or_replace: bool,
     temporary: bool,
-    parser: &mut Parser,
+    parser: &Parser,
 ) -> Result<Statement, ParserError> {
     //[ IF NOT EXISTS ]
     let if_not_exists = parser.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
@@ -1092,7 +1092,7 @@ pub fn parse_create_stage(
     })
 }
 
-pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserError> {
+pub fn parse_stage_name_identifier(parser: &Parser) -> Result<Ident, ParserError> {
     let mut ident = String::new();
     while let Some(next_token) = parser.next_token_no_skip() {
         match &next_token.token {
@@ -1119,7 +1119,7 @@ pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserE
     Ok(Ident::new(ident))
 }
 
-pub fn parse_snowflake_stage_name(parser: &mut Parser) -> Result<ObjectName, ParserError> {
+pub fn parse_snowflake_stage_name(parser: &Parser) -> Result<ObjectName, ParserError> {
     match parser.next_token().token {
         Token::AtSign => {
             parser.prev_token();
@@ -1141,7 +1141,7 @@ pub fn parse_snowflake_stage_name(parser: &mut Parser) -> Result<ObjectName, Par
 
 /// Parses a `COPY INTO` statement. Snowflake has two variants, `COPY INTO <table>`
 /// and `COPY INTO <location>` which have different syntax.
-pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
+pub fn parse_copy_into(parser: &Parser) -> Result<Statement, ParserError> {
     let kind = match parser.peek_token().token {
         // Indicates an internal stage
         Token::AtSign => CopyIntoSnowflakeKind::Location,
@@ -1303,7 +1303,7 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
 }
 
 fn parse_select_items_for_data_load(
-    parser: &mut Parser,
+    parser: &Parser,
 ) -> Result<Option<Vec<StageLoadSelectItemKind>>, ParserError> {
     let mut select_items: Vec<StageLoadSelectItemKind> = vec![];
     loop {
@@ -1324,9 +1324,7 @@ fn parse_select_items_for_data_load(
     Ok(Some(select_items))
 }
 
-fn parse_select_item_for_data_load(
-    parser: &mut Parser,
-) -> Result<StageLoadSelectItem, ParserError> {
+fn parse_select_item_for_data_load(parser: &Parser) -> Result<StageLoadSelectItem, ParserError> {
     let mut alias: Option<Ident> = None;
     let mut file_col_num: i32 = 0;
     let mut element: Option<Ident> = None;
@@ -1393,7 +1391,7 @@ fn parse_select_item_for_data_load(
     })
 }
 
-fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserError> {
+fn parse_stage_params(parser: &Parser) -> Result<StageParamsObject, ParserError> {
     let (mut url, mut storage_integration, mut endpoint) = (None, None, None);
     let mut encryption: KeyValueOptions = KeyValueOptions {
         options: vec![],
@@ -1459,10 +1457,7 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
 /// ABORT_DETACHED_QUERY = { TRUE | FALSE }
 ///      [ ACTIVE_PYTHON_PROFILER = { 'LINE' | 'MEMORY' } ]
 ///      [ BINARY_INPUT_FORMAT = '\<string\>' ]
-fn parse_session_options(
-    parser: &mut Parser,
-    set: bool,
-) -> Result<Vec<KeyValueOption>, ParserError> {
+fn parse_session_options(parser: &Parser, set: bool) -> Result<Vec<KeyValueOption>, ParserError> {
     let mut options: Vec<KeyValueOption> = Vec::new();
     let empty = String::new;
     loop {
@@ -1505,7 +1500,7 @@ fn parse_session_options(
 /// [ (seed , increment) | START num INCREMENT num ] [ ORDER | NOORDER ]
 /// ```
 /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
-fn parse_identity_property(parser: &mut Parser) -> Result<IdentityProperty, ParserError> {
+fn parse_identity_property(parser: &Parser) -> Result<IdentityProperty, ParserError> {
     let parameters = if parser.consume_token(&Token::LParen) {
         let seed = parser.parse_number()?;
         parser.expect_token(&Token::Comma)?;
@@ -1541,7 +1536,7 @@ fn parse_identity_property(parser: &mut Parser) -> Result<IdentityProperty, Pars
 /// ```
 /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
 fn parse_column_policy_property(
-    parser: &mut Parser,
+    parser: &Parser,
     with: bool,
 ) -> Result<ColumnPolicyProperty, ParserError> {
     let policy_name = parser.parse_object_name(false)?;
@@ -1567,7 +1562,7 @@ fn parse_column_policy_property(
 /// ( <tag_name> = '<tag_value>' [ , <tag_name> = '<tag_value>' , ... ] )
 /// ```
 /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
-fn parse_column_tags(parser: &mut Parser, with: bool) -> Result<TagsColumnOption, ParserError> {
+fn parse_column_tags(parser: &Parser, with: bool) -> Result<TagsColumnOption, ParserError> {
     parser.expect_token(&Token::LParen)?;
     let tags = parser.parse_comma_separated(Parser::parse_tag)?;
     parser.expect_token(&Token::RParen)?;
@@ -1577,7 +1572,7 @@ fn parse_column_tags(parser: &mut Parser, with: bool) -> Result<TagsColumnOption
 
 /// Parse snowflake show objects.
 /// <https://docs.snowflake.com/en/sql-reference/sql/show-objects>
-fn parse_show_objects(terse: bool, parser: &mut Parser) -> Result<Statement, ParserError> {
+fn parse_show_objects(terse: bool, parser: &Parser) -> Result<Statement, ParserError> {
     let show_options = parser.parse_show_stmt_options()?;
     Ok(Statement::ShowObjects(ShowObjects {
         terse,

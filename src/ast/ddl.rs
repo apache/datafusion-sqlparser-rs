@@ -3029,8 +3029,6 @@ pub struct CreateTrigger {
     /// FOR EACH ROW
     /// EXECUTE FUNCTION trigger_function();
     /// ```
-    ///
-    /// This may be omitted in SQLite, the effect is equivalent to BEFORE.
     pub period: Option<TriggerPeriod>,
     /// Whether the trigger period was specified before the target table name.
     /// This does not refer to whether the period is BEFORE, AFTER, or INSTEAD OF,

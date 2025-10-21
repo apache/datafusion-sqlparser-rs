@@ -1868,6 +1868,7 @@ fn parse_create_table_with_valid_options() {
                         },
                         data_type: Int(None,),
                         options: vec![],
+                        leading_comment: None,
                     },
                     ColumnDef {
                         name: Ident {
@@ -1877,6 +1878,7 @@ fn parse_create_table_with_valid_options() {
                         },
                         data_type: Int(None,),
                         options: vec![],
+                        leading_comment: None,
                     },
                     ColumnDef {
                         name: Ident {
@@ -1886,6 +1888,7 @@ fn parse_create_table_with_valid_options() {
                         },
                         data_type: Int(None,),
                         options: vec![],
+                        leading_comment: None,
                     },
                 ],
                 constraints: vec![],
@@ -1934,6 +1937,7 @@ fn parse_create_table_with_valid_options() {
                 refresh_mode: None,
                 initialize: None,
                 require_user: false,
+                leading_comment: None,
             })
         );
     }
@@ -2059,6 +2063,7 @@ fn parse_create_table_with_identity_column() {
                     data_type: Int(None,),
 
                     options: column_options,
+                    leading_comment: None,
                 },],
                 constraints: vec![],
                 hive_distribution: HiveDistributionStyle::NONE,
@@ -2105,6 +2110,7 @@ fn parse_create_table_with_identity_column() {
                 refresh_mode: None,
                 initialize: None,
                 require_user: false,
+                leading_comment: None,
             }),
         );
     }
@@ -2301,7 +2307,8 @@ fn parse_mssql_varbinary_max_length() {
                     name: Ident::new("var_binary_col"),
                     data_type: Varbinary(Some(BinaryLength::Max)),
 
-                    options: vec![]
+                    options: vec![],
+                    leading_comment: None,
                 },],
             );
         }
@@ -2326,7 +2333,8 @@ fn parse_mssql_varbinary_max_length() {
                     name: Ident::new("var_binary_col"),
                     data_type: Varbinary(Some(BinaryLength::IntegerLength { length: 50 })),
 
-                    options: vec![]
+                    options: vec![],
+                    leading_comment: None,
                 },],
             );
         }

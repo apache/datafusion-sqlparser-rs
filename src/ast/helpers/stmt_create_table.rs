@@ -32,6 +32,7 @@ use crate::ast::{
 };
 
 use crate::parser::ParserError;
+use crate::tokenizer::Comment;
 
 /// Builder for create table statement variant ([1]).
 ///
@@ -49,6 +50,7 @@ use crate::parser::ParserError;
 ///        name: Ident::new("c1"),
 ///        data_type: DataType::Int(None),
 ///        options: vec![],
+///        leading_comment: None,
 /// }]);
 /// // You can access internal elements with ease
 /// assert!(builder.if_not_exists);
@@ -115,6 +117,7 @@ pub struct CreateTableBuilder {
     pub refresh_mode: Option<RefreshModeKind>,
     pub initialize: Option<InitializeKind>,
     pub require_user: bool,
+    pub leading_comment: Option<Comment>,
 }
 
 impl CreateTableBuilder {
@@ -171,6 +174,7 @@ impl CreateTableBuilder {
             refresh_mode: None,
             initialize: None,
             require_user: false,
+            leading_comment: None,
         }
     }
     pub fn or_replace(mut self, or_replace: bool) -> Self {
@@ -431,6 +435,11 @@ impl CreateTableBuilder {
         self
     }
 
+    pub fn leading_comment(mut self, leading_comment: Option<Comment>) -> Self {
+        self.leading_comment = leading_comment;
+        self
+    }
+
     pub fn build(self) -> Statement {
         CreateTable {
             or_replace: self.or_replace,
@@ -484,6 +493,7 @@ impl CreateTableBuilder {
             refresh_mode: self.refresh_mode,
             initialize: self.initialize,
             require_user: self.require_user,
+            leading_comment: self.leading_comment,
         }
         .into()
     }
@@ -548,6 +558,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 refresh_mode,
                 initialize,
                 require_user,
+                leading_comment,
             }) => Ok(Self {
                 or_replace,
                 temporary,
@@ -600,6 +611,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 refresh_mode,
                 initialize,
                 require_user,
+                leading_comment,
             }),
             _ => Err(ParserError::ParserError(format!(
                 "Expected create table statement, but received: {stmt}"

@@ -229,6 +229,7 @@ fn parse_create_table_auto_increment() {
                             )]),
                         },
                     ],
+                    leading_comment: None, 
                 }],
                 columns
             );
@@ -255,6 +256,7 @@ fn parse_create_table_primary_key_asc_desc() {
                 option: ColumnOption::DialectSpecific(vec![Token::make_keyword(kind)]),
             },
         ],
+        leading_comment: None, 
     };
 
     let sql = "CREATE TABLE foo (bar INT PRIMARY KEY ASC)";
@@ -285,11 +287,13 @@ fn parse_create_sqlite_quote() {
                         name: Ident::with_quote('"', "KEY"),
                         data_type: DataType::Int(None),
                         options: vec![],
+                        leading_comment: None, 
                     },
                     ColumnDef {
                         name: Ident::with_quote('[', "INDEX"),
                         data_type: DataType::Int(None),
                         options: vec![],
+                        leading_comment: None, 
                     },
                 ],
                 columns

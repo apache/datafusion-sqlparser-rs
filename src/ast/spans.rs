@@ -553,6 +553,7 @@ impl Spanned for CreateTable {
             refresh_mode: _,
             initialize: _,
             require_user: _,
+            leading_comment: _,                 // Option<Comment>
         } = self;
 
         union_spans(
@@ -572,6 +573,7 @@ impl Spanned for ColumnDef {
             name,
             data_type: _, // enum
             options,
+            leading_comment: _,
         } = self;
 
         union_spans(core::iter::once(name.span).chain(options.iter().map(|i| i.span())))
@@ -2525,7 +2527,9 @@ ALTER TABLE users
   ADD COLUMN foo
   varchar; -- hi there"#;
 
-        let r = Parser::parse_sql(&crate::dialect::PostgreSqlDialect {}, sql).unwrap();
+        let r = Parser::parse_sql(&crate::dialect::PostgreSqlDialect {}, sql);
+        dbg!(&r);
+        let r = r.unwrap();
         assert_eq!(1, r.len());
 
         let stmt_span = r[0].span();

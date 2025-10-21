@@ -284,7 +284,7 @@ pub enum Token {
 /// Decide whether a comment is a LeadingComment or an InterstitialComment based on the previous token.
 fn dispatch_comment_kind(prev_nontrivial_token: Option<Token>, comment: Comment) -> Token {
     match prev_nontrivial_token {
-        None | Some(Token::Comma) | Some(Token::SemiColon) => Token::LeadingComment(comment),
+        None | Some(Token::LParen) | Some(Token::Comma) | Some(Token::SemiColon) => Token::LeadingComment(comment),
         _ => Token::Whitespace(comment.into()),
     }
 }
@@ -3224,11 +3224,11 @@ mod tests {
 
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
-        let expected = vec![Token::LeadingComment(
-            Comment::SingleLineComment {
+        let expected = vec![Token::Whitespace(
+            Whitespace::InterstitialComment(Comment::SingleLineComment{
                 prefix: "--".to_string(),
                 comment: "this is a comment".to_string(),
-            }
+            })
             .into(),
         )];
         compare(expected, tokens);

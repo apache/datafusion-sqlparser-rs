@@ -5640,7 +5640,7 @@ fn parse_create_simple_before_insert_trigger() {
         or_replace: false,
         is_constraint: false,
         name: ObjectName::from(vec![Ident::new("check_insert")]),
-        period: TriggerPeriod::Before,
+        period: Some(TriggerPeriod::Before),
         period_before_table: true,
         events: vec![TriggerEvent::Insert],
         table_name: ObjectName::from(vec![Ident::new("accounts")]),
@@ -5672,7 +5672,7 @@ fn parse_create_after_update_trigger_with_condition() {
         or_replace: false,
         is_constraint: false,
         name: ObjectName::from(vec![Ident::new("check_update")]),
-        period: TriggerPeriod::After,
+        period: Some(TriggerPeriod::After),
         period_before_table: true,
         events: vec![TriggerEvent::Update(vec![])],
         table_name: ObjectName::from(vec![Ident::new("accounts")]),
@@ -5711,7 +5711,7 @@ fn parse_create_instead_of_delete_trigger() {
         or_replace: false,
         is_constraint: false,
         name: ObjectName::from(vec![Ident::new("check_delete")]),
-        period: TriggerPeriod::InsteadOf,
+        period: Some(TriggerPeriod::InsteadOf),
         period_before_table: true,
         events: vec![TriggerEvent::Delete],
         table_name: ObjectName::from(vec![Ident::new("accounts")]),
@@ -5743,7 +5743,7 @@ fn parse_create_trigger_with_multiple_events_and_deferrable() {
         or_replace: false,
         is_constraint: true,
         name: ObjectName::from(vec![Ident::new("check_multiple_events")]),
-        period: TriggerPeriod::Before,
+        period: Some(TriggerPeriod::Before),
         period_before_table: true,
         events: vec![
             TriggerEvent::Insert,
@@ -5783,7 +5783,7 @@ fn parse_create_trigger_with_referencing() {
         or_replace: false,
         is_constraint: false,
         name: ObjectName::from(vec![Ident::new("check_referencing")]),
-        period: TriggerPeriod::Before,
+        period: Some(TriggerPeriod::Before),
         period_before_table: true,
         events: vec![TriggerEvent::Insert],
         table_name: ObjectName::from(vec![Ident::new("accounts")]),
@@ -5830,7 +5830,7 @@ fn parse_create_trigger_invalid_cases() {
         ),
         (
             "CREATE TRIGGER check_update TOMORROW UPDATE ON accounts EXECUTE FUNCTION check_account_update",
-            "Expected: one of FOR or BEFORE or AFTER or INSTEAD, found: TOMORROW"
+            "Expected: one of INSERT or UPDATE or DELETE or TRUNCATE, found: TOMORROW"
         ),
         (
             "CREATE TRIGGER check_update BEFORE SAVE ON accounts EXECUTE FUNCTION check_account_update",
@@ -6099,7 +6099,7 @@ fn parse_trigger_related_functions() {
             or_replace: false,
             is_constraint: false,
             name: ObjectName::from(vec![Ident::new("emp_stamp")]),
-            period: TriggerPeriod::Before,
+            period: Some(TriggerPeriod::Before),
             period_before_table: true,
             events: vec![TriggerEvent::Insert, TriggerEvent::Update(vec![])],
             table_name: ObjectName::from(vec![Ident::new("emp")]),

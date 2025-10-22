@@ -5592,7 +5592,7 @@ impl<'a> Parser<'a> {
         }
 
         let name = self.parse_object_name(false)?;
-        let period = self.parse_trigger_period()?;
+        let period = self.maybe_parse(|parser| parser.parse_trigger_period())?;
 
         let events = self.parse_keyword_separated(Keyword::OR, Parser::parse_trigger_event)?;
         self.expect_keyword_is(Keyword::ON)?;

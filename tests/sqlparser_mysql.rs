@@ -4034,7 +4034,7 @@ fn parse_create_trigger() {
             or_replace: false,
             is_constraint: false,
             name: ObjectName::from(vec![Ident::new("emp_stamp")]),
-            period: TriggerPeriod::Before,
+            period: Some(TriggerPeriod::Before),
             period_before_table: true,
             events: vec![TriggerEvent::Insert],
             table_name: ObjectName::from(vec![Ident::new("emp")]),

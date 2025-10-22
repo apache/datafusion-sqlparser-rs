@@ -4333,8 +4333,8 @@ comment */id INT PRIMARY KEY)"#;
 #[test]
 fn parse_alter_table_with_leading_comment() {
     let single_line_sql = r#"-- a single line leading comment
-ALTER TABLE user (ADD COLUMN -- a column single line comment
-id INT PRIMARY KEY)"#;
+ALTER TABLE user ADD COLUMN -- a column single line comment
+id INT PRIMARY KEY"#;
     let single_line_ast = verified_stmt(single_line_sql);
     match single_line_ast {
         Statement::AlterTable (
@@ -4359,8 +4359,8 @@ id INT PRIMARY KEY)"#;
         _ => unreachable!(),
     };
     let multi_line_sql = r#"/* a multi line
-leading comment */ALTER TABLE user (ADD COLUMN /* a column multiline
-comment */id INT PRIMARY KEY)"#;
+leading comment */ALTER TABLE user ADD COLUMN /* a column multiline
+comment */id INT PRIMARY KEY"#;
     let multi_line_ast = verified_stmt(multi_line_sql);
     match multi_line_ast {
         Statement::AlterTable(

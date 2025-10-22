@@ -9741,6 +9741,7 @@ impl<'a> Parser<'a> {
             Keyword::BLANKSASNULL,
             Keyword::BZIP2,
             Keyword::CLEANPATH,
+            Keyword::COMPUPDATE,
             Keyword::CSV,
             Keyword::DATEFORMAT,
             Keyword::DELIMITER,
@@ -9761,7 +9762,9 @@ impl<'a> Parser<'a> {
             Keyword::PARQUET,
             Keyword::PARTITION,
             Keyword::REGION,
+            Keyword::REMOVEQUOTES,
             Keyword::ROWGROUPSIZE,
+            Keyword::STATUPDATE,
             Keyword::TIMEFORMAT,
             Keyword::TRUNCATECOLUMNS,
             Keyword::ZSTD,
@@ -9782,6 +9785,20 @@ impl<'a> Parser<'a> {
             Some(Keyword::BLANKSASNULL) => CopyLegacyOption::BlankAsNull,
             Some(Keyword::BZIP2) => CopyLegacyOption::Bzip2,
             Some(Keyword::CLEANPATH) => CopyLegacyOption::CleanPath,
+            Some(Keyword::COMPUPDATE) => {
+                let preset = self.parse_keyword(Keyword::PRESET);
+                let enabled = match self.parse_one_of_keywords(&[
+                    Keyword::TRUE,
+                    Keyword::FALSE,
+                    Keyword::ON,
+                    Keyword::OFF,
+                ]) {
+                    Some(Keyword::TRUE) | Some(Keyword::ON) => Some(true),
+                    Some(Keyword::FALSE) | Some(Keyword::OFF) => Some(false),
+                    _ => None,
+                };
+                CopyLegacyOption::CompUpdate { preset, enabled }
+            }
             Some(Keyword::CSV) => CopyLegacyOption::Csv({
                 let mut opts = vec![];
                 while let Some(opt) =
@@ -9870,10 +9887,24 @@ impl<'a> Parser<'a> {
                 let region = self.parse_literal_string()?;
                 CopyLegacyOption::Region(region)
             }
+            Some(Keyword::REMOVEQUOTES) => CopyLegacyOption::RemoveQuotes,
             Some(Keyword::ROWGROUPSIZE) => {
                 let _ = self.parse_keyword(Keyword::AS);
                 let file_size = self.parse_file_size()?;
                 CopyLegacyOption::RowGroupSize(file_size)
+            }
+            Some(Keyword::STATUPDATE) => {
+                let enabled = match self.parse_one_of_keywords(&[
+                    Keyword::TRUE,
+                    Keyword::FALSE,
+                    Keyword::ON,
+                    Keyword::OFF,
+                ]) {
+                    Some(Keyword::TRUE) | Some(Keyword::ON) => Some(true),
+                    Some(Keyword::FALSE) | Some(Keyword::OFF) => Some(false),
+                    _ => None,
+                };
+                CopyLegacyOption::StatUpdate(enabled)
             }
             Some(Keyword::TIMEFORMAT) => {
                 let _ = self.parse_keyword(Keyword::AS);

@@ -8210,6 +8210,8 @@ pub enum CopyLegacyOption {
     Bzip2,
     /// CLEANPATH
     CleanPath,
+    /// COMPUPDATE [ PRESET | { ON | TRUE } | { OFF | FALSE } ]
+    CompUpdate { preset: bool, enabled: Option<bool> },
     /// CSV ...
     Csv(Vec<CopyLegacyCsvOption>),
     /// DATEFORMAT \[ AS \] {'dateformat_string' | 'auto' }
@@ -8250,8 +8252,12 @@ pub enum CopyLegacyOption {
     PartitionBy(UnloadPartitionBy),
     /// REGION \[ AS \] 'aws-region' }
     Region(String),
+    /// REMOVEQUOTES
+    RemoveQuotes,
     /// ROWGROUPSIZE \[ AS \] size \[ MB | GB \]
     RowGroupSize(FileSize),
+    /// STATUPDATE [ { ON | TRUE } | { OFF | FALSE } ]
+    StatUpdate(Option<bool>),
     /// TIMEFORMAT \[ AS \] {'timeformat_string' | 'auto' | 'epochsecs' | 'epochmillisecs' }
     TimeFormat(Option<String>),
     /// TRUNCATECOLUMNS
@@ -8278,6 +8284,22 @@ impl fmt::Display for CopyLegacyOption {
             BlankAsNull => write!(f, "BLANKSASNULL"),
             Bzip2 => write!(f, "BZIP2"),
             CleanPath => write!(f, "CLEANPATH"),
+            CompUpdate { preset, enabled } => {
+                write!(f, "COMPUPDATE")?;
+                if *preset {
+                    write!(f, " PRESET")?;
+                } else if let Some(enabled) = enabled {
+                    write!(
+                        f,
+                        "{}",
+                        match enabled {
+                            true => " TRUE",
+                            false => " FALSE",
+                        }
+                    )?;
+                }
+                Ok(())
+            }
             Csv(opts) => {
                 write!(f, "CSV")?;
                 if !opts.is_empty() {
@@ -8324,7 +8346,19 @@ impl fmt::Display for CopyLegacyOption {
             Parquet => write!(f, "PARQUET"),
             PartitionBy(p) => write!(f, "{p}"),
             Region(region) => write!(f, "REGION '{}'", value::escape_single_quote_string(region)),
+            RemoveQuotes => write!(f, "REMOVEQUOTES"),
             RowGroupSize(file_size) => write!(f, "ROWGROUPSIZE {file_size}"),
+            StatUpdate(enabled) => {
+                write!(
+                    f,
+                    "STATUPDATE{}",
+                    match enabled {
+                        Some(true) => " TRUE",
+                        Some(false) => " FALSE",
+                        _ => "",
+                    }
+                )
+            }
             TimeFormat(fmt) => {
                 write!(f, "TIMEFORMAT")?;
                 if let Some(fmt) = fmt {

@@ -532,7 +532,7 @@ impl<'a> Parser<'a> {
     /// Parses a single leading comment (if any)
     pub fn parse_leading_comment(&mut self) -> Option<Comment> {
         if let Token::LeadingComment(ref comment) = self.peek_token_ref().token {
-        let comment = comment.clone();
+            let comment = comment.clone();
             self.advance_token();
             Some(comment)
         } else {
@@ -675,7 +675,7 @@ impl<'a> Parser<'a> {
             Token::LParen => {
                 self.prev_token();
                 self.parse_query().map(Statement::Query)
-            },
+            }
             _ => self.expected("an SQL statement", next_token),
         }
     }
@@ -4161,16 +4161,7 @@ impl<'a> Parser<'a> {
     ///
     /// See [`Self::get_current_token`] to get the current token after advancing
     pub fn advance_token(&mut self) {
-        loop {
-            self.index += 1;
-            match self.tokens.get(self.index - 1) {
-                Some(TokenWithSpan {
-                    token: Token::Whitespace(_),
-                    span: _,
-                }) => continue,
-                _ => break,
-            }
-        }
+        self.index += 1;
     }
 
     /// Returns a reference to the current token
@@ -4201,18 +4192,8 @@ impl<'a> Parser<'a> {
     ///
     // TODO rename to backup_token and deprecate prev_token?
     pub fn prev_token(&mut self) {
-        loop {
-            assert!(self.index > 0);
-            self.index -= 1;
-            if let Some(TokenWithSpan {
-                token: Token::Whitespace(_),
-                span: _,
-            }) = self.tokens.get(self.index)
-            {
-                continue;
-            }
-            return;
-        }
+        assert!(self.index > 0);
+        self.index -= 1;
     }
 
     /// Report `found` was encountered instead of `expected`
@@ -4731,7 +4712,10 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a SQL CREATE statement
-    pub fn parse_create(&mut self, leading_comment: Option<Comment>) -> Result<Statement, ParserError> {
+    pub fn parse_create(
+        &mut self,
+        leading_comment: Option<Comment>,
+    ) -> Result<Statement, ParserError> {
         let or_replace = self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
         let or_alter = self.parse_keywords(&[Keyword::OR, Keyword::ALTER]);
         let local = self.parse_one_of_keywords(&[Keyword::LOCAL]).is_some();
@@ -5810,7 +5794,7 @@ impl<'a> Parser<'a> {
     pub fn parse_create_external_table(
         &mut self,
         or_replace: bool,
-        leading_comment: Option<Comment>
+        leading_comment: Option<Comment>,
     ) -> Result<Statement, ParserError> {
         self.expect_keyword_is(Keyword::TABLE)?;
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
@@ -7243,7 +7227,9 @@ impl<'a> Parser<'a> {
     //TODO: Implement parsing for Skewed
     pub fn parse_hive_distribution(&mut self) -> Result<HiveDistributionStyle, ParserError> {
         if self.parse_keywords(&[Keyword::PARTITIONED, Keyword::BY]) {
-            Ok(HiveDistributionStyle::PARTITIONED { columns: self.parse_returns_table_columns()? })
+            Ok(HiveDistributionStyle::PARTITIONED {
+                columns: self.parse_returns_table_columns()?,
+            })
         } else {
             Ok(HiveDistributionStyle::NONE)
         }
@@ -7407,7 +7393,7 @@ impl<'a> Parser<'a> {
         temporary: bool,
         global: Option<bool>,
         transient: bool,
-        leading_comment: Option<Comment>
+        leading_comment: Option<Comment>,
     ) -> Result<Statement, ParserError> {
         let allow_unquoted_hyphen = dialect_of!(self is BigQueryDialect);
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
@@ -7893,7 +7879,6 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_columns(&mut self) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
-        
         let mut columns = vec![];
         let mut constraints = vec![];
         if !self.consume_token(&Token::LParen) || self.consume_token(&Token::RParen) {
@@ -7956,7 +7941,10 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_column_def(&mut self, leading_comment: Option<Comment>) -> Result<ColumnDef, ParserError> {
+    pub fn parse_column_def(
+        &mut self,
+        leading_comment: Option<Comment>,
+    ) -> Result<ColumnDef, ParserError> {
         let col_name = self.parse_identifier()?;
         let data_type = if self.is_column_type_sqlite_unspecified() {
             DataType::Unspecified
@@ -7964,7 +7952,7 @@ impl<'a> Parser<'a> {
             self.parse_data_type()?
         };
         let mut options = vec![];
-        
+
         loop {
             if self.parse_keyword(Keyword::CONSTRAINT) {
                 let name = Some(self.parse_identifier()?);
@@ -9375,7 +9363,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_alter(&mut self, leading_comment: Option<Comment>) -> Result<Statement, ParserError> {
+    pub fn parse_alter(
+        &mut self,
+        leading_comment: Option<Comment>,
+    ) -> Result<Statement, ParserError> {
         let object_type = self.expect_one_of_keywords(&[
             Keyword::VIEW,
             Keyword::TYPE,
@@ -9429,7 +9420,11 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a [Statement::AlterTable]
-    pub fn parse_alter_table(&mut self, leading_comment: Option<Comment>, iceberg: bool) -> Result<Statement, ParserError> {
+    pub fn parse_alter_table(
+        &mut self,
+        leading_comment: Option<Comment>,
+        iceberg: bool,
+    ) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let only = self.parse_keyword(Keyword::ONLY); // [ ONLY ]
         let table_name = self.parse_object_name(false)?;
@@ -9464,7 +9459,7 @@ impl<'a> Parser<'a> {
             on_cluster,
             iceberg,
             end_token: AttachedToken(end_token),
-            leading_comment
+            leading_comment,
         }
         .into())
     }

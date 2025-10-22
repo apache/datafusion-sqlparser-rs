@@ -1572,6 +1572,7 @@ fn parse_table_identifiers() {
 
     fn test_table_ident_err(ident: &str) {
         let sql = format!("SELECT 1 FROM {ident}");
+        dbg!(bigquery().parse_sql_statements(&sql));
         assert!(bigquery().parse_sql_statements(&sql).is_err());
     }
 

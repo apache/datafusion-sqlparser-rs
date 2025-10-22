@@ -553,7 +553,7 @@ impl Spanned for CreateTable {
             refresh_mode: _,
             initialize: _,
             require_user: _,
-            leading_comment: _,                 // Option<Comment>
+            leading_comment: _, // Option<Comment>
         } = self;
 
         union_spans(

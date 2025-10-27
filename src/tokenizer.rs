@@ -23,12 +23,15 @@
 
 #[cfg(not(feature = "std"))]
 use alloc::{
-    borrow::ToOwned,
+    borrow::{Cow, ToOwned},
     format,
     string::{String, ToString},
     vec,
     vec::Vec,
 };
+#[cfg(feature = "std")]
+use std::borrow::Cow;
+
 use core::iter::Peekable;
 use core::num::NonZeroU8;
 use core::str::Chars;
@@ -1783,80 +1786,106 @@ impl<'a> Tokenizer<'a> {
     }
 
     /// Tokenize dollar preceded value (i.e: a string/placeholder)
-    fn tokenize_dollar_preceded_value(&self, chars: &mut State) -> Result<Token, TokenizerError> {
-        let mut s = String::new();
-        let mut value = String::new();
+    fn tokenize_dollar_preceded_value(
+        &self,
+        chars: &mut State<'a>,
+    ) -> Result<Token, TokenizerError> {
+        chars.next(); // consume first $
 
-        chars.next();
-
-        // If the dialect does not support dollar-quoted strings, then `$$` is rather a placeholder.
+        // Case 1: $$text$$ (untagged dollar-quoted string)
         if matches!(chars.peek(), Some('$')) && !self.dialect.supports_dollar_placeholder() {
-            chars.next();
+            let (value, tag) = self.tokenize_dollar_quoted_string_borrowed(chars, None)?;
+            return Ok(Token::DollarQuotedString(DollarQuotedString {
+                value: value.into_owned(),
+                tag: tag.map(|t| t.into_owned()),
+            }));
+        }
 
-            let mut is_terminated = false;
-            let mut prev: Option<char> = None;
+        // If it's not $$ we have 2 options :
+        //   Case 2: $tag$text$tag$ (tagged dollar-quoted string) if dialect supports it
+        //   Case 3: $placeholder (e.g., $1, $name)
+        let tag_start = chars.byte_pos;
+        let _tag_slice = peeking_take_while_ref(chars, |ch| {
+            ch.is_alphanumeric()
+                || ch == '_'
+                || matches!(ch, '$' if self.dialect.supports_dollar_placeholder())
+        });
+        let tag_end = chars.byte_pos;
 
-            while let Some(&ch) = chars.peek() {
-                if prev == Some('$') {
-                    if ch == '$' {
-                        chars.next();
-                        is_terminated = true;
-                        break;
-                    } else {
-                        s.push('$');
-                        s.push(ch);
+        // Case 2: $tag$text$tag$ (tagged dollar-quoted string)
+        if matches!(chars.peek(), Some('$')) && !self.dialect.supports_dollar_placeholder() {
+            let tag_value = &chars.source[tag_start..tag_end];
+            let (value, tag) =
+                self.tokenize_dollar_quoted_string_borrowed(chars, Some(tag_value))?;
+            return Ok(Token::DollarQuotedString(DollarQuotedString {
+                value: value.into_owned(),
+                tag: tag.map(|t| t.into_owned()),
+            }));
+        }
+
+        // Case 3: $placeholder (e.g., $1, $name)
+        let tag_value = &chars.source[tag_start..tag_end];
+        Ok(Token::Placeholder(format!("${}", tag_value)))
+    }
+
+    /// Tokenize a dollar-quoted string ($$text$$ or $tag$text$tag$), returning borrowed slices.
+    /// tag_prefix: None for $$, Some("tag") for $tag$
+    /// Returns (value: Cow<'a, str>, tag: Option<Cow<'a, str>>)
+    fn tokenize_dollar_quoted_string_borrowed(
+        &self,
+        chars: &mut State<'a>,
+        tag_prefix: Option<&'a str>,
+    ) -> Result<(Cow<'a, str>, Option<Cow<'a, str>>), TokenizerError> {
+        chars.next(); // consume $ after tag (or second $ for $$)
+        let content_start = chars.byte_pos;
+
+        match tag_prefix {
+            None => {
+                // Case: $$text$$
+                let mut prev: Option<char> = None;
+
+                while let Some(&ch) = chars.peek() {
+                    if prev == Some('$') && ch == '$' {
+                        chars.next(); // consume final $
+                                      // content_end is before the first $ of $$
+                        let content_end = chars.byte_pos - 2;
+                        let value = &chars.source[content_start..content_end];
+                        return Ok((Cow::Borrowed(value), None));
                     }
-                } else if ch != '$' {
-                    s.push(ch);
+
+                    prev = Some(ch);
+                    chars.next();
                 }
 
-                prev = Some(ch);
-                chars.next();
-            }
-
-            return if chars.peek().is_none() && !is_terminated {
                 self.tokenizer_error(chars.location(), "Unterminated dollar-quoted string")
-            } else {
-                Ok(Token::DollarQuotedString(DollarQuotedString {
-                    value: s,
-                    tag: None,
-                }))
-            };
-        } else {
-            value.push_str(&peeking_take_while(chars, |ch| {
-                ch.is_alphanumeric()
-                    || ch == '_'
-                    // Allow $ as a placeholder character if the dialect supports it
-                    || matches!(ch, '$' if self.dialect.supports_dollar_placeholder())
-            }));
+            }
+            Some(tag) => {
+                // Case: $tag$text$tag$
+                let end_delimiter = format!("${}$", tag);
 
-            // If the dialect does not support dollar-quoted strings, don't look for the end delimiter.
-            if matches!(chars.peek(), Some('$')) && !self.dialect.supports_dollar_placeholder() {
-                chars.next();
-
-                let mut temp = String::new();
-                let end_delimiter = format!("${value}$");
-
+                // Scan for the end delimiter
+                let buffer_start = content_start;
                 loop {
                     match chars.next() {
-                        Some(ch) => {
-                            temp.push(ch);
+                        Some(_) => {
+                            let current_pos = chars.byte_pos;
+                            let buffer = &chars.source[buffer_start..current_pos];
 
-                            if temp.ends_with(&end_delimiter) {
-                                if let Some(temp) = temp.strip_suffix(&end_delimiter) {
-                                    s.push_str(temp);
-                                }
-                                break;
+                            if buffer.ends_with(&end_delimiter) {
+                                // Found the end delimiter
+                                let content_end = current_pos - end_delimiter.len();
+                                let value = &chars.source[content_start..content_end];
+                                return Ok((
+                                    Cow::Borrowed(value),
+                                    if tag.is_empty() {
+                                        None
+                                    } else {
+                                        Some(Cow::Borrowed(tag))
+                                    },
+                                ));
                             }
                         }
                         None => {
-                            if temp.ends_with(&end_delimiter) {
-                                if let Some(temp) = temp.strip_suffix(&end_delimiter) {
-                                    s.push_str(temp);
-                                }
-                                break;
-                            }
-
                             return self.tokenizer_error(
                                 chars.location(),
                                 "Unterminated dollar-quoted, expected $",
@@ -1864,15 +1893,8 @@ impl<'a> Tokenizer<'a> {
                         }
                     }
                 }
-            } else {
-                return Ok(Token::Placeholder(String::from("$") + &value));
             }
         }
-
-        Ok(Token::DollarQuotedString(DollarQuotedString {
-            value: s,
-            tag: if value.is_empty() { None } else { Some(value) },
-        }))
     }
 
     fn tokenizer_error<R>(
@@ -1887,19 +1909,30 @@ impl<'a> Tokenizer<'a> {
     }
 
     // Consume characters until newline
-    fn tokenize_single_line_comment(&self, chars: &mut State) -> String {
-        let mut comment = peeking_take_while(chars, |ch| match ch {
+    fn tokenize_single_line_comment(&self, chars: &mut State<'a>) -> String {
+        self.tokenize_single_line_comment_borrowed(chars)
+            .to_string()
+    }
+
+    /// Tokenize a single-line comment, returning a borrowed slice.
+    /// Returns a slice that includes the terminating newline character.
+    fn tokenize_single_line_comment_borrowed(&self, chars: &mut State<'a>) -> &'a str {
+        let start_pos = chars.byte_pos;
+
+        // Consume until newline
+        peeking_take_while_ref(chars, |ch| match ch {
             '\n' => false,                                           // Always stop at \n
             '\r' if dialect_of!(self is PostgreSqlDialect) => false, // Stop at \r for Postgres
             _ => true, // Keep consuming for other characters
         });
 
+        // Consume the newline character
         if let Some(ch) = chars.next() {
             assert!(ch == '\n' || ch == '\r');
-            comment.push(ch);
         }
 
-        comment
+        // Return slice including the newline
+        &chars.source[start_pos..chars.byte_pos]
     }
 
     /// Tokenize an identifier or keyword, after the first char(s) have already been consumed.
@@ -1938,7 +1971,7 @@ impl<'a> Tokenizer<'a> {
     fn tokenize_quoted_identifier(
         &self,
         quote_start: char,
-        chars: &mut State,
+        chars: &mut State<'a>,
     ) -> Result<String, TokenizerError> {
         let error_loc = chars.location();
         chars.next(); // consume the opening quote
@@ -2152,9 +2185,21 @@ impl<'a> Tokenizer<'a> {
 
     fn tokenize_multiline_comment(
         &self,
-        chars: &mut State,
+        chars: &mut State<'a>,
     ) -> Result<Option<Token>, TokenizerError> {
-        let mut s = String::new();
+        let s = self.tokenize_multiline_comment_borrowed(chars)?;
+        Ok(Some(Token::Whitespace(Whitespace::MultiLineComment(
+            s.to_string(),
+        ))))
+    }
+
+    /// Tokenize a multi-line comment, returning a borrowed slice.
+    /// Returns a slice that excludes the opening `/*` (already consumed) and the final closing `*/`.
+    fn tokenize_multiline_comment_borrowed(
+        &self,
+        chars: &mut State<'a>,
+    ) -> Result<&'a str, TokenizerError> {
+        let start_pos = chars.byte_pos;
         let mut nested = 1;
         let supports_nested_comments = self.dialect.supports_nested_comments();
 
@@ -2162,24 +2207,22 @@ impl<'a> Tokenizer<'a> {
             match chars.next() {
                 Some('/') if matches!(chars.peek(), Some('*')) && supports_nested_comments => {
                     chars.next(); // consume the '*'
-                    s.push('/');
-                    s.push('*');
                     nested += 1;
                 }
                 Some('*') if matches!(chars.peek(), Some('/')) => {
                     chars.next(); // consume the '/'
                     nested -= 1;
                     if nested == 0 {
-                        break Ok(Some(Token::Whitespace(Whitespace::MultiLineComment(s))));
+                        // We've consumed the final */, so exclude it from the slice
+                        let end_pos = chars.byte_pos - 2; // Subtract 2 bytes for '*' and '/'
+                        return Ok(&chars.source[start_pos..end_pos]);
                     }
-                    s.push('*');
-                    s.push('/');
                 }
-                Some(ch) => {
-                    s.push(ch);
+                Some(_) => {
+                    // Just consume the character, don't need to push to string
                 }
                 None => {
-                    break self.tokenizer_error(
+                    return self.tokenizer_error(
                         chars.location(),
                         "Unexpected EOF while in a multi-line comment",
                     );
@@ -2188,27 +2231,66 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    fn parse_quoted_ident(&self, chars: &mut State, quote_end: char) -> (String, Option<char>) {
+    fn parse_quoted_ident(&self, chars: &mut State<'a>, quote_end: char) -> (String, Option<char>) {
+        let (cow, last_char) = self.parse_quoted_ident_borrowed(chars, quote_end);
+        (cow.into_owned(), last_char)
+    }
+
+    /// Parse quoted identifier, returning borrowed slice when possible.
+    /// Returns `(Cow<'a, str>, Option<char>)` where the `Option<char>` is the closing quote.
+    fn parse_quoted_ident_borrowed(
+        &self,
+        chars: &mut State<'a>,
+        quote_end: char,
+    ) -> (Cow<'a, str>, Option<char>) {
+        let content_start = chars.byte_pos;
+        let mut has_doubled_quotes = false;
         let mut last_char = None;
-        let mut s = String::new();
+
+        // Scan to find the end and detect doubled quotes
         while let Some(ch) = chars.next() {
             if ch == quote_end {
                 if chars.peek() == Some(&quote_end) {
-                    chars.next();
-                    s.push(ch);
-                    if !self.unescape {
-                        // In no-escape mode, the given query has to be saved completely
-                        s.push(ch);
-                    }
+                    has_doubled_quotes = true;
+                    chars.next(); // consume the second quote
                 } else {
                     last_char = Some(quote_end);
                     break;
                 }
-            } else {
-                s.push(ch);
             }
         }
-        (s, last_char)
+
+        let content_end = if last_char.is_some() {
+            chars.byte_pos - 1 // exclude the closing quote
+        } else {
+            chars.byte_pos
+        };
+
+        let content = &chars.source[content_start..content_end];
+
+        // If no doubled quotes, we can always borrow
+        if !has_doubled_quotes {
+            return (Cow::Borrowed(content), last_char);
+        }
+
+        // If unescape=false, keep the content as-is (with doubled quotes)
+        if !self.unescape {
+            return (Cow::Borrowed(content), last_char);
+        }
+
+        // Need to unescape: process doubled quotes
+        let mut result = String::new();
+        let mut chars_iter = content.chars();
+
+        while let Some(ch) = chars_iter.next() {
+            result.push(ch);
+            if ch == quote_end {
+                // This is the first of a doubled quote, skip the second one
+                chars_iter.next();
+            }
+        }
+
+        (Cow::Owned(result), last_char)
     }
 
     #[allow(clippy::unnecessary_wraps)]
@@ -2304,7 +2386,69 @@ fn peeking_next_take_while(
 }
 
 fn unescape_single_quoted_string(chars: &mut State<'_>) -> Option<String> {
-    Unescape::new(chars).unescape()
+    borrow_or_unescape_single_quoted_string(chars, true).map(|cow| cow.into_owned())
+}
+
+/// Scans a single-quoted string and returns either a borrowed slice or an unescaped owned string.
+///
+/// Strategy: Scan once to find the end and detect escape sequences.
+/// - If no escapes exist (or unescape=false), return Cow::Borrowed
+/// - If escapes exist and unescape=true, reprocess using existing Unescape logic
+fn borrow_or_unescape_single_quoted_string<'a>(
+    chars: &mut State<'a>,
+    unescape: bool,
+) -> Option<Cow<'a, str>> {
+    let content_start = chars.byte_pos;
+    chars.next(); // consume opening '
+
+    // Scan to find end and check for escape sequences
+    let mut has_escapes = false;
+
+    loop {
+        match chars.next() {
+            Some('\'') => {
+                // Check for doubled single quote (escape)
+                if chars.peek() == Some(&'\'') {
+                    has_escapes = true;
+                    chars.next(); // consume the second '
+                } else {
+                    // End of string found (including closing ')
+                    let content_end = chars.byte_pos;
+                    let full_content = &chars.source[content_start..content_end];
+
+                    // If no unescaping needed, return borrowed (without quotes)
+                    if !unescape || !has_escapes {
+                        // Strip opening and closing quotes
+                        return Some(Cow::Borrowed(&full_content[1..full_content.len() - 1]));
+                    }
+
+                    // Need to unescape - reprocess using existing logic
+                    // Create a temporary State from the content
+                    let mut temp_state = State {
+                        peekable: full_content.chars().peekable(),
+                        source: full_content,
+                        line: 0,
+                        col: 0,
+                        byte_pos: 0,
+                    };
+
+                    return Unescape::new(&mut temp_state).unescape().map(Cow::Owned);
+                }
+            }
+            Some('\\') => {
+                has_escapes = true;
+                // Skip next character (it's escaped)
+                chars.next();
+            }
+            Some(_) => {
+                // Regular character, continue scanning
+            }
+            None => {
+                // Unexpected EOF
+                return None;
+            }
+        }
+    }
 }
 
 struct Unescape<'a: 'b, 'b> {
@@ -2452,8 +2596,83 @@ impl<'a: 'b, 'b> Unescape<'a, 'b> {
 }
 
 fn unescape_unicode_single_quoted_string(chars: &mut State<'_>) -> Result<String, TokenizerError> {
+    borrow_or_unescape_unicode_single_quoted_string(chars, true).map(|cow| cow.into_owned())
+}
+
+/// Scans a unicode-escaped single-quoted string and returns either a borrowed slice or an unescaped owned string.
+///
+/// Strategy: Scan once to find the end and detect escape sequences.
+/// - If no escapes exist (or unescape=false), return Cow::Borrowed
+/// - If escapes exist and unescape=true, reprocess with unicode escaping logic
+fn borrow_or_unescape_unicode_single_quoted_string<'a>(
+    chars: &mut State<'a>,
+    unescape: bool,
+) -> Result<Cow<'a, str>, TokenizerError> {
+    let content_start = chars.byte_pos;
+    let error_loc = chars.location();
+    chars.next(); // consume the opening quote
+
+    // Scan to find end and check for escape sequences
+    let mut has_escapes = false;
+
+    loop {
+        match chars.next() {
+            Some('\'') => {
+                // Check for doubled single quote (escape)
+                if chars.peek() == Some(&'\'') {
+                    has_escapes = true;
+                    chars.next(); // consume the second '
+                } else {
+                    // End of string found (including closing ')
+                    let content_end = chars.byte_pos;
+                    let full_content = &chars.source[content_start..content_end];
+
+                    // If no unescaping needed, return borrowed (without quotes)
+                    if !unescape || !has_escapes {
+                        // Strip opening and closing quotes
+                        return Ok(Cow::Borrowed(&full_content[1..full_content.len() - 1]));
+                    }
+
+                    // Need to unescape - reprocess with unicode logic
+                    // Create a temporary State from the content
+                    let mut temp_state = State {
+                        peekable: full_content.chars().peekable(),
+                        source: full_content,
+                        line: 0,
+                        col: 0,
+                        byte_pos: 0,
+                    };
+
+                    return process_unicode_string_with_escapes(&mut temp_state, error_loc)
+                        .map(Cow::Owned);
+                }
+            }
+            Some('\\') => {
+                has_escapes = true;
+                // Skip next character (it's escaped or part of unicode sequence)
+                chars.next();
+            }
+            Some(_) => {
+                // Regular character, continue scanning
+            }
+            None => {
+                return Err(TokenizerError {
+                    message: "Unterminated unicode encoded string literal".to_string(),
+                    location: error_loc,
+                });
+            }
+        }
+    }
+}
+
+/// Process a unicode-escaped string using the original unescape logic
+fn process_unicode_string_with_escapes(
+    chars: &mut State<'_>,
+    error_loc: Location,
+) -> Result<String, TokenizerError> {
     let mut unescaped = String::new();
     chars.next(); // consume the opening quote
+
     while let Some(c) = chars.next() {
         match c {
             '\'' => {
@@ -2480,9 +2699,10 @@ fn unescape_unicode_single_quoted_string(chars: &mut State<'_>) -> Result<String
             }
         }
     }
+
     Err(TokenizerError {
         message: "Unterminated unicode encoded string literal".to_string(),
-        location: chars.location(),
+        location: error_loc,
     })
 }
 

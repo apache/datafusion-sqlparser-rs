@@ -908,6 +908,22 @@ impl<'a> Tokenizer<'a> {
         Ok(Some(Token::make_word(&word, None)))
     }
 
+    /// Returns a standardized error if the previous token is a `:` and
+    /// the method is expected to be called when a space is found after it.
+    fn handle_colon_space_error(
+        &self,
+        chars: &State,
+        prev_token: Option<&Token>,
+    ) -> Result<Option<Token>, TokenizerError> {
+        if let Some(Token::Colon) = prev_token {
+            return Err(TokenizerError {
+                message: "Unexpected whitespace after ':'; did you mean ':placeholder' or '::'?".to_string(),
+                location: chars.location(),
+            });
+        }
+        Ok(None)
+    }
+
     /// Get the next token or return None
     fn next_token(
         &self,
@@ -919,6 +935,7 @@ impl<'a> Tokenizer<'a> {
         match chars.peek() {
             Some(&ch) => match ch {
                 ' ' | '\t' | '\n' | '\r' => {
+                    self.handle_colon_space_error(chars, prev_token)?;
                     chars.next(); // consume
                     *location = chars.location();
                     self.next_token(location, chars, prev_token, true)
@@ -1166,7 +1183,7 @@ impl<'a> Tokenizer<'a> {
                     // if the prev token is not a word, then this is not a valid sql
                     // word or number.
                     if ch == '.' && chars.peekable.clone().nth(1) == Some('_') {
-                        if let Some(Token::Word(_)) = prev_token {
+                        if !preceded_by_whitespace {
                             chars.next();
                             return Ok(Some(Token::Period));
                         }
@@ -1210,7 +1227,7 @@ impl<'a> Tokenizer<'a> {
                     // we should yield the dot as a dedicated token so compound identifiers
                     // starting with digits can be parsed correctly.
                     if s == "." && self.dialect.supports_numeric_prefix() {
-                        if let Some(Token::Word(_)) = prev_token {
+                        if !preceded_by_whitespace {
                             return Ok(Some(Token::Period));
                         }
                     }
@@ -1300,6 +1317,7 @@ impl<'a> Tokenizer<'a> {
                             }
 
                             if is_comment {
+                                self.handle_colon_space_error(chars, prev_token)?;
                                 chars.next(); // consume second '-'
                                 // Consume the rest of the line as comment
                                 let _comment = self.tokenize_single_line_comment(chars);
@@ -1324,12 +1342,14 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume the '/'
                     match chars.peek() {
                         Some('*') => {
+                            self.handle_colon_space_error(chars, prev_token)?;
                             chars.next(); // consume the '*', starting a multi-line comment
                             let _comment = self.consume_multiline_comment(chars)?;
                             *location = chars.location();
                             self.next_token(location, chars, prev_token, true)
                         }
                         Some('/') if dialect_of!(self is SnowflakeDialect) => {
+                            self.handle_colon_space_error(chars, prev_token)?;
                             chars.next(); // consume the second '/', starting a snowflake single-line comment
                             // Consume the rest of the line as comment
                             let _comment = self.tokenize_single_line_comment(chars);
@@ -1534,6 +1554,7 @@ impl<'a> Tokenizer<'a> {
                 '}' => self.consume_and_return(chars, Token::RBrace),
                 '#' if dialect_of!(self is SnowflakeDialect | BigQueryDialect | MySqlDialect | HiveDialect) =>
                 {
+                    self.handle_colon_space_error(chars, prev_token)?;
                     chars.next(); // consume the '#', starting a snowflake single-line comment
                     // Consume the rest of the line as comment
                     let _comment = self.tokenize_single_line_comment(chars);
@@ -1668,6 +1689,7 @@ impl<'a> Tokenizer<'a> {
 
                 // whitespace check (including unicode chars) should be last as it covers some of the chars above
                 ch if ch.is_whitespace() => {
+                    self.handle_colon_space_error(chars, prev_token)?;
                     chars.next(); // consume
                     *location = chars.location();
                     self.next_token(location, chars, prev_token, true)

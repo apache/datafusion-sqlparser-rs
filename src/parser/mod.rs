@@ -18475,7 +18475,7 @@ mod tests {
 
     #[test]
     fn test_placeholder_invalid_whitespace() {
-        for w in ["  ", "/*invalid*/"] {
+        for w in [" ", "  ", "/*invalid*/", "\n", "\t", "\r\n", "--comment\n"] {
             let sql = format!("\nSELECT\n  :{w}fooBar");
             assert!(Parser::parse_sql(&GenericDialect, &sql).is_err());
         }

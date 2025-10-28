@@ -1049,9 +1049,9 @@ pub fn parse_create_stage(
 
 pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserError> {
     let mut ident = String::new();
-    while let Some(next_token) = parser.next_token_no_skip() {
-        match &next_token.token {
-            Token::SemiColon => break,
+    loop {
+        match &parser.next_token().token {
+            Token::SemiColon | Token::EOF => break,
             Token::Period => {
                 parser.prev_token();
                 break;

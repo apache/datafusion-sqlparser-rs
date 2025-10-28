@@ -3227,7 +3227,7 @@ pub enum Statement {
         /// WITH options (before PostgreSQL version 9.0)
         legacy_options: Vec<CopyLegacyOption>,
         /// VALUES a vector of values to be copied
-        values: Vec<Option<String>>,
+        values: Vec<Vec<Option<String>>>,
     },
     /// ```sql
     /// COPY INTO <table> | <location>
@@ -4579,18 +4579,76 @@ impl fmt::Display for Statement {
                 if !legacy_options.is_empty() {
                     write!(f, " {}", display_separated(legacy_options, " "))?;
                 }
+
+                let mut null_symbol = "\\N";
+                let mut writer_builder = csv::WriterBuilder::new();
+
+                // Apply options
+                for option in options {
+                    match option {
+                        CopyOption::Delimiter(c) => {
+                            writer_builder.delimiter(*c as u8);
+                        }
+                        CopyOption::Quote(c) => {
+                            writer_builder.quote(*c as u8);
+                        }
+                        CopyOption::Escape(c) => {
+                            writer_builder.escape(*c as u8);
+                        }
+                        CopyOption::Null(null) => {
+                            null_symbol = null;
+                        }
+                        _ => {}
+                    }
+                }
+
+                // Apply legacy options
+                for option in legacy_options {
+                    match option {
+                        CopyLegacyOption::Delimiter(c) => {
+                            writer_builder.delimiter(*c as u8);
+                        }
+                        CopyLegacyOption::Header => {
+                            writer_builder.has_headers(true);
+                        }
+                        CopyLegacyOption::Null(null) => {
+                            null_symbol = null;
+                        }
+                        CopyLegacyOption::Csv(csv_options) => {
+                            for csv_option in csv_options {
+                                match csv_option {
+                                    CopyLegacyCsvOption::Header => {
+                                        writer_builder.has_headers(true);
+                                    }
+                                    CopyLegacyCsvOption::Quote(c) => {
+                                        writer_builder.quote(*c as u8);
+                                    }
+                                    CopyLegacyCsvOption::Escape(c) => {
+                                        writer_builder.escape(*c as u8);
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+
                 if !values.is_empty() {
                     writeln!(f, ";")?;
-                    let mut delim = "";
-                    for v in values {
-                        write!(f, "{delim}")?;
-                        delim = "\t";
-                        if let Some(v) = v {
-                            write!(f, "{v}")?;
-                        } else {
-                            write!(f, "\\N")?;
-                        }
+                    let mut writer = writer_builder.from_writer(vec![]);
+                    for row in values {
+                        writer
+                            .write_record(
+                                row.iter()
+                                    .map(|column| column.as_deref().unwrap_or(null_symbol)),
+                            )
+                            .map_err(|_| fmt::Error)?
                     }
+                    writer.flush().map_err(|_| fmt::Error)?;
+                    let data = String::from_utf8(writer.into_inner().map_err(|_| fmt::Error)?)
+                        .map_err(|_| fmt::Error)?;
+                    write!(f, "{}", data)?;
                     write!(f, "\n\\.")?;
                 }
                 Ok(())

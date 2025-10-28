@@ -47,6 +47,7 @@ visitor = ["sqlparser_derive"]
 [dependencies]
 bigdecimal = { version = "0.4.1", features = ["serde"], optional = true }
 log = "0.4"
+csv = "1.4.0"
 recursive = { version = "0.1.1", optional = true}
 
 serde = { version = "1.0", default-features = false, features = ["derive", "alloc"], optional = true }

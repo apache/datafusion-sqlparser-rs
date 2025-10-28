@@ -4071,23 +4071,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Return the first token, possibly whitespace, that has not yet been processed
-    /// (or None if reached end-of-file).
-    pub fn peek_token_no_skip(&self) -> TokenWithSpan {
-        self.peek_nth_token_no_skip(0)
-    }
-
-    /// Return nth token, possibly whitespace, that has not yet been processed.
-    pub fn peek_nth_token_no_skip(&self, n: usize) -> TokenWithSpan {
-        self.tokens
-            .get(self.index + n)
-            .cloned()
-            .unwrap_or(TokenWithSpan {
-                token: Token::EOF,
-                span: Span::empty(),
-            })
-    }
-
     /// Return true if the next tokens exactly `expected`
     ///
     /// Does not advance the current token.
@@ -4113,12 +4096,6 @@ impl<'a> Parser<'a> {
     /// [`Self::token_at`]
     pub fn get_current_index(&self) -> usize {
         self.index.saturating_sub(1)
-    }
-
-    /// Return the next unprocessed token, possibly whitespace.
-    pub fn next_token_no_skip(&mut self) -> Option<&TokenWithSpan> {
-        self.index += 1;
-        self.tokens.get(self.index - 1)
     }
 
     /// Advances the current token to the next non-whitespace token
@@ -9556,6 +9533,101 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse_csv_body(
+        &mut self,
+        options: &[CopyOption],
+        legacy_options: &[CopyLegacyOption],
+    ) -> Result<Vec<Vec<Option<String>>>, ParserError> {
+        let Token::CopyFromStdin(body) = self.next_token().token else {
+            return self.expected(
+                "COPY ... FROM STDIN with CSV body",
+                self.peek_token(),
+            );
+        };
+
+        let mut reader_builder = csv::ReaderBuilder::new();
+
+        let mut null_symbol = "\\N";
+
+        // Apply options
+        for option in options {
+            match option {
+                CopyOption::Delimiter(c) => {
+                    reader_builder.delimiter(*c as u8);
+                }
+                CopyOption::Header(has_header) => {
+                    reader_builder.has_headers(*has_header);
+                }
+                CopyOption::Quote(c) => {
+                    reader_builder.quote(*c as u8);
+                }
+                CopyOption::Escape(c) => {
+                    reader_builder.escape(Some(*c as u8));
+                }
+                CopyOption::Null(null) => {
+                    null_symbol = null;
+                }
+                _ => {}
+            }
+        }
+
+        // Apply legacy options
+        for option in legacy_options {
+            match option {
+                CopyLegacyOption::Delimiter(c) => {
+                    reader_builder.delimiter(*c as u8);
+                }
+                CopyLegacyOption::Header => {
+                    reader_builder.has_headers(true);
+                }
+                CopyLegacyOption::Null(null) => {
+                    null_symbol = null;
+                }
+                CopyLegacyOption::Csv(csv_options) => {
+                    for csv_option in csv_options {
+                        match csv_option {
+                            CopyLegacyCsvOption::Header => {
+                                reader_builder.has_headers(true);
+                            }
+                            CopyLegacyCsvOption::Quote(c) => {
+                                reader_builder.quote(*c as u8);
+                            }
+                            CopyLegacyCsvOption::Escape(c) => {
+                                reader_builder.escape(Some(*c as u8));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let mut result = vec![];
+        let mut reader = reader_builder.from_reader(body.as_bytes());
+        for record in reader.records() {
+            let record = match record {
+                Ok(rec) => rec,
+                Err(e) => {
+                    return Err(ParserError::ParserError(format!(
+                        "Error parsing CSV data: {}",
+                        e
+                    )))
+                }
+            };
+            let mut row = vec![];
+            for field in record.iter() {
+                if field == null_symbol {
+                    row.push(None);
+                } else {
+                    row.push(Some(field.to_string()));
+                }
+            }
+            result.push(row);
+        }
+        Ok(result)
+    }
+
     /// Parse a copy statement
     pub fn parse_copy(&mut self) -> Result<Statement, ParserError> {
         let source;
@@ -9609,7 +9681,7 @@ impl<'a> Parser<'a> {
         }
         let values = if let CopyTarget::Stdin = target {
             self.expect_token(&Token::SemiColon)?;
-            self.parse_tsv()
+            self.parse_csv_body(&options, &legacy_options)?
         } else {
             vec![]
         };
@@ -9947,35 +10019,6 @@ impl<'a> Parser<'a> {
         Ok(s.chars().next().unwrap())
     }
 
-    /// Parse a tab separated values in
-    /// COPY payload
-    pub fn parse_tsv(&mut self) -> Vec<Option<String>> {
-        self.parse_tab_value()
-    }
-
-    pub fn parse_tab_value(&mut self) -> Vec<Option<String>> {
-        let mut values = vec![];
-        let mut content = String::from("");
-        while let Some(t) = self.next_token_no_skip().map(|t| &t.token) {
-            match t {
-                Token::Backslash => {
-                    if self.consume_token(&Token::Period) {
-                        return values;
-                    }
-                    if let Token::Word(w) = self.next_token().token {
-                        if w.value == "N" {
-                            values.push(None);
-                        }
-                    }
-                }
-                _ => {
-                    content.push_str(&t.to_string());
-                }
-            }
-        }
-        values
-    }
-
     /// Parse a literal value (numbers, strings, date/time, booleans)
     pub fn parse_value(&mut self) -> Result<ValueWithSpan, ParserError> {
         let next_token = self.next_token();
@@ -10069,7 +10112,7 @@ impl<'a> Parser<'a> {
                 // 2. Not calling self.next_token() to enforce `tok`
                 //    be followed immediately by a word/number, ie.
                 //    without any whitespace in between
-                let next_token = self.next_token_no_skip().unwrap_or(&EOF_TOKEN).clone();
+                let next_token = self.next_token();
                 let ident = match next_token.token {
                     Token::Word(w) => Ok(w.into_ident(next_token.span)),
                     Token::Number(w, false) => Ok(Ident::with_span(next_token.span, w)),
@@ -11293,54 +11336,66 @@ impl<'a> Parser<'a> {
     /// Return a tuple of the identifier and a boolean indicating it ends with a period.
     fn parse_unquoted_hyphenated_identifier(&mut self) -> Result<(Ident, bool), ParserError> {
         match self.peek_token().token {
+            Token::UnquotedDashStringLiteral(lit) => {
+                let span = self.next_token().span;
+                Ok((
+                    Ident {
+                        value: lit,
+                        quote_style: None,
+                        span,
+                    },
+                    false,
+                ))
+            }
             Token::Word(w) => {
                 let quote_style_is_none = w.quote_style.is_none();
                 let mut requires_whitespace = false;
                 let mut ident = w.into_ident(self.next_token().span);
                 if quote_style_is_none {
-                    while matches!(self.peek_token_no_skip().token, Token::Minus) {
-                        self.next_token();
-                        ident.value.push('-');
+                    while matches!(self.peek_token().token, Token::Minus) {
+                        unreachable!("Something went wrong in the tokenizer!");
+                        // self.next_token();
+                        // ident.value.push('-');
 
-                        let token = self
-                            .next_token_no_skip()
-                            .cloned()
-                            .unwrap_or(TokenWithSpan::wrap(Token::EOF));
-                        requires_whitespace = match token.token {
-                            Token::Word(next_word) if next_word.quote_style.is_none() => {
-                                ident.value.push_str(&next_word.value);
-                                false
-                            }
-                            Token::Number(s, false) => {
-                                // A number token can represent a decimal value ending with a period, e.g., `Number('123.')`.
-                                // However, for an [ObjectName], it is part of a hyphenated identifier, e.g., `foo-123.bar`.
-                                //
-                                // If a number token is followed by a period, it is part of an [ObjectName].
-                                // Return the identifier with `true` if the number token is followed by a period, indicating that
-                                // parsing should continue for the next part of the hyphenated identifier.
-                                if s.ends_with('.') {
-                                    let Some(s) = s.split('.').next().filter(|s| {
-                                        !s.is_empty() && s.chars().all(|c| c.is_ascii_digit())
-                                    }) else {
-                                        return self.expected(
-                                            "continuation of hyphenated identifier",
-                                            TokenWithSpan::new(Token::Number(s, false), token.span),
-                                        );
-                                    };
-                                    ident.value.push_str(s);
-                                    return Ok((ident, true));
-                                } else {
-                                    ident.value.push_str(&s);
-                                }
-                                // If next token is period, then it is part of an ObjectName and we don't expect whitespace
-                                // after the number.
-                                !matches!(self.peek_token().token, Token::Period)
-                            }
-                            _ => {
-                                return self
-                                    .expected("continuation of hyphenated identifier", token);
-                            }
-                        }
+                        // let token = self
+                        //     .next_token_no_skip()
+                        //     .cloned()
+                        //     .unwrap_or(TokenWithSpan::wrap(Token::EOF));
+                        // requires_whitespace = match token.token {
+                        //     Token::Word(next_word) if next_word.quote_style.is_none() => {
+                        //         ident.value.push_str(&next_word.value);
+                        //         false
+                        //     }
+                        //     Token::Number(s, false) => {
+                        //         // A number token can represent a decimal value ending with a period, e.g., `Number('123.')`.
+                        //         // However, for an [ObjectName], it is part of a hyphenated identifier, e.g., `foo-123.bar`.
+                        //         //
+                        //         // If a number token is followed by a period, it is part of an [ObjectName].
+                        //         // Return the identifier with `true` if the number token is followed by a period, indicating that
+                        //         // parsing should continue for the next part of the hyphenated identifier.
+                        //         if s.ends_with('.') {
+                        //             let Some(s) = s.split('.').next().filter(|s| {
+                        //                 !s.is_empty() && s.chars().all(|c| c.is_ascii_digit())
+                        //             }) else {
+                        //                 return self.expected(
+                        //                     "continuation of hyphenated identifier",
+                        //                     TokenWithSpan::new(Token::Number(s, false), token.span),
+                        //                 );
+                        //             };
+                        //             ident.value.push_str(s);
+                        //             return Ok((ident, true));
+                        //         } else {
+                        //             ident.value.push_str(&s);
+                        //         }
+                        //         // If next token is period, then it is part of an ObjectName and we don't expect whitespace
+                        //         // after the number.
+                        //         !matches!(self.peek_token().token, Token::Period)
+                        //     }
+                        //     _ => {
+                        //         return self
+                        //             .expected("continuation of hyphenated identifier", token);
+                        //     }
+                        // }
                     }
 
                     // If the last segment was a number, we must check that it's followed by whitespace,

@@ -96,6 +96,11 @@ pub enum Token {
     /// Triple double quoted literal with raw string prefix. Example `R"""abc"""`
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals)
     TripleDoubleQuotedRawStringLiteral(String),
+    /// An unquoted string literal containing dashes, i.e: 'first-second',
+    /// which is allowed in some BigQuery contexts
+    UnquotedDashStringLiteral(String),
+    /// A CSV body from a `COPY ... FROM STDIN` statement
+    CopyFromStdin(String),
     /// "National" string literal: i.e: N'string'
     NationalStringLiteral(String),
     /// "escaped" string literal, which are an extension to the SQL standard: i.e: e'first \n second' or E 'first \n second'
@@ -301,6 +306,8 @@ impl fmt::Display for Token {
             Token::DoubleQuotedRawStringLiteral(ref s) => write!(f, "R\"{s}\""),
             Token::TripleSingleQuotedRawStringLiteral(ref s) => write!(f, "R'''{s}'''"),
             Token::TripleDoubleQuotedRawStringLiteral(ref s) => write!(f, "R\"\"\"{s}\"\"\""),
+            Token::UnquotedDashStringLiteral(ref s) => write!(f, "{s}"),
+            Token::CopyFromStdin(ref s) => write!(f, "{s}\\."),
             Token::Comma => f.write_str(","),
             Token::DoubleEq => f.write_str("=="),
             Token::Spaceship => f.write_str("<=>"),
@@ -387,14 +394,18 @@ impl fmt::Display for Token {
 }
 
 impl Token {
-    pub fn make_keyword(keyword: &str) -> Self {
+    pub fn make_keyword<S: Into<String>>(keyword: S) -> Self {
         Token::make_word(keyword, None)
     }
 
-    pub fn make_word(word: &str, quote_style: Option<char>) -> Self {
+    pub fn make_word<S: Into<String>>(word: S, quote_style: Option<char>) -> Self {
+        let word = word.into();
+        if quote_style.is_none() && word.contains('-') {
+            return Token::UnquotedDashStringLiteral(word);
+        }
         let word_uppercase = word.to_uppercase();
         Token::Word(Word {
-            value: word.to_string(),
+            value: word,
             quote_style,
             keyword: if quote_style.is_none() {
                 let keyword = ALL_KEYWORDS.binary_search(&word_uppercase.as_str());
@@ -777,6 +788,62 @@ struct TokenizeQuotedStringSettings {
     backslash_escape: bool,
 }
 
+#[derive(Clone, Copy, Default)]
+/// Helper struct to handle the logic of the `COPY ... FROM STDIN` statement
+/// which may occur in PostgreSQL and some other dialects.
+struct CopyStdinHandler {
+    previous_copy_token_found: bool,
+    previous_stdin_token_found: bool,
+    current_copy_token_found: bool,
+    current_stdin_token_found: bool,
+}
+
+impl CopyStdinHandler {
+    /// Update the internal state based on the provided token.
+    fn update(&mut self, token: &Token) {
+        match token {
+            Token::Word(Word {
+                keyword: Keyword::COPY,
+                ..
+            }) => {
+                self.current_copy_token_found = true;
+            }
+            Token::Word(Word {
+                keyword: Keyword::STDIN,
+                ..
+            }) if self.current_copy_token_found => {
+                self.current_stdin_token_found = true;
+            }
+            Token::SemiColon => {
+                self.previous_copy_token_found = self.current_copy_token_found;
+                self.previous_stdin_token_found = self.current_stdin_token_found;
+                self.current_copy_token_found = false;
+                self.current_stdin_token_found = false;
+            }
+            _ => {}
+        }
+    }
+
+    /// Returns whether the previous tokens indicated a `COPY ... FROM STDIN` statement.
+    fn is_in_copy_from_stdin(&self) -> bool {
+        self.previous_copy_token_found && self.previous_stdin_token_found
+    }
+
+    /// Extracts the CSV string from the provided State.
+    fn extract_csv_string(&self, state: &mut State) -> Result<String, TokenizerError> {
+        let mut csv_string = String::new();
+        let mut last_character_was_cr = false;
+        while let Some(ch) = state.next() {
+            if last_character_was_cr && ch == '\\' && state.peek() == Some(&'.') {
+                break;
+            }
+            last_character_was_cr = ch == '\n';
+            csv_string.push(ch);
+        }
+        Ok(csv_string)
+    }
+}
+
 /// SQL Tokenizer
 pub struct Tokenizer<'a> {
     dialect: &'a dyn Dialect,
@@ -870,14 +937,29 @@ impl<'a> Tokenizer<'a> {
             line: 1,
             col: 1,
         };
+        let mut cs_handler = CopyStdinHandler::default();
 
         let mut location = state.location();
-        while let Some(token) = self.next_token(&mut location, &mut state, buf.last().map(|t| &t.token), false)? {
+        while let Some(token) = self.next_token(
+            &mut location,
+            &mut state,
+            buf.last().map(|t| &t.token),
+            false,
+        )? {
             let span = location.span_to(state.location());
-
+            cs_handler.update(&token);
             buf.push(TokenWithSpan { token, span });
-
             location = state.location();
+
+            if cs_handler.is_in_copy_from_stdin() {
+                let csv_string = cs_handler.extract_csv_string(&mut state)?;
+                let span = location.span_to(state.location());
+                buf.push(TokenWithSpan {
+                    token: Token::CopyFromStdin(csv_string),
+                    span,
+                });
+                location = state.location();
+            }
         }
         Ok(())
     }
@@ -905,7 +987,7 @@ impl<'a> Tokenizer<'a> {
             return Ok(Some(Token::Number(s, false)));
         }
 
-        Ok(Some(Token::make_word(&word, None)))
+        Ok(Some(Token::make_word(word, None)))
     }
 
     /// Returns a standardized error if the previous token is a `:` and
@@ -917,7 +999,8 @@ impl<'a> Tokenizer<'a> {
     ) -> Result<Option<Token>, TokenizerError> {
         if let Some(Token::Colon) = prev_token {
             return Err(TokenizerError {
-                message: "Unexpected whitespace after ':'; did you mean ':placeholder' or '::'?".to_string(),
+                message: "Unexpected whitespace after ':'; did you mean ':placeholder' or '::'?"
+                    .to_string(),
                 location: chars.location(),
             });
         }
@@ -939,7 +1022,7 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume
                     *location = chars.location();
                     self.next_token(location, chars, prev_token, true)
-                },
+                }
                 // BigQuery and MySQL use b or B for byte string literal, Postgres for bit strings
                 b @ 'B' | b @ 'b' if dialect_of!(self is BigQueryDialect | PostgreSqlDialect | MySqlDialect | GenericDialect) =>
                 {
@@ -976,7 +1059,7 @@ impl<'a> Tokenizer<'a> {
                         _ => {
                             // regular identifier starting with an "b" or "B"
                             let s = self.tokenize_word(b, chars);
-                            Ok(Some(Token::make_word(&s, None)))
+                            Ok(Some(Token::make_word(s, None)))
                         }
                     }
                 }
@@ -1003,7 +1086,7 @@ impl<'a> Tokenizer<'a> {
                         _ => {
                             // regular identifier starting with an "r" or "R"
                             let s = self.tokenize_word(b, chars);
-                            Ok(Some(Token::make_word(&s, None)))
+                            Ok(Some(Token::make_word(s, None)))
                         }
                     }
                 }
@@ -1022,7 +1105,7 @@ impl<'a> Tokenizer<'a> {
                         _ => {
                             // regular identifier starting with an "N"
                             let s = self.tokenize_word(n, chars);
-                            Ok(Some(Token::make_word(&s, None)))
+                            Ok(Some(Token::make_word(s, None)))
                         }
                     }
                 }
@@ -1039,7 +1122,7 @@ impl<'a> Tokenizer<'a> {
                         _ => {
                             // regular identifier starting with an "E" or "e"
                             let s = self.tokenize_word(x, chars);
-                            Ok(Some(Token::make_word(&s, None)))
+                            Ok(Some(Token::make_word(s, None)))
                         }
                     }
                 }
@@ -1058,7 +1141,7 @@ impl<'a> Tokenizer<'a> {
                     }
                     // regular identifier starting with an "U" or "u"
                     let s = self.tokenize_word(x, chars);
-                    Ok(Some(Token::make_word(&s, None)))
+                    Ok(Some(Token::make_word(s, None)))
                 }
                 // The spec only allows an uppercase 'X' to introduce a hex
                 // string, but PostgreSQL, at least, allows a lowercase 'x' too.
@@ -1073,7 +1156,7 @@ impl<'a> Tokenizer<'a> {
                         _ => {
                             // regular identifier starting with an "X"
                             let s = self.tokenize_word(x, chars);
-                            Ok(Some(Token::make_word(&s, None)))
+                            Ok(Some(Token::make_word(s, None)))
                         }
                     }
                 }
@@ -1122,7 +1205,7 @@ impl<'a> Tokenizer<'a> {
                 // delimited (quoted) identifier
                 quote_start if self.dialect.is_delimited_identifier_start(ch) => {
                     let word = self.tokenize_quoted_identifier(quote_start, chars)?;
-                    Ok(Some(Token::make_word(&word, Some(quote_start))))
+                    Ok(Some(Token::make_word(word, Some(quote_start))))
                 }
                 // Potentially nested delimited (quoted) identifier
                 quote_start
@@ -1146,7 +1229,7 @@ impl<'a> Tokenizer<'a> {
 
                     let Some(nested_quote_start) = nested_quote_start else {
                         let word = self.tokenize_quoted_identifier(quote_start, chars)?;
-                        return Ok(Some(Token::make_word(&word, Some(quote_start))));
+                        return Ok(Some(Token::make_word(word, Some(quote_start))));
                     };
 
                     let mut word = vec![];
@@ -1174,7 +1257,7 @@ impl<'a> Tokenizer<'a> {
                     }
                     chars.next(); // skip close delimiter
 
-                    Ok(Some(Token::make_word(&word.concat(), Some(quote_start))))
+                    Ok(Some(Token::make_word(word.concat(), Some(quote_start))))
                 }
                 // numbers and period
                 '0'..='9' | '.' => {
@@ -1284,12 +1367,12 @@ impl<'a> Tokenizer<'a> {
 
                             if !word.is_empty() {
                                 s += word.as_str();
-                                return Ok(Some(Token::make_word(s.as_str(), None)));
+                                return Ok(Some(Token::make_word(s, None)));
                             }
                         } else if prev_token == Some(&Token::Period) {
                             // If the previous token was a period, thus not belonging to a number,
                             // the value we have is part of an identifier.
-                            return Ok(Some(Token::make_word(s.as_str(), None)));
+                            return Ok(Some(Token::make_word(s, None)));
                         }
                     }
 
@@ -1319,7 +1402,7 @@ impl<'a> Tokenizer<'a> {
                             if is_comment {
                                 self.handle_colon_space_error(chars, prev_token)?;
                                 chars.next(); // consume second '-'
-                                // Consume the rest of the line as comment
+                                              // Consume the rest of the line as comment
                                 let _comment = self.tokenize_single_line_comment(chars);
                                 *location = chars.location();
                                 return self.next_token(location, chars, prev_token, true);
@@ -1351,7 +1434,7 @@ impl<'a> Tokenizer<'a> {
                         Some('/') if dialect_of!(self is SnowflakeDialect) => {
                             self.handle_colon_space_error(chars, prev_token)?;
                             chars.next(); // consume the second '/', starting a snowflake single-line comment
-                            // Consume the rest of the line as comment
+                                          // Consume the rest of the line as comment
                             let _comment = self.tokenize_single_line_comment(chars);
                             *location = chars.location();
                             self.next_token(location, chars, prev_token, true)
@@ -1556,7 +1639,7 @@ impl<'a> Tokenizer<'a> {
                 {
                     self.handle_colon_space_error(chars, prev_token)?;
                     chars.next(); // consume the '#', starting a snowflake single-line comment
-                    // Consume the rest of the line as comment
+                                  // Consume the rest of the line as comment
                     let _comment = self.tokenize_single_line_comment(chars);
                     *location = chars.location();
                     self.next_token(location, chars, prev_token, true)
@@ -1871,7 +1954,7 @@ impl<'a> Tokenizer<'a> {
     fn tokenize_word(&self, first_chars: impl Into<String>, chars: &mut State) -> String {
         let mut s = first_chars.into();
         s.push_str(&peeking_take_while(chars, |ch| {
-            self.dialect.is_identifier_part(ch)
+            self.dialect.is_identifier_part(ch) || ch == '-' && self.dialect.is_identifier_part('-')
         }));
         s
     }
@@ -2703,10 +2786,7 @@ mod tests {
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         // println!("tokens: {:#?}", tokens);
-        let expected = vec![
-            Token::Char('💝'),
-            Token::make_word("مصطفىh", None),
-        ];
+        let expected = vec![Token::Char('💝'), Token::make_word("مصطفىh", None)];
         compare(expected, tokens);
     }
 
@@ -2992,9 +3072,7 @@ mod tests {
             ),
             (
                 String::from("0--this is a comment\r1"),
-                vec![
-                    Token::Number("0".to_string(), false),
-                ],
+                vec![Token::Number("0".to_string(), false)],
             ),
             (
                 String::from("0--this is a comment\r\n1"),
@@ -3715,49 +3793,25 @@ mod tests {
             );
 
         all_dialects_where(|dialect| dialect.requires_single_line_comment_whitespace())
-            .tokenizes_to(
-                "SELECT -- 'abc'",
-                vec![
-                    Token::make_keyword("SELECT"),
-                ],
-            );
+            .tokenizes_to("SELECT -- 'abc'", vec![Token::make_keyword("SELECT")]);
 
         all_dialects_where(|dialect| dialect.requires_single_line_comment_whitespace())
             .tokenizes_to(
                 "SELECT --",
-                vec![
-                    Token::make_keyword("SELECT"),
-                    Token::Minus,
-                    Token::Minus,
-                ],
+                vec![Token::make_keyword("SELECT"), Token::Minus, Token::Minus],
             );
     }
 
     #[test]
     fn test_whitespace_not_required_after_single_line_comment() {
         all_dialects_where(|dialect| !dialect.requires_single_line_comment_whitespace())
-            .tokenizes_to(
-                "SELECT --'abc'",
-                vec![
-                    Token::make_keyword("SELECT"),
-                ],
-            );
+            .tokenizes_to("SELECT --'abc'", vec![Token::make_keyword("SELECT")]);
 
         all_dialects_where(|dialect| !dialect.requires_single_line_comment_whitespace())
-            .tokenizes_to(
-                "SELECT -- 'abc'",
-                vec![
-                    Token::make_keyword("SELECT"),
-                ],
-            );
+            .tokenizes_to("SELECT -- 'abc'", vec![Token::make_keyword("SELECT")]);
 
         all_dialects_where(|dialect| !dialect.requires_single_line_comment_whitespace())
-            .tokenizes_to(
-                "SELECT --",
-                vec![
-                    Token::make_keyword("SELECT"),
-                ],
-            );
+            .tokenizes_to("SELECT --", vec![Token::make_keyword("SELECT")]);
     }
 
     #[test]

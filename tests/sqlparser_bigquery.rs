@@ -1567,9 +1567,10 @@ fn parse_table_identifiers() {
 
     fn test_table_ident_err(ident: &str) {
         let sql = format!("SELECT 1 FROM {ident}");
+        let parsed = bigquery().parse_sql_statements(&sql);
         assert!(
-            bigquery().parse_sql_statements(&sql).is_err(),
-            "Expected error parsing identifier: `{ident}`, within SQL: `{sql}`"
+            parsed.is_err(),
+            "Expected error parsing identifier: `{ident}`, within SQL: `{sql}` - but got success: {parsed:#?}"
         );
     }
 

@@ -106,8 +106,6 @@ pub enum Token {
     HexStringLiteral(String),
     /// Comma
     Comma,
-    /// Whitespace (space, tab, etc)
-    Whitespace(Whitespace),
     /// Double equals sign `==`
     DoubleEq,
     /// Equality operator `=`
@@ -304,7 +302,6 @@ impl fmt::Display for Token {
             Token::TripleSingleQuotedRawStringLiteral(ref s) => write!(f, "R'''{s}'''"),
             Token::TripleDoubleQuotedRawStringLiteral(ref s) => write!(f, "R\"\"\"{s}\"\"\""),
             Token::Comma => f.write_str(","),
-            Token::Whitespace(ws) => write!(f, "{ws}"),
             Token::DoubleEq => f.write_str("=="),
             Token::Spaceship => f.write_str("<=>"),
             Token::Eq => f.write_str("="),
@@ -445,29 +442,6 @@ impl Word {
             '[' => ']', // MS SQL
             '`' => '`', // MySQL
             _ => panic!("unexpected quoting style!"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum Whitespace {
-    Space,
-    Newline,
-    Tab,
-    SingleLineComment { comment: String, prefix: String },
-    MultiLineComment(String),
-}
-
-impl fmt::Display for Whitespace {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Whitespace::Space => f.write_str(" "),
-            Whitespace::Newline => f.write_str("\n"),
-            Whitespace::Tab => f.write_str("\t"),
-            Whitespace::SingleLineComment { prefix, comment } => write!(f, "{prefix}{comment}"),
-            Whitespace::MultiLineComment(s) => write!(f, "/*{s}*/"),
         }
     }
 }
@@ -898,7 +872,7 @@ impl<'a> Tokenizer<'a> {
         };
 
         let mut location = state.location();
-        while let Some(token) = self.next_token(&mut state, buf.last().map(|t| &t.token))? {
+        while let Some(token) = self.next_token(&mut location, &mut state, buf.last().map(|t| &t.token), false)? {
             let span = location.span_to(state.location());
 
             buf.push(TokenWithSpan { token, span });
@@ -937,22 +911,18 @@ impl<'a> Tokenizer<'a> {
     /// Get the next token or return None
     fn next_token(
         &self,
+        location: &mut Location,
         chars: &mut State,
         prev_token: Option<&Token>,
+        preceded_by_whitespace: bool,
     ) -> Result<Option<Token>, TokenizerError> {
         match chars.peek() {
             Some(&ch) => match ch {
-                ' ' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Space)),
-                '\t' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Tab)),
-                '\n' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Newline)),
-                '\r' => {
-                    // Emit a single Whitespace::Newline token for \r and \r\n
-                    chars.next();
-                    if let Some('\n') = chars.peek() {
-                        chars.next();
-                    }
-                    Ok(Some(Token::Whitespace(Whitespace::Newline)))
-                }
+                ' ' | '\t' | '\n' | '\r' => {
+                    chars.next(); // consume
+                    *location = chars.location();
+                    self.next_token(location, chars, prev_token, true)
+                },
                 // BigQuery and MySQL use b or B for byte string literal, Postgres for bit strings
                 b @ 'B' | b @ 'b' if dialect_of!(self is BigQueryDialect | PostgreSqlDialect | MySqlDialect | GenericDialect) =>
                 {
@@ -1331,13 +1301,10 @@ impl<'a> Tokenizer<'a> {
 
                             if is_comment {
                                 chars.next(); // consume second '-'
-                                let comment = self.tokenize_single_line_comment(chars);
-                                return Ok(Some(Token::Whitespace(
-                                    Whitespace::SingleLineComment {
-                                        prefix: "--".to_owned(),
-                                        comment,
-                                    },
-                                )));
+                                // Consume the rest of the line as comment
+                                let _comment = self.tokenize_single_line_comment(chars);
+                                *location = chars.location();
+                                return self.next_token(location, chars, prev_token, true);
                             }
 
                             self.start_binop(chars, "-", Token::Minus)
@@ -1358,15 +1325,16 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some('*') => {
                             chars.next(); // consume the '*', starting a multi-line comment
-                            self.tokenize_multiline_comment(chars)
+                            let _comment = self.consume_multiline_comment(chars)?;
+                            *location = chars.location();
+                            self.next_token(location, chars, prev_token, true)
                         }
                         Some('/') if dialect_of!(self is SnowflakeDialect) => {
                             chars.next(); // consume the second '/', starting a snowflake single-line comment
-                            let comment = self.tokenize_single_line_comment(chars);
-                            Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
-                                prefix: "//".to_owned(),
-                                comment,
-                            })))
+                            // Consume the rest of the line as comment
+                            let _comment = self.tokenize_single_line_comment(chars);
+                            *location = chars.location();
+                            self.next_token(location, chars, prev_token, true)
                         }
                         Some('/') if dialect_of!(self is DuckDbDialect | GenericDialect) => {
                             self.consume_and_return(chars, Token::DuckIntDiv)
@@ -1567,11 +1535,10 @@ impl<'a> Tokenizer<'a> {
                 '#' if dialect_of!(self is SnowflakeDialect | BigQueryDialect | MySqlDialect | HiveDialect) =>
                 {
                     chars.next(); // consume the '#', starting a snowflake single-line comment
-                    let comment = self.tokenize_single_line_comment(chars);
-                    Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "#".to_owned(),
-                        comment,
-                    })))
+                    // Consume the rest of the line as comment
+                    let _comment = self.tokenize_single_line_comment(chars);
+                    *location = chars.location();
+                    self.next_token(location, chars, prev_token, true)
                 }
                 '~' => {
                     chars.next(); // consume
@@ -1701,7 +1668,9 @@ impl<'a> Tokenizer<'a> {
 
                 // whitespace check (including unicode chars) should be last as it covers some of the chars above
                 ch if ch.is_whitespace() => {
-                    self.consume_and_return(chars, Token::Whitespace(Whitespace::Space))
+                    chars.next(); // consume
+                    *location = chars.location();
+                    self.next_token(location, chars, prev_token, true)
                 }
                 other => self.consume_and_return(chars, Token::Char(other)),
             },
@@ -2101,10 +2070,10 @@ impl<'a> Tokenizer<'a> {
         self.tokenizer_error(error_loc, "Unterminated string literal")
     }
 
-    fn tokenize_multiline_comment(
+    fn consume_multiline_comment(
         &self,
         chars: &mut State,
-    ) -> Result<Option<Token>, TokenizerError> {
+    ) -> Result<Option<String>, TokenizerError> {
         let mut s = String::new();
         let mut nested = 1;
         let supports_nested_comments = self.dialect.supports_nested_comments();
@@ -2121,7 +2090,7 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume the '/'
                     nested -= 1;
                     if nested == 0 {
-                        break Ok(Some(Token::Whitespace(Whitespace::MultiLineComment(s))));
+                        break Ok(Some(s));
                     }
                     s.push('*');
                     s.push('/');
@@ -2444,7 +2413,6 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1"), false),
         ];
 
@@ -2459,7 +2427,6 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from(".1"), false),
         ];
 
@@ -2475,7 +2442,6 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Word(Word {
                 value: "foo".to_string(),
                 quote_style: None,
@@ -2496,7 +2462,6 @@ mod tests {
         let tokens = tokenizer.tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Number("10".to_string(), false),
             Token::make_word("_000", None),
         ];
@@ -2506,17 +2471,13 @@ mod tests {
             "SELECT 10_000, _10_000, 10_00_, 10___0",
             vec![
                 Token::make_keyword("SELECT"),
-                Token::Whitespace(Whitespace::Space),
                 Token::Number("10_000".to_string(), false),
                 Token::Comma,
-                Token::Whitespace(Whitespace::Space),
                 Token::make_word("_10_000", None), // leading underscore tokenizes as a word (parsed as column identifier)
                 Token::Comma,
-                Token::Whitespace(Whitespace::Space),
                 Token::Number("10_00".to_string(), false),
                 Token::make_word("_", None), // trailing underscores tokenizes as a word (syntax error in some dialects)
                 Token::Comma,
-                Token::Whitespace(Whitespace::Space),
                 Token::Number("10".to_string(), false),
                 Token::make_word("___0", None), // multiple underscores tokenizes as a word (syntax error in some dialects)
             ],
@@ -2531,24 +2492,18 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1e10"), false),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1e-10"), false),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1e+10"), false),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1"), false),
             Token::make_word("ea", None),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1e-10"), false),
             Token::make_word("a", None),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1e-10"), false),
             Token::Minus,
             Token::Number(String::from("10"), false),
@@ -2565,7 +2520,6 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("sqrt", None),
             Token::LParen,
             Token::Number(String::from("1"), false),
@@ -2583,11 +2537,8 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString(String::from("a")),
-            Token::Whitespace(Whitespace::Space),
             Token::StringConcat,
-            Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString(String::from("b")),
         ];
 
@@ -2601,15 +2552,10 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("one", None),
-            Token::Whitespace(Whitespace::Space),
             Token::Pipe,
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("two", None),
-            Token::Whitespace(Whitespace::Space),
             Token::Caret,
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("three", None),
         ];
         compare(expected, tokens);
@@ -2624,32 +2570,20 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("true"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("XOR"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("true"),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("false"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("XOR"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("false"),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("true"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("XOR"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("false"),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("false"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("XOR"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("true"),
         ];
         compare(expected, tokens);
@@ -2663,23 +2597,14 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Mul,
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("customer", None),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("WHERE"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("id", None),
-            Token::Whitespace(Whitespace::Space),
             Token::Eq,
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1"), false),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("LIMIT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("5"), false),
         ];
 
@@ -2694,21 +2619,13 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("EXPLAIN"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Mul,
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("customer", None),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("WHERE"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("id", None),
-            Token::Whitespace(Whitespace::Space),
             Token::Eq,
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1"), false),
         ];
 
@@ -2723,23 +2640,14 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("EXPLAIN"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("ANALYZE"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Mul,
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("customer", None),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("WHERE"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("id", None),
-            Token::Whitespace(Whitespace::Space),
             Token::Eq,
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1"), false),
         ];
 
@@ -2754,19 +2662,12 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Mul,
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("customer", None),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("WHERE"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("salary", None),
-            Token::Whitespace(Whitespace::Space),
             Token::Neq,
-            Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString(String::from("Not Provided")),
         ];
 
@@ -2781,7 +2682,6 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         // println!("tokens: {:#?}", tokens);
         let expected = vec![
-            Token::Whitespace(Whitespace::Newline),
             Token::Char('💝'),
             Token::make_word("مصطفىh", None),
         ];
@@ -2839,16 +2739,10 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         // println!("tokens: {:#?}", tokens);
         let expected = vec![
-            Token::Whitespace(Whitespace::Newline),
-            Token::Whitespace(Whitespace::Newline),
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Mul,
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("table"),
-            Token::Whitespace(Whitespace::Tab),
             Token::Char('💝'),
             Token::make_word("مصطفىh", None),
         ];
@@ -2862,7 +2756,6 @@ mod tests {
                 String::from("SELECT $tag$dollar '$' quoted strings have $tags like this$ or like this $$$tag$"),
                 vec![
                     Token::make_keyword("SELECT"),
-                    Token::Whitespace(Whitespace::Space),
                     Token::DollarQuotedString(DollarQuotedString {
                         value: "dollar '$' quoted strings have $tags like this$ or like this $$".into(),
                         tag: Some("tag".into()),
@@ -2873,7 +2766,6 @@ mod tests {
                 String::from("SELECT $abc$x$ab$abc$"),
                 vec![
                     Token::make_keyword("SELECT"),
-                    Token::Whitespace(Whitespace::Space),
                     Token::DollarQuotedString(DollarQuotedString {
                         value: "x$ab".into(),
                         tag: Some("abc".into()),
@@ -2884,7 +2776,6 @@ mod tests {
                 String::from("SELECT $abc$$abc$"),
                 vec![
                     Token::make_keyword("SELECT"),
-                    Token::Whitespace(Whitespace::Space),
                     Token::DollarQuotedString(DollarQuotedString {
                         value: "".into(),
                         tag: Some("abc".into()),
@@ -2961,16 +2852,12 @@ mod tests {
             tokens,
             vec![
                 Token::make_keyword("SELECT"),
-                Token::Whitespace(Whitespace::Space),
                 Token::Placeholder("$$".into()),
                 Token::Comma,
-                Token::Whitespace(Whitespace::Space),
                 Token::Placeholder("$$ABC$$".into()),
                 Token::Comma,
-                Token::Whitespace(Whitespace::Space),
                 Token::Placeholder("$ABC$".into()),
                 Token::Comma,
-                Token::Whitespace(Whitespace::Space),
                 Token::Placeholder("$ABC".into()),
             ]
         );
@@ -2983,7 +2870,6 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::DollarQuotedString(DollarQuotedString {
                 value: "dollar $nested$ string".into(),
                 tag: Some("tag".into()),
@@ -2999,7 +2885,6 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::DollarQuotedString(DollarQuotedString {
                 value: "".into(),
                 tag: None,
@@ -3016,7 +2901,6 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::DollarQuotedString(DollarQuotedString {
                 value: "within dollar '$' quoted strings have $tags like this$ ".into(),
                 tag: None,
@@ -3067,9 +2951,7 @@ mod tests {
 
         let expected = vec![
             Token::make_word("a", None),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("IS"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("NULL"),
         ];
 
@@ -3083,10 +2965,6 @@ mod tests {
                 String::from("0--this is a comment\n1"),
                 vec![
                     Token::Number("0".to_string(), false),
-                    Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "--".to_string(),
-                        comment: "this is a comment\n".to_string(),
-                    }),
                     Token::Number("1".to_string(), false),
                 ],
             ),
@@ -3094,20 +2972,12 @@ mod tests {
                 String::from("0--this is a comment\r1"),
                 vec![
                     Token::Number("0".to_string(), false),
-                    Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "--".to_string(),
-                        comment: "this is a comment\r1".to_string(),
-                    }),
                 ],
             ),
             (
                 String::from("0--this is a comment\r\n1"),
                 vec![
                     Token::Number("0".to_string(), false),
-                    Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "--".to_string(),
-                        comment: "this is a comment\r\n".to_string(),
-                    }),
                     Token::Number("1".to_string(), false),
                 ],
             ),
@@ -3129,10 +2999,6 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
             Token::Number("1".to_string(), false),
-            Token::Whitespace(Whitespace::SingleLineComment {
-                prefix: "--".to_string(),
-                comment: "\r".to_string(),
-            }),
             Token::Number("0".to_string(), false),
         ];
         compare(expected, tokens);
@@ -3144,11 +3010,7 @@ mod tests {
 
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
-        let expected = vec![Token::Whitespace(Whitespace::SingleLineComment {
-            prefix: "--".to_string(),
-            comment: "this is a comment".to_string(),
-        })];
-        compare(expected, tokens);
+        assert!(tokens.is_empty());
     }
 
     #[test]
@@ -3159,9 +3021,6 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
             Token::Number("0".to_string(), false),
-            Token::Whitespace(Whitespace::MultiLineComment(
-                "multi-line\n* /comment".to_string(),
-            )),
             Token::Number("1".to_string(), false),
         ];
         compare(expected, tokens);
@@ -3173,10 +3032,6 @@ mod tests {
             "0/*multi-line\n* \n/* comment \n /*comment*/*/ */ /comment*/1",
             vec![
                 Token::Number("0".to_string(), false),
-                Token::Whitespace(Whitespace::MultiLineComment(
-                    "multi-line\n* \n/* comment \n /*comment*/*/ ".into(),
-                )),
-                Token::Whitespace(Whitespace::Space),
                 Token::Div,
                 Token::Word(Word {
                     value: "comment".to_string(),
@@ -3193,9 +3048,6 @@ mod tests {
             "0/*multi-line\n* \n/* comment \n /*comment/**/ */ /comment*/*/1",
             vec![
                 Token::Number("0".to_string(), false),
-                Token::Whitespace(Whitespace::MultiLineComment(
-                    "multi-line\n* \n/* comment \n /*comment/**/ */ /comment*/".into(),
-                )),
                 Token::Number("1".to_string(), false),
             ],
         );
@@ -3204,9 +3056,7 @@ mod tests {
             "SELECT 1/* a /* b */ c */0",
             vec![
                 Token::make_keyword("SELECT"),
-                Token::Whitespace(Whitespace::Space),
                 Token::Number("1".to_string(), false),
-                Token::Whitespace(Whitespace::MultiLineComment(" a /* b */ c ".to_string())),
                 Token::Number("0".to_string(), false),
             ],
         );
@@ -3218,9 +3068,7 @@ mod tests {
             "select 1/*/**/*/0",
             vec![
                 Token::make_keyword("select"),
-                Token::Whitespace(Whitespace::Space),
                 Token::Number("1".to_string(), false),
-                Token::Whitespace(Whitespace::MultiLineComment("/**/".to_string())),
                 Token::Number("0".to_string(), false),
             ],
         );
@@ -3232,11 +3080,7 @@ mod tests {
             "SELECT 1/*/* nested comment */*/0",
             vec![
                 Token::make_keyword("SELECT"),
-                Token::Whitespace(Whitespace::Space),
                 Token::Number("1".to_string(), false),
-                Token::Whitespace(Whitespace::MultiLineComment(
-                    "/* nested comment ".to_string(),
-                )),
                 Token::Mul,
                 Token::Div,
                 Token::Number("0".to_string(), false),
@@ -3250,12 +3094,7 @@ mod tests {
 
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
-        let expected = vec![
-            Token::Whitespace(Whitespace::Newline),
-            Token::Whitespace(Whitespace::MultiLineComment("* Comment *".to_string())),
-            Token::Whitespace(Whitespace::Newline),
-        ];
-        compare(expected, tokens);
+        assert!(tokens.is_empty());
     }
 
     #[test]
@@ -3264,12 +3103,7 @@ mod tests {
 
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
-        let expected = vec![
-            Token::Whitespace(Whitespace::Space),
-            Token::Whitespace(Whitespace::Space),
-            Token::Whitespace(Whitespace::Newline),
-        ];
-        compare(expected, tokens);
+        assert!(tokens.is_empty());
     }
 
     #[test]
@@ -3295,13 +3129,9 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
             Token::make_word("line1", None),
-            Token::Whitespace(Whitespace::Newline),
             Token::make_word("line2", None),
-            Token::Whitespace(Whitespace::Newline),
             Token::make_word("line3", None),
-            Token::Whitespace(Whitespace::Newline),
             Token::make_word("line4", None),
-            Token::Whitespace(Whitespace::Newline),
         ];
         compare(expected, tokens);
     }
@@ -3313,15 +3143,10 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("TOP"),
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("5"), false),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("bar", Some('[')),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("foo", None),
         ];
         compare(expected, tokens);
@@ -3334,32 +3159,20 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("col", None),
-            Token::Whitespace(Whitespace::Space),
             Token::Tilde,
-            Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("^a".into()),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("col", None),
-            Token::Whitespace(Whitespace::Space),
             Token::TildeAsterisk,
-            Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("^a".into()),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("col", None),
-            Token::Whitespace(Whitespace::Space),
             Token::ExclamationMarkTilde,
-            Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("^a".into()),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("col", None),
-            Token::Whitespace(Whitespace::Space),
             Token::ExclamationMarkTildeAsterisk,
-            Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("^a".into()),
         ];
         compare(expected, tokens);
@@ -3372,32 +3185,20 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("col", None),
-            Token::Whitespace(Whitespace::Space),
             Token::DoubleTilde,
-            Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("_a%".into()),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("col", None),
-            Token::Whitespace(Whitespace::Space),
             Token::DoubleTildeAsterisk,
-            Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("_a%".into()),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("col", None),
-            Token::Whitespace(Whitespace::Space),
             Token::ExclamationMarkDoubleTilde,
-            Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("_a%".into()),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("col", None),
-            Token::Whitespace(Whitespace::Space),
             Token::ExclamationMarkDoubleTildeAsterisk,
-            Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("_a%".into()),
         ];
         compare(expected, tokens);
@@ -3409,13 +3210,9 @@ mod tests {
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![
-            Token::Whitespace(Whitespace::Space),
             Token::make_word(r#"a " b"#, Some('"')),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word(r#"a ""#, Some('"')),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word(r#"c """#, Some('"')),
-            Token::Whitespace(Whitespace::Space),
         ];
         compare(expected, tokens);
     }
@@ -3442,13 +3239,9 @@ mod tests {
             .tokenize()
             .unwrap();
         let expected = vec![
-            Token::Whitespace(Whitespace::Space),
             Token::make_word(r#"a "" b"#, Some('"')),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word(r#"a """#, Some('"')),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word(r#"c """""#, Some('"')),
-            Token::Whitespace(Whitespace::Space),
         ];
         compare(expected, tokens);
     }
@@ -3462,23 +3255,8 @@ mod tests {
             .unwrap();
         let expected = vec![
             TokenWithSpan::at(Token::make_keyword("SELECT"), (1, 1).into(), (1, 7).into()),
-            TokenWithSpan::at(
-                Token::Whitespace(Whitespace::Space),
-                (1, 7).into(),
-                (1, 8).into(),
-            ),
             TokenWithSpan::at(Token::make_word("a", None), (1, 8).into(), (1, 9).into()),
             TokenWithSpan::at(Token::Comma, (1, 9).into(), (1, 10).into()),
-            TokenWithSpan::at(
-                Token::Whitespace(Whitespace::Newline),
-                (1, 10).into(),
-                (2, 1).into(),
-            ),
-            TokenWithSpan::at(
-                Token::Whitespace(Whitespace::Space),
-                (2, 1).into(),
-                (2, 2).into(),
-            ),
             TokenWithSpan::at(Token::make_word("b", None), (2, 2).into(), (2, 3).into()),
         ];
         compare(expected, tokens);
@@ -3600,11 +3378,8 @@ mod tests {
         let tokens = Tokenizer::new(dialect, sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Mul,
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1"), false),
         ];
         compare(expected, tokens);
@@ -3802,9 +3577,7 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("CREATE"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("USER"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("root", Some('`')),
             Token::AtSign,
             Token::make_word("%", Some('`')),
@@ -3820,7 +3593,6 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::AtSign,
             Token::SingleQuotedString("1".to_string()),
         ];
@@ -3835,12 +3607,9 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::AtSign,
             Token::DoubleQuotedString("bar".to_string()),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("foo", None),
         ];
         compare(expected, tokens);
@@ -3853,7 +3622,6 @@ mod tests {
                 "select n'''''\\'",
                 vec![
                     Token::make_keyword("select"),
-                    Token::Whitespace(Whitespace::Space),
                     Token::NationalStringLiteral("''\\".to_string()),
                 ],
             );
@@ -3866,7 +3634,6 @@ mod tests {
                 "select n'''''\\''",
                 vec![
                     Token::make_keyword("select"),
-                    Token::Whitespace(Whitespace::Space),
                     Token::NationalStringLiteral("'''".to_string()),
                 ],
             );
@@ -3878,7 +3645,6 @@ mod tests {
             "select e'...'",
             vec![
                 Token::make_keyword("select"),
-                Token::Whitespace(Whitespace::Space),
                 Token::make_word("e", None),
                 Token::SingleQuotedString("...".to_string()),
             ],
@@ -3888,7 +3654,6 @@ mod tests {
             "select E'...'",
             vec![
                 Token::make_keyword("select"),
-                Token::Whitespace(Whitespace::Space),
                 Token::make_word("E", None),
                 Token::SingleQuotedString("...".to_string()),
             ],
@@ -3901,7 +3666,6 @@ mod tests {
             "select e'\\''",
             vec![
                 Token::make_keyword("select"),
-                Token::Whitespace(Whitespace::Space),
                 Token::EscapedStringLiteral("'".to_string()),
             ],
         );
@@ -3910,7 +3674,6 @@ mod tests {
             "select E'\\''",
             vec![
                 Token::make_keyword("select"),
-                Token::Whitespace(Whitespace::Space),
                 Token::EscapedStringLiteral("'".to_string()),
             ],
         );
@@ -3923,7 +3686,6 @@ mod tests {
                 "SELECT --'abc'",
                 vec![
                     Token::make_keyword("SELECT"),
-                    Token::Whitespace(Whitespace::Space),
                     Token::Minus,
                     Token::Minus,
                     Token::SingleQuotedString("abc".to_string()),
@@ -3935,11 +3697,6 @@ mod tests {
                 "SELECT -- 'abc'",
                 vec![
                     Token::make_keyword("SELECT"),
-                    Token::Whitespace(Whitespace::Space),
-                    Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "--".to_string(),
-                        comment: " 'abc'".to_string(),
-                    }),
                 ],
             );
 
@@ -3948,7 +3705,6 @@ mod tests {
                 "SELECT --",
                 vec![
                     Token::make_keyword("SELECT"),
-                    Token::Whitespace(Whitespace::Space),
                     Token::Minus,
                     Token::Minus,
                 ],
@@ -3962,11 +3718,6 @@ mod tests {
                 "SELECT --'abc'",
                 vec![
                     Token::make_keyword("SELECT"),
-                    Token::Whitespace(Whitespace::Space),
-                    Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "--".to_string(),
-                        comment: "'abc'".to_string(),
-                    }),
                 ],
             );
 
@@ -3975,11 +3726,6 @@ mod tests {
                 "SELECT -- 'abc'",
                 vec![
                     Token::make_keyword("SELECT"),
-                    Token::Whitespace(Whitespace::Space),
-                    Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "--".to_string(),
-                        comment: " 'abc'".to_string(),
-                    }),
                 ],
             );
 
@@ -3988,11 +3734,6 @@ mod tests {
                 "SELECT --",
                 vec![
                     Token::make_keyword("SELECT"),
-                    Token::Whitespace(Whitespace::Space),
-                    Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "--".to_string(),
-                        comment: "".to_string(),
-                    }),
                 ],
             );
     }
@@ -4033,7 +3774,6 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Word(Word {
                 value: "table".to_string(),
                 quote_style: None,

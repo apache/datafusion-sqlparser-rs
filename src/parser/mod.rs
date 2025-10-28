@@ -4034,13 +4034,6 @@ impl<'a> Parser<'a> {
         core::array::from_fn(|_| loop {
             let token = self.tokens.get(index);
             index += 1;
-            if let Some(TokenWithSpan {
-                token: Token::Whitespace(_),
-                span: _,
-            }) = token
-            {
-                continue;
-            }
             break token.cloned().unwrap_or(TokenWithSpan {
                 token: Token::EOF,
                 span: Span::empty(),
@@ -4057,13 +4050,6 @@ impl<'a> Parser<'a> {
         core::array::from_fn(|_| loop {
             let token = self.tokens.get(index);
             index += 1;
-            if let Some(TokenWithSpan {
-                token: Token::Whitespace(_),
-                span: _,
-            }) = token
-            {
-                continue;
-            }
             break token.unwrap_or(&EOF_TOKEN);
         })
     }
@@ -4078,18 +4064,10 @@ impl<'a> Parser<'a> {
         let mut index = self.index;
         loop {
             index += 1;
-            match self.tokens.get(index - 1) {
-                Some(TokenWithSpan {
-                    token: Token::Whitespace(_),
-                    span: _,
-                }) => continue,
-                non_whitespace => {
-                    if n == 0 {
-                        return non_whitespace.unwrap_or(&EOF_TOKEN);
-                    }
-                    n -= 1;
-                }
+            if n == 0 {
+                return self.tokens.get(index - 1).unwrap_or(&EOF_TOKEN);
             }
+            n -= 1;
         }
     }
 
@@ -4147,16 +4125,7 @@ impl<'a> Parser<'a> {
     ///
     /// See [`Self::get_current_token`] to get the current token after advancing
     pub fn advance_token(&mut self) {
-        loop {
-            self.index += 1;
-            match self.tokens.get(self.index - 1) {
-                Some(TokenWithSpan {
-                    token: Token::Whitespace(_),
-                    span: _,
-                }) => continue,
-                _ => break,
-            }
-        }
+        self.index += 1;
     }
 
     /// Returns a reference to the current token
@@ -4187,18 +4156,8 @@ impl<'a> Parser<'a> {
     ///
     // TODO rename to backup_token and deprecate prev_token?
     pub fn prev_token(&mut self) {
-        loop {
-            assert!(self.index > 0);
-            self.index -= 1;
-            if let Some(TokenWithSpan {
-                token: Token::Whitespace(_),
-                span: _,
-            }) = self.tokens.get(self.index)
-            {
-                continue;
-            }
-            return;
-        }
+        assert!(self.index > 0);
+        self.index -= 1;
     }
 
     /// Report `found` was encountered instead of `expected`
@@ -9999,14 +9958,6 @@ impl<'a> Parser<'a> {
         let mut content = String::from("");
         while let Some(t) = self.next_token_no_skip().map(|t| &t.token) {
             match t {
-                Token::Whitespace(Whitespace::Tab) => {
-                    values.push(Some(content.to_string()));
-                    content.clear();
-                }
-                Token::Whitespace(Whitespace::Newline) => {
-                    values.push(Some(content.to_string()));
-                    content.clear();
-                }
                 Token::Backslash => {
                     if self.consume_token(&Token::Period) {
                         return values;
@@ -11396,7 +11347,7 @@ impl<'a> Parser<'a> {
                     // otherwise foo-123a will be parsed as `foo-123` with the alias `a`.
                     if requires_whitespace {
                         let token = self.next_token();
-                        if !matches!(token.token, Token::EOF | Token::Whitespace(_)) {
+                        if !matches!(token.token, Token::EOF) {
                             return self
                                 .expected("whitespace following hyphenated identifier", token);
                         }

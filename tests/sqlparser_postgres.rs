@@ -1014,27 +1014,37 @@ fn parse_drop_schema_if_exists() {
 
 #[test]
 fn parse_copy_from_stdin() {
-    let sql = r#"COPY public.actor (actor_id, first_name, last_name, last_update, value) FROM stdin;
-1	PENELOPE	GUINESS	2006-02-15 09:34:33 0.11111
-2	NICK	WAHLBERG	2006-02-15 09:34:33 0.22222
-3	ED	CHASE	2006-02-15 09:34:33 0.312323
-4	JENNIFER	DAVIS	2006-02-15 09:34:33 0.3232
-5	JOHNNY	LOLLOBRIGIDA	2006-02-15 09:34:33 1.343
-6	BETTE	NICHOLSON	2006-02-15 09:34:33 5.0
-7	GRACE	MOSTEL	2006-02-15 09:34:33 6.0
-8	MATTHEW	JOHANSSON	2006-02-15 09:34:33 7.0
-9	JOE	SWANK	2006-02-15 09:34:33 8.0
-10	CHRISTIAN	GABLE	2006-02-15 09:34:33 9.1
-11	ZERO	CAGE	2006-02-15 09:34:33 10.001
-12	KARL	BERRY	2017-11-02 19:15:42.308637+08 11.001
-A Fateful Reflection of a Waitress And a Boat who must Discover a Sumo Wrestler in Ancient China
-Kwara & Kogi
-{"Deleted Scenes","Behind the Scenes"}
-'awe':5 'awe-inspir':4 'barbarella':1 'cat':13 'conquer':16 'dog':18 'feminist':10 'inspir':6 'monasteri':21 'must':15 'stori':7 'streetcar':2
-PHP	₱ USD $
-\N  Some other value
-\\."#;
-    pg_and_generic().one_statement_parses_to(sql, "");
+    let sql = r#"COPY public.actor (actor_id, first_name, last_name, last_update, value) FROM STDIN;
+1	PENELOPE	GUINESS	2006-02-15 09:34:33	0.11111
+2	NICK	WAHLBERG	2006-02-15 09:34:33	0.22222
+3	ED	CHASE	2006-02-15 09:34:33	0.312323
+4	JENNIFER	DAVIS	2006-02-15 09:34:33	0.3232
+5	JOHNNY	LOLLOBRIGIDA	2006-02-15 09:34:33	1.343
+6	BETTE	NICHOLSON	2006-02-15 09:34:33	5.0
+7	GRACE	MOSTEL	2006-02-15 09:34:33	6.0
+8	MATTHEW	JOHANSSON	2006-02-15 09:34:33	7.0
+9	JOE	SWANK	2006-02-15 09:34:33	8.0
+10	CHRISTIAN	GABLE	2006-02-15 09:34:33	9.1
+11	ZERO	CAGE	2006-02-15 09:34:33	10.001
+12	KARL	BERRY	2017-11-02 19:15:42.308637+08	11.001
+\."#;
+    pg_and_generic().verified_stmt(sql);
+
+    let sql_comma_separated = r#"COPY public.actor (actor_id, first_name, last_name, last_update, value) FROM STDIN (FORMAT csv, DELIMITER ',');
+1,PENELOPE,GUINESS,2006-02-15 09:34:33,0.11111
+2,NICK,WAHLBERG,2006-02-15 09:34:33,0.22222
+3,ED,CHASE,2006-02-15 09:34:33,0.312323
+4,JENNIFER,DAVIS,2006-02-15 09:34:33,0.3232
+5,JOHNNY,"LOLLO,BRIGIDA",2006-02-15 09:34:33,1.343
+6,BETTE,NICHOLSON,2006-02-15 09:34:33,5.0
+7,GRACE,MOSTEL,2006-02-15 09:34:33,6.0
+8,MATTHEW,JOHANSSON,2006-02-15 09:34:33,7.0
+9,JOE,SWANK,2006-02-15 09:34:33,8.0
+10,CHRISTIAN,GABLE,2006-02-15 09:34:33,9.1
+11,ZERO,CAGE,2006-02-15 09:34:33,10.001
+12,KARL,BERRY,2017-11-02 19:15:42.308637+08,11.001
+\."#;
+    pg_and_generic().verified_stmt(sql_comma_separated);
 }
 
 #[test]

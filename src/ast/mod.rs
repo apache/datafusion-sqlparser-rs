@@ -4649,7 +4649,7 @@ impl fmt::Display for Statement {
                     let data = String::from_utf8(writer.into_inner().map_err(|_| fmt::Error)?)
                         .map_err(|_| fmt::Error)?;
                     write!(f, "{}", data)?;
-                    write!(f, "\n\\.")?;
+                    write!(f, "\\.")?;
                 }
                 Ok(())
             }

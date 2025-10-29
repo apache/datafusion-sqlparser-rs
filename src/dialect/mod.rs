@@ -178,6 +178,11 @@ pub trait Dialect: Debug + Any {
     /// Determine if a character is a valid unquoted identifier character
     fn is_identifier_part(&self, ch: char) -> bool;
 
+    /// Returns whether the dialect supports hyphenated identifiers
+    fn supports_hyphenated_identifiers(&self) -> bool {
+        false
+    }
+
     /// Most dialects do not have custom operators. Override this method to provide custom operators.
     fn is_custom_operator_part(&self, _ch: char) -> bool {
         false

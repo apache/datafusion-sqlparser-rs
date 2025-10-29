@@ -83,7 +83,11 @@ impl Dialect for BigQueryDialect {
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
-        ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_' || ch == '-'
+        ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_'
+    }
+
+    fn supports_hyphenated_identifiers(&self) -> bool {
+        true
     }
 
     /// See [doc](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals)

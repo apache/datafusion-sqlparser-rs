@@ -3589,6 +3589,7 @@ fn test_double_value() {
 
     for (input, expected) in test_cases {
         for (i, expr) in input.iter().enumerate() {
+            println!("Testing expression: {}", expr);
             if let Statement::Query(query) =
                 dialects.one_statement_parses_to(&format!("SELECT {expr}"), "")
             {

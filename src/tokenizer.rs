@@ -1669,6 +1669,11 @@ impl<'a> Tokenizer<'a> {
                             _ => self.start_binop(chars, "~~", Token::DoubleTilde),
                         }
                     }
+                    Some('/') if self.dialect.supports_path_like_identifiers() => {
+                        // regular identifier starting with an "E" or "e"
+                        let s = self.tokenize_word("~", chars, prev_keyword)?;
+                        Ok(Some(Token::make_word(s, None)))
+                    } 
                     _ => self.start_binop(chars, "~", Token::Tilde),
                 }
             }
@@ -1969,6 +1974,25 @@ impl<'a> Tokenizer<'a> {
         s.push_str(&peeking_take_while(chars, |ch| {
             self.dialect.is_identifier_part(ch)
         }));
+
+        while !matches!(prev_keyword, Some(Keyword::SELECT))
+            && self.dialect.supports_path_like_identifiers()
+            && chars.peek().map(|&ch| ch == '/').unwrap_or(false)
+            && chars
+                .peekable
+                .clone()
+                .nth(1)
+                .map(|ch| ch.is_alphabetic())
+                .unwrap_or(false)
+        {
+            s.push('/');
+            chars.next(); // consume the '/'
+
+            s.push_str(&peeking_take_while(chars, |ch| {
+                self.dialect.is_identifier_part(ch)
+            }));
+        }
+
         if !matches!(prev_keyword, Some(Keyword::SELECT))
             && self.dialect.supports_hyphenated_identifiers()
         {

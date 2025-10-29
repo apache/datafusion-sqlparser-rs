@@ -158,6 +158,10 @@ impl Dialect for SnowflakeDialect {
             || ch == '_'
     }
 
+    fn supports_path_like_identifiers(&self) -> bool {
+        true
+    }
+
     // See https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#escape_sequences
     fn supports_string_literal_backslash_escape(&self) -> bool {
         true
@@ -1067,8 +1071,22 @@ pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserE
             Token::Plus => ident.push('+'),
             Token::Minus => ident.push('-'),
             Token::Number(n, _) => ident.push_str(n),
-            Token::Word(w) => ident.push_str(&w.to_string()),
-            _ => return parser.expected("stage name identifier", parser.peek_token()),
+            Token::Word(w) => {
+                if matches!(w.keyword, Keyword::NoKeyword) {
+                    ident.push_str(w.to_string().as_str());
+                } else {
+                    parser.prev_token();
+                    break;
+                }
+            }
+            token => {
+                return {
+                    println!(
+                        "Unexpected token {token:?} while parsing stage name identifier {ident:?}"
+                    );
+                    parser.expected("stage name identifier", parser.peek_token())
+                }
+            }
         }
     }
     Ok(Ident::new(ident))

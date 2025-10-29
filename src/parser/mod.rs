@@ -9542,25 +9542,22 @@ impl<'a> Parser<'a> {
             return self.expected("COPY ... FROM STDIN with CSV body", self.peek_token());
         };
 
-        let mut reader_builder = csv::ReaderBuilder::new();
-        reader_builder.has_headers(false);
-
+        let mut delimiter = '\t';
+        let mut quote = '"';
+        let mut escape = '\\';
         let mut null_symbol = "\\N";
 
         // Apply options
         for option in options {
             match option {
                 CopyOption::Delimiter(c) => {
-                    reader_builder.delimiter(*c as u8);
-                }
-                CopyOption::Header(has_header) => {
-                    reader_builder.has_headers(*has_header);
+                    delimiter = *c;
                 }
                 CopyOption::Quote(c) => {
-                    reader_builder.quote(*c as u8);
+                    quote = *c;
                 }
                 CopyOption::Escape(c) => {
-                    reader_builder.escape(Some(*c as u8));
+                    escape = *c;
                 }
                 CopyOption::Null(null) => {
                     null_symbol = null;
@@ -9573,10 +9570,7 @@ impl<'a> Parser<'a> {
         for option in legacy_options {
             match option {
                 CopyLegacyOption::Delimiter(c) => {
-                    reader_builder.delimiter(*c as u8);
-                }
-                CopyLegacyOption::Header => {
-                    reader_builder.has_headers(true);
+                    delimiter = *c;
                 }
                 CopyLegacyOption::Null(null) => {
                     null_symbol = null;
@@ -9584,14 +9578,11 @@ impl<'a> Parser<'a> {
                 CopyLegacyOption::Csv(csv_options) => {
                     for csv_option in csv_options {
                         match csv_option {
-                            CopyLegacyCsvOption::Header => {
-                                reader_builder.has_headers(true);
-                            }
                             CopyLegacyCsvOption::Quote(c) => {
-                                reader_builder.quote(*c as u8);
+                                quote = *c;
                             }
                             CopyLegacyCsvOption::Escape(c) => {
-                                reader_builder.escape(Some(*c as u8));
+                                escape = *c;
                             }
                             _ => {}
                         }
@@ -9601,28 +9592,116 @@ impl<'a> Parser<'a> {
             }
         }
 
+        // Simple CSV parser
         let mut result = vec![];
-        let mut reader = reader_builder.from_reader(body.as_bytes());
-        for record in reader.records() {
-            let record = match record {
-                Ok(rec) => rec,
-                Err(e) => {
-                    return Err(ParserError::ParserError(format!(
-                        "Error parsing CSV data: {}",
-                        e
-                    )))
-                }
-            };
-            let mut row = vec![];
-            for field in record.iter() {
-                if field == null_symbol {
-                    row.push(None);
+        let mut current_row = vec![];
+        let mut current_field = String::new();
+        let mut in_quotes = false;
+        let mut chars = body.chars().peekable();
+        let mut expected_column_count: Option<usize> = None;
+        let mut row_number = 0;
+
+        while let Some(ch) = chars.next() {
+            if in_quotes {
+                if ch == quote {
+                    // Check if it's an escaped quote
+                    if let Some(&next_ch) = chars.peek() {
+                        if next_ch == quote {
+                            // Escaped quote
+                            current_field.push(quote);
+                            chars.next();
+                        } else {
+                            // End of quoted field
+                            in_quotes = false;
+                        }
+                    } else {
+                        // End of quoted field at end of input
+                        in_quotes = false;
+                    }
+                } else if ch == escape {
+                    // Escape character
+                    if let Some(next_ch) = chars.next() {
+                        current_field.push(next_ch);
+                    }
                 } else {
-                    row.push(Some(field.to_string()));
+                    current_field.push(ch);
+                }
+            } else if ch == quote {
+                in_quotes = true;
+            } else if ch == delimiter {
+                // End of field
+                if current_field == null_symbol {
+                    current_row.push(None);
+                } else {
+                    current_row.push(Some(current_field.clone()));
+                }
+                current_field.clear();
+            } else if ch == '\n' || ch == '\r' {
+                // End of record
+                if ch == '\r' {
+                    // Skip \n if it follows \r
+                    if let Some(&'\n') = chars.peek() {
+                        chars.next();
+                    }
+                }
+                if !current_field.is_empty() || !current_row.is_empty() {
+                    if current_field == null_symbol {
+                        current_row.push(None);
+                    } else {
+                        current_row.push(Some(current_field.clone()));
+                    }
+                    current_field.clear();
+
+                    // Validate column count
+                    row_number += 1;
+                    if let Some(expected) = expected_column_count {
+                        if current_row.len() != expected {
+                            return Err(ParserError::ParserError(format!(
+                                "CSV row {} has {} columns, but expected {} columns based on first row",
+                                row_number,
+                                current_row.len(),
+                                expected
+                            )));
+                        }
+                    } else {
+                        // First row establishes the expected column count
+                        expected_column_count = Some(current_row.len());
+                    }
+
+                    result.push(current_row.clone());
+                    current_row.clear();
+                }
+            } else {
+                current_field.push(ch);
+            }
+        }
+
+        // Handle remaining field/row
+        if !current_field.is_empty() || !current_row.is_empty() {
+            if current_field == null_symbol {
+                current_row.push(None);
+            } else {
+                current_row.push(Some(current_field));
+            }
+
+            // Validate column count for last row
+            row_number += 1;
+            if let Some(expected) = expected_column_count {
+                if current_row.len() != expected {
+                    return Err(ParserError::ParserError(format!(
+                        "CSV row {} has {} columns, but expected {} columns based on first row",
+                        row_number,
+                        current_row.len(),
+                        expected
+                    )));
                 }
             }
-            result.push(row);
+            // Note: if this is the first and only row, we don't need to set expected_column_count
+            // since there's nothing to validate against
+
+            result.push(current_row);
         }
+
         Ok(result)
     }
 

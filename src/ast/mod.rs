@@ -4576,19 +4576,21 @@ impl fmt::Display for Statement {
                 }
 
                 let mut null_symbol = "\\N";
-                let mut writer_builder = csv::WriterBuilder::new();
+                let mut delimiter = '\t';
+                let mut quote = '"';
+                let mut escape = '\\';
 
                 // Apply options
                 for option in options {
                     match option {
                         CopyOption::Delimiter(c) => {
-                            writer_builder.delimiter(*c as u8);
+                            delimiter = *c;
                         }
                         CopyOption::Quote(c) => {
-                            writer_builder.quote(*c as u8);
+                            quote = *c;
                         }
                         CopyOption::Escape(c) => {
-                            writer_builder.escape(*c as u8);
+                            escape = *c;
                         }
                         CopyOption::Null(null) => {
                             null_symbol = null;
@@ -4601,10 +4603,7 @@ impl fmt::Display for Statement {
                 for option in legacy_options {
                     match option {
                         CopyLegacyOption::Delimiter(c) => {
-                            writer_builder.delimiter(*c as u8);
-                        }
-                        CopyLegacyOption::Header => {
-                            writer_builder.has_headers(true);
+                            delimiter = *c;
                         }
                         CopyLegacyOption::Null(null) => {
                             null_symbol = null;
@@ -4612,14 +4611,11 @@ impl fmt::Display for Statement {
                         CopyLegacyOption::Csv(csv_options) => {
                             for csv_option in csv_options {
                                 match csv_option {
-                                    CopyLegacyCsvOption::Header => {
-                                        writer_builder.has_headers(true);
-                                    }
                                     CopyLegacyCsvOption::Quote(c) => {
-                                        writer_builder.quote(*c as u8);
+                                        quote = *c;
                                     }
                                     CopyLegacyCsvOption::Escape(c) => {
-                                        writer_builder.escape(*c as u8);
+                                        escape = *c;
                                     }
                                     _ => {}
                                 }
@@ -4631,19 +4627,43 @@ impl fmt::Display for Statement {
 
                 if !values.is_empty() {
                     writeln!(f, ";")?;
-                    let mut writer = writer_builder.from_writer(vec![]);
+
+                    // Simple CSV writer
                     for row in values {
-                        writer
-                            .write_record(
-                                row.iter()
-                                    .map(|column| column.as_deref().unwrap_or(null_symbol)),
-                            )
-                            .map_err(|_| fmt::Error)?
+                        for (idx, column) in row.iter().enumerate() {
+                            if idx > 0 {
+                                write!(f, "{}", delimiter)?;
+                            }
+
+                            let field_value = column.as_deref().unwrap_or(null_symbol);
+
+                            // Check if field needs quoting
+                            let needs_quoting = field_value.contains(delimiter)
+                                || field_value.contains(quote)
+                                || field_value.contains('\n')
+                                || field_value.contains('\r');
+
+                            if needs_quoting {
+                                write!(f, "{}", quote)?;
+                                for ch in field_value.chars() {
+                                    if ch == quote {
+                                        // Escape quote by doubling it
+                                        write!(f, "{}{}", quote, quote)?;
+                                    } else if ch == escape {
+                                        // Escape escape character
+                                        write!(f, "{}{}", escape, escape)?;
+                                    } else {
+                                        write!(f, "{}", ch)?;
+                                    }
+                                }
+                                write!(f, "{}", quote)?;
+                            } else {
+                                write!(f, "{}", field_value)?;
+                            }
+                        }
+                        writeln!(f)?;
                     }
-                    writer.flush().map_err(|_| fmt::Error)?;
-                    let data = String::from_utf8(writer.into_inner().map_err(|_| fmt::Error)?)
-                        .map_err(|_| fmt::Error)?;
-                    write!(f, "{}", data)?;
+
                     write!(f, "\\.")?;
                 }
                 Ok(())

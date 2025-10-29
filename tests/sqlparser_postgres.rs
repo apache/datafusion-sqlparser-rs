@@ -1045,6 +1045,30 @@ fn parse_copy_from_stdin() {
 12,KARL,BERRY,2017-11-02 19:15:42.308637+08,11.001
 \."#;
     pg_and_generic().verified_stmt(sql_comma_separated);
+
+    let incorrect_csv_sql = r#"COPY public.actor (actor_id, first_name, last_name, last_update, value) FROM STDIN (FORMAT csv, DELIMITER ',');
+1,PENELOPE,GUINESS,2006-02-15 09:34:33,0.11111
+2,NICK,WAHLBERG,2006-02-15 09:34:33
+\."#;
+    let parsed = pg_and_generic().parse_sql_statements(incorrect_csv_sql);
+    assert_eq!(
+        parsed.unwrap_err(),
+        ParserError::ParserError(
+            "CSV row 2 has 4 columns, but expected 5 columns based on first row".to_string()
+        )
+    );
+
+    let mixed_incorrect_separators = r#"COPY public.actor (actor_id, first_name, last_name, last_update, value) FROM STDIN (FORMAT csv, DELIMITER ',');
+1,PENELOPE,GUINESS,2006-02-15 09:34:33,0.11111
+2	NICK	WAHLBERG	2006-02-15 09:34:33,0.22222
+\."#;
+    let parsed = pg_and_generic().parse_sql_statements(mixed_incorrect_separators);
+    assert_eq!(
+        parsed.unwrap_err(),
+        ParserError::ParserError(
+            "CSV row 2 has 2 columns, but expected 5 columns based on first row".to_string()
+        )
+    );
 }
 
 #[test]

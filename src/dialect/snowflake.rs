@@ -1072,7 +1072,7 @@ pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserE
             Token::Minus => ident.push('-'),
             Token::Number(n, _) => ident.push_str(n),
             Token::Word(w) => {
-                if matches!(w.keyword, Keyword::NoKeyword) {
+                if matches!(w.keyword, Keyword::NoKeyword) || ident.ends_with("@") {
                     ident.push_str(w.to_string().as_str());
                 } else {
                     parser.prev_token();

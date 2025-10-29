@@ -23,7 +23,6 @@
 
 #[cfg(not(feature = "std"))]
 use alloc::{
-    borrow::ToOwned,
     format,
     string::{String, ToString},
     vec,
@@ -1319,12 +1318,12 @@ impl<'a> Tokenizer<'a> {
                 // If so, what follows is definitely not part of a decimal number and
                 // we should yield the dot as a dedicated token so compound identifiers
                 // starting with digits can be parsed correctly.
-                if s == "." && self.dialect.supports_numeric_prefix() {
-                    if !preceded_by_whitespace
-                        && !matches!(prev_token, Some(Token::Plus | Token::Minus))
-                    {
-                        return Ok(Some(Token::Period));
-                    }
+                if s == "."
+                    && self.dialect.supports_numeric_prefix()
+                    && !preceded_by_whitespace
+                    && !matches!(prev_token, Some(Token::Plus | Token::Minus))
+                {
+                    return Ok(Some(Token::Period));
                 }
 
                 // Consume fractional digits.

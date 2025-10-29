@@ -1079,14 +1079,7 @@ pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserE
                     break;
                 }
             }
-            token => {
-                return {
-                    println!(
-                        "Unexpected token {token:?} while parsing stage name identifier {ident:?}"
-                    );
-                    parser.expected("stage name identifier", parser.peek_token())
-                }
-            }
+            _ => return parser.expected("stage name identifier", parser.peek_token()),
         }
     }
     Ok(Ident::new(ident))

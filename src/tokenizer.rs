@@ -851,7 +851,7 @@ impl<'a> Tokenizer<'a> {
     /// Create a new SQL tokenizer for the specified SQL statement
     ///
     /// ```
-    /// # use sqlparser::tokenizer::{Token, Whitespace, Tokenizer};
+    /// # use sqlparser::tokenizer::{Token, Tokenizer};
     /// # use sqlparser::dialect::GenericDialect;
     /// # let dialect = GenericDialect{};
     /// let query = r#"SELECT 'foo'"#;
@@ -861,7 +861,6 @@ impl<'a> Tokenizer<'a> {
     ///
     /// assert_eq!(tokens, vec![
     ///   Token::make_word("SELECT", None),
-    ///   Token::Whitespace(Whitespace::Space),
     ///   Token::SingleQuotedString("foo".to_string()),
     /// ]);
     pub fn new(dialect: &'a dyn Dialect, query: &'a str) -> Self {
@@ -1673,7 +1672,7 @@ impl<'a> Tokenizer<'a> {
                         // regular identifier starting with an "E" or "e"
                         let s = self.tokenize_word("~", chars, prev_keyword)?;
                         Ok(Some(Token::make_word(s, None)))
-                    } 
+                    }
                     _ => self.start_binop(chars, "~", Token::Tilde),
                 }
             }

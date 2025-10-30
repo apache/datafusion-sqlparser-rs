@@ -375,7 +375,7 @@ pub enum DataType {
     /// Databricks timestamp without time zone. See [1].
     ///
     /// [1]: https://docs.databricks.com/aws/en/sql/language-manual/data-types/timestamp-ntz-type
-    TimestampNtz,
+    TimestampNtz(Option<u64>),
     /// Interval type.
     Interval {
         /// [PostgreSQL] fields specification like `INTERVAL YEAR TO MONTH`.
@@ -676,7 +676,9 @@ impl fmt::Display for DataType {
             DataType::Timestamp(precision, timezone_info) => {
                 format_datetime_precision_and_tz(f, "TIMESTAMP", precision, timezone_info)
             }
-            DataType::TimestampNtz => write!(f, "TIMESTAMP_NTZ"),
+            DataType::TimestampNtz(precision) => {
+                format_type_with_optional_length(f, "TIMESTAMP_NTZ", precision, false)
+            }
             DataType::Datetime64(precision, timezone) => {
                 format_clickhouse_datetime_precision_and_timezone(
                     f,

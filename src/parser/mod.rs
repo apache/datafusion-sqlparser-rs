@@ -656,6 +656,7 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     self.parse_vacuum()
                 }
+                Keyword::RESET => self.parse_reset(),
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
@@ -17726,6 +17727,18 @@ impl<'a> Parser<'a> {
             }
             _ => self.expected("expected option value", self.peek_token()),
         }
+    }
+
+    /// Parses a RESET statement
+    fn parse_reset(&mut self) -> Result<Statement, ParserError> {
+        if self.parse_keyword(Keyword::ALL) {
+            return Ok(Statement::Reset(ResetStatement { reset: Reset::ALL }));
+        }
+
+        let obj = self.parse_object_name(false)?;
+        Ok(Statement::Reset(ResetStatement {
+            reset: Reset::ConfigurationParameter(obj),
+        }))
     }
 }
 

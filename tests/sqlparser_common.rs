@@ -17632,3 +17632,30 @@ fn parse_generic_unary_ops() {
         );
     }
 }
+
+#[test]
+fn parse_reset_statement() {
+    match verified_stmt("RESET some_parameter") {
+        Statement::Reset(ResetStatement { reset }) => match reset {
+            Reset::ConfigurationParameter(o) => {
+                assert_eq!(o, ObjectName::from(vec!["some_parameter".into()]))
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+    match verified_stmt("RESET some_extension.some_parameter") {
+        Statement::Reset(ResetStatement { reset }) => match reset {
+            Reset::ConfigurationParameter(o) => assert_eq!(
+                o,
+                ObjectName::from(vec!["some_extension".into(), "some_parameter".into()])
+            ),
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+    match verified_stmt("RESET ALL") {
+        Statement::Reset(ResetStatement { reset }) => assert_eq!(reset, Reset::ALL),
+        _ => unreachable!(),
+    }
+}

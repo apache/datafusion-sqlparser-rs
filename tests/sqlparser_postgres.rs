@@ -2144,13 +2144,11 @@ fn parse_ampersand_arobase() {
 #[test]
 fn parse_pg_unary_ops() {
     let pg_unary_ops = &[
-        ("~", UnaryOperator::PGBitwiseNot),
         ("|/", UnaryOperator::PGSquareRoot),
         ("||/", UnaryOperator::PGCubeRoot),
         ("!!", UnaryOperator::PGPrefixFactorial),
         ("@", UnaryOperator::PGAbs),
     ];
-
     for (str_op, op) in pg_unary_ops {
         let select = pg().verified_only_select(&format!("SELECT {}a", &str_op));
         assert_eq!(

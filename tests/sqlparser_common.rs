@@ -17613,3 +17613,22 @@ fn test_parse_alter_user() {
     }
     verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL'), PASSWORD='secret', WORKLOAD_IDENTITY=(TYPE=AWS, ARN='arn:aws:iam::123456789:r1/')");
 }
+
+#[test]
+fn parse_generic_unary_ops() {
+    let unary_ops = &[
+        ("~", UnaryOperator::BitwiseNot),
+        ("-", UnaryOperator::Minus),
+        ("+", UnaryOperator::Plus),
+    ];
+    for (str_op, op) in unary_ops {
+        let select = verified_only_select(&format!("SELECT {}expr", &str_op));
+        assert_eq!(
+            UnnamedExpr(UnaryOp {
+                op: *op,
+                expr: Box::new(Identifier(Ident::new("expr"))),
+            }),
+            select.projection[0]
+        );
+    }
+}

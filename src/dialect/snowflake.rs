@@ -26,7 +26,7 @@ use crate::ast::helpers::stmt_data_loading::{
     FileStagingCommand, StageLoadSelectItem, StageLoadSelectItemKind, StageParamsObject,
 };
 use crate::ast::{
-    CatalogSyncNamespaceMode, ColumnOption, ColumnPolicy, ColumnPolicyProperty, ContactEntry,
+    AlterTableOperation, CatalogSyncNamespaceMode, ColumnOption, ColumnPolicy, ColumnPolicyProperty, ContactEntry,
     CopyIntoSnowflakeKind, CreateTableLikeKind, DollarQuotedString, Ident, IdentityParameters,
     IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
     InitializeKind, ObjectName, ObjectNamePart, RefreshModeKind, RowAccessPolicy, ShowObjects,
@@ -213,6 +213,11 @@ impl Dialect for SnowflakeDialect {
         if parser.parse_keyword(Keyword::BEGIN) {
             return Some(parser.parse_begin_exception_end());
         }
+
+	if parser.parse_keywords(&[Keyword::ALTER, Keyword::DYNAMIC, Keyword::TABLE]) {
+            // ALTER DYNAMIC TABLE
+            return Some(parse_alter_dynamic_table(parser));
+	}
 
         if parser.parse_keywords(&[Keyword::ALTER, Keyword::SESSION]) {
             // ALTER SESSION
@@ -601,6 +606,27 @@ fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statem
         _ => Err(ParserError::ParserError(
             "unexpected stage command, expecting LIST, LS, REMOVE or RM".to_string(),
         )),
+    }
+}
+
+/// Parse snowflake alter dynamic table.
+/// <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
+fn parse_alter_dynamic_table(parser: &mut Parser) -> Result<Statement, ParserError> {
+    let table_name = parser.parse_object_name(false)?;
+
+    // Parse the operation (currently only REFRESH is supported)
+    if parser.parse_keyword(Keyword::REFRESH) {
+        Ok(Statement::AlterTable {
+            name: table_name,
+            if_exists: false,
+            only: false,
+            operations: vec![AlterTableOperation::Refresh],
+            location: None,
+            on_cluster: None,
+            iceberg: false,
+        })
+    } else {
+        parser.expected("REFRESH after ALTER DYNAMIC TABLE", parser.peek_token())
     }
 }
 

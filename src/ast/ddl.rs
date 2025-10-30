@@ -365,6 +365,10 @@ pub enum AlterTableOperation {
     DropClusteringKey,
     SuspendRecluster,
     ResumeRecluster,
+    /// `REFRESH`
+    ///
+    /// Note: this is Snowflake specific for dynamic tables <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
+    Refresh,
     /// `ALGORITHM [=] { DEFAULT | INSTANT | INPLACE | COPY }`
     ///
     /// [MySQL]-specific table alter algorithm.
@@ -844,6 +848,9 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::ResumeRecluster => {
                 write!(f, "RESUME RECLUSTER")?;
                 Ok(())
+            }
+            AlterTableOperation::Refresh => {
+                write!(f, "REFRESH")
             }
             AlterTableOperation::AutoIncrement { equals, value } => {
                 write!(

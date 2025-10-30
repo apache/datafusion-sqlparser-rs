@@ -158,6 +158,10 @@ impl Dialect for SnowflakeDialect {
             || ch == '_'
     }
 
+    fn supports_path_like_identifiers(&self) -> bool {
+        true
+    }
+
     // See https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#escape_sequences
     fn supports_string_literal_backslash_escape(&self) -> bool {
         true
@@ -1049,9 +1053,9 @@ pub fn parse_create_stage(
 
 pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserError> {
     let mut ident = String::new();
-    while let Some(next_token) = parser.next_token_no_skip() {
-        match &next_token.token {
-            Token::Whitespace(_) | Token::SemiColon => break,
+    loop {
+        match &parser.next_token().token {
+            Token::SemiColon | Token::EOF => break,
             Token::Period => {
                 parser.prev_token();
                 break;
@@ -1067,7 +1071,14 @@ pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserE
             Token::Plus => ident.push('+'),
             Token::Minus => ident.push('-'),
             Token::Number(n, _) => ident.push_str(n),
-            Token::Word(w) => ident.push_str(&w.to_string()),
+            Token::Word(w) => {
+                if matches!(w.keyword, Keyword::NoKeyword) || ident.ends_with("@") {
+                    ident.push_str(w.to_string().as_str());
+                } else {
+                    parser.prev_token();
+                    break;
+                }
+            }
             _ => return parser.expected("stage name identifier", parser.peek_token()),
         }
     }

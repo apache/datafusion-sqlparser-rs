@@ -2787,10 +2787,11 @@ impl fmt::Display for Declare {
 }
 
 /// Sql options of a `CREATE TABLE` statement.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CreateTableOptions {
+    #[default]
     None,
     /// Options specified using the `WITH` keyword.
     /// e.g. `WITH (description = "123")`
@@ -2817,12 +2818,6 @@ pub enum CreateTableOptions {
     Plain(Vec<SqlOption>),
 
     TableProperties(Vec<SqlOption>),
-}
-
-impl Default for CreateTableOptions {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 impl fmt::Display for CreateTableOptions {
@@ -3227,7 +3222,7 @@ pub enum Statement {
         /// WITH options (before PostgreSQL version 9.0)
         legacy_options: Vec<CopyLegacyOption>,
         /// VALUES a vector of values to be copied
-        values: Vec<Option<String>>,
+        values: Vec<Vec<Option<String>>>,
     },
     /// ```sql
     /// COPY INTO <table> | <location>
@@ -4579,19 +4574,97 @@ impl fmt::Display for Statement {
                 if !legacy_options.is_empty() {
                     write!(f, " {}", display_separated(legacy_options, " "))?;
                 }
+
+                let mut null_symbol = "\\N";
+                let mut delimiter = '\t';
+                let mut quote = '"';
+                let mut escape = '\\';
+
+                // Apply options
+                for option in options {
+                    match option {
+                        CopyOption::Delimiter(c) => {
+                            delimiter = *c;
+                        }
+                        CopyOption::Quote(c) => {
+                            quote = *c;
+                        }
+                        CopyOption::Escape(c) => {
+                            escape = *c;
+                        }
+                        CopyOption::Null(null) => {
+                            null_symbol = null;
+                        }
+                        _ => {}
+                    }
+                }
+
+                // Apply legacy options
+                for option in legacy_options {
+                    match option {
+                        CopyLegacyOption::Delimiter(c) => {
+                            delimiter = *c;
+                        }
+                        CopyLegacyOption::Null(null) => {
+                            null_symbol = null;
+                        }
+                        CopyLegacyOption::Csv(csv_options) => {
+                            for csv_option in csv_options {
+                                match csv_option {
+                                    CopyLegacyCsvOption::Quote(c) => {
+                                        quote = *c;
+                                    }
+                                    CopyLegacyCsvOption::Escape(c) => {
+                                        escape = *c;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+
                 if !values.is_empty() {
                     writeln!(f, ";")?;
-                    let mut delim = "";
-                    for v in values {
-                        write!(f, "{delim}")?;
-                        delim = "\t";
-                        if let Some(v) = v {
-                            write!(f, "{v}")?;
-                        } else {
-                            write!(f, "\\N")?;
+
+                    // Simple CSV writer
+                    for row in values {
+                        for (idx, column) in row.iter().enumerate() {
+                            if idx > 0 {
+                                write!(f, "{}", delimiter)?;
+                            }
+
+                            let field_value = column.as_deref().unwrap_or(null_symbol);
+
+                            // Check if field needs quoting
+                            let needs_quoting = field_value.contains(delimiter)
+                                || field_value.contains(quote)
+                                || field_value.contains('\n')
+                                || field_value.contains('\r');
+
+                            if needs_quoting {
+                                write!(f, "{}", quote)?;
+                                for ch in field_value.chars() {
+                                    if ch == quote {
+                                        // Escape quote by doubling it
+                                        write!(f, "{}{}", quote, quote)?;
+                                    } else if ch == escape {
+                                        // Escape escape character
+                                        write!(f, "{}{}", escape, escape)?;
+                                    } else {
+                                        write!(f, "{}", ch)?;
+                                    }
+                                }
+                                write!(f, "{}", quote)?;
+                            } else {
+                                write!(f, "{}", field_value)?;
+                            }
                         }
+                        writeln!(f)?;
                     }
-                    write!(f, "\n\\.")?;
+
+                    write!(f, "\\.")?;
                 }
                 Ok(())
             }

@@ -1207,17 +1207,6 @@ pub trait Dialect: Debug + Any {
     fn supports_semantic_view_table_factor(&self) -> bool {
         false
     }
-
-    /// Returns true if the dialect supports the `RESET` statement
-    /// for resetting session variables.
-    ///
-    /// ```sql
-    /// RESET configuration_parameter;
-    /// RESET ALL;
-    /// ```
-    fn supports_reset(&self) -> bool {
-        false
-    }
 }
 
 /// This represents the operators for which precedence must be defined

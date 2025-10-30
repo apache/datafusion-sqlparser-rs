@@ -656,7 +656,7 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     self.parse_vacuum()
                 }
-                Keyword::RESET if self.dialect.supports_reset() => self.parse_reset(),
+                Keyword::RESET => self.parse_reset(),
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
@@ -17725,8 +17725,8 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parses a RESET statement
     fn parse_reset(&mut self) -> Result<Statement, ParserError> {
-        // RESET { ALL | <configuration_parameter> }
         if self.parse_keyword(Keyword::ALL) {
             return Ok(Statement::Reset(ResetStatement { reset: Reset::ALL }));
         }
@@ -18540,31 +18540,6 @@ mod tests {
         for w in ["  ", "/*invalid*/"] {
             let sql = format!("\nSELECT\n  :{w}fooBar");
             assert!(Parser::parse_sql(&GenericDialect, &sql).is_err());
-        }
-    }
-
-    #[test]
-    fn test_reset_all() {
-        let sql = "RESET ALL";
-        let ast = Parser::parse_sql(&PostgreSqlDialect {}, sql).unwrap();
-        assert_eq!(
-            ast,
-            vec![Statement::Reset(ResetStatement { reset: Reset::ALL })]
-        );
-    }
-
-    #[test]
-    fn test_reset_parameter() {
-        for w in ["parameter_name", "extension.parameter_name"] {
-            let sql = format!("RESET {w}");
-            let parts = w.split(".").map(|s| s.into()).collect::<Vec<Ident>>();
-            let ast = Parser::parse_sql(&PostgreSqlDialect {}, &sql).unwrap();
-            assert_eq!(
-                ast,
-                vec![Statement::Reset(ResetStatement {
-                    reset: Reset::ConfigurationParameter(ObjectName::from(parts))
-                })]
-            );
         }
     }
 }

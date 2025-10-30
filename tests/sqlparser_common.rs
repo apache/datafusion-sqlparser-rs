@@ -17613,3 +17613,30 @@ fn test_parse_alter_user() {
     }
     verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL'), PASSWORD='secret', WORKLOAD_IDENTITY=(TYPE=AWS, ARN='arn:aws:iam::123456789:r1/')");
 }
+
+#[test]
+fn parse_reset_statement() {
+    match verified_stmt("RESET some_parameter") {
+        Statement::Reset(ResetStatement { reset }) => match reset {
+            Reset::ConfigurationParameter(o) => {
+                assert_eq!(o, ObjectName::from(vec!["some_parameter".into()]))
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+    match verified_stmt("RESET some_extension.some_parameter") {
+        Statement::Reset(ResetStatement { reset }) => match reset {
+            Reset::ConfigurationParameter(o) => assert_eq!(
+                o,
+                ObjectName::from(vec!["some_extension".into(), "some_parameter".into()])
+            ),
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+    match verified_stmt("RESET ALL") {
+        Statement::Reset(ResetStatement { reset }) => assert_eq!(reset, Reset::ALL),
+        _ => unreachable!(),
+    }
+}

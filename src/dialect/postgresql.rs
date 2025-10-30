@@ -280,11 +280,4 @@ impl Dialect for PostgreSqlDialect {
     fn supports_interval_options(&self) -> bool {
         true
     }
-
-    /// Postgres supports the `RESET` statement for resetting session variables.
-    ///
-    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-reset.html)
-    fn supports_reset(&self) -> bool {
-        true
-    }
 }

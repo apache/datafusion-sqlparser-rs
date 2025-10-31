@@ -17,6 +17,7 @@
 
 #[cfg(not(feature = "std"))]
 use crate::alloc::string::ToString;
+use crate::ast::helpers::attached_token::AttachedToken;
 use crate::ast::helpers::key_value_options::{
     KeyValueOption, KeyValueOptionKind, KeyValueOptions, KeyValueOptionsDelimiter,
 };
@@ -26,15 +27,15 @@ use crate::ast::helpers::stmt_data_loading::{
     FileStagingCommand, StageLoadSelectItem, StageLoadSelectItemKind, StageParamsObject,
 };
 use crate::ast::{
-    AlterTable, AlterTableOperation, CatalogSyncNamespaceMode, ColumnOption, ColumnPolicy, ColumnPolicyProperty, ContactEntry,
-    CopyIntoSnowflakeKind, CreateTableLikeKind, DollarQuotedString, Ident, IdentityParameters,
-    IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
-    InitializeKind, ObjectName, ObjectNamePart, RefreshModeKind, RowAccessPolicy, ShowObjects,
-    SqlOption, Statement, StorageSerializationPolicy, TagsColumnOption, Value, WrappedCollection,
+    AlterTable, AlterTableOperation, CatalogSyncNamespaceMode, ColumnOption, ColumnPolicy,
+    ColumnPolicyProperty, ContactEntry, CopyIntoSnowflakeKind, CreateTableLikeKind,
+    DollarQuotedString, Ident, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
+    IdentityPropertyKind, IdentityPropertyOrder, InitializeKind, ObjectName, ObjectNamePart,
+    RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement,
+    StorageSerializationPolicy, TagsColumnOption, Value, WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
-use crate::ast::helpers::attached_token::AttachedToken;
 use crate::parser::{IsOptional, Parser, ParserError};
 use crate::tokenizer::Token;
 #[cfg(not(feature = "std"))]
@@ -215,10 +216,10 @@ impl Dialect for SnowflakeDialect {
             return Some(parser.parse_begin_exception_end());
         }
 
-	if parser.parse_keywords(&[Keyword::ALTER, Keyword::DYNAMIC, Keyword::TABLE]) {
+        if parser.parse_keywords(&[Keyword::ALTER, Keyword::DYNAMIC, Keyword::TABLE]) {
             // ALTER DYNAMIC TABLE
             return Some(parse_alter_dynamic_table(parser));
-	}
+        }
 
         if parser.parse_keywords(&[Keyword::ALTER, Keyword::SESSION]) {
             // ALTER SESSION

@@ -4662,3 +4662,11 @@ fn test_drop_constraints() {
     snowflake().verified_stmt("ALTER TABLE tbl DROP FOREIGN KEY k1 RESTRICT");
     snowflake().verified_stmt("ALTER TABLE tbl DROP CONSTRAINT c1 CASCADE");
 }
+
+#[test]
+fn test_alter_dynamic_table() {
+    snowflake().verified_stmt("ALTER DYNAMIC TABLE MY_DYNAMIC_TABLE REFRESH");
+    snowflake().verified_stmt("ALTER DYNAMIC TABLE my_database.my_schema.my_dynamic_table REFRESH");
+    snowflake().verified_stmt("ALTER DYNAMIC TABLE my_dyn_table SUSPEND");
+    snowflake().verified_stmt("ALTER DYNAMIC TABLE my_dyn_table RESUME");
+}

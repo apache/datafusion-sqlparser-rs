@@ -4639,6 +4639,21 @@ fn test_create_database() {
 }
 
 #[test]
+fn test_timestamp_ntz_with_precision() {
+    snowflake().verified_stmt("SELECT CAST('2024-01-01 01:00:00' AS TIMESTAMP_NTZ(1))");
+    snowflake().verified_stmt("SELECT CAST('2024-01-01 01:00:00' AS TIMESTAMP_NTZ(9))");
+
+    let select =
+        snowflake().verified_only_select("SELECT CAST('2024-01-01 01:00:00' AS TIMESTAMP_NTZ(9))");
+    match expr_from_projection(only(&select.projection)) {
+        Expr::Cast { data_type, .. } => {
+            assert_eq!(*data_type, DataType::TimestampNtz(Some(9)));
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn test_drop_constraints() {
     snowflake().verified_stmt("ALTER TABLE tbl DROP PRIMARY KEY");
     snowflake().verified_stmt("ALTER TABLE tbl DROP FOREIGN KEY k1");

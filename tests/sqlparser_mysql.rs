@@ -1885,6 +1885,7 @@ fn parse_simple_insert() {
                 Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
+                        keyword: ValuesKeyword::Values,
                         explicit_row: false,
                         rows: vec![
                             vec![
@@ -1950,6 +1951,7 @@ fn parse_ignore_insert() {
                 Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
+                        keyword: ValuesKeyword::Values,
                         explicit_row: false,
                         rows: vec![vec![
                             Expr::Value(
@@ -1999,6 +2001,7 @@ fn parse_priority_insert() {
                 Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
+                        keyword: ValuesKeyword::Values,
                         explicit_row: false,
                         rows: vec![vec![
                             Expr::Value(
@@ -2045,6 +2048,7 @@ fn parse_priority_insert() {
                 Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
+                        keyword: ValuesKeyword::Values,
                         explicit_row: false,
                         rows: vec![vec![
                             Expr::Value(
@@ -2097,6 +2101,7 @@ fn parse_insert_as() {
                 Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
+                        keyword: ValuesKeyword::Values,
                         explicit_row: false,
                         rows: vec![vec![Expr::Value(
                             (Value::SingleQuotedString("2024-01-01".to_string())).with_empty_span()
@@ -2156,6 +2161,7 @@ fn parse_insert_as() {
                 Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
+                        keyword: ValuesKeyword::Values,
                         explicit_row: false,
                         rows: vec![vec![
                             Expr::value(number("1")),
@@ -2206,6 +2212,7 @@ fn parse_replace_insert() {
                 Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
+                        keyword: ValuesKeyword::Values,
                         explicit_row: false,
                         rows: vec![vec![
                             Expr::Value(
@@ -2253,6 +2260,7 @@ fn parse_empty_row_insert() {
                 Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
+                        keyword: ValuesKeyword::Values,
                         explicit_row: false,
                         rows: vec![vec![], vec![]]
                     })),
@@ -2303,6 +2311,7 @@ fn parse_insert_with_on_duplicate_update() {
                 Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
+                        keyword: ValuesKeyword::Values,
                         explicit_row: false,
                         rows: vec![vec![
                             Expr::Value(
@@ -4352,4 +4361,42 @@ fn test_create_index_options() {
     mysql_and_generic().verified_stmt(
         "CREATE INDEX idx_name ON t(c1, c2) USING BTREE LOCK = EXCLUSIVE ALGORITHM = DEFAULT",
     );
+}
+
+#[test]
+fn test_insert_into_value() {
+    let sql = r"INSERT INTO t (id, name) VALUE ('AAA', 'BBB')";
+    match mysql_and_generic().verified_stmt(sql) {
+        Statement::Insert(Insert { source, .. }) => {
+            assert_eq!(
+                Some(Box::new(Query {
+                    with: None,
+                    body: Box::new(SetExpr::Values(Values {
+                        keyword: ValuesKeyword::Value,
+                        explicit_row: false,
+                        rows: vec![vec![
+                            Expr::Value(ValueWithSpan {
+                                value: Value::SingleQuotedString("AAA".to_string()),
+                                span: Span::empty(),
+                            }),
+                            Expr::Value(ValueWithSpan {
+                                value: Value::SingleQuotedString("BBB".to_string()),
+                                span: Span::empty(),
+                            }),
+                        ]],
+                    })),
+                    order_by: None,
+                    limit_clause: None,
+                    fetch: None,
+                    locks: vec![],
+                    for_clause: None,
+                    settings: None,
+                    format_clause: None,
+                    pipe_operators: vec![],
+                })),
+                source
+            );
+        }
+        _ => unreachable!(),
+    }
 }

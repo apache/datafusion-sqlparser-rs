@@ -9908,6 +9908,7 @@ fn parse_merge() {
                         action: MergeAction::Insert(MergeInsertExpr {
                             columns: vec![Ident::new("A"), Ident::new("B"), Ident::new("C")],
                             kind: MergeInsertKind::Values(Values {
+                                keyword: ValuesKeyword::Values,
                                 explicit_row: false,
                                 rows: vec![vec![
                                     Expr::CompoundIdentifier(vec![

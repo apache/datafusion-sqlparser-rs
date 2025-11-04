@@ -17632,3 +17632,28 @@ fn parse_generic_unary_ops() {
         );
     }
 }
+
+#[test]
+fn test_parse_set_session_authorization() {
+    let stmt = verified_stmt("SET SESSION AUTHORIZATION DEFAULT");
+    assert_eq!(
+        stmt,
+        Statement::Set(Set::SetSessionAuthorization(SetSessionAuthorizationParam {
+            scope: ContextModifier::Session,
+            kind: SetSessionAuthorizationParamKind::Default,
+        }))
+    );
+
+    let stmt = verified_stmt("SET SESSION AUTHORIZATION 'username'");
+    assert_eq!(
+        stmt,
+        Statement::Set(Set::SetSessionAuthorization(SetSessionAuthorizationParam {
+            scope: ContextModifier::Session,
+            kind: SetSessionAuthorizationParamKind::User(Ident {
+                value: "username".to_string(),
+                quote_style: Some('\''),
+                span: Span::empty(),
+            }),
+        }))
+    );
+}

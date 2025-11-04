@@ -13104,6 +13104,18 @@ impl<'a> Parser<'a> {
                 session: false,
             }
             .into());
+        } else if self.parse_keyword(Keyword::AUTHORIZATION) {
+            let auth_value = if self.parse_keyword(Keyword::DEFAULT) {
+                SetSessionAuthorizationParamKind::Default
+            } else {
+                let value = self.parse_identifier()?;
+                SetSessionAuthorizationParamKind::User(value)
+            };
+            return Ok(Set::SetSessionAuthorization(SetSessionAuthorizationParam {
+                scope: scope.expect("SET ... AUTHORIZATION must have a scope"),
+                kind: auth_value,
+            })
+            .into());
         }
 
         if self.dialect.supports_comma_separated_set_assignments() {

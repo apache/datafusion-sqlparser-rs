@@ -39,7 +39,6 @@ use crate::ast::helpers::{
     stmt_create_table::{CreateTableBuilder, CreateTableConfiguration},
 };
 use crate::ast::Statement::CreatePolicy;
-use crate::ast::ValuesKeyword;
 use crate::ast::*;
 use crate::dialect::*;
 use crate::keywords::{Keyword, ALL_KEYWORDS};
@@ -12529,10 +12528,10 @@ impl<'a> Parser<'a> {
             SetExpr::Query(subquery)
         } else if self.parse_keyword(Keyword::VALUES) {
             let is_mysql = dialect_of!(self is MySqlDialect);
-            SetExpr::Values(self.parse_values(is_mysql, ValuesKeyword::Values)?)
+            SetExpr::Values(self.parse_values(is_mysql, false)?)
         } else if self.parse_keyword(Keyword::VALUE) {
             let is_mysql = dialect_of!(self is MySqlDialect);
-            SetExpr::Values(self.parse_values(is_mysql, ValuesKeyword::Value)?)
+            SetExpr::Values(self.parse_values(is_mysql, true)?)
         } else if self.parse_keyword(Keyword::TABLE) {
             SetExpr::Table(Box::new(self.parse_as_table()?))
         } else {
@@ -13836,7 +13835,7 @@ impl<'a> Parser<'a> {
             // Snowflake and Databricks allow syntax like below:
             // SELECT * FROM VALUES (1, 'a'), (2, 'b') AS t (col1, col2)
             // where there are no parentheses around the VALUES clause.
-            let values = SetExpr::Values(self.parse_values(false, ValuesKeyword::Values)?);
+            let values = SetExpr::Values(self.parse_values(false, false)?);
             let alias = self.maybe_parse_table_alias()?;
             Ok(TableFactor::Derived {
                 lateral: false,
@@ -16506,7 +16505,7 @@ impl<'a> Parser<'a> {
     pub fn parse_values(
         &mut self,
         allow_empty: bool,
-        keyword: ValuesKeyword,
+        value_keyword: bool,
     ) -> Result<Values, ParserError> {
         let mut explicit_row = false;
 
@@ -16528,7 +16527,7 @@ impl<'a> Parser<'a> {
         Ok(Values {
             explicit_row,
             rows,
-            keyword,
+            value_keyword,
         })
     }
 
@@ -16944,7 +16943,7 @@ impl<'a> Parser<'a> {
                         MergeInsertKind::Row
                     } else {
                         self.expect_keyword_is(Keyword::VALUES)?;
-                        let values = self.parse_values(is_mysql, ValuesKeyword::Values)?;
+                        let values = self.parse_values(is_mysql, false)?;
                         MergeInsertKind::Values(values)
                     };
                     MergeAction::Insert(MergeInsertExpr { columns, kind })

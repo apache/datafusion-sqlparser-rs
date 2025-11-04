@@ -3137,30 +3137,16 @@ pub struct Values {
     pub explicit_row: bool,
     // MySql supports both VALUES and VALUE keywords.
     // <https://dev.mysql.com/doc/refman/9.2/en/insert.html>
-    pub keyword: ValuesKeyword,
+    pub value_keyword: bool,
     pub rows: Vec<Vec<Expr>>,
-}
-
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum ValuesKeyword {
-    Values,
-    Value,
-}
-
-impl fmt::Display for ValuesKeyword {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ValuesKeyword::Values => write!(f, "VALUES"),
-            ValuesKeyword::Value => write!(f, "VALUE"),
-        }
-    }
 }
 
 impl fmt::Display for Values {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.keyword)?;
+        match self.value_keyword {
+            true => f.write_str("VALUE")?,
+            false => f.write_str("VALUES")?,
+        };
         let prefix = if self.explicit_row { "ROW" } else { "" };
         let mut delim = "";
         for row in &self.rows {

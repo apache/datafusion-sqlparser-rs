@@ -5169,7 +5169,7 @@ fn test_simple_postgres_insert_with_alias() {
             source: Some(Box::new(Query {
                 with: None,
                 body: Box::new(SetExpr::Values(Values {
-                    keyword: ValuesKeyword::Values,
+                    value_keyword: false,
                     explicit_row: false,
                     rows: vec![vec![
                         Expr::Identifier(Ident::new("DEFAULT")),
@@ -5239,7 +5239,7 @@ fn test_simple_postgres_insert_with_alias() {
             source: Some(Box::new(Query {
                 with: None,
                 body: Box::new(SetExpr::Values(Values {
-                    keyword: ValuesKeyword::Values,
+                    value_keyword: false,
                     explicit_row: false,
                     rows: vec![vec![
                         Expr::Identifier(Ident::new("DEFAULT")),
@@ -5311,7 +5311,7 @@ fn test_simple_insert_with_quoted_alias() {
             source: Some(Box::new(Query {
                 with: None,
                 body: Box::new(SetExpr::Values(Values {
-                    keyword: ValuesKeyword::Values,
+                    value_keyword: false,
                     explicit_row: false,
                     rows: vec![vec![
                         Expr::Identifier(Ident::new("DEFAULT")),

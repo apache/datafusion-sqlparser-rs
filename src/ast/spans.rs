@@ -223,7 +223,7 @@ impl Spanned for Values {
     fn span(&self) -> Span {
         let Values {
             explicit_row: _, // bool,
-            keyword: _,
+            value_keyword: _,
             rows,
         } = self;
 

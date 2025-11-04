@@ -157,7 +157,7 @@ fn test_databricks_lambdas() {
 #[test]
 fn test_values_clause() {
     let values = Values {
-        keyword: ValuesKeyword::Values,
+        value_keyword: false,
         explicit_row: false,
         rows: vec![
             vec![

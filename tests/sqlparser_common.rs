@@ -106,19 +106,19 @@ fn parse_insert_values() {
     let rows2 = vec![row.clone(), row];
 
     let sql = "INSERT customer VALUES (1, 2, 3)";
-    check_one(sql, "customer", &[], &rows1);
+    check_one(sql, "customer", &[], &rows1, false);
 
     let sql = "INSERT INTO customer VALUES (1, 2, 3)";
-    check_one(sql, "customer", &[], &rows1);
+    check_one(sql, "customer", &[], &rows1, false);
 
     let sql = "INSERT INTO customer VALUES (1, 2, 3), (1, 2, 3)";
-    check_one(sql, "customer", &[], &rows2);
+    check_one(sql, "customer", &[], &rows2, false);
 
     let sql = "INSERT INTO public.customer VALUES (1, 2, 3)";
-    check_one(sql, "public.customer", &[], &rows1);
+    check_one(sql, "public.customer", &[], &rows1, false);
 
     let sql = "INSERT INTO db.public.customer VALUES (1, 2, 3)";
-    check_one(sql, "db.public.customer", &[], &rows1);
+    check_one(sql, "db.public.customer", &[], &rows1, false);
 
     let sql = "INSERT INTO public.customer (id, name, active) VALUES (1, 2, 3)";
     check_one(
@@ -126,6 +126,16 @@ fn parse_insert_values() {
         "public.customer",
         &["id".to_string(), "name".to_string(), "active".to_string()],
         &rows1,
+        false,
+    );
+
+    let sql = r"INSERT INTO t (id, name, active) VALUE (1, 2, 3)";
+    check_one(
+        sql,
+        "t",
+        &["id".to_string(), "name".to_string(), "active".to_string()],
+        &rows1,
+        true,
     );
 
     fn check_one(
@@ -133,6 +143,7 @@ fn parse_insert_values() {
         expected_table_name: &str,
         expected_columns: &[String],
         expected_rows: &[Vec<Expr>],
+        expected_value_keyword: bool,
     ) {
         match verified_stmt(sql) {
             Statement::Insert(Insert {
@@ -147,8 +158,9 @@ fn parse_insert_values() {
                     assert_eq!(column, &Ident::new(expected_columns[index].clone()));
                 }
                 match *source.body {
-                    SetExpr::Values(Values { rows, .. }) => {
-                        assert_eq!(rows.as_slice(), expected_rows)
+                    SetExpr::Values(Values { rows, value_keyword, .. }) => {
+                        assert_eq!(rows.as_slice(), expected_rows);
+                        assert!(value_keyword == expected_value_keyword);
                     }
                     _ => unreachable!(),
                 }
@@ -9908,7 +9920,7 @@ fn parse_merge() {
                         action: MergeAction::Insert(MergeInsertExpr {
                             columns: vec![Ident::new("A"), Ident::new("B"), Ident::new("C")],
                             kind: MergeInsertKind::Values(Values {
-                                keyword: ValuesKeyword::Values,
+                                value_keyword: false,
                                 explicit_row: false,
                                 rows: vec![vec![
                                     Expr::CompoundIdentifier(vec![

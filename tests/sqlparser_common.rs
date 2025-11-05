@@ -158,7 +158,11 @@ fn parse_insert_values() {
                     assert_eq!(column, &Ident::new(expected_columns[index].clone()));
                 }
                 match *source.body {
-                    SetExpr::Values(Values { rows, value_keyword, .. }) => {
+                    SetExpr::Values(Values {
+                        rows,
+                        value_keyword,
+                        ..
+                    }) => {
                         assert_eq!(rows.as_slice(), expected_rows);
                         assert!(value_keyword == expected_value_keyword);
                     }

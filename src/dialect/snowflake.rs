@@ -27,8 +27,8 @@ use crate::ast::helpers::stmt_data_loading::{
     FileStagingCommand, StageLoadSelectItem, StageLoadSelectItemKind, StageParamsObject,
 };
 use crate::ast::{
-    AlterTable, AlterTableOperation, CatalogSyncNamespaceMode, ColumnOption, ColumnPolicy,
-    ColumnPolicyProperty, ContactEntry, CopyIntoSnowflakeKind, CreateTableLikeKind,
+    AlterTable, AlterTableOperation, AlterTableType, CatalogSyncNamespaceMode, ColumnOption,
+    ColumnPolicy, ColumnPolicyProperty, ContactEntry, CopyIntoSnowflakeKind, CreateTableLikeKind,
     DollarQuotedString, Ident, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
     IdentityPropertyKind, IdentityPropertyOrder, InitializeKind, ObjectName, ObjectNamePart,
     RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement,
@@ -644,8 +644,7 @@ fn parse_alter_dynamic_table(parser: &mut Parser) -> Result<Statement, ParserErr
         operations: vec![operation],
         location: None,
         on_cluster: None,
-        iceberg: false,
-        dynamic: true,
+        table_type: Some(AlterTableType::Dynamic),
         end_token: AttachedToken(end_token),
     }))
 }

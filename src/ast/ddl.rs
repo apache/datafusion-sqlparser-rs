@@ -3553,6 +3553,20 @@ impl Spanned for DropExtension {
     }
 }
 
+/// Table type for ALTER TABLE statements.
+/// Used to distinguish between regular tables, Iceberg tables, and Dynamic tables.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterTableType {
+    /// Iceberg table type
+    /// <https://docs.snowflake.com/en/sql-reference/sql/alter-iceberg-table>
+    Iceberg,
+    /// Dynamic table type
+    /// <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
+    Dynamic,
+}
+
 /// ALTER TABLE statement
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -3569,24 +3583,18 @@ pub struct AlterTable {
     /// For example: `ALTER TABLE table_name ON CLUSTER cluster_name ADD COLUMN c UInt32`
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/update)
     pub on_cluster: Option<Ident>,
-    /// Snowflake "ICEBERG" clause for Iceberg tables
-    /// <https://docs.snowflake.com/en/sql-reference/sql/alter-iceberg-table>
-    pub iceberg: bool,
-    /// Snowflake "DYNAMIC" clause for Dynamic tables
-    /// <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
-    pub dynamic: bool,
+    /// Table type: None for regular tables, Some(AlterTableType) for Iceberg or Dynamic tables
+    pub table_type: Option<AlterTableType>,
     /// Token that represents the end of the statement (semicolon or EOF)
     pub end_token: AttachedToken,
 }
 
 impl fmt::Display for AlterTable {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.iceberg {
-            write!(f, "ALTER ICEBERG TABLE ")?;
-        } else if self.dynamic {
-            write!(f, "ALTER DYNAMIC TABLE ")?;
-        } else {
-            write!(f, "ALTER TABLE ")?;
+        match &self.table_type {
+            Some(AlterTableType::Iceberg) => write!(f, "ALTER ICEBERG TABLE ")?,
+            Some(AlterTableType::Dynamic) => write!(f, "ALTER DYNAMIC TABLE ")?,
+            None => write!(f, "ALTER TABLE ")?,
         }
 
         if self.if_exists {

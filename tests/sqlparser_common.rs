@@ -17632,3 +17632,45 @@ fn parse_generic_unary_ops() {
         );
     }
 }
+
+#[test]
+fn parse_sql_with_offsets() {
+    let sql = "SELECT * FROM users";
+    let results = Parser::parse_sql_with_offsets(&GenericDialect {}, sql).unwrap();
+
+    assert_eq!(results.len(), 1);
+    let (stmt, offset) = &results[0];
+    assert!(matches!(stmt, Statement::Query(_)));
+    assert_eq!(&sql[offset.range()], "SELECT * FROM users");
+    assert_eq!(&sql[offset.start()..offset.end()], "SELECT * FROM users");
+
+    // Test with multiple statements
+    let sql = "SELECT * FROM foo; INSERT INTO bar VALUES (1);";
+    let results = Parser::parse_sql_with_offsets(&GenericDialect {}, sql).unwrap();
+
+    assert_eq!(results.len(), 2);
+
+    let (stmt1, offset1) = &results[0];
+    assert!(matches!(stmt1, Statement::Query(_)));
+    let original1 = &sql[offset1.range()];
+    assert_eq!(original1, "SELECT * FROM foo;");
+
+    let (stmt2, offset2) = &results[1];
+    assert!(matches!(stmt2, Statement::Insert(_)));
+    let original2 = &sql[offset2.range()];
+    assert_eq!(original2, "INSERT INTO bar VALUES (1);");
+
+    // Test with multiline SQL
+    let sql = "SELECT a,\n  b,\n  c\nFROM table1;\nINSERT INTO table2 VALUES (1);";
+    let results = Parser::parse_sql_with_offsets(&GenericDialect {}, sql).unwrap();
+
+    assert_eq!(results.len(), 2);
+    let (_, offset1) = &results[0];
+    let original1 = &sql[offset1.range()];
+    assert!(original1.contains("SELECT"));
+    assert!(original1.contains("FROM table1"));
+
+    let (_, offset2) = &results[1];
+    let original2 = &sql[offset2.range()];
+    assert_eq!(original2, "INSERT INTO table2 VALUES (1);");
+}

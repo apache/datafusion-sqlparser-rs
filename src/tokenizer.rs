@@ -29,10 +29,9 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use core::iter::Peekable;
-use core::num::NonZeroU8;
 use core::str::Chars;
 use core::{cmp, fmt};
+use core::{iter::Peekable, num::NonZeroU8, ops::Range};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -648,6 +647,48 @@ impl Span {
         iter.into_iter()
             .reduce(|acc, item| acc.union(&item))
             .unwrap_or(Span::empty())
+    }
+}
+
+/// Represents byte offsets into the original source string
+///
+/// Unlike [`Span`] which tracks line and column numbers, `SourceOffset` tracks
+/// byte positions which can be used to directly slice the original source string.
+///
+/// # Examples
+/// ```
+/// # use sqlparser::tokenizer::SourceOffset;
+/// let sql = "SELECT * FROM users; INSERT INTO foo VALUES (1);";
+/// let offset = SourceOffset::new(0, 20);
+/// assert_eq!(&sql[offset.start()..offset.end()], "SELECT * FROM users;");
+/// ```
+#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy, Ord, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SourceOffset {
+    start: usize,
+    end: usize,
+}
+
+impl SourceOffset {
+    /// Create a new `SourceOffset` from start and end byte offsets
+    pub fn new(start: usize, end: usize) -> Self {
+        Self { start, end }
+    }
+
+    /// Returns the starting byte offset
+    pub fn start(&self) -> usize {
+        self.start
+    }
+
+    /// Returns the ending byte offset
+    pub fn end(&self) -> usize {
+        self.end
+    }
+
+    /// Returns a range representing the byte offsets
+    pub fn range(&self) -> Range<usize> {
+        self.start..self.end
     }
 }
 

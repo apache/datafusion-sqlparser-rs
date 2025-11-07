@@ -344,6 +344,44 @@ pub struct Parser<'a> {
     recursion_counter: RecursionCounter,
 }
 
+/// Helper function to convert a Location (line, column) to a byte offset in the source string.
+///
+/// Line and column numbers are 1-indexed as per the Location type.
+fn span_to_byte_offset(sql: &str, location: Location) -> usize {
+    if location.line == 0 || location.column == 0 {
+        // Empty location
+        return 0;
+    }
+
+    let mut byte_offset = 0;
+    let mut current_line = 1u64;
+
+    for ch in sql.chars() {
+        if current_line == location.line {
+            // We're on the target line, now count columns
+            let mut current_col = 1u64;
+            let remaining = &sql[byte_offset..];
+            for ch in remaining.chars() {
+                if current_col >= location.column {
+                    return byte_offset;
+                }
+                if ch == '\n' {
+                    // Don't go past the end of the line
+                    return byte_offset;
+                }
+                byte_offset += ch.len_utf8();
+                current_col += 1;
+            }
+            return byte_offset;
+        }
+        if ch == '\n' {
+            current_line += 1;
+        }
+        byte_offset += ch.len_utf8();
+    }
+    byte_offset
+}
+
 impl<'a> Parser<'a> {
     /// Create a parser for a [`Dialect`]
     ///
@@ -510,6 +548,101 @@ impl<'a> Parser<'a> {
         Ok(stmts)
     }
 
+    /// Parse multiple statements and return them with their byte offsets in the original source.
+    ///
+    /// Similar to [`Self::parse_statements`], but also returns [`crate::tokenizer::SourceOffset`]
+    /// for each statement indicating its position in the original SQL string.
+    pub fn parse_statements_with_offsets(
+        &mut self,
+        sql: &str,
+    ) -> Result<Vec<(Statement, crate::tokenizer::SourceOffset)>, ParserError> {
+        let mut stmts = Vec::new();
+        let mut expecting_statement_delimiter = false;
+        loop {
+            // ignore empty statements (between successive statement delimiters)
+            while self.consume_token(&Token::SemiColon) {
+                expecting_statement_delimiter = false;
+            }
+
+            if !self.options.require_semicolon_stmt_delimiter {
+                expecting_statement_delimiter = false;
+            }
+
+            match self.peek_token().token {
+                Token::EOF => break,
+
+                // end of statement
+                Token::Word(word) => {
+                    if expecting_statement_delimiter && word.keyword == Keyword::END {
+                        break;
+                    }
+                }
+                _ => {}
+            }
+
+            if expecting_statement_delimiter {
+                return self.expected("end of statement", self.peek_token());
+            }
+
+            // Find the first non-whitespace token to get the actual start position
+            let mut start_index = self.index;
+            while start_index < self.tokens.len() {
+                if matches!(self.tokens[start_index].token, Token::Whitespace(_)) {
+                    start_index += 1;
+                } else {
+                    break;
+                }
+            }
+
+            let statement = self.parse_statement()?;
+
+            // Find the last non-whitespace token that was consumed
+            // We need to look backwards from the current position to skip any whitespace
+            let mut end_index = self.index.saturating_sub(1);
+            while end_index > start_index {
+                if matches!(
+                    self.tokens.get(end_index).map(|t| &t.token),
+                    Some(Token::Whitespace(_))
+                ) {
+                    end_index = end_index.saturating_sub(1);
+                } else {
+                    break;
+                }
+            }
+
+            // Check if the next non-whitespace token is a semicolon and include it in the range
+            let mut check_index = self.index;
+            while check_index < self.tokens.len() {
+                match &self.tokens[check_index].token {
+                    Token::Whitespace(_) => check_index += 1,
+                    Token::SemiColon => {
+                        end_index = check_index;
+                        break;
+                    }
+                    _ => break,
+                }
+            }
+
+            // Calculate byte offsets from the token spans
+            let start_offset = if start_index < self.tokens.len() {
+                span_to_byte_offset(sql, self.tokens[start_index].span.start)
+            } else {
+                sql.len()
+            };
+
+            let end_offset = if end_index < self.tokens.len() {
+                span_to_byte_offset(sql, self.tokens[end_index].span.end)
+            } else {
+                sql.len()
+            };
+
+            let source_offset = crate::tokenizer::SourceOffset::new(start_offset, end_offset);
+            stmts.push((statement, source_offset));
+            expecting_statement_delimiter = true;
+        }
+        Ok(stmts)
+    }
+
     /// Convenience method to parse a string with one or more SQL
     /// statements into produce an Abstract Syntax Tree (AST).
     ///
@@ -527,6 +660,37 @@ impl<'a> Parser<'a> {
     /// ```
     pub fn parse_sql(dialect: &dyn Dialect, sql: &str) -> Result<Vec<Statement>, ParserError> {
         Parser::new(dialect).try_with_sql(sql)?.parse_statements()
+    }
+
+    /// Convenience method to parse a string with one or more SQL statements and return
+    /// both the Abstract Syntax Tree (AST) and byte offsets into the original source string.
+    ///
+    /// This is useful when you need to preserve the original source text for each statement,
+    /// for example to maintain case-sensitive identifiers or type names that get normalized
+    /// in the AST.
+    ///
+    /// # Example
+    /// ```
+    /// # use sqlparser::{parser::Parser, dialect::GenericDialect};
+    /// # fn main() -> Result<(), sqlparser::parser::ParserError> {
+    /// let dialect = GenericDialect{};
+    /// let sql = "SELECT * FROM foo; INSERT INTO bar VALUES (1);";
+    /// let results = Parser::parse_sql_with_offsets(&dialect, sql)?;
+    ///
+    /// assert_eq!(results.len(), 2);
+    /// let (stmt, offset) = &results[0];
+    /// let original_text = &sql[offset.start()..offset.end()];
+    /// assert_eq!(original_text, "SELECT * FROM foo;");
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn parse_sql_with_offsets(
+        dialect: &dyn Dialect,
+        sql: &str,
+    ) -> Result<Vec<(Statement, crate::tokenizer::SourceOffset)>, ParserError> {
+        Parser::new(dialect)
+            .try_with_sql(sql)?
+            .parse_statements_with_offsets(sql)
     }
 
     /// Parse a single top-level statement (such as SELECT, INSERT, CREATE, etc.),

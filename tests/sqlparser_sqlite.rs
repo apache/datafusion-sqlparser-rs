@@ -22,6 +22,7 @@
 #[macro_use]
 mod test_utils;
 
+use sqlparser::ast::helpers::attached_token::AttachedToken;
 use sqlparser::keywords::Keyword;
 use test_utils::*;
 
@@ -30,7 +31,7 @@ use sqlparser::ast::Value::Placeholder;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, SQLiteDialect};
 use sqlparser::parser::{ParserError, ParserOptions};
-use sqlparser::tokenizer::Token;
+use sqlparser::tokenizer::{Span, Token, TokenWithSpan};
 
 #[test]
 fn pragma_no_value() {
@@ -494,7 +495,11 @@ fn parse_update_tuple_row_values() {
             },
             from: None,
             returning: None,
-            limit: None
+            limit: None,
+            update_token: AttachedToken(TokenWithSpan {
+                token: Token::make_keyword("UPDATE"),
+                span: Span::new((1, 1).into(), (1, 7).into())
+            })
         })
     );
 }

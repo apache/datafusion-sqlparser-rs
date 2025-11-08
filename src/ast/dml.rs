@@ -27,9 +27,10 @@ use sqlparser_derive::{Visit, VisitMut};
 use crate::display_utils::{indented_list, Indent, SpaceOrNewline};
 
 use super::{
-    display_comma_separated, query::InputFormatClause, Assignment, Expr, FromTable, Ident,
-    InsertAliases, MysqlInsertPriority, ObjectName, OnInsert, OrderByExpr, Query, SelectItem,
-    Setting, SqliteOnConflict, TableObject, TableWithJoins, UpdateTableFromKind,
+    display_comma_separated, helpers::attached_token::AttachedToken, query::InputFormatClause,
+    Assignment, Expr, FromTable, Ident, InsertAliases, MysqlInsertPriority, ObjectName, OnInsert,
+    OrderByExpr, Query, SelectItem, Setting, SqliteOnConflict, TableObject, TableWithJoins,
+    UpdateTableFromKind,
 };
 
 /// INSERT statement.
@@ -246,6 +247,8 @@ impl Display for Delete {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Update {
+    /// Token for the `UPDATE` keyword
+    pub update_token: AttachedToken,
     /// TABLE
     pub table: TableWithJoins,
     /// Column assignments

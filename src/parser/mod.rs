@@ -590,7 +590,7 @@ impl<'a> Parser<'a> {
                 Keyword::INSERT => self.parse_insert(),
                 Keyword::REPLACE => self.parse_replace(),
                 Keyword::UNCACHE => self.parse_uncache_table(),
-                Keyword::UPDATE => self.parse_update(),
+                Keyword::UPDATE => self.parse_update(next_token),
                 Keyword::ALTER => self.parse_alter(),
                 Keyword::CALL => self.parse_call(),
                 Keyword::COPY => self.parse_copy(),
@@ -12014,7 +12014,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::UPDATE) {
             Ok(Query {
                 with,
-                body: self.parse_update_setexpr_boxed()?,
+                body: self.parse_update_setexpr_boxed(self.get_current_token().clone())?,
                 order_by: None,
                 limit_clause: None,
                 fetch: None,
@@ -15754,11 +15754,14 @@ impl<'a> Parser<'a> {
     /// Parse an UPDATE statement, returning a `Box`ed SetExpr
     ///
     /// This is used to reduce the size of the stack frames in debug builds
-    fn parse_update_setexpr_boxed(&mut self) -> Result<Box<SetExpr>, ParserError> {
-        Ok(Box::new(SetExpr::Update(self.parse_update()?)))
+    fn parse_update_setexpr_boxed(
+        &mut self,
+        update_token: TokenWithSpan,
+    ) -> Result<Box<SetExpr>, ParserError> {
+        Ok(Box::new(SetExpr::Update(self.parse_update(update_token)?)))
     }
 
-    pub fn parse_update(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_update(&mut self, update_token: TokenWithSpan) -> Result<Statement, ParserError> {
         let or = self.parse_conflict_clause();
         let table = self.parse_table_and_joins()?;
         let from_before_set = if self.parse_keyword(Keyword::FROM) {
@@ -15793,6 +15796,7 @@ impl<'a> Parser<'a> {
             None
         };
         Ok(Update {
+            update_token: update_token.into(),
             table,
             assignments,
             from,

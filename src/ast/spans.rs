@@ -869,6 +869,7 @@ impl Spanned for Delete {
 impl Spanned for Update {
     fn span(&self) -> Span {
         let Update {
+            update_token,
             table,
             assignments,
             from,
@@ -880,6 +881,7 @@ impl Spanned for Update {
 
         union_spans(
             core::iter::once(table.span())
+                .chain(core::iter::once(update_token.0.span))
                 .chain(assignments.iter().map(|i| i.span()))
                 .chain(from.iter().map(|i| i.span()))
                 .chain(selection.iter().map(|i| i.span()))
@@ -2539,5 +2541,23 @@ ALTER TABLE users
 
         assert_eq!(stmt_span.start, (2, 13).into());
         assert_eq!(stmt_span.end, (4, 11).into());
+    }
+
+    #[test]
+    fn test_update_statement_span() {
+        let sql = r#"-- foo
+      UPDATE foo
+   /* bar */
+   SET bar = 3
+ WHERE quux > 42 ;
+"#;
+
+        let r = Parser::parse_sql(&crate::dialect::GenericDialect, sql).unwrap();
+        assert_eq!(1, r.len());
+
+        let stmt_span = r[0].span();
+
+        assert_eq!(stmt_span.start, (2, 7).into());
+        assert_eq!(stmt_span.end, (5, 17).into());
     }
 }

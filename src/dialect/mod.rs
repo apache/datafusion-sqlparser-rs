@@ -18,6 +18,7 @@
 mod ansi;
 mod bigquery;
 mod clickhouse;
+mod cypher;
 mod databricks;
 mod duckdb;
 mod generic;
@@ -39,6 +40,7 @@ use log::debug;
 pub use self::ansi::AnsiDialect;
 pub use self::bigquery::BigQueryDialect;
 pub use self::clickhouse::ClickHouseDialect;
+pub use self::cypher::CypherDialect;
 pub use self::databricks::DatabricksDialect;
 pub use self::duckdb::DuckDbDialect;
 pub use self::generic::GenericDialect;
@@ -383,6 +385,11 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports numbers containing underscores, e.g. `10_000_000`
     fn supports_numeric_literal_underscores(&self) -> bool {
         false
+    }
+
+    /// Returns true if this dialect supports Cypher-style range notation (e.g., *1..6)
+    fn supports_range_notation(&self) -> bool {
+        false // default implementation returns false
     }
 
     /// Returns true if the dialects supports specifying null treatment

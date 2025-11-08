@@ -48,4 +48,12 @@ impl Dialect for CypherDialect {
     // fn supports_nested_table_aliases(&self) -> bool {
     //     false
     // }
+
+    fn supports_numeric_prefix(&self) -> bool {
+        true
+    }
+
+    fn supports_range_notation(&self) -> bool {
+        true
+    }
 }

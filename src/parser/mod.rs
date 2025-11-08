@@ -783,7 +783,7 @@ impl<'a> Parser<'a> {
                 if w.keyword == Keyword::AS {
                     self.next_token(); // consume AS
                     Some(self.parse_identifier()?)
-                } else if w.keyword == Keyword::IDENTIFIER || w.keyword == Keyword::UNRESERVED {
+                } else if w.keyword == Keyword::NoKeyword {
                     Some(self.parse_identifier()?)
                 } else {
                     None
@@ -798,47 +798,37 @@ impl<'a> Parser<'a> {
             }
 
             let length = if self.consume_token(&Token::Mul){
-                let min = if let Token::Number(n, false) = &self.peek_token().token {
+                let min = if let Token::Number(n, false) = self.next_token().token {
                     let min_value = n.parse::<u64>().map_err(|_| {
                         ParserError::ParserError(format!(
                             "Invalid number for relationship length: {}",
                             n
                         ))
                     })?;
-                    self.next_token(); // consume number
                     Some(min_value)
                 } else {
                     None
                 };
-                
-                let max = if let Token::DoubleDot = &self.peek_token().token {
-                    self.next_token(); // consume ..
-                    if let Token::Number(n, false) = &self.peek_token().token {
+
+                let max = if let Token::Number(n, false) = self.next_token().token {
                         let max_value = n.parse::<u64>().map_err(|_| {
                             ParserError::ParserError(format!(
                                 "Invalid number for relationship length: {}",
                                 n
                             ))
                         })?;
-                        self.next_token(); // consume number
                         Some(max_value)
                     } else {
                         None
-                    }
-                } else {
-                    None
-                };
+                    };
 
                 Some(RelationshipRange { min, max })
             } else {
                 None
             };
 
-            let _properties = if self.consume_token(&Token::LBrace) {
-                // For simplicity, we skip actual property map parsing in this example.
-                // In a complete implementation, you would parse key-value pairs here.
-                self.expect_token(&Token::RBrace)?;
-                Some(()) // Placeholder for properties
+            let properties = if self.peek_token().token == Token::LBrace {
+                Some(self.parse_properties()?)
             } else {
                 None
             };
@@ -848,7 +838,7 @@ impl<'a> Parser<'a> {
             Ok(RelationshipDetail {
                 variable,
                 types,
-                properties: None,
+                properties,
                 length,
             })
         } else {
@@ -864,40 +854,64 @@ impl<'a> Parser<'a> {
     pub fn parse_node_pattern(&mut self) -> Result<NodePattern, ParserError> {
         self.expect_token(&Token::LParen)?;
 
-        let variable = if let Token::Word(w) = &self.peek_token().token {
-            if w.keyword == Keyword::AS {
-                self.next_token(); // consume AS
-                Some(self.parse_identifier()?)
-            } else if w.keyword == Keyword::IDENTIFIER || w.keyword == Keyword::UNRESERVED {
-                Some(self.parse_identifier()?)
+            let variable = if let Token::Word(w) = &self.peek_token().token {
+                if w.keyword == Keyword::AS {
+                    self.next_token(); // consume AS
+                    Some(self.parse_identifier()?)
+                } else if w.keyword == Keyword::NoKeyword
+                {
+                    Some(self.parse_identifier()?)
+                } else {
+                    None
+                }
             } else {
                 None
-            }
-        } else {
-            None
-        };
+            };
 
         let mut labels = Vec::new();
         while self.consume_token(&Token::Colon) {
             labels.push(self.parse_identifier()?);
         }
 
-        let _properties = if self.consume_token(&Token::LBrace) {
-            // For simplicity, we skip actual property map parsing in this example.
-            // In a complete implementation, you would parse key-value pairs here.
-            self.expect_token(&Token::RBrace)?;
-            Some(()) // Placeholder for properties
+        let properties = if self.peek_token().token == Token::LBrace {
+            Some(self.parse_properties()?)
         } else {
             None
         };
 
-        self.expect_token(&Token::RParen)?;
-
         Ok(NodePattern {
             variable,
             labels,
-            properties: None, // TODO: handle properties properly
+            properties,
         })
+    }
+
+    pub fn parse_properties(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LBrace)?;
+        let mut entries = Vec::new();
+        loop {
+            if let Token::RBrace = &self.peek_token().token {
+                break;
+            }
+
+            let key = self.parse_identifier()?;
+            self.expect_token(&Token::Colon)?;
+            let value = self.parse_expr()?;
+
+            entries.push(
+                MapEntry { 
+                    key: Box::new(Expr::Identifier(key)), 
+                    value: Box::new(value) 
+                });
+
+            if !self.consume_token(&Token::Comma) {
+                break;
+            }
+        }
+
+        self.expect_token(&Token::RBrace)?;
+
+        Ok(Expr::Map(Map { entries }))
     }
 
     /// Parse a `CASE` statement.

@@ -38,6 +38,8 @@ use super::{
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Insert {
+    /// Token for the `INSERT` keyword (or its substitutes)
+    pub insert_token: AttachedToken,
     /// Only for Sqlite
     pub or: Option<SqliteOnConflict>,
     /// Only for mysql

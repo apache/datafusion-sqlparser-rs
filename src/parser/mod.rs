@@ -587,8 +587,8 @@ impl<'a> Parser<'a> {
                 Keyword::DECLARE => self.parse_declare(),
                 Keyword::FETCH => self.parse_fetch_statement(),
                 Keyword::DELETE => self.parse_delete(next_token),
-                Keyword::INSERT => self.parse_insert(),
-                Keyword::REPLACE => self.parse_replace(),
+                Keyword::INSERT => self.parse_insert(next_token),
+                Keyword::REPLACE => self.parse_replace(next_token),
                 Keyword::UNCACHE => self.parse_uncache_table(),
                 Keyword::UPDATE => self.parse_update(next_token),
                 Keyword::ALTER => self.parse_alter(),
@@ -12001,7 +12001,7 @@ impl<'a> Parser<'a> {
         if self.parse_keyword(Keyword::INSERT) {
             Ok(Query {
                 with,
-                body: self.parse_insert_setexpr_boxed()?,
+                body: self.parse_insert_setexpr_boxed(self.get_current_token().clone())?,
                 order_by: None,
                 limit_clause: None,
                 fetch: None,
@@ -15471,7 +15471,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse an REPLACE statement
-    pub fn parse_replace(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_replace(&mut self, replace_token: TokenWithSpan) -> Result<Statement, ParserError> {
         if !dialect_of!(self is MySqlDialect | GenericDialect) {
             return parser_err!(
                 "Unsupported statement REPLACE",
@@ -15479,7 +15479,7 @@ impl<'a> Parser<'a> {
             );
         }
 
-        let mut insert = self.parse_insert()?;
+        let mut insert = self.parse_insert(replace_token)?;
         if let Statement::Insert(Insert { replace_into, .. }) = &mut insert {
             *replace_into = true;
         }
@@ -15490,12 +15490,12 @@ impl<'a> Parser<'a> {
     /// Parse an INSERT statement, returning a `Box`ed SetExpr
     ///
     /// This is used to reduce the size of the stack frames in debug builds
-    fn parse_insert_setexpr_boxed(&mut self) -> Result<Box<SetExpr>, ParserError> {
-        Ok(Box::new(SetExpr::Insert(self.parse_insert()?)))
+    fn parse_insert_setexpr_boxed(&mut self, insert_token: TokenWithSpan) -> Result<Box<SetExpr>, ParserError> {
+        Ok(Box::new(SetExpr::Insert(self.parse_insert(insert_token)?)))
     }
 
     /// Parse an INSERT statement
-    pub fn parse_insert(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_insert(&mut self, insert_token: TokenWithSpan) -> Result<Statement, ParserError> {
         let or = self.parse_conflict_clause();
         let priority = if !dialect_of!(self is MySqlDialect | GenericDialect) {
             None
@@ -15664,6 +15664,7 @@ impl<'a> Parser<'a> {
             };
 
             Ok(Statement::Insert(Insert {
+                insert_token: insert_token.into(),
                 or,
                 table: table_object,
                 table_alias,

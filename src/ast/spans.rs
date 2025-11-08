@@ -1221,6 +1221,7 @@ impl Spanned for AlterIndexOperation {
 impl Spanned for Insert {
     fn span(&self) -> Span {
         let Insert {
+            insert_token,
             or: _,     // enum, sqlite specific
             ignore: _, // bool
             into: _,   // bool
@@ -1244,6 +1245,7 @@ impl Spanned for Insert {
 
         union_spans(
             core::iter::once(table.span())
+                .chain(core::iter::once(insert_token.0.span))
                 .chain(table_alias.as_ref().map(|i| i.span))
                 .chain(columns.iter().map(|i| i.span))
                 .chain(source.as_ref().map(|q| q.span()))

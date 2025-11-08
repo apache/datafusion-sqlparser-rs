@@ -4476,6 +4476,46 @@ fn parse_create_function_detailed() {
     pg_and_generic().verified_stmt(r#"CREATE OR REPLACE FUNCTION no_arg() RETURNS VOID LANGUAGE plpgsql AS $$ BEGIN DELETE FROM my_table; END; $$"#);
     pg_and_generic().verified_stmt(r#"CREATE OR REPLACE FUNCTION return_table(i INTEGER) RETURNS TABLE(id UUID, is_active BOOLEAN) LANGUAGE plpgsql AS $$ BEGIN RETURN QUERY SELECT NULL::UUID, NULL::BOOLEAN; END; $$"#);
 }
+
+#[test]
+fn parse_create_function_unnamed_default_syntax() {
+    let sql =
+        "CREATE FUNCTION add(INTEGER, INTEGER DEFAULT 1) RETURNS INTEGER AS 'select $1 + $2;'";
+    let canonical =
+        "CREATE FUNCTION add(INTEGER, INTEGER = 1) RETURNS INTEGER AS 'select $1 + $2;'";
+    assert_eq!(
+        pg_and_generic().one_statement_parses_to(sql, canonical),
+        Statement::CreateFunction(CreateFunction {
+            or_alter: false,
+            or_replace: false,
+            temporary: false,
+            name: ObjectName::from(vec![Ident::new("add")]),
+            args: Some(vec![
+                OperateFunctionArg::unnamed(DataType::Integer(None)),
+                OperateFunctionArg {
+                    mode: None,
+                    name: None,
+                    data_type: DataType::Integer(None),
+                    default_expr: Some(Expr::Value(number("1").with_empty_span())),
+                },
+            ]),
+            return_type: Some(DataType::Integer(None)),
+            language: None,
+            behavior: None,
+            called_on_null: None,
+            parallel: None,
+            function_body: Some(CreateFunctionBody::AsBeforeOptions(Expr::Value(
+                (Value::SingleQuotedString("select $1 + $2;".into())).with_empty_span()
+            ))),
+            if_not_exists: false,
+            using: None,
+            determinism_specifier: None,
+            options: None,
+            remote_connection: None,
+        })
+    );
+}
+
 #[test]
 fn parse_incorrect_create_function_parallel() {
     let sql = "CREATE FUNCTION add(INTEGER, INTEGER) RETURNS INTEGER LANGUAGE SQL PARALLEL BLAH AS 'select $1 + $2;'";

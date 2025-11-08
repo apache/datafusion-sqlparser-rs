@@ -586,7 +586,7 @@ impl<'a> Parser<'a> {
                 Keyword::DISCARD => self.parse_discard(),
                 Keyword::DECLARE => self.parse_declare(),
                 Keyword::FETCH => self.parse_fetch_statement(),
-                Keyword::DELETE => self.parse_delete(),
+                Keyword::DELETE => self.parse_delete(next_token),
                 Keyword::INSERT => self.parse_insert(),
                 Keyword::REPLACE => self.parse_replace(),
                 Keyword::UNCACHE => self.parse_uncache_table(),
@@ -11817,8 +11817,8 @@ impl<'a> Parser<'a> {
     /// Parse a DELETE statement, returning a `Box`ed SetExpr
     ///
     /// This is used to reduce the size of the stack frames in debug builds
-    fn parse_delete_setexpr_boxed(&mut self) -> Result<Box<SetExpr>, ParserError> {
-        Ok(Box::new(SetExpr::Delete(self.parse_delete()?)))
+    fn parse_delete_setexpr_boxed(&mut self, delete_token: TokenWithSpan) -> Result<Box<SetExpr>, ParserError> {
+        Ok(Box::new(SetExpr::Delete(self.parse_delete(delete_token)?)))
     }
 
     /// Parse a MERGE statement, returning a `Box`ed SetExpr
@@ -11828,7 +11828,7 @@ impl<'a> Parser<'a> {
         Ok(Box::new(SetExpr::Merge(self.parse_merge()?)))
     }
 
-    pub fn parse_delete(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_delete(&mut self, delete_token: TokenWithSpan) -> Result<Statement, ParserError> {
         let (tables, with_from_keyword) = if !self.parse_keyword(Keyword::FROM) {
             // `FROM` keyword is optional in BigQuery SQL.
             // https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#delete_statement
@@ -11871,6 +11871,7 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Statement::Delete(Delete {
+            delete_token: delete_token.into(),
             tables,
             from: if with_from_keyword {
                 FromTable::WithFromKeyword(from)
@@ -12028,7 +12029,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::DELETE) {
             Ok(Query {
                 with,
-                body: self.parse_delete_setexpr_boxed()?,
+                body: self.parse_delete_setexpr_boxed(self.get_current_token().clone())?,
                 limit_clause: None,
                 order_by: None,
                 fetch: None,

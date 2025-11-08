@@ -839,6 +839,7 @@ impl Spanned for CopySource {
 impl Spanned for Delete {
     fn span(&self) -> Span {
         let Delete {
+            delete_token,
             tables,
             from,
             using,
@@ -849,6 +850,7 @@ impl Spanned for Delete {
         } = self;
 
         union_spans(
+            core::iter::once(delete_token.0.span).chain(
             tables
                 .iter()
                 .map(|i| i.span())
@@ -862,7 +864,7 @@ impl Spanned for Delete {
                 .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
                 .chain(order_by.iter().map(|i| i.span()))
                 .chain(limit.iter().map(|i| i.span())),
-        )
+            ))
     }
 }
 

@@ -180,6 +180,8 @@ impl Display for Insert {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Delete {
+    /// Token for the `DELETE` keyword
+    pub delete_token: AttachedToken,
     /// Multi tables delete are supported in mysql
     pub tables: Vec<ObjectName>,
     /// FROM

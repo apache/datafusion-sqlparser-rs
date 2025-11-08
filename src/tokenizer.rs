@@ -108,6 +108,8 @@ pub enum Token {
     Comma,
     /// Whitespace (space, tab, etc)
     Whitespace(Whitespace),
+    //Cypher range '..'
+    DoubleDot,
     /// Double equals sign `==`
     DoubleEq,
     /// Equality operator `=`
@@ -305,6 +307,7 @@ impl fmt::Display for Token {
             Token::TripleDoubleQuotedRawStringLiteral(ref s) => write!(f, "R\"\"\"{s}\"\"\""),
             Token::Comma => f.write_str(","),
             Token::Whitespace(ws) => write!(f, "{ws}"),
+            Token::DoubleDot => f.write_str(".."),
             Token::DoubleEq => f.write_str("=="),
             Token::Spaceship => f.write_str("<=>"),
             Token::Eq => f.write_str("="),

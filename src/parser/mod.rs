@@ -665,6 +665,240 @@ impl<'a> Parser<'a> {
             _ => self.expected("an SQL statement", next_token),
         }
     }
+    
+    // pub fn parse_cypher_query(&mut self) -> Result<SingleQuery, ParserError> {
+    //     let reading_clause = self.parse_match_clause()?;
+
+    //     // For simplicity, we treat all Cypher queries as SinglePartQuery in this example.
+    //     Ok(SingleQuery::Single(SinglePartQuery { reading_clause }))
+    // }
+
+    // pub fn parse_match_clause(&mut self) -> Result<ReadingClause, ParserError> {
+    //     self.expect_keyword_is(Keyword::MATCH)?;
+
+    //     let pattern = self.parse_pattern()?;
+
+    //     Ok(ReadingClause::Match(MatchClause { pattern }))
+    // }
+
+    // pub fn parse_pattern(&mut self) -> Result<Pattern, ParserError> {
+    //     let mut pattern_elements = Vec::new();
+
+    //     loop {
+    //         let pattern_element = self.parse_pattern_parts()?;
+    //         pattern_elements.push(pattern_element);
+
+    //         if !self.consume_token(&Token::Comma) {
+    //             break;
+    //         }
+    //     }
+
+    //     Ok(Pattern { pattern_elements })        
+    // }
+
+    // pub fn parse_pattern_parts(&mut self) -> Result<PatternParts, ParserError> {
+    //     // Check if this is a nested pattern starting with a parenthesis
+    //     if self.consume_token(&Token::LParen) {
+    //         // Parse the nested pattern element
+    //         let pattern_element = self.parse_pattern_element()?;
+    //         self.expect_token(&Token::RParen)?;
+            
+    //         Ok(PatternParts::Nested(Box::new(pattern_element)))
+    //     } else {
+    //         // Parse as a simple pattern part
+    //         let variable = if self.peek_token().is_word() {
+    //             Some(self.parse_identifier()?)
+    //         } else {
+    //             None
+    //         };
+            
+    //         // Parse the anonymous pattern part
+    //         let anon_pattern_part = self.parse_pattern_element()?;
+            
+    //         Ok(PatternParts::Simple(SimplePatternPart {
+    //             variable,
+    //             anon_pattern_part,
+    //         }))
+    //     }
+    // }
+
+    // pub fn parse_pattern_element(&mut self) -> Result<PatternElement, ParserError> {
+
+    //     if self.consume_token(&Token::LParen) {
+    //         let nested_element = self.parse_pattern_element()?;
+    //         self.expect_token(&Token::RParen)?;
+    //         return Ok(PatternElement::Nested(Box::new(nested_element)));
+    //     } else {
+    //         let node = self.parse_node_pattern()?;
+    //         let chain = self.parse_pattern_chain()?;
+    //         return Ok(PatternElement::Simple(SimplePatternElement {
+    //             node,
+    //             chain,
+    //         }));
+    //     }
+    // }
+
+    // pub fn parse_pattern_chain(&mut self) -> Result<Vec<PatternChainElement>, ParserError> {
+    //     let mut chain_elements = Vec::new();
+
+    //     while let Some(rel_element) = self.parse_relationship_pattern()? {
+    //         chain_elements.push(rel_element);
+
+    //         let node = self.parse_node_pattern()?;
+    //         chain_elements.push(PatternChainElement::Node(node));
+    //     }
+
+    //     Ok(chain_elements)
+    // }
+
+    // pub fun parse_relationship_pattern(&mut self) -> Result<Option<PatternChainElement>, ParserError> {
+    //     let l_direction = if self.consume_token(&Token::ArrowRight) {
+    //             RelationshipDirection::Right
+    //         } else if self.consume_token(&Token::ArrowLeft) {
+    //             RelationshipDirection::Left
+    //         } else {
+    //             RelationshipDirection::Undirected
+    //         };
+
+    //     let details = self.parse_relationship_details()?;
+
+    //     let r_direction = if self.consume_token(&Token::ArrowRight) {
+    //             RelationshipDirection::Right
+    //         } else if self.consume_token(&Token::ArrowLeft) {
+    //             RelationshipDirection::Left
+    //         } else {
+    //             RelationshipDirection::Undirected
+    //         };
+
+    //     Ok(Some(PatternChainElement::Relationship(RelationshipPattern {
+    //         l_direction,
+    //         details,
+    //         r_direction,
+    //     })))
+    // }
+
+    pub fn parse_relationship_details(&mut self) -> Result<RelationshipDetail, ParserError> {
+        if self.consume_token(&Token::LBracket) {
+            let variable = if let Token::Word(w) = &self.peek_token().token {
+                if w.keyword == Keyword::AS {
+                    self.next_token(); // consume AS
+                    Some(self.parse_identifier()?)
+                } else if w.keyword == Keyword::IDENTIFIER || w.keyword == Keyword::UNRESERVED {
+                    Some(self.parse_identifier()?)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            let mut types = Vec::new();
+            while self.consume_token(&Token::Colon) {
+                types.push(self.parse_identifier()?);
+            }
+
+            let length = if self.consume_token(&Token::Mul){
+                let min = if let Token::Number(n, false) = &self.peek_token().token {
+                    let min_value = n.parse::<u64>().map_err(|_| {
+                        ParserError::ParserError(format!(
+                            "Invalid number for relationship length: {}",
+                            n
+                        ))
+                    })?;
+                    self.next_token(); // consume number
+                    Some(min_value)
+                } else {
+                    None
+                };
+                
+                let max = if let Token::DoubleDot = &self.peek_token().token {
+                    self.next_token(); // consume ..
+                    if let Token::Number(n, false) = &self.peek_token().token {
+                        let max_value = n.parse::<u64>().map_err(|_| {
+                            ParserError::ParserError(format!(
+                                "Invalid number for relationship length: {}",
+                                n
+                            ))
+                        })?;
+                        self.next_token(); // consume number
+                        Some(max_value)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                Some(RelationshipRange { min, max })
+            } else {
+                None
+            };
+
+            let _properties = if self.consume_token(&Token::LBrace) {
+                // For simplicity, we skip actual property map parsing in this example.
+                // In a complete implementation, you would parse key-value pairs here.
+                self.expect_token(&Token::RBrace)?;
+                Some(()) // Placeholder for properties
+            } else {
+                None
+            };
+
+            self.expect_token(&Token::RBracket)?;
+
+            Ok(RelationshipDetail {
+                variable,
+                types,
+                properties: None,
+                length,
+            })
+        } else {
+            Ok(RelationshipDetail {
+                variable: None,
+                types: vec![],
+                properties: None,
+                length: None,
+            })
+        }
+    }
+
+    pub fn parse_node_pattern(&mut self) -> Result<NodePattern, ParserError> {
+        self.expect_token(&Token::LParen)?;
+
+        let variable = if let Token::Word(w) = &self.peek_token().token {
+            if w.keyword == Keyword::AS {
+                self.next_token(); // consume AS
+                Some(self.parse_identifier()?)
+            } else if w.keyword == Keyword::IDENTIFIER || w.keyword == Keyword::UNRESERVED {
+                Some(self.parse_identifier()?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let mut labels = Vec::new();
+        while self.consume_token(&Token::Colon) {
+            labels.push(self.parse_identifier()?);
+        }
+
+        let _properties = if self.consume_token(&Token::LBrace) {
+            // For simplicity, we skip actual property map parsing in this example.
+            // In a complete implementation, you would parse key-value pairs here.
+            self.expect_token(&Token::RBrace)?;
+            Some(()) // Placeholder for properties
+        } else {
+            None
+        };
+
+        self.expect_token(&Token::RParen)?;
+
+        Ok(NodePattern {
+            variable,
+            labels,
+            properties: None, // TODO: handle properties properly
+        })
+    }
 
     /// Parse a `CASE` statement.
     ///

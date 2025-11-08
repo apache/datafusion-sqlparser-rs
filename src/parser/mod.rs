@@ -751,31 +751,37 @@ impl<'a> Parser<'a> {
     //     Ok(chain_elements)
     // }
 
-    // pub fun parse_relationship_pattern(&mut self) -> Result<Option<PatternChainElement>, ParserError> {
-    //     let l_direction = if self.consume_token(&Token::ArrowRight) {
-    //             RelationshipDirection::Right
-    //         } else if self.consume_token(&Token::ArrowLeft) {
-    //             RelationshipDirection::Left
-    //         } else {
-    //             RelationshipDirection::Undirected
-    //         };
+    pub fn parse_relationship_pattern(&mut self) -> Result<Option<RelationshipPattern>, ParserError> {
+        let l_direction = if self.consume_token(&Token::Lt) {
+                self.expect_token(&Token::Minus)?;
+                RelationshipDirection::Outgoing
+            } else if self.consume_token(&Token::Arrow) {
+                RelationshipDirection::Incoming
+            } else if self.consume_token(&Token::Minus) {
+                RelationshipDirection::Undirected
+            } else {
+                return Err(ParserError::ParserError("No Left Relationship Direction found".to_string()));
+            };
 
-    //     let details = self.parse_relationship_details()?;
+        let details = self.parse_relationship_details()?;
 
-    //     let r_direction = if self.consume_token(&Token::ArrowRight) {
-    //             RelationshipDirection::Right
-    //         } else if self.consume_token(&Token::ArrowLeft) {
-    //             RelationshipDirection::Left
-    //         } else {
-    //             RelationshipDirection::Undirected
-    //         };
+        let r_direction = if self.consume_token(&Token::Arrow) {
+                RelationshipDirection::Outgoing
+            } else if self.consume_token(&Token::Lt) {
+                self.expect_token(&Token::Minus)?;
+                RelationshipDirection::Incoming
+            } else if self.consume_token(&Token::Minus) {
+                RelationshipDirection::Undirected
+            } else {
+                return Err(ParserError::ParserError("No RightRelationship Direction found".to_string()));
+            };
 
-    //     Ok(Some(PatternChainElement::Relationship(RelationshipPattern {
-    //         l_direction,
-    //         details,
-    //         r_direction,
-    //     })))
-    // }
+        Ok(Some(RelationshipPattern {
+            l_direction,
+            details,
+            r_direction,
+        }))
+    }
 
     pub fn parse_relationship_details(&mut self) -> Result<RelationshipDetail, ParserError> {
         if self.consume_token(&Token::LBracket) {

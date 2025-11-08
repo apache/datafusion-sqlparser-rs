@@ -169,6 +169,54 @@ fn parse_relationship_with_length_and_properties() {
     );
 }
 
+#[test]
+fn parse_relationship_pattern_undirected() {
+    let sql = "-[r:KNOWS]-"; 
+    let dialect = CypherDialect {};
+    let mut tokenizer = Tokenizer::new(&dialect, sql);
+    let tokens = tokenizer.tokenize().unwrap();
+    let mut parser = Parser::new(&dialect).with_tokens(tokens);
+    
+    let rel = parser.parse_relationship_pattern().unwrap().unwrap();
+    assert_eq!(
+        rel,
+        RelationshipPattern {
+            details: RelationshipDetail {
+                variable: Some(Ident::new("r")),
+                types: vec![Ident::new("KNOWS")],
+                properties: None,
+                length: None,
+            },
+            l_direction: RelationshipDirection::Undirected,
+            r_direction: RelationshipDirection::Undirected,
+        }
+    );
+}
+
+#[test]
+fn parse_relationship_pattern_outgoing() {
+    let sql = "<-[r:KNOWS]->"; 
+    let dialect = CypherDialect {};
+    let mut tokenizer = Tokenizer::new(&dialect, sql);
+    let tokens = tokenizer.tokenize().unwrap();
+    let mut parser = Parser::new(&dialect).with_tokens(tokens);
+    
+    let rel = parser.parse_relationship_pattern().unwrap().unwrap();
+    assert_eq!(
+        rel,
+        RelationshipPattern {
+            details: RelationshipDetail {
+                variable: Some(Ident::new("r")),
+                types: vec![Ident::new("KNOWS")],
+                properties: None,
+                length: None,
+            },
+            l_direction: RelationshipDirection::Outgoing,
+            r_direction: RelationshipDirection::Outgoing,
+        }
+    );
+}
+
 // #[test]
 // fn parse_simple_path_pattern() {
 //     let sql = "(a:Person)-[r:KNOWS]->(b:Person)";

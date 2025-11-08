@@ -214,6 +214,8 @@ pub enum Token {
     Placeholder(String),
     /// `->`, used as a operator to extract json field in PostgreSQL
     Arrow,
+    /// `<-`, used as a operator for relation in Cypher
+    ArrowLeft,
     /// `->>`, used as a operator to extract json field as text in PostgreSQL
     LongArrow,
     /// `#>`, extracts JSON sub-object at the specified path
@@ -376,6 +378,7 @@ impl fmt::Display for Token {
             Token::VerticalBarShiftRight => f.write_str("|>>"),
             Token::Placeholder(ref s) => write!(f, "{s}"),
             Token::Arrow => write!(f, "->"),
+            Token::ArrowLeft => write!(f, "<-"),
             Token::LongArrow => write!(f, "->>"),
             Token::HashArrow => write!(f, "#>"),
             Token::HashLongArrow => write!(f, "#>>"),

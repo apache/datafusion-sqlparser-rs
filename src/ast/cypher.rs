@@ -123,7 +123,7 @@ pub enum PatternElement {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct SimplePatternElement {
 
-    pub node: Node,
+    pub node: NodePattern,
     
     pub chains: Vec<PatternElementChain>,
 }
@@ -134,7 +134,7 @@ pub struct SimplePatternElement {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct RelationshipsPattern {
     // The starting node of the pattern
-    pub node: Node,
+    pub node: NodePattern,
     // One or more chains (relationship + node pairs)
     pub chains: Vec<PatternElementChain>
 }
@@ -246,7 +246,7 @@ pub enum ProjectionItem {
     AllFromNode{ node: Ident },
 }
 
-impl fmt::Display for Node {
+impl fmt::Display for NodePattern {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "(")?;
         if let Some(ref var) = self.variable {

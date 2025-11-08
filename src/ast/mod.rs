@@ -113,11 +113,13 @@ use crate::ast::helpers::stmt_data_loading::StageParamsObject;
 pub use visitor::*;
 
 pub use self::data_type::GeometricTypeKind;
+pub use self::cypher::*;
 
 mod data_type;
 mod dcl;
 mod ddl;
 mod dml;
+mod cypher;
 pub mod helpers;
 pub mod table_constraints;
 pub use table_constraints::{

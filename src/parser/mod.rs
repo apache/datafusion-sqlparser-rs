@@ -11817,7 +11817,10 @@ impl<'a> Parser<'a> {
     /// Parse a DELETE statement, returning a `Box`ed SetExpr
     ///
     /// This is used to reduce the size of the stack frames in debug builds
-    fn parse_delete_setexpr_boxed(&mut self, delete_token: TokenWithSpan) -> Result<Box<SetExpr>, ParserError> {
+    fn parse_delete_setexpr_boxed(
+        &mut self,
+        delete_token: TokenWithSpan,
+    ) -> Result<Box<SetExpr>, ParserError> {
         Ok(Box::new(SetExpr::Delete(self.parse_delete(delete_token)?)))
     }
 
@@ -15471,7 +15474,10 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse an REPLACE statement
-    pub fn parse_replace(&mut self, replace_token: TokenWithSpan) -> Result<Statement, ParserError> {
+    pub fn parse_replace(
+        &mut self,
+        replace_token: TokenWithSpan,
+    ) -> Result<Statement, ParserError> {
         if !dialect_of!(self is MySqlDialect | GenericDialect) {
             return parser_err!(
                 "Unsupported statement REPLACE",
@@ -15490,7 +15496,10 @@ impl<'a> Parser<'a> {
     /// Parse an INSERT statement, returning a `Box`ed SetExpr
     ///
     /// This is used to reduce the size of the stack frames in debug builds
-    fn parse_insert_setexpr_boxed(&mut self, insert_token: TokenWithSpan) -> Result<Box<SetExpr>, ParserError> {
+    fn parse_insert_setexpr_boxed(
+        &mut self,
+        insert_token: TokenWithSpan,
+    ) -> Result<Box<SetExpr>, ParserError> {
         Ok(Box::new(SetExpr::Insert(self.parse_insert(insert_token)?)))
     }
 

@@ -851,20 +851,21 @@ impl Spanned for Delete {
 
         union_spans(
             core::iter::once(delete_token.0.span).chain(
-            tables
-                .iter()
-                .map(|i| i.span())
-                .chain(core::iter::once(from.span()))
-                .chain(
-                    using
-                        .iter()
-                        .map(|u| union_spans(u.iter().map(|i| i.span()))),
-                )
-                .chain(selection.iter().map(|i| i.span()))
-                .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
-                .chain(order_by.iter().map(|i| i.span()))
-                .chain(limit.iter().map(|i| i.span())),
-            ))
+                tables
+                    .iter()
+                    .map(|i| i.span())
+                    .chain(core::iter::once(from.span()))
+                    .chain(
+                        using
+                            .iter()
+                            .map(|u| union_spans(u.iter().map(|i| i.span()))),
+                    )
+                    .chain(selection.iter().map(|i| i.span()))
+                    .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
+                    .chain(order_by.iter().map(|i| i.span()))
+                    .chain(limit.iter().map(|i| i.span())),
+            ),
+        )
     }
 }
 

@@ -816,7 +816,8 @@ impl<'a> Parser<'a> {
                     None
                 };
 
-                let max = if let Token::Number(n, false) = self.next_token().token {
+                let max = if self.consume_token(&Token::RangeNotation){
+                    if let Token::Number(n, false) = self.next_token().token {
                         let max_value = n.parse::<u64>().map_err(|_| {
                             ParserError::ParserError(format!(
                                 "Invalid number for relationship length: {}",
@@ -826,7 +827,10 @@ impl<'a> Parser<'a> {
                         Some(max_value)
                     } else {
                         None
-                    };
+                    }
+                } else {
+                    None
+                };
 
                 Some(RelationshipRange { min, max })
             } else {

@@ -1239,16 +1239,22 @@ impl<'a> Tokenizer<'a> {
                         && chars.peekable.clone().nth(1) == Some('.')
                     {
                         if !s.is_empty() {
-                            chars.next(); // consume first '.'
-                            chars.next(); // consume second '.'
                             return Ok(Some(Token::Number(s, false)));
                         }
                     }
 
                     // match one period
                     if let Some('.') = chars.peek() {
-                        s.push('.');
-                        chars.next();
+                        if self.dialect.supports_range_notation()
+                            && chars.peekable.clone().nth(1) == Some('.')
+                        {
+                            chars.next();
+                            chars.next();
+                            return Ok(Some(Token::RangeNotation));
+                        } else {
+                            s.push('.');
+                            chars.next();
+                        }
                     }
 
                     // If the dialect supports identifiers that start with a numeric prefix

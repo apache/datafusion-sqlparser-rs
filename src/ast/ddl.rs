@@ -2002,22 +2002,47 @@ impl fmt::Display for DropBehavior {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum UserDefinedTypeRepresentation {
+    /// Composite type: `CREATE TYPE name AS (attributes)`
     Composite {
         attributes: Vec<UserDefinedTypeCompositeAttributeDef>,
     },
+    /// Enum type: `CREATE TYPE name AS ENUM (labels)`
+    /// 
     /// Note: this is PostgreSQL-specific. See <https://www.postgresql.org/docs/current/sql-createtype.html>
-    Enum { labels: Vec<Ident> },
+    Enum { 
+        labels: Vec<Ident> 
+    },
+    /// Range type: `CREATE TYPE name AS RANGE (options)`
+    Range {
+        options: Vec<UserDefinedTypeRangeOption>,
+    },
+    /// Base type (SQL definition): `CREATE TYPE name (options)`
+    /// 
+    /// Note the lack of `AS` keyword
+    SqlDefinition {
+        options: Vec<UserDefinedTypeSqlDefinitionOption>,
+    },
+    /// When the representation of the type is not specified.
+    /// This is used in `CREATE TYPE <name>;` statements.
+    None,
 }
 
 impl fmt::Display for UserDefinedTypeRepresentation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            UserDefinedTypeRepresentation::Composite { attributes } => {
-                write!(f, "({})", display_comma_separated(attributes))
+            Self::Composite { attributes } => {
+                write!(f, "AS ({})", display_comma_separated(attributes))
             }
-            UserDefinedTypeRepresentation::Enum { labels } => {
-                write!(f, "ENUM ({})", display_comma_separated(labels))
+            Self::Enum { labels } => {
+                write!(f, "AS ENUM ({})", display_comma_separated(labels))
             }
+            Self::Range { options } => {
+                write!(f, "AS RANGE ({})", display_comma_separated(options))
+            }
+            Self::SqlDefinition { options } => {
+                write!(f, "({})", display_comma_separated(options))
+            }
+            Self::None => Ok(()),
         }
     }
 }
@@ -2039,6 +2064,272 @@ impl fmt::Display for UserDefinedTypeCompositeAttributeDef {
             write!(f, " COLLATE {collation}")?;
         }
         Ok(())
+    }
+}
+
+/// Internal length specification for PostgreSQL user-defined base types.
+///
+/// Specifies the internal length in bytes of the new type's internal representation.
+/// The default assumption is that it is variable-length.
+///
+/// # PostgreSQL Documentation
+/// See: <https://www.postgresql.org/docs/current/sql-createtype.html>
+///
+/// # Examples
+/// ```sql
+/// CREATE TYPE mytype (
+///     INPUT = in_func,
+///     OUTPUT = out_func,
+///     INTERNALLENGTH = 16  -- Fixed 16-byte length
+/// );
+///
+/// CREATE TYPE mytype2 (
+///     INPUT = in_func,
+///     OUTPUT = out_func,
+///     INTERNALLENGTH = VARIABLE  -- Variable length
+/// );
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum UserDefinedTypeInternalLength {
+    /// Fixed internal length: `INTERNALLENGTH = <number>`
+    Fixed(u64),
+    /// Variable internal length: `INTERNALLENGTH = VARIABLE`
+    Variable,
+}
+
+impl fmt::Display for UserDefinedTypeInternalLength {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            UserDefinedTypeInternalLength::Fixed(n) => write!(f, "{}", n),
+            UserDefinedTypeInternalLength::Variable => write!(f, "VARIABLE"),
+        }
+    }
+}
+
+/// Alignment specification for PostgreSQL user-defined base types.
+///
+/// Specifies the storage alignment requirement for values of the data type.
+/// The allowed values equate to alignment on 1, 2, 4, or 8 byte boundaries.
+/// Note that variable-length types must have an alignment of at least 4, since
+/// they necessarily contain an int4 as their first component.
+///
+/// # PostgreSQL Documentation
+/// See: <https://www.postgresql.org/docs/current/sql-createtype.html>
+///
+/// # Examples
+/// ```sql
+/// CREATE TYPE mytype (
+///     INPUT = in_func,
+///     OUTPUT = out_func,
+///     ALIGNMENT = int4  -- 4-byte alignment
+/// );
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum Alignment {
+    /// Single-byte alignment: `ALIGNMENT = char`
+    Char,
+    /// 2-byte alignment: `ALIGNMENT = int2`
+    Int2,
+    /// 4-byte alignment: `ALIGNMENT = int4`
+    Int4,
+    /// 8-byte alignment: `ALIGNMENT = double`
+    Double,
+}
+
+impl fmt::Display for Alignment {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Alignment::Char => write!(f, "char"),
+            Alignment::Int2 => write!(f, "int2"),
+            Alignment::Int4 => write!(f, "int4"),
+            Alignment::Double => write!(f, "double"),
+        }
+    }
+}
+
+/// Storage specification for PostgreSQL user-defined base types.
+///
+/// Specifies the storage strategy for values of the data type:
+/// - `plain`: Prevents compression and out-of-line storage (for fixed-length types)
+/// - `external`: Allows out-of-line storage but not compression
+/// - `extended`: Allows both compression and out-of-line storage (default for most types)
+/// - `main`: Allows compression but discourages out-of-line storage
+///
+/// # PostgreSQL Documentation
+/// See: <https://www.postgresql.org/docs/current/sql-createtype.html>
+///
+/// # Examples
+/// ```sql
+/// CREATE TYPE mytype (
+///     INPUT = in_func,
+///     OUTPUT = out_func,
+///     STORAGE = plain
+/// );
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum UserDefinedTypeStorage {
+    /// No compression or out-of-line storage: `STORAGE = plain`
+    Plain,
+    /// Out-of-line storage allowed, no compression: `STORAGE = external`
+    External,
+    /// Both compression and out-of-line storage allowed: `STORAGE = extended`
+    Extended,
+    /// Compression allowed, out-of-line discouraged: `STORAGE = main`
+    Main,
+}
+
+impl fmt::Display for UserDefinedTypeStorage {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            UserDefinedTypeStorage::Plain => write!(f, "plain"),
+            UserDefinedTypeStorage::External => write!(f, "external"),
+            UserDefinedTypeStorage::Extended => write!(f, "extended"),
+            UserDefinedTypeStorage::Main => write!(f, "main"),
+        }
+    }
+}
+
+/// Options for PostgreSQL `CREATE TYPE ... AS RANGE` statement.
+///
+/// Range types are data types representing a range of values of some element type
+/// (called the range's subtype). These options configure the behavior of the range type.
+///
+/// # PostgreSQL Documentation
+/// See: <https://www.postgresql.org/docs/current/sql-createtype.html>
+///
+/// # Examples
+/// ```sql
+/// CREATE TYPE int4range AS RANGE (
+///     SUBTYPE = int4,
+///     SUBTYPE_OPCLASS = int4_ops,
+///     CANONICAL = int4range_canonical,
+///     SUBTYPE_DIFF = int4range_subdiff
+/// );
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum UserDefinedTypeRangeOption {
+    /// The element type that the range type will represent: `SUBTYPE = subtype`
+    Subtype(DataType),
+    /// The operator class for the subtype: `SUBTYPE_OPCLASS = subtype_operator_class`
+    SubtypeOpClass(ObjectName),
+    /// Collation to use for ordering the subtype: `COLLATION = collation`
+    Collation(ObjectName),
+    /// Function to convert range values to canonical form: `CANONICAL = canonical_function`
+    Canonical(ObjectName),
+    /// Function to compute the difference between two subtype values: `SUBTYPE_DIFF = subtype_diff_function`
+    SubtypeDiff(ObjectName),
+    /// Name of the corresponding multirange type: `MULTIRANGE_TYPE_NAME = multirange_type_name`
+    MultirangeTypeName(ObjectName),
+}
+
+impl fmt::Display for UserDefinedTypeRangeOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            UserDefinedTypeRangeOption::Subtype(dt) => write!(f, "SUBTYPE = {}", dt),
+            UserDefinedTypeRangeOption::SubtypeOpClass(name) => write!(f, "SUBTYPE_OPCLASS = {}", name),
+            UserDefinedTypeRangeOption::Collation(name) => write!(f, "COLLATION = {}", name),
+            UserDefinedTypeRangeOption::Canonical(name) => write!(f, "CANONICAL = {}", name),
+            UserDefinedTypeRangeOption::SubtypeDiff(name) => write!(f, "SUBTYPE_DIFF = {}", name),
+            UserDefinedTypeRangeOption::MultirangeTypeName(name) => write!(f, "MULTIRANGE_TYPE_NAME = {}", name),
+        }
+    }
+}
+
+/// Options for PostgreSQL `CREATE TYPE ... (<options>)` statement (base type definition).
+///
+/// Base types are the lowest-level data types in PostgreSQL. To define a new base type,
+/// you must specify functions that convert it to and from text representation, and optionally
+/// binary representation and other properties.
+///
+/// Note: This syntax uses parentheses directly after the type name, without the `AS` keyword.
+///
+/// # PostgreSQL Documentation
+/// See: <https://www.postgresql.org/docs/current/sql-createtype.html>
+///
+/// # Examples
+/// ```sql
+/// CREATE TYPE complex (
+///     INPUT = complex_in,
+///     OUTPUT = complex_out,
+///     INTERNALLENGTH = 16,
+///     ALIGNMENT = double
+/// );
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum UserDefinedTypeSqlDefinitionOption {
+    /// Function to convert from external text representation to internal: `INPUT = input_function`
+    Input(ObjectName),
+    /// Function to convert from internal to external text representation: `OUTPUT = output_function`
+    Output(ObjectName),
+    /// Function to convert from external binary representation to internal: `RECEIVE = receive_function`
+    Receive(ObjectName),
+    /// Function to convert from internal to external binary representation: `SEND = send_function`
+    Send(ObjectName),
+    /// Function to convert type modifiers from text array to internal form: `TYPMOD_IN = type_modifier_input_function`
+    TypmodIn(ObjectName),
+    /// Function to convert type modifiers from internal to text form: `TYPMOD_OUT = type_modifier_output_function`
+    TypmodOut(ObjectName),
+    /// Function to compute statistics for the data type: `ANALYZE = analyze_function`
+    Analyze(ObjectName),
+    /// Function to handle subscripting operations: `SUBSCRIPT = subscript_function`
+    Subscript(ObjectName),
+    /// Internal storage size in bytes, or VARIABLE for variable-length: `INTERNALLENGTH = { internallength | VARIABLE }`
+    InternalLength(UserDefinedTypeInternalLength),
+    /// Indicates values are passed by value rather than by reference: `PASSEDBYVALUE`
+    PassedByValue,
+    /// Storage alignment requirement (1, 2, 4, or 8 bytes): `ALIGNMENT = alignment`
+    Alignment(Alignment),
+    /// Storage strategy for varlena types: `STORAGE = storage`
+    Storage(UserDefinedTypeStorage),
+    /// Copy properties from an existing type: `LIKE = like_type`
+    Like(ObjectName),
+    /// Type category for implicit casting rules (single char): `CATEGORY = category`
+    Category(char),
+    /// Whether this type is preferred within its category: `PREFERRED = preferred`
+    Preferred(bool),
+    /// Default value for the type: `DEFAULT = default`
+    Default(Expr),
+    /// Element type for array types: `ELEMENT = element`
+    Element(DataType),
+    /// Delimiter character for array value display: `DELIMITER = delimiter`
+    Delimiter(String),
+    /// Whether the type supports collation: `COLLATABLE = collatable`
+    Collatable(bool),
+}
+
+impl fmt::Display for UserDefinedTypeSqlDefinitionOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            UserDefinedTypeSqlDefinitionOption::Input(name) => write!(f, "INPUT = {}", name),
+            UserDefinedTypeSqlDefinitionOption::Output(name) => write!(f, "OUTPUT = {}", name),
+            UserDefinedTypeSqlDefinitionOption::Receive(name) => write!(f, "RECEIVE = {}", name),
+            UserDefinedTypeSqlDefinitionOption::Send(name) => write!(f, "SEND = {}", name),
+            UserDefinedTypeSqlDefinitionOption::TypmodIn(name) => write!(f, "TYPMOD_IN = {}", name),
+            UserDefinedTypeSqlDefinitionOption::TypmodOut(name) => write!(f, "TYPMOD_OUT = {}", name),
+            UserDefinedTypeSqlDefinitionOption::Analyze(name) => write!(f, "ANALYZE = {}", name),
+            UserDefinedTypeSqlDefinitionOption::Subscript(name) => write!(f, "SUBSCRIPT = {}", name),
+            UserDefinedTypeSqlDefinitionOption::InternalLength(len) => write!(f, "INTERNALLENGTH = {}", len),
+            UserDefinedTypeSqlDefinitionOption::PassedByValue => write!(f, "PASSEDBYVALUE"),
+            UserDefinedTypeSqlDefinitionOption::Alignment(align) => write!(f, "ALIGNMENT = {}", align),
+            UserDefinedTypeSqlDefinitionOption::Storage(storage) => write!(f, "STORAGE = {}", storage),
+            UserDefinedTypeSqlDefinitionOption::Like(name) => write!(f, "LIKE = {}", name),
+            UserDefinedTypeSqlDefinitionOption::Category(c) => write!(f, "CATEGORY = '{}'", c),
+            UserDefinedTypeSqlDefinitionOption::Preferred(b) => write!(f, "PREFERRED = {}", b),
+            UserDefinedTypeSqlDefinitionOption::Default(expr) => write!(f, "DEFAULT = {}", expr),
+            UserDefinedTypeSqlDefinitionOption::Element(dt) => write!(f, "ELEMENT = {}", dt),
+            UserDefinedTypeSqlDefinitionOption::Delimiter(s) => write!(f, "DELIMITER = '{}'", escape_single_quote_string(s)),
+            UserDefinedTypeSqlDefinitionOption::Collatable(b) => write!(f, "COLLATABLE = {}", b),
+        }
     }
 }
 

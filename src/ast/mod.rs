@@ -71,7 +71,9 @@ pub use self::ddl::{
     IdentityPropertyOrder, IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck,
     NullsDistinctOption, Owner, Partition, ProcedureParam, ReferentialAction, RenameTableNameKind,
     ReplicaIdentity, TagsColumnOption, TriggerObjectKind, Truncate,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
+    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength, UserDefinedTypeRangeOption,
+    UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage,
+    ViewColumnDef, Alignment,
 };
 pub use self::dml::{Delete, Insert, Update};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -2787,10 +2789,11 @@ impl fmt::Display for Declare {
 }
 
 /// Sql options of a `CREATE TABLE` statement.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CreateTableOptions {
+    #[default]
     None,
     /// Options specified using the `WITH` keyword.
     /// e.g. `WITH (description = "123")`
@@ -2817,12 +2820,6 @@ pub enum CreateTableOptions {
     Plain(Vec<SqlOption>),
 
     TableProperties(Vec<SqlOption>),
-}
-
-impl Default for CreateTableOptions {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 impl fmt::Display for CreateTableOptions {
@@ -5644,7 +5641,11 @@ impl fmt::Display for Statement {
                 name,
                 representation,
             } => {
-                write!(f, "CREATE TYPE {name} AS {representation}")
+                write!(f, "CREATE TYPE {name}")?;
+                match representation {
+                    UserDefinedTypeRepresentation::None => Ok(()),
+                    repr => write!(f, " {repr}"),
+                }
             }
             Statement::Pragma { name, value, is_eq } => {
                 write!(f, "PRAGMA {name}")?;

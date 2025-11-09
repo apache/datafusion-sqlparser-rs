@@ -2768,7 +2768,15 @@ impl fmt::Display for CreateFunction {
             write!(f, " REMOTE WITH CONNECTION {remote_connection}")?;
         }
         if let Some(CreateFunctionBody::AsBeforeOptions(function_body)) = &self.function_body {
-            write!(f, " AS {function_body}")?;
+            write!(f, " AS ")?;
+            // Special handling for tuple expressions to format without parentheses
+            // PostgreSQL C functions use: AS 'obj_file', 'link_symbol'
+            // rather than: AS ('obj_file', 'link_symbol')
+            if let Expr::Tuple(exprs) = function_body {
+                write!(f, "{}", display_comma_separated(exprs))?;
+            } else {
+                write!(f, "{function_body}")?;
+            }
         }
         if let Some(CreateFunctionBody::Return(function_body)) = &self.function_body {
             write!(f, " RETURN {function_body}")?;

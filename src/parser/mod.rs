@@ -10219,17 +10219,32 @@ impl<'a> Parser<'a> {
     /// Parse the body of a `CREATE FUNCTION` specified as a string.
     /// e.g. `CREATE FUNCTION ... AS $$ body $$`.
     fn parse_create_function_body_string(&mut self) -> Result<Expr, ParserError> {
-        let peek_token = self.peek_token();
-        let span = peek_token.span;
-        match peek_token.token {
-            Token::DollarQuotedString(s) if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
-            {
-                self.next_token();
-                Ok(Expr::Value(Value::DollarQuotedString(s).with_span(span)))
+        // Helper closure to parse a single string value (quoted or dollar-quoted)
+        let parse_string_expr = |parser: &mut Parser| -> Result<Expr, ParserError> {
+            let peek_token = parser.peek_token();
+            let span = peek_token.span;
+            match peek_token.token {
+                Token::DollarQuotedString(s) if dialect_of!(parser is PostgreSqlDialect | GenericDialect) =>
+                {
+                    parser.next_token();
+                    Ok(Expr::Value(Value::DollarQuotedString(s).with_span(span)))
+                }
+                _ => Ok(Expr::Value(
+                    Value::SingleQuotedString(parser.parse_literal_string()?).with_span(span),
+                )),
             }
-            _ => Ok(Expr::Value(
-                Value::SingleQuotedString(self.parse_literal_string()?).with_span(span),
-            )),
+        };
+
+        let first_expr = parse_string_expr(self)?;
+
+        // Check if there's a comma, indicating multiple strings (e.g., AS 'obj_file', 'link_symbol')
+        // This is used for C language functions: AS 'MODULE_PATHNAME', 'link_symbol'
+        if self.consume_token(&Token::Comma) {
+            let mut exprs = vec![first_expr];
+            exprs.extend(self.parse_comma_separated(parse_string_expr)?);
+            Ok(Expr::Tuple(exprs))
+        } else {
+            Ok(first_expr)
         }
     }
 

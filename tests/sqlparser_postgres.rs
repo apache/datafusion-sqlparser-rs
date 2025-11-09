@@ -4483,6 +4483,50 @@ fn parse_incorrect_create_function_parallel() {
 }
 
 #[test]
+fn parse_create_function_c_with_module_pathname() {
+    let sql = "CREATE FUNCTION cas_in(input cstring) RETURNS cas LANGUAGE c IMMUTABLE PARALLEL SAFE AS 'MODULE_PATHNAME', 'cas_in_wrapper'";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::CreateFunction(CreateFunction {
+            or_alter: false,
+            or_replace: false,
+            temporary: false,
+            name: ObjectName::from(vec![Ident::new("cas_in")]),
+            args: Some(vec![OperateFunctionArg::with_name(
+                "input",
+                DataType::Custom(ObjectName::from(vec![Ident::new("cstring")]), vec![]),
+            ),]),
+            return_type: Some(DataType::Custom(
+                ObjectName::from(vec![Ident::new("cas")]),
+                vec![]
+            )),
+            language: Some("c".into()),
+            behavior: Some(FunctionBehavior::Immutable),
+            called_on_null: None,
+            parallel: Some(FunctionParallel::Safe),
+            function_body: Some(CreateFunctionBody::AsBeforeOptions(Expr::Tuple(vec![
+                Expr::Value(
+                    (Value::SingleQuotedString("MODULE_PATHNAME".into())).with_empty_span()
+                ),
+                Expr::Value((Value::SingleQuotedString("cas_in_wrapper".into())).with_empty_span()),
+            ]))),
+            if_not_exists: false,
+            using: None,
+            determinism_specifier: None,
+            options: None,
+            remote_connection: None,
+        })
+    );
+
+    // Test that attribute order flexibility works (IMMUTABLE before LANGUAGE)
+    let sql_alt_order = "CREATE FUNCTION cas_in(input cstring) RETURNS cas IMMUTABLE PARALLEL SAFE LANGUAGE c AS 'MODULE_PATHNAME', 'cas_in_wrapper'";
+    pg_and_generic().one_statement_parses_to(
+        sql_alt_order,
+        "CREATE FUNCTION cas_in(input cstring) RETURNS cas LANGUAGE c IMMUTABLE PARALLEL SAFE AS 'MODULE_PATHNAME', 'cas_in_wrapper'"
+    );
+}
+
+#[test]
 fn parse_drop_function() {
     let sql = "DROP FUNCTION IF EXISTS test_func";
     assert_eq!(

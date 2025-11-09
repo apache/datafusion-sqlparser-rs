@@ -828,3 +828,57 @@ fn parse_cypher_query(){
         _ => panic!("Expected a SingleQuery"),
     }
 }
+
+#[test]
+fn parse_create(){
+    let sql = "CREATE (a:Person {name: 'Alice', age: 30})";
+    let dialect = CypherDialect {};
+    let mut tokenizer = Tokenizer::new(&dialect, sql);
+    let tokens = tokenizer.tokenize().unwrap();
+    
+    let mut parser = Parser::new(&dialect).with_tokens(tokens);
+
+    let create_clause = parser.parse_cypher_create_clause().unwrap();
+
+    assert_eq!(create_clause.pattern.parts.len(), 1, "Expected 1 pattern part in the CREATE clause");
+
+    let pattern_part = &create_clause.pattern.parts[0];
+    match &pattern_part.anon_pattern_part {
+        PatternElement::Simple(simple_element) => {
+            assert_eq!(simple_element.node.variable, Some(Ident::new("a")), "Node variable should be 'a'");
+            assert_eq!(simple_element.node.labels, vec![Ident::new("Person")], "Node label should be 'Person'");
+
+            match &simple_element.node.properties {
+                Some(Expr::Map(map)) => {
+                    assert_eq!(map.entries.len(), 2, "Expected 2 properties in the node properties");
+
+                    let name_entry = &map.entries[0];
+                    assert_eq!(
+                        *name_entry.key,
+                        Expr::Identifier(Ident::new("name")),
+                        "First property key should be 'name'"
+                    );
+                    assert_eq!(
+                        *name_entry.value,
+                        Expr::Value(Value::SingleQuotedString("Alice".to_string()).into()),
+                        "First property value should be 'Alice'"
+                    );
+
+                    let age_entry = &map.entries[1];
+                    assert_eq!(
+                        *age_entry.key,
+                        Expr::Identifier(Ident::new("age")),
+                        "Second property key should be 'age'"
+                    );
+                    assert_eq!(
+                        *age_entry.value,
+                        Expr::Value(Value::Number("30".to_string(), false).into()),
+                        "Second property value should be 30"
+                    );
+                },
+                _ => panic!("Expected node properties to be a Map expression"),
+            }
+        },
+        _ => panic!("Expected a SimplePatternElement in the PatternPart"),
+    }
+}

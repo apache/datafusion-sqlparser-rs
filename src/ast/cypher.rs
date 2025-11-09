@@ -35,7 +35,7 @@ pub enum SingleQuery{
 pub enum SinglePartQuery{
 
     Simple(SimpleSinglePartQuery),
-    
+
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -63,6 +63,14 @@ pub struct MultiPartQuery{
 pub enum ReadingClause{
     Match(MatchClause),
     // Other reading clauses can be added here
+}
+
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateClause {
+    pub pattern: Pattern,
 }
 
 /// A Cypher MATCH clause

@@ -720,6 +720,14 @@ impl<'a> Parser<'a> {
         Ok(ProjectionBody { distinct, projections })
     }
 
+    pub fn parse_cypher_create_clause(&mut self) -> Result<CreateClause, ParserError> {
+        self.expect_keyword(Keyword::CREATE)?;
+
+        let pattern = self.parse_cypher_pattern()?;
+
+        Ok(CreateClause { pattern })
+    }
+
     pub fn parse_match_clause(&mut self) -> Result<ReadingClause, ParserError> {
 
         let optional = if self.parse_keywords(&[Keyword::OPTIONAL]) {

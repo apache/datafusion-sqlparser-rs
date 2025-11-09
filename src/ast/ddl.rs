@@ -2087,7 +2087,7 @@ impl fmt::Display for UserDefinedTypeCompositeAttributeDef {
 ///     INTERNALLENGTH = VARIABLE  -- Variable length
 /// );
 /// ```
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum UserDefinedTypeInternalLength {
@@ -2124,7 +2124,7 @@ impl fmt::Display for UserDefinedTypeInternalLength {
 ///     ALIGNMENT = int4  -- 4-byte alignment
 /// );
 /// ```
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum Alignment {
@@ -2168,7 +2168,7 @@ impl fmt::Display for Alignment {
 ///     STORAGE = plain
 /// );
 /// ```
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum UserDefinedTypeStorage {

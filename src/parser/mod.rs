@@ -673,107 +673,125 @@ impl<'a> Parser<'a> {
     //     Ok(SingleQuery::Single(SinglePartQuery { reading_clause }))
     // }
 
-    // pub fn parse_match_clause(&mut self) -> Result<ReadingClause, ParserError> {
-    //     self.expect_keyword_is(Keyword::MATCH)?;
+    pub fn parse_match_clause(&mut self) -> Result<ReadingClause, ParserError> {
 
-    //     let pattern = self.parse_pattern()?;
+        let optional = if self.parse_keywords(&[Keyword::OPTIONAL]) {
+            true
+        } else {
+            false
+        };
+        
+        self.expect_keyword(Keyword::MATCH)?;
 
-    //     Ok(ReadingClause::Match(MatchClause { pattern }))
-    // }
+        let pattern = self.parse_cypher_pattern()?;
 
-    // pub fn parse_pattern(&mut self) -> Result<Pattern, ParserError> {
-    //     let mut pattern_elements = Vec::new();
+        Ok(ReadingClause::Match(MatchClause { optional, pattern }))
+    }
 
-    //     loop {
-    //         let pattern_element = self.parse_pattern_parts()?;
-    //         pattern_elements.push(pattern_element);
+    pub fn parse_cypher_pattern(&mut self) -> Result<Pattern, ParserError> {
+        let mut parts = Vec::new();
 
-    //         if !self.consume_token(&Token::Comma) {
-    //             break;
-    //         }
-    //     }
+        loop {
+            let part = self.parse_pattern_part()?;
+            parts.push(part);
 
-    //     Ok(Pattern { pattern_elements })        
-    // }
+            if !self.consume_token(&Token::Comma) {
+                break;
+            }
+        }
 
-    // pub fn parse_pattern_parts(&mut self) -> Result<PatternParts, ParserError> {
-    //     // Check if this is a nested pattern starting with a parenthesis
-    //     if self.consume_token(&Token::LParen) {
-    //         // Parse the nested pattern element
-    //         let pattern_element = self.parse_pattern_element()?;
-    //         self.expect_token(&Token::RParen)?;
-            
-    //         Ok(PatternParts::Nested(Box::new(pattern_element)))
-    //     } else {
-    //         // Parse as a simple pattern part
-    //         let variable = if self.peek_token().is_word() {
-    //             Some(self.parse_identifier()?)
-    //         } else {
-    //             None
-    //         };
-            
-    //         // Parse the anonymous pattern part
-    //         let anon_pattern_part = self.parse_pattern_element()?;
-            
-    //         Ok(PatternParts::Simple(SimplePatternPart {
-    //             variable,
-    //             anon_pattern_part,
-    //         }))
-    //     }
-    // }
+        Ok(Pattern { parts })        
+    }
 
-    // pub fn parse_pattern_element(&mut self) -> Result<PatternElement, ParserError> {
+    pub fn parse_pattern_part(&mut self) -> Result<PatternPart, ParserError> {
 
-    //     if self.consume_token(&Token::LParen) {
-    //         let nested_element = self.parse_pattern_element()?;
-    //         self.expect_token(&Token::RParen)?;
-    //         return Ok(PatternElement::Nested(Box::new(nested_element)));
-    //     } else {
-    //         let node = self.parse_node_pattern()?;
-    //         let chain = self.parse_pattern_chain()?;
-    //         return Ok(PatternElement::Simple(SimplePatternElement {
-    //             node,
-    //             chain,
-    //         }));
-    //     }
-    // }
+        let variable = if let Token::Word(_) = &self.peek_token().token {
+            let ident = self.parse_identifier()?;
+            self.expect_token(&Token::Eq)?;
+            Some(ident)
+        } else {
+            None
+        };
 
-    // pub fn parse_pattern_chain(&mut self) -> Result<Vec<PatternChainElement>, ParserError> {
-    //     let mut chain_elements = Vec::new();
+        
+        // Parse the anonymous pattern part
+        let anon_pattern_part = self.parse_pattern_element()?;
 
-    //     while let Some(rel_element) = self.parse_relationship_pattern()? {
-    //         chain_elements.push(rel_element);
+        Ok(PatternPart {
+            variable,
+            anon_pattern_part,
+        })
+    }
 
-    //         let node = self.parse_node_pattern()?;
-    //         chain_elements.push(PatternChainElement::Node(node));
-    //     }
+    pub fn parse_pattern_element(&mut self) -> Result<PatternElement, ParserError> {
 
-    //     Ok(chain_elements)
-    // }
+        if self.consume_token(&Token::LParen) && self.peek_token().token == Token::LParen {
+            let nested_element = self.parse_pattern_element()?;
+            self.expect_token(&Token::RParen)?;
+            return Ok(PatternElement::Nested(Box::new(nested_element)))
+        } else {
+            self.prev_token();
+            let simple_element = self.parse_simple_pattern_element()?;
+            return Ok(PatternElement::Simple(simple_element))
+        };
+    }
+
+    pub fn parse_simple_pattern_element(&mut self) -> Result<SimplePatternElement, ParserError> {
+        
+        let node = self.parse_node_pattern()?;
+        let chain = self.parse_pattern_chain()?;
+
+        Ok(SimplePatternElement {
+            node,
+            chain,
+        })
+    }
+
+    pub fn parse_pattern_chain(&mut self) -> Result<Vec<PatternElementChain>, ParserError> {
+        let mut chain_elements = Vec::new();
+
+        while let Some(relationship) = self.parse_relationship_pattern()? {
+            let node = self.parse_node_pattern()?;
+
+            chain_elements.push(PatternElementChain{
+                relationship,
+                node,
+            });
+        }
+
+        Ok(chain_elements)
+    }
 
     pub fn parse_relationship_pattern(&mut self) -> Result<Option<RelationshipPattern>, ParserError> {
+
+        if !(self.peek_token().token == Token::Lt
+            || self.peek_token().token == Token::Arrow
+            || self.peek_token().token == Token::Minus) {
+            return Ok(None);
+        }
+
         let l_direction = if self.consume_token(&Token::Lt) {
                 self.expect_token(&Token::Minus)?;
-                RelationshipDirection::Outgoing
+                Some(RelationshipDirection::Outgoing)
             } else if self.consume_token(&Token::Arrow) {
-                RelationshipDirection::Incoming
+                Some(RelationshipDirection::Incoming)
             } else if self.consume_token(&Token::Minus) {
-                RelationshipDirection::Undirected
+                Some(RelationshipDirection::Undirected)
             } else {
-                return Err(ParserError::ParserError("No Left Relationship Direction found".to_string()));
+                None
             };
 
         let details = self.parse_relationship_details()?;
 
         let r_direction = if self.consume_token(&Token::Arrow) {
-                RelationshipDirection::Outgoing
+                Some(RelationshipDirection::Outgoing)
             } else if self.consume_token(&Token::Lt) {
                 self.expect_token(&Token::Minus)?;
-                RelationshipDirection::Incoming
+                Some(RelationshipDirection::Incoming)
             } else if self.consume_token(&Token::Minus) {
-                RelationshipDirection::Undirected
+                Some(RelationshipDirection::Undirected)
             } else {
-                return Err(ParserError::ParserError("No RightRelationship Direction found".to_string()));
+                None
             };
 
         Ok(Some(RelationshipPattern {
@@ -888,6 +906,8 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+
+        self.expect_token(&Token::RParen)?;
 
         Ok(NodePattern {
             variable,

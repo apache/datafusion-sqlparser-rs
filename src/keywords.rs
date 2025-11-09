@@ -686,6 +686,7 @@ define_keywords!(
     OPTIMIZED,
     OPTIMIZER_COSTS,
     OPTION,
+    OPTIONAL,
     OPTIONS,
     OR,
     ORC,

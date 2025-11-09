@@ -81,25 +81,14 @@ pub struct MatchClause {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Pattern {
     /// The sequence of nodes and relationships that make up this path
-    pub parts: Vec<PatternParts>,
-}
-
-/// A part of a path pattern, which can be either a simple pattern part or a nested pattern
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum PatternParts {
-    
-    Simple(SimplePatternPart),
-
-    Nested(Box<PatternElement>)
+    pub parts: Vec<PatternPart>,
 }
 
 /// A Cypher simple pattern part, e.g., (a)-[r:KNOWS]->(b)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct SimplePatternPart {
+pub struct PatternPart {
 
     pub variable: Option<Ident>,
     
@@ -125,7 +114,7 @@ pub struct SimplePatternElement {
 
     pub node: NodePattern,
     
-    pub chains: Vec<PatternElementChain>,
+    pub chain: Vec<PatternElementChain>,
 }
 
 /// A Cypher relationships pattern, e.g., (a)-[r:KNOWS]->(b)-[r2:WORKS_AT]->(c)
@@ -136,7 +125,7 @@ pub struct RelationshipsPattern {
     // The starting node of the pattern
     pub node: NodePattern,
     // One or more chains (relationship + node pairs)
-    pub chains: Vec<PatternElementChain>
+    pub chain: Vec<PatternElementChain>
 }
 
 /// A Cypher node pattern, e.g., (n:Person {name: 'Alice'})
@@ -171,9 +160,9 @@ pub struct RelationshipPattern {
     /// Relationship details
     pub details: RelationshipDetail,
     /// Direction of the left of the relationship
-    pub l_direction: RelationshipDirection,
+    pub l_direction: Option<RelationshipDirection>,
     /// Direction of the right of the relationship
-    pub r_direction: RelationshipDirection,
+    pub r_direction: Option<RelationshipDirection>,
 }
 
 

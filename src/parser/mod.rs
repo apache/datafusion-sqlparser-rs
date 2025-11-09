@@ -4791,6 +4791,15 @@ impl<'a> Parser<'a> {
             self.parse_create_procedure(or_alter)
         } else if self.parse_keyword(Keyword::CONNECTOR) {
             self.parse_create_connector()
+        } else if self.parse_keyword(Keyword::OPERATOR) {
+            // Check if this is CREATE OPERATOR FAMILY or CREATE OPERATOR CLASS
+            if self.parse_keyword(Keyword::FAMILY) {
+                self.parse_create_operator_family()
+            } else if self.parse_keyword(Keyword::CLASS) {
+                self.parse_create_operator_class()
+            } else {
+                self.parse_create_operator()
+            }
         } else if self.parse_keyword(Keyword::SERVER) {
             self.parse_pg_create_server()
         } else {
@@ -6418,6 +6427,286 @@ impl<'a> Parser<'a> {
             url,
             comment,
             with_dcproperties,
+        }))
+    }
+
+    /// Helper function to parse an operator name (which can contain special characters)
+    /// Operator names can be schema-qualified (e.g., schema.operator)
+    fn parse_operator_name(&mut self) -> Result<ObjectName, ParserError> {
+        let mut name_parts = vec![];
+        loop {
+            let token = self.next_token();
+            let part = ObjectNamePart::Identifier(Ident::new(token.to_string()));
+            name_parts.push(part);
+
+            if !self.consume_token(&Token::Period) {
+                break;
+            }
+        }
+        Ok(ObjectName(name_parts))
+    }
+
+    /// Parse a CREATE OPERATOR statement
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createoperator.html)
+    pub fn parse_create_operator(&mut self) -> Result<Statement, ParserError> {
+        // Parse the operator name (can be schema-qualified)
+        // Operators can contain special characters like +, -, *, /, <, >, =, ~, !, @, #, %, ^, &, |, `, ?
+        // See https://www.postgresql.org/docs/current/sql-createoperator.html
+        let name = self.parse_operator_name()?;
+
+        // Expect opening parenthesis
+        self.expect_token(&Token::LParen)?;
+
+        let mut function: Option<ObjectName> = None;
+        let mut is_procedure = false;
+        let mut left_arg: Option<DataType> = None;
+        let mut right_arg: Option<DataType> = None;
+        let mut commutator: Option<ObjectName> = None;
+        let mut negator: Option<ObjectName> = None;
+        let mut restrict: Option<ObjectName> = None;
+        let mut join: Option<ObjectName> = None;
+        let mut hashes = false;
+        let mut merges = false;
+
+        loop {
+            // Parse parameter name
+            let param_name = self.parse_identifier()?;
+            let param_name_upper = param_name.value.to_uppercase();
+
+            // Check if this is a flag (HASHES or MERGES) - no '=' expected
+            match param_name_upper.as_str() {
+                "HASHES" => {
+                    hashes = true;
+                }
+                "MERGES" => {
+                    merges = true;
+                }
+                "FUNCTION" | "PROCEDURE" => {
+                    self.expect_token(&Token::Eq)?;
+                    let func_name = self.parse_object_name(false)?;
+                    function = Some(func_name);
+                    is_procedure = param_name_upper == "PROCEDURE";
+                }
+                "LEFTARG" => {
+                    self.expect_token(&Token::Eq)?;
+                    let data_type = self.parse_data_type()?;
+                    left_arg = Some(data_type);
+                }
+                "RIGHTARG" => {
+                    self.expect_token(&Token::Eq)?;
+                    let data_type = self.parse_data_type()?;
+                    right_arg = Some(data_type);
+                }
+                "COMMUTATOR" => {
+                    self.expect_token(&Token::Eq)?;
+                    let op_name = if self.parse_keyword(Keyword::OPERATOR) {
+                        self.expect_token(&Token::LParen)?;
+                        let op = self.parse_operator_name()?;
+                        self.expect_token(&Token::RParen)?;
+                        op
+                    } else {
+                        self.parse_operator_name()?
+                    };
+                    commutator = Some(op_name);
+                }
+                "NEGATOR" => {
+                    self.expect_token(&Token::Eq)?;
+                    let op_name = if self.parse_keyword(Keyword::OPERATOR) {
+                        self.expect_token(&Token::LParen)?;
+                        let op = self.parse_operator_name()?;
+                        self.expect_token(&Token::RParen)?;
+                        op
+                    } else {
+                        self.parse_operator_name()?
+                    };
+                    negator = Some(op_name);
+                }
+                "RESTRICT" => {
+                    self.expect_token(&Token::Eq)?;
+                    let func_name = self.parse_object_name(false)?;
+                    restrict = Some(func_name);
+                }
+                "JOIN" => {
+                    self.expect_token(&Token::Eq)?;
+                    let func_name = self.parse_object_name(false)?;
+                    join = Some(func_name);
+                }
+                _ => {
+                    return Err(ParserError::ParserError(format!(
+                        "Unknown CREATE OPERATOR parameter: {}",
+                        param_name_upper
+                    )))
+                }
+            }
+
+            // Check for comma or closing parenthesis
+            if !self.consume_token(&Token::Comma) {
+                break;
+            }
+        }
+
+        // Expect closing parenthesis
+        self.expect_token(&Token::RParen)?;
+
+        // FUNCTION is required
+        let function = function.ok_or_else(|| {
+            ParserError::ParserError("CREATE OPERATOR requires FUNCTION parameter".to_string())
+        })?;
+
+        Ok(Statement::CreateOperator(CreateOperator {
+            name,
+            function,
+            is_procedure,
+            left_arg,
+            right_arg,
+            commutator,
+            negator,
+            restrict,
+            join,
+            hashes,
+            merges,
+        }))
+    }
+
+    /// Parse a CREATE OPERATOR FAMILY statement
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createopfamily.html)
+    pub fn parse_create_operator_family(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name(false)?;
+        self.expect_keyword(Keyword::USING)?;
+        let using = self.parse_identifier()?;
+
+        Ok(Statement::CreateOperatorFamily(CreateOperatorFamily {
+            name,
+            using,
+        }))
+    }
+
+    /// Parse a CREATE OPERATOR CLASS statement
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createopclass.html)
+    pub fn parse_create_operator_class(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name(false)?;
+        let default = self.parse_keyword(Keyword::DEFAULT);
+        self.expect_keywords(&[Keyword::FOR, Keyword::TYPE])?;
+        let for_type = self.parse_data_type()?;
+        self.expect_keyword(Keyword::USING)?;
+        let using = self.parse_identifier()?;
+
+        let family = if self.parse_keyword(Keyword::FAMILY) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
+
+        self.expect_keyword(Keyword::AS)?;
+
+        let mut items = vec![];
+        loop {
+            if self.parse_keyword(Keyword::OPERATOR) {
+                let strategy_number = self.parse_literal_uint()? as u32;
+                let operator_name = self.parse_operator_name()?;
+
+                // Optional operator argument types
+                let op_types = if self.consume_token(&Token::LParen) {
+                    let left = self.parse_data_type()?;
+                    self.expect_token(&Token::Comma)?;
+                    let right = self.parse_data_type()?;
+                    self.expect_token(&Token::RParen)?;
+                    Some(OperatorArgTypes { left, right })
+                } else {
+                    None
+                };
+
+                // Optional purpose
+                let purpose = if self.parse_keyword(Keyword::FOR) {
+                    if self.parse_keyword(Keyword::SEARCH) {
+                        Some(OperatorPurpose::ForSearch)
+                    } else if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+                        let sort_family = self.parse_object_name(false)?;
+                        Some(OperatorPurpose::ForOrderBy { sort_family })
+                    } else {
+                        return self.expected("SEARCH or ORDER BY after FOR", self.peek_token());
+                    }
+                } else {
+                    None
+                };
+
+                items.push(OperatorClassItem::Operator {
+                    strategy_number,
+                    operator_name,
+                    op_types,
+                    purpose,
+                });
+            } else if self.parse_keyword(Keyword::FUNCTION) {
+                let support_number = self.parse_literal_uint()? as u32;
+
+                // Optional operator types
+                let op_types =
+                    if self.consume_token(&Token::LParen) && self.peek_token() != Token::RParen {
+                        let mut types = vec![];
+                        loop {
+                            types.push(self.parse_data_type()?);
+                            if !self.consume_token(&Token::Comma) {
+                                break;
+                            }
+                        }
+                        self.expect_token(&Token::RParen)?;
+                        Some(types)
+                    } else if self.consume_token(&Token::LParen) {
+                        self.expect_token(&Token::RParen)?;
+                        Some(vec![])
+                    } else {
+                        None
+                    };
+
+                let function_name = self.parse_object_name(false)?;
+
+                // Function argument types
+                let argument_types = if self.consume_token(&Token::LParen) {
+                    let mut types = vec![];
+                    loop {
+                        if self.peek_token() == Token::RParen {
+                            break;
+                        }
+                        types.push(self.parse_data_type()?);
+                        if !self.consume_token(&Token::Comma) {
+                            break;
+                        }
+                    }
+                    self.expect_token(&Token::RParen)?;
+                    types
+                } else {
+                    vec![]
+                };
+
+                items.push(OperatorClassItem::Function {
+                    support_number,
+                    op_types,
+                    function_name,
+                    argument_types,
+                });
+            } else if self.parse_keyword(Keyword::STORAGE) {
+                let storage_type = self.parse_data_type()?;
+                items.push(OperatorClassItem::Storage { storage_type });
+            } else {
+                break;
+            }
+
+            // Check for comma separator
+            if !self.consume_token(&Token::Comma) {
+                break;
+            }
+        }
+
+        Ok(Statement::CreateOperatorClass(CreateOperatorClass {
+            name,
+            default,
+            for_type,
+            using,
+            family,
+            items,
         }))
     }
 

@@ -65,13 +65,14 @@ pub use self::ddl::{
     AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue, ClusteredBy, ColumnDef,
     ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy, ColumnPolicyProperty,
     ConstraintCharacteristics, CreateConnector, CreateDomain, CreateExtension, CreateFunction,
-    CreateIndex, CreateTable, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
-    DropBehavior, DropExtension, DropFunction, DropTrigger, GeneratedAs, GeneratedExpressionMode,
-    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
-    IdentityPropertyOrder, IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck,
-    NullsDistinctOption, Owner, Partition, ProcedureParam, ReferentialAction, RenameTableNameKind,
-    ReplicaIdentity, TagsColumnOption, TriggerObjectKind, Truncate,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
+    CreateIndex, CreateOperator, CreateOperatorClass, CreateOperatorFamily, CreateTable,
+    CreateTrigger, CreateView, Deduplicate, DeferrableInitial, DropBehavior, DropExtension,
+    DropFunction, DropTrigger, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
+    IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
+    IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption,
+    OperatorArgTypes, OperatorClassItem, OperatorPurpose, Owner, Partition, ProcedureParam,
+    ReferentialAction, RenameTableNameKind, ReplicaIdentity, TagsColumnOption, TriggerObjectKind,
+    Truncate, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{Delete, Insert, Update};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -2787,10 +2788,11 @@ impl fmt::Display for Declare {
 }
 
 /// Sql options of a `CREATE TABLE` statement.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CreateTableOptions {
+    #[default]
     None,
     /// Options specified using the `WITH` keyword.
     /// e.g. `WITH (description = "123")`
@@ -2817,12 +2819,6 @@ pub enum CreateTableOptions {
     Plain(Vec<SqlOption>),
 
     TableProperties(Vec<SqlOption>),
-}
-
-impl Default for CreateTableOptions {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 impl fmt::Display for CreateTableOptions {
@@ -3339,6 +3335,21 @@ pub enum Statement {
     /// ```
     /// See [Hive](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362034#LanguageManualDDL-CreateDataConnectorCreateConnector)
     CreateConnector(CreateConnector),
+    /// ```sql
+    /// CREATE OPERATOR
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createoperator.html)
+    CreateOperator(CreateOperator),
+    /// ```sql
+    /// CREATE OPERATOR FAMILY
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createopfamily.html)
+    CreateOperatorFamily(CreateOperatorFamily),
+    /// ```sql
+    /// CREATE OPERATOR CLASS
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createopclass.html)
+    CreateOperatorClass(CreateOperatorClass),
     /// ```sql
     /// ALTER TABLE
     /// ```
@@ -4886,6 +4897,11 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::CreateConnector(create_connector) => create_connector.fmt(f),
+            Statement::CreateOperator(create_operator) => create_operator.fmt(f),
+            Statement::CreateOperatorFamily(create_operator_family) => {
+                create_operator_family.fmt(f)
+            }
+            Statement::CreateOperatorClass(create_operator_class) => create_operator_class.fmt(f),
             Statement::AlterTable(alter_table) => write!(f, "{alter_table}"),
             Statement::AlterIndex { name, operation } => {
                 write!(f, "ALTER INDEX {name} {operation}")

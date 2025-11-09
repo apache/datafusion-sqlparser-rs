@@ -6650,3 +6650,119 @@ fn parse_foreign_key_match_with_actions() {
 
     pg_and_generic().verified_stmt(sql);
 }
+
+#[test]
+fn parse_create_operator() {
+    // Test a basic CREATE OPERATOR statement
+    let sql = "CREATE OPERATOR < (PROCEDURE = \"cas_lt\", LEFTARG = CAS, RIGHTARG = CAS, COMMUTATOR = >, NEGATOR = >=, RESTRICT = scalarltsel, JOIN = scalarltjoinsel)";
+    let statement = pg().verified_stmt(sql);
+
+    // Verify the parsed statement
+    match statement {
+        Statement::CreateOperator(CreateOperator {
+            name,
+            function,
+            is_procedure,
+            left_arg,
+            right_arg,
+            commutator,
+            negator,
+            restrict,
+            join,
+            hashes,
+            merges,
+        }) => {
+            assert_eq!(name.to_string(), "<");
+            assert_eq!(function.to_string(), "\"cas_lt\"");
+            assert!(is_procedure);
+            assert_eq!(left_arg.as_ref().unwrap().to_string(), "CAS");
+            assert_eq!(right_arg.as_ref().unwrap().to_string(), "CAS");
+            assert_eq!(commutator.as_ref().unwrap().to_string(), ">");
+            assert_eq!(negator.as_ref().unwrap().to_string(), ">=");
+            assert_eq!(restrict.as_ref().unwrap().to_string(), "scalarltsel");
+            assert_eq!(join.as_ref().unwrap().to_string(), "scalarltjoinsel");
+            assert!(!hashes);
+            assert!(!merges);
+        }
+        _ => panic!("Expected Statement::CreateOperator, got {:?}", statement),
+    }
+}
+
+#[test]
+fn parse_create_operator_family() {
+    let sql = "CREATE OPERATOR FAMILY CAS_btree_ops USING btree";
+    let statement = pg().verified_stmt(sql);
+
+    match statement {
+        Statement::CreateOperatorFamily(CreateOperatorFamily { name, using }) => {
+            assert_eq!(name.to_string(), "CAS_btree_ops");
+            assert_eq!(using.to_string(), "btree");
+        }
+        _ => panic!(
+            "Expected Statement::CreateOperatorFamily, got {:?}",
+            statement
+        ),
+    }
+}
+
+#[test]
+fn parse_create_operator_class() {
+    let sql = "CREATE OPERATOR CLASS CAS_btree_ops DEFAULT FOR TYPE CAS USING btree FAMILY CAS_btree_ops AS OPERATOR 1 <, OPERATOR 2 <=, OPERATOR 3 =, OPERATOR 4 >=, OPERATOR 5 >, FUNCTION 1 cas_cmp(CAS, CAS)";
+    let statement = pg().verified_stmt(sql);
+
+    match statement {
+        Statement::CreateOperatorClass(CreateOperatorClass {
+            name,
+            default,
+            for_type,
+            using,
+            family,
+            items,
+        }) => {
+            assert_eq!(name.to_string(), "CAS_btree_ops");
+            assert!(default);
+            assert_eq!(for_type.to_string(), "CAS");
+            assert_eq!(using.to_string(), "btree");
+            assert_eq!(family.unwrap().to_string(), "CAS_btree_ops");
+            assert_eq!(items.len(), 6);
+
+            // Check first operator
+            match &items[0] {
+                OperatorClassItem::Operator {
+                    strategy_number,
+                    operator_name,
+                    op_types,
+                    purpose,
+                } => {
+                    assert_eq!(*strategy_number, 1);
+                    assert_eq!(operator_name.to_string(), "<");
+                    assert!(op_types.is_none());
+                    assert!(purpose.is_none());
+                }
+                _ => panic!("Expected Operator"),
+            }
+
+            // Check function
+            match &items[5] {
+                OperatorClassItem::Function {
+                    support_number,
+                    op_types,
+                    function_name,
+                    argument_types,
+                } => {
+                    assert_eq!(*support_number, 1);
+                    assert!(op_types.is_none());
+                    assert_eq!(function_name.to_string(), "cas_cmp");
+                    assert_eq!(argument_types.len(), 2);
+                    assert_eq!(argument_types[0].to_string(), "CAS");
+                    assert_eq!(argument_types[1].to_string(), "CAS");
+                }
+                _ => panic!("Expected Function"),
+            }
+        }
+        _ => panic!(
+            "Expected Statement::CreateOperatorClass, got {:?}",
+            statement
+        ),
+    }
+}

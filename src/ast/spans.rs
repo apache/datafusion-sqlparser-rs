@@ -17,7 +17,8 @@
 
 use crate::ast::{
     ddl::AlterSchema, query::SelectItemQualifiedWildcardKind, AlterSchemaOperation, AlterTable,
-    ColumnOptions, CreateView, ExportData, Owner, TypedString,
+    ColumnOptions, CreateOperator, CreateOperatorClass, CreateOperatorFamily, CreateView,
+    ExportData, Owner, TypedString,
 };
 use core::iter;
 
@@ -367,6 +368,11 @@ impl Spanned for Statement {
             Statement::CreateSecret { .. } => Span::empty(),
             Statement::CreateServer { .. } => Span::empty(),
             Statement::CreateConnector { .. } => Span::empty(),
+            Statement::CreateOperator(create_operator) => create_operator.span(),
+            Statement::CreateOperatorFamily(create_operator_family) => {
+                create_operator_family.span()
+            }
+            Statement::CreateOperatorClass(create_operator_class) => create_operator_class.span(),
             Statement::AlterTable(alter_table) => alter_table.span(),
             Statement::AlterIndex { name, operation } => name.span().union(&operation.span()),
             Statement::AlterView {
@@ -2534,5 +2540,23 @@ ALTER TABLE users
 
         assert_eq!(stmt_span.start, (2, 13).into());
         assert_eq!(stmt_span.end, (4, 11).into());
+    }
+}
+
+impl Spanned for CreateOperator {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}
+
+impl Spanned for CreateOperatorFamily {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}
+
+impl Spanned for CreateOperatorClass {
+    fn span(&self) -> Span {
+        Span::empty()
     }
 }

@@ -17380,9 +17380,7 @@ impl<'a> Parser<'a> {
             // Empty composite type
             return Ok(Statement::CreateType {
                 name,
-                representation: UserDefinedTypeRepresentation::Composite {
-                    attributes: vec![],
-                },
+                representation: UserDefinedTypeRepresentation::Composite { attributes: vec![] },
             });
         }
 

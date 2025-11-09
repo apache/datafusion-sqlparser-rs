@@ -2007,17 +2007,15 @@ pub enum UserDefinedTypeRepresentation {
         attributes: Vec<UserDefinedTypeCompositeAttributeDef>,
     },
     /// Enum type: `CREATE TYPE name AS ENUM (labels)`
-    /// 
+    ///
     /// Note: this is PostgreSQL-specific. See <https://www.postgresql.org/docs/current/sql-createtype.html>
-    Enum { 
-        labels: Vec<Ident> 
-    },
+    Enum { labels: Vec<Ident> },
     /// Range type: `CREATE TYPE name AS RANGE (options)`
     Range {
         options: Vec<UserDefinedTypeRangeOption>,
     },
     /// Base type (SQL definition): `CREATE TYPE name (options)`
-    /// 
+    ///
     /// Note the lack of `AS` keyword
     SqlDefinition {
         options: Vec<UserDefinedTypeSqlDefinitionOption>,
@@ -2234,11 +2232,15 @@ impl fmt::Display for UserDefinedTypeRangeOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             UserDefinedTypeRangeOption::Subtype(dt) => write!(f, "SUBTYPE = {}", dt),
-            UserDefinedTypeRangeOption::SubtypeOpClass(name) => write!(f, "SUBTYPE_OPCLASS = {}", name),
+            UserDefinedTypeRangeOption::SubtypeOpClass(name) => {
+                write!(f, "SUBTYPE_OPCLASS = {}", name)
+            }
             UserDefinedTypeRangeOption::Collation(name) => write!(f, "COLLATION = {}", name),
             UserDefinedTypeRangeOption::Canonical(name) => write!(f, "CANONICAL = {}", name),
             UserDefinedTypeRangeOption::SubtypeDiff(name) => write!(f, "SUBTYPE_DIFF = {}", name),
-            UserDefinedTypeRangeOption::MultirangeTypeName(name) => write!(f, "MULTIRANGE_TYPE_NAME = {}", name),
+            UserDefinedTypeRangeOption::MultirangeTypeName(name) => {
+                write!(f, "MULTIRANGE_TYPE_NAME = {}", name)
+            }
         }
     }
 }
@@ -2315,19 +2317,31 @@ impl fmt::Display for UserDefinedTypeSqlDefinitionOption {
             UserDefinedTypeSqlDefinitionOption::Receive(name) => write!(f, "RECEIVE = {}", name),
             UserDefinedTypeSqlDefinitionOption::Send(name) => write!(f, "SEND = {}", name),
             UserDefinedTypeSqlDefinitionOption::TypmodIn(name) => write!(f, "TYPMOD_IN = {}", name),
-            UserDefinedTypeSqlDefinitionOption::TypmodOut(name) => write!(f, "TYPMOD_OUT = {}", name),
+            UserDefinedTypeSqlDefinitionOption::TypmodOut(name) => {
+                write!(f, "TYPMOD_OUT = {}", name)
+            }
             UserDefinedTypeSqlDefinitionOption::Analyze(name) => write!(f, "ANALYZE = {}", name),
-            UserDefinedTypeSqlDefinitionOption::Subscript(name) => write!(f, "SUBSCRIPT = {}", name),
-            UserDefinedTypeSqlDefinitionOption::InternalLength(len) => write!(f, "INTERNALLENGTH = {}", len),
+            UserDefinedTypeSqlDefinitionOption::Subscript(name) => {
+                write!(f, "SUBSCRIPT = {}", name)
+            }
+            UserDefinedTypeSqlDefinitionOption::InternalLength(len) => {
+                write!(f, "INTERNALLENGTH = {}", len)
+            }
             UserDefinedTypeSqlDefinitionOption::PassedByValue => write!(f, "PASSEDBYVALUE"),
-            UserDefinedTypeSqlDefinitionOption::Alignment(align) => write!(f, "ALIGNMENT = {}", align),
-            UserDefinedTypeSqlDefinitionOption::Storage(storage) => write!(f, "STORAGE = {}", storage),
+            UserDefinedTypeSqlDefinitionOption::Alignment(align) => {
+                write!(f, "ALIGNMENT = {}", align)
+            }
+            UserDefinedTypeSqlDefinitionOption::Storage(storage) => {
+                write!(f, "STORAGE = {}", storage)
+            }
             UserDefinedTypeSqlDefinitionOption::Like(name) => write!(f, "LIKE = {}", name),
             UserDefinedTypeSqlDefinitionOption::Category(c) => write!(f, "CATEGORY = '{}'", c),
             UserDefinedTypeSqlDefinitionOption::Preferred(b) => write!(f, "PREFERRED = {}", b),
             UserDefinedTypeSqlDefinitionOption::Default(expr) => write!(f, "DEFAULT = {}", expr),
             UserDefinedTypeSqlDefinitionOption::Element(dt) => write!(f, "ELEMENT = {}", dt),
-            UserDefinedTypeSqlDefinitionOption::Delimiter(s) => write!(f, "DELIMITER = '{}'", escape_single_quote_string(s)),
+            UserDefinedTypeSqlDefinitionOption::Delimiter(s) => {
+                write!(f, "DELIMITER = '{}'", escape_single_quote_string(s))
+            }
             UserDefinedTypeSqlDefinitionOption::Collatable(b) => write!(f, "COLLATABLE = {}", b),
         }
     }

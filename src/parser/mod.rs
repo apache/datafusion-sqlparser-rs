@@ -6470,35 +6470,45 @@ impl<'a> Parser<'a> {
         let mut merges = false;
 
         loop {
-            // Parse parameter name
-            let param_name = self.parse_identifier()?;
-            let param_name_upper = param_name.value.to_uppercase();
+            // Parse parameter name as keyword
+            let keyword = self.expect_one_of_keywords(&[
+                Keyword::FUNCTION,
+                Keyword::PROCEDURE,
+                Keyword::LEFTARG,
+                Keyword::RIGHTARG,
+                Keyword::COMMUTATOR,
+                Keyword::NEGATOR,
+                Keyword::RESTRICT,
+                Keyword::JOIN,
+                Keyword::HASHES,
+                Keyword::MERGES,
+            ])?;
 
             // Check if this is a flag (HASHES or MERGES) - no '=' expected
-            match param_name_upper.as_str() {
-                "HASHES" => {
+            match keyword {
+                Keyword::HASHES => {
                     hashes = true;
                 }
-                "MERGES" => {
+                Keyword::MERGES => {
                     merges = true;
                 }
-                "FUNCTION" | "PROCEDURE" => {
+                Keyword::FUNCTION | Keyword::PROCEDURE => {
                     self.expect_token(&Token::Eq)?;
                     let func_name = self.parse_object_name(false)?;
                     function = Some(func_name);
-                    is_procedure = param_name_upper == "PROCEDURE";
+                    is_procedure = keyword == Keyword::PROCEDURE;
                 }
-                "LEFTARG" => {
+                Keyword::LEFTARG => {
                     self.expect_token(&Token::Eq)?;
                     let data_type = self.parse_data_type()?;
                     left_arg = Some(data_type);
                 }
-                "RIGHTARG" => {
+                Keyword::RIGHTARG => {
                     self.expect_token(&Token::Eq)?;
                     let data_type = self.parse_data_type()?;
                     right_arg = Some(data_type);
                 }
-                "COMMUTATOR" => {
+                Keyword::COMMUTATOR => {
                     self.expect_token(&Token::Eq)?;
                     let op_name = if self.parse_keyword(Keyword::OPERATOR) {
                         self.expect_token(&Token::LParen)?;
@@ -6510,7 +6520,7 @@ impl<'a> Parser<'a> {
                     };
                     commutator = Some(op_name);
                 }
-                "NEGATOR" => {
+                Keyword::NEGATOR => {
                     self.expect_token(&Token::Eq)?;
                     let op_name = if self.parse_keyword(Keyword::OPERATOR) {
                         self.expect_token(&Token::LParen)?;
@@ -6522,22 +6532,17 @@ impl<'a> Parser<'a> {
                     };
                     negator = Some(op_name);
                 }
-                "RESTRICT" => {
+                Keyword::RESTRICT => {
                     self.expect_token(&Token::Eq)?;
                     let func_name = self.parse_object_name(false)?;
                     restrict = Some(func_name);
                 }
-                "JOIN" => {
+                Keyword::JOIN => {
                     self.expect_token(&Token::Eq)?;
                     let func_name = self.parse_object_name(false)?;
                     join = Some(func_name);
                 }
-                _ => {
-                    return Err(ParserError::ParserError(format!(
-                        "Unknown CREATE OPERATOR parameter: {}",
-                        param_name_upper
-                    )))
-                }
+                _ => unreachable!("unexpected keyword in CREATE OPERATOR"),
             }
 
             // Check for comma or closing parenthesis

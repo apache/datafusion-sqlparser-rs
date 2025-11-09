@@ -2351,6 +2351,24 @@ impl Spanned for AlterTable {
     }
 }
 
+impl Spanned for CreateOperator {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}
+
+impl Spanned for CreateOperatorFamily {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}
+
+impl Spanned for CreateOperatorClass {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use crate::dialect::{Dialect, GenericDialect, SnowflakeDialect};
@@ -2540,23 +2558,5 @@ ALTER TABLE users
 
         assert_eq!(stmt_span.start, (2, 13).into());
         assert_eq!(stmt_span.end, (4, 11).into());
-    }
-}
-
-impl Spanned for CreateOperator {
-    fn span(&self) -> Span {
-        Span::empty()
-    }
-}
-
-impl Spanned for CreateOperatorFamily {
-    fn span(&self) -> Span {
-        Span::empty()
-    }
-}
-
-impl Spanned for CreateOperatorClass {
-    fn span(&self) -> Span {
-        Span::empty()
     }
 }

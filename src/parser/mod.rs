@@ -665,13 +665,60 @@ impl<'a> Parser<'a> {
             _ => self.expected("an SQL statement", next_token),
         }
     }
-    
-    // pub fn parse_cypher_query(&mut self) -> Result<SingleQuery, ParserError> {
-    //     let reading_clause = self.parse_match_clause()?;
 
-    //     // For simplicity, we treat all Cypher queries as SinglePartQuery in this example.
-    //     Ok(SingleQuery::Single(SinglePartQuery { reading_clause }))
-    // }
+    pub fn parse_cypher_query(&mut self) -> Result<SingleQuery, ParserError> {
+        let single_part_query = self.parse_cypher_single_part_query()?;
+
+        Ok(SingleQuery::Single(single_part_query))
+    }
+
+    pub fn parse_cypher_single_part_query(&mut self) -> Result<SinglePartQuery, ParserError> {
+        let reading_clause = self.parse_match_clause()?;
+        let returning_clause = self.parse_cypher_return()?;
+
+        Ok(SinglePartQuery::Simple(SimpleSinglePartQuery {
+            reading_clause,
+            returning_clause,
+        }))
+    }
+
+    pub fn parse_cypher_return(&mut self) -> Result<ReturningClause, ParserError> {
+        self.expect_keyword(Keyword::RETURN)?;
+        let body = self.parse_cypher_projection_body()?;
+        Ok(ReturningClause { body })
+    }
+
+    pub fn parse_cypher_projection_body(&mut self) -> Result<ProjectionBody, ParserError> {
+        let mut projections = Vec::new();
+
+        let distinct = if self.parse_keywords(&[Keyword::DISTINCT]) {
+            true
+        } else {
+            false
+        };
+
+        loop {
+            let item = if self.peek_token().token == Token::Mul {
+                self.next_token(); // consume '*'
+                ProjectionItem::All
+            } else {
+                let expr = self.parse_expr()?;
+                let alias = if self.parse_keywords(&[Keyword::AS]) {
+                    Some(self.parse_identifier()?)
+                } else {
+                    None
+                };
+                ProjectionItem::Expr { expr, alias }
+            };
+            projections.push(item);
+
+            if !self.consume_token(&Token::Comma) {
+                break;
+            }
+        }
+
+        Ok(ProjectionBody { distinct, projections })
+    }
 
     pub fn parse_match_clause(&mut self) -> Result<ReadingClause, ParserError> {
 

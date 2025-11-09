@@ -32,9 +32,10 @@ pub enum SingleQuery{
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct SinglePartQuery{
+pub enum SinglePartQuery{
 
-    pub reading_clause: ReadingClause
+    Simple(SimpleSinglePartQuery),
+    
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

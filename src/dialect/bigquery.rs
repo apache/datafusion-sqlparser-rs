@@ -46,7 +46,7 @@ const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
 pub struct BigQueryDialect;
 
 impl Dialect for BigQueryDialect {
-    fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
+    fn parse_statement(&self, parser: &Parser) -> Option<Result<Statement, ParserError>> {
         if parser.parse_keyword(Keyword::BEGIN) {
             if parser.peek_keyword(Keyword::TRANSACTION)
                 || parser.peek_token_ref().token == Token::SemiColon
@@ -145,7 +145,7 @@ impl Dialect for BigQueryDialect {
         true
     }
 
-    fn is_column_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+    fn is_column_alias(&self, kw: &Keyword, _parser: &Parser) -> bool {
         !RESERVED_FOR_COLUMN_ALIAS.contains(kw)
     }
 

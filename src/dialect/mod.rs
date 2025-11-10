@@ -466,7 +466,7 @@ pub trait Dialect: Debug + Any {
     }
 
     /// Dialect-specific prefix parser override
-    fn parse_prefix(&self, _parser: &mut Parser) -> Option<Result<Expr, ParserError>> {
+    fn parse_prefix(&self, _parser: &Parser) -> Option<Result<Expr, ParserError>> {
         // return None to fall back to the default behavior
         None
     }
@@ -615,7 +615,7 @@ pub trait Dialect: Debug + Any {
     /// If `None` is returned, falls back to the default behavior.
     fn parse_infix(
         &self,
-        _parser: &mut Parser,
+        _parser: &Parser,
         _expr: &Expr,
         _precedence: u8,
     ) -> Option<Result<Expr, ParserError>> {
@@ -778,7 +778,7 @@ pub trait Dialect: Debug + Any {
     /// This method is called to parse the next statement.
     ///
     /// If `None` is returned, falls back to the default behavior.
-    fn parse_statement(&self, _parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
+    fn parse_statement(&self, _parser: &Parser) -> Option<Result<Statement, ParserError>> {
         // return None to fall back to the default behavior
         None
     }
@@ -790,7 +790,7 @@ pub trait Dialect: Debug + Any {
     /// If `None` is returned, falls back to the default behavior.
     fn parse_column_option(
         &self,
-        _parser: &mut Parser,
+        _parser: &Parser,
     ) -> Result<Option<Result<Option<ColumnOption>, ParserError>>, ParserError> {
         // return None to fall back to the default behavior
         Ok(None)
@@ -1021,33 +1021,33 @@ pub trait Dialect: Debug + Any {
 
     /// Returns true if the specified keyword should be parsed as a column identifier.
     /// See [keywords::RESERVED_FOR_COLUMN_ALIAS]
-    fn is_column_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+    fn is_column_alias(&self, kw: &Keyword, _parser: &Parser) -> bool {
         !keywords::RESERVED_FOR_COLUMN_ALIAS.contains(kw)
     }
 
     /// Returns true if the specified keyword should be parsed as a select item alias.
     /// When explicit is true, the keyword is preceded by an `AS` word. Parser is provided
     /// to enable looking ahead if needed.
-    fn is_select_item_alias(&self, explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
+    fn is_select_item_alias(&self, explicit: bool, kw: &Keyword, parser: &Parser) -> bool {
         explicit || self.is_column_alias(kw, parser)
     }
 
     /// Returns true if the specified keyword should be parsed as a table factor identifier.
     /// See [keywords::RESERVED_FOR_TABLE_FACTOR]
-    fn is_table_factor(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+    fn is_table_factor(&self, kw: &Keyword, _parser: &Parser) -> bool {
         !keywords::RESERVED_FOR_TABLE_FACTOR.contains(kw)
     }
 
     /// Returns true if the specified keyword should be parsed as a table factor alias.
     /// See [keywords::RESERVED_FOR_TABLE_ALIAS]
-    fn is_table_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+    fn is_table_alias(&self, kw: &Keyword, _parser: &Parser) -> bool {
         !keywords::RESERVED_FOR_TABLE_ALIAS.contains(kw)
     }
 
     /// Returns true if the specified keyword should be parsed as a table factor alias.
     /// When explicit is true, the keyword is preceded by an `AS` word. Parser is provided
     /// to enable looking ahead if needed.
-    fn is_table_factor_alias(&self, explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
+    fn is_table_factor_alias(&self, explicit: bool, kw: &Keyword, parser: &Parser) -> bool {
         explicit || self.is_table_alias(kw, parser)
     }
 
@@ -1400,14 +1400,14 @@ mod tests {
 
             fn parse_prefix(
                 &self,
-                parser: &mut sqlparser::parser::Parser,
+                parser: &sqlparser::parser::Parser,
             ) -> Option<Result<Expr, sqlparser::parser::ParserError>> {
                 self.0.parse_prefix(parser)
             }
 
             fn parse_infix(
                 &self,
-                parser: &mut sqlparser::parser::Parser,
+                parser: &sqlparser::parser::Parser,
                 expr: &Expr,
                 precedence: u8,
             ) -> Option<Result<Expr, sqlparser::parser::ParserError>> {
@@ -1423,7 +1423,7 @@ mod tests {
 
             fn parse_statement(
                 &self,
-                parser: &mut sqlparser::parser::Parser,
+                parser: &sqlparser::parser::Parser,
             ) -> Option<Result<Statement, sqlparser::parser::ParserError>> {
                 self.0.parse_statement(parser)
             }

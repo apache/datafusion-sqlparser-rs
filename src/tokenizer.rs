@@ -574,8 +574,11 @@ impl Span {
     const EMPTY: Span = Self::empty();
 
     /// Create a new span from a start and end [`Location`]
-    pub fn new(start: Location, end: Location) -> Span {
-        Span { start, end }
+    pub fn new(start: impl Into<Location>, end: impl Into<Location>) -> Span {
+        Span {
+            start: start.into(),
+            end: end.into(),
+        }
     }
 
     /// Returns an empty span `(0, 0) -> (0, 0)`

@@ -865,7 +865,7 @@ fn test_duckdb_trim() {
     // missing comma separation
     let error_sql = "SELECT TRIM('xyz' 'a')";
     assert_eq!(
-        ParserError::ParserError("Expected: ), found: 'a'".to_owned()),
+        ParserError::SpannedParserError("Expected: ), found: 'a'".to_owned(), Span::empty()),
         duckdb().parse_sql_statements(error_sql).unwrap_err()
     );
 }

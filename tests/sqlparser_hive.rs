@@ -28,6 +28,7 @@ use sqlparser::ast::{
 use sqlparser::dialect::{AnsiDialect, GenericDialect, HiveDialect};
 use sqlparser::parser::ParserError;
 use sqlparser::test_utils::*;
+use sqlparser::tokenizer::Span;
 
 #[test]
 fn parse_table_create() {
@@ -147,7 +148,10 @@ fn create_table_with_comment() {
     );
     assert_eq!(
         hive().parse_sql_statements(invalid_sql).unwrap_err(),
-        ParserError::ParserError("Expected: end of statement, found: COMMENT".to_string())
+        ParserError::SpannedParserError(
+            "Expected: end of statement, found: COMMENT".to_string(),
+            Span::empty()
+        )
     );
 }
 
@@ -198,28 +202,28 @@ fn create_table_with_clustered_by() {
     hive_and_generic().parse_sql_statements(
         "CREATE TABLE db.table_name (a INT, b STRING) PARTITIONED BY (a INT, b STRING) CLUSTERED BY (a, b)"
     ).unwrap_err(),
-        ParserError::ParserError("Expected: INTO, found: EOF".to_string())
+        ParserError::SpannedParserError("Expected: INTO, found: EOF".to_string(), Span::empty())
    );
     // missing CLUSTER BY columns
     assert_eq!(
      hive_and_generic().parse_sql_statements(
           "CREATE TABLE db.table_name (a INT, b STRING) PARTITIONED BY (a INT, b STRING) CLUSTERED BY () INTO 4 BUCKETS"
      ).unwrap_err(),
-          ParserError::ParserError("Expected: identifier, found: )".to_string())
+          ParserError::SpannedParserError("Expected: identifier, found: )".to_string(), Span::empty())
     );
     // missing SORT BY columns
     assert_eq!(
      hive_and_generic().parse_sql_statements(
           "CREATE TABLE db.table_name (a INT, b STRING) PARTITIONED BY (a INT, b STRING) CLUSTERED BY (a, b) SORTED BY INTO 4 BUCKETS"
      ).unwrap_err(),
-          ParserError::ParserError("Expected: (, found: INTO".to_string())
+          ParserError::SpannedParserError("Expected: (, found: INTO".to_string(), Span::empty())
     );
     // missing number BUCKETS
     assert_eq!(
      hive_and_generic().parse_sql_statements(
           "CREATE TABLE db.table_name (a INT, b STRING) PARTITIONED BY (a INT, b STRING) CLUSTERED BY (a, b) SORTED BY (a ASC, b DESC) INTO"
      ).unwrap_err(),
-          ParserError::ParserError("Expected: a value, found: EOF".to_string())
+          ParserError::SpannedParserError("Expected: a value, found: EOF".to_string(), Span::empty())
     );
 }
 
@@ -387,8 +391,9 @@ fn set_statement_with_minus() {
 
     assert_eq!(
         hive().parse_sql_statements("SET hive.tez.java.opts = -"),
-        Err(ParserError::ParserError(
-            "Expected: variable value, found: EOF".to_string()
+        Err(ParserError::SpannedParserError(
+            "Expected: variable value, found: EOF".to_string(),
+            Span::empty(),
         ))
     )
 }
@@ -428,15 +433,19 @@ fn parse_create_function() {
 
     assert_eq!(
         unsupported_dialects.parse_sql_statements(sql).unwrap_err(),
-        ParserError::ParserError(
-            "Expected: an object type after CREATE, found: FUNCTION".to_string()
+        ParserError::SpannedParserError(
+            "Expected: an object type after CREATE, found: FUNCTION".to_string(),
+            Span::empty(),
         )
     );
 
     let sql = "CREATE TEMPORARY FUNCTION mydb.myfunc AS 'org.random.class.Name' USING JAR";
     assert_eq!(
         hive().parse_sql_statements(sql).unwrap_err(),
-        ParserError::ParserError("Expected: literal string, found: EOF".to_string()),
+        ParserError::SpannedParserError(
+            "Expected: literal string, found: EOF".to_string(),
+            Span::empty()
+        ),
     );
 }
 

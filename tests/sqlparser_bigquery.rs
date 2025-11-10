@@ -295,13 +295,13 @@ fn parse_begin() {
         bigquery()
             .parse_sql_statements("BEGIN SELECT 1; SELECT 2 END")
             .unwrap_err(),
-        ParserError::ParserError("Expected: ;, found: END".to_string())
+        ParserError::SpannedParserError("Expected: ;, found: END".to_string(), Span::empty())
     );
     assert_eq!(
         bigquery()
             .parse_sql_statements("BEGIN SELECT 1; EXCEPTION WHEN ERROR THEN SELECT 2 END")
             .unwrap_err(),
-        ParserError::ParserError("Expected: ;, found: END".to_string())
+        ParserError::SpannedParserError("Expected: ;, found: END".to_string(), Span::empty())
     );
 }
 
@@ -2011,7 +2011,7 @@ fn parse_merge_invalid_statements() {
     ] {
         let res = dialects.parse_sql_statements(sql);
         assert_eq!(
-            ParserError::ParserError(err_msg.to_string()),
+            ParserError::SpannedParserError(err_msg.to_string(), Span::empty()),
             res.unwrap_err()
         );
     }
@@ -2135,13 +2135,19 @@ fn parse_big_query_declare() {
 
     let error_sql = "DECLARE x";
     assert_eq!(
-        ParserError::ParserError("Expected: a data type name, found: EOF".to_owned()),
+        ParserError::SpannedParserError(
+            "Expected: a data type name, found: EOF".to_owned(),
+            Span::empty()
+        ),
         bigquery().parse_sql_statements(error_sql).unwrap_err()
     );
 
     let error_sql = "DECLARE x 42";
     assert_eq!(
-        ParserError::ParserError("Expected: a data type name, found: 42".to_owned()),
+        ParserError::SpannedParserError(
+            "Expected: a data type name, found: 42".to_owned(),
+            Span::empty()
+        ),
         bigquery().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -2345,7 +2351,7 @@ fn test_bigquery_create_function() {
     ];
     for (sql, error) in error_sqls {
         assert_eq!(
-            ParserError::ParserError(error.to_owned()),
+            ParserError::SpannedParserError(error.to_owned(), Span::empty()),
             bigquery().parse_sql_statements(sql).unwrap_err()
         );
     }
@@ -2375,7 +2381,7 @@ fn test_bigquery_trim() {
     // missing comma separation
     let error_sql = "SELECT TRIM('xyz' 'a')";
     assert_eq!(
-        ParserError::ParserError("Expected: ), found: 'a'".to_owned()),
+        ParserError::SpannedParserError("Expected: ), found: 'a'".to_owned(), Span::empty()),
         bigquery().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -2538,7 +2544,7 @@ fn test_struct_trailing_and_nested_bracket() {
 
     // Bad case with missing closing bracket
     assert_eq!(
-        ParserError::ParserError("Expected: >, found: )".to_owned()),
+        ParserError::SpannedParserError("Expected: >, found: )".to_owned(), Span::empty()),
         bigquery()
             .parse_sql_statements("CREATE TABLE my_table(f1 STRUCT<a STRING, b INT64)")
             .unwrap_err()
@@ -2546,8 +2552,9 @@ fn test_struct_trailing_and_nested_bracket() {
 
     // Bad case with redundant closing bracket
     assert_eq!(
-        ParserError::ParserError(
-            "unmatched > after parsing data type STRUCT<a STRING, b INT64>)".to_owned()
+        ParserError::SpannedParserError(
+            "unmatched > after parsing data type STRUCT<a STRING, b INT64>".to_owned(),
+            Span::empty()
         ),
         bigquery()
             .parse_sql_statements("CREATE TABLE my_table(f1 STRUCT<a STRING, b INT64>>)")
@@ -2556,8 +2563,9 @@ fn test_struct_trailing_and_nested_bracket() {
 
     // Base case with redundant closing bracket in nested struct
     assert_eq!(
-        ParserError::ParserError(
-            "Expected: ',' or ')' after column definition, found: >".to_owned()
+        ParserError::SpannedParserError(
+            "Expected: ',' or ')' after column definition, found: >".to_owned(),
+            Span::empty()
         ),
         bigquery()
             .parse_sql_statements("CREATE TABLE my_table(f1 STRUCT<a STRUCT<b INT>>>, c INT64)")
@@ -2569,7 +2577,7 @@ fn test_struct_trailing_and_nested_bracket() {
         bigquery_and_generic()
             .parse_sql_statements(sql)
             .unwrap_err(),
-        ParserError::ParserError("unmatched > in STRUCT literal".to_string())
+        ParserError::SpannedParserError("unmatched > in STRUCT literal".to_string(), Span::empty())
     );
 
     let sql = "SELECT STRUCT<STRUCT<INT64>>>(NULL)";
@@ -2577,7 +2585,7 @@ fn test_struct_trailing_and_nested_bracket() {
         bigquery_and_generic()
             .parse_sql_statements(sql)
             .unwrap_err(),
-        ParserError::ParserError("Expected: (, found: >".to_string())
+        ParserError::SpannedParserError("Expected: (, found: >".to_string(), Span::empty())
     );
 
     let sql = "CREATE TABLE table (x STRUCT<STRUCT<INT64>>>)";
@@ -2585,8 +2593,9 @@ fn test_struct_trailing_and_nested_bracket() {
         bigquery_and_generic()
             .parse_sql_statements(sql)
             .unwrap_err(),
-        ParserError::ParserError(
-            "Expected: ',' or ')' after column definition, found: >".to_string()
+        ParserError::SpannedParserError(
+            "Expected: ',' or ')' after column definition, found: >".to_string(),
+            Span::empty()
         )
     );
 }

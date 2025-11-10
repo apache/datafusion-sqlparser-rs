@@ -423,15 +423,17 @@ fn test_snowflake_create_global_table() {
 fn test_snowflake_create_invalid_local_global_table() {
     assert_eq!(
         snowflake().parse_sql_statements("CREATE LOCAL GLOBAL TABLE my_table (a INT)"),
-        Err(ParserError::ParserError(
-            "Expected: an SQL statement, found: LOCAL".to_string()
+        Err(ParserError::SpannedParserError(
+            "Expected: an SQL statement, found: LOCAL".to_string(),
+            Span::empty(),
         ))
     );
 
     assert_eq!(
         snowflake().parse_sql_statements("CREATE GLOBAL LOCAL TABLE my_table (a INT)"),
-        Err(ParserError::ParserError(
-            "Expected: an SQL statement, found: GLOBAL".to_string()
+        Err(ParserError::SpannedParserError(
+            "Expected: an SQL statement, found: GLOBAL".to_string(),
+            Span::empty(),
         ))
     );
 }
@@ -440,22 +442,25 @@ fn test_snowflake_create_invalid_local_global_table() {
 fn test_snowflake_create_invalid_temporal_table() {
     assert_eq!(
         snowflake().parse_sql_statements("CREATE TEMP TEMPORARY TABLE my_table (a INT)"),
-        Err(ParserError::ParserError(
-            "Expected: an object type after CREATE, found: TEMPORARY".to_string()
+        Err(ParserError::SpannedParserError(
+            "Expected: an object type after CREATE, found: TEMPORARY".to_string(),
+            Span::empty(),
         ))
     );
 
     assert_eq!(
         snowflake().parse_sql_statements("CREATE TEMP VOLATILE TABLE my_table (a INT)"),
-        Err(ParserError::ParserError(
-            "Expected: an object type after CREATE, found: VOLATILE".to_string()
+        Err(ParserError::SpannedParserError(
+            "Expected: an object type after CREATE, found: VOLATILE".to_string(),
+            Span::empty(),
         ))
     );
 
     assert_eq!(
         snowflake().parse_sql_statements("CREATE TEMP TRANSIENT TABLE my_table (a INT)"),
-        Err(ParserError::ParserError(
-            "Expected: an object type after CREATE, found: TRANSIENT".to_string()
+        Err(ParserError::SpannedParserError(
+            "Expected: an object type after CREATE, found: TRANSIENT".to_string(),
+            Span::empty(),
         ))
     );
 }
@@ -1845,13 +1850,13 @@ fn parse_snowflake_declare_cursor() {
 
     let error_sql = "DECLARE c1 CURSOR SELECT id FROM invoices";
     assert_eq!(
-        ParserError::ParserError("Expected: FOR, found: SELECT".to_owned()),
+        ParserError::SpannedParserError("Expected: FOR, found: SELECT".to_owned(), Span::empty()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 
     let error_sql = "DECLARE c1 CURSOR res";
     assert_eq!(
-        ParserError::ParserError("Expected: FOR, found: res".to_owned()),
+        ParserError::SpannedParserError("Expected: FOR, found: res".to_owned(), Span::empty()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -1899,13 +1904,19 @@ fn parse_snowflake_declare_result_set() {
 
     let error_sql = "DECLARE res RESULTSET DEFAULT";
     assert_eq!(
-        ParserError::ParserError("Expected: an expression, found: EOF".to_owned()),
+        ParserError::SpannedParserError(
+            "Expected: an expression, found: EOF".to_owned(),
+            Span::empty()
+        ),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 
     let error_sql = "DECLARE res RESULTSET :=";
     assert_eq!(
-        ParserError::ParserError("Expected: an expression, found: EOF".to_owned()),
+        ParserError::SpannedParserError(
+            "Expected: an expression, found: EOF".to_owned(),
+            Span::empty()
+        ),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -1991,19 +2002,28 @@ fn parse_snowflake_declare_variable() {
 
     let error_sql = "DECLARE profit INT 2";
     assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: 2".to_owned()),
+        ParserError::SpannedParserError(
+            "Expected: end of statement, found: 2".to_owned(),
+            Span::empty()
+        ),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 
     let error_sql = "DECLARE profit INT DEFAULT";
     assert_eq!(
-        ParserError::ParserError("Expected: an expression, found: EOF".to_owned()),
+        ParserError::SpannedParserError(
+            "Expected: an expression, found: EOF".to_owned(),
+            Span::empty()
+        ),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 
     let error_sql = "DECLARE profit DEFAULT";
     assert_eq!(
-        ParserError::ParserError("Expected: an expression, found: EOF".to_owned()),
+        ParserError::SpannedParserError(
+            "Expected: an expression, found: EOF".to_owned(),
+            Span::empty()
+        ),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -2038,7 +2058,10 @@ fn parse_snowflake_declare_multi_statements() {
 
     let error_sql = "DECLARE profit DEFAULT 42 c1 CURSOR FOR res;";
     assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: c1".to_owned()),
+        ParserError::SpannedParserError(
+            "Expected: end of statement, found: c1".to_owned(),
+            Span::empty()
+        ),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -2763,7 +2786,7 @@ fn test_snowflake_trim() {
     // missing comma separation
     let error_sql = "SELECT TRIM('xyz' 'a')";
     assert_eq!(
-        ParserError::ParserError("Expected: ), found: 'a'".to_owned()),
+        ParserError::SpannedParserError("Expected: ), found: 'a'".to_owned(), Span::empty()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -3247,7 +3270,10 @@ fn parse_use() {
     for sql in &invalid_cases {
         assert_eq!(
             snowflake().parse_sql_statements(sql).unwrap_err(),
-            ParserError::ParserError("Expected: identifier, found: EOF".to_string()),
+            ParserError::SpannedParserError(
+                "Expected: identifier, found: EOF".to_string(),
+                Span::empty()
+            ),
         );
     }
 

@@ -39,7 +39,7 @@ fn custom_prefix_parser() -> Result<(), ParserError> {
             is_identifier_part(ch)
         }
 
-        fn parse_prefix(&self, parser: &mut Parser) -> Option<Result<Expr, ParserError>> {
+        fn parse_prefix(&self, parser: &Parser) -> Option<Result<Expr, ParserError>> {
             if parser.consume_token(&Token::Number("1".to_string(), false)) {
                 Some(Ok(Expr::Value(Value::Null.with_empty_span())))
             } else {
@@ -72,7 +72,7 @@ fn custom_infix_parser() -> Result<(), ParserError> {
 
         fn parse_infix(
             &self,
-            parser: &mut Parser,
+            parser: &Parser,
             expr: &Expr,
             _precedence: u8,
         ) -> Option<Result<Expr, ParserError>> {
@@ -110,7 +110,7 @@ fn custom_statement_parser() -> Result<(), ParserError> {
             is_identifier_part(ch)
         }
 
-        fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
+        fn parse_statement(&self, parser: &Parser) -> Option<Result<Statement, ParserError>> {
             if parser.parse_keyword(Keyword::SELECT) {
                 for _ in 0..3 {
                     let _ = parser.next_token();

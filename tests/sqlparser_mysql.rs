@@ -26,8 +26,8 @@ use sqlparser::ast::MysqlInsertPriority::{Delayed, HighPriority, LowPriority};
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MySqlDialect};
 use sqlparser::parser::{ParserError, ParserOptions};
-use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Span;
+use sqlparser::tokenizer::Token;
 use test_utils::*;
 
 #[macro_use]

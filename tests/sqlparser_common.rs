@@ -39,8 +39,8 @@ use sqlparser::dialect::{
 };
 use sqlparser::keywords::{Keyword, ALL_KEYWORDS};
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
-use sqlparser::tokenizer::{Location, Span};
 use sqlparser::tokenizer::Tokenizer;
+use sqlparser::tokenizer::{Location, Span};
 use test_utils::{
     all_dialects, all_dialects_where, all_dialects_with_options, alter_table_op, assert_eq_vec,
     call, expr_from_projection, join, number, only, table, table_alias, table_from_name,

@@ -9462,7 +9462,11 @@ impl<'a> Parser<'a> {
             operations,
             location,
             on_cluster,
-            iceberg,
+            table_type: if iceberg {
+                Some(AlterTableType::Iceberg)
+            } else {
+                None
+            },
             end_token: AttachedToken(end_token),
         }
         .into())

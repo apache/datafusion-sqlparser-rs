@@ -968,3 +968,20 @@ fn parse_create(){
         _ => panic!("Expected a SimplePatternElement in the PatternPart"),
     }
 }
+
+#[test]
+fn desugar_cypher_create() {
+    let sql = "CREATE (a:Person {name: 'Alice', age: 30})";
+    let dialect = CypherDialect {};
+    // let mut tokenizer = Tokenizer::new(&dialect, sql);
+    // let tokens = tokenizer.tokenize().unwrap();
+
+    let output = match Parser::parse_sql(&dialect, sql) {
+        Ok(ast) => {
+            // Convert each statement back to a string
+            let stmt_strings: Vec<String> = ast.into_iter().map(|stmt| stmt.to_string()).collect();
+            println!("{:#?}", stmt_strings);
+        }
+        _ => panic!("Parsing failed"),
+    };
+}

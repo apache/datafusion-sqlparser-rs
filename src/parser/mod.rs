@@ -580,7 +580,14 @@ impl<'a> Parser<'a> {
                     self.parse_detach_duckdb_database()
                 }
                 Keyword::MSCK => self.parse_msck(),
-                Keyword::CREATE => self.parse_create(),
+                Keyword::CREATE  => {
+                    if dialect_of!(self is CypherDialect){
+                        self.prev_token();
+                        self.parse_cypher_create()
+                    } else {
+                        self.parse_create()
+                    }
+                },
                 Keyword::CACHE => self.parse_cache_table(),
                 Keyword::DROP => self.parse_drop(),
                 Keyword::DISCARD => self.parse_discard(),
@@ -664,6 +671,97 @@ impl<'a> Parser<'a> {
             }
             _ => self.expected("an SQL statement", next_token),
         }
+    }
+
+    pub fn parse_cypher_create(&mut self) -> Result<Statement, ParserError> {
+        let create_clause = self.parse_cypher_create_clause()?;
+        let sql = self.desugar_cypher_create(create_clause)?;
+        Ok(sql)
+    }
+
+    pub fn desugar_cypher_create(
+        &mut self,
+        create_clause: CypherCreateClause,
+    ) -> Result<Statement, ParserError> {
+        let mut columns = Vec::new();
+        let mut values = Vec::new();
+
+        for pattern_part in create_clause.pattern.parts {
+            // Process the node
+            let node = match pattern_part.anon_pattern_part {
+                PatternElement::Simple(simple_element) => {
+                    simple_element.node
+                }
+                _ => {
+                    return Err(ParserError::ParserError(
+                        "Only simple node patterns are supported in CREATE clause for desugaring to INSERT statements.".to_string()
+                    ));
+                }
+            };
+            let mut column_names = Vec::new();
+            let mut column_values = Vec::new();
+
+            match node.properties {
+                    Some(Expr::Map(map)) => {
+                        for key_value in map.entries {
+                            column_names.push(Ident::new(key_value.key.to_string()));
+                            column_values.push(*key_value.value);
+                        }
+                    },
+                    Some(other_expr) => {
+                        return Err(ParserError::ParserError(
+                            format!("Node properties must be a map expression for desugaring to INSERT statements. Found: {:?}", other_expr)
+                        ));
+                    },
+                    _ => { }
+                }
+
+                columns.extend(column_names.clone());
+
+                values.push(Expr::Tuple(column_values));
+        }
+
+        let values_clause = Values {
+                explicit_row: false,
+                rows: vec![values],
+            };
+        let source = Some(Box::new(Query {
+            with: None,
+            body: Box::new(SetExpr::Values(values_clause)),
+            order_by: None,
+            limit_clause: None,
+            for_clause: None,
+            settings: None,
+            format_clause: None,
+            pipe_operators: vec![],
+            fetch: None,
+            locks: vec![],
+        }));
+
+        let table_object = TableObject::TableName(ObjectName(
+            vec![ObjectNamePart::Identifier(Ident::new("nodes"))]));
+
+        Ok(Statement::Insert(Insert {
+            or: None,
+            table: table_object,
+            table_alias: None,
+            ignore: false,
+            into: true,
+            overwrite: false,
+            partitioned: None,
+            columns: columns,
+            after_columns: vec![],
+            source: source,
+            assignments: vec![],
+            has_table_keyword: false,
+            on: None,
+            returning: None,
+            replace_into: false,
+            priority: None,
+            insert_alias: None,
+            settings: None,
+            format_clause: None,
+        }))
     }
 
     pub fn parse_cypher_query(&mut self) -> Result<CypherSingleQuery, ParserError> {

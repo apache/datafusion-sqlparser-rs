@@ -1245,8 +1245,8 @@ impl Spanned for Insert {
         } = self;
 
         union_spans(
-            core::iter::once(table.span())
-                .chain(core::iter::once(insert_token.0.span))
+            core::iter::once(insert_token.0.span)
+                .chain(core::iter::once(table.span()))
                 .chain(table_alias.as_ref().map(|i| i.span))
                 .chain(columns.iter().map(|i| i.span))
                 .chain(source.as_ref().map(|q| q.span()))
@@ -2564,5 +2564,63 @@ ALTER TABLE users
 
         assert_eq!(stmt_span.start, (2, 7).into());
         assert_eq!(stmt_span.end, (5, 17).into());
+    }
+
+    #[test]
+    fn test_insert_statement_span() {
+        let sql = r#"
+/* foo */ INSERT  INTO  FOO  (X, Y, Z)
+  SELECT 1, 2, 3
+  FROM DUAL
+;"#;
+
+        let r = Parser::parse_sql(&crate::dialect::GenericDialect, sql).unwrap();
+        assert_eq!(1, r.len());
+
+        let stmt_span = r[0].span();
+
+        assert_eq!(stmt_span.start, (2, 11).into());
+        assert_eq!(stmt_span.end, (4, 12).into());
+    }
+
+    #[test]
+    fn test_replace_statement_span() {
+        let sql = r#"
+/* foo */ REPLACE INTO
+    cities(name,population)
+SELECT
+    name,
+    population
+FROM
+   cities
+WHERE id = 1
+;"#;
+
+        let r = Parser::parse_sql(&crate::dialect::GenericDialect, sql).unwrap();
+        assert_eq!(1, r.len());
+
+        dbg!(&r[0]);
+
+        let stmt_span = r[0].span();
+
+        assert_eq!(stmt_span.start, (2, 11).into());
+        assert_eq!(stmt_span.end, (9, 13).into());
+    }
+
+    #[test]
+    fn test_delete_statement_span() {
+        let sql = r#"-- foo
+      DELETE /* quux */
+        FROM foo
+       WHERE foo.x = 42
+;"#;
+
+        let r = Parser::parse_sql(&crate::dialect::GenericDialect, sql).unwrap();
+        assert_eq!(1, r.len());
+
+        let stmt_span = r[0].span();
+
+        assert_eq!(stmt_span.start, (2, 7).into());
+        assert_eq!(stmt_span.end, (4, 24).into());
     }
 }

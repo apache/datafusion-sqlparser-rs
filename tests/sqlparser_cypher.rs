@@ -28,7 +28,7 @@ fn parse_simple_node_pattern() {
     let tokens = tokenizer.tokenize().unwrap();
     let mut parser = Parser::new(&dialect).with_tokens(tokens);
     
-    let node = parser.parse_node_pattern().unwrap();
+    let node = parser.parse_cypher_node_pattern().unwrap();
     assert_eq!(
         node,
         NodePattern {
@@ -40,14 +40,14 @@ fn parse_simple_node_pattern() {
 }
 
 #[test]
-fn parse_node_pattern_with_properties() {
+fn parse_cypher_node_pattern_with_properties() {
     let sql = "(n:Person {name: 'Alice', age: 30})";
     let dialect = CypherDialect {};
     let mut tokenizer = Tokenizer::new(&dialect, sql);
     let tokens = tokenizer.tokenize().unwrap();
     let mut parser = Parser::new(&dialect).with_tokens(tokens);
     
-    let node = parser.parse_node_pattern().unwrap();
+    let node = parser.parse_cypher_node_pattern().unwrap();
     assert_eq!(
         node,
         NodePattern {
@@ -70,14 +70,14 @@ fn parse_node_pattern_with_properties() {
 }
 
 #[test]
-fn parse_relationship_details() {
+fn parse_cypher_relationship_details() {
     let sql = "[r:KNOWS]"; 
     let dialect = CypherDialect {};
     let mut tokenizer = Tokenizer::new(&dialect, sql);
     let tokens = tokenizer.tokenize().unwrap();
     let mut parser = Parser::new(&dialect).with_tokens(tokens);
     
-    let rel = parser.parse_relationship_details().unwrap();
+    let rel = parser.parse_cypher_relationship_details().unwrap();
     assert_eq!(
         rel,
         RelationshipDetail {
@@ -97,7 +97,7 @@ fn parse_relationship_with_properties() {
     let tokens = tokenizer.tokenize().unwrap();
     let mut parser = Parser::new(&dialect).with_tokens(tokens);
     
-    let rel = parser.parse_relationship_details().unwrap();
+    let rel = parser.parse_cypher_relationship_details().unwrap();
     assert_eq!(
         rel,
         RelationshipDetail {
@@ -124,7 +124,7 @@ fn parse_variable_length_relationship() {
     let tokens = tokenizer.tokenize().unwrap();
     let mut parser = Parser::new(&dialect).with_tokens(tokens);
     
-    let rel = parser.parse_relationship_details().unwrap();
+    let rel = parser.parse_cypher_relationship_details().unwrap();
     assert_eq!(
         rel,
         RelationshipDetail {
@@ -147,7 +147,7 @@ fn parse_relationship_with_length_and_properties() {
     let tokens = tokenizer.tokenize().unwrap();
     let mut parser = Parser::new(&dialect).with_tokens(tokens);
     
-    let rel = parser.parse_relationship_details().unwrap();
+    let rel = parser.parse_cypher_relationship_details().unwrap();
     assert_eq!(
         rel,
         RelationshipDetail {
@@ -170,14 +170,14 @@ fn parse_relationship_with_length_and_properties() {
 }
 
 #[test]
-fn parse_relationship_pattern_undirected() {
+fn parse_cypher_relationship_pattern_undirected() {
     let sql = "-[r:KNOWS]-"; 
     let dialect = CypherDialect {};
     let mut tokenizer = Tokenizer::new(&dialect, sql);
     let tokens = tokenizer.tokenize().unwrap();
     let mut parser = Parser::new(&dialect).with_tokens(tokens);
     
-    let rel = parser.parse_relationship_pattern().unwrap().unwrap();
+    let rel = parser.parse_cypher_relationship_pattern().unwrap().unwrap();
     assert_eq!(
         rel,
         RelationshipPattern {
@@ -194,14 +194,14 @@ fn parse_relationship_pattern_undirected() {
 }
 
 #[test]
-fn parse_relationship_pattern_outgoing() {
+fn parse_cypher_relationship_pattern_outgoing() {
     let sql = "<-[r:KNOWS]->"; 
     let dialect = CypherDialect {};
     let mut tokenizer = Tokenizer::new(&dialect, sql);
     let tokens = tokenizer.tokenize().unwrap();
     let mut parser = Parser::new(&dialect).with_tokens(tokens);
     
-    let rel = parser.parse_relationship_pattern().unwrap().unwrap();
+    let rel = parser.parse_cypher_relationship_pattern().unwrap().unwrap();
     assert_eq!(
         rel,
         RelationshipPattern {
@@ -218,14 +218,14 @@ fn parse_relationship_pattern_outgoing() {
 }
 
 #[test]
-fn parse_relationship_pattern_incoming() {
+fn parse_cypher_relationship_pattern_incoming() {
     let sql = "->[r:KNOWS]<-"; 
     let dialect = CypherDialect {};
     let mut tokenizer = Tokenizer::new(&dialect, sql);
     let tokens = tokenizer.tokenize().unwrap();
     let mut parser = Parser::new(&dialect).with_tokens(tokens);
     
-    let rel = parser.parse_relationship_pattern().unwrap().unwrap();
+    let rel = parser.parse_cypher_relationship_pattern().unwrap().unwrap();
     assert_eq!(
         rel,
         RelationshipPattern {
@@ -242,7 +242,7 @@ fn parse_relationship_pattern_incoming() {
 }
 
 #[test]
-fn parse_pattern_chain() {
+fn parse_cypher_pattern_chain() {
     let sql = "-[r:KNOWS]->(b:Person)<-[s:FRIENDS_WITH]-(c:Person)";
     let dialect = CypherDialect {};
     let mut tokenizer = Tokenizer::new(&dialect, sql);
@@ -250,7 +250,7 @@ fn parse_pattern_chain() {
     
     let mut parser = Parser::new(&dialect).with_tokens(tokens);
     
-    let pattern_chain = parser.parse_pattern_chain().unwrap();
+    let pattern_chain = parser.parse_cypher_pattern_chain().unwrap();
     
     assert_eq!(pattern_chain.len(), 2, "Expected 2 chain elements");
     
@@ -272,7 +272,7 @@ fn parse_full_path_pattern() {
     
     let mut parser = Parser::new(&dialect).with_tokens(tokens);
     
-    let path_pattern = parser.parse_simple_pattern_element().unwrap();
+    let path_pattern = parser.parse_cypher_simple_pattern_element().unwrap();
     
     assert_eq!(path_pattern.node.variable, Some(Ident::new("a")), "Start node variable should be 'a'");
     assert_eq!(path_pattern.chain.len(), 2, "Expected 2 chain elements in the path pattern");
@@ -287,7 +287,7 @@ fn parse_full_path_pattern() {
 }
 
 #[test]
-fn parse_simple_pattern_element() {
+fn parse_cypher_simple_pattern_element() {
     let sql = "(a:Person)-[r:KNOWS]->(b:Person)";
     let dialect = CypherDialect {};
     let mut tokenizer = Tokenizer::new(&dialect, sql);
@@ -295,7 +295,7 @@ fn parse_simple_pattern_element() {
     
     let mut parser = Parser::new(&dialect).with_tokens(tokens);
     
-    let path_pattern = parser.parse_simple_pattern_element().unwrap();
+    let path_pattern = parser.parse_cypher_simple_pattern_element().unwrap();
     
     assert_eq!(path_pattern.node.variable, Some(Ident::new("a")), "Start node variable should be 'a'");
     assert_eq!(path_pattern.chain.len(), 1, "Expected 1 chain element in the path pattern");
@@ -314,7 +314,7 @@ fn parse_nested_pattern_element() {
     
     let mut parser = Parser::new(&dialect).with_tokens(tokens);
     
-    let nested_pattern = parser.parse_pattern_element().unwrap();
+    let nested_pattern = parser.parse_cypher_pattern_element().unwrap();
     
     match nested_pattern {
         PatternElement::Nested(boxed_element) => {
@@ -343,7 +343,7 @@ fn parse_pattern_part_with_variable(){
     
     let mut parser = Parser::new(&dialect).with_tokens(tokens);
     
-    let pattern_part = parser.parse_pattern_part().unwrap();
+    let pattern_part = parser.parse_cypher_pattern_part().unwrap();
 
     assert_eq!(pattern_part.variable, Some(Ident::new("v")), "Pattern part variable should be 'v'");
 
@@ -369,7 +369,7 @@ fn parse_pattern_part_no_variable(){
     
     let mut parser = Parser::new(&dialect).with_tokens(tokens);
     
-    let pattern_part = parser.parse_pattern_part().unwrap();
+    let pattern_part = parser.parse_cypher_pattern_part().unwrap();
 
     assert_eq!(pattern_part.variable, None, "Pattern part variable should be None");
 
@@ -482,7 +482,7 @@ fn parse_match_clause() {
     
     let mut parser = Parser::new(&dialect).with_tokens(tokens);
     
-    let match_clause = parser.parse_match_clause().unwrap();
+    let match_clause = parser.parse_cypher_match_clause().unwrap();
 
     match match_clause {
         ReadingClause::Match(match_clause) => {
@@ -515,7 +515,7 @@ fn parse_optional_match_clause() {
     
     let mut parser = Parser::new(&dialect).with_tokens(tokens);
     
-    let match_clause = parser.parse_match_clause().unwrap();
+    let match_clause = parser.parse_cypher_match_clause().unwrap();
 
     match match_clause {
         ReadingClause::Match(match_clause) => {
@@ -549,8 +549,8 @@ fn parse_multiple_match_clauses() {
     
     let mut parser = Parser::new(&dialect).with_tokens(tokens);
     
-    let first_match_clause = parser.parse_match_clause().unwrap();
-    let second_match_clause = parser.parse_match_clause().unwrap();
+    let first_match_clause = parser.parse_cypher_match_clause().unwrap();
+    let second_match_clause = parser.parse_cypher_match_clause().unwrap();
 
     match first_match_clause {
         ReadingClause::Match(match_clause) => {
@@ -784,7 +784,7 @@ fn parse_cypher_query(){
     let cypher_query = parser.parse_cypher_query().unwrap();
 
     match cypher_query{
-        SingleQuery::Single(simple_cypher_query) => {
+        CypherSingleQuery::Single(simple_cypher_query) => {
             match simple_cypher_query {
                 SinglePartQuery::Simple(simple_query) => {
                     let match_clause = simple_query.reading_clause;

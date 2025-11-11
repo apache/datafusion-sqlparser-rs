@@ -666,14 +666,14 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_cypher_query(&mut self) -> Result<SingleQuery, ParserError> {
+    pub fn parse_cypher_query(&mut self) -> Result<CypherSingleQuery, ParserError> {
         let single_part_query = self.parse_cypher_single_part_query()?;
 
-        Ok(SingleQuery::Single(single_part_query))
+        Ok(CypherSingleQuery::Single(single_part_query))
     }
 
     pub fn parse_cypher_single_part_query(&mut self) -> Result<SinglePartQuery, ParserError> {
-        let reading_clause = self.parse_match_clause()?;
+        let reading_clause = self.parse_cypher_match_clause()?;
         let returning_clause = self.parse_cypher_return()?;
 
         Ok(SinglePartQuery::Simple(SimpleSinglePartQuery {
@@ -728,7 +728,7 @@ impl<'a> Parser<'a> {
         Ok(CreateClause { pattern })
     }
 
-    pub fn parse_match_clause(&mut self) -> Result<ReadingClause, ParserError> {
+    pub fn parse_cypher_match_clause(&mut self) -> Result<ReadingClause, ParserError> {
 
         let optional = if self.parse_keywords(&[Keyword::OPTIONAL]) {
             true
@@ -747,7 +747,7 @@ impl<'a> Parser<'a> {
         let mut parts = Vec::new();
 
         loop {
-            let part = self.parse_pattern_part()?;
+            let part = self.parse_cypher_pattern_part()?;
             parts.push(part);
 
             if !self.consume_token(&Token::Comma) {
@@ -758,7 +758,7 @@ impl<'a> Parser<'a> {
         Ok(Pattern { parts })        
     }
 
-    pub fn parse_pattern_part(&mut self) -> Result<PatternPart, ParserError> {
+    pub fn parse_cypher_pattern_part(&mut self) -> Result<PatternPart, ParserError> {
 
         let variable = if let Token::Word(_) = &self.peek_token().token {
             let ident = self.parse_identifier()?;
@@ -770,7 +770,7 @@ impl<'a> Parser<'a> {
 
         
         // Parse the anonymous pattern part
-        let anon_pattern_part = self.parse_pattern_element()?;
+        let anon_pattern_part = self.parse_cypher_pattern_element()?;
 
         Ok(PatternPart {
             variable,
@@ -778,23 +778,23 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_pattern_element(&mut self) -> Result<PatternElement, ParserError> {
+    pub fn parse_cypher_pattern_element(&mut self) -> Result<PatternElement, ParserError> {
 
         if self.consume_token(&Token::LParen) && self.peek_token().token == Token::LParen {
-            let nested_element = self.parse_pattern_element()?;
+            let nested_element = self.parse_cypher_pattern_element()?;
             self.expect_token(&Token::RParen)?;
             return Ok(PatternElement::Nested(Box::new(nested_element)))
         } else {
             self.prev_token();
-            let simple_element = self.parse_simple_pattern_element()?;
+            let simple_element = self.parse_cypher_simple_pattern_element()?;
             return Ok(PatternElement::Simple(simple_element))
         };
     }
 
-    pub fn parse_simple_pattern_element(&mut self) -> Result<SimplePatternElement, ParserError> {
+    pub fn parse_cypher_simple_pattern_element(&mut self) -> Result<SimplePatternElement, ParserError> {
         
-        let node = self.parse_node_pattern()?;
-        let chain = self.parse_pattern_chain()?;
+        let node = self.parse_cypher_node_pattern()?;
+        let chain = self.parse_cypher_pattern_chain()?;
 
         Ok(SimplePatternElement {
             node,
@@ -802,11 +802,11 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_pattern_chain(&mut self) -> Result<Vec<PatternElementChain>, ParserError> {
+    pub fn parse_cypher_pattern_chain(&mut self) -> Result<Vec<PatternElementChain>, ParserError> {
         let mut chain_elements = Vec::new();
 
-        while let Some(relationship) = self.parse_relationship_pattern()? {
-            let node = self.parse_node_pattern()?;
+        while let Some(relationship) = self.parse_cypher_relationship_pattern()? {
+            let node = self.parse_cypher_node_pattern()?;
 
             chain_elements.push(PatternElementChain{
                 relationship,
@@ -817,7 +817,7 @@ impl<'a> Parser<'a> {
         Ok(chain_elements)
     }
 
-    pub fn parse_relationship_pattern(&mut self) -> Result<Option<RelationshipPattern>, ParserError> {
+    pub fn parse_cypher_relationship_pattern(&mut self) -> Result<Option<RelationshipPattern>, ParserError> {
 
         if !(self.peek_token().token == Token::Lt
             || self.peek_token().token == Token::Arrow
@@ -836,7 +836,7 @@ impl<'a> Parser<'a> {
                 None
             };
 
-        let details = self.parse_relationship_details()?;
+        let details = self.parse_cypher_relationship_details()?;
 
         let r_direction = if self.consume_token(&Token::Arrow) {
                 Some(RelationshipDirection::Outgoing)
@@ -856,7 +856,7 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    pub fn parse_relationship_details(&mut self) -> Result<RelationshipDetail, ParserError> {
+    pub fn parse_cypher_relationship_details(&mut self) -> Result<RelationshipDetail, ParserError> {
         if self.consume_token(&Token::LBracket) {
             let variable = if let Token::Word(w) = &self.peek_token().token {
                 if w.keyword == Keyword::AS {
@@ -934,7 +934,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_node_pattern(&mut self) -> Result<NodePattern, ParserError> {
+    pub fn parse_cypher_node_pattern(&mut self) -> Result<NodePattern, ParserError> {
         self.expect_token(&Token::LParen)?;
 
             let variable = if let Token::Word(w) = &self.peek_token().token {

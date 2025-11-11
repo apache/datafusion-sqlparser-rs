@@ -971,7 +971,11 @@ fn parse_create(){
 
 #[test]
 fn desugar_cypher_create() {
-    let sql = "CREATE (a:Person {name: 'Alice', age: 30})";
+    let sql = "INSERT INTO nodes (label, properties)
+        VALUES 
+        ('Person', '{name: Alice, age: 30}'),
+        ('Person', '{name: Bob, age: 32}');
+        ";
     let dialect = CypherDialect {};
     // let mut tokenizer = Tokenizer::new(&dialect, sql);
     // let tokens = tokenizer.tokenize().unwrap();

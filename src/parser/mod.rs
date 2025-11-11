@@ -683,11 +683,13 @@ impl<'a> Parser<'a> {
         &mut self,
         create_clause: CypherCreateClause,
     ) -> Result<Statement, ParserError> {
-        let mut columns = Vec::new();
+
+        let mut columns = Vec::new();//vec![Ident::new("Label"), Ident::new("Properties")];
         let mut values = Vec::new();
 
         for pattern_part in create_clause.pattern.parts {
             // Process the node
+            let mut node_values = Vec::new();
             let node = match pattern_part.anon_pattern_part {
                 PatternElement::Simple(simple_element) => {
                     simple_element.node
@@ -698,32 +700,34 @@ impl<'a> Parser<'a> {
                     ));
                 }
             };
-            let mut column_names = Vec::new();
-            let mut column_values = Vec::new();
 
-            match node.properties {
-                    Some(Expr::Map(map)) => {
-                        for key_value in map.entries {
-                            column_names.push(Ident::new(key_value.key.to_string()));
-                            column_values.push(*key_value.value);
-                        }
-                    },
-                    Some(other_expr) => {
-                        return Err(ParserError::ParserError(
-                            format!("Node properties must be a map expression for desugaring to INSERT statements. Found: {:?}", other_expr)
-                        ));
-                    },
-                    _ => { }
+            let label = match node.labels.first() {
+                Some(l) => {
+                    let label_expr = Expr::Identifier(Ident::new(l.to_string()));
+                    columns.push(Ident::new("Label"));
+                    node_values.push(label_expr);
                 }
-
-                columns.extend(column_names.clone());
-
-                values.push(Expr::Tuple(column_values));
+                None => {},
+            };
+            let properties_str = match node.properties {
+                Some(Expr::Map(map)) => {
+                    let entries: Vec<String> = map.entries.into_iter()
+                        .map(|kv| format!("{}: {}", kv.key, kv.value))  // simple string
+                        .collect();
+                    let properties_str = format!("\'{{{}}}\'", entries.join(", "));
+                    columns.push(Ident::new("Properties"));
+                    node_values.push(
+                        Expr::Identifier(Ident::new(properties_str.to_string())),
+                    );
+                    values.push(node_values)
+                },
+                _ => {},
+            };
         }
 
         let values_clause = Values {
                 explicit_row: false,
-                rows: vec![values],
+                rows: values,
             };
         let source = Some(Box::new(Query {
             with: None,

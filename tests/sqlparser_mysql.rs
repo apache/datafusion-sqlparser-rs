@@ -27,7 +27,7 @@ use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MySqlDialect};
 use sqlparser::parser::{ParserError, ParserOptions};
 use sqlparser::tokenizer::Token;
-use sqlparser::tokenizer::{Span, TokenWithSpan};
+use sqlparser::tokenizer::Span;
 use test_utils::*;
 
 #[macro_use]
@@ -2632,7 +2632,7 @@ fn parse_update_with_joins() {
             returning,
             or: None,
             limit: None,
-            update_token,
+            update_token: _,
         }) => {
             assert_eq!(
                 TableWithJoins {
@@ -2707,13 +2707,6 @@ fn parse_update_with_joins() {
                 selection
             );
             assert_eq!(None, returning);
-            assert_eq!(
-                AttachedToken(TokenWithSpan {
-                    token: Token::make_keyword("UPDATE"),
-                    span: Span::new((1, 1).into(), (1, 7).into()),
-                }),
-                update_token
-            );
         }
         _ => unreachable!(),
     }

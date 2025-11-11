@@ -23,7 +23,7 @@
 mod test_utils;
 
 use helpers::attached_token::AttachedToken;
-use sqlparser::tokenizer::{Span, Token, TokenWithSpan};
+use sqlparser::tokenizer::Span;
 use test_utils::*;
 
 use sqlparser::ast::*;
@@ -5140,10 +5140,7 @@ fn test_simple_postgres_insert_with_alias() {
     assert_eq!(
         statement,
         Statement::Insert(Insert {
-            insert_token: AttachedToken(TokenWithSpan {
-                token: Token::make_keyword("INSERT"),
-                span: Span::new((1, 1).into(), (1, 7).into()),
-            }),
+            insert_token: AttachedToken::empty(),
             or: None,
             ignore: false,
             into: true,
@@ -5214,10 +5211,7 @@ fn test_simple_postgres_insert_with_alias() {
     assert_eq!(
         statement,
         Statement::Insert(Insert {
-            insert_token: AttachedToken(TokenWithSpan {
-                token: Token::make_keyword("INSERT"),
-                span: Span::new((1, 1).into(), (1, 7).into()),
-            }),
+            insert_token: AttachedToken::empty(),
             or: None,
             ignore: false,
             into: true,
@@ -5290,10 +5284,7 @@ fn test_simple_insert_with_quoted_alias() {
     assert_eq!(
         statement,
         Statement::Insert(Insert {
-            insert_token: AttachedToken(TokenWithSpan {
-                token: Token::make_keyword("INSERT"),
-                span: Span::new((1, 1).into(), (1, 7).into()),
-            }),
+            insert_token: AttachedToken::empty(),
             or: None,
             ignore: false,
             into: true,

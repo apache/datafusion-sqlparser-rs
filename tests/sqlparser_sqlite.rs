@@ -31,7 +31,7 @@ use sqlparser::ast::Value::Placeholder;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, SQLiteDialect};
 use sqlparser::parser::{ParserError, ParserOptions};
-use sqlparser::tokenizer::{Span, Token, TokenWithSpan};
+use sqlparser::tokenizer::Token;
 
 #[test]
 fn pragma_no_value() {
@@ -496,10 +496,7 @@ fn parse_update_tuple_row_values() {
             from: None,
             returning: None,
             limit: None,
-            update_token: AttachedToken(TokenWithSpan {
-                token: Token::make_keyword("UPDATE"),
-                span: Span::new((1, 1).into(), (1, 7).into())
-            })
+            update_token: AttachedToken::empty()
         })
     );
 }

@@ -39,8 +39,8 @@ use sqlparser::dialect::{
 };
 use sqlparser::keywords::{Keyword, ALL_KEYWORDS};
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
-use sqlparser::tokenizer::{Location, Span, TokenWithSpan};
-use sqlparser::tokenizer::{Token, Tokenizer};
+use sqlparser::tokenizer::{Location, Span};
+use sqlparser::tokenizer::Tokenizer;
 use test_utils::{
     all_dialects, all_dialects_where, all_dialects_with_options, alter_table_op, assert_eq_vec,
     call, expr_from_projection, join, number, only, table, table_alias, table_from_name,
@@ -456,10 +456,7 @@ fn parse_update_set_from() {
     assert_eq!(
         stmt,
         Statement::Update(Update {
-            update_token: AttachedToken(TokenWithSpan {
-                token: Token::make_keyword("UPDATE"),
-                span: Span::new((1, 1).into(), (1, 7).into()),
-            }),
+            update_token: AttachedToken::empty(),
             table: TableWithJoins {
                 relation: table_from_name(ObjectName::from(vec![Ident::new("t1")])),
                 joins: vec![],
@@ -555,7 +552,7 @@ fn parse_update_with_table_alias() {
             returning,
             or: None,
             limit: None,
-            update_token,
+            update_token: _,
         }) => {
             assert_eq!(
                 TableWithJoins {
@@ -604,13 +601,6 @@ fn parse_update_with_table_alias() {
                 selection
             );
             assert_eq!(None, returning);
-            assert_eq!(
-                AttachedToken(TokenWithSpan {
-                    token: Token::make_keyword("UPDATE"),
-                    span: Span::new((1, 1).into(), (1, 7).into()),
-                }),
-                update_token
-            );
         }
         _ => unreachable!(),
     }

@@ -485,7 +485,7 @@ fn parse_match_clause() {
     let match_clause = parser.parse_cypher_match_clause().unwrap();
 
     match match_clause {
-        ReadingClause::Match(match_clause) => {
+        CypherReadingClause::Match(match_clause) => {
     
             assert_eq!(match_clause.pattern.parts.len(), 1, "Expected 1 pattern part in the MATCH clause");
 
@@ -502,7 +502,7 @@ fn parse_match_clause() {
                 _ => panic!("Expected a SimplePatternElement in the PatternPart"),
             }
         },
-        _ => panic!("Expected a MatchClause"),
+        _ => panic!("Expected a CypherMatchClause"),
     }
 }
 
@@ -518,7 +518,7 @@ fn parse_optional_match_clause() {
     let match_clause = parser.parse_cypher_match_clause().unwrap();
 
     match match_clause {
-        ReadingClause::Match(match_clause) => {
+        CypherReadingClause::Match(match_clause) => {
             assert!(match_clause.optional, "MATCH clause should be optional");
     
             assert_eq!(match_clause.pattern.parts.len(), 1, "Expected 1 pattern part in the MATCH clause");
@@ -536,7 +536,7 @@ fn parse_optional_match_clause() {
                 _ => panic!("Expected a SimplePatternElement in the PatternPart"),
             }
         },
-        _ => panic!("Expected a MatchClause"),
+        _ => panic!("Expected a CypherMatchClause"),
     }
 }
 
@@ -553,7 +553,7 @@ fn parse_multiple_match_clauses() {
     let second_match_clause = parser.parse_cypher_match_clause().unwrap();
 
     match first_match_clause {
-        ReadingClause::Match(match_clause) => {
+        CypherReadingClause::Match(match_clause) => {
             assert!(!match_clause.optional, "First MATCH clause should not be optional");
     
             assert_eq!(match_clause.pattern.parts.len(), 1, "Expected 1 pattern part in the first MATCH clause");
@@ -571,11 +571,11 @@ fn parse_multiple_match_clauses() {
                 _ => panic!("Expected a SimplePatternElement in the PatternPart"),
             }
         },
-        _ => panic!("Expected a MatchClause"),
+        _ => panic!("Expected a CypherMatchClause"),
     }
 
     match second_match_clause {
-        ReadingClause::Match(match_clause) => {
+        CypherReadingClause::Match(match_clause) => {
             assert!(match_clause.optional, "Second MATCH clause should be optional");
     
             assert_eq!(match_clause.pattern.parts.len(), 1, "Expected 1 pattern part in the second MATCH clause");
@@ -592,7 +592,7 @@ fn parse_multiple_match_clauses() {
                 _ => panic!("Expected a SimplePatternElement in the PatternPart"),
             }
         },
-        _ => panic!("Expected a MatchClause"),
+        _ => panic!("Expected a CypherMatchClause"),
     }
 }
 
@@ -657,6 +657,42 @@ fn parse_projection_body_with_aliases() {
             alias: Some(Ident::new("personAge")),
         },
         "Second projection item should be 'p.age AS personAge'"
+    );
+}
+
+#[test]
+fn parse_where_clause() {
+    let sql = "WHERE p.age > 30 AND p.name = 'Alice'";
+    let dialect = CypherDialect {};
+    let mut tokenizer = Tokenizer::new(&dialect, sql);
+    let tokens = tokenizer.tokenize().unwrap();
+    
+    let mut parser = Parser::new(&dialect).with_tokens(tokens);
+    
+    let where_clause = parser.parse_cypher_where_clause().unwrap();
+    
+    assert_eq!(
+        where_clause.expr,
+        Expr::BinaryOp {
+            left: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("p"),
+                    Ident::new("age"),
+                ])),
+                op: BinaryOperator::Gt,
+                right: Box::new(Expr::Value(Value::Number("30".to_string(), false).into())),
+            }),
+            op: BinaryOperator::And,
+            right: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("p"),
+                    Ident::new("name"),
+                ])),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::Value(Value::SingleQuotedString("Alice".to_string()).into())),
+            }),
+        },
+        "WHERE clause expression did not match expected structure"
     );
 }
 
@@ -735,7 +771,7 @@ fn parse_match_with_returning() {
         SinglePartQuery::Simple(simple_query) => {
             let match_clause = simple_query.reading_clause;
             match match_clause {
-                ReadingClause::Match(match_clause) => {
+                CypherReadingClause::Match(match_clause) => {
                     assert_eq!(match_clause.pattern.parts.len(), 1, "Expected 1 pattern part in the MATCH clause");
 
                     let pattern_part = &match_clause.pattern.parts[0];
@@ -751,7 +787,7 @@ fn parse_match_with_returning() {
                         _ => panic!("Expected a SimplePatternElement in the PatternPart"),
                     }
                 },
-                _ => panic!("Expected a MatchClause"),
+                _ => panic!("Expected a CypherMatchClause"),
             }
             let returning_clause = simple_query.returning_clause;
             assert_eq!(returning_clause.body.projections.len(), 2, "Expected 2 entries in the RETURNING clause");
@@ -767,6 +803,56 @@ fn parse_match_with_returning() {
                 },
                 "First projection item should be 'a.name AS personName'"
             );
+        },
+        _ => panic!("Expected a SimplePartQuery"),
+    }
+}
+
+#[test]
+fn parse_match_with_where(){
+    let sql = "MATCH (a:Person)-[r:KNOWS]->(b:Person) WHERE a.age > 30 RETURN a.name AS personName, b.name AS friendName";
+    let dialect = CypherDialect {};
+    let mut tokenizer = Tokenizer::new(&dialect, sql);
+    let tokens = tokenizer.tokenize().unwrap();
+    
+    let mut parser = Parser::new(&dialect).with_tokens(tokens);
+
+    let single_part_query = parser.parse_cypher_single_part_query().unwrap();
+
+    match single_part_query {
+        SinglePartQuery::Simple(simple_query) => {
+            let match_clause = simple_query.reading_clause;
+            match match_clause {
+                CypherReadingClause::Match(match_clause) => {
+                    assert_eq!(match_clause.pattern.parts.len(), 1, "Expected 1 pattern part in the MATCH clause");
+
+                    let pattern_part = &match_clause.pattern.parts[0];
+                    match &pattern_part.anon_pattern_part {
+                        PatternElement::Simple(simple_element) => {
+                            assert_eq!(simple_element.node.variable, Some(Ident::new("a")), "Start node variable should be 'a'");
+                            assert_eq!(simple_element.chain.len(), 1, "Expected 1 chain element in the pattern part");
+
+                            let first_chain = &simple_element.chain[0];
+                            assert_eq!(first_chain.relationship.l_direction, Some(RelationshipDirection::Undirected), "Chain element should start with Undirected");
+                            assert_eq!(first_chain.relationship.r_direction, Some(RelationshipDirection::Outgoing), "Chain element should end with Outgoing");
+                        },
+                        _ => panic!("Expected a SimplePatternElement in the PatternPart"),
+                    }
+                    let where_clause = match_clause.where_clause.unwrap();
+                    assert_eq!(where_clause.expr,
+                        Expr::BinaryOp {
+                            left: Box::new(Expr::CompoundIdentifier(vec![
+                                Ident::new("a"),
+                                Ident::new("age"),
+                            ])),
+                            op: BinaryOperator::Gt,
+                            right: Box::new(Expr::Value(Value::Number("30".to_string(), false).into())),
+                        },
+                        "WHERE clause expression did not match expected structure"
+                    );
+                },
+                _ => panic!("Expected a CypherMatchClause"),
+            }
         },
         _ => panic!("Expected a SimplePartQuery"),
     }
@@ -789,7 +875,7 @@ fn parse_cypher_query(){
                 SinglePartQuery::Simple(simple_query) => {
                     let match_clause = simple_query.reading_clause;
                     match match_clause {
-                        ReadingClause::Match(match_clause) => {
+                        CypherReadingClause::Match(match_clause) => {
                             assert_eq!(match_clause.pattern.parts.len(), 1, "Expected 1 pattern part in the MATCH clause");
 
                             let pattern_part = &match_clause.pattern.parts[0];
@@ -805,7 +891,7 @@ fn parse_cypher_query(){
                                 _ => panic!("Expected a SimplePatternElement in the PatternPart"),
                             }
                         },
-                        _ => panic!("Expected a MatchClause"),
+                        _ => panic!("Expected a CypherMatchClause"),
                     }
                     let returning_clause = simple_query.returning_clause;
                     assert_eq!(returning_clause.body.projections.len(), 2, "Expected 2 entries in the RETURNING clause");

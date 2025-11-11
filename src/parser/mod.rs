@@ -682,6 +682,12 @@ impl<'a> Parser<'a> {
         }))
     }
 
+    pub fn parse_cypher_where_clause(&mut self) -> Result<CypherWhereClause, ParserError> {
+        self.expect_keyword(Keyword::WHERE)?;
+        let expr = self.parse_expr()?;
+        Ok(CypherWhereClause { expr })
+    }
+
     pub fn parse_cypher_return(&mut self) -> Result<ReturningClause, ParserError> {
         self.expect_keyword(Keyword::RETURN)?;
         let body = self.parse_cypher_projection_body()?;
@@ -720,15 +726,15 @@ impl<'a> Parser<'a> {
         Ok(ProjectionBody { distinct, projections })
     }
 
-    pub fn parse_cypher_create_clause(&mut self) -> Result<CreateClause, ParserError> {
+    pub fn parse_cypher_create_clause(&mut self) -> Result<CypherCreateClause, ParserError> {
         self.expect_keyword(Keyword::CREATE)?;
 
         let pattern = self.parse_cypher_pattern()?;
 
-        Ok(CreateClause { pattern })
+        Ok(CypherCreateClause { pattern })
     }
 
-    pub fn parse_cypher_match_clause(&mut self) -> Result<ReadingClause, ParserError> {
+    pub fn parse_cypher_match_clause(&mut self) -> Result<CypherReadingClause, ParserError> {
 
         let optional = if self.parse_keywords(&[Keyword::OPTIONAL]) {
             true
@@ -740,7 +746,13 @@ impl<'a> Parser<'a> {
 
         let pattern = self.parse_cypher_pattern()?;
 
-        Ok(ReadingClause::Match(MatchClause { optional, pattern }))
+        let where_clause =  if self.peek_keywords(&[Keyword::WHERE]) {
+            Some(self.parse_cypher_where_clause()?)
+        } else {
+            None
+        };
+
+        Ok(CypherReadingClause::Match(CypherMatchClause { optional, pattern, where_clause }))
     }
 
     pub fn parse_cypher_pattern(&mut self) -> Result<Pattern, ParserError> {

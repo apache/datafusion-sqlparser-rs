@@ -43,7 +43,7 @@ pub enum SinglePartQuery{
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct SimpleSinglePartQuery{
 
-    pub reading_clause: ReadingClause,
+    pub reading_clause: CypherReadingClause,
 
     pub returning_clause: ReturningClause,
 }
@@ -53,15 +53,15 @@ pub struct SimpleSinglePartQuery{
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct MultiPartQuery{
 
-    pub reading_clauses: Vec<ReadingClause>
+    pub reading_clauses: Vec<CypherReadingClause>
 
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum ReadingClause{
-    Match(MatchClause),
+pub enum CypherReadingClause{
+    Match(CypherMatchClause),
     // Other reading clauses can be added here
 }
 
@@ -69,7 +69,7 @@ pub enum ReadingClause{
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct CreateClause {
+pub struct CypherCreateClause {
     pub pattern: Pattern,
 }
 
@@ -77,11 +77,13 @@ pub struct CreateClause {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct MatchClause {
+pub struct CypherMatchClause {
     /// Whether the MATCH is optional
     pub optional: bool,
     /// The pattern to match
     pub pattern: Pattern,
+    /// An optional WHERE clause
+    pub where_clause: Option<CypherWhereClause>,
 }
 
 /// A complete path pattern in Cypher
@@ -212,6 +214,15 @@ pub struct RelationshipRange {
     pub min: Option<u64>,
     /// Maximum length (None means unlimited)
     pub max: Option<u64>,
+}
+
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CypherWhereClause {
+
+    pub expr: Expr,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

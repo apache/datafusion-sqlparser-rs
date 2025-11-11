@@ -223,6 +223,7 @@ impl Spanned for Values {
     fn span(&self) -> Span {
         let Values {
             explicit_row: _, // bool,
+            value_keyword: _,
             rows,
         } = self;
 
@@ -475,6 +476,7 @@ impl Spanned for Statement {
             Statement::AlterSchema(s) => s.span(),
             Statement::Vacuum(..) => Span::empty(),
             Statement::AlterUser(..) => Span::empty(),
+            Statement::Reset(..) => Span::empty(),
         }
     }
 }
@@ -1107,6 +1109,9 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::DropClusteringKey => Span::empty(),
             AlterTableOperation::SuspendRecluster => Span::empty(),
             AlterTableOperation::ResumeRecluster => Span::empty(),
+            AlterTableOperation::Refresh => Span::empty(),
+            AlterTableOperation::Suspend => Span::empty(),
+            AlterTableOperation::Resume => Span::empty(),
             AlterTableOperation::Algorithm { .. } => Span::empty(),
             AlterTableOperation::AutoIncrement { value, .. } => value.span(),
             AlterTableOperation::Lock { .. } => Span::empty(),

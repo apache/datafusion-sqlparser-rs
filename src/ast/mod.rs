@@ -61,7 +61,7 @@ pub use self::dcl::{
 pub use self::ddl::{
     AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterPolicyOperation,
     AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm, AlterTableLock,
-    AlterTableOperation, AlterType, AlterTypeAddValue, AlterTypeAddValuePosition,
+    AlterTableOperation, AlterTableType, AlterType, AlterTypeAddValue, AlterTypeAddValuePosition,
     AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue, ClusteredBy, ColumnDef,
     ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy, ColumnPolicyProperty,
     ConstraintCharacteristics, CreateConnector, CreateDomain, CreateExtension, CreateFunction,
@@ -2787,10 +2787,11 @@ impl fmt::Display for Declare {
 }
 
 /// Sql options of a `CREATE TABLE` statement.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CreateTableOptions {
+    #[default]
     None,
     /// Options specified using the `WITH` keyword.
     /// e.g. `WITH (description = "123")`
@@ -2817,12 +2818,6 @@ pub enum CreateTableOptions {
     Plain(Vec<SqlOption>),
 
     TableProperties(Vec<SqlOption>),
-}
-
-impl Default for CreateTableOptions {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 impl fmt::Display for CreateTableOptions {
@@ -4273,6 +4268,14 @@ pub enum Statement {
     /// ```
     /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_VACUUM_command.html)
     Vacuum(VacuumStatement),
+    /// Restore the value of a run-time parameter to the default value.
+    ///
+    /// ```sql
+    /// RESET configuration_parameter;
+    /// RESET ALL;
+    /// ```
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-reset.html)
+    Reset(ResetStatement),
 }
 
 impl From<Analyze> for Statement {
@@ -5767,6 +5770,7 @@ impl fmt::Display for Statement {
             Statement::AlterSchema(s) => write!(f, "{s}"),
             Statement::Vacuum(s) => write!(f, "{s}"),
             Statement::AlterUser(s) => write!(f, "{s}"),
+            Statement::Reset(s) => write!(f, "{s}"),
         }
     }
 }
@@ -10565,6 +10569,38 @@ impl fmt::Display for VacuumStatement {
     }
 }
 
+/// Variants of the RESET statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum Reset {
+    /// Resets all session parameters to their default values.
+    ALL,
+
+    /// Resets a specific session parameter to its default value.
+    ConfigurationParameter(ObjectName),
+}
+
+/// Resets a session parameter to its default value.
+/// ```sql
+/// RESET { ALL | <configuration_parameter> }
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ResetStatement {
+    pub reset: Reset,
+}
+
+impl fmt::Display for ResetStatement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.reset {
+            Reset::ALL => write!(f, "RESET ALL"),
+            Reset::ConfigurationParameter(param) => write!(f, "RESET {}", param),
+        }
+    }
+}
+
 impl From<Set> for Statement {
     fn from(s: Set) -> Self {
         Self::Set(s)
@@ -10802,6 +10838,12 @@ impl From<CreateUser> for Statement {
 impl From<VacuumStatement> for Statement {
     fn from(v: VacuumStatement) -> Self {
         Self::Vacuum(v)
+    }
+}
+
+impl From<ResetStatement> for Statement {
+    fn from(r: ResetStatement) -> Self {
+        Self::Reset(r)
     }
 }
 

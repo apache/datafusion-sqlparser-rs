@@ -1807,6 +1807,7 @@ fn parse_merge() {
     let insert_action = MergeAction::Insert(MergeInsertExpr {
         columns: vec![Ident::new("product"), Ident::new("quantity")],
         kind: MergeInsertKind::Values(Values {
+            value_keyword: false,
             explicit_row: false,
             rows: vec![vec![Expr::value(number("1")), Expr::value(number("2"))]],
         }),
@@ -1951,6 +1952,7 @@ fn parse_merge() {
                         action: MergeAction::Insert(MergeInsertExpr {
                             columns: vec![Ident::new("a"), Ident::new("b"),],
                             kind: MergeInsertKind::Values(Values {
+                                value_keyword: false,
                                 explicit_row: false,
                                 rows: vec![vec![
                                     Expr::value(number("1")),
@@ -1965,6 +1967,7 @@ fn parse_merge() {
                         action: MergeAction::Insert(MergeInsertExpr {
                             columns: vec![],
                             kind: MergeInsertKind::Values(Values {
+                                value_keyword: false,
                                 explicit_row: false,
                                 rows: vec![vec![
                                     Expr::value(number("1")),

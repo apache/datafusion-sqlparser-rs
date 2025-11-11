@@ -1885,6 +1885,7 @@ fn parse_simple_insert() {
                 Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
+                        value_keyword: false,
                         explicit_row: false,
                         rows: vec![
                             vec![
@@ -1950,6 +1951,7 @@ fn parse_ignore_insert() {
                 Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
+                        value_keyword: false,
                         explicit_row: false,
                         rows: vec![vec![
                             Expr::Value(
@@ -1999,6 +2001,7 @@ fn parse_priority_insert() {
                 Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
+                        value_keyword: false,
                         explicit_row: false,
                         rows: vec![vec![
                             Expr::Value(
@@ -2045,6 +2048,7 @@ fn parse_priority_insert() {
                 Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
+                        value_keyword: false,
                         explicit_row: false,
                         rows: vec![vec![
                             Expr::Value(
@@ -2097,6 +2101,7 @@ fn parse_insert_as() {
                 Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
+                        value_keyword: false,
                         explicit_row: false,
                         rows: vec![vec![Expr::Value(
                             (Value::SingleQuotedString("2024-01-01".to_string())).with_empty_span()
@@ -2156,6 +2161,7 @@ fn parse_insert_as() {
                 Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
+                        value_keyword: false,
                         explicit_row: false,
                         rows: vec![vec![
                             Expr::value(number("1")),
@@ -2206,6 +2212,7 @@ fn parse_replace_insert() {
                 Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
+                        value_keyword: false,
                         explicit_row: false,
                         rows: vec![vec![
                             Expr::Value(
@@ -2253,6 +2260,7 @@ fn parse_empty_row_insert() {
                 Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
+                        value_keyword: false,
                         explicit_row: false,
                         rows: vec![vec![], vec![]]
                     })),
@@ -2303,6 +2311,7 @@ fn parse_insert_with_on_duplicate_update() {
                 Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
+                        value_keyword: false,
                         explicit_row: false,
                         rows: vec![vec![
                             Expr::Value(

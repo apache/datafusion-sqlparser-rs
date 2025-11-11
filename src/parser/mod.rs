@@ -12533,7 +12533,10 @@ impl<'a> Parser<'a> {
             SetExpr::Query(subquery)
         } else if self.parse_keyword(Keyword::VALUES) {
             let is_mysql = dialect_of!(self is MySqlDialect);
-            SetExpr::Values(self.parse_values(is_mysql)?)
+            SetExpr::Values(self.parse_values(is_mysql, false)?)
+        } else if self.parse_keyword(Keyword::VALUE) {
+            let is_mysql = dialect_of!(self is MySqlDialect);
+            SetExpr::Values(self.parse_values(is_mysql, true)?)
         } else if self.parse_keyword(Keyword::TABLE) {
             SetExpr::Table(Box::new(self.parse_as_table()?))
         } else {
@@ -13837,7 +13840,7 @@ impl<'a> Parser<'a> {
             // Snowflake and Databricks allow syntax like below:
             // SELECT * FROM VALUES (1, 'a'), (2, 'b') AS t (col1, col2)
             // where there are no parentheses around the VALUES clause.
-            let values = SetExpr::Values(self.parse_values(false)?);
+            let values = SetExpr::Values(self.parse_values(false, false)?);
             let alias = self.maybe_parse_table_alias()?;
             Ok(TableFactor::Derived {
                 lateral: false,
@@ -16504,7 +16507,11 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_values(&mut self, allow_empty: bool) -> Result<Values, ParserError> {
+    pub fn parse_values(
+        &mut self,
+        allow_empty: bool,
+        value_keyword: bool,
+    ) -> Result<Values, ParserError> {
         let mut explicit_row = false;
 
         let rows = self.parse_comma_separated(|parser| {
@@ -16522,7 +16529,11 @@ impl<'a> Parser<'a> {
                 Ok(exprs)
             }
         })?;
-        Ok(Values { explicit_row, rows })
+        Ok(Values {
+            explicit_row,
+            rows,
+            value_keyword,
+        })
     }
 
     pub fn parse_start_transaction(&mut self) -> Result<Statement, ParserError> {
@@ -16937,7 +16948,7 @@ impl<'a> Parser<'a> {
                         MergeInsertKind::Row
                     } else {
                         self.expect_keyword_is(Keyword::VALUES)?;
-                        let values = self.parse_values(is_mysql)?;
+                        let values = self.parse_values(is_mysql, false)?;
                         MergeInsertKind::Values(values)
                     };
                     MergeAction::Insert(MergeInsertExpr { columns, kind })

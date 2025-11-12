@@ -11717,7 +11717,7 @@ fn parse_create_type() {
             representation,
         } => {
             assert_eq!(name.to_string(), "mytype");
-            assert_eq!(representation, UserDefinedTypeRepresentation::None);
+            assert!(representation.is_none());
         }
         _ => unreachable!(),
     }
@@ -11731,7 +11731,7 @@ fn parse_create_type() {
         } => {
             assert_eq!(name.to_string(), "address");
             match representation {
-                UserDefinedTypeRepresentation::Composite { attributes } => {
+                Some(UserDefinedTypeRepresentation::Composite { attributes }) => {
                     assert_eq!(attributes.len(), 2);
                     assert_eq!(attributes[0].name, Ident::new("street"));
                     assert_eq!(
@@ -11766,7 +11766,7 @@ fn parse_create_type() {
         } => {
             assert_eq!(name.to_string(), "mood");
             match representation {
-                UserDefinedTypeRepresentation::Enum { labels } => {
+                Some(UserDefinedTypeRepresentation::Enum { labels }) => {
                     assert_eq!(labels.len(), 2);
                     assert_eq!(labels[0], Ident::with_quote('\'', "happy"));
                     assert_eq!(labels[1], Ident::with_quote('\'', "sad"));
@@ -11785,7 +11785,7 @@ fn parse_create_type() {
         } => {
             assert_eq!(name.to_string(), "int4range");
             match representation {
-                UserDefinedTypeRepresentation::Range { options } => {
+                Some(UserDefinedTypeRepresentation::Range { options }) => {
                     assert_eq!(options.len(), 2);
                     assert!(matches!(
                         options[0],
@@ -11804,6 +11804,103 @@ fn parse_create_type() {
 
     verified_stmt("CREATE TYPE textrange AS RANGE (SUBTYPE = TEXT, COLLATION = \"en_US\", MULTIRANGE_TYPE_NAME = textmultirange)");
 
+    // Test RANGE type with SUBTYPE_OPCLASS - verify AST structure
+    match verified_stmt(
+        "CREATE TYPE int4range AS RANGE (SUBTYPE = INTEGER, SUBTYPE_OPCLASS = int4_ops)",
+    ) {
+        Statement::CreateType {
+            name,
+            representation,
+        } => {
+            assert_eq!(name.to_string(), "int4range");
+            match representation {
+                Some(UserDefinedTypeRepresentation::Range { options }) => {
+                    assert_eq!(options.len(), 2);
+                    assert!(matches!(
+                        options[0],
+                        UserDefinedTypeRangeOption::Subtype(DataType::Integer(_))
+                    ));
+                    match &options[1] {
+                        UserDefinedTypeRangeOption::SubtypeOpClass(name) => {
+                            assert_eq!(name.to_string(), "int4_ops");
+                        }
+                        _ => unreachable!("Expected SubtypeOpClass"),
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    }
+
+    // Test RANGE type with SUBTYPE_DIFF - verify AST structure
+    match verified_stmt(
+        "CREATE TYPE int4range AS RANGE (SUBTYPE = INTEGER, SUBTYPE_DIFF = int4range_subdiff)",
+    ) {
+        Statement::CreateType {
+            name,
+            representation,
+        } => {
+            assert_eq!(name.to_string(), "int4range");
+            match representation {
+                Some(UserDefinedTypeRepresentation::Range { options }) => {
+                    assert_eq!(options.len(), 2);
+                    assert!(matches!(
+                        options[0],
+                        UserDefinedTypeRangeOption::Subtype(DataType::Integer(_))
+                    ));
+                    match &options[1] {
+                        UserDefinedTypeRangeOption::SubtypeDiff(name) => {
+                            assert_eq!(name.to_string(), "int4range_subdiff");
+                        }
+                        _ => unreachable!("Expected SubtypeDiff"),
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    }
+
+    // Test RANGE type with all options including SUBTYPE_OPCLASS and SUBTYPE_DIFF
+    match verified_stmt(
+        "CREATE TYPE int4range AS RANGE (SUBTYPE = INTEGER, SUBTYPE_OPCLASS = int4_ops, CANONICAL = int4range_canonical, SUBTYPE_DIFF = int4range_subdiff, MULTIRANGE_TYPE_NAME = int4multirange)",
+    ) {
+        Statement::CreateType {
+            name,
+            representation,
+        } => {
+            assert_eq!(name.to_string(), "int4range");
+            match representation {
+                Some(UserDefinedTypeRepresentation::Range { options }) => {
+                    assert_eq!(options.len(), 5);
+                    assert!(matches!(
+                        options[0],
+                        UserDefinedTypeRangeOption::Subtype(DataType::Integer(_))
+                    ));
+                    assert!(matches!(
+                        options[1],
+                        UserDefinedTypeRangeOption::SubtypeOpClass(_)
+                    ));
+                    assert!(matches!(
+                        options[2],
+                        UserDefinedTypeRangeOption::Canonical(_)
+                    ));
+                    assert!(matches!(
+                        options[3],
+                        UserDefinedTypeRangeOption::SubtypeDiff(_)
+                    ));
+                    assert!(matches!(
+                        options[4],
+                        UserDefinedTypeRangeOption::MultirangeTypeName(_)
+                    ));
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    }
+
     // Test SQL definition type - verify AST
     match verified_stmt(
         "CREATE TYPE mytype (INPUT = in_fn, OUTPUT = out_fn, INTERNALLENGTH = 16, PASSEDBYVALUE)",
@@ -11814,7 +11911,7 @@ fn parse_create_type() {
         } => {
             assert_eq!(name.to_string(), "mytype");
             match representation {
-                UserDefinedTypeRepresentation::SqlDefinition { options } => {
+                Some(UserDefinedTypeRepresentation::SqlDefinition { options }) => {
                     assert_eq!(options.len(), 4);
                     assert!(matches!(
                         options[0],

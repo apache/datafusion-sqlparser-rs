@@ -17371,14 +17371,14 @@ impl<'a> Parser<'a> {
                 self.expect_token(&Token::RParen)?;
                 return Ok(Statement::CreateType {
                     name,
-                    representation: UserDefinedTypeRepresentation::SqlDefinition { options },
+                    representation: Some(UserDefinedTypeRepresentation::SqlDefinition { options }),
                 });
             }
 
             // CREATE TYPE name; - no representation
             return Ok(Statement::CreateType {
                 name,
-                representation: UserDefinedTypeRepresentation::None,
+                representation: None,
             });
         }
 
@@ -17400,15 +17400,14 @@ impl<'a> Parser<'a> {
     /// Parse remainder of `CREATE TYPE AS (attributes)` statement (composite type)
     ///
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtype.html)
-    fn parse_create_type_composite(
-        &mut self,
-        name: ObjectName,
-    ) -> Result<Statement, ParserError> {
+    fn parse_create_type_composite(&mut self, name: ObjectName) -> Result<Statement, ParserError> {
         if self.consume_token(&Token::RParen) {
             // Empty composite type
             return Ok(Statement::CreateType {
                 name,
-                representation: UserDefinedTypeRepresentation::Composite { attributes: vec![] },
+                representation: Some(UserDefinedTypeRepresentation::Composite {
+                    attributes: vec![],
+                }),
             });
         }
 
@@ -17435,7 +17434,7 @@ impl<'a> Parser<'a> {
 
         Ok(Statement::CreateType {
             name,
-            representation: UserDefinedTypeRepresentation::Composite { attributes },
+            representation: Some(UserDefinedTypeRepresentation::Composite { attributes }),
         })
     }
 
@@ -17449,7 +17448,7 @@ impl<'a> Parser<'a> {
 
         Ok(Statement::CreateType {
             name,
-            representation: UserDefinedTypeRepresentation::Enum { labels },
+            representation: Some(UserDefinedTypeRepresentation::Enum { labels }),
         })
     }
 
@@ -17463,7 +17462,7 @@ impl<'a> Parser<'a> {
 
         Ok(Statement::CreateType {
             name,
-            representation: UserDefinedTypeRepresentation::Range { options },
+            representation: Some(UserDefinedTypeRepresentation::Range { options }),
         })
     }
 

@@ -2041,9 +2041,6 @@ pub enum UserDefinedTypeRepresentation {
     SqlDefinition {
         options: Vec<UserDefinedTypeSqlDefinitionOption>,
     },
-    /// When the representation of the type is not specified.
-    /// This is used in `CREATE TYPE <name>;` statements.
-    None,
 }
 
 impl fmt::Display for UserDefinedTypeRepresentation {
@@ -2061,7 +2058,6 @@ impl fmt::Display for UserDefinedTypeRepresentation {
             Self::SqlDefinition { options } => {
                 write!(f, "({})", display_comma_separated(options))
             }
-            Self::None => Ok(()),
         }
     }
 }

@@ -17439,7 +17439,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse a single range option for CREATE TYPE AS RANGE
+    /// Parse a single range option for a `CREATE TYPE AS RANGE` statement
     fn parse_range_option(&mut self) -> Result<UserDefinedTypeRangeOption, ParserError> {
         let keyword = self.parse_one_of_keywords(&[
             Keyword::SUBTYPE,

@@ -794,6 +794,7 @@ define_keywords!(
     REF,
     REFERENCES,
     REFERENCING,
+    REFRESH,
     REFRESH_MODE,
     REGCLASS,
     REGEXP,

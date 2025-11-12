@@ -2919,6 +2919,15 @@ pub enum Set {
     /// MySQL-style
     /// SET a = 1, b = 2, ..;
     MultipleAssignments { assignments: Vec<SetAssignment> },
+    /// Session authorization for Postgres/Redshift
+    ///
+    /// ```sql
+    /// SET SESSION AUTHORIZATION { user_name | DEFAULT }
+    /// ```
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-set-session-authorization.html>
+    /// See <https://docs.aws.amazon.com/redshift/latest/dg/r_SET_SESSION_AUTHORIZATION.html>
+    SetSessionAuthorization(SetSessionAuthorizationParam),
     /// MS-SQL session
     ///
     /// See <https://learn.microsoft.com/en-us/sql/t-sql/statements/set-statements-transact-sql>
@@ -2993,6 +3002,7 @@ impl Display for Set {
                     modifier = context_modifier.map(|m| format!("{m}")).unwrap_or_default()
                 )
             }
+            Self::SetSessionAuthorization(kind) => write!(f, "SET SESSION AUTHORIZATION {kind}"),
             Self::SetSessionParam(kind) => write!(f, "SET {kind}"),
             Self::SetTransaction {
                 modes,
@@ -9818,6 +9828,42 @@ impl fmt::Display for TableObject {
         match self {
             Self::TableName(table_name) => write!(f, "{table_name}"),
             Self::TableFunction(func) => write!(f, "FUNCTION {func}"),
+        }
+    }
+}
+
+/// Represents a SET SESSION AUTHORIZATION statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SetSessionAuthorizationParam {
+    pub scope: ContextModifier,
+    pub kind: SetSessionAuthorizationParamKind,
+}
+
+impl fmt::Display for SetSessionAuthorizationParam {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.kind)
+    }
+}
+
+/// Represents the parameter kind for SET SESSION AUTHORIZATION
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SetSessionAuthorizationParamKind {
+    /// Default authorization
+    Default,
+
+    /// User name
+    User(Ident),
+}
+
+impl fmt::Display for SetSessionAuthorizationParamKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SetSessionAuthorizationParamKind::Default => write!(f, "DEFAULT"),
+            SetSessionAuthorizationParamKind::User(name) => write!(f, "{}", name),
         }
     }
 }

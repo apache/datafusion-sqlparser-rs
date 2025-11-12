@@ -17372,7 +17372,7 @@ impl<'a> Parser<'a> {
     /// Parse remainder of `CREATE TYPE AS (attributes)` statement (composite type)
     ///
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtype.html)
-    pub fn parse_create_type_composite(
+    fn parse_create_type_composite(
         &mut self,
         name: ObjectName,
     ) -> Result<Statement, ParserError> {

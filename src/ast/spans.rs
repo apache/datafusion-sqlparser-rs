@@ -2516,7 +2516,7 @@ pub mod tests {
                         span,
                     })) => {
                         assert_eq!(":fooBar", s);
-                        assert_eq!(&Span::new((3, 3).into(), (3, 10).into()), span);
+                        assert_eq!(&Span::new((3, 3), (3, 10)), span);
                     }
                     _ => panic!("expected unnamed expression; got {col:?}"),
                 }

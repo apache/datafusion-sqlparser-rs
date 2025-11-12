@@ -1321,7 +1321,7 @@ fn parse_create_table_both_options_and_as_query() {
         r"CREATE TABLE foo (id INT(11)) ENGINE = InnoDB AS SELECT 1 DEFAULT CHARSET = utf8mb3";
     assert!(matches!(
         mysql_and_generic().parse_sql_statements(sql),
-        Err(ParserError::ParserError(_))
+        Err(ParserError::SpannedParserError(_, _))
     ));
 }
 
@@ -2125,7 +2125,7 @@ fn parse_insert_as() {
     let sql = r"INSERT INTO `table` (`date`) VALUES ('2024-01-01') AS `alias` ()";
     assert!(matches!(
         mysql_and_generic().parse_sql_statements(sql),
-        Err(ParserError::ParserError(_))
+        Err(ParserError::SpannedParserError(_, _))
     ));
 
     let sql = r"INSERT INTO `table` (`id`, `date`) VALUES (1, '2024-01-01') AS `alias` (`mek_id`, `mek_date`)";

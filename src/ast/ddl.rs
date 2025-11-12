@@ -2032,12 +2032,16 @@ pub enum UserDefinedTypeRepresentation {
     /// Note: this is PostgreSQL-specific. See <https://www.postgresql.org/docs/current/sql-createtype.html>
     Enum { labels: Vec<Ident> },
     /// Range type: `CREATE TYPE name AS RANGE (options)`
+    ///
+    /// Note: this is PostgreSQL-specific. See <https://www.postgresql.org/docs/current/sql-createtype.html>
     Range {
         options: Vec<UserDefinedTypeRangeOption>,
     },
     /// Base type (SQL definition): `CREATE TYPE name (options)`
     ///
     /// Note the lack of `AS` keyword
+    ///
+    /// Note: this is PostgreSQL-specific. See <https://www.postgresql.org/docs/current/sql-createtype.html>
     SqlDefinition {
         options: Vec<UserDefinedTypeSqlDefinitionOption>,
     },

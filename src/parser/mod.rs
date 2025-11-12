@@ -17428,7 +17428,7 @@ impl<'a> Parser<'a> {
     /// Parse remainder of `CREATE TYPE AS RANGE` statement
     ///
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtype.html)
-    pub fn parse_create_type_range(&mut self, name: ObjectName) -> Result<Statement, ParserError> {
+    fn parse_create_type_range(&mut self, name: ObjectName) -> Result<Statement, ParserError> {
         self.expect_token(&Token::LParen)?;
         let options = self.parse_comma_separated0(|p| p.parse_range_option(), Token::RParen)?;
         self.expect_token(&Token::RParen)?;

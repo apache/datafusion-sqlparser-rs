@@ -5522,19 +5522,32 @@ impl<'a> Parser<'a> {
         // peek the next token, which if it is another type keyword, then the
         // first token is a name and not a type in itself.
         let data_type_idx = self.get_current_index();
-        // DEFAULT will be parsed as `DataType::Custom`, which is undesirable in this context
-        if !self.peek_keyword(Keyword::DEFAULT) {
-            if let Some(next_data_type) = self.maybe_parse(|parser| parser.parse_data_type())? {
-                let token = self.token_at(data_type_idx);
 
-                // We ensure that the token is a `Word` token, and not other special tokens.
-                if !matches!(token.token, Token::Word(_)) {
-                    return self.expected("a name or type", token.clone());
-                }
-
-                name = Some(Ident::new(token.to_string()));
-                data_type = next_data_type;
+        // FIXME: DEFAULT will be parsed as `DataType::Custom`, which is undesirable in this context
+        fn parse_data_type_no_default(
+            parser: &mut Parser,
+        ) -> Result<DataType, ParserError> {
+            if parser.peek_keyword(Keyword::DEFAULT) {
+                // This dummy error is ignored in `maybe_parse`
+                parser_err!(
+                    "The DEFAULT keyword is not a type",
+                    parser.peek_token().span.start
+                )
+            } else {
+                parser.parse_data_type()
             }
+        }
+
+        if let Some(next_data_type) = self.maybe_parse(parse_data_type_no_default)? {
+            let token = self.token_at(data_type_idx);
+
+            // We ensure that the token is a `Word` token, and not other special tokens.
+            if !matches!(token.token, Token::Word(_)) {
+                return self.expected("a name or type", token.clone());
+            }
+
+            name = Some(Ident::new(token.to_string()));
+            data_type = next_data_type;
         }
 
         let default_expr = if self.parse_keyword(Keyword::DEFAULT) || self.consume_token(&Token::Eq)

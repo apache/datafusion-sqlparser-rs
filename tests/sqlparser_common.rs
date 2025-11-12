@@ -11710,7 +11710,6 @@ fn parse_projection_trailing_comma() {
 
 #[test]
 fn parse_create_type() {
-    // Test simple type declaration without AS - verify AST
     match verified_stmt("CREATE TYPE mytype") {
         Statement::CreateType {
             name,
@@ -11722,7 +11721,6 @@ fn parse_create_type() {
         _ => unreachable!(),
     }
 
-    // Test composite type - verify AST structure
     match verified_stmt("CREATE TYPE address AS (street VARCHAR(100), city TEXT COLLATE \"en_US\")")
     {
         Statement::CreateType {
@@ -11758,7 +11756,6 @@ fn parse_create_type() {
 
     verified_stmt("CREATE TYPE empty AS ()");
 
-    // Test ENUM type - verify AST
     match verified_stmt("CREATE TYPE mood AS ENUM ('happy', 'sad')") {
         Statement::CreateType {
             name,
@@ -11777,7 +11774,6 @@ fn parse_create_type() {
         _ => unreachable!(),
     }
 
-    // Test RANGE type - verify AST structure
     match verified_stmt("CREATE TYPE int4range AS RANGE (SUBTYPE = INTEGER, CANONICAL = fn1)") {
         Statement::CreateType {
             name,
@@ -11804,7 +11800,6 @@ fn parse_create_type() {
 
     verified_stmt("CREATE TYPE textrange AS RANGE (SUBTYPE = TEXT, COLLATION = \"en_US\", MULTIRANGE_TYPE_NAME = textmultirange)");
 
-    // Test RANGE type with SUBTYPE_OPCLASS - verify AST structure
     match verified_stmt(
         "CREATE TYPE int4range AS RANGE (SUBTYPE = INTEGER, SUBTYPE_OPCLASS = int4_ops)",
     ) {
@@ -11833,7 +11828,6 @@ fn parse_create_type() {
         _ => unreachable!(),
     }
 
-    // Test RANGE type with SUBTYPE_DIFF - verify AST structure
     match verified_stmt(
         "CREATE TYPE int4range AS RANGE (SUBTYPE = INTEGER, SUBTYPE_DIFF = int4range_subdiff)",
     ) {
@@ -11862,7 +11856,6 @@ fn parse_create_type() {
         _ => unreachable!(),
     }
 
-    // Test RANGE type with all options including SUBTYPE_OPCLASS and SUBTYPE_DIFF
     match verified_stmt(
         "CREATE TYPE int4range AS RANGE (SUBTYPE = INTEGER, SUBTYPE_OPCLASS = int4_ops, CANONICAL = int4range_canonical, SUBTYPE_DIFF = int4range_subdiff, MULTIRANGE_TYPE_NAME = int4multirange)",
     ) {
@@ -11901,7 +11894,6 @@ fn parse_create_type() {
         _ => unreachable!(),
     }
 
-    // Test SQL definition type - verify AST
     match verified_stmt(
         "CREATE TYPE mytype (INPUT = in_fn, OUTPUT = out_fn, INTERNALLENGTH = 16, PASSEDBYVALUE)",
     ) {

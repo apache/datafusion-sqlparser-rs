@@ -17,6 +17,7 @@
 
 use sqlparser::ast::*;
 use sqlparser::dialect::CypherDialect;
+use sqlparser::dialect::SQLiteDialect;
 use sqlparser::parser::Parser;
 use sqlparser::tokenizer::Tokenizer;
 
@@ -502,7 +503,6 @@ fn parse_match_clause() {
                 _ => panic!("Expected a SimplePatternElement in the PatternPart"),
             }
         },
-        _ => panic!("Expected a CypherMatchClause"),
     }
 }
 
@@ -536,7 +536,6 @@ fn parse_optional_match_clause() {
                 _ => panic!("Expected a SimplePatternElement in the PatternPart"),
             }
         },
-        _ => panic!("Expected a CypherMatchClause"),
     }
 }
 
@@ -571,7 +570,6 @@ fn parse_multiple_match_clauses() {
                 _ => panic!("Expected a SimplePatternElement in the PatternPart"),
             }
         },
-        _ => panic!("Expected a CypherMatchClause"),
     }
 
     match second_match_clause {
@@ -592,7 +590,6 @@ fn parse_multiple_match_clauses() {
                 _ => panic!("Expected a SimplePatternElement in the PatternPart"),
             }
         },
-        _ => panic!("Expected a CypherMatchClause"),
     }
 }
 
@@ -787,7 +784,6 @@ fn parse_match_with_returning() {
                         _ => panic!("Expected a SimplePatternElement in the PatternPart"),
                     }
                 },
-                _ => panic!("Expected a CypherMatchClause"),
             }
             let returning_clause = simple_query.returning_clause;
             assert_eq!(returning_clause.body.projections.len(), 2, "Expected 2 entries in the RETURNING clause");
@@ -804,7 +800,6 @@ fn parse_match_with_returning() {
                 "First projection item should be 'a.name AS personName'"
             );
         },
-        _ => panic!("Expected a SimplePartQuery"),
     }
 }
 
@@ -851,10 +846,8 @@ fn parse_match_with_where(){
                         "WHERE clause expression did not match expected structure"
                     );
                 },
-                _ => panic!("Expected a CypherMatchClause"),
             }
         },
-        _ => panic!("Expected a SimplePartQuery"),
     }
 }
 
@@ -890,8 +883,7 @@ fn parse_cypher_query(){
                                 },
                                 _ => panic!("Expected a SimplePatternElement in the PatternPart"),
                             }
-                        },
-                        _ => panic!("Expected a CypherMatchClause"),
+                        }
                     }
                     let returning_clause = simple_query.returning_clause;
                     assert_eq!(returning_clause.body.projections.len(), 2, "Expected 2 entries in the RETURNING clause");
@@ -908,7 +900,6 @@ fn parse_cypher_query(){
                         "First projection item should be 'a.name AS personName'"
                     );
                 },
-                _ => panic!("Expected a SimplePartQuery"),
             }
         },
         _ => panic!("Expected a SingleQuery"),
@@ -970,17 +961,56 @@ fn parse_create(){
 }
 
 #[test]
-fn desugar_cypher_create() {
-    let sql = "INSERT INTO nodes (label, properties)
-        VALUES 
-        ('Person', '{name: Alice, age: 30}'),
-        ('Person', '{name: Bob, age: 32}');
-        ";
+fn desugar_cypher_pattern_part(){
+    // (a:Person {name: 'Alice', age: 30})-[:KNOWS]->(b:Person {name: 'Bob', age: 28})
+    let cypher = "(a:Person {name: 'Alice', age: 30})";
     let dialect = CypherDialect {};
+    let mut tokenizer = Tokenizer::new(&dialect, cypher);
+    let mut counter = 1;
+    let tokens = tokenizer.tokenize().unwrap();
+
+    let mut parser = Parser::new(&dialect).with_tokens(tokens);
+
+    let pattern_part = parser.parse_cypher_pattern_part().unwrap();
+    let sql = parser.desugar_cypher_node_cte(&mut counter, pattern_part).unwrap();
+    println!("{}", sql);
+}
+
+#[test]
+fn desugar_cypher_create(){
+    let cypher = "CREATE (a:Person {name: 'Alice'})
+       -[:KNOWS]->(b:Person {name: 'Bob'})
+       -[:WORKS_WITH]->(c:Person {name: 'Carol'})
+    ";
+    let dialect = CypherDialect {};
+    let mut tokenizer = Tokenizer::new(&dialect, cypher);
+    let tokens = tokenizer.tokenize().unwrap();
+
+    let mut parser = Parser::new(&dialect).with_tokens(tokens);
+
+    let create_clause = parser.parse_cypher_create_clause().unwrap();
+    let sql = parser.desugar_cypher_create(create_clause).unwrap();
+    println!("{}", sql);
+}
+
+#[test]
+fn parse_cypher_create() {
+    let sql = "With
+            alice AS (
+                INSERT INTO persons (name, age) VALUES ('Alice', 30) RETURNING id
+            ),
+            bob AS (
+                INSERT INTO persons (name, age) VALUES ('Bob', 28) RETURNING id
+            )
+        INSERT INTO edges (start_node_id, end_node_id, label, properties)
+        SELECT alice.id, bob.id, 'KNOWS', '{\"since\": 2020}'
+        FROM alice, bob;
+        ";
+    let dialect = SQLiteDialect {};
     // let mut tokenizer = Tokenizer::new(&dialect, sql);
     // let tokens = tokenizer.tokenize().unwrap();
 
-    let output = match Parser::parse_sql(&dialect, sql) {
+    match Parser::parse_sql(&dialect, sql) {
         Ok(ast) => {
             // Convert each statement back to a string
             let stmt_strings: Vec<String> = ast.into_iter().map(|stmt| stmt.to_string()).collect();

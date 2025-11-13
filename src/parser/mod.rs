@@ -679,51 +679,65 @@ impl<'a> Parser<'a> {
         Ok(sql)
     }
 
-    pub fn desugar_cypher_create(
-        &mut self,
-        create_clause: CypherCreateClause,
-    ) -> Result<Statement, ParserError> {
+    pub fn desugar_cypher_properties(&mut self, properties: Map) -> Result<String, ParserError>{
+        let entries: Vec<String> = properties.entries.into_iter()
+                            .map(|kv| {
+                                // Format key as JSON string
+                                let key_str = match *kv.key {
+                                    Expr::Identifier(id) => format!("\"{}\"", id.value),
+                                    _ => format!("\"{}\"", kv.key),
+                                };
+                                
+                                // Format value as JSON
+                                let value_str = match *kv.value {
+                                    Expr::Value(val_with_span) => {
+                                        match val_with_span.value {
+                                            Value::SingleQuotedString(s) => format!("\"{}\"", s),
+                                            Value::DoubleQuotedString(s) => format!("\"{}\"", s),
+                                            Value::Number(n, _) => n.to_string(),
+                                            Value::Boolean(b) => b.to_string().to_lowercase(),
+                                            Value::Null => "null".to_string(),
+                                            _ => format!("\"{}\"", val_with_span),
+                                        }
+                                    }
+                                    _ => format!("\"{}\"", kv.value),
+                                };
+                                
+                                format!("{}: {}", key_str, value_str)
+                            })
+                            .collect();
+        Ok(format!("{{{}}}", entries.join(", ")))
+    }
 
-        let mut columns = Vec::new();//vec![Ident::new("Label"), Ident::new("Properties")];
+    pub fn desugar_cypher_node_insert(&mut self, node:NodePattern) -> Result<Box<SetExpr>, ParserError>{
+
+        let mut columns = Vec::new();
+        let mut node_values = Vec::new();
         let mut values = Vec::new();
+        let mut returning = Vec::new();
 
-        for pattern_part in create_clause.pattern.parts {
-            // Process the node
-            let mut node_values = Vec::new();
-            let node = match pattern_part.anon_pattern_part {
-                PatternElement::Simple(simple_element) => {
-                    simple_element.node
-                }
-                _ => {
-                    return Err(ParserError::ParserError(
-                        "Only simple node patterns are supported in CREATE clause for desugaring to INSERT statements.".to_string()
-                    ));
-                }
-            };
+        match node.labels.first() {
+            Some(l) => {
+                let label_expr = Expr::Value(Value::SingleQuotedString(l.to_string()).into());
+                columns.push(Ident::new("Label"));
+                node_values.push(label_expr);
+            }
+            None => {},
+        };
+        match node.properties {
+            Some(Expr::Map(map)) => {
+                let properties_str = self.desugar_cypher_properties(map.clone())?;
+                columns.push(Ident::new("Properties"));
+                node_values.push(
+                    Expr::Value(Value::SingleQuotedString(properties_str.to_string()).into()),
+                );
+            },
+            _ => {},
+        };
 
-            let label = match node.labels.first() {
-                Some(l) => {
-                    let label_expr = Expr::Identifier(Ident::new(l.to_string()));
-                    columns.push(Ident::new("Label"));
-                    node_values.push(label_expr);
-                }
-                None => {},
-            };
-            let properties_str = match node.properties {
-                Some(Expr::Map(map)) => {
-                    let entries: Vec<String> = map.entries.into_iter()
-                        .map(|kv| format!("{}: {}", kv.key, kv.value))  // simple string
-                        .collect();
-                    let properties_str = format!("\'{{{}}}\'", entries.join(", "));
-                    columns.push(Ident::new("Properties"));
-                    node_values.push(
-                        Expr::Identifier(Ident::new(properties_str.to_string())),
-                    );
-                    values.push(node_values)
-                },
-                _ => {},
-            };
-        }
+        values.push(node_values);
+
+        returning.push(SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id"))));
 
         let values_clause = Values {
                 explicit_row: false,
@@ -745,7 +759,7 @@ impl<'a> Parser<'a> {
         let table_object = TableObject::TableName(ObjectName(
             vec![ObjectNamePart::Identifier(Ident::new("nodes"))]));
 
-        Ok(Statement::Insert(Insert {
+        Ok(Box::new(SetExpr::Insert(Statement::Insert(Insert {
             or: None,
             table: table_object,
             table_alias: None,
@@ -759,13 +773,423 @@ impl<'a> Parser<'a> {
             assignments: vec![],
             has_table_keyword: false,
             on: None,
-            returning: None,
+            returning: Some(returning),
             replace_into: false,
             priority: None,
             insert_alias: None,
             settings: None,
             format_clause: None,
-        }))
+        }))))
+    }
+
+    pub fn desugar_cypher_node_cte(&mut self, node_counter: &mut i32, pattern_part: PatternPart) -> Result<Cte, ParserError> {
+
+        match pattern_part.anon_pattern_part {
+            PatternElement::Simple(simple_element) => {
+                let node_insert = self.desugar_cypher_node_insert(simple_element.node)?;
+                let node_alias = Ident::new(format!("node{}", node_counter));
+                let subquery = Query {
+                    with: None,
+                    body: node_insert,
+                    order_by: None,
+                    limit_clause: None,
+                    fetch: None,
+                    locks: vec![],
+                    for_clause: None,
+                    settings: None,
+                    format_clause: None,
+                    pipe_operators: vec![],
+                }
+                .into();
+                Ok(
+                    Cte{
+                        alias: TableAlias {
+                            name: node_alias,
+                            columns: vec![],
+                        },
+                        query: subquery,
+                        from: None,
+                        materialized: None,
+                        closing_paren_token: AttachedToken(TokenWithSpan {
+                            token: Token::RParen,
+                            span: Span::empty(),
+                        })
+                    })
+            }
+            _ => {
+                return Err(ParserError::ParserError(
+                    "Only simple node patterns are supported in CREATE clause for desugaring to INSERT statements.".to_string()
+                ));
+            }
+        }
+    }
+
+    pub fn desugar_cypher_relationship_select(&mut self, relationship: RelationshipPattern) -> Result<SelectItem, ParserError> {
+        // Build a SELECT projection for the relationship. We return a single
+        // unnamed expression containing a tuple of:
+        //  - relationship type (string literal, first type if present)
+        //  - source id placeholder (will be replaced / referenced from node CTEs)
+        //  - target id placeholder
+        //  - properties (serialized map or empty object)
+
+        // Relationship type: use first type if present, otherwise empty string
+        let rel_type = relationship
+            .details
+            .types
+            .first()
+            .map(|id| id.value.clone())
+            .unwrap_or_default();
+
+        let type_expr = Expr::Value(Value::SingleQuotedString(rel_type).into());
+
+        // Placeholders for source/target ids. The final desugaring that builds
+        // the full INSERT/SELECT should replace these with the proper
+        // compound identifiers referencing node CTE aliases (e.g. node0.id).
+        let source_expr = Expr::Identifier(Ident::new("source_id"));
+        let target_expr = Expr::Identifier(Ident::new("target_id"));
+
+        // Properties: if present and it's a map, serialize it using the same
+        // helper used for nodes; otherwise use an empty object literal.
+        let props_expr = match relationship.details.properties.clone() {
+            Some(Expr::Map(map)) => {
+                let props_str = self.desugar_cypher_properties(map)?;
+                Expr::Identifier(Ident::new(props_str))
+            }
+            _ => Expr::Identifier(Ident::new("'{}'".to_string())),
+        };
+
+        let tuple = Expr::Tuple(vec![type_expr, source_expr, target_expr, props_expr]);
+
+        Ok(SelectItem::UnnamedExpr(tuple))
+    }
+
+    pub fn desugar_cypher_create(&mut self, create_clause: CypherCreateClause,) -> Result<Statement, ParserError> {
+
+        let mut cte_tables = Vec::new();
+        let mut columns = Vec::new();
+        let mut values = Vec::new();
+
+        let mut node_only = true;
+
+        let mut node_counter = 0;
+
+
+        for pattern_part in &create_clause.pattern.parts {
+            // Process the node
+            let mut node_values = Vec::new();
+            match pattern_part.anon_pattern_part {
+                PatternElement::Simple(ref simple_element) => {
+                    if simple_element.chain.len() == 0{ 
+                        match &simple_element.node.labels.first() {
+                            Some(l) => {
+                                let label_expr = Expr::Identifier(Ident::new(l.to_string()));
+                                if !columns.contains(&Ident::new("Label")) {
+                                    columns.push(Ident::new("Label"));
+                                }
+                                node_values.push(label_expr);
+                            }
+                            None => {},
+                        };
+                        match &simple_element.node.properties {
+                            Some(Expr::Map(map)) => {
+                                let properties_str = self.desugar_cypher_properties(map.clone())?;
+                                if !columns.contains(&Ident::new("Properties")) {
+                                    columns.push(Ident::new("Properties"));
+                                }
+                                node_values.push(
+                                    Expr::Identifier(Ident::new(properties_str.to_string())),
+                                );
+                                values.push(node_values)
+                            },
+                            _ => {},
+                        };
+                    } else {
+                        // One or more relationships: desugar each node in the
+                        // chain into a CTE. We create a CTE for the starting
+                        // node and for each chained node, naming them
+                        // node0, node1, ... in encounter order.
+                        node_only = false;
+
+                        if let PatternElement::Simple(ref simple) = pattern_part.anon_pattern_part {
+                            // initial node
+                            let initial_node = simple.node.clone();
+                            let node_insert = self.desugar_cypher_node_insert(initial_node.clone())?;
+                            let node_alias = Ident::new(format!("node{}", node_counter));
+                            let subquery = Query {
+                                with: None,
+                                body: node_insert,
+                                order_by: None,
+                                limit_clause: None,
+                                fetch: None,
+                                locks: vec![],
+                                for_clause: None,
+                                settings: None,
+                                format_clause: None,
+                                pipe_operators: vec![],
+                            }
+                            .into();
+
+                            cte_tables.push(Cte{
+                                alias: TableAlias { name: node_alias, columns: vec![] },
+                                query: subquery,
+                                from: None,
+                                materialized: None,
+                                closing_paren_token: AttachedToken(TokenWithSpan {
+                                    token: Token::RParen,
+                                    span: Span::empty(),
+                                })
+                            });
+                            node_counter += 1;
+
+                            // then each chained node
+                            for chain_elem in &simple.chain {
+                                let chained_node = chain_elem.node.clone();
+                                let node_insert = self.desugar_cypher_node_insert(chained_node.clone())?;
+                                let node_alias = Ident::new(format!("node{}", node_counter));
+                                let subquery = Query {
+                                    with: None,
+                                    body: node_insert,
+                                    order_by: None,
+                                    limit_clause: None,
+                                    fetch: None,
+                                    locks: vec![],
+                                    for_clause: None,
+                                    settings: None,
+                                    format_clause: None,
+                                    pipe_operators: vec![],
+                                }
+                                .into();
+
+                                cte_tables.push(Cte{
+                                    alias: TableAlias { name: node_alias, columns: vec![] },
+                                    query: subquery,
+                                    from: None,
+                                    materialized: None,
+                                    closing_paren_token: AttachedToken(TokenWithSpan {
+                                        token: Token::RParen,
+                                        span: Span::empty(),
+                                    })
+                                });
+                                node_counter += 1;
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    return Err(ParserError::ParserError(
+                        "Only simple node patterns are supported in CREATE clause for desugaring to INSERT statements.".to_string()
+                    ));
+                }
+            };            
+        }   
+        
+        if node_only == true {
+            let values_clause = Values {
+                explicit_row: false,
+                rows: values,
+            };
+            let source = Some(Box::new(Query {
+                with: None,
+                body: Box::new(SetExpr::Values(values_clause)),
+                order_by: None,
+                limit_clause: None,
+                for_clause: None,
+                settings: None,
+                format_clause: None,
+                pipe_operators: vec![],
+                fetch: None,
+                locks: vec![],
+            }));
+
+            let table_object = TableObject::TableName(ObjectName(
+                vec![ObjectNamePart::Identifier(Ident::new("nodes"))]));
+
+            Ok(Statement::Insert(Insert {
+                or: None,
+                table: table_object,
+                table_alias: None,
+                ignore: false,
+                into: true,
+                overwrite: false,
+                partitioned: None,
+                columns: columns,
+                after_columns: vec![],
+                source: source,
+                assignments: vec![],
+                has_table_keyword: false,
+                on: None,
+                returning: None,
+                replace_into: false,
+                priority: None,
+                insert_alias: None,
+                settings: None,
+                format_clause: None,
+            }))
+        } else {
+            // Full-chain desugaring: create a CTE per encountered node (already
+            // in `cte_tables`) and build one SELECT per relationship, then
+            // combine them via UNION ALL into a single source query for the
+            // INSERT INTO edges (...).
+
+            let with_clause = With {
+                with_token: AttachedToken::empty(),
+                recursive: false,
+                cte_tables: cte_tables.clone(),
+            };
+
+            // Build a list of (relationship, source_idx, target_idx) by
+            // traversing the pattern parts in encounter order. node indices
+            // correspond to the order in which we added CTEs earlier: the
+            // starting node followed by each chained node.
+            let mut rels: Vec<(RelationshipPattern, usize, usize)> = Vec::new();
+            let mut idx: usize = 0;
+            for part in &create_clause.pattern.parts {
+                if let PatternElement::Simple(simple) = &part.anon_pattern_part {
+                    if !simple.chain.is_empty() {
+                        for (k, chain_elem) in simple.chain.iter().enumerate() {
+                            let source_idx = idx + k;
+                            let target_idx = idx + k + 1;
+                            rels.push((chain_elem.relationship.clone(), source_idx, target_idx));
+                        }
+                        idx += 1 + simple.chain.len();
+                    }
+                }
+            }
+
+            if rels.is_empty() {
+                return Err(ParserError::ParserError("No relationship found to desugar".to_string()));
+            }
+
+            // Build individual SELECTs for each relationship
+            let mut selects: Vec<Select> = Vec::new();
+            for (rel, s_idx, t_idx) in rels.iter() {
+                let rel_type = rel.details.types.first().map(|id| id.value.clone()).unwrap_or_default();
+                let type_expr = Expr::Value(Value::SingleQuotedString(rel_type).into());
+
+                let source_alias = format!("node{}", s_idx);
+                let target_alias = format!("node{}", t_idx);
+
+                let source_expr = Expr::CompoundIdentifier(vec![Ident::new(source_alias.clone()), Ident::new("id")]);
+                let target_expr = Expr::CompoundIdentifier(vec![Ident::new(target_alias.clone()), Ident::new("id")]);
+
+                let props_expr = match rel.details.properties.clone() {
+                    Some(Expr::Map(map)) => {
+                        let props_str = self.desugar_cypher_properties(map)?;
+                        Expr::Identifier(Ident::new(props_str.to_string()))
+                    }
+                    _ => Expr::Identifier(Ident::new("'{}'".to_string())),
+                };
+
+                let projection = vec![
+                    SelectItem::UnnamedExpr(type_expr),
+                    SelectItem::UnnamedExpr(source_expr),
+                    SelectItem::UnnamedExpr(target_expr),
+                    SelectItem::UnnamedExpr(props_expr),
+                ];
+
+                let from = vec![TableWithJoins { relation: TableFactor::Table {
+                    name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new(source_alias.clone()))]),
+                    alias: None, args: None, with_hints: vec![], version: None, with_ordinality: false, partitions: vec![], json_path: None, sample: None, index_hints: vec![],
+                }, joins: vec![] }, TableWithJoins { relation: TableFactor::Table {
+                    name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new(target_alias.clone()))]),
+                    alias: None, args: None, with_hints: vec![], version: None, with_ordinality: false, partitions: vec![], json_path: None, sample: None, index_hints: vec![],
+                }, joins: vec![] }];
+
+                let select = Select {
+                    select_token: AttachedToken::empty(),
+                    distinct: None,
+                    top: None,
+                    top_before_distinct: false,
+                    projection,
+                    exclude: None,
+                    into: None,
+                    from,
+                    lateral_views: vec![],
+                    prewhere: None,
+                    selection: None,
+                    group_by: GroupByExpr::Expressions(vec![], vec![]),
+                    cluster_by: vec![],
+                    distribute_by: vec![],
+                    sort_by: vec![],
+                    having: None,
+                    named_window: vec![],
+                    window_before_qualify: false,
+                    qualify: None,
+                    value_table_mode: None,
+                    connect_by: None,
+                    flavor: SelectFlavor::Standard,
+                };
+
+                selects.push(select);
+            }
+
+            // Combine SELECTs via UNION ALL into a single SetExpr
+            let mut combined: SetExpr = SetExpr::Select(Box::new(selects[0].clone()));
+            for sel in selects.iter().skip(1) {
+                combined = SetExpr::SetOperation {
+                    op: SetOperator::Union,
+                    set_quantifier: SetQuantifier::All,
+                    left: Box::new(combined),
+                    right: Box::new(SetExpr::Select(Box::new(sel.clone()))),
+                };
+            }
+
+            // Build the INSERT statement without a WITH clause (source will be the combined UNION ALL SELECT)
+            let source_query_no_with = Query {
+                with: None,
+                body: Box::new(combined),
+                order_by: None,
+                limit_clause: None,
+                for_clause: None,
+                settings: None,
+                format_clause: None,
+                pipe_operators: vec![],
+                fetch: None,
+                locks: vec![],
+            };
+
+            let table_object = TableObject::TableName(ObjectName(vec![ObjectNamePart::Identifier(Ident::new("edges"))]));
+
+            let columns = vec![Ident::new("type"), Ident::new("source_id"), Ident::new("target_id"), Ident::new("properties")];
+
+            let insert_stmt = Insert { 
+                or: None, 
+                table: table_object, 
+                table_alias: None, 
+                ignore: false, 
+                into: true, 
+                overwrite: false, 
+                partitioned: None, 
+                columns, 
+                after_columns: vec![], 
+                source: Some(Box::new(source_query_no_with)), 
+                assignments: vec![], 
+                has_table_keyword: false, 
+                on: None, 
+                returning: None, 
+                replace_into: false, 
+                priority: None, 
+                insert_alias: None, 
+                settings: None, 
+                format_clause: None,
+            };
+
+            // Wrap the INSERT in a Query with the WITH clause at the top level
+            let final_query = Query {
+                with: Some(with_clause),
+                body: Box::new(SetExpr::Insert(Statement::Insert(insert_stmt))),
+                order_by: None,
+                limit_clause: None,
+                for_clause: None,
+                settings: None,
+                format_clause: None,
+                pipe_operators: vec![],
+                fetch: None,
+                locks: vec![],
+            };
+
+            Ok(Statement::Query(Box::new(final_query)))
+        }
     }
 
     pub fn parse_cypher_query(&mut self) -> Result<CypherSingleQuery, ParserError> {

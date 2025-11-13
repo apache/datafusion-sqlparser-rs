@@ -5523,7 +5523,7 @@ impl<'a> Parser<'a> {
         // first token is a name and not a type in itself.
         let data_type_idx = self.get_current_index();
 
-        // FIXME: DEFAULT will be parsed as `DataType::Custom`, which is undesirable in this context
+        // DEFAULT will be parsed as `DataType::Custom`, which is undesirable in this context
         fn parse_data_type_no_default(
             parser: &mut Parser,
         ) -> Result<DataType, ParserError> {

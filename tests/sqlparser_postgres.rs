@@ -6749,6 +6749,13 @@ fn parse_create_operator() {
     assert!(pg()
         .parse_sql_statements("CREATE OPERATOR + (LEFTARG = INT4)")
         .is_err());
+
+    // Test empty parameter list error
+    assert!(pg().parse_sql_statements("CREATE OPERATOR + ()").is_err());
+
+    // Test nested empty parentheses error
+    assert!(pg().parse_sql_statements("CREATE OPERATOR > (()").is_err());
+    assert!(pg().parse_sql_statements("CREATE OPERATOR > ())").is_err());
 }
 
 #[test]
@@ -6848,7 +6855,11 @@ fn parse_create_operator_class() {
                 OperatorClassItem::Operator {
                     strategy_number: 1,
                     ref operator_name,
-                    op_types: Some(_),
+                    op_types:
+                        Some(OperatorArgTypes {
+                            left: DataType::Int4(None),
+                            right: DataType::Int4(None),
+                        }),
                     purpose: None,
                 } => {
                     assert_eq!(operator_name, &ObjectName::from(vec![Ident::new("<")]));

@@ -456,6 +456,7 @@ fn parse_update_set_from() {
     assert_eq!(
         stmt,
         Statement::Update(Update {
+            update_token: AttachedToken::empty(),
             table: TableWithJoins {
                 relation: table_from_name(ObjectName::from(vec![Ident::new("t1")])),
                 joins: vec![],
@@ -551,6 +552,7 @@ fn parse_update_with_table_alias() {
             returning,
             or: None,
             limit: None,
+            update_token: _,
         }) => {
             assert_eq!(
                 TableWithJoins {

@@ -5140,6 +5140,7 @@ fn test_simple_postgres_insert_with_alias() {
     assert_eq!(
         statement,
         Statement::Insert(Insert {
+            insert_token: AttachedToken::empty(),
             or: None,
             ignore: false,
             into: true,
@@ -5210,6 +5211,7 @@ fn test_simple_postgres_insert_with_alias() {
     assert_eq!(
         statement,
         Statement::Insert(Insert {
+            insert_token: AttachedToken::empty(),
             or: None,
             ignore: false,
             into: true,
@@ -5282,6 +5284,7 @@ fn test_simple_insert_with_quoted_alias() {
     assert_eq!(
         statement,
         Statement::Insert(Insert {
+            insert_token: AttachedToken::empty(),
             or: None,
             ignore: false,
             into: true,

@@ -6710,7 +6710,12 @@ fn parse_create_operator() {
         ),
     ] {
         match pg().verified_stmt(&format!("CREATE OPERATOR {name} (FUNCTION = f)")) {
-            Statement::CreateOperator(CreateOperator { name, hashes: false, merges: false, .. }) => {
+            Statement::CreateOperator(CreateOperator {
+                name,
+                hashes: false,
+                merges: false,
+                ..
+            }) => {
                 assert_eq!(name, expected_name);
             }
             _ => unreachable!(),
@@ -6750,14 +6755,18 @@ fn parse_create_operator() {
 fn parse_create_operator_family() {
     for index_method in &["btree", "hash", "gist", "gin", "spgist", "brin"] {
         assert_eq!(
-            pg().verified_stmt(&format!("CREATE OPERATOR FAMILY my_family USING {index_method}")),
+            pg().verified_stmt(&format!(
+                "CREATE OPERATOR FAMILY my_family USING {index_method}"
+            )),
             Statement::CreateOperatorFamily(CreateOperatorFamily {
                 name: ObjectName::from(vec![Ident::new("my_family")]),
                 using: Ident::new(*index_method),
             })
         );
         assert_eq!(
-            pg().verified_stmt(&format!("CREATE OPERATOR FAMILY myschema.test_family USING {index_method}")),
+            pg().verified_stmt(&format!(
+                "CREATE OPERATOR FAMILY myschema.test_family USING {index_method}"
+            )),
             Statement::CreateOperatorFamily(CreateOperatorFamily {
                 name: ObjectName::from(vec![Ident::new("myschema"), Ident::new("test_family")]),
                 using: Ident::new(*index_method),
@@ -6773,7 +6782,10 @@ fn parse_create_operator_class() {
         for (has_family, family_clause) in [(false, ""), (true, " FAMILY int4_family")] {
             for (class_name, expected_name) in [
                 ("int4_ops", ObjectName::from(vec![Ident::new("int4_ops")])),
-                ("myschema.test_ops", ObjectName::from(vec![Ident::new("myschema"), Ident::new("test_ops")])),
+                (
+                    "myschema.test_ops",
+                    ObjectName::from(vec![Ident::new("myschema"), Ident::new("test_ops")]),
+                ),
             ] {
                 let sql = format!(
                     "CREATE OPERATOR CLASS {class_name} {default_clause}FOR TYPE INT4 USING btree{family_clause} AS OPERATOR 1 <"
@@ -6793,7 +6805,11 @@ fn parse_create_operator_class() {
                         assert_eq!(using, &Ident::new("btree"));
                         assert_eq!(
                             family,
-                            &if has_family { Some(ObjectName::from(vec![Ident::new("int4_family")])) } else { None }
+                            &if has_family {
+                                Some(ObjectName::from(vec![Ident::new("int4_family")]))
+                            } else {
+                                None
+                            }
                         );
                         assert_eq!(items.len(), 1);
                     }
@@ -6823,11 +6839,10 @@ fn parse_create_operator_class() {
     }
 
     // Test operator with argument types
-    match pg().verified_stmt("CREATE OPERATOR CLASS test_ops FOR TYPE INT4 USING gist AS OPERATOR 1 < (INT4, INT4)") {
-        Statement::CreateOperatorClass(CreateOperatorClass {
-            ref items,
-            ..
-        }) => {
+    match pg().verified_stmt(
+        "CREATE OPERATOR CLASS test_ops FOR TYPE INT4 USING gist AS OPERATOR 1 < (INT4, INT4)",
+    ) {
+        Statement::CreateOperatorClass(CreateOperatorClass { ref items, .. }) => {
             assert_eq!(items.len(), 1);
             match &items[0] {
                 OperatorClassItem::Operator {
@@ -6845,11 +6860,10 @@ fn parse_create_operator_class() {
     }
 
     // Test operator FOR SEARCH
-    match pg().verified_stmt("CREATE OPERATOR CLASS test_ops FOR TYPE INT4 USING gist AS OPERATOR 1 < FOR SEARCH") {
-        Statement::CreateOperatorClass(CreateOperatorClass {
-            ref items,
-            ..
-        }) => {
+    match pg().verified_stmt(
+        "CREATE OPERATOR CLASS test_ops FOR TYPE INT4 USING gist AS OPERATOR 1 < FOR SEARCH",
+    ) {
+        Statement::CreateOperatorClass(CreateOperatorClass { ref items, .. }) => {
             assert_eq!(items.len(), 1);
             match &items[0] {
                 OperatorClassItem::Operator {

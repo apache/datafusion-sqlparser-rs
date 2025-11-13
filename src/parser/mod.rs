@@ -6447,7 +6447,7 @@ impl<'a> Parser<'a> {
         Ok(ObjectName(name_parts))
     }
 
-    /// Parse a CREATE OPERATOR statement
+    /// Parse a `CREATE OPERATOR` statement
     ///
     /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createoperator.html)
     pub fn parse_create_operator(&mut self) -> Result<Statement, ParserError> {

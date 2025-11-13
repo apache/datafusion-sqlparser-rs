@@ -59,20 +59,22 @@ pub use self::dcl::{
     AlterRoleOperation, CreateRole, ResetConfig, RoleOption, SecondaryRoles, SetConfigValue, Use,
 };
 pub use self::ddl::{
-    AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterPolicyOperation,
-    AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm, AlterTableLock,
-    AlterTableOperation, AlterType, AlterTypeAddValue, AlterTypeAddValuePosition,
-    AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue, ClusteredBy, ColumnDef,
-    ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy, ColumnPolicyProperty,
-    ConstraintCharacteristics, CreateConnector, CreateDomain, CreateExtension, CreateFunction,
-    CreateIndex, CreateOperator, CreateOperatorClass, CreateOperatorFamily, CreateTable,
-    CreateTrigger, CreateView, Deduplicate, DeferrableInitial, DropBehavior, DropExtension,
-    DropFunction, DropTrigger, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
-    IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
-    IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption,
-    OperatorArgTypes, OperatorClassItem, OperatorPurpose, Owner, Partition, ProcedureParam,
-    ReferentialAction, RenameTableNameKind, ReplicaIdentity, TagsColumnOption, TriggerObjectKind,
-    Truncate, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
+    Alignment, AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation,
+    AlterPolicyOperation, AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm,
+    AlterTableLock, AlterTableOperation, AlterTableType, AlterType, AlterTypeAddValue,
+    AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
+    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy,
+    ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain,
+    CreateExtension, CreateFunction, CreateIndex, CreateOperator, CreateOperatorClass,
+    CreateOperatorFamily, CreateTable, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
+    DropBehavior, DropExtension, DropFunction, DropTrigger, GeneratedAs, GeneratedExpressionMode,
+    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
+    IdentityPropertyOrder, IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck,
+    NullsDistinctOption, OperatorArgTypes, OperatorClassItem, OperatorPurpose, Owner, Partition,
+    ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity, TagsColumnOption,
+    TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
+    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, ViewColumnDef,
 };
 pub use self::dml::{Delete, Insert, Update};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -2920,6 +2922,15 @@ pub enum Set {
     /// MySQL-style
     /// SET a = 1, b = 2, ..;
     MultipleAssignments { assignments: Vec<SetAssignment> },
+    /// Session authorization for Postgres/Redshift
+    ///
+    /// ```sql
+    /// SET SESSION AUTHORIZATION { user_name | DEFAULT }
+    /// ```
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-set-session-authorization.html>
+    /// See <https://docs.aws.amazon.com/redshift/latest/dg/r_SET_SESSION_AUTHORIZATION.html>
+    SetSessionAuthorization(SetSessionAuthorizationParam),
     /// MS-SQL session
     ///
     /// See <https://learn.microsoft.com/en-us/sql/t-sql/statements/set-statements-transact-sql>
@@ -2994,6 +3005,7 @@ impl Display for Set {
                     modifier = context_modifier.map(|m| format!("{m}")).unwrap_or_default()
                 )
             }
+            Self::SetSessionAuthorization(kind) => write!(f, "SET SESSION AUTHORIZATION {kind}"),
             Self::SetSessionParam(kind) => write!(f, "SET {kind}"),
             Self::SetTransaction {
                 modes,
@@ -4113,7 +4125,7 @@ pub enum Statement {
     /// ```
     CreateType {
         name: ObjectName,
-        representation: UserDefinedTypeRepresentation,
+        representation: Option<UserDefinedTypeRepresentation>,
     },
     /// ```sql
     /// PRAGMA <schema-name>.<pragma-name> = <pragma-value>
@@ -4274,6 +4286,14 @@ pub enum Statement {
     /// ```
     /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_VACUUM_command.html)
     Vacuum(VacuumStatement),
+    /// Restore the value of a run-time parameter to the default value.
+    ///
+    /// ```sql
+    /// RESET configuration_parameter;
+    /// RESET ALL;
+    /// ```
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-reset.html)
+    Reset(ResetStatement),
 }
 
 impl From<Analyze> for Statement {
@@ -5660,7 +5680,11 @@ impl fmt::Display for Statement {
                 name,
                 representation,
             } => {
-                write!(f, "CREATE TYPE {name} AS {representation}")
+                write!(f, "CREATE TYPE {name}")?;
+                if let Some(repr) = representation {
+                    write!(f, " {repr}")?;
+                }
+                Ok(())
             }
             Statement::Pragma { name, value, is_eq } => {
                 write!(f, "PRAGMA {name}")?;
@@ -5773,6 +5797,7 @@ impl fmt::Display for Statement {
             Statement::AlterSchema(s) => write!(f, "{s}"),
             Statement::Vacuum(s) => write!(f, "{s}"),
             Statement::AlterUser(s) => write!(f, "{s}"),
+            Statement::Reset(s) => write!(f, "{s}"),
         }
     }
 }
@@ -9834,6 +9859,42 @@ impl fmt::Display for TableObject {
     }
 }
 
+/// Represents a SET SESSION AUTHORIZATION statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SetSessionAuthorizationParam {
+    pub scope: ContextModifier,
+    pub kind: SetSessionAuthorizationParamKind,
+}
+
+impl fmt::Display for SetSessionAuthorizationParam {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.kind)
+    }
+}
+
+/// Represents the parameter kind for SET SESSION AUTHORIZATION
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SetSessionAuthorizationParamKind {
+    /// Default authorization
+    Default,
+
+    /// User name
+    User(Ident),
+}
+
+impl fmt::Display for SetSessionAuthorizationParamKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SetSessionAuthorizationParamKind::Default => write!(f, "DEFAULT"),
+            SetSessionAuthorizationParamKind::User(name) => write!(f, "{}", name),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -10535,6 +10596,38 @@ impl fmt::Display for VacuumStatement {
     }
 }
 
+/// Variants of the RESET statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum Reset {
+    /// Resets all session parameters to their default values.
+    ALL,
+
+    /// Resets a specific session parameter to its default value.
+    ConfigurationParameter(ObjectName),
+}
+
+/// Resets a session parameter to its default value.
+/// ```sql
+/// RESET { ALL | <configuration_parameter> }
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ResetStatement {
+    pub reset: Reset,
+}
+
+impl fmt::Display for ResetStatement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.reset {
+            Reset::ALL => write!(f, "RESET ALL"),
+            Reset::ConfigurationParameter(param) => write!(f, "RESET {}", param),
+        }
+    }
+}
+
 impl From<Set> for Statement {
     fn from(s: Set) -> Self {
         Self::Set(s)
@@ -10772,6 +10865,12 @@ impl From<CreateUser> for Statement {
 impl From<VacuumStatement> for Statement {
     fn from(v: VacuumStatement) -> Self {
         Self::Vacuum(v)
+    }
+}
+
+impl From<ResetStatement> for Statement {
+    fn from(r: ResetStatement) -> Self {
+        Self::Reset(r)
     }
 }
 

@@ -22,6 +22,7 @@
 #[macro_use]
 mod test_utils;
 
+use sqlparser::ast::helpers::attached_token::AttachedToken;
 use sqlparser::keywords::Keyword;
 use test_utils::*;
 
@@ -494,7 +495,8 @@ fn parse_update_tuple_row_values() {
             },
             from: None,
             returning: None,
-            limit: None
+            limit: None,
+            update_token: AttachedToken::empty()
         })
     );
 }

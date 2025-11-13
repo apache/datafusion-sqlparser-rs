@@ -961,22 +961,6 @@ fn parse_create(){
 }
 
 #[test]
-fn desugar_cypher_pattern_part(){
-    // (a:Person {name: 'Alice', age: 30})-[:KNOWS]->(b:Person {name: 'Bob', age: 28})
-    let cypher = "(a:Person {name: 'Alice', age: 30})";
-    let dialect = CypherDialect {};
-    let mut tokenizer = Tokenizer::new(&dialect, cypher);
-    let mut counter = 1;
-    let tokens = tokenizer.tokenize().unwrap();
-
-    let mut parser = Parser::new(&dialect).with_tokens(tokens);
-
-    let pattern_part = parser.parse_cypher_pattern_part().unwrap();
-    let sql = parser.desugar_cypher_node_cte(&mut counter, pattern_part).unwrap();
-    println!("{}", sql);
-}
-
-#[test]
 fn desugar_cypher_create(){
     let cypher = "CREATE (a:Person {name: 'Alice'})
        -[:KNOWS]->(b:Person {name: 'Bob'})

@@ -6937,6 +6937,35 @@ fn parse_create_operator_class() {
         _ => panic!("Expected CreateOperatorClass statement"),
     }
 
+    // Test function with no arguments (empty parentheses normalizes to no parentheses)
+    pg().one_statement_parses_to(
+        "CREATE OPERATOR CLASS test_ops FOR TYPE INT4 USING btree AS FUNCTION 1 my_func()",
+        "CREATE OPERATOR CLASS test_ops FOR TYPE INT4 USING btree AS FUNCTION 1 my_func",
+    );
+    match pg().verified_stmt(
+        "CREATE OPERATOR CLASS test_ops FOR TYPE INT4 USING btree AS FUNCTION 1 my_func",
+    ) {
+        Statement::CreateOperatorClass(CreateOperatorClass { ref items, .. }) => {
+            assert_eq!(items.len(), 1);
+            match &items[0] {
+                OperatorClassItem::Function {
+                    support_number: 1,
+                    op_types: None,
+                    ref function_name,
+                    ref argument_types,
+                } => {
+                    assert_eq!(
+                        function_name,
+                        &ObjectName::from(vec![Ident::new("my_func")])
+                    );
+                    assert_eq!(argument_types.len(), 0);
+                }
+                _ => panic!("Expected Function item without op_types and no arguments"),
+            }
+        }
+        _ => panic!("Expected CreateOperatorClass statement"),
+    }
+
     // Test multiple items including STORAGE
     match pg().verified_stmt("CREATE OPERATOR CLASS gist_ops FOR TYPE geometry USING gist AS OPERATOR 1 <<, FUNCTION 1 gist_consistent(internal, geometry, INT4), STORAGE box") {
         Statement::CreateOperatorClass(CreateOperatorClass {
@@ -6978,4 +7007,11 @@ fn parse_create_operator_class() {
         }
         _ => panic!("Expected CreateOperatorClass statement"),
     }
+
+    // Test nested empty parentheses error in function arguments
+    assert!(pg()
+        .parse_sql_statements(
+            "CREATE OPERATOR CLASS test_ops FOR TYPE INT4 USING btree AS FUNCTION 1 cas_cmp(()"
+        )
+        .is_err());
 }

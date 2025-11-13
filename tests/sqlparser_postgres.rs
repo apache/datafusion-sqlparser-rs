@@ -5213,6 +5213,7 @@ fn test_simple_postgres_insert_with_alias() {
             source: Some(Box::new(Query {
                 with: None,
                 body: Box::new(SetExpr::Values(Values {
+                    value_keyword: false,
                     explicit_row: false,
                     rows: vec![vec![
                         Expr::Identifier(Ident::new("DEFAULT")),
@@ -5282,6 +5283,7 @@ fn test_simple_postgres_insert_with_alias() {
             source: Some(Box::new(Query {
                 with: None,
                 body: Box::new(SetExpr::Values(Values {
+                    value_keyword: false,
                     explicit_row: false,
                     rows: vec![vec![
                         Expr::Identifier(Ident::new("DEFAULT")),
@@ -5353,6 +5355,7 @@ fn test_simple_insert_with_quoted_alias() {
             source: Some(Box::new(Query {
                 with: None,
                 body: Box::new(SetExpr::Values(Values {
+                    value_keyword: false,
                     explicit_row: false,
                     rows: vec![vec![
                         Expr::Identifier(Ident::new("DEFAULT")),
@@ -6264,7 +6267,7 @@ fn parse_create_type_as_enum() {
     match statement {
         Statement::CreateType {
             name,
-            representation: UserDefinedTypeRepresentation::Enum { labels },
+            representation: Some(UserDefinedTypeRepresentation::Enum { labels }),
         } => {
             assert_eq!("public.my_type", name.to_string());
             assert_eq!(

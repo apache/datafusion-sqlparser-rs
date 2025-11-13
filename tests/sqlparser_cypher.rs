@@ -959,49 +959,6 @@ fn parse_create_clause(){
     }
 }
 
-// #[test]
-// fn desugar_cypher_create_nodes_only(){
-//     let cypher = "CREATE (a:Person {name: 'Alice'}), (b:Person {name: 'Bob'}), (c:Person {name: 'Carol'})";
-//     let dialect = CypherDialect {};
-//     let mut tokenizer = Tokenizer::new(&dialect, cypher);
-//     let tokens = tokenizer.tokenize().unwrap();
-
-//     let mut parser = Parser::new(&dialect).with_tokens(tokens);
-
-//     let create_clause = parser.parse_cypher_create_clause().unwrap();
-//     let stmnt = parser.desugar_cypher_create_nodes_only(create_clause).unwrap();
-
-//     let sql = stmnt.to_string();
-
-//     let expected_sql = "INSERT INTO nodes (Label, Properties) VALUES ('Person', '{\"name\": \"Alice\"}'), ('Person', '{\"name\": \"Bob\"}'), ('Person', '{\"name\": \"Carol\"}')";
-//     assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
-// }
-
-// #[test]
-// fn parse_cypher_create_with_relationship() {
-//     let cypher = "CREATE (a:Person {name: 'Alice', age: 30})-[:KNOWS {since: 2020}]->(b:Person {name: 'Bob', age: 28})";
-//     let dialect = CypherDialect {};
-//     let mut tokenizer = Tokenizer::new(&dialect, cypher);
-//     let tokens = tokenizer.tokenize().unwrap();
-
-//     let mut parser = Parser::new(&dialect).with_tokens(tokens);
-
-//     let create_clause = parser.parse_cypher_create_clause().unwrap();
-//     let stmnt = parser.desugar_cypher_create_with_relationships(create_clause).unwrap();
-
-//     let sql = stmnt.to_string();
-
-//     let expected_sql = "WITH \
-//         node1 AS \
-//         (INSERT INTO nodes (Label, Properties) VALUES ('Person', '{\"name\": \"Alice\", \"age\": 30}') RETURNING id), \
-//         node2 AS \
-//         (INSERT INTO nodes (Label, Properties) VALUES ('Person', '{\"name\": \"Bob\", \"age\": 28}') RETURNING id) \
-//         INSERT INTO edges (Label, Source_id, Target_id, Properties) \
-//         SELECT 'KNOWS', node1.id, node2.id, '{\"since\": 2020}' \
-//         FROM node1, node2";
-//     assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
-// }
-
 #[test]
 fn parse_cypher_create_nodes_only(){
     let cypher = "CREATE (a:Person {name: 'Alice'}), (b:Person {name: 'Bob'}), (c:Person {name: 'Carol'})";

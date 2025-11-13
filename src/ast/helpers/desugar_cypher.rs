@@ -27,6 +27,7 @@ use crate::parser::{ParserError};
 pub struct Desugarer;
 
 impl Desugarer {
+
     /// Desugar Cypher property map into JSON string format
     fn desugar_cypher_properties(properties: Map) -> Result<String, ParserError>{
         let entries: Vec<String> = properties.entries.into_iter()
@@ -58,6 +59,7 @@ impl Desugarer {
         Ok(format!("{{{}}}", entries.join(", ")))
     }
 
+    // Desugar Cypher node pattern into INSERT INTO nodes statement for individual CTE statement
     fn desugar_cypher_node_insert(node:NodePattern) -> Result<Box<SetExpr>, ParserError>{
 
         let mut columns = Vec::new();
@@ -131,6 +133,7 @@ impl Desugarer {
         }))))
     }
 
+    // Desugar Cypher node pattern into INSERT INTO nodes statement wrapped in CTE for node and relationship creation
     fn desugar_cypher_node_cte(node_counter: &mut i32, initial_node: NodePattern) -> Result<Cte, ParserError> {
 
         let node_insert = Self::desugar_cypher_node_insert(initial_node.clone())?;
@@ -161,6 +164,7 @@ impl Desugarer {
         })
     }
 
+    /// Desugar Cypher relationship pattern into SELECT statement for relationship insertion.
     fn desugar_cypher_relationship_select(relationship: RelationshipPattern, s_idx:usize, t_idx:usize) -> Result<Select, ParserError> {
         let rel_type = relationship.details.types.first().map(|id| id.value.clone()).unwrap_or_default();
         let type_expr = Expr::Value(Value::SingleQuotedString(rel_type).into());
@@ -231,7 +235,6 @@ impl Desugarer {
                 PatternElement::Simple(simple_element) => {
                     let mut node_values = Vec::new();
                     
-                    // Process label
                     if let Some(label) = simple_element.node.labels.first() {
                         let label_expr = Expr::Value(Value::SingleQuotedString(label.to_string()).into());
                         if !columns.contains(&Ident::new("Label")) {
@@ -240,7 +243,6 @@ impl Desugarer {
                         node_values.push(label_expr);
                     }
                     
-                    // Process properties
                     if let Some(Expr::Map(map)) = &simple_element.node.properties {
                         let properties_str = Self::desugar_cypher_properties(map.clone())?;
                         if !columns.contains(&Ident::new("Properties")) {
@@ -258,7 +260,6 @@ impl Desugarer {
             }
         }
 
-        // Build INSERT INTO nodes statement
         let values_clause = Values {
             explicit_row: false,
             rows: values,
@@ -306,12 +307,6 @@ impl Desugarer {
 
     /// Desugar relationship CREATE patterns into CTEs + INSERT INTO edges statement.
     /// Handles patterns like: CREATE (a:Person)-[:KNOWS]->(b:Person)
-    /// 
-    /// Strategy:
-    /// 1. Create a CTE for each node in the pattern with INSERT INTO nodes RETURNING id
-    /// 2. Build SELECT statements for each relationship referencing the CTEs
-    /// 3. Combine SELECTs with UNION ALL
-    /// 4. Wrap in WITH clause and INSERT INTO edges
     fn desugar_cypher_create_with_relationships(create_clause: CypherCreateClause) -> Result<Statement, ParserError> {
         let mut cte_tables = Vec::new();
         let mut node_counter = 1;
@@ -451,8 +446,8 @@ impl Desugarer {
     }    
 
     /// Desugar Cypher CREATE clause into SQL INSERT statement(s).
-    /// Routes to specialized handlers based on whether the pattern contains relationships.
     pub fn desugar_cypher_create(create_clause: CypherCreateClause) -> Result<Statement, ParserError> {
+        
         // Determine if pattern contains relationships or just nodes
         let has_relationships = create_clause.pattern.parts.iter()
             .any(|p| matches!(&p.anon_pattern_part, PatternElement::Simple(s) if !s.chain.is_empty()));

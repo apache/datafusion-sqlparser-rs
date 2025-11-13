@@ -59,19 +59,21 @@ pub use self::dcl::{
     AlterRoleOperation, CreateRole, ResetConfig, RoleOption, SecondaryRoles, SetConfigValue, Use,
 };
 pub use self::ddl::{
-    AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterPolicyOperation,
-    AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm, AlterTableLock,
-    AlterTableOperation, AlterTableType, AlterType, AlterTypeAddValue, AlterTypeAddValuePosition,
-    AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue, ClusteredBy, ColumnDef,
-    ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy, ColumnPolicyProperty,
-    ConstraintCharacteristics, CreateConnector, CreateDomain, CreateExtension, CreateFunction,
-    CreateIndex, CreateTable, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
-    DropBehavior, DropExtension, DropFunction, DropTrigger, GeneratedAs, GeneratedExpressionMode,
-    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
-    IdentityPropertyOrder, IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck,
-    NullsDistinctOption, Owner, Partition, ProcedureParam, ReferentialAction, RenameTableNameKind,
-    ReplicaIdentity, TagsColumnOption, TriggerObjectKind, Truncate,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
+    Alignment, AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation,
+    AlterPolicyOperation, AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm,
+    AlterTableLock, AlterTableOperation, AlterTableType, AlterType, AlterTypeAddValue,
+    AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
+    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy,
+    ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain,
+    CreateExtension, CreateFunction, CreateIndex, CreateTable, CreateTrigger, CreateView,
+    Deduplicate, DeferrableInitial, DropBehavior, DropExtension, DropFunction, DropTrigger,
+    GeneratedAs, GeneratedExpressionMode, IdentityParameters, IdentityProperty,
+    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, IndexColumn,
+    IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption, Owner, Partition,
+    ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity, TagsColumnOption,
+    TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
+    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, ViewColumnDef,
 };
 pub use self::dml::{Delete, Insert, Update};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -2787,7 +2789,7 @@ impl fmt::Display for Declare {
 }
 
 /// Sql options of a `CREATE TABLE` statement.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
+#[derive(Debug, Default, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CreateTableOptions {
@@ -4107,7 +4109,7 @@ pub enum Statement {
     /// ```
     CreateType {
         name: ObjectName,
-        representation: UserDefinedTypeRepresentation,
+        representation: Option<UserDefinedTypeRepresentation>,
     },
     /// ```sql
     /// PRAGMA <schema-name>.<pragma-name> = <pragma-value>
@@ -5657,7 +5659,11 @@ impl fmt::Display for Statement {
                 name,
                 representation,
             } => {
-                write!(f, "CREATE TYPE {name} AS {representation}")
+                write!(f, "CREATE TYPE {name}")?;
+                if let Some(repr) = representation {
+                    write!(f, " {repr}")?;
+                }
+                Ok(())
             }
             Statement::Pragma { name, value, is_eq } => {
                 write!(f, "PRAGMA {name}")?;

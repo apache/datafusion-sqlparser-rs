@@ -11710,28 +11710,247 @@ fn parse_projection_trailing_comma() {
 
 #[test]
 fn parse_create_type() {
-    let create_type =
-        verified_stmt("CREATE TYPE db.type_name AS (foo INT, bar TEXT COLLATE \"de_DE\")");
-    assert_eq!(
+    match verified_stmt("CREATE TYPE mytype") {
         Statement::CreateType {
-            name: ObjectName::from(vec![Ident::new("db"), Ident::new("type_name")]),
-            representation: UserDefinedTypeRepresentation::Composite {
-                attributes: vec![
-                    UserDefinedTypeCompositeAttributeDef {
-                        name: Ident::new("foo"),
-                        data_type: DataType::Int(None),
-                        collation: None,
-                    },
-                    UserDefinedTypeCompositeAttributeDef {
-                        name: Ident::new("bar"),
-                        data_type: DataType::Text,
-                        collation: Some(ObjectName::from(vec![Ident::with_quote('\"', "de_DE")])),
-                    }
-                ]
+            name,
+            representation,
+        } => {
+            assert_eq!(name.to_string(), "mytype");
+            assert!(representation.is_none());
+        }
+        _ => unreachable!(),
+    }
+
+    match verified_stmt("CREATE TYPE address AS (street VARCHAR(100), city TEXT COLLATE \"en_US\")")
+    {
+        Statement::CreateType {
+            name,
+            representation,
+        } => {
+            assert_eq!(name.to_string(), "address");
+            match representation {
+                Some(UserDefinedTypeRepresentation::Composite { attributes }) => {
+                    assert_eq!(attributes.len(), 2);
+                    assert_eq!(attributes[0].name, Ident::new("street"));
+                    assert_eq!(
+                        attributes[0].data_type,
+                        DataType::Varchar(Some(CharacterLength::IntegerLength {
+                            length: 100,
+                            unit: None
+                        }))
+                    );
+                    assert_eq!(attributes[0].collation, None);
+
+                    assert_eq!(attributes[1].name, Ident::new("city"));
+                    assert_eq!(attributes[1].data_type, DataType::Text);
+                    assert_eq!(
+                        attributes[1].collation.as_ref().map(|n| n.to_string()),
+                        Some("\"en_US\"".to_string())
+                    );
+                }
+                _ => unreachable!(),
             }
-        },
-        create_type
-    );
+        }
+        _ => unreachable!(),
+    }
+
+    verified_stmt("CREATE TYPE empty AS ()");
+
+    match verified_stmt("CREATE TYPE mood AS ENUM ('happy', 'sad')") {
+        Statement::CreateType {
+            name,
+            representation,
+        } => {
+            assert_eq!(name.to_string(), "mood");
+            match representation {
+                Some(UserDefinedTypeRepresentation::Enum { labels }) => {
+                    assert_eq!(labels.len(), 2);
+                    assert_eq!(labels[0], Ident::with_quote('\'', "happy"));
+                    assert_eq!(labels[1], Ident::with_quote('\'', "sad"));
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    }
+
+    match verified_stmt("CREATE TYPE int4range AS RANGE (SUBTYPE = INTEGER, CANONICAL = fn1)") {
+        Statement::CreateType {
+            name,
+            representation,
+        } => {
+            assert_eq!(name.to_string(), "int4range");
+            match representation {
+                Some(UserDefinedTypeRepresentation::Range { options }) => {
+                    assert_eq!(options.len(), 2);
+                    assert!(matches!(
+                        options[0],
+                        UserDefinedTypeRangeOption::Subtype(DataType::Integer(_))
+                    ));
+                    assert!(matches!(
+                        options[1],
+                        UserDefinedTypeRangeOption::Canonical(_)
+                    ));
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    }
+
+    verified_stmt("CREATE TYPE textrange AS RANGE (SUBTYPE = TEXT, COLLATION = \"en_US\", MULTIRANGE_TYPE_NAME = textmultirange)");
+
+    match verified_stmt(
+        "CREATE TYPE int4range AS RANGE (SUBTYPE = INTEGER, SUBTYPE_OPCLASS = int4_ops)",
+    ) {
+        Statement::CreateType {
+            name,
+            representation,
+        } => {
+            assert_eq!(name.to_string(), "int4range");
+            match representation {
+                Some(UserDefinedTypeRepresentation::Range { options }) => {
+                    assert_eq!(options.len(), 2);
+                    assert!(matches!(
+                        options[0],
+                        UserDefinedTypeRangeOption::Subtype(DataType::Integer(_))
+                    ));
+                    match &options[1] {
+                        UserDefinedTypeRangeOption::SubtypeOpClass(name) => {
+                            assert_eq!(name.to_string(), "int4_ops");
+                        }
+                        _ => unreachable!("Expected SubtypeOpClass"),
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    }
+
+    match verified_stmt(
+        "CREATE TYPE int4range AS RANGE (SUBTYPE = INTEGER, SUBTYPE_DIFF = int4range_subdiff)",
+    ) {
+        Statement::CreateType {
+            name,
+            representation,
+        } => {
+            assert_eq!(name.to_string(), "int4range");
+            match representation {
+                Some(UserDefinedTypeRepresentation::Range { options }) => {
+                    assert_eq!(options.len(), 2);
+                    assert!(matches!(
+                        options[0],
+                        UserDefinedTypeRangeOption::Subtype(DataType::Integer(_))
+                    ));
+                    match &options[1] {
+                        UserDefinedTypeRangeOption::SubtypeDiff(name) => {
+                            assert_eq!(name.to_string(), "int4range_subdiff");
+                        }
+                        _ => unreachable!("Expected SubtypeDiff"),
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    }
+
+    match verified_stmt(
+        "CREATE TYPE int4range AS RANGE (SUBTYPE = INTEGER, SUBTYPE_OPCLASS = int4_ops, CANONICAL = int4range_canonical, SUBTYPE_DIFF = int4range_subdiff, MULTIRANGE_TYPE_NAME = int4multirange)",
+    ) {
+        Statement::CreateType {
+            name,
+            representation,
+        } => {
+            assert_eq!(name.to_string(), "int4range");
+            match representation {
+                Some(UserDefinedTypeRepresentation::Range { options }) => {
+                    assert_eq!(options.len(), 5);
+                    assert!(matches!(
+                        options[0],
+                        UserDefinedTypeRangeOption::Subtype(DataType::Integer(_))
+                    ));
+                    assert!(matches!(
+                        options[1],
+                        UserDefinedTypeRangeOption::SubtypeOpClass(_)
+                    ));
+                    assert!(matches!(
+                        options[2],
+                        UserDefinedTypeRangeOption::Canonical(_)
+                    ));
+                    assert!(matches!(
+                        options[3],
+                        UserDefinedTypeRangeOption::SubtypeDiff(_)
+                    ));
+                    assert!(matches!(
+                        options[4],
+                        UserDefinedTypeRangeOption::MultirangeTypeName(_)
+                    ));
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    }
+
+    match verified_stmt(
+        "CREATE TYPE mytype (INPUT = in_fn, OUTPUT = out_fn, INTERNALLENGTH = 16, PASSEDBYVALUE)",
+    ) {
+        Statement::CreateType {
+            name,
+            representation,
+        } => {
+            assert_eq!(name.to_string(), "mytype");
+            match representation {
+                Some(UserDefinedTypeRepresentation::SqlDefinition { options }) => {
+                    assert_eq!(options.len(), 4);
+                    assert!(matches!(
+                        options[0],
+                        UserDefinedTypeSqlDefinitionOption::Input(_)
+                    ));
+                    assert!(matches!(
+                        options[1],
+                        UserDefinedTypeSqlDefinitionOption::Output(_)
+                    ));
+                    assert!(matches!(
+                        options[2],
+                        UserDefinedTypeSqlDefinitionOption::InternalLength(
+                            UserDefinedTypeInternalLength::Fixed(16)
+                        )
+                    ));
+                    assert!(matches!(
+                        options[3],
+                        UserDefinedTypeSqlDefinitionOption::PassedByValue
+                    ));
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    }
+
+    verified_stmt("CREATE TYPE mytype (INPUT = in_fn, OUTPUT = out_fn, INTERNALLENGTH = VARIABLE, STORAGE = extended)");
+
+    // Test all storage variants
+    for storage in ["plain", "external", "extended", "main"] {
+        verified_stmt(&format!(
+            "CREATE TYPE t (INPUT = f_in, OUTPUT = f_out, STORAGE = {storage})"
+        ));
+    }
+
+    // Test all alignment variants
+    for align in ["char", "int2", "int4", "double"] {
+        verified_stmt(&format!(
+            "CREATE TYPE t (INPUT = f_in, OUTPUT = f_out, ALIGNMENT = {align})"
+        ));
+    }
+
+    // Test additional function options (PostgreSQL-specific due to ANALYZE keyword)
+    pg_and_generic().verified_stmt("CREATE TYPE t (INPUT = f_in, OUTPUT = f_out, RECEIVE = f_recv, SEND = f_send, TYPMOD_IN = f_tmin, TYPMOD_OUT = f_tmout, ANALYZE = f_analyze, SUBSCRIPT = f_sub)");
+
+    // Test advanced options
+    verified_stmt("CREATE TYPE t (INPUT = f_in, OUTPUT = f_out, LIKE = INT, CATEGORY = 'N', PREFERRED = true, DEFAULT = 0, ELEMENT = INTEGER, DELIMITER = ',', COLLATABLE = false)");
 }
 
 #[test]

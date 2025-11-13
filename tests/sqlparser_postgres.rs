@@ -6223,7 +6223,7 @@ fn parse_create_type_as_enum() {
     match statement {
         Statement::CreateType {
             name,
-            representation: UserDefinedTypeRepresentation::Enum { labels },
+            representation: Some(UserDefinedTypeRepresentation::Enum { labels }),
         } => {
             assert_eq!("public.my_type", name.to_string());
             assert_eq!(

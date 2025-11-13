@@ -17,7 +17,6 @@
 
 use sqlparser::ast::*;
 use sqlparser::dialect::CypherDialect;
-use sqlparser::dialect::SQLiteDialect;
 use sqlparser::parser::Parser;
 use sqlparser::tokenizer::Tokenizer;
 
@@ -907,7 +906,7 @@ fn parse_cypher_query(){
 }
 
 #[test]
-fn parse_create(){
+fn parse_create_clause(){
     let sql = "CREATE (a:Person {name: 'Alice', age: 30})";
     let dialect = CypherDialect {};
     let mut tokenizer = Tokenizer::new(&dialect, sql);
@@ -960,45 +959,85 @@ fn parse_create(){
     }
 }
 
+// #[test]
+// fn desugar_cypher_create_nodes_only(){
+//     let cypher = "CREATE (a:Person {name: 'Alice'}), (b:Person {name: 'Bob'}), (c:Person {name: 'Carol'})";
+//     let dialect = CypherDialect {};
+//     let mut tokenizer = Tokenizer::new(&dialect, cypher);
+//     let tokens = tokenizer.tokenize().unwrap();
+
+//     let mut parser = Parser::new(&dialect).with_tokens(tokens);
+
+//     let create_clause = parser.parse_cypher_create_clause().unwrap();
+//     let stmnt = parser.desugar_cypher_create_nodes_only(create_clause).unwrap();
+
+//     let sql = stmnt.to_string();
+
+//     let expected_sql = "INSERT INTO nodes (Label, Properties) VALUES ('Person', '{\"name\": \"Alice\"}'), ('Person', '{\"name\": \"Bob\"}'), ('Person', '{\"name\": \"Carol\"}')";
+//     assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
+// }
+
+// #[test]
+// fn parse_cypher_create_with_relationship() {
+//     let cypher = "CREATE (a:Person {name: 'Alice', age: 30})-[:KNOWS {since: 2020}]->(b:Person {name: 'Bob', age: 28})";
+//     let dialect = CypherDialect {};
+//     let mut tokenizer = Tokenizer::new(&dialect, cypher);
+//     let tokens = tokenizer.tokenize().unwrap();
+
+//     let mut parser = Parser::new(&dialect).with_tokens(tokens);
+
+//     let create_clause = parser.parse_cypher_create_clause().unwrap();
+//     let stmnt = parser.desugar_cypher_create_with_relationships(create_clause).unwrap();
+
+//     let sql = stmnt.to_string();
+
+//     let expected_sql = "WITH \
+//         node1 AS \
+//         (INSERT INTO nodes (Label, Properties) VALUES ('Person', '{\"name\": \"Alice\", \"age\": 30}') RETURNING id), \
+//         node2 AS \
+//         (INSERT INTO nodes (Label, Properties) VALUES ('Person', '{\"name\": \"Bob\", \"age\": 28}') RETURNING id) \
+//         INSERT INTO edges (Label, Source_id, Target_id, Properties) \
+//         SELECT 'KNOWS', node1.id, node2.id, '{\"since\": 2020}' \
+//         FROM node1, node2";
+//     assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
+// }
+
 #[test]
-fn desugar_cypher_create(){
-    let cypher = "CREATE (a:Person {name: 'Alice'})
-       -[:KNOWS]->(b:Person {name: 'Bob'})
-       -[:WORKS_WITH]->(c:Person {name: 'Carol'})
-    ";
+fn parse_cypher_create_nodes_only(){
+    let cypher = "CREATE (a:Person {name: 'Alice'}), (b:Person {name: 'Bob'}), (c:Person {name: 'Carol'})";
     let dialect = CypherDialect {};
-    let mut tokenizer = Tokenizer::new(&dialect, cypher);
-    let tokens = tokenizer.tokenize().unwrap();
 
-    let mut parser = Parser::new(&dialect).with_tokens(tokens);
+    match Parser::parse_sql(&dialect, cypher) {
+        Ok(ast) => {
+            // Convert each statement back to a string
+            let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
 
-    let create_clause = parser.parse_cypher_create_clause().unwrap();
-    let sql = parser.desugar_cypher_create(create_clause).unwrap();
-    println!("{}", sql);
+            let expected_sql = "INSERT INTO nodes (Label, Properties) VALUES ('Person', '{\"name\": \"Alice\"}'), ('Person', '{\"name\": \"Bob\"}'), ('Person', '{\"name\": \"Carol\"}')";
+            assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
+        }
+        _ => panic!("Parsing failed"),
+    };
 }
 
 #[test]
-fn parse_cypher_create() {
-    let sql = "With
-            alice AS (
-                INSERT INTO persons (name, age) VALUES ('Alice', 30) RETURNING id
-            ),
-            bob AS (
-                INSERT INTO persons (name, age) VALUES ('Bob', 28) RETURNING id
-            )
-        INSERT INTO edges (start_node_id, end_node_id, label, properties)
-        SELECT alice.id, bob.id, 'KNOWS', '{\"since\": 2020}'
-        FROM alice, bob;
-        ";
-    let dialect = SQLiteDialect {};
-    // let mut tokenizer = Tokenizer::new(&dialect, sql);
-    // let tokens = tokenizer.tokenize().unwrap();
+fn parse_cypher_create_with_relationship(){
+    let cypher = "CREATE (a:Person {name: 'Alice', age: 30})-[:KNOWS {since: 2020}]->(b:Person {name: 'Bob', age: 28})";
+    let dialect = CypherDialect {};
 
-    match Parser::parse_sql(&dialect, sql) {
+    match Parser::parse_sql(&dialect, cypher) {
         Ok(ast) => {
             // Convert each statement back to a string
-            let stmt_strings: Vec<String> = ast.into_iter().map(|stmt| stmt.to_string()).collect();
-            println!("{:#?}", stmt_strings);
+            let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
+
+            let expected_sql = "WITH \
+                node1 AS \
+                (INSERT INTO nodes (Label, Properties) VALUES ('Person', '{\"name\": \"Alice\", \"age\": 30}') RETURNING id), \
+                node2 AS \
+                (INSERT INTO nodes (Label, Properties) VALUES ('Person', '{\"name\": \"Bob\", \"age\": 28}') RETURNING id) \
+                INSERT INTO edges (Label, Source_id, Target_id, Properties) \
+                SELECT 'KNOWS', node1.id, node2.id, '{\"since\": 2020}' \
+                FROM node1, node2";
+            assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
         }
         _ => panic!("Parsing failed"),
     };

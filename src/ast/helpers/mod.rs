@@ -19,3 +19,4 @@ pub mod key_value_options;
 pub mod stmt_create_database;
 pub mod stmt_create_table;
 pub mod stmt_data_loading;
+pub mod desugar_cypher;

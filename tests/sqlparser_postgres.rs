@@ -6548,7 +6548,9 @@ fn parse_create_server() {
 
 #[test]
 fn parse_alter_schema() {
-    match pg_and_generic().verified_stmt("ALTER SCHEMA foo RENAME TO bar") {
+    // Test RENAME operation
+    let stmt = pg_and_generic().verified_stmt("ALTER SCHEMA foo RENAME TO bar");
+    match stmt {
         Statement::AlterSchema(AlterSchema { operations, .. }) => {
             assert_eq!(
                 operations,
@@ -6560,52 +6562,26 @@ fn parse_alter_schema() {
         _ => unreachable!(),
     }
 
-    match pg_and_generic().verified_stmt("ALTER SCHEMA foo OWNER TO bar") {
-        Statement::AlterSchema(AlterSchema { operations, .. }) => {
-            assert_eq!(
-                operations,
-                vec![AlterSchemaOperation::OwnerTo {
-                    owner: Owner::Ident("bar".into())
-                }]
-            );
+    // Test OWNER TO operations with different owner types
+    for (owner_clause, expected_owner) in &[
+        ("bar", Owner::Ident("bar".into())),
+        ("CURRENT_ROLE", Owner::CurrentRole),
+        ("CURRENT_USER", Owner::CurrentUser),
+        ("SESSION_USER", Owner::SessionUser),
+    ] {
+        let sql = format!("ALTER SCHEMA foo OWNER TO {}", owner_clause);
+        let stmt = pg_and_generic().verified_stmt(&sql);
+        match stmt {
+            Statement::AlterSchema(AlterSchema { operations, .. }) => {
+                assert_eq!(
+                    operations,
+                    vec![AlterSchemaOperation::OwnerTo {
+                        owner: expected_owner.clone()
+                    }]
+                );
+            }
+            _ => unreachable!(),
         }
-        _ => unreachable!(),
-    }
-
-    match pg_and_generic().verified_stmt("ALTER SCHEMA foo OWNER TO CURRENT_ROLE") {
-        Statement::AlterSchema(AlterSchema { operations, .. }) => {
-            assert_eq!(
-                operations,
-                vec![AlterSchemaOperation::OwnerTo {
-                    owner: Owner::CurrentRole
-                }]
-            );
-        }
-        _ => unreachable!(),
-    }
-
-    match pg_and_generic().verified_stmt("ALTER SCHEMA foo OWNER TO CURRENT_USER") {
-        Statement::AlterSchema(AlterSchema { operations, .. }) => {
-            assert_eq!(
-                operations,
-                vec![AlterSchemaOperation::OwnerTo {
-                    owner: Owner::CurrentUser
-                }]
-            );
-        }
-        _ => unreachable!(),
-    }
-
-    match pg_and_generic().verified_stmt("ALTER SCHEMA foo OWNER TO SESSION_USER") {
-        Statement::AlterSchema(AlterSchema { operations, .. }) => {
-            assert_eq!(
-                operations,
-                vec![AlterSchemaOperation::OwnerTo {
-                    owner: Owner::SessionUser
-                }]
-            );
-        }
-        _ => unreachable!(),
     }
 }
 
@@ -6659,116 +6635,322 @@ fn parse_foreign_key_match_with_actions() {
 
 #[test]
 fn parse_create_operator() {
-    // Test a basic CREATE OPERATOR statement
-    let sql = "CREATE OPERATOR < (PROCEDURE = \"cas_lt\", LEFTARG = CAS, RIGHTARG = CAS, COMMUTATOR = >, NEGATOR = >=, RESTRICT = scalarltsel, JOIN = scalarltjoinsel)";
-    let statement = pg().verified_stmt(sql);
-
-    // Verify the parsed statement
-    match statement {
+    let sql = "CREATE OPERATOR myschema.@@ (PROCEDURE = myschema.my_proc, LEFTARG = TIMESTAMP WITH TIME ZONE, RIGHTARG = VARCHAR(255), COMMUTATOR = schema.>, NEGATOR = schema.<=, RESTRICT = myschema.sel_func, JOIN = myschema.join_func, HASHES, MERGES)";
+    assert_eq!(
+        pg().verified_stmt(sql),
         Statement::CreateOperator(CreateOperator {
-            name,
-            function,
-            is_procedure,
-            left_arg,
-            right_arg,
-            commutator,
-            negator,
-            restrict,
-            join,
-            hashes,
-            merges,
-        }) => {
-            assert_eq!(name.to_string(), "<");
-            assert_eq!(function.to_string(), "\"cas_lt\"");
-            assert!(is_procedure);
-            assert_eq!(left_arg.as_ref().unwrap().to_string(), "CAS");
-            assert_eq!(right_arg.as_ref().unwrap().to_string(), "CAS");
-            assert_eq!(commutator.as_ref().unwrap().to_string(), ">");
-            assert_eq!(negator.as_ref().unwrap().to_string(), ">=");
-            assert_eq!(restrict.as_ref().unwrap().to_string(), "scalarltsel");
-            assert_eq!(join.as_ref().unwrap().to_string(), "scalarltjoinsel");
-            assert!(!hashes);
-            assert!(!merges);
-        }
-        _ => panic!("Expected Statement::CreateOperator, got {:?}", statement),
+            name: ObjectName::from(vec![Ident::new("myschema"), Ident::new("@@")]),
+            function: ObjectName::from(vec![Ident::new("myschema"), Ident::new("my_proc")]),
+            is_procedure: true,
+            left_arg: Some(DataType::Timestamp(None, TimezoneInfo::WithTimeZone)),
+            right_arg: Some(DataType::Varchar(Some(CharacterLength::IntegerLength {
+                length: 255,
+                unit: None
+            }))),
+            commutator: Some(ObjectName::from(vec![
+                Ident::new("schema"),
+                Ident::new(">")
+            ])),
+            negator: Some(ObjectName::from(vec![
+                Ident::new("schema"),
+                Ident::new("<=")
+            ])),
+            restrict: Some(ObjectName::from(vec![
+                Ident::new("myschema"),
+                Ident::new("sel_func")
+            ])),
+            join: Some(ObjectName::from(vec![
+                Ident::new("myschema"),
+                Ident::new("join_func")
+            ])),
+            hashes: true,
+            merges: true,
+        })
+    );
+
+    for op_symbol in &[
+        "-", "*", "/", "<", ">", "=", "<=", ">=", "<>", "~", "!", "@", "#", "%", "^", "&", "|",
+        "<<", ">>", "&&",
+    ] {
+        assert_eq!(
+            pg().verified_stmt(&format!("CREATE OPERATOR {op_symbol} (FUNCTION = f)")),
+            Statement::CreateOperator(CreateOperator {
+                name: ObjectName::from(vec![Ident::new(*op_symbol)]),
+                function: ObjectName::from(vec![Ident::new("f")]),
+                is_procedure: false,
+                left_arg: None,
+                right_arg: None,
+                commutator: None,
+                negator: None,
+                restrict: None,
+                join: None,
+                hashes: false,
+                merges: false,
+            })
+        );
     }
+
+    pg().one_statement_parses_to(
+        "CREATE OPERATOR != (FUNCTION = func)",
+        "CREATE OPERATOR <> (FUNCTION = func)",
+    );
+
+    for (name, expected_name) in [
+        (
+            "s1.+",
+            ObjectName::from(vec![Ident::new("s1"), Ident::new("+")]),
+        ),
+        (
+            "s2.-",
+            ObjectName::from(vec![Ident::new("s2"), Ident::new("-")]),
+        ),
+        (
+            "s1.s3.*",
+            ObjectName::from(vec![Ident::new("s1"), Ident::new("s3"), Ident::new("*")]),
+        ),
+    ] {
+        match pg().verified_stmt(&format!("CREATE OPERATOR {name} (FUNCTION = f)")) {
+            Statement::CreateOperator(CreateOperator { name, hashes: false, merges: false, .. }) => {
+                assert_eq!(name, expected_name);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    pg().one_statement_parses_to(
+        "CREATE OPERATOR + (FUNCTION = f, COMMUTATOR = OPERATOR(>), NEGATOR = OPERATOR(>=))",
+        "CREATE OPERATOR + (FUNCTION = f, COMMUTATOR = >, NEGATOR = >=)",
+    );
+
+    // Test all duplicate clause errors
+    for field in &[
+        "FUNCTION = f2",
+        "PROCEDURE = p",
+        "LEFTARG = INT4, LEFTARG = INT4",
+        "RIGHTARG = INT4, RIGHTARG = INT4",
+        "COMMUTATOR = -, COMMUTATOR = *",
+        "NEGATOR = -, NEGATOR = *",
+        "RESTRICT = f1, RESTRICT = f2",
+        "JOIN = f1, JOIN = f2",
+        "HASHES, HASHES",
+        "MERGES, MERGES",
+    ] {
+        assert!(pg()
+            .parse_sql_statements(&format!("CREATE OPERATOR + (FUNCTION = f, {field})"))
+            .is_err());
+    }
+
+    // Test missing FUNCTION/PROCEDURE error
+    assert!(pg()
+        .parse_sql_statements("CREATE OPERATOR + (LEFTARG = INT4)")
+        .is_err());
 }
 
 #[test]
 fn parse_create_operator_family() {
-    let sql = "CREATE OPERATOR FAMILY CAS_btree_ops USING btree";
-    let statement = pg().verified_stmt(sql);
-
-    match statement {
-        Statement::CreateOperatorFamily(CreateOperatorFamily { name, using }) => {
-            assert_eq!(name.to_string(), "CAS_btree_ops");
-            assert_eq!(using.to_string(), "btree");
-        }
-        _ => panic!(
-            "Expected Statement::CreateOperatorFamily, got {:?}",
-            statement
-        ),
+    for index_method in &["btree", "hash", "gist", "gin", "spgist", "brin"] {
+        assert_eq!(
+            pg().verified_stmt(&format!("CREATE OPERATOR FAMILY my_family USING {index_method}")),
+            Statement::CreateOperatorFamily(CreateOperatorFamily {
+                name: ObjectName::from(vec![Ident::new("my_family")]),
+                using: Ident::new(*index_method),
+            })
+        );
+        assert_eq!(
+            pg().verified_stmt(&format!("CREATE OPERATOR FAMILY myschema.test_family USING {index_method}")),
+            Statement::CreateOperatorFamily(CreateOperatorFamily {
+                name: ObjectName::from(vec![Ident::new("myschema"), Ident::new("test_family")]),
+                using: Ident::new(*index_method),
+            })
+        );
     }
 }
 
 #[test]
 fn parse_create_operator_class() {
-    let sql = "CREATE OPERATOR CLASS CAS_btree_ops DEFAULT FOR TYPE CAS USING btree FAMILY CAS_btree_ops AS OPERATOR 1 <, OPERATOR 2 <=, OPERATOR 3 =, OPERATOR 4 >=, OPERATOR 5 >, FUNCTION 1 cas_cmp(CAS, CAS)";
-    let statement = pg().verified_stmt(sql);
-
-    match statement {
-        Statement::CreateOperatorClass(CreateOperatorClass {
-            name,
-            default,
-            for_type,
-            using,
-            family,
-            items,
-        }) => {
-            assert_eq!(name.to_string(), "CAS_btree_ops");
-            assert!(default);
-            assert_eq!(for_type.to_string(), "CAS");
-            assert_eq!(using.to_string(), "btree");
-            assert_eq!(family.unwrap().to_string(), "CAS_btree_ops");
-            assert_eq!(items.len(), 6);
-
-            // Check first operator
-            match &items[0] {
-                OperatorClassItem::Operator {
-                    strategy_number,
-                    operator_name,
-                    op_types,
-                    purpose,
-                } => {
-                    assert_eq!(*strategy_number, 1);
-                    assert_eq!(operator_name.to_string(), "<");
-                    assert!(op_types.is_none());
-                    assert!(purpose.is_none());
+    // Test all combinations of DEFAULT flag and FAMILY clause with different name qualifications
+    for (is_default, default_clause) in [(false, ""), (true, "DEFAULT ")] {
+        for (has_family, family_clause) in [(false, ""), (true, " FAMILY int4_family")] {
+            for (class_name, expected_name) in [
+                ("int4_ops", ObjectName::from(vec![Ident::new("int4_ops")])),
+                ("myschema.test_ops", ObjectName::from(vec![Ident::new("myschema"), Ident::new("test_ops")])),
+            ] {
+                let sql = format!(
+                    "CREATE OPERATOR CLASS {class_name} {default_clause}FOR TYPE INT4 USING btree{family_clause} AS OPERATOR 1 <"
+                );
+                match pg().verified_stmt(&sql) {
+                    Statement::CreateOperatorClass(CreateOperatorClass {
+                        name,
+                        default,
+                        ref for_type,
+                        ref using,
+                        ref family,
+                        ref items,
+                    }) => {
+                        assert_eq!(name, expected_name);
+                        assert_eq!(default, is_default);
+                        assert_eq!(for_type, &DataType::Int4(None));
+                        assert_eq!(using, &Ident::new("btree"));
+                        assert_eq!(
+                            family,
+                            &if has_family { Some(ObjectName::from(vec![Ident::new("int4_family")])) } else { None }
+                        );
+                        assert_eq!(items.len(), 1);
+                    }
+                    _ => panic!("Expected CreateOperatorClass statement"),
                 }
-                _ => panic!("Expected Operator"),
-            }
-
-            // Check function
-            match &items[5] {
-                OperatorClassItem::Function {
-                    support_number,
-                    op_types,
-                    function_name,
-                    argument_types,
-                } => {
-                    assert_eq!(*support_number, 1);
-                    assert!(op_types.is_none());
-                    assert_eq!(function_name.to_string(), "cas_cmp");
-                    assert_eq!(argument_types.len(), 2);
-                    assert_eq!(argument_types[0].to_string(), "CAS");
-                    assert_eq!(argument_types[1].to_string(), "CAS");
-                }
-                _ => panic!("Expected Function"),
             }
         }
-        _ => panic!(
-            "Expected Statement::CreateOperatorClass, got {:?}",
-            statement
-        ),
+    }
+
+    // Test comprehensive operator class with all fields
+    match pg().verified_stmt("CREATE OPERATOR CLASS CAS_btree_ops DEFAULT FOR TYPE CAS USING btree FAMILY CAS_btree_ops AS OPERATOR 1 <, OPERATOR 2 <=, OPERATOR 3 =, OPERATOR 4 >=, OPERATOR 5 >, FUNCTION 1 cas_cmp(CAS, CAS)") {
+        Statement::CreateOperatorClass(CreateOperatorClass {
+            name,
+            default: true,
+            ref for_type,
+            ref using,
+            ref family,
+            ref items,
+        }) => {
+            assert_eq!(name, ObjectName::from(vec![Ident::new("CAS_btree_ops")]));
+            assert_eq!(for_type, &DataType::Custom(ObjectName::from(vec![Ident::new("CAS")]), vec![]));
+            assert_eq!(using, &Ident::new("btree"));
+            assert_eq!(family, &Some(ObjectName::from(vec![Ident::new("CAS_btree_ops")])));
+            assert_eq!(items.len(), 6);
+        }
+        _ => panic!("Expected CreateOperatorClass statement"),
+    }
+
+    // Test operator with argument types
+    match pg().verified_stmt("CREATE OPERATOR CLASS test_ops FOR TYPE INT4 USING gist AS OPERATOR 1 < (INT4, INT4)") {
+        Statement::CreateOperatorClass(CreateOperatorClass {
+            ref items,
+            ..
+        }) => {
+            assert_eq!(items.len(), 1);
+            match &items[0] {
+                OperatorClassItem::Operator {
+                    strategy_number: 1,
+                    ref operator_name,
+                    op_types: Some(_),
+                    purpose: None,
+                } => {
+                    assert_eq!(operator_name, &ObjectName::from(vec![Ident::new("<")]));
+                }
+                _ => panic!("Expected Operator item with arg types"),
+            }
+        }
+        _ => panic!("Expected CreateOperatorClass statement"),
+    }
+
+    // Test operator FOR SEARCH
+    match pg().verified_stmt("CREATE OPERATOR CLASS test_ops FOR TYPE INT4 USING gist AS OPERATOR 1 < FOR SEARCH") {
+        Statement::CreateOperatorClass(CreateOperatorClass {
+            ref items,
+            ..
+        }) => {
+            assert_eq!(items.len(), 1);
+            match &items[0] {
+                OperatorClassItem::Operator {
+                    strategy_number: 1,
+                    ref operator_name,
+                    op_types: None,
+                    purpose: Some(OperatorPurpose::ForSearch),
+                } => {
+                    assert_eq!(operator_name, &ObjectName::from(vec![Ident::new("<")]));
+                }
+                _ => panic!("Expected Operator item FOR SEARCH"),
+            }
+        }
+        _ => panic!("Expected CreateOperatorClass statement"),
+    }
+
+    // Test operator FOR ORDER BY
+    match pg().verified_stmt("CREATE OPERATOR CLASS test_ops FOR TYPE INT4 USING gist AS OPERATOR 2 <<-> FOR ORDER BY float_ops") {
+        Statement::CreateOperatorClass(CreateOperatorClass {
+            ref items,
+            ..
+        }) => {
+            assert_eq!(items.len(), 1);
+            match &items[0] {
+                OperatorClassItem::Operator {
+                    strategy_number: 2,
+                    ref operator_name,
+                    op_types: None,
+                    purpose: Some(OperatorPurpose::ForOrderBy { ref sort_family }),
+                } => {
+                    assert_eq!(operator_name, &ObjectName::from(vec![Ident::new("<<->")]));
+                    assert_eq!(sort_family, &ObjectName::from(vec![Ident::new("float_ops")]));
+                }
+                _ => panic!("Expected Operator item FOR ORDER BY"),
+            }
+        }
+        _ => panic!("Expected CreateOperatorClass statement"),
+    }
+
+    // Test function with operator class arg types
+    match pg().verified_stmt("CREATE OPERATOR CLASS test_ops FOR TYPE INT4 USING btree AS FUNCTION 1 (INT4, INT4) btcmp(INT4, INT4)") {
+        Statement::CreateOperatorClass(CreateOperatorClass {
+            ref items,
+            ..
+        }) => {
+            assert_eq!(items.len(), 1);
+            match &items[0] {
+                OperatorClassItem::Function {
+                    support_number: 1,
+                    op_types: Some(_),
+                    ref function_name,
+                    ref argument_types,
+                } => {
+                    assert_eq!(function_name, &ObjectName::from(vec![Ident::new("btcmp")]));
+                    assert_eq!(argument_types.len(), 2);
+                }
+                _ => panic!("Expected Function item with op_types"),
+            }
+        }
+        _ => panic!("Expected CreateOperatorClass statement"),
+    }
+
+    // Test multiple items including STORAGE
+    match pg().verified_stmt("CREATE OPERATOR CLASS gist_ops FOR TYPE geometry USING gist AS OPERATOR 1 <<, FUNCTION 1 gist_consistent(internal, geometry, INT4), STORAGE box") {
+        Statement::CreateOperatorClass(CreateOperatorClass {
+            ref items,
+            ..
+        }) => {
+            assert_eq!(items.len(), 3);
+            // Check operator item
+            match &items[0] {
+                OperatorClassItem::Operator {
+                    strategy_number: 1,
+                    ref operator_name,
+                    ..
+                } => {
+                    assert_eq!(operator_name, &ObjectName::from(vec![Ident::new("<<")]));
+                }
+                _ => panic!("Expected Operator item"),
+            }
+            // Check function item
+            match &items[1] {
+                OperatorClassItem::Function {
+                    support_number: 1,
+                    ref function_name,
+                    ref argument_types,
+                    ..
+                } => {
+                    assert_eq!(function_name, &ObjectName::from(vec![Ident::new("gist_consistent")]));
+                    assert_eq!(argument_types.len(), 3);
+                }
+                _ => panic!("Expected Function item"),
+            }
+            // Check storage item
+            match &items[2] {
+                OperatorClassItem::Storage { ref storage_type } => {
+                    assert_eq!(storage_type, &DataType::Custom(ObjectName::from(vec![Ident::new("box")]), vec![]));
+                }
+                _ => panic!("Expected Storage item"),
+            }
+        }
+        _ => panic!("Expected CreateOperatorClass statement"),
     }
 }

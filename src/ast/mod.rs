@@ -75,7 +75,7 @@ pub use self::ddl::{
     UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
     UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, ViewColumnDef,
 };
-pub use self::dml::{Delete, Insert, Update};
+pub use self::dml::{Copy, CsvFormatOptions, Delete, Insert, Update};
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
     AfterMatchSkip, ConnectBy, Cte, CteAsMaterialized, Distinct, EmptyMatchesMode,
@@ -3222,20 +3222,7 @@ pub enum Statement {
     /// ```sql
     /// COPY [TO | FROM] ...
     /// ```
-    Copy {
-        /// The source of 'COPY TO', or the target of 'COPY FROM'
-        source: CopySource,
-        /// If true, is a 'COPY TO' statement. If false is a 'COPY FROM'
-        to: bool,
-        /// The target of 'COPY TO', or the source of 'COPY FROM'
-        target: CopyTarget,
-        /// WITH options (from PostgreSQL version 9.0)
-        options: Vec<CopyOption>,
-        /// WITH options (before PostgreSQL version 9.0)
-        legacy_options: Vec<CopyLegacyOption>,
-        /// VALUES a vector of values to be copied
-        values: Vec<Option<String>>,
-    },
+    Copy(Copy),
     /// ```sql
     /// COPY INTO <table> | <location>
     /// ```
@@ -4298,6 +4285,12 @@ impl From<ddl::Msck> for Statement {
     }
 }
 
+impl From<Copy> for Statement {
+    fn from(copy: Copy) -> Self {
+        Statement::Copy(copy)
+    }
+}
+
 /// ```sql
 /// {COPY | REVOKE} CURRENT GRANTS
 /// ```
@@ -4566,50 +4559,7 @@ impl fmt::Display for Statement {
 
             Statement::Call(function) => write!(f, "CALL {function}"),
 
-            Statement::Copy {
-                source,
-                to,
-                target,
-                options,
-                legacy_options,
-                values,
-            } => {
-                write!(f, "COPY")?;
-                match source {
-                    CopySource::Query(query) => write!(f, " ({query})")?,
-                    CopySource::Table {
-                        table_name,
-                        columns,
-                    } => {
-                        write!(f, " {table_name}")?;
-                        if !columns.is_empty() {
-                            write!(f, " ({})", display_comma_separated(columns))?;
-                        }
-                    }
-                }
-                write!(f, " {} {}", if *to { "TO" } else { "FROM" }, target)?;
-                if !options.is_empty() {
-                    write!(f, " ({})", display_comma_separated(options))?;
-                }
-                if !legacy_options.is_empty() {
-                    write!(f, " {}", display_separated(legacy_options, " "))?;
-                }
-                if !values.is_empty() {
-                    writeln!(f, ";")?;
-                    let mut delim = "";
-                    for v in values {
-                        write!(f, "{delim}")?;
-                        delim = "\t";
-                        if let Some(v) = v {
-                            write!(f, "{v}")?;
-                        } else {
-                            write!(f, "\\N")?;
-                        }
-                    }
-                    write!(f, "\n\\.")?;
-                }
-                Ok(())
-            }
+            Statement::Copy(copy) => copy.fmt(f),
             Statement::Update(update) => update.fmt(f),
             Statement::Delete(delete) => delete.fmt(f),
             Statement::Open(open) => open.fmt(f),

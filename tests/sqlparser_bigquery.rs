@@ -1567,7 +1567,11 @@ fn parse_table_identifiers() {
 
     fn test_table_ident_err(ident: &str) {
         let sql = format!("SELECT 1 FROM {ident}");
-        assert!(bigquery().parse_sql_statements(&sql).is_err());
+        let parsed = bigquery().parse_sql_statements(&sql);
+        assert!(
+            parsed.is_err(),
+            "Expected error parsing identifier: `{ident}`, within SQL: `{sql}` - but got success: {parsed:#?}"
+        );
     }
 
     test_table_ident("`spa ce`", None, vec![Ident::with_quote('`', "spa ce")]);

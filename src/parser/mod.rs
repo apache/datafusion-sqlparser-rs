@@ -4034,20 +4034,13 @@ impl<'a> Parser<'a> {
     /// See [`Self::peek_token`] for an example.
     pub fn peek_tokens_with_location<const N: usize>(&self) -> [TokenWithSpan; N] {
         let mut index = self.index;
-        core::array::from_fn(|_| loop {
+        core::array::from_fn(|_| {
             let token = self.tokens.get(index);
             index += 1;
-            if let Some(TokenWithSpan {
-                token: Token::Whitespace(_),
-                span: _,
-            }) = token
-            {
-                continue;
-            }
-            break token.cloned().unwrap_or(TokenWithSpan {
+            token.cloned().unwrap_or(TokenWithSpan {
                 token: Token::EOF,
                 span: Span::empty(),
-            });
+            })
         })
     }
 
@@ -4057,17 +4050,10 @@ impl<'a> Parser<'a> {
     /// See [`Self::peek_tokens`] for an example.
     pub fn peek_tokens_ref<const N: usize>(&self) -> [&TokenWithSpan; N] {
         let mut index = self.index;
-        core::array::from_fn(|_| loop {
+        core::array::from_fn(|_| {
             let token = self.tokens.get(index);
             index += 1;
-            if let Some(TokenWithSpan {
-                token: Token::Whitespace(_),
-                span: _,
-            }) = token
-            {
-                continue;
-            }
-            break token.unwrap_or(&EOF_TOKEN);
+            token.unwrap_or(&EOF_TOKEN)
         })
     }
 
@@ -4081,36 +4067,11 @@ impl<'a> Parser<'a> {
         let mut index = self.index;
         loop {
             index += 1;
-            match self.tokens.get(index - 1) {
-                Some(TokenWithSpan {
-                    token: Token::Whitespace(_),
-                    span: _,
-                }) => continue,
-                non_whitespace => {
-                    if n == 0 {
-                        return non_whitespace.unwrap_or(&EOF_TOKEN);
-                    }
-                    n -= 1;
-                }
+            if n == 0 {
+                return self.tokens.get(index - 1).unwrap_or(&EOF_TOKEN);
             }
+            n -= 1;
         }
-    }
-
-    /// Return the first token, possibly whitespace, that has not yet been processed
-    /// (or None if reached end-of-file).
-    pub fn peek_token_no_skip(&self) -> TokenWithSpan {
-        self.peek_nth_token_no_skip(0)
-    }
-
-    /// Return nth token, possibly whitespace, that has not yet been processed.
-    pub fn peek_nth_token_no_skip(&self, n: usize) -> TokenWithSpan {
-        self.tokens
-            .get(self.index + n)
-            .cloned()
-            .unwrap_or(TokenWithSpan {
-                token: Token::EOF,
-                span: Span::empty(),
-            })
     }
 
     /// Return true if the next tokens exactly `expected`
@@ -4140,26 +4101,11 @@ impl<'a> Parser<'a> {
         self.index.saturating_sub(1)
     }
 
-    /// Return the next unprocessed token, possibly whitespace.
-    pub fn next_token_no_skip(&mut self) -> Option<&TokenWithSpan> {
-        self.index += 1;
-        self.tokens.get(self.index - 1)
-    }
-
     /// Advances the current token to the next non-whitespace token
     ///
     /// See [`Self::get_current_token`] to get the current token after advancing
     pub fn advance_token(&mut self) {
-        loop {
-            self.index += 1;
-            match self.tokens.get(self.index - 1) {
-                Some(TokenWithSpan {
-                    token: Token::Whitespace(_),
-                    span: _,
-                }) => continue,
-                _ => break,
-            }
-        }
+        self.index += 1;
     }
 
     /// Returns a reference to the current token
@@ -4190,18 +4136,8 @@ impl<'a> Parser<'a> {
     ///
     // TODO rename to backup_token and deprecate prev_token?
     pub fn prev_token(&mut self) {
-        loop {
-            assert!(self.index > 0);
-            self.index -= 1;
-            if let Some(TokenWithSpan {
-                token: Token::Whitespace(_),
-                span: _,
-            }) = self.tokens.get(self.index)
-            {
-                continue;
-            }
-            return;
-        }
+        assert!(self.index > 0);
+        self.index -= 1;
     }
 
     /// Report `found` was encountered instead of `expected`
@@ -8613,7 +8549,7 @@ impl<'a> Parser<'a> {
                     return self.expected(
                         "FULLTEXT or SPATIAL option without constraint name",
                         TokenWithSpan {
-                            token: Token::make_keyword(&name.to_string()),
+                            token: Token::make_keyword(name.to_string()),
                             span: next_token.span,
                         },
                     );
@@ -9604,6 +9540,134 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_csv_body(
+        &mut self,
+        options: &[CopyOption],
+        legacy_options: &[CopyLegacyOption],
+    ) -> Result<Vec<Vec<Option<String>>>, ParserError> {
+        let Token::CopyFromStdin(body) = self.next_token().token else {
+            return self.expected("COPY ... FROM STDIN with CSV body", self.peek_token());
+        };
+
+        let csv_options = CsvFormatOptions::from_copy_options(options, legacy_options);
+        let delimiter = csv_options.delimiter;
+        let quote = csv_options.quote;
+        let escape = csv_options.escape;
+        let null_symbol = csv_options.null_symbol.as_str();
+
+        // Simple CSV parser
+        let mut result = vec![];
+        let mut current_row = vec![];
+        let mut current_field = String::new();
+        let mut in_quotes = false;
+        let mut chars = body.chars().peekable();
+        let mut expected_column_count: Option<usize> = None;
+        let mut row_number = 0;
+
+        while let Some(ch) = chars.next() {
+            if in_quotes {
+                if ch == quote {
+                    // Check if it's an escaped quote
+                    if let Some(&next_ch) = chars.peek() {
+                        if next_ch == quote {
+                            // Escaped quote
+                            current_field.push(quote);
+                            chars.next();
+                        } else {
+                            // End of quoted field
+                            in_quotes = false;
+                        }
+                    } else {
+                        // End of quoted field at end of input
+                        in_quotes = false;
+                    }
+                } else if ch == escape {
+                    // Escape character
+                    if let Some(next_ch) = chars.next() {
+                        current_field.push(next_ch);
+                    }
+                } else {
+                    current_field.push(ch);
+                }
+            } else if ch == quote {
+                in_quotes = true;
+            } else if ch == delimiter {
+                // End of field
+                if current_field == null_symbol {
+                    current_row.push(None);
+                } else {
+                    current_row.push(Some(current_field.clone()));
+                }
+                current_field.clear();
+            } else if ch == '\n' || ch == '\r' {
+                // End of record
+                if ch == '\r' {
+                    // Skip \n if it follows \r
+                    if let Some(&'\n') = chars.peek() {
+                        chars.next();
+                    }
+                }
+                if !current_field.is_empty() || !current_row.is_empty() {
+                    if current_field == null_symbol {
+                        current_row.push(None);
+                    } else {
+                        current_row.push(Some(current_field.clone()));
+                    }
+                    current_field.clear();
+
+                    // Validate column count
+                    row_number += 1;
+                    if let Some(expected) = expected_column_count {
+                        if current_row.len() != expected {
+                            return Err(ParserError::ParserError(format!(
+                                "CSV row {} has {} columns, but expected {} columns based on first row",
+                                row_number,
+                                current_row.len(),
+                                expected
+                            )));
+                        }
+                    } else {
+                        // First row establishes the expected column count
+                        expected_column_count = Some(current_row.len());
+                    }
+
+                    result.push(current_row.clone());
+                    current_row.clear();
+                }
+            } else {
+                current_field.push(ch);
+            }
+        }
+
+        // Handle remaining field/row
+        if !current_field.is_empty() || !current_row.is_empty() {
+            if current_field == null_symbol {
+                current_row.push(None);
+            } else {
+                current_row.push(Some(current_field));
+            }
+
+            // Validate column count for last row
+            row_number += 1;
+            if let Some(expected) = expected_column_count {
+                if current_row.len() != expected {
+                    return Err(ParserError::ParserError(format!(
+                        "CSV row {} has {} columns, but expected {} columns based on first row",
+                        row_number,
+                        current_row.len(),
+                        expected
+                    )));
+                }
+            }
+            // Note: if this is the first and only row, we don't need to set expected_column_count
+            // since there's nothing to validate against
+
+            result.push(current_row);
+        }
+
+        Ok(result)
+    }
+
     /// Parse a copy statement
     pub fn parse_copy(&mut self) -> Result<Statement, ParserError> {
         let source;
@@ -9657,18 +9721,18 @@ impl<'a> Parser<'a> {
         }
         let values = if let CopyTarget::Stdin = target {
             self.expect_token(&Token::SemiColon)?;
-            self.parse_tsv()
+            self.parse_csv_body(&options, &legacy_options)?
         } else {
             vec![]
         };
-        Ok(Statement::Copy {
+        Ok(Statement::Copy(Copy {
             source,
             to,
             target,
             options,
             legacy_options,
             values,
-        })
+        }))
     }
 
     /// Parse [Statement::Open]
@@ -9995,43 +10059,6 @@ impl<'a> Parser<'a> {
         Ok(s.chars().next().unwrap())
     }
 
-    /// Parse a tab separated values in
-    /// COPY payload
-    pub fn parse_tsv(&mut self) -> Vec<Option<String>> {
-        self.parse_tab_value()
-    }
-
-    pub fn parse_tab_value(&mut self) -> Vec<Option<String>> {
-        let mut values = vec![];
-        let mut content = String::from("");
-        while let Some(t) = self.next_token_no_skip().map(|t| &t.token) {
-            match t {
-                Token::Whitespace(Whitespace::Tab) => {
-                    values.push(Some(content.to_string()));
-                    content.clear();
-                }
-                Token::Whitespace(Whitespace::Newline) => {
-                    values.push(Some(content.to_string()));
-                    content.clear();
-                }
-                Token::Backslash => {
-                    if self.consume_token(&Token::Period) {
-                        return values;
-                    }
-                    if let Token::Word(w) = self.next_token().token {
-                        if w.value == "N" {
-                            values.push(None);
-                        }
-                    }
-                }
-                _ => {
-                    content.push_str(&t.to_string());
-                }
-            }
-        }
-        values
-    }
-
     /// Parse a literal value (numbers, strings, date/time, booleans)
     pub fn parse_value(&mut self) -> Result<ValueWithSpan, ParserError> {
         let next_token = self.next_token();
@@ -10125,7 +10152,7 @@ impl<'a> Parser<'a> {
                 // 2. Not calling self.next_token() to enforce `tok`
                 //    be followed immediately by a word/number, ie.
                 //    without any whitespace in between
-                let next_token = self.next_token_no_skip().unwrap_or(&EOF_TOKEN).clone();
+                let next_token = self.next_token();
                 let ident = match next_token.token {
                     Token::Word(w) => Ok(w.into_ident(next_token.span)),
                     Token::Number(w, false) => Ok(Ident::with_span(next_token.span, w)),
@@ -11142,9 +11169,9 @@ impl<'a> Parser<'a> {
         let mut parts = vec![];
         if dialect_of!(self is BigQueryDialect) && in_table_clause {
             loop {
-                let (ident, end_with_period) = self.parse_unquoted_hyphenated_identifier()?;
+                let ident = self.parse_identifier()?;
                 parts.push(ObjectNamePart::Identifier(ident));
-                if !self.consume_token(&Token::Period) && !end_with_period {
+                if !self.consume_token(&Token::Period) {
                     break;
                 }
             }
@@ -11158,9 +11185,9 @@ impl<'a> Parser<'a> {
                         span,
                     }));
                 } else if dialect_of!(self is BigQueryDialect) && in_table_clause {
-                    let (ident, end_with_period) = self.parse_unquoted_hyphenated_identifier()?;
+                    let ident = self.parse_identifier()?;
                     parts.push(ObjectNamePart::Identifier(ident));
-                    if !self.consume_token(&Token::Period) && !end_with_period {
+                    if !self.consume_token(&Token::Period) {
                         break;
                     }
                 } else if self.dialect.supports_object_name_double_dot_notation()
@@ -11336,84 +11363,6 @@ impl<'a> Parser<'a> {
             Token::SingleQuotedString(s) => Ok(Ident::with_quote('\'', s)),
             Token::DoubleQuotedString(s) => Ok(Ident::with_quote('\"', s)),
             _ => self.expected("identifier", next_token),
-        }
-    }
-
-    /// On BigQuery, hyphens are permitted in unquoted identifiers inside of a FROM or
-    /// TABLE clause.
-    ///
-    /// The first segment must be an ordinary unquoted identifier, e.g. it must not start
-    /// with a digit. Subsequent segments are either must either be valid identifiers or
-    /// integers, e.g. foo-123 is allowed, but foo-123a is not.
-    ///
-    /// [BigQuery-lexical](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical)
-    ///
-    /// Return a tuple of the identifier and a boolean indicating it ends with a period.
-    fn parse_unquoted_hyphenated_identifier(&mut self) -> Result<(Ident, bool), ParserError> {
-        match self.peek_token().token {
-            Token::Word(w) => {
-                let quote_style_is_none = w.quote_style.is_none();
-                let mut requires_whitespace = false;
-                let mut ident = w.into_ident(self.next_token().span);
-                if quote_style_is_none {
-                    while matches!(self.peek_token_no_skip().token, Token::Minus) {
-                        self.next_token();
-                        ident.value.push('-');
-
-                        let token = self
-                            .next_token_no_skip()
-                            .cloned()
-                            .unwrap_or(TokenWithSpan::wrap(Token::EOF));
-                        requires_whitespace = match token.token {
-                            Token::Word(next_word) if next_word.quote_style.is_none() => {
-                                ident.value.push_str(&next_word.value);
-                                false
-                            }
-                            Token::Number(s, false) => {
-                                // A number token can represent a decimal value ending with a period, e.g., `Number('123.')`.
-                                // However, for an [ObjectName], it is part of a hyphenated identifier, e.g., `foo-123.bar`.
-                                //
-                                // If a number token is followed by a period, it is part of an [ObjectName].
-                                // Return the identifier with `true` if the number token is followed by a period, indicating that
-                                // parsing should continue for the next part of the hyphenated identifier.
-                                if s.ends_with('.') {
-                                    let Some(s) = s.split('.').next().filter(|s| {
-                                        !s.is_empty() && s.chars().all(|c| c.is_ascii_digit())
-                                    }) else {
-                                        return self.expected(
-                                            "continuation of hyphenated identifier",
-                                            TokenWithSpan::new(Token::Number(s, false), token.span),
-                                        );
-                                    };
-                                    ident.value.push_str(s);
-                                    return Ok((ident, true));
-                                } else {
-                                    ident.value.push_str(&s);
-                                }
-                                // If next token is period, then it is part of an ObjectName and we don't expect whitespace
-                                // after the number.
-                                !matches!(self.peek_token().token, Token::Period)
-                            }
-                            _ => {
-                                return self
-                                    .expected("continuation of hyphenated identifier", token);
-                            }
-                        }
-                    }
-
-                    // If the last segment was a number, we must check that it's followed by whitespace,
-                    // otherwise foo-123a will be parsed as `foo-123` with the alias `a`.
-                    if requires_whitespace {
-                        let token = self.next_token();
-                        if !matches!(token.token, Token::EOF | Token::Whitespace(_)) {
-                            return self
-                                .expected("whitespace following hyphenated identifier", token);
-                        }
-                    }
-                }
-                Ok((ident, false))
-            }
-            _ => Ok((self.parse_identifier()?, false)),
         }
     }
 
@@ -18868,9 +18817,17 @@ mod tests {
 
     #[test]
     fn test_placeholder_invalid_whitespace() {
-        for w in ["  ", "/*invalid*/"] {
+        for w in [
+            "  ",
+            "/*invalid*/",
+            "\n",
+            "\t\t",
+            "\r\n",
+            "--comment\n",
+            "/* multi\nline\ncomment */",
+        ] {
             let sql = format!("\nSELECT\n  :{w}fooBar");
-            assert!(Parser::parse_sql(&GenericDialect, &sql).is_err());
+            assert!(Parser::parse_sql(&GenericDialect, &sql).is_err(), "Failed to error on when inserting the whitespace {w:?} within the placeholder SQL: `{sql}`");
         }
     }
 }

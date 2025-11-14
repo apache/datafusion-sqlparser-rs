@@ -9533,7 +9533,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_csv_body(
+    fn parse_csv_body(
         &mut self,
         options: &[CopyOption],
         legacy_options: &[CopyLegacyOption],

@@ -3135,12 +3135,18 @@ pub struct Values {
     /// Was there an explicit ROWs keyword (MySQL)?
     /// <https://dev.mysql.com/doc/refman/8.0/en/values.html>
     pub explicit_row: bool,
+    // MySql supports both VALUES and VALUE keywords.
+    // <https://dev.mysql.com/doc/refman/9.2/en/insert.html>
+    pub value_keyword: bool,
     pub rows: Vec<Vec<Expr>>,
 }
 
 impl fmt::Display for Values {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("VALUES")?;
+        match self.value_keyword {
+            true => f.write_str("VALUE")?,
+            false => f.write_str("VALUES")?,
+        };
         let prefix = if self.explicit_row { "ROW" } else { "" };
         let mut delim = "";
         for row in &self.rows {

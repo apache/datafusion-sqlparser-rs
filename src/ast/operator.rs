@@ -33,35 +33,35 @@ use super::display_separated;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum UnaryOperator {
+    /// `@-@` Length or circumference (PostgreSQL/Redshift geometric operator)
+    /// see <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    AtDashAt,
+    /// Unary logical not operator: e.g. `! false` (Hive-specific)
+    BangNot,
+    /// Bitwise Not, e.g. `~9`
+    BitwiseNot,
+    /// `@@` Center (PostgreSQL/Redshift geometric operator)
+    /// see <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    DoubleAt,
+    /// `#` Number of points in path or polygon (PostgreSQL/Redshift geometric operator)
+    /// see <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    Hash,
     /// Plus, e.g. `+9`
     Plus,
     /// Minus, e.g. `-9`
     Minus,
     /// Not, e.g. `NOT(true)`
     Not,
-    /// Bitwise Not, e.g. `~9` (PostgreSQL-specific)
-    PGBitwiseNot,
-    /// Square root, e.g. `|/9` (PostgreSQL-specific)
-    PGSquareRoot,
+    /// Absolute value, e.g. `@ -9` (PostgreSQL-specific)
+    PGAbs,
     /// Cube root, e.g. `||/27` (PostgreSQL-specific)
     PGCubeRoot,
     /// Factorial, e.g. `9!` (PostgreSQL-specific)
     PGPostfixFactorial,
     /// Factorial, e.g. `!!9` (PostgreSQL-specific)
     PGPrefixFactorial,
-    /// Absolute value, e.g. `@ -9` (PostgreSQL-specific)
-    PGAbs,
-    /// Unary logical not operator: e.g. `! false` (Hive-specific)
-    BangNot,
-    /// `#` Number of points in path or polygon (PostgreSQL/Redshift geometric operator)
-    /// see <https://www.postgresql.org/docs/9.5/functions-geometry.html>
-    Hash,
-    /// `@-@` Length or circumference (PostgreSQL/Redshift geometric operator)
-    /// see <https://www.postgresql.org/docs/9.5/functions-geometry.html>
-    AtDashAt,
-    /// `@@` Center (PostgreSQL/Redshift geometric operator)
-    /// see <https://www.postgresql.org/docs/9.5/functions-geometry.html>
-    DoubleAt,
+    /// Square root, e.g. `|/9` (PostgreSQL-specific)
+    PGSquareRoot,
     /// `?-` Is horizontal? (PostgreSQL/Redshift geometric operator)
     /// see <https://www.postgresql.org/docs/9.5/functions-geometry.html>
     QuestionDash,
@@ -73,19 +73,19 @@ pub enum UnaryOperator {
 impl fmt::Display for UnaryOperator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match self {
-            UnaryOperator::Plus => "+",
+            UnaryOperator::AtDashAt => "@-@",
+            UnaryOperator::BangNot => "!",
+            UnaryOperator::BitwiseNot => "~",
+            UnaryOperator::DoubleAt => "@@",
+            UnaryOperator::Hash => "#",
             UnaryOperator::Minus => "-",
             UnaryOperator::Not => "NOT",
-            UnaryOperator::PGBitwiseNot => "~",
-            UnaryOperator::PGSquareRoot => "|/",
+            UnaryOperator::PGAbs => "@",
             UnaryOperator::PGCubeRoot => "||/",
             UnaryOperator::PGPostfixFactorial => "!",
             UnaryOperator::PGPrefixFactorial => "!!",
-            UnaryOperator::PGAbs => "@",
-            UnaryOperator::BangNot => "!",
-            UnaryOperator::Hash => "#",
-            UnaryOperator::AtDashAt => "@-@",
-            UnaryOperator::DoubleAt => "@@",
+            UnaryOperator::PGSquareRoot => "|/",
+            UnaryOperator::Plus => "+",
             UnaryOperator::QuestionDash => "?-",
             UnaryOperator::QuestionPipe => "?|",
         })

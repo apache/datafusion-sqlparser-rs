@@ -223,6 +223,7 @@ impl Spanned for Values {
     fn span(&self) -> Span {
         let Values {
             explicit_row: _, // bool,
+            value_keyword: _,
             rows,
         } = self;
 
@@ -468,6 +469,7 @@ impl Spanned for Statement {
             Statement::AlterSchema(s) => s.span(),
             Statement::Vacuum(..) => Span::empty(),
             Statement::AlterUser(..) => Span::empty(),
+            Statement::Reset(..) => Span::empty(),
         }
     }
 }
@@ -830,6 +832,7 @@ impl Spanned for CopySource {
 impl Spanned for Delete {
     fn span(&self) -> Span {
         let Delete {
+            delete_token,
             tables,
             from,
             using,
@@ -840,19 +843,21 @@ impl Spanned for Delete {
         } = self;
 
         union_spans(
-            tables
-                .iter()
-                .map(|i| i.span())
-                .chain(core::iter::once(from.span()))
-                .chain(
-                    using
-                        .iter()
-                        .map(|u| union_spans(u.iter().map(|i| i.span()))),
-                )
-                .chain(selection.iter().map(|i| i.span()))
-                .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
-                .chain(order_by.iter().map(|i| i.span()))
-                .chain(limit.iter().map(|i| i.span())),
+            core::iter::once(delete_token.0.span).chain(
+                tables
+                    .iter()
+                    .map(|i| i.span())
+                    .chain(core::iter::once(from.span()))
+                    .chain(
+                        using
+                            .iter()
+                            .map(|u| union_spans(u.iter().map(|i| i.span()))),
+                    )
+                    .chain(selection.iter().map(|i| i.span()))
+                    .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
+                    .chain(order_by.iter().map(|i| i.span()))
+                    .chain(limit.iter().map(|i| i.span())),
+            ),
         )
     }
 }
@@ -860,6 +865,7 @@ impl Spanned for Delete {
 impl Spanned for Update {
     fn span(&self) -> Span {
         let Update {
+            update_token,
             table,
             assignments,
             from,
@@ -871,6 +877,7 @@ impl Spanned for Update {
 
         union_spans(
             core::iter::once(table.span())
+                .chain(core::iter::once(update_token.0.span))
                 .chain(assignments.iter().map(|i| i.span()))
                 .chain(from.iter().map(|i| i.span()))
                 .chain(selection.iter().map(|i| i.span()))
@@ -1100,6 +1107,9 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::DropClusteringKey => Span::empty(),
             AlterTableOperation::SuspendRecluster => Span::empty(),
             AlterTableOperation::ResumeRecluster => Span::empty(),
+            AlterTableOperation::Refresh => Span::empty(),
+            AlterTableOperation::Suspend => Span::empty(),
+            AlterTableOperation::Resume => Span::empty(),
             AlterTableOperation::Algorithm { .. } => Span::empty(),
             AlterTableOperation::AutoIncrement { value, .. } => value.span(),
             AlterTableOperation::Lock { .. } => Span::empty(),
@@ -1205,6 +1215,7 @@ impl Spanned for AlterIndexOperation {
 impl Spanned for Insert {
     fn span(&self) -> Span {
         let Insert {
+            insert_token,
             or: _,     // enum, sqlite specific
             ignore: _, // bool
             into: _,   // bool
@@ -1227,7 +1238,8 @@ impl Spanned for Insert {
         } = self;
 
         union_spans(
-            core::iter::once(table.span())
+            core::iter::once(insert_token.0.span)
+                .chain(core::iter::once(table.span()))
                 .chain(table_alias.as_ref().map(|i| i.span))
                 .chain(columns.iter().map(|i| i.span))
                 .chain(source.as_ref().map(|q| q.span()))
@@ -2527,5 +2539,81 @@ ALTER TABLE users
 
         assert_eq!(stmt_span.start, (2, 13).into());
         assert_eq!(stmt_span.end, (4, 11).into());
+    }
+
+    #[test]
+    fn test_update_statement_span() {
+        let sql = r#"-- foo
+      UPDATE foo
+   /* bar */
+   SET bar = 3
+ WHERE quux > 42 ;
+"#;
+
+        let r = Parser::parse_sql(&crate::dialect::GenericDialect, sql).unwrap();
+        assert_eq!(1, r.len());
+
+        let stmt_span = r[0].span();
+
+        assert_eq!(stmt_span.start, (2, 7).into());
+        assert_eq!(stmt_span.end, (5, 17).into());
+    }
+
+    #[test]
+    fn test_insert_statement_span() {
+        let sql = r#"
+/* foo */ INSERT  INTO  FOO  (X, Y, Z)
+  SELECT 1, 2, 3
+  FROM DUAL
+;"#;
+
+        let r = Parser::parse_sql(&crate::dialect::GenericDialect, sql).unwrap();
+        assert_eq!(1, r.len());
+
+        let stmt_span = r[0].span();
+
+        assert_eq!(stmt_span.start, (2, 11).into());
+        assert_eq!(stmt_span.end, (4, 12).into());
+    }
+
+    #[test]
+    fn test_replace_statement_span() {
+        let sql = r#"
+/* foo */ REPLACE INTO
+    cities(name,population)
+SELECT
+    name,
+    population
+FROM
+   cities
+WHERE id = 1
+;"#;
+
+        let r = Parser::parse_sql(&crate::dialect::GenericDialect, sql).unwrap();
+        assert_eq!(1, r.len());
+
+        dbg!(&r[0]);
+
+        let stmt_span = r[0].span();
+
+        assert_eq!(stmt_span.start, (2, 11).into());
+        assert_eq!(stmt_span.end, (9, 13).into());
+    }
+
+    #[test]
+    fn test_delete_statement_span() {
+        let sql = r#"-- foo
+      DELETE /* quux */
+        FROM foo
+       WHERE foo.x = 42
+;"#;
+
+        let r = Parser::parse_sql(&crate::dialect::GenericDialect, sql).unwrap();
+        assert_eq!(1, r.len());
+
+        let stmt_span = r[0].span();
+
+        assert_eq!(stmt_span.start, (2, 7).into());
+        assert_eq!(stmt_span.end, (4, 24).into());
     }
 }

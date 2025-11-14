@@ -180,47 +180,47 @@ pub trait Dialect: Debug + Any {
 
     /// Returns whether the dialect supports hyphenated identifiers.
     ///
-    /// Hyphenated identifiers are identifiers that contain hyphens (dashes)
-    /// within the name, such as `my-table` or `column-name`.
-    ///
-    /// # Examples
-    ///
-    /// BigQuery supports hyphenated identifiers:
+    /// Hyphenated identifiers contain hyphens within the name (e.g., `my-table`).
+    /// Supported by BigQuery for project, dataset, and table names.
     ///
     /// ```rust
     /// # use sqlparser::{dialect::BigQueryDialect, parser::Parser};
-    /// let dialect = BigQueryDialect;
-    /// let sql = "SELECT my-column FROM my-table";
-    /// let result = Parser::parse_sql(&dialect, sql);
-    /// assert!(result.is_ok());
+    /// let sql = "SELECT * FROM my-project.my-dataset.my-table";
+    /// assert!(Parser::parse_sql(&BigQueryDialect, sql).is_ok());
     /// ```
     ///
-    /// Most other dialects do not support hyphenated identifiers,
-    /// and in those cases such identifiers must be quoted:
+    /// For dialects that do not support hyphenated identifiers,
+    /// the parser will interpret the hyphen as a minus operator,
+    /// and may result in a syntax error if the context is not valid.
     ///
     /// ```rust
     /// # use sqlparser::{dialect::PostgreSqlDialect, parser::Parser};
-    /// let dialect = PostgreSqlDialect {};
-    /// let sql = "SELECT my-column FROM my-table";
-    /// let result = Parser::parse_sql(&dialect, sql);
-    /// assert!(result.is_err());
-    /// ```
-    ///
-    /// In dialects that do not support hyphenated identifiers, the above
-    /// query would need to be written as:
-    ///
-    /// ```rust
-    /// # use sqlparser::{dialect::PostgreSqlDialect, parser::Parser};
-    /// let dialect = PostgreSqlDialect {};
-    /// let sql = "SELECT \"my-column\" FROM \"my-table\"";
-    /// let result = Parser::parse_sql(&dialect, sql);
-    /// assert!(result.is_ok());
+    /// let sql = "SELECT * FROM my-project.my-dataset.my-table";
+    /// assert!(Parser::parse_sql(&PostgreSqlDialect{}, sql).is_err());
     /// ```
     fn supports_hyphenated_identifiers(&self) -> bool {
         false
     }
 
-    /// Returns whether the dialect supports path-like identifiers
+    /// Returns whether the dialect supports path-like identifiers.
+    ///
+    /// Path-like identifiers contain forward slashes for hierarchical paths
+    /// (e.g., `@namespace.stage_name/path`). Used in Snowflake for stage locations.
+    ///
+    /// ```rust
+    /// # use sqlparser::{dialect::SnowflakeDialect, parser::Parser};
+    /// let sql = "COPY INTO a.b FROM @namespace.stage_name/path";
+    /// assert!(Parser::parse_sql(&SnowflakeDialect, sql).is_ok());
+    /// ```
+    ///
+    /// For dialects that do not support path-like identifiers,
+    /// the parser will raise a syntax error when encountering such identifiers.
+    ///
+    /// ```rust
+    /// # use sqlparser::{dialect::PostgreSqlDialect, parser::Parser};
+    /// let sql = "COPY INTO a.b FROM @namespace.stage_name/path";
+    /// assert!(Parser::parse_sql(&PostgreSqlDialect{}, sql).is_err());
+    /// ```
     fn supports_path_like_identifiers(&self) -> bool {
         false
     }

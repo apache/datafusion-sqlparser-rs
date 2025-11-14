@@ -5524,9 +5524,7 @@ impl<'a> Parser<'a> {
         let data_type_idx = self.get_current_index();
 
         // DEFAULT will be parsed as `DataType::Custom`, which is undesirable in this context
-        fn parse_data_type_no_default(
-            parser: &mut Parser,
-        ) -> Result<DataType, ParserError> {
+        fn parse_data_type_no_default(parser: &mut Parser) -> Result<DataType, ParserError> {
             if parser.peek_keyword(Keyword::DEFAULT) {
                 // This dummy error is ignored in `maybe_parse`
                 parser_err!(

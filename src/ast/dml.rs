@@ -27,9 +27,10 @@ use sqlparser_derive::{Visit, VisitMut};
 use crate::display_utils::{indented_list, Indent, SpaceOrNewline};
 
 use super::{
-    display_comma_separated, query::InputFormatClause, Assignment, Expr, FromTable, Ident,
-    InsertAliases, MysqlInsertPriority, ObjectName, OnInsert, OrderByExpr, Query, SelectItem,
-    Setting, SqliteOnConflict, TableObject, TableWithJoins, UpdateTableFromKind,
+    display_comma_separated, helpers::attached_token::AttachedToken, query::InputFormatClause,
+    Assignment, Expr, FromTable, Ident, InsertAliases, MysqlInsertPriority, ObjectName, OnInsert,
+    OrderByExpr, Query, SelectItem, Setting, SqliteOnConflict, TableObject, TableWithJoins,
+    UpdateTableFromKind,
 };
 
 /// INSERT statement.
@@ -37,6 +38,8 @@ use super::{
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Insert {
+    /// Token for the `INSERT` keyword (or its substitutes)
+    pub insert_token: AttachedToken,
     /// Only for Sqlite
     pub or: Option<SqliteOnConflict>,
     /// Only for mysql
@@ -179,6 +182,8 @@ impl Display for Insert {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Delete {
+    /// Token for the `DELETE` keyword
+    pub delete_token: AttachedToken,
     /// Multi tables delete are supported in mysql
     pub tables: Vec<ObjectName>,
     /// FROM
@@ -246,6 +251,8 @@ impl Display for Delete {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Update {
+    /// Token for the `UPDATE` keyword
+    pub update_token: AttachedToken,
     /// TABLE
     pub table: TableWithJoins,
     /// Column assignments

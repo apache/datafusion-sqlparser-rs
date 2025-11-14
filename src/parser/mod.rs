@@ -586,11 +586,11 @@ impl<'a> Parser<'a> {
                 Keyword::DISCARD => self.parse_discard(),
                 Keyword::DECLARE => self.parse_declare(),
                 Keyword::FETCH => self.parse_fetch_statement(),
-                Keyword::DELETE => self.parse_delete(),
-                Keyword::INSERT => self.parse_insert(),
-                Keyword::REPLACE => self.parse_replace(),
+                Keyword::DELETE => self.parse_delete(next_token),
+                Keyword::INSERT => self.parse_insert(next_token),
+                Keyword::REPLACE => self.parse_replace(next_token),
                 Keyword::UNCACHE => self.parse_uncache_table(),
-                Keyword::UPDATE => self.parse_update(),
+                Keyword::UPDATE => self.parse_update(next_token),
                 Keyword::ALTER => self.parse_alter(),
                 Keyword::CALL => self.parse_call(),
                 Keyword::COPY => self.parse_copy(),
@@ -11833,8 +11833,11 @@ impl<'a> Parser<'a> {
     /// Parse a DELETE statement, returning a `Box`ed SetExpr
     ///
     /// This is used to reduce the size of the stack frames in debug builds
-    fn parse_delete_setexpr_boxed(&mut self) -> Result<Box<SetExpr>, ParserError> {
-        Ok(Box::new(SetExpr::Delete(self.parse_delete()?)))
+    fn parse_delete_setexpr_boxed(
+        &mut self,
+        delete_token: TokenWithSpan,
+    ) -> Result<Box<SetExpr>, ParserError> {
+        Ok(Box::new(SetExpr::Delete(self.parse_delete(delete_token)?)))
     }
 
     /// Parse a MERGE statement, returning a `Box`ed SetExpr
@@ -11844,7 +11847,7 @@ impl<'a> Parser<'a> {
         Ok(Box::new(SetExpr::Merge(self.parse_merge()?)))
     }
 
-    pub fn parse_delete(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_delete(&mut self, delete_token: TokenWithSpan) -> Result<Statement, ParserError> {
         let (tables, with_from_keyword) = if !self.parse_keyword(Keyword::FROM) {
             // `FROM` keyword is optional in BigQuery SQL.
             // https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#delete_statement
@@ -11887,6 +11890,7 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Statement::Delete(Delete {
+            delete_token: delete_token.into(),
             tables,
             from: if with_from_keyword {
                 FromTable::WithFromKeyword(from)
@@ -12016,7 +12020,7 @@ impl<'a> Parser<'a> {
         if self.parse_keyword(Keyword::INSERT) {
             Ok(Query {
                 with,
-                body: self.parse_insert_setexpr_boxed()?,
+                body: self.parse_insert_setexpr_boxed(self.get_current_token().clone())?,
                 order_by: None,
                 limit_clause: None,
                 fetch: None,
@@ -12030,7 +12034,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::UPDATE) {
             Ok(Query {
                 with,
-                body: self.parse_update_setexpr_boxed()?,
+                body: self.parse_update_setexpr_boxed(self.get_current_token().clone())?,
                 order_by: None,
                 limit_clause: None,
                 fetch: None,
@@ -12044,7 +12048,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::DELETE) {
             Ok(Query {
                 with,
-                body: self.parse_delete_setexpr_boxed()?,
+                body: self.parse_delete_setexpr_boxed(self.get_current_token().clone())?,
                 limit_clause: None,
                 order_by: None,
                 fetch: None,
@@ -15486,7 +15490,10 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse an REPLACE statement
-    pub fn parse_replace(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_replace(
+        &mut self,
+        replace_token: TokenWithSpan,
+    ) -> Result<Statement, ParserError> {
         if !dialect_of!(self is MySqlDialect | GenericDialect) {
             return parser_err!(
                 "Unsupported statement REPLACE",
@@ -15494,7 +15501,7 @@ impl<'a> Parser<'a> {
             );
         }
 
-        let mut insert = self.parse_insert()?;
+        let mut insert = self.parse_insert(replace_token)?;
         if let Statement::Insert(Insert { replace_into, .. }) = &mut insert {
             *replace_into = true;
         }
@@ -15505,12 +15512,15 @@ impl<'a> Parser<'a> {
     /// Parse an INSERT statement, returning a `Box`ed SetExpr
     ///
     /// This is used to reduce the size of the stack frames in debug builds
-    fn parse_insert_setexpr_boxed(&mut self) -> Result<Box<SetExpr>, ParserError> {
-        Ok(Box::new(SetExpr::Insert(self.parse_insert()?)))
+    fn parse_insert_setexpr_boxed(
+        &mut self,
+        insert_token: TokenWithSpan,
+    ) -> Result<Box<SetExpr>, ParserError> {
+        Ok(Box::new(SetExpr::Insert(self.parse_insert(insert_token)?)))
     }
 
     /// Parse an INSERT statement
-    pub fn parse_insert(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_insert(&mut self, insert_token: TokenWithSpan) -> Result<Statement, ParserError> {
         let or = self.parse_conflict_clause();
         let priority = if !dialect_of!(self is MySqlDialect | GenericDialect) {
             None
@@ -15679,6 +15689,7 @@ impl<'a> Parser<'a> {
             };
 
             Ok(Statement::Insert(Insert {
+                insert_token: insert_token.into(),
                 or,
                 table: table_object,
                 table_alias,
@@ -15770,11 +15781,14 @@ impl<'a> Parser<'a> {
     /// Parse an UPDATE statement, returning a `Box`ed SetExpr
     ///
     /// This is used to reduce the size of the stack frames in debug builds
-    fn parse_update_setexpr_boxed(&mut self) -> Result<Box<SetExpr>, ParserError> {
-        Ok(Box::new(SetExpr::Update(self.parse_update()?)))
+    fn parse_update_setexpr_boxed(
+        &mut self,
+        update_token: TokenWithSpan,
+    ) -> Result<Box<SetExpr>, ParserError> {
+        Ok(Box::new(SetExpr::Update(self.parse_update(update_token)?)))
     }
 
-    pub fn parse_update(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_update(&mut self, update_token: TokenWithSpan) -> Result<Statement, ParserError> {
         let or = self.parse_conflict_clause();
         let table = self.parse_table_and_joins()?;
         let from_before_set = if self.parse_keyword(Keyword::FROM) {
@@ -15809,6 +15823,7 @@ impl<'a> Parser<'a> {
             None
         };
         Ok(Update {
+            update_token: update_token.into(),
             table,
             assignments,
             from,

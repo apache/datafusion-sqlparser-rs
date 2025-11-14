@@ -10245,9 +10245,10 @@ impl<'a> Parser<'a> {
         // Check if there's a comma, indicating multiple strings (e.g., AS 'obj_file', 'link_symbol')
         // This is used for C language functions: AS 'MODULE_PATHNAME', 'link_symbol'
         if self.consume_token(&Token::Comma) {
-            let mut exprs = vec![first_expr];
-            exprs.extend(self.parse_comma_separated(parse_string_expr)?);
-            Ok(Expr::Tuple(exprs))
+            Ok(Expr::Tuple(vec![
+                first_expr,
+                self.parse_comma_separated(parse_string_expr)?
+            ]))
         } else {
             Ok(first_expr)
         }

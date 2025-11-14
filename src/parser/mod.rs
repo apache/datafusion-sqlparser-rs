@@ -9542,55 +9542,11 @@ impl<'a> Parser<'a> {
             return self.expected("COPY ... FROM STDIN with CSV body", self.peek_token());
         };
 
-        let mut delimiter = '\t';
-        let mut quote = '"';
-        let mut escape = '\\';
-        let mut null_symbol = "\\N";
-
-        // Apply options
-        for option in options {
-            match option {
-                CopyOption::Delimiter(c) => {
-                    delimiter = *c;
-                }
-                CopyOption::Quote(c) => {
-                    quote = *c;
-                }
-                CopyOption::Escape(c) => {
-                    escape = *c;
-                }
-                CopyOption::Null(null) => {
-                    null_symbol = null;
-                }
-                _ => {}
-            }
-        }
-
-        // Apply legacy options
-        for option in legacy_options {
-            match option {
-                CopyLegacyOption::Delimiter(c) => {
-                    delimiter = *c;
-                }
-                CopyLegacyOption::Null(null) => {
-                    null_symbol = null;
-                }
-                CopyLegacyOption::Csv(csv_options) => {
-                    for csv_option in csv_options {
-                        match csv_option {
-                            CopyLegacyCsvOption::Quote(c) => {
-                                quote = *c;
-                            }
-                            CopyLegacyCsvOption::Escape(c) => {
-                                escape = *c;
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
+        let csv_options = CsvFormatOptions::from_copy_options(options, legacy_options);
+        let delimiter = csv_options.delimiter;
+        let quote = csv_options.quote;
+        let escape = csv_options.escape;
+        let null_symbol = csv_options.null_symbol.as_str();
 
         // Simple CSV parser
         let mut result = vec![];
@@ -9762,14 +9718,14 @@ impl<'a> Parser<'a> {
         } else {
             vec![]
         };
-        Ok(Statement::Copy {
+        Ok(Statement::Copy(Copy {
             source,
             to,
             target,
             options,
             legacy_options,
             values,
-        })
+        }))
     }
 
     /// Parse [Statement::Open]

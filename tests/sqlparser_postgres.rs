@@ -1076,7 +1076,7 @@ fn test_copy_from() {
     let stmt = pg().verified_stmt("COPY users FROM 'data.csv'");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(Copy {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
@@ -1088,13 +1088,13 @@ fn test_copy_from() {
             options: vec![],
             legacy_options: vec![],
             values: vec![],
-        }
+        })
     );
 
     let stmt = pg().verified_stmt("COPY users FROM 'data.csv' DELIMITER ','");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(Copy {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
@@ -1106,13 +1106,13 @@ fn test_copy_from() {
             options: vec![],
             legacy_options: vec![CopyLegacyOption::Delimiter(',')],
             values: vec![],
-        }
+        })
     );
 
     let stmt = pg().verified_stmt("COPY users FROM 'data.csv' DELIMITER ',' CSV HEADER");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(Copy {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
@@ -1127,7 +1127,7 @@ fn test_copy_from() {
                 CopyLegacyOption::Csv(vec![CopyLegacyCsvOption::Header,])
             ],
             values: vec![],
-        }
+        })
     );
 }
 
@@ -1136,7 +1136,7 @@ fn test_copy_to() {
     let stmt = pg().verified_stmt("COPY users TO 'data.csv'");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(Copy {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
@@ -1148,13 +1148,13 @@ fn test_copy_to() {
             options: vec![],
             legacy_options: vec![],
             values: vec![],
-        }
+        })
     );
 
     let stmt = pg().verified_stmt("COPY users TO 'data.csv' DELIMITER ','");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(Copy {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
@@ -1166,13 +1166,13 @@ fn test_copy_to() {
             options: vec![],
             legacy_options: vec![CopyLegacyOption::Delimiter(',')],
             values: vec![],
-        }
+        })
     );
 
     let stmt = pg().verified_stmt("COPY users TO 'data.csv' DELIMITER ',' CSV HEADER");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(Copy {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
@@ -1187,7 +1187,7 @@ fn test_copy_to() {
                 CopyLegacyOption::Csv(vec![CopyLegacyCsvOption::Header,])
             ],
             values: vec![],
-        }
+        })
     )
 }
 
@@ -1213,7 +1213,7 @@ fn parse_copy_from() {
     )";
     assert_eq!(
         pg_and_generic().one_statement_parses_to(sql, ""),
-        Statement::Copy {
+        Statement::Copy(Copy {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["table".into()]),
                 columns: vec!["a".into(), "b".into()],
@@ -1241,7 +1241,7 @@ fn parse_copy_from() {
             ],
             legacy_options: vec![],
             values: vec![],
-        }
+        })
     );
 }
 
@@ -1259,7 +1259,7 @@ fn parse_copy_to() {
     let stmt = pg().verified_stmt("COPY users TO 'data.csv'");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(Copy {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
@@ -1271,13 +1271,13 @@ fn parse_copy_to() {
             options: vec![],
             legacy_options: vec![],
             values: vec![],
-        }
+        })
     );
 
     let stmt = pg().verified_stmt("COPY country TO STDOUT (DELIMITER '|')");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(Copy {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["country".into()]),
                 columns: vec![],
@@ -1287,14 +1287,14 @@ fn parse_copy_to() {
             options: vec![CopyOption::Delimiter('|')],
             legacy_options: vec![],
             values: vec![],
-        }
+        })
     );
 
     let stmt =
         pg().verified_stmt("COPY country TO PROGRAM 'gzip > /usr1/proj/bray/sql/country_data.gz'");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(Copy {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["country".into()]),
                 columns: vec![],
@@ -1306,13 +1306,13 @@ fn parse_copy_to() {
             options: vec![],
             legacy_options: vec![],
             values: vec![],
-        }
+        })
     );
 
     let stmt = pg().verified_stmt("COPY (SELECT 42 AS a, 'hello' AS b) TO 'query.csv'");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(Copy {
             source: CopySource::Query(Box::new(Query {
                 with: None,
                 body: Box::new(SetExpr::Select(Box::new(Select {
@@ -1374,7 +1374,7 @@ fn parse_copy_to() {
             options: vec![],
             legacy_options: vec![],
             values: vec![],
-        }
+        })
     )
 }
 
@@ -1383,7 +1383,7 @@ fn parse_copy_from_before_v9_0() {
     let stmt = pg().verified_stmt("COPY users FROM 'data.csv' BINARY DELIMITER ',' NULL 'null' CSV HEADER QUOTE '\"' ESCAPE '\\' FORCE NOT NULL column");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(Copy {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
@@ -1405,14 +1405,14 @@ fn parse_copy_from_before_v9_0() {
                 ]),
             ],
             values: vec![],
-        }
+        })
     );
 
     // test 'AS' keyword
     let sql = "COPY users FROM 'data.csv' DELIMITER AS ',' NULL AS 'null' CSV QUOTE AS '\"' ESCAPE AS '\\'";
     assert_eq!(
         pg_and_generic().one_statement_parses_to(sql, ""),
-        Statement::Copy {
+        Statement::Copy(Copy {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
@@ -1431,7 +1431,7 @@ fn parse_copy_from_before_v9_0() {
                 ]),
             ],
             values: vec![],
-        }
+        })
     );
 }
 
@@ -1440,7 +1440,7 @@ fn parse_copy_to_before_v9_0() {
     let stmt = pg().verified_stmt("COPY users TO 'data.csv' BINARY DELIMITER ',' NULL 'null' CSV HEADER QUOTE '\"' ESCAPE '\\' FORCE QUOTE column");
     assert_eq!(
         stmt,
-        Statement::Copy {
+        Statement::Copy(Copy {
             source: CopySource::Table {
                 table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
@@ -1462,7 +1462,7 @@ fn parse_copy_to_before_v9_0() {
                 ]),
             ],
             values: vec![],
-        }
+        })
     )
 }
 

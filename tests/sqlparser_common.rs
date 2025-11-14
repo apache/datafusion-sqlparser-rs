@@ -17082,7 +17082,7 @@ fn parse_copy_options() {
         r#"COPY dst (c1, c2, c3) FROM 's3://redshift-downloads/tickit/category_pipe.txt' IAM_ROLE 'arn:aws:iam::123456789:role/role1' CSV IGNOREHEADER 1"#,
     );
     match copy {
-        Statement::Copy { legacy_options, .. } => {
+        Statement::Copy(Copy { legacy_options, .. }) => {
             assert_eq!(
                 legacy_options,
                 vec![
@@ -17102,7 +17102,7 @@ fn parse_copy_options() {
         r#"COPY dst (c1, c2, c3) FROM 's3://redshift-downloads/tickit/category_pipe.txt' IAM_ROLE DEFAULT CSV IGNOREHEADER 1"#,
     );
     match copy {
-        Statement::Copy { legacy_options, .. } => {
+        Statement::Copy(Copy { legacy_options, .. }) => {
             assert_eq!(
                 legacy_options,
                 vec![

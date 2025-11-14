@@ -317,14 +317,7 @@ impl Spanned for Statement {
             Statement::While(stmt) => stmt.span(),
             Statement::Raise(stmt) => stmt.span(),
             Statement::Call(function) => function.span(),
-            Statement::Copy {
-                source,
-                to: _,
-                target: _,
-                options: _,
-                legacy_options: _,
-                values: _,
-            } => source.span(),
+            Statement::Copy(copy) => copy.source.span(),
             Statement::CopyIntoSnowflake {
                 into: _,
                 into_columns: _,

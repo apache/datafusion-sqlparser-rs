@@ -73,7 +73,7 @@ pub use self::ddl::{
     ReplicaIdentity, TagsColumnOption, TriggerObjectKind, Truncate,
     UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
 };
-pub use self::dml::{Delete, Insert, Update};
+pub use self::dml::{Copy, CsvFormatOptions, Delete, Insert, Update};
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
     AfterMatchSkip, ConnectBy, Cte, CteAsMaterialized, Distinct, EmptyMatchesMode,
@@ -3210,20 +3210,7 @@ pub enum Statement {
     /// ```sql
     /// COPY [TO | FROM] ...
     /// ```
-    Copy {
-        /// The source of 'COPY TO', or the target of 'COPY FROM'
-        source: CopySource,
-        /// If true, is a 'COPY TO' statement. If false is a 'COPY FROM'
-        to: bool,
-        /// The target of 'COPY TO', or the source of 'COPY FROM'
-        target: CopyTarget,
-        /// WITH options (from PostgreSQL version 9.0)
-        options: Vec<CopyOption>,
-        /// WITH options (before PostgreSQL version 9.0)
-        legacy_options: Vec<CopyLegacyOption>,
-        /// VALUES a vector of values to be copied
-        values: Vec<Vec<Option<String>>>,
-    },
+    Copy(Copy),
     /// ```sql
     /// COPY INTO <table> | <location>
     /// ```
@@ -4278,6 +4265,12 @@ impl From<ddl::Msck> for Statement {
     }
 }
 
+impl From<Copy> for Statement {
+    fn from(copy: Copy) -> Self {
+        Statement::Copy(copy)
+    }
+}
+
 /// ```sql
 /// {COPY | REVOKE} CURRENT GRANTS
 /// ```
@@ -4546,128 +4539,7 @@ impl fmt::Display for Statement {
 
             Statement::Call(function) => write!(f, "CALL {function}"),
 
-            Statement::Copy {
-                source,
-                to,
-                target,
-                options,
-                legacy_options,
-                values,
-            } => {
-                write!(f, "COPY")?;
-                match source {
-                    CopySource::Query(query) => write!(f, " ({query})")?,
-                    CopySource::Table {
-                        table_name,
-                        columns,
-                    } => {
-                        write!(f, " {table_name}")?;
-                        if !columns.is_empty() {
-                            write!(f, " ({})", display_comma_separated(columns))?;
-                        }
-                    }
-                }
-                write!(f, " {} {}", if *to { "TO" } else { "FROM" }, target)?;
-                if !options.is_empty() {
-                    write!(f, " ({})", display_comma_separated(options))?;
-                }
-                if !legacy_options.is_empty() {
-                    write!(f, " {}", display_separated(legacy_options, " "))?;
-                }
-
-                let mut null_symbol = "\\N";
-                let mut delimiter = '\t';
-                let mut quote = '"';
-                let mut escape = '\\';
-
-                // Apply options
-                for option in options {
-                    match option {
-                        CopyOption::Delimiter(c) => {
-                            delimiter = *c;
-                        }
-                        CopyOption::Quote(c) => {
-                            quote = *c;
-                        }
-                        CopyOption::Escape(c) => {
-                            escape = *c;
-                        }
-                        CopyOption::Null(null) => {
-                            null_symbol = null;
-                        }
-                        _ => {}
-                    }
-                }
-
-                // Apply legacy options
-                for option in legacy_options {
-                    match option {
-                        CopyLegacyOption::Delimiter(c) => {
-                            delimiter = *c;
-                        }
-                        CopyLegacyOption::Null(null) => {
-                            null_symbol = null;
-                        }
-                        CopyLegacyOption::Csv(csv_options) => {
-                            for csv_option in csv_options {
-                                match csv_option {
-                                    CopyLegacyCsvOption::Quote(c) => {
-                                        quote = *c;
-                                    }
-                                    CopyLegacyCsvOption::Escape(c) => {
-                                        escape = *c;
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-
-                if !values.is_empty() {
-                    writeln!(f, ";")?;
-
-                    // Simple CSV writer
-                    for row in values {
-                        for (idx, column) in row.iter().enumerate() {
-                            if idx > 0 {
-                                write!(f, "{}", delimiter)?;
-                            }
-
-                            let field_value = column.as_deref().unwrap_or(null_symbol);
-
-                            // Check if field needs quoting
-                            let needs_quoting = field_value.contains(delimiter)
-                                || field_value.contains(quote)
-                                || field_value.contains('\n')
-                                || field_value.contains('\r');
-
-                            if needs_quoting {
-                                write!(f, "{}", quote)?;
-                                for ch in field_value.chars() {
-                                    if ch == quote {
-                                        // Escape quote by doubling it
-                                        write!(f, "{}{}", quote, quote)?;
-                                    } else if ch == escape {
-                                        // Escape escape character
-                                        write!(f, "{}{}", escape, escape)?;
-                                    } else {
-                                        write!(f, "{}", ch)?;
-                                    }
-                                }
-                                write!(f, "{}", quote)?;
-                            } else {
-                                write!(f, "{}", field_value)?;
-                            }
-                        }
-                        writeln!(f)?;
-                    }
-
-                    write!(f, "\\.")?;
-                }
-                Ok(())
-            }
+            Statement::Copy(copy) => copy.fmt(f),
             Statement::Update(update) => update.fmt(f),
             Statement::Delete(delete) => delete.fmt(f),
             Statement::Open(open) => open.fmt(f),

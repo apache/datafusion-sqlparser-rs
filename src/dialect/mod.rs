@@ -178,7 +178,44 @@ pub trait Dialect: Debug + Any {
     /// Determine if a character is a valid unquoted identifier character
     fn is_identifier_part(&self, ch: char) -> bool;
 
-    /// Returns whether the dialect supports hyphenated identifiers
+    /// Returns whether the dialect supports hyphenated identifiers.
+    ///
+    /// Hyphenated identifiers are identifiers that contain hyphens (dashes)
+    /// within the name, such as `my-table` or `column-name`.
+    ///
+    /// # Examples
+    ///
+    /// BigQuery supports hyphenated identifiers:
+    ///
+    /// ```rust
+    /// # use sqlparser::{dialect::BigQueryDialect, parser::Parser};
+    /// let dialect = BigQueryDialect;
+    /// let sql = "SELECT my-column FROM my-table";
+    /// let result = Parser::parse_sql(&dialect, sql);
+    /// assert!(result.is_ok());
+    /// ```
+    ///
+    /// Most other dialects do not support hyphenated identifiers,
+    /// and in those cases such identifiers must be quoted:
+    ///
+    /// ```rust
+    /// # use sqlparser::{dialect::PostgreSqlDialect, parser::Parser};
+    /// let dialect = PostgreSqlDialect {};
+    /// let sql = "SELECT my-column FROM my-table";
+    /// let result = Parser::parse_sql(&dialect, sql);
+    /// assert!(result.is_err());
+    /// ```
+    ///
+    /// In dialects that do not support hyphenated identifiers, the above
+    /// query would need to be written as:
+    ///
+    /// ```rust
+    /// # use sqlparser::{dialect::PostgreSqlDialect, parser::Parser};
+    /// let dialect = PostgreSqlDialect {};
+    /// let sql = "SELECT \"my-column\" FROM \"my-table\"";
+    /// let result = Parser::parse_sql(&dialect, sql);
+    /// assert!(result.is_ok());
+    /// ```
     fn supports_hyphenated_identifiers(&self) -> bool {
         false
     }

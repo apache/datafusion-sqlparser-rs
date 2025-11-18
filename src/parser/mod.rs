@@ -622,7 +622,7 @@ impl<'a> Parser<'a> {
                 Keyword::DEALLOCATE => self.parse_deallocate(),
                 Keyword::EXECUTE | Keyword::EXEC => self.parse_execute(),
                 Keyword::PREPARE => self.parse_prepare(),
-                Keyword::MERGE => self.parse_merge(),
+                Keyword::MERGE => self.parse_merge(next_token),
                 // `LISTEN`, `UNLISTEN` and `NOTIFY` are Postgres-specific
                 // syntaxes. They are used for Postgres statement.
                 Keyword::LISTEN if self.dialect.supports_listen_notify() => self.parse_listen(),
@@ -12125,8 +12125,11 @@ impl<'a> Parser<'a> {
     /// Parse a MERGE statement, returning a `Box`ed SetExpr
     ///
     /// This is used to reduce the size of the stack frames in debug builds
-    fn parse_merge_setexpr_boxed(&mut self) -> Result<Box<SetExpr>, ParserError> {
-        Ok(Box::new(SetExpr::Merge(self.parse_merge()?)))
+    fn parse_merge_setexpr_boxed(
+        &mut self,
+        merge_token: TokenWithSpan,
+    ) -> Result<Box<SetExpr>, ParserError> {
+        Ok(Box::new(SetExpr::Merge(self.parse_merge(merge_token)?)))
     }
 
     pub fn parse_delete(&mut self, delete_token: TokenWithSpan) -> Result<Statement, ParserError> {
@@ -12344,7 +12347,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::MERGE) {
             Ok(Query {
                 with,
-                body: self.parse_merge_setexpr_boxed()?,
+                body: self.parse_merge_setexpr_boxed(self.get_current_token().clone())?,
                 limit_clause: None,
                 order_by: None,
                 fetch: None,
@@ -17200,6 +17203,7 @@ impl<'a> Parser<'a> {
             if !(self.parse_keyword(Keyword::WHEN)) {
                 break;
             }
+            let when_token = self.get_current_token().clone();
 
             let mut clause_kind = MergeClauseKind::Matched;
             if self.parse_keyword(Keyword::NOT) {
@@ -17239,8 +17243,10 @@ impl<'a> Parser<'a> {
                             "UPDATE is not allowed in a {clause_kind} merge clause"
                         )));
                     }
+                    let update_token = self.get_current_token().clone();
                     self.expect_keyword_is(Keyword::SET)?;
                     MergeAction::Update {
+                        update_token: update_token.into(),
                         assignments: self.parse_comma_separated(Parser::parse_assignment)?,
                     }
                 }
@@ -17253,7 +17259,10 @@ impl<'a> Parser<'a> {
                             "DELETE is not allowed in a {clause_kind} merge clause"
                         )));
                     }
-                    MergeAction::Delete
+                    let delete_token = self.get_current_token().clone();
+                    MergeAction::Delete {
+                        delete_token: delete_token.into(),
+                    }
                 }
                 Some(Keyword::INSERT) => {
                     if !matches!(
@@ -17264,19 +17273,26 @@ impl<'a> Parser<'a> {
                             "INSERT is not allowed in a {clause_kind} merge clause"
                         )));
                     }
+                    let insert_token = self.get_current_token().clone();
                     let is_mysql = dialect_of!(self is MySqlDialect);
 
                     let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
-                    let kind = if dialect_of!(self is BigQueryDialect | GenericDialect)
+                    let (kind, kind_token) = if dialect_of!(self is BigQueryDialect | GenericDialect)
                         && self.parse_keyword(Keyword::ROW)
                     {
-                        MergeInsertKind::Row
+                        (MergeInsertKind::Row, self.get_current_token().clone())
                     } else {
                         self.expect_keyword_is(Keyword::VALUES)?;
+                        let values_token = self.get_current_token().clone();
                         let values = self.parse_values(is_mysql, false)?;
-                        MergeInsertKind::Values(values)
+                        (MergeInsertKind::Values(values), values_token)
                     };
-                    MergeAction::Insert(MergeInsertExpr { columns, kind })
+                    MergeAction::Insert(MergeInsertExpr {
+                        insert_token: insert_token.into(),
+                        columns,
+                        kind_token: kind_token.into(),
+                        kind,
+                    })
                 }
                 _ => {
                     return Err(ParserError::ParserError(
@@ -17285,6 +17301,7 @@ impl<'a> Parser<'a> {
                 }
             };
             clauses.push(MergeClause {
+                when_token: when_token.into(),
                 clause_kind,
                 predicate,
                 action: merge_clause,
@@ -17293,7 +17310,11 @@ impl<'a> Parser<'a> {
         Ok(clauses)
     }
 
-    fn parse_output(&mut self, start_keyword: Keyword) -> Result<OutputClause, ParserError> {
+    fn parse_output(
+        &mut self,
+        start_keyword: Keyword,
+        start_token: TokenWithSpan,
+    ) -> Result<OutputClause, ParserError> {
         let select_items = self.parse_projection()?;
         let into_table = if start_keyword == Keyword::OUTPUT && self.peek_keyword(Keyword::INTO) {
             self.expect_keyword_is(Keyword::INTO)?;
@@ -17304,11 +17325,15 @@ impl<'a> Parser<'a> {
 
         Ok(if start_keyword == Keyword::OUTPUT {
             OutputClause::Output {
+                output_token: start_token.into(),
                 select_items,
                 into_table,
             }
         } else {
-            OutputClause::Returning { select_items }
+            OutputClause::Returning {
+                returning_token: start_token.into(),
+                select_items,
+            }
         })
     }
 
@@ -17328,7 +17353,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_merge(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_merge(&mut self, merge_token: TokenWithSpan) -> Result<Statement, ParserError> {
         let into = self.parse_keyword(Keyword::INTO);
 
         let table = self.parse_table_factor()?;
@@ -17339,11 +17364,12 @@ impl<'a> Parser<'a> {
         let on = self.parse_expr()?;
         let clauses = self.parse_merge_clauses()?;
         let output = match self.parse_one_of_keywords(&[Keyword::OUTPUT, Keyword::RETURNING]) {
-            Some(start_keyword) => Some(self.parse_output(start_keyword)?),
+            Some(keyword) => Some(self.parse_output(keyword, self.get_current_token().clone())?),
             None => None,
         };
 
         Ok(Statement::Merge {
+            merge_token: merge_token.into(),
             into,
             table,
             source,

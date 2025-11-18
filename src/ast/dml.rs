@@ -33,10 +33,9 @@ use crate::display_utils::{indented_list, Indent, SpaceOrNewline};
 
 use super::{
     display_comma_separated, display_separated, helpers::attached_token::AttachedToken,
-    query::InputFormatClause, Assignment, CopyLegacyCsvOption, CopyLegacyOption, CopyOption,
-    CopySource, CopyTarget, Expr, FromTable, Ident, InsertAliases, MysqlInsertPriority, ObjectName,
-    OnInsert, OrderByExpr, Query, SelectItem, Setting, SqliteOnConflict, TableObject,
-    TableWithJoins, UpdateTableFromKind,
+    query::InputFormatClause, Assignment, CopyLegacyOption, CopyOption, CopySource, CopyTarget,
+    Expr, FromTable, Ident, InsertAliases, MysqlInsertPriority, ObjectName, OnInsert, OrderByExpr,
+    Query, SelectItem, Setting, SqliteOnConflict, TableObject, TableWithJoins, UpdateTableFromKind,
 };
 
 /// INSERT statement.
@@ -317,191 +316,6 @@ impl Display for Update {
     }
 }
 
-/// CSV formatting options extracted from COPY options.
-///
-/// This struct encapsulates the CSV formatting settings used when parsing
-/// or formatting COPY statement data. It extracts relevant options from both
-/// modern [`CopyOption`] and legacy [`CopyLegacyOption`] variants.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CsvFormatOptions {
-    /// The field delimiter character (default: tab)
-    pub(crate) delimiter: char,
-    /// The quote character used to enclose fields (default: `"`)
-    pub(crate) quote: char,
-    /// The escape character (default: `\`)
-    pub(crate) escape: char,
-    /// The string representing NULL values (default: `\\N`)
-    pub(crate) null_symbol: String,
-}
-
-impl Default for CsvFormatOptions {
-    fn default() -> Self {
-        Self {
-            delimiter: '\t',
-            quote: '"',
-            escape: '\\',
-            null_symbol: "\\N".to_string(),
-        }
-    }
-}
-
-impl CsvFormatOptions {
-    /// Extract CSV format options from CopyOption and CopyLegacyOption lists.
-    ///
-    /// This method processes both modern and legacy COPY options to determine
-    /// the CSV formatting settings. Later options in the lists override earlier ones.
-    ///
-    /// # Arguments
-    ///
-    /// * `options` - Modern COPY options (PostgreSQL 9.0+)
-    /// * `legacy_options` - Legacy COPY options (pre-PostgreSQL 9.0)
-    ///
-    /// # Returns
-    ///
-    /// A `CsvFormatOptions` instance with the extracted settings, using defaults
-    /// for any options not specified.
-    pub(crate) fn from_copy_options(
-        options: &[CopyOption],
-        legacy_options: &[CopyLegacyOption],
-    ) -> Self {
-        let mut csv_options = Self::default();
-
-        // Apply options
-        for option in options {
-            match option {
-                CopyOption::Delimiter(c) => {
-                    csv_options.delimiter = *c;
-                }
-                CopyOption::Quote(c) => {
-                    csv_options.quote = *c;
-                }
-                CopyOption::Escape(c) => {
-                    csv_options.escape = *c;
-                }
-                CopyOption::Null(null) => {
-                    csv_options.null_symbol = null.clone();
-                }
-                // These options don't affect CSV formatting
-                CopyOption::Format(_)
-                | CopyOption::Freeze(_)
-                | CopyOption::Header(_)
-                | CopyOption::ForceQuote(_)
-                | CopyOption::ForceNotNull(_)
-                | CopyOption::ForceNull(_)
-                | CopyOption::Encoding(_) => {}
-            }
-        }
-
-        // Apply legacy options
-        for option in legacy_options {
-            match option {
-                CopyLegacyOption::Delimiter(c) => {
-                    csv_options.delimiter = *c;
-                }
-                CopyLegacyOption::Null(null) => {
-                    csv_options.null_symbol = null.clone();
-                }
-                CopyLegacyOption::Csv(csv_opts) => {
-                    for csv_option in csv_opts {
-                        match csv_option {
-                            CopyLegacyCsvOption::Quote(c) => {
-                                csv_options.quote = *c;
-                            }
-                            CopyLegacyCsvOption::Escape(c) => {
-                                csv_options.escape = *c;
-                            }
-                            // These CSV options don't affect CSV formatting
-                            CopyLegacyCsvOption::Header
-                            | CopyLegacyCsvOption::ForceQuote(_)
-                            | CopyLegacyCsvOption::ForceNotNull(_) => {}
-                        }
-                    }
-                }
-                // These legacy options don't affect CSV formatting
-                CopyLegacyOption::AcceptAnyDate
-                | CopyLegacyOption::AcceptInvChars(_)
-                | CopyLegacyOption::AddQuotes
-                | CopyLegacyOption::AllowOverwrite
-                | CopyLegacyOption::Binary
-                | CopyLegacyOption::BlankAsNull
-                | CopyLegacyOption::Bzip2
-                | CopyLegacyOption::CleanPath
-                | CopyLegacyOption::CompUpdate { .. }
-                | CopyLegacyOption::DateFormat(_)
-                | CopyLegacyOption::EmptyAsNull
-                | CopyLegacyOption::Encrypted { .. }
-                | CopyLegacyOption::Escape
-                | CopyLegacyOption::Extension(_)
-                | CopyLegacyOption::FixedWidth(_)
-                | CopyLegacyOption::Gzip
-                | CopyLegacyOption::Header
-                | CopyLegacyOption::IamRole(_)
-                | CopyLegacyOption::IgnoreHeader(_)
-                | CopyLegacyOption::Json
-                | CopyLegacyOption::Manifest { .. }
-                | CopyLegacyOption::MaxFileSize(_)
-                | CopyLegacyOption::Parallel(_)
-                | CopyLegacyOption::Parquet
-                | CopyLegacyOption::PartitionBy(_)
-                | CopyLegacyOption::Region(_)
-                | CopyLegacyOption::RemoveQuotes
-                | CopyLegacyOption::RowGroupSize(_)
-                | CopyLegacyOption::StatUpdate(_)
-                | CopyLegacyOption::TimeFormat(_)
-                | CopyLegacyOption::TruncateColumns
-                | CopyLegacyOption::Zstd => {}
-            }
-        }
-
-        csv_options
-    }
-
-    /// Format a single CSV field, adding quotes and escaping if necessary.
-    ///
-    /// This method handles CSV field formatting according to the configured options:
-    /// - Writes NULL values using the configured `null_symbol`
-    /// - Adds quotes around fields containing delimiters, quotes, or newlines
-    /// - Escapes quote characters by doubling them
-    /// - Escapes escape characters
-    ///
-    /// # Arguments
-    ///
-    /// * `f` - The formatter to write to
-    /// * `field` - The field value to format, or `None` for NULL
-    ///
-    /// # Returns
-    ///
-    /// A `fmt::Result` indicating success or failure of the write operation.
-    fn format_csv_field(&self, f: &mut fmt::Formatter, field: Option<&str>) -> fmt::Result {
-        let field_value = field.unwrap_or(&self.null_symbol);
-
-        // Check if field needs quoting
-        let needs_quoting = field_value.contains(self.delimiter)
-            || field_value.contains(self.quote)
-            || field_value.contains('\n')
-            || field_value.contains('\r');
-
-        if needs_quoting {
-            write!(f, "{}", self.quote)?;
-            for ch in field_value.chars() {
-                if ch == self.quote {
-                    // Escape quote by doubling it
-                    write!(f, "{}{}", self.quote, self.quote)?;
-                } else if ch == self.escape {
-                    // Escape escape character
-                    write!(f, "{}{}", self.escape, self.escape)?;
-                } else {
-                    write!(f, "{}", ch)?;
-                }
-            }
-            write!(f, "{}", self.quote)?;
-        } else {
-            write!(f, "{}", field_value)?;
-        }
-        Ok(())
-    }
-}
-
 /// COPY statement.
 ///
 /// Represents a PostgreSQL COPY statement for bulk data transfer between
@@ -550,7 +364,7 @@ pub struct Copy {
     /// CSV data rows for COPY FROM STDIN statements.
     /// Each row is a vector of optional strings (None represents NULL).
     /// Populated only when copying from STDIN with inline data.
-    pub values: Vec<Vec<Option<String>>>,
+    pub values: Option<String>,
 }
 
 impl Display for Copy {
@@ -581,24 +395,8 @@ impl Display for Copy {
             write!(f, " {}", display_separated(&self.legacy_options, " "))?;
         }
 
-        if !self.values.is_empty() {
-            writeln!(f, ";")?;
-
-            let csv_options =
-                CsvFormatOptions::from_copy_options(&self.options, &self.legacy_options);
-
-            // Write CSV data
-            for row in &self.values {
-                for (idx, column) in row.iter().enumerate() {
-                    if idx > 0 {
-                        write!(f, "{}", csv_options.delimiter)?;
-                    }
-                    csv_options.format_csv_field(f, column.as_deref())?;
-                }
-                writeln!(f)?;
-            }
-
-            write!(f, "\\.")?;
+        if let Some(values) = &self.values {
+            write!(f, ";{values}\\.")?;
         }
         Ok(())
     }

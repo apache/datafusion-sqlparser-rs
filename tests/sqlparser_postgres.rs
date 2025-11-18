@@ -1050,25 +1050,13 @@ fn parse_copy_from_stdin() {
 1,PENELOPE,GUINESS,2006-02-15 09:34:33,0.11111
 2,NICK,WAHLBERG,2006-02-15 09:34:33
 \."#;
-    let parsed = pg_and_generic().parse_sql_statements(incorrect_csv_sql);
-    assert_eq!(
-        parsed.unwrap_err(),
-        ParserError::ParserError(
-            "CSV row 2 has 4 columns, but expected 5 columns based on first row".to_string()
-        )
-    );
+    pg_and_generic().verified_stmt(incorrect_csv_sql);
 
     let mixed_incorrect_separators = r#"COPY public.actor (actor_id, first_name, last_name, last_update, value) FROM STDIN (FORMAT csv, DELIMITER ',');
 1,PENELOPE,GUINESS,2006-02-15 09:34:33,0.11111
 2	NICK	WAHLBERG	2006-02-15 09:34:33,0.22222
 \."#;
-    let parsed = pg_and_generic().parse_sql_statements(mixed_incorrect_separators);
-    assert_eq!(
-        parsed.unwrap_err(),
-        ParserError::ParserError(
-            "CSV row 2 has 2 columns, but expected 5 columns based on first row".to_string()
-        )
-    );
+    pg_and_generic().verified_stmt(mixed_incorrect_separators);
 }
 
 #[test]
@@ -1087,7 +1075,7 @@ fn test_copy_from() {
             },
             options: vec![],
             legacy_options: vec![],
-            values: vec![],
+            values: None,
         })
     );
 
@@ -1105,7 +1093,7 @@ fn test_copy_from() {
             },
             options: vec![],
             legacy_options: vec![CopyLegacyOption::Delimiter(',')],
-            values: vec![],
+            values: None,
         })
     );
 
@@ -1126,7 +1114,7 @@ fn test_copy_from() {
                 CopyLegacyOption::Delimiter(','),
                 CopyLegacyOption::Csv(vec![CopyLegacyCsvOption::Header,])
             ],
-            values: vec![],
+            values: None,
         })
     );
 }
@@ -1147,7 +1135,7 @@ fn test_copy_to() {
             },
             options: vec![],
             legacy_options: vec![],
-            values: vec![],
+            values: None,
         })
     );
 
@@ -1165,7 +1153,7 @@ fn test_copy_to() {
             },
             options: vec![],
             legacy_options: vec![CopyLegacyOption::Delimiter(',')],
-            values: vec![],
+            values: None,
         })
     );
 
@@ -1186,7 +1174,7 @@ fn test_copy_to() {
                 CopyLegacyOption::Delimiter(','),
                 CopyLegacyOption::Csv(vec![CopyLegacyCsvOption::Header,])
             ],
-            values: vec![],
+            values: None,
         })
     )
 }
@@ -1240,7 +1228,7 @@ fn parse_copy_from() {
                 CopyOption::Encoding("utf8".into()),
             ],
             legacy_options: vec![],
-            values: vec![],
+            values: None,
         })
     );
 }
@@ -1270,7 +1258,7 @@ fn parse_copy_to() {
             },
             options: vec![],
             legacy_options: vec![],
-            values: vec![],
+            values: None,
         })
     );
 
@@ -1286,7 +1274,7 @@ fn parse_copy_to() {
             target: CopyTarget::Stdout,
             options: vec![CopyOption::Delimiter('|')],
             legacy_options: vec![],
-            values: vec![],
+            values: None,
         })
     );
 
@@ -1305,7 +1293,7 @@ fn parse_copy_to() {
             },
             options: vec![],
             legacy_options: vec![],
-            values: vec![],
+            values: None,
         })
     );
 
@@ -1373,7 +1361,7 @@ fn parse_copy_to() {
             },
             options: vec![],
             legacy_options: vec![],
-            values: vec![],
+            values: None,
         })
     )
 }
@@ -1404,7 +1392,7 @@ fn parse_copy_from_before_v9_0() {
                     CopyLegacyCsvOption::ForceNotNull(vec!["column".into()]),
                 ]),
             ],
-            values: vec![],
+            values: None,
         })
     );
 
@@ -1430,7 +1418,7 @@ fn parse_copy_from_before_v9_0() {
                     CopyLegacyCsvOption::Escape('\\'),
                 ]),
             ],
-            values: vec![],
+            values: None,
         })
     );
 }
@@ -1461,7 +1449,7 @@ fn parse_copy_to_before_v9_0() {
                     CopyLegacyCsvOption::ForceQuote(vec!["column".into()]),
                 ]),
             ],
-            values: vec![],
+            values: None,
         })
     )
 }

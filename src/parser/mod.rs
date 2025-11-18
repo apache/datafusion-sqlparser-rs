@@ -6467,12 +6467,6 @@ impl<'a> Parser<'a> {
     ///
     /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createoperator.html)
     pub fn parse_create_operator(&mut self) -> Result<Statement, ParserError> {
-        macro_rules! dup_err {
-            ($name:expr) => {
-                ParserError::ParserError(format!("Duplicate {} clause in CREATE OPERATOR", $name))
-            };
-        }
-
         let name = self.parse_operator_name()?;
         self.expect_token(&Token::LParen)?;
 
@@ -6502,44 +6496,26 @@ impl<'a> Parser<'a> {
             ])?;
 
             match keyword {
-                Keyword::HASHES => {
-                    if hashes {
-                        return Err(dup_err!("HASHES"));
-                    }
+                Keyword::HASHES if !hashes => {
                     hashes = true;
                 }
-                Keyword::MERGES => {
-                    if merges {
-                        return Err(dup_err!("MERGES"));
-                    }
+                Keyword::MERGES if !merges => {
                     merges = true;
                 }
-                Keyword::FUNCTION | Keyword::PROCEDURE => {
-                    if function.is_some() {
-                        return Err(dup_err!("FUNCTION/PROCEDURE"));
-                    }
+                Keyword::FUNCTION | Keyword::PROCEDURE if function.is_none() => {
                     self.expect_token(&Token::Eq)?;
                     function = Some(self.parse_object_name(false)?);
                     is_procedure = keyword == Keyword::PROCEDURE;
                 }
-                Keyword::LEFTARG => {
-                    if left_arg.is_some() {
-                        return Err(dup_err!("LEFTARG"));
-                    }
+                Keyword::LEFTARG if left_arg.is_none() => {
                     self.expect_token(&Token::Eq)?;
                     left_arg = Some(self.parse_data_type()?);
                 }
-                Keyword::RIGHTARG => {
-                    if right_arg.is_some() {
-                        return Err(dup_err!("RIGHTARG"));
-                    }
+                Keyword::RIGHTARG if right_arg.is_none() => {
                     self.expect_token(&Token::Eq)?;
                     right_arg = Some(self.parse_data_type()?);
                 }
-                Keyword::COMMUTATOR => {
-                    if commutator.is_some() {
-                        return Err(dup_err!("COMMUTATOR"));
-                    }
+                Keyword::COMMUTATOR if commutator.is_none() => {
                     self.expect_token(&Token::Eq)?;
                     if self.parse_keyword(Keyword::OPERATOR) {
                         self.expect_token(&Token::LParen)?;
@@ -6549,10 +6525,7 @@ impl<'a> Parser<'a> {
                         commutator = Some(self.parse_operator_name()?);
                     }
                 }
-                Keyword::NEGATOR => {
-                    if negator.is_some() {
-                        return Err(dup_err!("NEGATOR"));
-                    }
+                Keyword::NEGATOR if negator.is_none() => {
                     self.expect_token(&Token::Eq)?;
                     if self.parse_keyword(Keyword::OPERATOR) {
                         self.expect_token(&Token::LParen)?;
@@ -6562,23 +6535,17 @@ impl<'a> Parser<'a> {
                         negator = Some(self.parse_operator_name()?);
                     }
                 }
-                Keyword::RESTRICT => {
-                    if restrict.is_some() {
-                        return Err(dup_err!("RESTRICT"));
-                    }
+                Keyword::RESTRICT if restrict.is_none() => {
                     self.expect_token(&Token::Eq)?;
                     restrict = Some(self.parse_object_name(false)?);
                 }
-                Keyword::JOIN => {
-                    if join.is_some() {
-                        return Err(dup_err!("JOIN"));
-                    }
+                Keyword::JOIN if join.is_none() => {
                     self.expect_token(&Token::Eq)?;
                     join = Some(self.parse_object_name(false)?);
                 }
                 _ => {
                     return Err(ParserError::ParserError(format!(
-                        "Unexpected keyword {:?} in CREATE OPERATOR",
+                        "Duplicate or unexpected keyword {:?} in CREATE OPERATOR",
                         keyword
                     )))
                 }

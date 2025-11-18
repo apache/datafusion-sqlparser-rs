@@ -6612,7 +6612,7 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    /// Parse a CREATE OPERATOR CLASS statement
+    /// Parse a [Statement::CreateOperatorClass]
     ///
     /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createopclass.html)
     pub fn parse_create_operator_class(&mut self) -> Result<Statement, ParserError> {

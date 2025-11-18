@@ -6598,7 +6598,7 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    /// Parse a `CREATE OPERATOR FAMILY` statement
+    /// Parse a [Statement::CreateOperatorFamily]
     ///
     /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createopfamily.html)
     pub fn parse_create_operator_family(&mut self) -> Result<Statement, ParserError> {

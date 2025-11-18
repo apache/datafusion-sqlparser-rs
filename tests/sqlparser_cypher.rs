@@ -753,6 +753,68 @@ fn parse_returning_clause_all() {
 }
 
 #[test]
+fn parse_create_single_part_query() {
+    let sql = "CREATE (a:Person {name: 'Alice', age: 30})";
+    let dialect = CypherDialect {};
+    let mut tokenizer = Tokenizer::new(&dialect, sql);
+    let tokens = tokenizer.tokenize().unwrap();
+    
+    let mut parser = Parser::new(&dialect).with_tokens(tokens);
+
+    let single_part_query = parser.parse_cypher_single_part_query().unwrap();
+
+    match single_part_query {
+        SinglePartQuery::Updating(create_query) => {
+            let create_clause = create_query.create_clause;
+            assert_eq!(create_clause.pattern.parts.len(), 1, "Expected 1 pattern part in the CREATE clause");
+
+            let pattern_part = &create_clause.pattern.parts[0];
+            match &pattern_part.anon_pattern_part {
+                PatternElement::Simple(simple_element) => {
+                    assert_eq!(simple_element.node.variable, Some(Ident::new("a")), "Node variable should be 'a'");
+                    assert_eq!(simple_element.node.labels, vec![Ident::new("Person")], "Node label should be 'Person'");
+
+                    match &simple_element.node.properties {
+                        Some(Expr::Map(map)) => {
+                            assert_eq!(map.entries.len(), 2, "Expected 2 properties in the node properties");
+
+                            let name_entry = &map.entries[0];
+                            assert_eq!(
+                                *name_entry.key,
+                                Expr::Identifier(Ident::new("name")),
+                                "First property key should be 'name'"
+                            );
+                            assert_eq!(
+                                *name_entry.value,
+                                Expr::Value(Value::SingleQuotedString("Alice".to_string()).into()),
+                                "First property value should be 'Alice'"
+                            );
+
+                            let age_entry = &map.entries[1];
+                            assert_eq!(
+                                *age_entry.key,
+                                Expr::Identifier(Ident::new("age")),
+                                "Second property key should be 'age'"
+                            );
+                            assert_eq!(
+                                *age_entry.value,
+                                Expr::Value(Value::Number("30".to_string(), false).into()),
+                                "Second property value should be 30"
+                            );
+                        },
+                        _ => panic!("Expected node properties to be a Map expression"),
+                    }
+                },
+                _ => panic!("Expected a SimplePatternElement in the PatternPart"),
+            }
+        },
+        SinglePartQuery::Reading(_) => {
+            panic!("Expected a Updating query, got Reading");
+        }
+    }
+}
+
+#[test]
 fn parse_match_with_returning() {
     let sql = "MATCH (a:Person)-[r:KNOWS]->(b:Person) RETURN a.name AS personName, b.name AS friendName";
     let dialect = CypherDialect {};
@@ -764,7 +826,7 @@ fn parse_match_with_returning() {
     let single_part_query = parser.parse_cypher_single_part_query().unwrap();
 
     match single_part_query {
-        SinglePartQuery::Simple(simple_query) => {
+        SinglePartQuery::Reading(simple_query) => {
             let match_clause = simple_query.reading_clause;
             match match_clause {
                 CypherReadingClause::Match(match_clause) => {
@@ -799,6 +861,9 @@ fn parse_match_with_returning() {
                 "First projection item should be 'a.name AS personName'"
             );
         },
+        SinglePartQuery::Updating(_) => {
+            panic!("Expected a Reading query, got Writing");
+        }
     }
 }
 
@@ -814,7 +879,7 @@ fn parse_match_with_where(){
     let single_part_query = parser.parse_cypher_single_part_query().unwrap();
 
     match single_part_query {
-        SinglePartQuery::Simple(simple_query) => {
+        SinglePartQuery::Reading(simple_query) => {
             let match_clause = simple_query.reading_clause;
             match match_clause {
                 CypherReadingClause::Match(match_clause) => {
@@ -847,66 +912,14 @@ fn parse_match_with_where(){
                 },
             }
         },
+        SinglePartQuery::Updating(_) => {
+            panic!("Expected a Reading query, got Writing");
+        }
     }
-}
+ }
 
 #[test]
-fn parse_cypher_query(){
-    let sql = "MATCH (a:Person)-[r:KNOWS]->(b:Person) RETURN a.name AS personName, b.name AS friendName";
-    let dialect = CypherDialect {};
-    let mut tokenizer = Tokenizer::new(&dialect, sql);
-    let tokens = tokenizer.tokenize().unwrap();
-    
-    let mut parser = Parser::new(&dialect).with_tokens(tokens);
-
-    let cypher_query = parser.parse_cypher_query().unwrap();
-
-    match cypher_query{
-        CypherSingleQuery::Single(simple_cypher_query) => {
-            match simple_cypher_query {
-                SinglePartQuery::Simple(simple_query) => {
-                    let match_clause = simple_query.reading_clause;
-                    match match_clause {
-                        CypherReadingClause::Match(match_clause) => {
-                            assert_eq!(match_clause.pattern.parts.len(), 1, "Expected 1 pattern part in the MATCH clause");
-
-                            let pattern_part = &match_clause.pattern.parts[0];
-                            match &pattern_part.anon_pattern_part {
-                                PatternElement::Simple(simple_element) => {
-                                    assert_eq!(simple_element.node.variable, Some(Ident::new("a")), "Start node variable should be 'a'");
-                                    assert_eq!(simple_element.chain.len(), 1, "Expected 1 chain element in the pattern part");
-
-                                    let first_chain = &simple_element.chain[0];
-                                    assert_eq!(first_chain.relationship.l_direction, Some(RelationshipDirection::Undirected), "Chain element should start with Undirected");
-                                    assert_eq!(first_chain.relationship.r_direction, Some(RelationshipDirection::Outgoing), "Chain element should end with Outgoing");
-                                },
-                                _ => panic!("Expected a SimplePatternElement in the PatternPart"),
-                            }
-                        }
-                    }
-                    let returning_clause = simple_query.returning_clause;
-                    assert_eq!(returning_clause.body.projections.len(), 2, "Expected 2 entries in the RETURNING clause");
-
-                    assert_eq!(
-                        returning_clause.body.projections[0],
-                        ProjectionItem::Expr {
-                            expr: Expr::CompoundIdentifier(vec![
-                                Ident::new("a"),
-                                Ident::new("name"),
-                            ]),
-                            alias: Some(Ident::new("personName")),
-                        },
-                        "First projection item should be 'a.name AS personName'"
-                    );
-                },
-            }
-        },
-        _ => panic!("Expected a SingleQuery"),
-    }
-}
-
-#[test]
-fn parse_create_clause(){
+fn parse_cypher_create(){
     let sql = "CREATE (a:Person {name: 'Alice', age: 30})";
     let dialect = CypherDialect {};
     let mut tokenizer = Tokenizer::new(&dialect, sql);

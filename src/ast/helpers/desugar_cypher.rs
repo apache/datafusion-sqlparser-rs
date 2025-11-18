@@ -443,10 +443,72 @@ impl Desugarer {
         };
 
         Ok(Statement::Query(Box::new(final_query)))
-    }    
+    }   
+    
+    /// Desugar Cypher reading query into SQL SELECT statement(s).
+    // fn desugar_cypher_reading(reading_query: CypherReadingClause) -> Result<Statement, ParserError> {
+    //     let mut current_query: Option<Box<Query>> = None;
+
+    //     for clause in reading_query.clauses {
+    //         match clause {
+    //             CypherReadingClause::Match(match_clause) => {
+    //                 let match_stmt = Self::desugar_cypher_match(match_clause)?;
+    //                 current_query = Some(Box::new(Query {
+    //                     with: None,
+    //                     body: Box::new(SetExpr::Select(Box::new(Select {
+    //                         select_token: AttachedToken::empty(),
+    //                         distinct: None,
+    //                         top: None,
+    //                         top_before_distinct: false,
+    //                         projection: vec![SelectItem::Wildcard],
+    //                         exclude: None,
+    //                         into: None,
+    //                         from: vec![],
+    //                         lateral_views: vec![],
+    //                         prewhere: None,
+    //                         selection: None,
+    //                         group_by: GroupByExpr::Expressions(vec![], vec![]),
+    //                         cluster_by: vec![],
+    //                         distribute_by: vec![],
+    //                         sort_by: vec![],
+    //                         having: None,
+    //                         named_window: vec![],
+    //                         window_before_qualify: false,
+    //                         qualify: None,
+    //                         value_table_mode: None,
+    //                         connect_by: None,
+    //                         flavor: SelectFlavor::Standard,
+    //                     }))),
+    //                     order_by: None,
+    //                     limit_clause: None,
+    //                     for_clause: None,
+    //                     settings: None,
+    //                     format_clause: None,
+    //                     pipe_operators: vec![],
+    //                     fetch: None,
+    //                     locks: vec![],
+    //                 }));
+    //             },
+    //             // Handle other reading clauses like RETURN, WHERE, etc.
+    //             _ => {
+    //                 return Err(ParserError::ParserError(
+    //                     "Desugaring for this Cypher reading clause is not yet implemented.".to_string()
+    //                 ));
+    //             }
+    //         }
+    //     }
+
+    //     if let Some(query) = current_query {
+    //         Ok(Statement::Query(query))
+    //     } else {
+    //         Err(ParserError::ParserError(
+    //             "No valid Cypher reading clauses found to desugar.".to_string()
+    //         ))
+    //     }
+    // }
 
     /// Desugar Cypher CREATE clause into SQL INSERT statement(s).
-    pub fn desugar_cypher_create(create_clause: CypherCreateClause) -> Result<Statement, ParserError> {
+    fn desugar_cypher_create(create_clause: CypherCreateClause) -> Result<Statement, ParserError> {
         
         // Determine if pattern contains relationships or just nodes
         let has_relationships = create_clause.pattern.parts.iter()
@@ -456,6 +518,28 @@ impl Desugarer {
             Self::desugar_cypher_create_with_relationships(create_clause)
         } else {
             Self::desugar_cypher_create_nodes_only(create_clause)
+        }
+    }
+
+    // Desugar Cypher MATCH clause into SQL SELECT statement(s).
+    fn desugar_cypher_match(match_clause: CypherMatchClause) -> Result<Statement, ParserError> {
+        // Placeholder implementation
+        Err(ParserError::ParserError(
+            "Desugaring Cypher MATCH clause is not yet implemented.".to_string()
+        ))
+    }
+
+    pub fn desugar_cypher_query(query: SinglePartQuery) -> Result<Statement, ParserError> {
+        match query {
+            SinglePartQuery::Reading(reading_query) => {
+                //Self::desugar_cypher_reading(reading_query)
+                Err(ParserError::ParserError(
+                    "Desugaring Cypher reading queries is not yet implemented.".to_string()
+                ))
+            },
+            SinglePartQuery::Updating(updating_query) => {
+                Self::desugar_cypher_create(updating_query.create_clause)
+            },
         }
     }
 }

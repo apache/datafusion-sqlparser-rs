@@ -504,7 +504,11 @@ impl<'a> Parser<'a> {
                 return self.expected("end of statement", self.peek_token());
             }
 
-            let statement = self.parse_statement()?;
+            let statement = if dialect_of!(self is CypherDialect){
+                self.parse_cypher_statement()?
+            } else {
+                self.parse_statement()?
+            };
             stmts.push(statement);
             expecting_statement_delimiter = true;
         }
@@ -581,14 +585,7 @@ impl<'a> Parser<'a> {
                     self.parse_detach_duckdb_database()
                 }
                 Keyword::MSCK => self.parse_msck(),
-                Keyword::CREATE  => {
-                    if dialect_of!(self is CypherDialect){
-                        self.prev_token();
-                        self.parse_cypher_create()
-                    } else {
-                        self.parse_create()
-                    }
-                },
+                Keyword::CREATE  => self.parse_create(),
                 Keyword::CACHE => self.parse_cache_table(),
                 Keyword::DROP => self.parse_drop(),
                 Keyword::DISCARD => self.parse_discard(),
@@ -674,25 +671,29 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_cypher_create(&mut self) -> Result<Statement, ParserError> {
-        let create_clause = self.parse_cypher_create_clause()?;
-        Ok(Desugarer::desugar_cypher_create(create_clause)?)
-    }
-
-    pub fn parse_cypher_query(&mut self) -> Result<CypherSingleQuery, ParserError> {
+    pub fn parse_cypher_statement(&mut self) -> Result<Statement, ParserError> {
         let single_part_query = self.parse_cypher_single_part_query()?;
-
-        Ok(CypherSingleQuery::Single(single_part_query))
+        Ok(Desugarer::desugar_cypher_query(single_part_query)?)
     }
 
     pub fn parse_cypher_single_part_query(&mut self) -> Result<SinglePartQuery, ParserError> {
-        let reading_clause = self.parse_cypher_match_clause()?;
-        let returning_clause = self.parse_cypher_return()?;
+        if self.peek_keywords(&[Keyword::CREATE]) {
+            let create_clause = self.parse_cypher_create_clause()?;
+            return Ok(SinglePartQuery::Updating(UpdatingQuery { create_clause }));
+        }
+        else if self.peek_keywords(&[Keyword::OPTIONAL, Keyword::MATCH]) || self.peek_keywords(&[Keyword::MATCH]) {
+            
+            let reading_clause = self.parse_cypher_match_clause()?;
+            let returning_clause = self.parse_cypher_return()?;
 
-        Ok(SinglePartQuery::Simple(SimpleSinglePartQuery {
-            reading_clause,
-            returning_clause,
-        }))
+            Ok(SinglePartQuery::Reading(ReadingQuery {
+                reading_clause,
+                returning_clause,
+            }))
+        }
+        else {
+            return Err(ParserError::ParserError("Expected either CREATE, OPTIONAL MATCH or MATCH".to_string()));
+        }
     }
 
     pub fn parse_cypher_where_clause(&mut self) -> Result<CypherWhereClause, ParserError> {

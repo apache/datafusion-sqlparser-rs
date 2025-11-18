@@ -6436,7 +6436,7 @@ impl<'a> Parser<'a> {
     /// This is used for PostgreSQL CREATE OPERATOR statements.
     ///
     /// Examples: `+`, `myschema.+`, `pg_catalog.<=`
-    pub fn parse_operator_name(&mut self) -> Result<ObjectName, ParserError> {
+    fn parse_operator_name(&mut self) -> Result<ObjectName, ParserError> {
         let mut parts = vec![];
         loop {
             parts.push(ObjectNamePart::Identifier(Ident::new(

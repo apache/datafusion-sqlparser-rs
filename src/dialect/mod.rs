@@ -603,10 +603,119 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Return true if the dialect supports specifying multiple options
+    /// Returns true if the dialect supports specifying multiple options
     /// in a `CREATE TABLE` statement for the structure of the new table. For example:
     /// `CREATE TABLE t (a INT, b INT) AS SELECT 1 AS b, 2 AS a`
     fn supports_create_table_multi_schema_info_sources(&self) -> bool {
+        false
+    }
+
+    /// Returns `true` if the dialect supports qualified column names
+    /// as part of a MERGE's INSERT's column list. Example:
+    ///
+    /// ```sql
+    /// MERGE INTO FOO
+    /// USING FOO_IMP
+    ///    ON (FOO.ID = FOO_IMP.ID)
+    ///  WHEN NOT MATCHED THEN
+    ///      -- no qualifier
+    ///      INSERT (ID, NAME)
+    ///      VALUES (FOO_IMP.ID, UPPER(FOO_IMP.NAME))
+    /// ```
+    /// vs.
+    /// ```sql
+    /// MERGE INTO FOO
+    /// USING FOO_IMP
+    ///    ON (FOO.ID = FOO_IMP.ID)
+    ///  WHEN NOT MATCHED THEN
+    ///      -- here: qualified
+    ///      INSERT (FOO.ID, FOO.NAME)
+    ///      VALUES (FOO_IMP.ID, UPPER(FOO_IMP.NAME))
+    /// ```
+    /// or
+    /// ```sql
+    /// MERGE INTO FOO X
+    /// USING FOO_IMP
+    ///    ON (X.ID = FOO_IMP.ID)
+    ///  WHEN NOT MATCHED THEN
+    ///      -- here: qualified using the alias
+    ///      INSERT (X.ID, X.NAME)
+    ///      VALUES (FOO_IMP.ID, UPPER(FOO_IMP.NAME))
+    /// ```
+    ///
+    /// Note: in the latter case, the qualifier must match the target table
+    /// name or its alias if one is present. The parser will enforce this.
+    ///
+    /// The default implementation always returns `false` not allowing the
+    /// qualifiers.
+    fn supports_merge_insert_qualified_columns(&self) -> bool {
+        false
+    }
+
+    /// Returns `true` if the dialect supports specify an INSERT predicate in
+    /// MERGE statements. Example:
+    ///
+    /// ```sql
+    /// MERGE INTO FOO
+    /// USING FOO_IMP
+    ///    ON (FOO.ID = FOO_IMP.ID)
+    ///  WHEN NOT MATCHED THEN
+    ///      INSERT (ID, NAME)
+    ///      VALUES (FOO_IMP.ID, UPPER(FOO_IMP.NAME))
+    ///       -- insert predicate
+    ///       WHERE NOT FOO_IMP.NAME like '%.IGNORE'
+    /// ```
+    ///
+    /// The default implementation always returns `false` indicating no
+    /// support for the additional predicate.
+    ///
+    /// See also [Dialect::supports_merge_update_predicate] and
+    /// [Dialect::supports_merge_update_delete_predicate].
+    fn supports_merge_insert_predicate(&self) -> bool {
+        false
+    }
+
+    /// Indicates the supports of UPDATE predicates in MERGE
+    /// statements. Example:
+    ///
+    /// ```sql
+    /// MERGE INTO FOO
+    /// USING FOO_IMPORT
+    ///    ON (FOO.ID = FOO_IMPORT.ID)
+    ///  WHEN MATCHED THEN
+    ///      UPDATE SET FOO.NAME = FOO_IMPORT.NAME
+    ///       -- update predicate
+    ///       WHERE FOO.NAME <> 'pete'
+    /// ```
+    ///
+    /// The default implementation always returns false indicating no support
+    /// for the additional predicate.
+    ///
+    /// See also [Dialect::supports_merge_insert_predicate] and
+    /// [Dialect::supports_merge_update_delete_predicate].
+    fn supports_merge_update_predicate(&self) -> bool {
+        false
+    }
+
+    /// Indicates the supports of UPDATE ... DELETEs and associated predicates
+    /// in MERGE statements. Example:
+    ///
+    /// ```sql
+    /// MERGE INTO FOO
+    /// USING FOO_IMPORT
+    ///    ON (FOO.ID = FOO_IMPORT.ID)
+    ///  WHEN MATCHED THEN
+    ///      UPDATE SET FOO.NAME = FOO_IMPORT.NAME
+    ///      -- update delete with predicate
+    ///      DELETE WHERE UPPER(FOO.NAME) == FOO.NAME
+    /// ```
+    ///
+    /// The default implementation always returns false indicating no support
+    /// for the `UPDATE ... DELETE` and its associated predicate.
+    ///
+    /// See also [Dialect::supports_merge_insert_predicate] and
+    /// [Dialect::supports_merge_update_predicate].
+    fn supports_merge_update_delete_predicate(&self) -> bool {
         false
     }
 

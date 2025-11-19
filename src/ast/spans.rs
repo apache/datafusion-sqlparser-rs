@@ -2422,8 +2422,13 @@ impl Spanned for MergeAction {
             MergeAction::Update {
                 update_token,
                 assignments,
+                update_predicate,
+                delete_predicate,
             } => union_spans(
-                core::iter::once(update_token.0.span).chain(assignments.iter().map(Spanned::span)),
+                core::iter::once(update_token.0.span)
+                    .chain(assignments.iter().map(Spanned::span))
+                    .chain(update_predicate.iter().map(Spanned::span))
+                    .chain(delete_predicate.iter().map(Spanned::span)),
             ),
             MergeAction::Delete { delete_token } => delete_token.0.span,
         }
@@ -2442,6 +2447,7 @@ impl Spanned for MergeInsertExpr {
                 },
             ]
             .into_iter()
+            .chain(self.insert_predicate.iter().map(Spanned::span))
             .chain(self.columns.iter().map(|i| i.span)),
         )
     }
@@ -2815,6 +2821,8 @@ WHERE id = 1
         if let MergeAction::Update {
             update_token,
             assignments: _,
+            update_predicate: _,
+            delete_predicate: _,
         } = &clauses[1].action
         {
             assert_eq!(
@@ -2934,5 +2942,45 @@ WHERE id = 1
         } else {
             panic!("not a MERGE statement");
         };
+    }
+
+    #[test]
+    fn test_merge_statement_spans_with_update_predicates() {
+        let sql = r#"
+       MERGE INTO a USING b ON a.id = b.id
+        WHEN MATCHED THEN
+              UPDATE set a.x = a.x + b.x
+               WHERE b.x != 2
+              DELETE WHERE a.x <> 3"#;
+
+        let r = Parser::parse_sql(&crate::dialect::GenericDialect, sql).unwrap();
+        assert_eq!(1, r.len());
+
+        // ~ assert the span of the whole statement
+        let stmt_span = r[0].span();
+        assert_eq!(
+            stmt_span,
+            Span::new(Location::new(2, 8), Location::new(6, 36))
+        );
+    }
+
+    #[test]
+    fn test_merge_statement_spans_with_insert_predicate() {
+        let sql = r#"
+       MERGE INTO a USING b ON a.id = b.id
+        WHEN NOT MATCHED THEN
+            INSERT VALUES (b.x, b.y) WHERE b.x != 2
+-- qed
+"#;
+
+        let r = Parser::parse_sql(&crate::dialect::GenericDialect, sql).unwrap();
+        assert_eq!(1, r.len());
+
+        // ~ assert the span of the whole statement
+        let stmt_span = r[0].span();
+        assert_eq!(
+            stmt_span,
+            Span::new(Location::new(2, 8), Location::new(4, 52))
+        );
     }
 }

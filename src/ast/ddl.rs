@@ -19,7 +19,13 @@
 //! (commonly referred to as Data Definition Language, or DDL)
 
 #[cfg(not(feature = "std"))]
-use alloc::{boxed::Box, format, string::String, vec::Vec};
+use alloc::{
+    boxed::Box,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 use core::fmt::{self, Display, Write};
 
 #[cfg(feature = "serde")]
@@ -3950,5 +3956,235 @@ impl fmt::Display for DropFunction {
 impl Spanned for DropFunction {
     fn span(&self) -> Span {
         Span::empty()
+    }
+}
+
+/// CREATE OPERATOR statement
+/// See <https://www.postgresql.org/docs/current/sql-createoperator.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateOperator {
+    /// Operator name (can be schema-qualified)
+    pub name: ObjectName,
+    /// FUNCTION or PROCEDURE parameter (function name)
+    pub function: ObjectName,
+    /// Whether PROCEDURE keyword was used (vs FUNCTION)
+    pub is_procedure: bool,
+    /// LEFTARG parameter (left operand type)
+    pub left_arg: Option<DataType>,
+    /// RIGHTARG parameter (right operand type)
+    pub right_arg: Option<DataType>,
+    /// COMMUTATOR parameter (commutator operator)
+    pub commutator: Option<ObjectName>,
+    /// NEGATOR parameter (negator operator)
+    pub negator: Option<ObjectName>,
+    /// RESTRICT parameter (restriction selectivity function)
+    pub restrict: Option<ObjectName>,
+    /// JOIN parameter (join selectivity function)
+    pub join: Option<ObjectName>,
+    /// HASHES flag
+    pub hashes: bool,
+    /// MERGES flag
+    pub merges: bool,
+}
+
+/// CREATE OPERATOR FAMILY statement
+/// See <https://www.postgresql.org/docs/current/sql-createopfamily.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateOperatorFamily {
+    /// Operator family name (can be schema-qualified)
+    pub name: ObjectName,
+    /// Index method (btree, hash, gist, gin, etc.)
+    pub using: Ident,
+}
+
+/// CREATE OPERATOR CLASS statement
+/// See <https://www.postgresql.org/docs/current/sql-createopclass.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateOperatorClass {
+    /// Operator class name (can be schema-qualified)
+    pub name: ObjectName,
+    /// Whether this is the default operator class for the type
+    pub default: bool,
+    /// The data type
+    pub for_type: DataType,
+    /// Index method (btree, hash, gist, gin, etc.)
+    pub using: Ident,
+    /// Optional operator family name
+    pub family: Option<ObjectName>,
+    /// List of operator class items (operators, functions, storage)
+    pub items: Vec<OperatorClassItem>,
+}
+
+impl fmt::Display for CreateOperator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CREATE OPERATOR {} (", self.name)?;
+
+        let function_keyword = if self.is_procedure {
+            "PROCEDURE"
+        } else {
+            "FUNCTION"
+        };
+        let mut params = vec![format!("{} = {}", function_keyword, self.function)];
+
+        if let Some(left_arg) = &self.left_arg {
+            params.push(format!("LEFTARG = {}", left_arg));
+        }
+        if let Some(right_arg) = &self.right_arg {
+            params.push(format!("RIGHTARG = {}", right_arg));
+        }
+        if let Some(commutator) = &self.commutator {
+            params.push(format!("COMMUTATOR = {}", commutator));
+        }
+        if let Some(negator) = &self.negator {
+            params.push(format!("NEGATOR = {}", negator));
+        }
+        if let Some(restrict) = &self.restrict {
+            params.push(format!("RESTRICT = {}", restrict));
+        }
+        if let Some(join) = &self.join {
+            params.push(format!("JOIN = {}", join));
+        }
+        if self.hashes {
+            params.push("HASHES".to_string());
+        }
+        if self.merges {
+            params.push("MERGES".to_string());
+        }
+
+        write!(f, "{}", params.join(", "))?;
+        write!(f, ")")
+    }
+}
+
+impl fmt::Display for CreateOperatorFamily {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CREATE OPERATOR FAMILY {} USING {}",
+            self.name, self.using
+        )
+    }
+}
+
+impl fmt::Display for CreateOperatorClass {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CREATE OPERATOR CLASS {}", self.name)?;
+        if self.default {
+            write!(f, " DEFAULT")?;
+        }
+        write!(f, " FOR TYPE {} USING {}", self.for_type, self.using)?;
+        if let Some(family) = &self.family {
+            write!(f, " FAMILY {}", family)?;
+        }
+        write!(f, " AS {}", display_comma_separated(&self.items))
+    }
+}
+
+/// Operator argument types for CREATE OPERATOR CLASS
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct OperatorArgTypes {
+    pub left: DataType,
+    pub right: DataType,
+}
+
+impl fmt::Display for OperatorArgTypes {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}, {}", self.left, self.right)
+    }
+}
+
+/// An item in a CREATE OPERATOR CLASS statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum OperatorClassItem {
+    /// OPERATOR clause
+    Operator {
+        strategy_number: u32,
+        operator_name: ObjectName,
+        /// Optional operator argument types
+        op_types: Option<OperatorArgTypes>,
+        /// FOR SEARCH or FOR ORDER BY
+        purpose: Option<OperatorPurpose>,
+    },
+    /// FUNCTION clause
+    Function {
+        support_number: u32,
+        /// Optional function argument types for the operator class
+        op_types: Option<Vec<DataType>>,
+        function_name: ObjectName,
+        /// Function argument types
+        argument_types: Vec<DataType>,
+    },
+    /// STORAGE clause
+    Storage { storage_type: DataType },
+}
+
+/// Purpose of an operator in an operator class
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum OperatorPurpose {
+    ForSearch,
+    ForOrderBy { sort_family: ObjectName },
+}
+
+impl fmt::Display for OperatorClassItem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            OperatorClassItem::Operator {
+                strategy_number,
+                operator_name,
+                op_types,
+                purpose,
+            } => {
+                write!(f, "OPERATOR {strategy_number} {operator_name}")?;
+                if let Some(types) = op_types {
+                    write!(f, " ({types})")?;
+                }
+                if let Some(purpose) = purpose {
+                    write!(f, " {purpose}")?;
+                }
+                Ok(())
+            }
+            OperatorClassItem::Function {
+                support_number,
+                op_types,
+                function_name,
+                argument_types,
+            } => {
+                write!(f, "FUNCTION {support_number}")?;
+                if let Some(types) = op_types {
+                    write!(f, " ({})", display_comma_separated(types))?;
+                }
+                write!(f, " {function_name}")?;
+                if !argument_types.is_empty() {
+                    write!(f, "({})", display_comma_separated(argument_types))?;
+                }
+                Ok(())
+            }
+            OperatorClassItem::Storage { storage_type } => {
+                write!(f, "STORAGE {storage_type}")
+            }
+        }
+    }
+}
+
+impl fmt::Display for OperatorPurpose {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            OperatorPurpose::ForSearch => write!(f, "FOR SEARCH"),
+            OperatorPurpose::ForOrderBy { sort_family } => {
+                write!(f, "FOR ORDER BY {sort_family}")
+            }
+        }
     }
 }

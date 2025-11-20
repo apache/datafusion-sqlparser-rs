@@ -260,8 +260,6 @@ pub enum ProjectionItem {
     Expr{ expr: Expr, alias: Option<Ident>},
 
     All,
-
-    AllFromNode{ node: Ident },
 }
 
 impl fmt::Display for NodePattern {

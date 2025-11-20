@@ -59,13 +59,16 @@ impl Desugarer {
         Ok(format!("{{{}}}", entries.join(", ")))
     }
 
-    /// Desugar Cypher property map into WHERE clause expression
-    fn desugar_properties_map(properties: Map) -> Result<Option<Expr>, ParserError>{
+    /// Desugar Cypher property map into WHERE clause expression with table alias
+    fn desugar_properties_map(properties: Map, table_alias: &Ident) -> Result<Option<Expr>, ParserError>{
 
         let mut entries: Vec<Expr> = Vec::new();
         for entry in &properties.entries {
             let key_expr = Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("properties"))),
+                left: Box::new(Expr::CompoundIdentifier(vec![
+                    table_alias.clone(),
+                    Ident::new("Properties"),
+                ])),
                 op: BinaryOperator::Arrow,
                 right: Box::new(Expr::Value(Value::SingleQuotedString(entry.key.to_string()).into())),
             };
@@ -95,11 +98,14 @@ impl Desugarer {
         Ok(Some(combined))
     }
 
-    fn desugar_filters(properties: Option<Expr>, initial: Option<&Ident>) -> Result<Option<Expr>, ParserError> {
+    fn desugar_filters(properties: Option<Expr>, initial: Option<&Ident>, table_alias: &Ident) -> Result<Option<Expr>, ParserError> {
         
         let label_expr = if let Some(label) = initial {
             Some(Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("Label"))),
+                left: Box::new(Expr::CompoundIdentifier(vec![
+                    table_alias.clone(),
+                    Ident::new("Label"),
+                ])),
                 op: BinaryOperator::Eq,
                 right: Box::new(Expr::Value(Value::SingleQuotedString(label.to_string()).into())),
             })
@@ -108,7 +114,7 @@ impl Desugarer {
         };
 
         if let Some(Expr::Map(map)) = properties {
-            let properties_expr = Self::desugar_properties_map(map.clone())?;
+            let properties_expr = Self::desugar_properties_map(map.clone(), table_alias)?;
 
             let combined_expr = match (label_expr, properties_expr) {
                 (Some(label), Some(props)) => {
@@ -129,19 +135,61 @@ impl Desugarer {
         }
     }
 
-    fn desugar_cypher_node_filter(node: NodePattern) -> Result<Option<Expr>, ParserError> {
+    fn desugar_cypher_node_filter(node: NodePattern, table_alias: &Ident) -> Result<Option<Expr>, ParserError> {
 
-        let filter = Self::desugar_filters(node.properties.clone(), node.labels.first().clone())?;
+        let filter = Self::desugar_filters(node.properties.clone(), node.labels.first(), table_alias)?;
         Ok(filter)
     }
 
-    fn desugar_cypher_relationship_filter(relationship: RelationshipPattern) -> Result<Option<Expr>, ParserError> {
+    fn desugar_cypher_relationship_filter(relationship: RelationshipPattern, table_alias: &Ident) -> Result<Option<Expr>, ParserError> {
 
-        let filter = Self::desugar_filters(relationship.details.properties.clone(), relationship.details.types.first())?;
         if relationship.details.length.is_some() {
             return Err(ParserError::ParserError("Relationship length is not supported for Desugaring".to_string()));
         }
+        let filter = Self::desugar_filters(relationship.details.properties.clone(), relationship.details.types.first(), table_alias)?;
         Ok(filter)
+    }
+
+    fn desugar_cypher_where(where_clause: CypherWhereClause) -> Result<Expr, ParserError> {
+
+        match where_clause.expr{
+            Expr::BinaryOp {left, op, right } => {
+                match op {
+                    BinaryOperator::And | BinaryOperator::Or => {
+                        let left_expr = Self::desugar_cypher_where(CypherWhereClause { expr: *left })?;
+                        let right_expr = Self::desugar_cypher_where(CypherWhereClause { expr: *right })?;
+                        return Ok(Expr::BinaryOp {
+                            left: Box::new(left_expr),
+                            op,
+                            right: Box::new(right_expr),
+                        });
+                    },
+                        _ => {},
+                }
+                match left.as_ref(){
+                    Expr::CompoundIdentifier(idents) => {
+                        if idents.len() !=2 {
+                            return Err(ParserError::ParserError("WHERE clause identifier not valid".to_string()));
+                        }
+                        let key_expr = Expr::BinaryOp {
+                            left: Box::new(Expr::CompoundIdentifier(vec![
+                                idents[0].clone(),
+                                Ident::new("Properties"),
+                            ])),
+                            op: BinaryOperator::Arrow,
+                            right: Box::new(Expr::Value(Value::SingleQuotedString(idents[1].to_string()).into())),
+                        };
+                        Ok(Expr::BinaryOp {
+                            left: Box::new(key_expr),
+                            op,
+                            right,
+                        })
+                    },
+                    _ => Err(ParserError::ParserError("WHERE clause left expression must be a property access".to_string())),
+                }
+            },
+            _ => Err(ParserError::ParserError("Only binary operations are supported in WHERE clause desugaring".to_string())),
+        }
     }
 
     // Desugar Cypher node pattern into INSERT INTO nodes statement for individual CTE statement
@@ -309,44 +357,72 @@ impl Desugarer {
         })
     }
 
-    fn desugar_cypher_pattern(pattern: Pattern) -> Result<Statement, ParserError> {
-
+    fn desugar_cypher_match_nodes_only(pattern: Pattern) -> Result<Select, ParserError> {
         let mut filters = Vec::new();
+        let mut first_table: Option<TableWithJoins> = None;
 
-        for pattern_part in &pattern.parts {
+        // Process each node pattern to build FROM clause and WHERE filters
+        for (idx, pattern_part) in pattern.parts.iter().enumerate() {
             match &pattern_part.anon_pattern_part {
                 PatternElement::Simple(simple_element) => {
+                    // Get the variable name or generate one
+                    let table_alias = if let Some(ref var) = simple_element.node.variable {
+                        var.clone()
+                    } else {
+                        return Err(ParserError::ParserError(
+                            "Node patterns in MATCH must have variables".to_string()
+                        ));
+                    };
 
-                    let node_filter = Self::desugar_cypher_node_filter(simple_element.node.clone())?;
+                    // Build the table factor
+                    let table_factor = TableFactor::Table {
+                        name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("nodes"))]),
+                        alias: Some(TableAlias {
+                            name: table_alias.clone(),
+                            columns: vec![],
+                        }),
+                        args: None,
+                        with_hints: vec![],
+                        version: None,
+                        with_ordinality: false,
+                        partitions: vec![],
+                        json_path: None,
+                        sample: None,
+                        index_hints: vec![],
+                    };
+
+                    // Build FROM clause with explicit CROSS JOINs
+                    if idx == 0 {
+                        // First table goes in FROM
+                        first_table = Some(TableWithJoins {
+                            relation: table_factor,
+                            joins: vec![],
+                        });
+                    } else {
+                        // Subsequent tables are CROSS JOINed
+                        if let Some(ref mut first) = first_table {
+                            first.joins.push(Join {
+                                relation: table_factor,
+                                global: false,
+                                join_operator: JoinOperator::CrossJoin(JoinConstraint::None),
+                            });
+                        }
+                    }
+
+                    let node_filter = Self::desugar_cypher_node_filter(simple_element.node.clone(), &table_alias.clone())?;
                     if let Some(combined_expr) = node_filter {
                         filters.push(combined_expr);
                     }
-
-                    for chain_elem in &simple_element.chain {
-                        let rel = &chain_elem.relationship;
-                        let chain_rel_filter = Self::desugar_cypher_relationship_filter(rel.clone())?;
-                        let chain_node_filter = Self::desugar_cypher_node_filter(chain_elem.node.clone())?;
-                        let rel_filter = match (chain_rel_filter, chain_node_filter) {
-                            (Some(rel_f), Some(node_f)) => {
-                                Some(Expr::BinaryOp {
-                                    left: Box::new(rel_f),
-                                    op: BinaryOperator::And,
-                                    right: Box::new(node_f),
-                                })
-                            }
-                            (Some(rel_f), None) => Some(rel_f),
-                            (None, Some(node_f)) => Some(node_f),
-                            (None, None) => None,
-                        };
-                        if let Some(combined_expr) = rel_filter {
-                            filters.push(combined_expr);
-                        }
-                    }
                 }
-                _ => {}
+                _ => {
+                    return Err(ParserError::ParserError(
+                        "Only simple node patterns are supported in MATCH clause".to_string()
+                    ));
+                }
             }
         }
 
+        // Combine all filters with AND
         let selection = if !filters.is_empty() {
             let mut combined = filters[0].clone();
             for expr in filters.iter().skip(1) {
@@ -361,15 +437,22 @@ impl Desugarer {
             None
         };
 
-        let body = Box::new(SetExpr::Select(Box::new(Select{
+        // Build the SELECT statement
+        let from_tables = if let Some(first) = first_table {
+            vec![first]
+        } else {
+            vec![]
+        };
+
+        Ok(Select {
             select_token: AttachedToken::empty(),
             distinct: None,
             top: None,
             top_before_distinct: false,
-            projection: vec![],
+            projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
             exclude: None,
             into: None,
-            from: vec![],
+            from: from_tables,
             lateral_views: vec![],
             prewhere: None,
             selection,
@@ -384,22 +467,9 @@ impl Desugarer {
             value_table_mode: None,
             connect_by: None,
             flavor: SelectFlavor::Standard,
-        })));
+        })
 
-        let query = Query {
-            with: None,
-            body,
-            order_by: None,
-            limit_clause: None,
-            for_clause: None,
-            settings: None,
-            format_clause: None,
-            pipe_operators: vec![],
-            fetch: None,
-            locks: vec![],
-        };
-
-        Ok(Statement::Query(Box::new(query)))
+        
     }
 
     /// Desugar simple node-only CREATE patterns into INSERT INTO nodes statement.
@@ -623,29 +693,86 @@ impl Desugarer {
         Ok(Statement::Query(Box::new(final_query)))
     }
 
-    // fn desugar_cypher_reading(reading_query: ReadingQuery) -> Result<Statement, ParserError> {
-    //     let mut current_query: Option<Box<Query>> = None;
+    fn desugar_cypher_return(returning_clause: ReturningClause, mut select: Select) -> Result<Select, ParserError> {
+        
+        let mut projections = Vec::new();
+        
+        let distinct = if returning_clause.body.distinct {
+            Some(Distinct::Distinct)
+        } else {
+            None
+        };
 
-    //     match reading_query.reading_clause {
-    //         CypherReadingClause::Match(match_clause) => {
-    //             let current_query = Self::desugar_cypher_match(match_clause)?;
-    //         },
-    //         // Handle other reading clauses like RETURN, WHERE, etc.
-    //         _ => {
-    //             return Err(ParserError::ParserError(
-    //                 "Desugaring for this Cypher reading clause is not yet implemented.".to_string()
-    //             ));
-    //         }
-    //     }
+        for item in returning_clause.body.projections {
+            match item {
+                ProjectionItem::Expr { expr, alias } => {
+                    if let Some(a) = alias {
+                        projections.push(SelectItem::ExprWithAlias {
+                            expr,
+                            alias: a,
+                        });
+                    } else {
+                        projections.push(SelectItem::UnnamedExpr(expr));
+                    }
+                },
+                ProjectionItem::All => {
+                    projections.push(SelectItem::Wildcard(WildcardAdditionalOptions::default()));
+                }
+            }
+        }
 
-    //     if let Some(query) = current_query {
-    //         Ok(Statement::Query(query))
-    //     } else {
-    //         Err(ParserError::ParserError(
-    //             "No valid Cypher reading clauses found to desugar.".to_string()
-    //         ))
-    //     }
-    // }
+        select.projection = projections;
+        select.distinct = distinct;
+
+        Ok(select)
+    }
+
+    fn desugar_cypher_reading(reading_query: CypherReadingClause) -> Result<Select, ParserError> {
+        match reading_query {
+            CypherReadingClause::Match(match_clause) => {
+                Ok(Self::desugar_cypher_match(match_clause)?)
+            },
+        }
+    }
+
+    // Desugar Cypher MATCH clause into SQL SELECT statement(s).
+    fn desugar_cypher_match(match_clause: CypherMatchClause) -> Result<Select, ParserError> {
+
+        if match_clause.optional {
+            return Err(ParserError::ParserError(
+                "Desugaring Cypher OPTIONAL MATCH clause is not supported.".to_string()
+            ));
+        }
+        else
+        {
+            // Determine if pattern contains relationships or just nodes
+            let has_relationships = match_clause.pattern.parts.iter()
+                .any(|p| matches!(&p.anon_pattern_part, PatternElement::Simple(s) if !s.chain.is_empty()));
+                
+            if has_relationships {
+                return Err(ParserError::ParserError(
+                    "Desugaring Cypher MATCH clauses with relationships is not yet implemented.".to_string()
+                ));
+            }
+            
+            let mut select = Self::desugar_cypher_match_nodes_only(match_clause.pattern)?;
+            
+            // Add WHERE clause if present
+            if let Some(where_clause) = match_clause.where_clause {
+                let where_expr = Self::desugar_cypher_where(where_clause)?;
+                select.selection = match select.selection {
+                    Some(existing) => Some(Expr::BinaryOp {
+                        left: Box::new(existing),
+                        op: BinaryOperator::And,
+                        right: Box::new(where_expr),
+                    }),
+                    None => Some(where_expr),
+                };
+            }
+
+            Ok(select)
+        }
+    }
 
     /// Desugar Cypher CREATE clause into SQL INSERT statement(s).
     fn desugar_cypher_create(create_clause: CypherCreateClause) -> Result<Statement, ParserError> {
@@ -661,27 +788,24 @@ impl Desugarer {
         }
     }
 
-    // Desugar Cypher MATCH clause into SQL SELECT statement(s).
-    // fn desugar_cypher_match(match_clause: CypherMatchClause) -> Result<Statement, ParserError> {
-
-    //     if match_clause.optional {
-    //         return Err(ParserError::ParserError(
-    //             "Desugaring Cypher OPTIONAL MATCH clause is not supported.".to_string()
-    //         ));
-    //     }
-    //     else
-    //     {
-    //         let pattern = self.desugar_cypher_pattern(match_clause.pattern)?;
-    //     }
-    // }
-
     pub fn desugar_cypher_query(query: SinglePartQuery) -> Result<Statement, ParserError> {
         match query {
             SinglePartQuery::Reading(reading_query) => {
-                //Self::desugar_cypher_reading(reading_query)
-                Err(ParserError::ParserError(
-                    "Desugaring for Cypher reading queries is not yet implemented.".to_string()
-                ))
+                let reading = Self::desugar_cypher_reading(reading_query.reading_clause)?;
+                let select = Self::desugar_cypher_return(reading_query.returning_clause, reading)?;
+
+                Ok(Statement::Query(Box::new(Query {
+                    with: None,
+                    body: Box::new(SetExpr::Select(Box::new(select))),
+                    order_by: None,
+                    limit_clause: None,
+                    for_clause: None,
+                    settings: None,
+                    format_clause: None,
+                    pipe_operators: vec![],
+                    fetch: None,
+                    locks: vec![],
+                })))
             },
             SinglePartQuery::Updating(updating_query) => {
                 Self::desugar_cypher_create(updating_query.create_clause)
@@ -694,10 +818,9 @@ impl Desugarer {
 mod tests {
     use super::*;
     use crate::ast::helpers::desugar_cypher::Desugarer;
-    use crate::parser::ParserError;
 
     #[test]
-    fn test_cypher_properties_to_string() -> Result<(), ParserError> {
+    fn test_cypher_properties_to_string(){
 
         let properties = Map {
             entries: vec![
@@ -712,11 +835,12 @@ mod tests {
             ],
         };
 
-        let desugared = Desugarer::desugar_properties_map(properties)?;
+        let dummy_alias = Ident::new("n");
+        let desugared = Desugarer::desugar_properties_map(properties, &dummy_alias).unwrap();
         let expected = Some(Expr::BinaryOp {
             left: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::BinaryOp {
-                    left: Box::new(Expr::Identifier(Ident::new("properties"))),
+                    left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties")])),
                     op: BinaryOperator::Arrow,
                     right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()).into())),
                 }),
@@ -726,7 +850,7 @@ mod tests {
             op: BinaryOperator::And,
             right: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::BinaryOp {
-                    left: Box::new(Expr::Identifier(Ident::new("properties"))),
+                    left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties")])),
                     op: BinaryOperator::Arrow,
                     right: Box::new(Expr::Value(Value::SingleQuotedString("age".to_string()).into())),
                 }),
@@ -735,13 +859,12 @@ mod tests {
             }),
         });
         assert_eq!(desugared, expected);
-        Ok(())
     }
 
     #[test]
-    fn test_desugar_cypher_node_pattern() -> Result<(), ParserError> {
+    fn test_desugar_cypher_node_pattern()  {
         let node_pattern = NodePattern {
-            variable: None,
+            variable: Some(Ident::new("n")),
             labels: vec![Ident::new("Person")],
             properties: Some(Expr::Map(Map {
                 entries: vec![
@@ -753,17 +876,18 @@ mod tests {
             })),
         };
 
-        let desugared = Desugarer::desugar_cypher_node_filter(node_pattern)?;
+        let alias = Ident::new("n");
+        let desugared = Desugarer::desugar_cypher_node_filter(node_pattern, &alias).unwrap();
         let expected = Some(Expr::BinaryOp {
             left: Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("Label"))),
+                left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Label")])),
                 op: BinaryOperator::Eq,
                 right: Box::new(Expr::Value(Value::SingleQuotedString("Person".to_string()).into())),
             }),
             op: BinaryOperator::And,
             right: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::BinaryOp {
-                    left: Box::new(Expr::Identifier(Ident::new("properties"))),
+                    left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties")])),
                     op: BinaryOperator::Arrow,
                     right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()).into())),
                 }),
@@ -772,7 +896,6 @@ mod tests {
             }),
         });
         assert_eq!(desugared, expected);
-        Ok(())
     }
 
     #[test]
@@ -795,17 +918,18 @@ mod tests {
             r_direction: Some(RelationshipDirection::Undirected),
         };
 
-        let desugared = Desugarer::desugar_cypher_relationship_filter(relationship_pattern).unwrap();
+        let alias = Ident::new("r");
+        let desugared = Desugarer::desugar_cypher_relationship_filter(relationship_pattern, &alias).unwrap();
         let expected = Some(Expr::BinaryOp {
             left: Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("Label"))),
+                left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("r"), Ident::new("Label")])),
                 op: BinaryOperator::Eq,
                 right: Box::new(Expr::Value(Value::SingleQuotedString("KNOWS".to_string()).into())),
             }),
             op: BinaryOperator::And,
             right: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::BinaryOp {
-                    left: Box::new(Expr::Identifier(Ident::new("properties"))),
+                    left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("r"), Ident::new("Properties")])),
                     op: BinaryOperator::Arrow,
                     right: Box::new(Expr::Value(Value::SingleQuotedString("since".to_string()).into())),
                 }),
@@ -817,14 +941,14 @@ mod tests {
     }
 
     #[test]
-    fn test_desugar_cypher_pattern(){
+    fn test_desguar_cypher_match_nodes_only() {
         let pattern = Pattern {
             parts: vec![
                 PatternPart {
                     variable: None,
                     anon_pattern_part: PatternElement::Simple(SimplePatternElement {
                         node: NodePattern {
-                            variable: None,
+                            variable: Some(Ident::new("a")),
                             labels: vec![Ident::new("Person")],
                             properties: Some(Expr::Map(Map {
                                 entries: vec![
@@ -838,33 +962,89 @@ mod tests {
                         chain: vec![],
                     }),
                 },
+                PatternPart {
+                    variable: None,
+                    anon_pattern_part: PatternElement::Simple(SimplePatternElement {
+                        node: NodePattern {
+                            variable: Some(Ident::new("b")),
+                            labels: vec![Ident::new("Person")],
+                            properties: Some(Expr::Map(Map {
+                                entries: vec![
+                                    MapEntry {
+                                        key: Box::new(Expr::Identifier(Ident::new("name"))),
+                                        value: Box::new(Expr::Value(Value::SingleQuotedString("Bob".to_string()).into())),
+                                    },
+                                ],
+                            })),
+                        },
+                        chain: vec![],
+                    }),
+                },
             ],
         };
 
-        let desugared = Desugarer::desugar_cypher_pattern(pattern).unwrap();
-        let expected = Statement::Query(Box::new(Query {
-            with: None,
-            body: Box::new(SetExpr::Select(Box::new(Select {
-                select_token: AttachedToken::empty(),
-                distinct: None,
-                top: None,
-                top_before_distinct: false,
-                projection: vec![],
-                exclude: None,
-                into: None,
-                from: vec![],
-                lateral_views: vec![],
-                prewhere: None,
-                selection: Some(Expr::BinaryOp {
+        let desugared = Desugarer::desugar_cypher_match_nodes_only(pattern).unwrap();
+        let expected = Select {
+            select_token: AttachedToken::empty(),
+            distinct: None,
+            top: None,
+            top_before_distinct: false,
+            projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
+            exclude: None,
+            into: None,
+            from: vec![
+                TableWithJoins {
+                    relation: TableFactor::Table {
+                        name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("nodes"))]),
+                        alias: Some(TableAlias {
+                            name: Ident::new("a"),
+                            columns: vec![],
+                        }),
+                        args: None,
+                        with_hints: vec![],
+                        version: None,
+                        with_ordinality: false,
+                        partitions: vec![],
+                        json_path: None,
+                        sample: None,
+                        index_hints: vec![],
+                    },
+                    joins: vec![
+                        Join {
+                            relation: TableFactor::Table {
+                                name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("nodes"))]),
+                                alias: Some(TableAlias {
+                                    name: Ident::new("b"),
+                                    columns: vec![],
+                                }),
+                                args: None,
+                                with_hints: vec![],
+                                version: None,
+                                with_ordinality: false,
+                                partitions: vec![],
+                                json_path: None,
+                                sample: None,
+                                index_hints: vec![],
+                            },
+                            global: false,
+                            join_operator: JoinOperator::CrossJoin(JoinConstraint::None),
+                        }
+                    ],
+                }
+            ],
+            lateral_views: vec![],
+            prewhere: None,
+            selection: Some(Expr::BinaryOp {
+                left: Box::new(Expr::BinaryOp {
                     left: Box::new(Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident::new("Label"))),
+                        left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("a"), Ident::new("Label")])),
                         op: BinaryOperator::Eq,
                         right: Box::new(Expr::Value(Value::SingleQuotedString("Person".to_string()).into())),
                     }),
                     op: BinaryOperator::And,
                     right: Box::new(Expr::BinaryOp {
                         left: Box::new(Expr::BinaryOp {
-                            left: Box::new(Expr::Identifier(Ident::new("properties"))),
+                            left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("a"), Ident::new("Properties")])),
                             op: BinaryOperator::Arrow,
                             right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()).into())),
                         }),
@@ -872,27 +1052,306 @@ mod tests {
                         right: Box::new(Expr::Value(Value::SingleQuotedString("Alice".to_string()).into())),
                     }),
                 }),
-                group_by: GroupByExpr::Expressions(vec![], vec![]),
-                cluster_by: vec![],
-                distribute_by: vec![],
-                sort_by: vec![],
-                having: None,
-                named_window: vec![],
-                window_before_qualify: false,
-                qualify: None,
-                value_table_mode: None,
-                connect_by: None,
-                flavor: SelectFlavor::Standard,
-            }))),
-            order_by: None,
-            limit_clause: None,
-            for_clause: None,
-            settings: None,
-            format_clause: None,
-            pipe_operators: vec![],
-            fetch: None,
-            locks: vec![],
-        }));
+                op: BinaryOperator::And,
+                right: Box::new(Expr::BinaryOp {
+                    left: Box::new(Expr::BinaryOp {
+                        left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("b"), Ident::new("Label")])),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Value(Value::SingleQuotedString("Person".to_string()).into())),
+                    }),
+                    op: BinaryOperator::And,
+                    right: Box::new(Expr::BinaryOp {
+                        left: Box::new(Expr::BinaryOp {
+                            left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("b"), Ident::new("Properties")])),
+                            op: BinaryOperator::Arrow,
+                            right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()).into())),
+                        }),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Value(Value::SingleQuotedString("Bob".to_string()).into())),
+                    }),
+                }),
+            }),
+            group_by: GroupByExpr::Expressions(vec![], vec![]),
+            cluster_by: vec![],
+            distribute_by: vec![],
+            sort_by: vec![],
+            having: None,
+            named_window: vec![],
+            window_before_qualify: false,
+            qualify: None,
+            value_table_mode: None,
+            connect_by: None,
+            flavor: SelectFlavor::Standard,
+        };
         assert_eq!(desugared, expected);
     }
+
+    #[test]
+    fn test_desugar_cypher_single_where() {
+        let where_clause = CypherWhereClause {
+            expr: Expr::BinaryOp {
+                left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("age")])),
+                op: BinaryOperator::Gt,
+                right: Box::new(Expr::Value(Value::Number("30".to_string(), false).into())),
+            },
+        };
+
+        let desugared = Desugarer::desugar_cypher_where(where_clause).unwrap();
+        let expected = Expr::BinaryOp {
+            left: Box::new(
+                Expr::BinaryOp {
+                    left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties"),])),
+                    op: BinaryOperator::Arrow,
+                    right: Box::new(Expr::Value(Value::SingleQuotedString("age".to_string()).into())),
+                }),
+            op: BinaryOperator::Gt,
+            right: Box::new(Expr::Value(Value::Number("30".to_string(), false).into())),
+        };
+        assert_eq!(desugared, expected);
+    }
+
+    #[test]
+    fn test_desugar_cypher_and_where(){
+        let where_clause = CypherWhereClause {
+            expr: Expr::BinaryOp {
+                left: Box::new(Expr::BinaryOp {
+                    left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("age")])),
+                    op: BinaryOperator::Gt,
+                    right: Box::new(Expr::Value(Value::Number("30".to_string(), false).into())),
+                }),
+                op: BinaryOperator::And,
+                right: Box::new(Expr::BinaryOp {
+                    left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("city")])),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::SingleQuotedString("London".to_string()).into())),
+                }),
+            },
+        };
+
+        let desugared = Desugarer::desugar_cypher_where(where_clause).unwrap();
+        let expected = Expr::BinaryOp {
+            left: Box::new(
+                Expr::BinaryOp {
+                    left: Box::new(Expr::BinaryOp {
+                        left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties"),])),
+                        op: BinaryOperator::Arrow,
+                        right: Box::new(Expr::Value(Value::SingleQuotedString("age".to_string()).into())),
+                    }),
+                    op: BinaryOperator::Gt,
+                    right: Box::new(Expr::Value(Value::Number("30".to_string(), false).into())),
+                }),
+            op: BinaryOperator::And,
+            right: Box::new(
+                Expr::BinaryOp {
+                    left: Box::new(Expr::BinaryOp {
+                        left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties"),])),
+                        op: BinaryOperator::Arrow,
+                        right: Box::new(Expr::Value(Value::SingleQuotedString("city".to_string()).into())),
+                    }),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::SingleQuotedString("London".to_string()).into())),
+                }),
+        };
+        assert_eq!(desugared, expected);
+    }
+
+    #[test]
+    fn test_desugar_cypher_or_where(){
+        let where_clause = CypherWhereClause {
+            expr: Expr::BinaryOp {
+                left: Box::new(Expr::BinaryOp {
+                    left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("age")])),
+                    op: BinaryOperator::Lt,
+                    right: Box::new(Expr::Value(Value::Number("25".to_string(), false).into())),
+                }),
+                op: BinaryOperator::Or,
+                right: Box::new(Expr::BinaryOp {
+                    left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("city")])),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::SingleQuotedString("New York".to_string()).into())),
+                }),
+            },
+        };
+
+        let desugared = Desugarer::desugar_cypher_where(where_clause).unwrap();
+        let expected = Expr::BinaryOp {
+            left: Box::new(
+                Expr::BinaryOp {
+                    left: Box::new(Expr::BinaryOp {
+                        left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties"),])),
+                        op: BinaryOperator::Arrow,
+                        right: Box::new(Expr::Value(Value::SingleQuotedString("age".to_string()).into())),
+                    }),
+                    op: BinaryOperator::Lt,
+                    right: Box::new(Expr::Value(Value::Number("25".to_string(), false).into())),
+                }),
+            op: BinaryOperator::Or,
+            right: Box::new(
+                Expr::BinaryOp {
+                    left: Box::new(Expr::BinaryOp {
+                        left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties"),])),
+                        op: BinaryOperator::Arrow,
+                        right: Box::new(Expr::Value(Value::SingleQuotedString("city".to_string()).into())),
+                    }),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::SingleQuotedString("New York".to_string()).into())),
+                }),
+        };
+        assert_eq!(desugared, expected);
+    }
+
+    #[test]
+    fn test_cypher_return(){
+        let returning_clause = ReturningClause {
+            body: ProjectionBody {
+                distinct: true,
+                projections: vec![
+                    ProjectionItem::Expr {
+                        expr: Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("name")]),
+                        alias: Some(Ident::new("person_name")),
+                    },
+                    ProjectionItem::All,
+                ],
+            },
+        };
+
+        let select = Select {
+            select_token: AttachedToken::empty(),
+            distinct: None,
+            top: None,
+            top_before_distinct: false,
+            projection: vec![],
+            exclude: None,
+            into: None,
+            from: vec![],
+            lateral_views: vec![],
+            prewhere: None,
+            selection: None,
+            group_by: GroupByExpr::Expressions(vec![], vec![]),
+            cluster_by: vec![],
+            distribute_by: vec![],
+            sort_by: vec![],
+            having: None,
+            named_window: vec![],
+            window_before_qualify: false,
+            qualify: None,
+            value_table_mode: None,
+            connect_by: None,
+            flavor: SelectFlavor::Standard,
+        };
+
+        let desugared = Desugarer::desugar_cypher_return(returning_clause, select).unwrap();
+        let expected = Select {
+            select_token: AttachedToken::empty(),
+            distinct: Some(Distinct::Distinct),
+            top: None,
+            top_before_distinct: false,
+            projection: vec![
+                SelectItem::ExprWithAlias {
+                    expr: Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("name")]),
+                    alias: Ident::new("person_name"),
+                },
+                SelectItem::Wildcard(WildcardAdditionalOptions::default()),
+            ],
+            exclude: None,
+            into: None,
+            from: vec![],
+            lateral_views: vec![],
+            prewhere: None,
+            selection: None,
+            group_by: GroupByExpr::Expressions(vec![], vec![]),
+            cluster_by: vec![],
+            distribute_by: vec![],
+            sort_by: vec![],
+            having: None,
+            named_window: vec![],
+            window_before_qualify: false,
+            qualify: None,
+            value_table_mode: None,
+            connect_by: None,
+            flavor: SelectFlavor::Standard,
+        };
+
+        assert_eq!(desugared, expected);
+    }
+
+    // #[test]
+    // fn test_desugar_cypher_pattern(){
+    //     let pattern = Pattern {
+    //         parts: vec![
+    //             PatternPart {
+    //                 variable: None,
+    //                 anon_pattern_part: PatternElement::Simple(SimplePatternElement {
+    //                     node: NodePattern {
+    //                         variable: None,
+    //                         labels: vec![Ident::new("Person")],
+    //                         properties: Some(Expr::Map(Map {
+    //                             entries: vec![
+    //                                 MapEntry {
+    //                                     key: Box::new(Expr::Identifier(Ident::new("name"))),
+    //                                     value: Box::new(Expr::Value(Value::SingleQuotedString("Alice".to_string()).into())),
+    //                                 },
+    //                             ],
+    //                         })),
+    //                     },
+    //                     chain: vec![],
+    //                 }),
+    //             },
+    //         ],
+    //     };
+
+    //     let desugared = Desugarer::desugar_cypher_pattern(pattern).unwrap();
+    //     let expected = Statement::Query(Box::new(Query {
+    //         with: None,
+    //         body: Box::new(SetExpr::Select(Box::new(Select {
+    //             select_token: AttachedToken::empty(),
+    //             distinct: None,
+    //             top: None,
+    //             top_before_distinct: false,
+    //             projection: vec![],
+    //             exclude: None,
+    //             into: None,
+    //             from: vec![],
+    //             lateral_views: vec![],
+    //             prewhere: None,
+    //             selection: Some(Expr::BinaryOp {
+    //                 left: Box::new(Expr::BinaryOp {
+    //                     left: Box::new(Expr::Identifier(Ident::new("Label"))),
+    //                     op: BinaryOperator::Eq,
+    //                     right: Box::new(Expr::Value(Value::SingleQuotedString("Person".to_string()).into())),
+    //                 }),
+    //                 op: BinaryOperator::And,
+    //                 right: Box::new(Expr::BinaryOp {
+    //                     left: Box::new(Expr::BinaryOp {
+    //                         left: Box::new(Expr::Identifier(Ident::new("properties"))),
+    //                         op: BinaryOperator::Arrow,
+    //                         right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()).into())),
+    //                     }),
+    //                     op: BinaryOperator::Eq,
+    //                     right: Box::new(Expr::Value(Value::SingleQuotedString("Alice".to_string()).into())),
+    //                 }),
+    //             }),
+    //             group_by: GroupByExpr::Expressions(vec![], vec![]),
+    //             cluster_by: vec![],
+    //             distribute_by: vec![],
+    //             sort_by: vec![],
+    //             having: None,
+    //             named_window: vec![],
+    //             window_before_qualify: false,
+    //             qualify: None,
+    //             value_table_mode: None,
+    //             connect_by: None,
+    //             flavor: SelectFlavor::Standard,
+    //         }))),
+    //         order_by: None,
+    //         limit_clause: None,
+    //         for_clause: None,
+    //         settings: None,
+    //         format_clause: None,
+    //         pipe_operators: vec![],
+    //         fetch: None,
+    //         locks: vec![],
+    //     }));
+    //     assert_eq!(desugared, expected);
+    // }
 }

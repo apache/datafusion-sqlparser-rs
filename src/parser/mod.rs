@@ -17239,10 +17239,12 @@ impl<'a> Parser<'a> {
                         clause_kind,
                         MergeClauseKind::NotMatched | MergeClauseKind::NotMatchedByTarget
                     ) {
-                        return Err(ParserError::ParserError(format!(
-                            "UPDATE is not allowed in a {clause_kind} merge clause"
-                        )));
+                        return parser_err!(
+                            format_args!("UPDATE is not allowed in a {clause_kind} merge clause"),
+                            self.get_current_token().span.start
+                        );
                     }
+
                     let update_token = self.get_current_token().clone();
                     self.expect_keyword_is(Keyword::SET)?;
                     MergeAction::Update {
@@ -17255,10 +17257,12 @@ impl<'a> Parser<'a> {
                         clause_kind,
                         MergeClauseKind::NotMatched | MergeClauseKind::NotMatchedByTarget
                     ) {
-                        return Err(ParserError::ParserError(format!(
-                            "DELETE is not allowed in a {clause_kind} merge clause"
-                        )));
-                    }
+                        return parser_err!(
+                            format_args!("DELETE is not allowed in a {clause_kind} merge clause"),
+                            self.get_current_token().span.start
+                        );
+                    };
+
                     let delete_token = self.get_current_token().clone();
                     MergeAction::Delete {
                         delete_token: delete_token.into(),
@@ -17269,10 +17273,12 @@ impl<'a> Parser<'a> {
                         clause_kind,
                         MergeClauseKind::NotMatched | MergeClauseKind::NotMatchedByTarget
                     ) {
-                        return Err(ParserError::ParserError(format!(
-                            "INSERT is not allowed in a {clause_kind} merge clause"
-                        )));
-                    }
+                        return parser_err!(
+                            format_args!("INSERT is not allowed in a {clause_kind} merge clause"),
+                            self.get_current_token().span.start
+                        );
+                    };
+
                     let insert_token = self.get_current_token().clone();
                     let is_mysql = dialect_of!(self is MySqlDialect);
 
@@ -17295,9 +17301,10 @@ impl<'a> Parser<'a> {
                     })
                 }
                 _ => {
-                    return Err(ParserError::ParserError(
-                        "expected UPDATE, DELETE or INSERT in merge clause".to_string(),
-                    ));
+                    return parser_err!(
+                        "expected UPDATE, DELETE or INSERT in merge clause",
+                        self.peek_token_ref().span.start
+                    );
                 }
             };
             clauses.push(MergeClause {

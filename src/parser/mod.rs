@@ -6767,9 +6767,11 @@ impl<'a> Parser<'a> {
             return self.parse_drop_trigger();
         } else if self.parse_keyword(Keyword::EXTENSION) {
             return self.parse_drop_extension();
+        } else if self.parse_keyword(Keyword::OPERATOR) {
+            return self.parse_drop_operator();
         } else {
             return self.expected(
-                "CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW or USER after DROP",
+                "CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW or USER after DROP",
                 self.peek_token(),
             );
         };
@@ -7523,6 +7525,51 @@ impl<'a> Parser<'a> {
                 })
                 .transpose()?,
         }))
+    }
+
+    /// Parse a PostgreSQL-specific [Statement::DropOperator] statement.
+    ///
+    /// ```sql
+    /// DROP OPERATOR [ IF EXISTS ] name ( { left_type | NONE } , right_type ) [, ...] [ CASCADE | RESTRICT ]
+    /// ```
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-dropoperator.html)
+    pub fn parse_drop_operator(&mut self) -> Result<Statement, ParserError> {
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let operators = self.parse_comma_separated(|p| p.parse_operator_signature())?;
+        let drop_behavior = self.parse_optional_drop_behavior();
+        Ok(Statement::DropOperator(DropOperator {
+            if_exists,
+            operators,
+            drop_behavior,
+        }))
+    }
+
+    /// Parse an operator signature for DROP OPERATOR
+    /// Format: name ( { left_type | NONE } , right_type )
+    fn parse_operator_signature(&mut self) -> Result<OperatorSignature, ParserError> {
+        let name = self.parse_operator_name()?;
+        self.expect_token(&Token::LParen)?;
+
+        // Parse left operand type (or NONE for prefix operators)
+        let left_type = if self.parse_keyword(Keyword::NONE) {
+            None
+        } else {
+            Some(self.parse_data_type()?)
+        };
+
+        self.expect_token(&Token::Comma)?;
+
+        // Parse right operand type (always required)
+        let right_type = self.parse_data_type()?;
+
+        self.expect_token(&Token::RParen)?;
+
+        Ok(OperatorSignature {
+            name,
+            left_type,
+            right_type,
+        })
     }
 
     //TODO: Implement parsing for Skewed

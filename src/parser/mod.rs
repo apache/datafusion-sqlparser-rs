@@ -12294,7 +12294,7 @@ impl<'a> Parser<'a> {
             Some(With {
                 with_token: with_token.clone().into(),
                 recursive: self.parse_keyword(Keyword::RECURSIVE),
-                cte_tables: self.parse_comma_separated(Parser::parse_cte)?,
+                cte_tables: self.parse_comma_separated(Parser::parse_with_expression)?,
             })
         } else {
             None
@@ -12753,7 +12753,28 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse a CTE (`alias [( col1, col2, ... )] AS (subquery)`)
+    /// Parse the expression in a `WITH` clause.
+    pub fn parse_with_expression(&mut self) -> Result<WithExpression, ParserError> {
+        Ok(if self.dialect.supports_common_scalar_expressions() {
+            if let Some(cse) = self.maybe_parse(|parser| parser.parse_cse())? {
+                WithExpression::Cse(cse)
+            } else {
+                WithExpression::Cte(self.parse_cte()?)
+            }
+        } else {
+            WithExpression::Cte(self.parse_cte()?)
+        })
+    }
+
+    /// Parse a [`Cse`] in a `WITH` clause.
+    pub fn parse_cse(&mut self) -> Result<Cse, ParserError> {
+        let expr = self.parse_expr()?;
+        self.expect_keyword_is(Keyword::AS)?;
+        let ident = self.parse_identifier()?;
+        Ok(Cse { expr, ident })
+    }
+
+    /// Parse a [`Cte`] in a `WITH` clause.
     pub fn parse_cte(&mut self) -> Result<Cte, ParserError> {
         let name = self.parse_identifier()?;
 

@@ -1014,7 +1014,107 @@ fn parse_cypher_create_with_relationship(){
 }
 
 #[test]
-fn parse_cypher_match(){
+fn parse_cypher_single_node_match(){
+    let cypher = "Match (a:Person) RETURN a.name AS personName";
+    let dialect = CypherDialect {};
+
+    match Parser::parse_sql(&dialect, cypher) {
+        Ok(ast) => {
+            // Convert each statement back to a string
+            let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
+
+            let expected_sql = "SELECT a.Properties ->> 'name' AS personName \
+                FROM nodes AS a \
+                WHERE a.Label = 'Person'";
+            assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
+        }
+        _ => panic!("Parsing failed"),
+    };
+}
+
+#[test]
+fn parse_cypher_node_match_with_where(){
+    let cypher = "Match (a:Person) WHERE a.age > 30 RETURN a.name AS personName";
+    let dialect = CypherDialect {};
+
+    match Parser::parse_sql(&dialect, cypher) {
+        Ok(ast) => {
+            // Convert each statement back to a string
+            let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
+
+            let expected_sql = "SELECT a.Properties ->> 'name' AS personName \
+                FROM nodes AS a \
+                WHERE a.Label = 'Person' \
+                AND (a.Properties ->> 'age')::INT > 30";
+            assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
+        }
+        _ => panic!("Parsing failed"),
+    };
+}
+
+#[test]
+fn parse_cypher_node_match_with_where_and_distinct(){
+    let cypher = "Match (a:Person) WHERE a.age > 30 RETURN DISTINCT a.name AS personName";
+    let dialect = CypherDialect {};
+
+    match Parser::parse_sql(&dialect, cypher) {
+        Ok(ast) => {
+            // Convert each statement back to a string
+            let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
+
+            let expected_sql = "SELECT DISTINCT a.Properties ->> 'name' AS personName \
+                FROM nodes AS a \
+                WHERE a.Label = 'Person' \
+                AND (a.Properties ->> 'age')::INT > 30";
+            assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
+        }
+        _ => panic!("Parsing failed"),
+    };
+}
+
+#[test]
+fn parse_cypher_node_match_with_aliasing(){
+    let cypher = "Match (p:Person) RETURN p.name AS personName, p.age AS personAge";
+    let dialect = CypherDialect {};
+
+    match Parser::parse_sql(&dialect, cypher) {
+        Ok(ast) => {
+            // Convert each statement back to a string
+            let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
+
+            let expected_sql = "SELECT p.Properties ->> 'name' AS personName, \
+                p.Properties ->> 'age' AS personAge \
+                FROM nodes AS p \
+                WHERE p.Label = 'Person'";
+            assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
+        }
+        _ => panic!("Parsing failed"),
+    };
+}
+
+#[test]
+fn parse_cypher_node_match_with_properties(){
+    let cypher = "Match (a:Person {name: 'Alice', age: 30}) RETURN a.name AS personName";
+    let dialect = CypherDialect {};
+
+    match Parser::parse_sql(&dialect, cypher) {
+        Ok(ast) => {
+            // Convert each statement back to a string
+            let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
+
+            let expected_sql = "SELECT a.Properties ->> 'name' AS personName \
+                FROM nodes AS a \
+                WHERE a.Label = 'Person' \
+                AND a.Properties ->> 'name' = 'Alice' \
+                AND (a.Properties ->> 'age')::INT = 30";
+            assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
+        }
+        _ => panic!("Parsing failed"),
+    };
+}
+
+#[test]
+fn parse_cypher_multiple_node_match(){
     let cypher = "Match (a:Person),(b:Person) RETURN a.name AS personName, b.name AS friendName";
     let dialect = CypherDialect {};
 

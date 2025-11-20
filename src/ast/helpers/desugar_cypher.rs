@@ -73,8 +73,30 @@ impl Desugarer {
                 right: Box::new(Expr::Value(Value::SingleQuotedString(entry.key.to_string()).into())),
             };
 
+            // Apply type casting for numeric values
+            let left_expr = if let Expr::Value(v) = entry.value.as_ref() {
+                if let Value::Number(num_str, _) = &v.value {
+                    let cast_type = if num_str.contains('.') {
+                        DataType::Float(ExactNumberInfo::None)
+                    } else {
+                        DataType::Int(None)
+                    };
+                    
+                    Box::new(Expr::Cast {
+                        kind: CastKind::DoubleColon,
+                        expr: Box::new(Expr::Nested(Box::new(key_expr))),
+                        data_type: cast_type,
+                        format: None,
+                    })
+                } else {
+                    Box::new(key_expr)
+                }
+            } else {
+                Err(ParserError::ParserError("Unsupported value type for property desugaring".to_string()))?
+            };
+            
             let value_expr = Expr::BinaryOp {
-                left: Box::new(key_expr),
+                left: left_expr,
                 op: BinaryOperator::Eq,
                 right: entry.value.clone(),
             };
@@ -171,7 +193,14 @@ impl Desugarer {
                         if idents.len() !=2 {
                             return Err(ParserError::ParserError("WHERE clause identifier not valid".to_string()));
                         }
-                        let key_expr = Expr::BinaryOp {
+                        
+                        // Determine if we need type casting based on the right operand
+                        let needs_cast = match right.as_ref() {
+                            Expr::Value(v) => matches!(v.value, Value::Number(_, _)),
+                            _ => false,
+                        };
+                        
+                        let mut key_expr = Expr::BinaryOp {
                             left: Box::new(Expr::CompoundIdentifier(vec![
                                 idents[0].clone(),
                                 Ident::new("Properties"),
@@ -179,6 +208,27 @@ impl Desugarer {
                             op: BinaryOperator::LongArrow,
                             right: Box::new(Expr::Value(Value::SingleQuotedString(idents[1].to_string()).into())),
                         };
+                        
+                        // Add type casting if comparing with a number
+                        if needs_cast {
+                            if let Expr::Value(v) = right.as_ref() {
+                                if let Value::Number(num_str, _) = &v.value {
+                                    let cast_type = if num_str.contains('.') {
+                                        DataType::Float(ExactNumberInfo::None)
+                                    } else {
+                                        DataType::Int(None)
+                                    };
+                                    
+                                    key_expr = Expr::Cast {
+                                        kind: CastKind::DoubleColon,
+                                        expr: Box::new(Expr::Nested(Box::new(key_expr))),
+                                        data_type: cast_type,
+                                        format: None,
+                                    };
+                                }
+                            }
+                        }
+                        
                         Ok(Expr::BinaryOp {
                             left: Box::new(key_expr),
                             op,
@@ -877,10 +927,17 @@ mod tests {
             }),
             op: BinaryOperator::And,
             right: Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::BinaryOp {
-                    left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties")])),
-                    op: BinaryOperator::LongArrow,
-                    right: Box::new(Expr::Value(Value::SingleQuotedString("age".to_string()).into())),
+                left: Box::new(Expr::Cast {
+                    kind: CastKind::DoubleColon,
+                    expr: Box::new(Expr::Nested(Box::new(
+                        Expr::BinaryOp {
+                            left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties")])),
+                            op: BinaryOperator::LongArrow,
+                            right: Box::new(Expr::Value(Value::SingleQuotedString("age".to_string()).into())),
+                        }
+                    ))),
+                    data_type: DataType::Int(None),
+                    format: None,
                 }),
                 op: BinaryOperator::Eq,
                 right: Box::new(Expr::Value(Value::Number("30".to_string(), false).into())),
@@ -956,10 +1013,17 @@ mod tests {
             }),
             op: BinaryOperator::And,
             right: Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::BinaryOp {
-                    left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("r"), Ident::new("Properties")])),
-                    op: BinaryOperator::LongArrow,
-                    right: Box::new(Expr::Value(Value::SingleQuotedString("since".to_string()).into())),
+                left: Box::new(Expr::Cast {
+                    kind: CastKind::DoubleColon,
+                    expr: Box::new(Expr::Nested(Box::new(
+                        Expr::BinaryOp {
+                            left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("r"), Ident::new("Properties")])),
+                            op: BinaryOperator::LongArrow,
+                            right: Box::new(Expr::Value(Value::SingleQuotedString("since".to_string()).into())),
+                        }
+                    ))),
+                    data_type: DataType::Int(None),
+                    format: None,
                 }),
                 op: BinaryOperator::Eq,
                 right: Box::new(Expr::Value(Value::Number("2020".to_string(), false).into())),
@@ -1127,10 +1191,17 @@ mod tests {
         let desugared = Desugarer::desugar_cypher_where(where_clause).unwrap();
         let expected = Expr::BinaryOp {
             left: Box::new(
-                Expr::BinaryOp {
-                    left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties"),])),
-                    op: BinaryOperator::LongArrow,
-                    right: Box::new(Expr::Value(Value::SingleQuotedString("age".to_string()).into())),
+                Expr::Cast {
+                    kind: CastKind::DoubleColon,
+                    expr: Box::new(Expr::Nested(Box::new(
+                        Expr::BinaryOp {
+                            left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties"),])),
+                            op: BinaryOperator::LongArrow,
+                            right: Box::new(Expr::Value(Value::SingleQuotedString("age".to_string()).into())),
+                        }
+                    ))),
+                    data_type: DataType::Int(None),
+                    format: None,
                 }),
             op: BinaryOperator::Gt,
             right: Box::new(Expr::Value(Value::Number("30".to_string(), false).into())),
@@ -1160,11 +1231,20 @@ mod tests {
         let expected = Expr::BinaryOp {
             left: Box::new(
                 Expr::BinaryOp {
-                    left: Box::new(Expr::BinaryOp {
-                        left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties"),])),
-                        op: BinaryOperator::LongArrow,
-                        right: Box::new(Expr::Value(Value::SingleQuotedString("age".to_string()).into())),
-                    }),
+                    left: Box::new(
+                        Expr::Cast {
+                            kind: CastKind::DoubleColon,
+                            expr: Box::new(Expr::Nested(Box::new(
+                                Expr::BinaryOp {
+                                    left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties"),])),
+                                    op: BinaryOperator::LongArrow,
+                                    right: Box::new(Expr::Value(Value::SingleQuotedString("age".to_string()).into())),
+                                }
+                            ))),
+                            data_type: DataType::Int(None),
+                            format: None,
+                        }
+                    ),
                     op: BinaryOperator::Gt,
                     right: Box::new(Expr::Value(Value::Number("30".to_string(), false).into())),
                 }),
@@ -1205,11 +1285,20 @@ mod tests {
         let expected = Expr::BinaryOp {
             left: Box::new(
                 Expr::BinaryOp {
-                    left: Box::new(Expr::BinaryOp {
-                        left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties"),])),
-                        op: BinaryOperator::LongArrow,
-                        right: Box::new(Expr::Value(Value::SingleQuotedString("age".to_string()).into())),
-                    }),
+                    left: Box::new(
+                        Expr::Cast {
+                            kind: CastKind::DoubleColon,
+                            expr: Box::new(Expr::Nested(Box::new(
+                                Expr::BinaryOp {
+                                    left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties"),])),
+                                    op: BinaryOperator::LongArrow,
+                                    right: Box::new(Expr::Value(Value::SingleQuotedString("age".to_string()).into())),
+                                }
+                            ))),
+                            data_type: DataType::Int(None),
+                            format: None,
+                        }
+                    ),
                     op: BinaryOperator::Lt,
                     right: Box::new(Expr::Value(Value::Number("25".to_string(), false).into())),
                 }),

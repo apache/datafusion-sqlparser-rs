@@ -707,12 +707,40 @@ impl Desugarer {
             match item {
                 ProjectionItem::Expr { expr, alias } => {
                     if let Some(a) = alias {
-                        projections.push(SelectItem::ExprWithAlias {
-                            expr,
-                            alias: a,
-                        });
+                        match expr {
+                            Expr::CompoundIdentifier(idents) if idents.len() == 2 => {
+                                let key_expr = Expr::BinaryOp {
+                                    left: Box::new(Expr::CompoundIdentifier(vec![
+                                        idents[0].clone(),
+                                        Ident::new("Properties"),
+                                    ])),
+                                    op: BinaryOperator::Arrow,
+                                    right: Box::new(Expr::Value(Value::SingleQuotedString(idents[1].to_string()).into())),
+                                };
+                                projections.push(SelectItem::ExprWithAlias {
+                                    expr: key_expr,
+                                    alias: a,
+                                });
+                                continue;
+                            },
+                            _ => return Err(ParserError::ParserError("RETURN aliasing is only supported for property access expressions.".to_string())),                            
+                        }
                     } else {
-                        projections.push(SelectItem::UnnamedExpr(expr));
+                        match expr {
+                            Expr::CompoundIdentifier(idents) if idents.len() == 2 => {
+                                let key_expr = Expr::BinaryOp {
+                                    left: Box::new(Expr::CompoundIdentifier(vec![
+                                        idents[0].clone(),
+                                        Ident::new("Properties"),
+                                    ])),
+                                    op: BinaryOperator::Arrow,
+                                    right: Box::new(Expr::Value(Value::SingleQuotedString(idents[1].to_string()).into())),
+                                };
+                                projections.push(SelectItem::UnnamedExpr(key_expr));
+                                continue;
+                            },
+                            _ => return Err(ParserError::ParserError("RETURN aliasing is only supported for property access expressions.".to_string())),                            
+                        }
                     }
                 },
                 ProjectionItem::All => {
@@ -1248,7 +1276,14 @@ mod tests {
             top_before_distinct: false,
             projection: vec![
                 SelectItem::ExprWithAlias {
-                    expr: Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("name")]),
+                    expr: Expr::BinaryOp {
+                        left: Box::new(Expr::CompoundIdentifier(vec![
+                            Ident::new("n"),
+                            Ident::new("Properties"),
+                        ])),
+                        op: BinaryOperator::Arrow,
+                        right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()).into())),
+                    },
                     alias: Ident::new("person_name"),
                 },
                 SelectItem::Wildcard(WildcardAdditionalOptions::default()),
@@ -1274,84 +1309,4 @@ mod tests {
 
         assert_eq!(desugared, expected);
     }
-
-    // #[test]
-    // fn test_desugar_cypher_pattern(){
-    //     let pattern = Pattern {
-    //         parts: vec![
-    //             PatternPart {
-    //                 variable: None,
-    //                 anon_pattern_part: PatternElement::Simple(SimplePatternElement {
-    //                     node: NodePattern {
-    //                         variable: None,
-    //                         labels: vec![Ident::new("Person")],
-    //                         properties: Some(Expr::Map(Map {
-    //                             entries: vec![
-    //                                 MapEntry {
-    //                                     key: Box::new(Expr::Identifier(Ident::new("name"))),
-    //                                     value: Box::new(Expr::Value(Value::SingleQuotedString("Alice".to_string()).into())),
-    //                                 },
-    //                             ],
-    //                         })),
-    //                     },
-    //                     chain: vec![],
-    //                 }),
-    //             },
-    //         ],
-    //     };
-
-    //     let desugared = Desugarer::desugar_cypher_pattern(pattern).unwrap();
-    //     let expected = Statement::Query(Box::new(Query {
-    //         with: None,
-    //         body: Box::new(SetExpr::Select(Box::new(Select {
-    //             select_token: AttachedToken::empty(),
-    //             distinct: None,
-    //             top: None,
-    //             top_before_distinct: false,
-    //             projection: vec![],
-    //             exclude: None,
-    //             into: None,
-    //             from: vec![],
-    //             lateral_views: vec![],
-    //             prewhere: None,
-    //             selection: Some(Expr::BinaryOp {
-    //                 left: Box::new(Expr::BinaryOp {
-    //                     left: Box::new(Expr::Identifier(Ident::new("Label"))),
-    //                     op: BinaryOperator::Eq,
-    //                     right: Box::new(Expr::Value(Value::SingleQuotedString("Person".to_string()).into())),
-    //                 }),
-    //                 op: BinaryOperator::And,
-    //                 right: Box::new(Expr::BinaryOp {
-    //                     left: Box::new(Expr::BinaryOp {
-    //                         left: Box::new(Expr::Identifier(Ident::new("properties"))),
-    //                         op: BinaryOperator::Arrow,
-    //                         right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()).into())),
-    //                     }),
-    //                     op: BinaryOperator::Eq,
-    //                     right: Box::new(Expr::Value(Value::SingleQuotedString("Alice".to_string()).into())),
-    //                 }),
-    //             }),
-    //             group_by: GroupByExpr::Expressions(vec![], vec![]),
-    //             cluster_by: vec![],
-    //             distribute_by: vec![],
-    //             sort_by: vec![],
-    //             having: None,
-    //             named_window: vec![],
-    //             window_before_qualify: false,
-    //             qualify: None,
-    //             value_table_mode: None,
-    //             connect_by: None,
-    //             flavor: SelectFlavor::Standard,
-    //         }))),
-    //         order_by: None,
-    //         limit_clause: None,
-    //         for_clause: None,
-    //         settings: None,
-    //         format_clause: None,
-    //         pipe_operators: vec![],
-    //         fetch: None,
-    //         locks: vec![],
-    //     }));
-    //     assert_eq!(desugared, expected);
-    // }
 }

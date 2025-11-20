@@ -1012,3 +1012,25 @@ fn parse_cypher_create_with_relationship(){
         _ => panic!("Parsing failed"),
     };
 }
+
+#[test]
+fn parse_cypher_match(){
+    let cypher = "Match (a:Person),(b:Person) RETURN a.name AS personName, b.name AS friendName";
+    let dialect = CypherDialect {};
+
+    match Parser::parse_sql(&dialect, cypher) {
+        Ok(ast) => {
+            // Convert each statement back to a string
+            let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
+
+            let expected_sql = "SELECT a.Properties -> 'name' AS personName, \
+                b.Properties -> 'name' AS friendName \
+                FROM nodes AS a \
+                CROSS JOIN nodes AS b \
+                WHERE a.Label = 'Person' \
+                AND b.Label = 'Person'";
+            assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
+        }
+        _ => panic!("Parsing failed"),
+    };
+}

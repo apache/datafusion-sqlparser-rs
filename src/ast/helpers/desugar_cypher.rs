@@ -69,7 +69,7 @@ impl Desugarer {
                     table_alias.clone(),
                     Ident::new("Properties"),
                 ])),
-                op: BinaryOperator::Arrow,
+                op: BinaryOperator::LongArrow,
                 right: Box::new(Expr::Value(Value::SingleQuotedString(entry.key.to_string()).into())),
             };
 
@@ -176,7 +176,7 @@ impl Desugarer {
                                 idents[0].clone(),
                                 Ident::new("Properties"),
                             ])),
-                            op: BinaryOperator::Arrow,
+                            op: BinaryOperator::LongArrow,
                             right: Box::new(Expr::Value(Value::SingleQuotedString(idents[1].to_string()).into())),
                         };
                         Ok(Expr::BinaryOp {
@@ -714,7 +714,7 @@ impl Desugarer {
                                         idents[0].clone(),
                                         Ident::new("Properties"),
                                     ])),
-                                    op: BinaryOperator::Arrow,
+                                    op: BinaryOperator::LongArrow,
                                     right: Box::new(Expr::Value(Value::SingleQuotedString(idents[1].to_string()).into())),
                                 };
                                 projections.push(SelectItem::ExprWithAlias {
@@ -733,7 +733,7 @@ impl Desugarer {
                                         idents[0].clone(),
                                         Ident::new("Properties"),
                                     ])),
-                                    op: BinaryOperator::Arrow,
+                                    op: BinaryOperator::LongArrow,
                                     right: Box::new(Expr::Value(Value::SingleQuotedString(idents[1].to_string()).into())),
                                 };
                                 projections.push(SelectItem::UnnamedExpr(key_expr));
@@ -869,7 +869,7 @@ mod tests {
             left: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::BinaryOp {
                     left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties")])),
-                    op: BinaryOperator::Arrow,
+                    op: BinaryOperator::LongArrow,
                     right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()).into())),
                 }),
                 op: BinaryOperator::Eq,
@@ -879,7 +879,7 @@ mod tests {
             right: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::BinaryOp {
                     left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties")])),
-                    op: BinaryOperator::Arrow,
+                    op: BinaryOperator::LongArrow,
                     right: Box::new(Expr::Value(Value::SingleQuotedString("age".to_string()).into())),
                 }),
                 op: BinaryOperator::Eq,
@@ -916,7 +916,7 @@ mod tests {
             right: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::BinaryOp {
                     left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties")])),
-                    op: BinaryOperator::Arrow,
+                    op: BinaryOperator::LongArrow,
                     right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()).into())),
                 }),
                 op: BinaryOperator::Eq,
@@ -958,7 +958,7 @@ mod tests {
             right: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::BinaryOp {
                     left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("r"), Ident::new("Properties")])),
-                    op: BinaryOperator::Arrow,
+                    op: BinaryOperator::LongArrow,
                     right: Box::new(Expr::Value(Value::SingleQuotedString("since".to_string()).into())),
                 }),
                 op: BinaryOperator::Eq,
@@ -1073,7 +1073,7 @@ mod tests {
                     right: Box::new(Expr::BinaryOp {
                         left: Box::new(Expr::BinaryOp {
                             left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("a"), Ident::new("Properties")])),
-                            op: BinaryOperator::Arrow,
+                            op: BinaryOperator::LongArrow,
                             right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()).into())),
                         }),
                         op: BinaryOperator::Eq,
@@ -1091,7 +1091,7 @@ mod tests {
                     right: Box::new(Expr::BinaryOp {
                         left: Box::new(Expr::BinaryOp {
                             left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("b"), Ident::new("Properties")])),
-                            op: BinaryOperator::Arrow,
+                            op: BinaryOperator::LongArrow,
                             right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()).into())),
                         }),
                         op: BinaryOperator::Eq,
@@ -1129,7 +1129,7 @@ mod tests {
             left: Box::new(
                 Expr::BinaryOp {
                     left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties"),])),
-                    op: BinaryOperator::Arrow,
+                    op: BinaryOperator::LongArrow,
                     right: Box::new(Expr::Value(Value::SingleQuotedString("age".to_string()).into())),
                 }),
             op: BinaryOperator::Gt,
@@ -1162,7 +1162,7 @@ mod tests {
                 Expr::BinaryOp {
                     left: Box::new(Expr::BinaryOp {
                         left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties"),])),
-                        op: BinaryOperator::Arrow,
+                        op: BinaryOperator::LongArrow,
                         right: Box::new(Expr::Value(Value::SingleQuotedString("age".to_string()).into())),
                     }),
                     op: BinaryOperator::Gt,
@@ -1173,7 +1173,7 @@ mod tests {
                 Expr::BinaryOp {
                     left: Box::new(Expr::BinaryOp {
                         left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties"),])),
-                        op: BinaryOperator::Arrow,
+                        op: BinaryOperator::LongArrow,
                         right: Box::new(Expr::Value(Value::SingleQuotedString("city".to_string()).into())),
                     }),
                     op: BinaryOperator::Eq,
@@ -1207,7 +1207,7 @@ mod tests {
                 Expr::BinaryOp {
                     left: Box::new(Expr::BinaryOp {
                         left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties"),])),
-                        op: BinaryOperator::Arrow,
+                        op: BinaryOperator::LongArrow,
                         right: Box::new(Expr::Value(Value::SingleQuotedString("age".to_string()).into())),
                     }),
                     op: BinaryOperator::Lt,
@@ -1218,7 +1218,7 @@ mod tests {
                 Expr::BinaryOp {
                     left: Box::new(Expr::BinaryOp {
                         left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties"),])),
-                        op: BinaryOperator::Arrow,
+                        op: BinaryOperator::LongArrow,
                         right: Box::new(Expr::Value(Value::SingleQuotedString("city".to_string()).into())),
                     }),
                     op: BinaryOperator::Eq,
@@ -1281,7 +1281,7 @@ mod tests {
                             Ident::new("n"),
                             Ident::new("Properties"),
                         ])),
-                        op: BinaryOperator::Arrow,
+                        op: BinaryOperator::LongArrow,
                         right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()).into())),
                     },
                     alias: Ident::new("person_name"),

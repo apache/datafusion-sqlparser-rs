@@ -1134,3 +1134,132 @@ fn parse_cypher_multiple_node_match(){
         _ => panic!("Parsing failed"),
     };
 }
+
+#[test]
+fn parse_cypher_match_with_relationship(){
+    let cypher = "Match (a:Person)-[r:KNOWS]->(b:Person) RETURN a.name AS personName, b.name AS friendName";
+    let dialect = CypherDialect {};
+
+    match Parser::parse_sql(&dialect, cypher) {
+        Ok(ast) => {
+            // Convert each statement back to a string
+            let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
+            let expected_sql = "SELECT a.Properties ->> 'name' AS personName, \
+                b.Properties ->> 'name' AS friendName \
+                FROM edges AS r \
+                JOIN nodes AS a ON r.Source_id = a.id \
+                JOIN nodes AS b ON r.Target_id = b.id \
+                WHERE r.Label = 'KNOWS' \
+                AND a.Label = 'Person' \
+                AND b.Label = 'Person'";
+            assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
+        }
+        _ => panic!("Parsing failed"),
+    };
+}
+
+#[test]
+fn parse_cypher_match_with_relationship_and_properties(){
+    let cypher = "Match (a:Person)-[r:KNOWS {since: 2020}]->(b:Person) RETURN a.name AS personName, b.name AS friendName";
+    let dialect = CypherDialect {};
+
+    match Parser::parse_sql(&dialect, cypher) {
+        Ok(ast) => {
+            // Convert each statement back to a string
+            let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
+            let expected_sql = "SELECT a.Properties ->> 'name' AS personName, \
+                b.Properties ->> 'name' AS friendName \
+                FROM edges AS r \
+                JOIN nodes AS a ON r.Source_id = a.id \
+                JOIN nodes AS b ON r.Target_id = b.id \
+                WHERE r.Label = 'KNOWS' \
+                AND (r.Properties ->> 'since')::INT = 2020 \
+                AND a.Label = 'Person' \
+                AND b.Label = 'Person'";
+            assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
+        }
+        _ => panic!("Parsing failed"),
+    };
+}
+
+#[test]
+fn parse_cypher_match_with_relationship_and_where(){
+    let cypher = "Match (a:Person)-[r:KNOWS]->(b:Person) WHERE r.since > 2015 RETURN a.name AS personName, b.name AS friendName";
+    let dialect = CypherDialect {};
+
+    match Parser::parse_sql(&dialect, cypher) {
+        Ok(ast) => {
+            // Convert each statement back to a string
+            let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
+            let expected_sql = "SELECT a.Properties ->> 'name' AS personName, \
+                b.Properties ->> 'name' AS friendName \
+                FROM edges AS r \
+                JOIN nodes AS a ON r.Source_id = a.id \
+                JOIN nodes AS b ON r.Target_id = b.id \
+                WHERE r.Label = 'KNOWS' \
+                AND a.Label = 'Person' \
+                AND b.Label = 'Person' \
+                AND (r.Properties ->> 'since')::INT > 2015";
+            assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
+        }
+        _ => panic!("Parsing failed"),
+    };
+}
+
+#[test]
+fn parse_cypher_match_with_chain(){
+    let cypher = "Match (a:Person)-[r1:KNOWS]->(b:Person)-[r2:WORKS_AT]->(c:Company) RETURN a.name AS personName, c.name AS companyName";
+    let dialect = CypherDialect {};
+
+    match Parser::parse_sql(&dialect, cypher) {
+        Ok(ast) => {
+            // Convert each statement back to a string
+            let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
+            let expected_sql = "SELECT a.Properties ->> 'name' AS personName, \
+                c.Properties ->> 'name' AS companyName \
+                FROM edges AS r1 \
+                JOIN nodes AS a ON r1.Source_id = a.id \
+                JOIN nodes AS b ON r1.Target_id = b.id \
+                JOIN edges AS r2 ON r2.Source_id = b.id \
+                JOIN nodes AS c ON r2.Target_id = c.id \
+                WHERE r1.Label = 'KNOWS' \
+                AND r2.Label = 'WORKS_AT' \
+                AND a.Label = 'Person' \
+                AND b.Label = 'Person' \
+                AND c.Label = 'Company'";
+            assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
+        }
+        _ => panic!("Parsing failed"),
+    };
+}
+
+#[test]
+fn parse_cypher_match_with_long_chain(){
+    let cypher = "Match (a:Person)-[r1:KNOWS]->(b:Person)-[r2:WORKS_AT]->(c:Company)-[r3:LOCATED_IN]->(d:City) RETURN a.name AS personName, d.name AS cityName";
+    let dialect = CypherDialect {};
+
+    match Parser::parse_sql(&dialect, cypher) {
+        Ok(ast) => {
+            // Convert each statement back to a string
+            let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
+            let expected_sql = "SELECT a.Properties ->> 'name' AS personName, \
+                d.Properties ->> 'name' AS cityName \
+                FROM edges AS r1 \
+                JOIN nodes AS a ON r1.Source_id = a.id \
+                JOIN nodes AS b ON r1.Target_id = b.id \
+                JOIN edges AS r2 ON r2.Source_id = b.id \
+                JOIN nodes AS c ON r2.Target_id = c.id \
+                JOIN edges AS r3 ON r3.Source_id = c.id \
+                JOIN nodes AS d ON r3.Target_id = d.id \
+                WHERE r1.Label = 'KNOWS' \
+                AND r2.Label = 'WORKS_AT' \
+                AND r3.Label = 'LOCATED_IN' \
+                AND a.Label = 'Person' \
+                AND b.Label = 'Person' \
+                AND c.Label = 'Company' \
+                AND d.Label = 'City'";
+            assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
+        }
+        _ => panic!("Parsing failed"),
+    };
+}

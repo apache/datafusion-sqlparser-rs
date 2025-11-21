@@ -28,6 +28,39 @@ pub struct Desugarer;
 
 impl Desugarer {
 
+    // Helper function to extract alias from TableFactor
+    fn extract_alias(table: &TableFactor) -> Result<Ident, ParserError> {
+        match table {
+            TableFactor::Table { alias: Some(a), .. } => Ok(a.name.clone()),
+            _ => Err(ParserError::ParserError("Table must have an alias".to_string())),
+        }
+    }
+
+    // Helper function to create edge table
+    fn create_edge_table(alias: Ident) -> TableFactor {
+        TableFactor::Table {
+            name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("edges"))]),
+            alias: Some(TableAlias { name: alias, columns: vec![] }),
+            args: None,
+            with_hints: vec![],
+            version: None,
+            with_ordinality: false,
+            partitions: vec![],
+            json_path: None,
+            sample: None,
+            index_hints: vec![],
+        }
+    }
+
+    // Helper function to create join condition
+    fn create_join_condition(left_table: Ident, left_col: &str, right_table: Ident, right_col: &str) -> Expr {
+        Expr::BinaryOp {
+            left: Box::new(Expr::CompoundIdentifier(vec![left_table, Ident::new(left_col)])),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::CompoundIdentifier(vec![right_table, Ident::new(right_col)])),
+        }
+    }
+
     /// Desugar Cypher property map into JSON string format for INSERT statements
     fn cypher_properties_to_string(properties: Map) -> Result<String, ParserError>{
         let entries: Vec<String> = properties.entries.into_iter()
@@ -347,6 +380,34 @@ impl Desugarer {
         })
     }
 
+    fn desugar_cypher_node_join(node:NodePattern) -> Result<TableFactor, ParserError>{
+
+        let table_alias = if let Some(ref var) = node.variable {
+            var.clone()
+        } else {
+            return Err(ParserError::ParserError(
+                "Node patterns must have variables".to_string()
+            ));
+        };
+
+        // Build the table factor
+        Ok(TableFactor::Table {
+            name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("nodes"))]),
+            alias: Some(TableAlias {
+                name: table_alias.clone(),
+                columns: vec![],
+            }),
+            args: None,
+            with_hints: vec![],
+            version: None,
+            with_ordinality: false,
+            partitions: vec![],
+            json_path: None,
+            sample: None,
+            index_hints: vec![],
+        })
+    }
+
     /// Desugar Cypher relationship pattern into SELECT statement for relationship insertion.
     fn desugar_cypher_relationship_select(relationship: RelationshipPattern, s_idx:usize, t_idx:usize) -> Result<Select, ParserError> {
         let rel_type = relationship.details.types.first().map(|id| id.value.clone()).unwrap_or_default();
@@ -517,9 +578,140 @@ impl Desugarer {
             value_table_mode: None,
             connect_by: None,
             flavor: SelectFlavor::Standard,
-        })
+        })        
+    }
 
+    fn desugar_cypher_match_with_relationships(pattern: Pattern) -> Result<Select, ParserError> {
+
+        let mut first_table: Option<TableWithJoins> = None;
+        let mut edge_filters = Vec::new();
+        let mut node_filters = Vec::new();
+
+        // Process all pattern parts
+        for pattern_part in &pattern.parts {
+            let simple_element = match &pattern_part.anon_pattern_part {
+                PatternElement::Simple(s) => s,
+                PatternElement::Nested(_) => {
+                    return Err(ParserError::ParserError(
+                        "Nested pattern elements are not supported in MATCH clause".to_string()
+                    ));
+                }
+            };
+
+            // Start with the first node in the pattern
+            let mut current_node = Self::desugar_cypher_node_join(simple_element.node.clone())?;
+            let current_alias = Self::extract_alias(&current_node)?;
+            let first_node_filter = Self::desugar_cypher_node_filter(simple_element.node.clone(), &current_alias)?;
+            if let Some(combined_expr) = first_node_filter {
+                node_filters.push(combined_expr);
+            }
+
+            // Process each relationship chain element
+            for chain_elem in &simple_element.chain {
+                let rel_alias = chain_elem.relationship.details.variable.as_ref()
+                    .ok_or_else(|| ParserError::ParserError("Relationships in MATCH must have variables".to_string()))?
+                    .clone();
+
+                let edge_table = Self::create_edge_table(rel_alias.clone());
+                let edge_filter = Self::desugar_cypher_relationship_filter(chain_elem.relationship.clone(), &rel_alias)?;
+                if let Some(combined_expr) = edge_filter {
+                    edge_filters.push(combined_expr);
+                }
+
+                let target_node = Self::desugar_cypher_node_join(chain_elem.node.clone())?;
+                let target_alias = Self::extract_alias(&target_node)?;
+                let target_filter = Self::desugar_cypher_node_filter(chain_elem.node.clone(), &target_alias)?;
+                if let Some(combined_expr) = target_filter {
+                    node_filters.push(combined_expr);
+                }
+
+                // Start with first edge table in FROM clause
+                if first_table.is_none() {
+                    first_table = Some(TableWithJoins {
+                        relation: edge_table.clone(),
+                        joins: vec![],
+                    });
+                    
+                    // Join the source node
+                    if let Some(ref mut first) = first_table {
+                        let source_alias = Self::extract_alias(&current_node)?;
+                        let source_join_condition = Self::create_join_condition(rel_alias.clone(), "Source_id", source_alias, "id");
+                        first.joins.push(Join {
+                            relation: current_node.clone(),
+                            global: false,
+                            join_operator: JoinOperator::Join(JoinConstraint::On(source_join_condition)),
+                        });
+                    }
+                } else {
+                    // For subsequent edges in the chain, join the edge first
+                    if let Some(ref mut first) = first_table {
+                        let source_alias = Self::extract_alias(&current_node)?;
+                        let edge_join_condition = Self::create_join_condition(rel_alias.clone(), "Source_id", source_alias, "id");
+                        first.joins.push(Join {
+                            relation: edge_table.clone(),
+                            global: false,
+                            join_operator: JoinOperator::Join(JoinConstraint::On(edge_join_condition)),
+                        });
+                    }
+                }
+
+                // Join target node: r.Target_id = b.id
+                if let Some(ref mut first) = first_table {
+                    let target_join_condition = Self::create_join_condition(rel_alias, "Target_id", target_alias, "id");
+                    first.joins.push(Join {
+                        relation: target_node.clone(),
+                        global: false,
+                        join_operator: JoinOperator::Join(JoinConstraint::On(target_join_condition)),
+                    });
+                }
+
+                // Update current node to be the target for the next iteration
+                current_node = target_node;
+            }
+        }
+
+        // Combine filters: edge filters first, then node filters
+        let mut all_filters = edge_filters;
+        all_filters.extend(node_filters);
         
+        let selection = if !all_filters.is_empty() {
+            let mut combined = all_filters[0].clone();
+            for expr in all_filters.iter().skip(1) {
+                combined = Expr::BinaryOp {
+                    left: Box::new(combined),
+                    op: BinaryOperator::And,
+                    right: Box::new(expr.clone()),
+                };
+            }
+            Some(combined)
+        } else {
+            None
+        };
+
+        Ok(Select {
+            select_token: AttachedToken::empty(),
+            distinct: None,
+            top: None,
+            top_before_distinct: false,
+            projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
+            exclude: None,
+            into: None,
+            from: first_table.into_iter().collect(),
+            lateral_views: vec![],
+            prewhere: None,
+            selection,
+            group_by: GroupByExpr::Expressions(vec![], vec![]),
+            cluster_by: vec![],
+            distribute_by: vec![],
+            sort_by: vec![],
+            having: None,
+            named_window: vec![],
+            window_before_qualify: false,
+            qualify: None,
+            value_table_mode: None,
+            connect_by: None,
+            flavor: SelectFlavor::Standard,
+        })
     }
 
     /// Desugar simple node-only CREATE patterns into INSERT INTO nodes statement.
@@ -827,13 +1019,11 @@ impl Desugarer {
             let has_relationships = match_clause.pattern.parts.iter()
                 .any(|p| matches!(&p.anon_pattern_part, PatternElement::Simple(s) if !s.chain.is_empty()));
                 
-            if has_relationships {
-                return Err(ParserError::ParserError(
-                    "Desugaring Cypher MATCH clauses with relationships is not yet implemented.".to_string()
-                ));
-            }
-            
-            let mut select = Self::desugar_cypher_match_nodes_only(match_clause.pattern)?;
+            let mut select =if has_relationships {
+                Self::desugar_cypher_match_with_relationships(match_clause.pattern)?
+            } else {
+                Self::desugar_cypher_match_nodes_only(match_clause.pattern)?
+            };
             
             // Add WHERE clause if present
             if let Some(where_clause) = match_clause.where_clause {

@@ -7541,7 +7541,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse an operator signature for a [Statement::DropOperator]
-    /// Format: name ( { left_type | NONE } , right_type )
+    /// Format: `name ( { left_type | NONE } , right_type )`
     fn parse_operator_signature(&mut self) -> Result<OperatorSignature, ParserError> {
         let name = self.parse_operator_name()?;
         self.expect_token(&Token::LParen)?;

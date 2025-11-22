@@ -23,7 +23,6 @@
 
 #[cfg(not(feature = "std"))]
 use alloc::{
-    borrow::ToOwned,
     format,
     string::{String, ToString},
     vec,
@@ -96,6 +95,8 @@ pub enum Token {
     /// Triple double quoted literal with raw string prefix. Example `R"""abc"""`
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals)
     TripleDoubleQuotedRawStringLiteral(String),
+    /// A CSV body from a `COPY ... FROM STDIN` statement
+    CopyFromStdin(String),
     /// "National" string literal: i.e: N'string'
     NationalStringLiteral(String),
     /// "escaped" string literal, which are an extension to the SQL standard: i.e: e'first \n second' or E 'first \n second'
@@ -106,8 +107,6 @@ pub enum Token {
     HexStringLiteral(String),
     /// Comma
     Comma,
-    /// Whitespace (space, tab, etc)
-    Whitespace(Whitespace),
     /// Double equals sign `==`
     DoubleEq,
     /// Equality operator `=`
@@ -303,8 +302,8 @@ impl fmt::Display for Token {
             Token::DoubleQuotedRawStringLiteral(ref s) => write!(f, "R\"{s}\""),
             Token::TripleSingleQuotedRawStringLiteral(ref s) => write!(f, "R'''{s}'''"),
             Token::TripleDoubleQuotedRawStringLiteral(ref s) => write!(f, "R\"\"\"{s}\"\"\""),
+            Token::CopyFromStdin(ref s) => write!(f, "{s}\\."),
             Token::Comma => f.write_str(","),
-            Token::Whitespace(ws) => write!(f, "{ws}"),
             Token::DoubleEq => f.write_str("=="),
             Token::Spaceship => f.write_str("<=>"),
             Token::Eq => f.write_str("="),
@@ -390,14 +389,15 @@ impl fmt::Display for Token {
 }
 
 impl Token {
-    pub fn make_keyword(keyword: &str) -> Self {
+    pub fn make_keyword<S: Into<String>>(keyword: S) -> Self {
         Token::make_word(keyword, None)
     }
 
-    pub fn make_word(word: &str, quote_style: Option<char>) -> Self {
+    pub fn make_word<S: Into<String>>(word: S, quote_style: Option<char>) -> Self {
+        let word = word.into();
         let word_uppercase = word.to_uppercase();
         Token::Word(Word {
-            value: word.to_string(),
+            value: word,
             quote_style,
             keyword: if quote_style.is_none() {
                 let keyword = ALL_KEYWORDS.binary_search(&word_uppercase.as_str());
@@ -445,29 +445,6 @@ impl Word {
             '[' => ']', // MS SQL
             '`' => '`', // MySQL
             _ => panic!("unexpected quoting style!"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum Whitespace {
-    Space,
-    Newline,
-    Tab,
-    SingleLineComment { comment: String, prefix: String },
-    MultiLineComment(String),
-}
-
-impl fmt::Display for Whitespace {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Whitespace::Space => f.write_str(" "),
-            Whitespace::Newline => f.write_str("\n"),
-            Whitespace::Tab => f.write_str("\t"),
-            Whitespace::SingleLineComment { prefix, comment } => write!(f, "{prefix}{comment}"),
-            Whitespace::MultiLineComment(s) => write!(f, "/*{s}*/"),
         }
     }
 }
@@ -803,6 +780,63 @@ struct TokenizeQuotedStringSettings {
     backslash_escape: bool,
 }
 
+#[derive(Clone, Copy, Default)]
+/// Helper struct to handle the logic of the `COPY ... FROM STDIN` statement
+/// which may occur in PostgreSQL and some other dialects.
+struct CopyStdinHandler {
+    previous_copy_token_found: bool,
+    previous_stdin_token_found: bool,
+    current_copy_token_found: bool,
+    current_stdin_token_found: bool,
+}
+
+impl CopyStdinHandler {
+    /// Update the internal state based on the provided token.
+    fn update(&mut self, token: &Token) {
+        match token {
+            Token::Word(Word {
+                keyword: Keyword::COPY,
+                ..
+            }) => {
+                self.current_copy_token_found = true;
+            }
+            Token::Word(Word {
+                keyword: Keyword::STDIN,
+                ..
+            }) if self.current_copy_token_found => {
+                self.current_stdin_token_found = true;
+            }
+            Token::SemiColon => {
+                self.previous_copy_token_found = self.current_copy_token_found;
+                self.previous_stdin_token_found = self.current_stdin_token_found;
+                self.current_copy_token_found = false;
+                self.current_stdin_token_found = false;
+            }
+            _ => {}
+        }
+    }
+
+    /// Returns whether the previous tokens indicated a `COPY ... FROM STDIN` statement.
+    fn is_in_copy_from_stdin(&self) -> bool {
+        self.previous_copy_token_found && self.previous_stdin_token_found
+    }
+
+    /// Extracts the CSV string from the provided State.
+    fn extract_csv_string(&self, state: &mut State) -> Result<String, TokenizerError> {
+        let mut csv_string = String::new();
+        let mut last_character_was_cr = false;
+        while let Some(ch) = state.next() {
+            if last_character_was_cr && ch == '\\' && state.peek() == Some(&'.') {
+                state.next(); // consume the '.'
+                break;
+            }
+            last_character_was_cr = ch == '\n';
+            csv_string.push(ch);
+        }
+        Ok(csv_string)
+    }
+}
+
 /// SQL Tokenizer
 pub struct Tokenizer<'a> {
     dialect: &'a dyn Dialect,
@@ -816,7 +850,7 @@ impl<'a> Tokenizer<'a> {
     /// Create a new SQL tokenizer for the specified SQL statement
     ///
     /// ```
-    /// # use sqlparser::tokenizer::{Token, Whitespace, Tokenizer};
+    /// # use sqlparser::tokenizer::{Token, Tokenizer};
     /// # use sqlparser::dialect::GenericDialect;
     /// # let dialect = GenericDialect{};
     /// let query = r#"SELECT 'foo'"#;
@@ -826,7 +860,6 @@ impl<'a> Tokenizer<'a> {
     ///
     /// assert_eq!(tokens, vec![
     ///   Token::make_word("SELECT", None),
-    ///   Token::Whitespace(Whitespace::Space),
     ///   Token::SingleQuotedString("foo".to_string()),
     /// ]);
     pub fn new(dialect: &'a dyn Dialect, query: &'a str) -> Self {
@@ -896,14 +929,37 @@ impl<'a> Tokenizer<'a> {
             line: 1,
             col: 1,
         };
+        let mut prev_keyword = None;
+        let mut cs_handler = CopyStdinHandler::default();
 
         let mut location = state.location();
-        while let Some(token) = self.next_token(&mut state, buf.last().map(|t| &t.token))? {
+        while let Some(token) = self.next_token(
+            &mut location,
+            &mut state,
+            buf.last().map(|t| &t.token),
+            prev_keyword,
+            false,
+        )? {
+            if let Token::Word(Word { keyword, .. }) = &token {
+                if *keyword != Keyword::NoKeyword {
+                    prev_keyword = Some(*keyword);
+                }
+            }
+
             let span = location.span_to(state.location());
-
+            cs_handler.update(&token);
             buf.push(TokenWithSpan { token, span });
-
             location = state.location();
+
+            if cs_handler.is_in_copy_from_stdin() {
+                let csv_string = cs_handler.extract_csv_string(&mut state)?;
+                let span = location.span_to(state.location());
+                buf.push(TokenWithSpan {
+                    token: Token::CopyFromStdin(csv_string),
+                    span,
+                });
+                location = state.location();
+            }
         }
         Ok(())
     }
@@ -913,10 +969,11 @@ impl<'a> Tokenizer<'a> {
         &self,
         ch: impl IntoIterator<Item = char>,
         chars: &mut State,
+        prev_keyword: Option<Keyword>,
     ) -> Result<Option<Token>, TokenizerError> {
         chars.next(); // consume the first char
         let ch: String = ch.into_iter().collect();
-        let word = self.tokenize_word(ch, chars);
+        let word = self.tokenize_word(ch, chars, prev_keyword)?;
 
         // TODO: implement parsing of exponent here
         if word.chars().all(|x| x.is_ascii_digit() || x == '.') {
@@ -931,781 +988,809 @@ impl<'a> Tokenizer<'a> {
             return Ok(Some(Token::Number(s, false)));
         }
 
-        Ok(Some(Token::make_word(&word, None)))
+        Ok(Some(Token::make_word(word, None)))
+    }
+
+    /// Returns a standardized error if the previous token is a `:` and
+    /// the method is expected to be called when a space is found after it.
+    fn handle_colon_space_error(
+        &self,
+        chars: &State,
+        prev_token: Option<&Token>,
+        preceded_by_whitespace: bool,
+    ) -> Result<(), TokenizerError> {
+        if !preceded_by_whitespace {
+            return Ok(());
+        }
+        if let Some(Token::Colon) = prev_token {
+            return Err(TokenizerError {
+                message: "Unexpected whitespace after ':'; did you mean ':placeholder' or '::'?"
+                    .to_string(),
+                location: chars.location(),
+            });
+        }
+        Ok(())
     }
 
     /// Get the next token or return None
     fn next_token(
         &self,
+        location: &mut Location,
         chars: &mut State,
         prev_token: Option<&Token>,
+        prev_keyword: Option<Keyword>,
+        preceded_by_whitespace: bool,
     ) -> Result<Option<Token>, TokenizerError> {
-        match chars.peek() {
-            Some(&ch) => match ch {
-                ' ' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Space)),
-                '\t' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Tab)),
-                '\n' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Newline)),
-                '\r' => {
-                    // Emit a single Whitespace::Newline token for \r and \r\n
-                    chars.next();
-                    if let Some('\n') = chars.peek() {
-                        chars.next();
+        let Some(&ch) = chars.peek() else {
+            return Ok(None);
+        };
+        match ch {
+            ' ' | '\t' | '\n' | '\r' => {
+                self.handle_colon_space_error(
+                    chars,
+                    prev_token,
+                    preceded_by_whitespace || ch == '\n',
+                )?;
+                chars.next(); // consume
+                *location = chars.location();
+                self.next_token(location, chars, prev_token, prev_keyword, true)
+            }
+            // BigQuery and MySQL use b or B for byte string literal, Postgres for bit strings
+            b @ 'B' | b @ 'b' if dialect_of!(self is BigQueryDialect | PostgreSqlDialect | MySqlDialect | GenericDialect) =>
+            {
+                chars.next(); // consume
+                match chars.peek() {
+                    Some('\'') => {
+                        if self.dialect.supports_triple_quoted_string() {
+                            return self
+                                .tokenize_single_or_triple_quoted_string::<fn(String) -> Token>(
+                                    chars,
+                                    '\'',
+                                    false,
+                                    Token::SingleQuotedByteStringLiteral,
+                                    Token::TripleSingleQuotedByteStringLiteral,
+                                );
+                        }
+                        let s = self.tokenize_single_quoted_string(chars, '\'', false)?;
+                        Ok(Some(Token::SingleQuotedByteStringLiteral(s)))
                     }
-                    Ok(Some(Token::Whitespace(Whitespace::Newline)))
-                }
-                // BigQuery and MySQL use b or B for byte string literal, Postgres for bit strings
-                b @ 'B' | b @ 'b' if dialect_of!(self is BigQueryDialect | PostgreSqlDialect | MySqlDialect | GenericDialect) =>
-                {
-                    chars.next(); // consume
-                    match chars.peek() {
-                        Some('\'') => {
-                            if self.dialect.supports_triple_quoted_string() {
-                                return self
-                                    .tokenize_single_or_triple_quoted_string::<fn(String) -> Token>(
-                                        chars,
-                                        '\'',
-                                        false,
-                                        Token::SingleQuotedByteStringLiteral,
-                                        Token::TripleSingleQuotedByteStringLiteral,
-                                    );
-                            }
-                            let s = self.tokenize_single_quoted_string(chars, '\'', false)?;
-                            Ok(Some(Token::SingleQuotedByteStringLiteral(s)))
+                    Some('\"') => {
+                        if self.dialect.supports_triple_quoted_string() {
+                            return self
+                                .tokenize_single_or_triple_quoted_string::<fn(String) -> Token>(
+                                    chars,
+                                    '"',
+                                    false,
+                                    Token::DoubleQuotedByteStringLiteral,
+                                    Token::TripleDoubleQuotedByteStringLiteral,
+                                );
                         }
-                        Some('\"') => {
-                            if self.dialect.supports_triple_quoted_string() {
-                                return self
-                                    .tokenize_single_or_triple_quoted_string::<fn(String) -> Token>(
-                                        chars,
-                                        '"',
-                                        false,
-                                        Token::DoubleQuotedByteStringLiteral,
-                                        Token::TripleDoubleQuotedByteStringLiteral,
-                                    );
-                            }
-                            let s = self.tokenize_single_quoted_string(chars, '\"', false)?;
-                            Ok(Some(Token::DoubleQuotedByteStringLiteral(s)))
-                        }
-                        _ => {
-                            // regular identifier starting with an "b" or "B"
-                            let s = self.tokenize_word(b, chars);
-                            Ok(Some(Token::make_word(&s, None)))
-                        }
+                        let s = self.tokenize_single_quoted_string(chars, '\"', false)?;
+                        Ok(Some(Token::DoubleQuotedByteStringLiteral(s)))
                     }
-                }
-                // BigQuery uses r or R for raw string literal
-                b @ 'R' | b @ 'r' if dialect_of!(self is BigQueryDialect | GenericDialect) => {
-                    chars.next(); // consume
-                    match chars.peek() {
-                        Some('\'') => self
-                            .tokenize_single_or_triple_quoted_string::<fn(String) -> Token>(
-                                chars,
-                                '\'',
-                                false,
-                                Token::SingleQuotedRawStringLiteral,
-                                Token::TripleSingleQuotedRawStringLiteral,
-                            ),
-                        Some('\"') => self
-                            .tokenize_single_or_triple_quoted_string::<fn(String) -> Token>(
-                                chars,
-                                '"',
-                                false,
-                                Token::DoubleQuotedRawStringLiteral,
-                                Token::TripleDoubleQuotedRawStringLiteral,
-                            ),
-                        _ => {
-                            // regular identifier starting with an "r" or "R"
-                            let s = self.tokenize_word(b, chars);
-                            Ok(Some(Token::make_word(&s, None)))
-                        }
+                    _ => {
+                        // regular identifier starting with an "b" or "B"
+                        let s = self.tokenize_word(b, chars, prev_keyword)?;
+                        Ok(Some(Token::make_word(s, None)))
                     }
                 }
-                // Redshift uses lower case n for national string literal
-                n @ 'N' | n @ 'n' => {
-                    chars.next(); // consume, to check the next char
-                    match chars.peek() {
-                        Some('\'') => {
-                            // N'...' - a <national character string literal>
-                            let backslash_escape =
-                                self.dialect.supports_string_literal_backslash_escape();
-                            let s =
-                                self.tokenize_single_quoted_string(chars, '\'', backslash_escape)?;
-                            Ok(Some(Token::NationalStringLiteral(s)))
-                        }
-                        _ => {
-                            // regular identifier starting with an "N"
-                            let s = self.tokenize_word(n, chars);
-                            Ok(Some(Token::make_word(&s, None)))
-                        }
+            }
+            // BigQuery uses r or R for raw string literal
+            b @ 'R' | b @ 'r' if dialect_of!(self is BigQueryDialect | GenericDialect) => {
+                chars.next(); // consume
+                match chars.peek() {
+                    Some('\'') => self
+                        .tokenize_single_or_triple_quoted_string::<fn(String) -> Token>(
+                            chars,
+                            '\'',
+                            false,
+                            Token::SingleQuotedRawStringLiteral,
+                            Token::TripleSingleQuotedRawStringLiteral,
+                        ),
+                    Some('\"') => self
+                        .tokenize_single_or_triple_quoted_string::<fn(String) -> Token>(
+                            chars,
+                            '"',
+                            false,
+                            Token::DoubleQuotedRawStringLiteral,
+                            Token::TripleDoubleQuotedRawStringLiteral,
+                        ),
+                    _ => {
+                        // regular identifier starting with an "r" or "R"
+                        let s = self.tokenize_word(b, chars, prev_keyword)?;
+                        Ok(Some(Token::make_word(s, None)))
                     }
                 }
-                // PostgreSQL accepts "escape" string constants, which are an extension to the SQL standard.
-                x @ 'e' | x @ 'E' if self.dialect.supports_string_escape_constant() => {
-                    let starting_loc = chars.location();
-                    chars.next(); // consume, to check the next char
-                    match chars.peek() {
-                        Some('\'') => {
-                            let s =
-                                self.tokenize_escaped_single_quoted_string(starting_loc, chars)?;
-                            Ok(Some(Token::EscapedStringLiteral(s)))
-                        }
-                        _ => {
-                            // regular identifier starting with an "E" or "e"
-                            let s = self.tokenize_word(x, chars);
-                            Ok(Some(Token::make_word(&s, None)))
-                        }
+            }
+            // Redshift uses lower case n for national string literal
+            n @ 'N' | n @ 'n' => {
+                chars.next(); // consume, to check the next char
+                match chars.peek() {
+                    Some('\'') => {
+                        // N'...' - a <national character string literal>
+                        let backslash_escape =
+                            self.dialect.supports_string_literal_backslash_escape();
+                        let s =
+                            self.tokenize_single_quoted_string(chars, '\'', backslash_escape)?;
+                        Ok(Some(Token::NationalStringLiteral(s)))
+                    }
+                    _ => {
+                        // regular identifier starting with an "N"
+                        let s = self.tokenize_word(n, chars, None)?;
+                        Ok(Some(Token::make_word(s, None)))
                     }
                 }
-                // Unicode string literals like U&'first \000A second' are supported in some dialects, including PostgreSQL
-                x @ 'u' | x @ 'U' if self.dialect.supports_unicode_string_literal() => {
-                    chars.next(); // consume, to check the next char
-                    if chars.peek() == Some(&'&') {
-                        // we cannot advance the iterator here, as we need to consume the '&' later if the 'u' was an identifier
-                        let mut chars_clone = chars.peekable.clone();
-                        chars_clone.next(); // consume the '&' in the clone
-                        if chars_clone.peek() == Some(&'\'') {
-                            chars.next(); // consume the '&' in the original iterator
-                            let s = unescape_unicode_single_quoted_string(chars)?;
-                            return Ok(Some(Token::UnicodeStringLiteral(s)));
-                        }
+            }
+            // PostgreSQL accepts "escape" string constants, which are an extension to the SQL standard.
+            x @ 'e' | x @ 'E' if self.dialect.supports_string_escape_constant() => {
+                let starting_loc = chars.location();
+                chars.next(); // consume, to check the next char
+                match chars.peek() {
+                    Some('\'') => {
+                        let s = self.tokenize_escaped_single_quoted_string(starting_loc, chars)?;
+                        Ok(Some(Token::EscapedStringLiteral(s)))
                     }
-                    // regular identifier starting with an "U" or "u"
-                    let s = self.tokenize_word(x, chars);
-                    Ok(Some(Token::make_word(&s, None)))
-                }
-                // The spec only allows an uppercase 'X' to introduce a hex
-                // string, but PostgreSQL, at least, allows a lowercase 'x' too.
-                x @ 'x' | x @ 'X' => {
-                    chars.next(); // consume, to check the next char
-                    match chars.peek() {
-                        Some('\'') => {
-                            // X'...' - a <binary string literal>
-                            let s = self.tokenize_single_quoted_string(chars, '\'', true)?;
-                            Ok(Some(Token::HexStringLiteral(s)))
-                        }
-                        _ => {
-                            // regular identifier starting with an "X"
-                            let s = self.tokenize_word(x, chars);
-                            Ok(Some(Token::make_word(&s, None)))
-                        }
+                    _ => {
+                        // regular identifier starting with an "E" or "e"
+                        let s = self.tokenize_word(x, chars, prev_keyword)?;
+                        Ok(Some(Token::make_word(s, None)))
                     }
                 }
-                // single quoted string
-                '\'' => {
-                    if self.dialect.supports_triple_quoted_string() {
-                        return self
-                            .tokenize_single_or_triple_quoted_string::<fn(String) -> Token>(
-                                chars,
-                                '\'',
-                                self.dialect.supports_string_literal_backslash_escape(),
-                                Token::SingleQuotedString,
-                                Token::TripleSingleQuotedString,
-                            );
+            }
+            // Unicode string literals like U&'first \000A second' are supported in some dialects, including PostgreSQL
+            x @ 'u' | x @ 'U' if self.dialect.supports_unicode_string_literal() => {
+                chars.next(); // consume, to check the next char
+                if chars.peek() == Some(&'&') {
+                    // we cannot advance the iterator here, as we need to consume the '&' later if the 'u' was an identifier
+                    let mut chars_clone = chars.peekable.clone();
+                    chars_clone.next(); // consume the '&' in the clone
+                    if chars_clone.peek() == Some(&'\'') {
+                        chars.next(); // consume the '&' in the original iterator
+                        let s = unescape_unicode_single_quoted_string(chars)?;
+                        return Ok(Some(Token::UnicodeStringLiteral(s)));
                     }
-                    let s = self.tokenize_single_quoted_string(
+                }
+                // regular identifier starting with an "U" or "u"
+                let s = self.tokenize_word(x, chars, prev_keyword)?;
+                Ok(Some(Token::make_word(s, None)))
+            }
+            // The spec only allows an uppercase 'X' to introduce a hex
+            // string, but PostgreSQL, at least, allows a lowercase 'x' too.
+            x @ 'x' | x @ 'X' => {
+                chars.next(); // consume, to check the next char
+                match chars.peek() {
+                    Some('\'') => {
+                        // X'...' - a <binary string literal>
+                        let s = self.tokenize_single_quoted_string(chars, '\'', true)?;
+                        Ok(Some(Token::HexStringLiteral(s)))
+                    }
+                    _ => {
+                        // regular identifier starting with an "X"
+                        let s = self.tokenize_word(x, chars, prev_keyword)?;
+                        Ok(Some(Token::make_word(s, None)))
+                    }
+                }
+            }
+            // single quoted string
+            '\'' => {
+                if self.dialect.supports_triple_quoted_string() {
+                    return self.tokenize_single_or_triple_quoted_string::<fn(String) -> Token>(
                         chars,
                         '\'',
                         self.dialect.supports_string_literal_backslash_escape(),
-                    )?;
-
-                    Ok(Some(Token::SingleQuotedString(s)))
+                        Token::SingleQuotedString,
+                        Token::TripleSingleQuotedString,
+                    );
                 }
-                // double quoted string
-                '\"' if !self.dialect.is_delimited_identifier_start(ch)
-                    && !self.dialect.is_identifier_start(ch) =>
-                {
-                    if self.dialect.supports_triple_quoted_string() {
-                        return self
-                            .tokenize_single_or_triple_quoted_string::<fn(String) -> Token>(
-                                chars,
-                                '"',
-                                self.dialect.supports_string_literal_backslash_escape(),
-                                Token::DoubleQuotedString,
-                                Token::TripleDoubleQuotedString,
-                            );
-                    }
-                    let s = self.tokenize_single_quoted_string(
+                let s = self.tokenize_single_quoted_string(
+                    chars,
+                    '\'',
+                    self.dialect.supports_string_literal_backslash_escape(),
+                )?;
+
+                Ok(Some(Token::SingleQuotedString(s)))
+            }
+            // double quoted string
+            '\"' if !self.dialect.is_delimited_identifier_start(ch)
+                && !self.dialect.is_identifier_start(ch) =>
+            {
+                if self.dialect.supports_triple_quoted_string() {
+                    return self.tokenize_single_or_triple_quoted_string::<fn(String) -> Token>(
                         chars,
                         '"',
                         self.dialect.supports_string_literal_backslash_escape(),
-                    )?;
+                        Token::DoubleQuotedString,
+                        Token::TripleDoubleQuotedString,
+                    );
+                }
+                let s = self.tokenize_single_quoted_string(
+                    chars,
+                    '"',
+                    self.dialect.supports_string_literal_backslash_escape(),
+                )?;
 
-                    Ok(Some(Token::DoubleQuotedString(s)))
-                }
-                // delimited (quoted) identifier
-                quote_start if self.dialect.is_delimited_identifier_start(ch) => {
-                    let word = self.tokenize_quoted_identifier(quote_start, chars)?;
-                    Ok(Some(Token::make_word(&word, Some(quote_start))))
-                }
-                // Potentially nested delimited (quoted) identifier
-                quote_start
-                    if self
-                        .dialect
-                        .is_nested_delimited_identifier_start(quote_start)
-                        && self
-                            .dialect
-                            .peek_nested_delimited_identifier_quotes(chars.peekable.clone())
-                            .is_some() =>
-                {
-                    let Some((quote_start, nested_quote_start)) = self
+                Ok(Some(Token::DoubleQuotedString(s)))
+            }
+            // delimited (quoted) identifier
+            quote_start if self.dialect.is_delimited_identifier_start(ch) => {
+                let word = self.tokenize_quoted_identifier(quote_start, chars)?;
+                Ok(Some(Token::make_word(word, Some(quote_start))))
+            }
+            // Potentially nested delimited (quoted) identifier
+            quote_start
+                if self
+                    .dialect
+                    .is_nested_delimited_identifier_start(quote_start)
+                    && self
                         .dialect
                         .peek_nested_delimited_identifier_quotes(chars.peekable.clone())
-                    else {
-                        return self.tokenizer_error(
-                            chars.location(),
-                            format!("Expected nested delimiter '{quote_start}' before EOF."),
-                        );
-                    };
+                        .is_some() =>
+            {
+                let Some((quote_start, nested_quote_start)) = self
+                    .dialect
+                    .peek_nested_delimited_identifier_quotes(chars.peekable.clone())
+                else {
+                    return self.tokenizer_error(
+                        chars.location(),
+                        format!("Expected nested delimiter '{quote_start}' before EOF."),
+                    );
+                };
 
-                    let Some(nested_quote_start) = nested_quote_start else {
-                        let word = self.tokenize_quoted_identifier(quote_start, chars)?;
-                        return Ok(Some(Token::make_word(&word, Some(quote_start))));
-                    };
+                let Some(nested_quote_start) = nested_quote_start else {
+                    let word = self.tokenize_quoted_identifier(quote_start, chars)?;
+                    return Ok(Some(Token::make_word(word, Some(quote_start))));
+                };
 
-                    let mut word = vec![];
-                    let quote_end = Word::matching_end_quote(quote_start);
-                    let nested_quote_end = Word::matching_end_quote(nested_quote_start);
-                    let error_loc = chars.location();
+                let mut word = vec![];
+                let quote_end = Word::matching_end_quote(quote_start);
+                let nested_quote_end = Word::matching_end_quote(nested_quote_start);
+                let error_loc = chars.location();
 
-                    chars.next(); // skip the first delimiter
-                    peeking_take_while(chars, |ch| ch.is_whitespace());
-                    if chars.peek() != Some(&nested_quote_start) {
-                        return self.tokenizer_error(
-                            error_loc,
-                            format!("Expected nested delimiter '{nested_quote_start}' before EOF."),
-                        );
-                    }
-                    word.push(nested_quote_start.into());
-                    word.push(self.tokenize_quoted_identifier(nested_quote_end, chars)?);
-                    word.push(nested_quote_end.into());
-                    peeking_take_while(chars, |ch| ch.is_whitespace());
-                    if chars.peek() != Some(&quote_end) {
-                        return self.tokenizer_error(
-                            error_loc,
-                            format!("Expected close delimiter '{quote_end}' before EOF."),
-                        );
-                    }
-                    chars.next(); // skip close delimiter
-
-                    Ok(Some(Token::make_word(&word.concat(), Some(quote_start))))
+                chars.next(); // skip the first delimiter
+                peeking_take_while(chars, |ch| ch.is_whitespace());
+                if chars.peek() != Some(&nested_quote_start) {
+                    return self.tokenizer_error(
+                        error_loc,
+                        format!("Expected nested delimiter '{nested_quote_start}' before EOF."),
+                    );
                 }
-                // numbers and period
-                '0'..='9' | '.' => {
-                    // special case where if ._ is encountered after a word then that word
-                    // is a table and the _ is the start of the col name.
-                    // if the prev token is not a word, then this is not a valid sql
-                    // word or number.
-                    if ch == '.' && chars.peekable.clone().nth(1) == Some('_') {
-                        if let Some(Token::Word(_)) = prev_token {
-                            chars.next();
-                            return Ok(Some(Token::Period));
-                        }
+                word.push(nested_quote_start.into());
+                word.push(self.tokenize_quoted_identifier(nested_quote_end, chars)?);
+                word.push(nested_quote_end.into());
+                peeking_take_while(chars, |ch| ch.is_whitespace());
+                if chars.peek() != Some(&quote_end) {
+                    return self.tokenizer_error(
+                        error_loc,
+                        format!("Expected close delimiter '{quote_end}' before EOF."),
+                    );
+                }
+                chars.next(); // skip close delimiter
 
-                        return self.tokenizer_error(
-                            chars.location(),
-                            "Unexpected character '_'".to_string(),
-                        );
-                    }
-
-                    // Some dialects support underscore as number separator
-                    // There can only be one at a time and it must be followed by another digit
-                    let is_number_separator = |ch: char, next_char: Option<char>| {
-                        self.dialect.supports_numeric_literal_underscores()
-                            && ch == '_'
-                            && next_char.is_some_and(|next_ch| next_ch.is_ascii_hexdigit())
-                    };
-
-                    let mut s = peeking_next_take_while(chars, |ch, next_ch| {
-                        ch.is_ascii_digit() || is_number_separator(ch, next_ch)
-                    });
-
-                    // match binary literal that starts with 0x
-                    if s == "0" && chars.peek() == Some(&'x') {
+                Ok(Some(Token::make_word(word.concat(), Some(quote_start))))
+            }
+            // numbers and period
+            '0'..='9' | '.' => {
+                // special case where if ._ is encountered after a word then that word
+                // is a table and the _ is the start of the col name.
+                // if the prev token is not a word, then this is not a valid sql
+                // word or number.
+                if ch == '.' && chars.peekable.clone().nth(1) == Some('_') {
+                    if !preceded_by_whitespace
+                        && !matches!(prev_token, Some(Token::Plus | Token::Minus))
+                    {
                         chars.next();
-                        let s2 = peeking_next_take_while(chars, |ch, next_ch| {
-                            ch.is_ascii_hexdigit() || is_number_separator(ch, next_ch)
-                        });
-                        return Ok(Some(Token::HexStringLiteral(s2)));
-                    }
-
-                    // match one period
-                    if let Some('.') = chars.peek() {
-                        s.push('.');
-                        chars.next();
-                    }
-
-                    // If the dialect supports identifiers that start with a numeric prefix
-                    // and we have now consumed a dot, check if the previous token was a Word.
-                    // If so, what follows is definitely not part of a decimal number and
-                    // we should yield the dot as a dedicated token so compound identifiers
-                    // starting with digits can be parsed correctly.
-                    if s == "." && self.dialect.supports_numeric_prefix() {
-                        if let Some(Token::Word(_)) = prev_token {
-                            return Ok(Some(Token::Period));
-                        }
-                    }
-
-                    // Consume fractional digits.
-                    s += &peeking_next_take_while(chars, |ch, next_ch| {
-                        ch.is_ascii_digit() || is_number_separator(ch, next_ch)
-                    });
-
-                    // No fraction -> Token::Period
-                    if s == "." {
                         return Ok(Some(Token::Period));
                     }
 
-                    // Parse exponent as number
-                    let mut exponent_part = String::new();
-                    if chars.peek() == Some(&'e') || chars.peek() == Some(&'E') {
-                        let mut char_clone = chars.peekable.clone();
-                        exponent_part.push(char_clone.next().unwrap());
+                    return self
+                        .tokenizer_error(chars.location(), "Unexpected character '_'".to_string());
+                }
 
-                        // Optional sign
-                        match char_clone.peek() {
-                            Some(&c) if matches!(c, '+' | '-') => {
-                                exponent_part.push(c);
-                                char_clone.next();
-                            }
-                            _ => (),
-                        }
+                // Some dialects support underscore as number separator
+                // There can only be one at a time and it must be followed by another digit
+                let is_number_separator = |ch: char, next_char: Option<char>| {
+                    self.dialect.supports_numeric_literal_underscores()
+                        && ch == '_'
+                        && next_char.is_some_and(|next_ch| next_ch.is_ascii_hexdigit())
+                };
 
-                        match char_clone.peek() {
-                            // Definitely an exponent, get original iterator up to speed and use it
-                            Some(&c) if c.is_ascii_digit() => {
-                                for _ in 0..exponent_part.len() {
-                                    chars.next();
-                                }
-                                exponent_part +=
-                                    &peeking_take_while(chars, |ch| ch.is_ascii_digit());
-                                s += exponent_part.as_str();
-                            }
-                            // Not an exponent, discard the work done
-                            _ => (),
-                        }
-                    }
+                let mut s = peeking_next_take_while(chars, |ch, next_ch| {
+                    ch.is_ascii_digit() || is_number_separator(ch, next_ch)
+                });
 
-                    // If the dialect supports identifiers that start with a numeric prefix,
-                    // we need to check if the value is in fact an identifier and must thus
-                    // be tokenized as a word.
-                    if self.dialect.supports_numeric_prefix() {
-                        if exponent_part.is_empty() {
-                            // If it is not a number with an exponent, it may be
-                            // an identifier starting with digits.
-                            let word =
-                                peeking_take_while(chars, |ch| self.dialect.is_identifier_part(ch));
-
-                            if !word.is_empty() {
-                                s += word.as_str();
-                                return Ok(Some(Token::make_word(s.as_str(), None)));
-                            }
-                        } else if prev_token == Some(&Token::Period) {
-                            // If the previous token was a period, thus not belonging to a number,
-                            // the value we have is part of an identifier.
-                            return Ok(Some(Token::make_word(s.as_str(), None)));
-                        }
-                    }
-
-                    let long = if chars.peek() == Some(&'L') {
-                        chars.next();
-                        true
-                    } else {
-                        false
-                    };
-                    Ok(Some(Token::Number(s, long)))
-                }
-                // punctuation
-                '(' => self.consume_and_return(chars, Token::LParen),
-                ')' => self.consume_and_return(chars, Token::RParen),
-                ',' => self.consume_and_return(chars, Token::Comma),
-                // operators
-                '-' => {
-                    chars.next(); // consume the '-'
-
-                    match chars.peek() {
-                        Some('-') => {
-                            let mut is_comment = true;
-                            if self.dialect.requires_single_line_comment_whitespace() {
-                                is_comment = Some(' ') == chars.peekable.clone().nth(1);
-                            }
-
-                            if is_comment {
-                                chars.next(); // consume second '-'
-                                let comment = self.tokenize_single_line_comment(chars);
-                                return Ok(Some(Token::Whitespace(
-                                    Whitespace::SingleLineComment {
-                                        prefix: "--".to_owned(),
-                                        comment,
-                                    },
-                                )));
-                            }
-
-                            self.start_binop(chars, "-", Token::Minus)
-                        }
-                        Some('>') => {
-                            chars.next();
-                            match chars.peek() {
-                                Some('>') => self.consume_for_binop(chars, "->>", Token::LongArrow),
-                                _ => self.start_binop(chars, "->", Token::Arrow),
-                            }
-                        }
-                        // a regular '-' operator
-                        _ => self.start_binop(chars, "-", Token::Minus),
-                    }
-                }
-                '/' => {
-                    chars.next(); // consume the '/'
-                    match chars.peek() {
-                        Some('*') => {
-                            chars.next(); // consume the '*', starting a multi-line comment
-                            self.tokenize_multiline_comment(chars)
-                        }
-                        Some('/') if dialect_of!(self is SnowflakeDialect) => {
-                            chars.next(); // consume the second '/', starting a snowflake single-line comment
-                            let comment = self.tokenize_single_line_comment(chars);
-                            Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
-                                prefix: "//".to_owned(),
-                                comment,
-                            })))
-                        }
-                        Some('/') if dialect_of!(self is DuckDbDialect | GenericDialect) => {
-                            self.consume_and_return(chars, Token::DuckIntDiv)
-                        }
-                        // a regular '/' operator
-                        _ => Ok(Some(Token::Div)),
-                    }
-                }
-                '+' => self.consume_and_return(chars, Token::Plus),
-                '*' => self.consume_and_return(chars, Token::Mul),
-                '%' => {
-                    chars.next(); // advance past '%'
-                    match chars.peek() {
-                        Some(s) if s.is_whitespace() => Ok(Some(Token::Mod)),
-                        Some(sch) if self.dialect.is_identifier_start('%') => {
-                            self.tokenize_identifier_or_keyword([ch, *sch], chars)
-                        }
-                        _ => self.start_binop(chars, "%", Token::Mod),
-                    }
-                }
-                '|' => {
-                    chars.next(); // consume the '|'
-                    match chars.peek() {
-                        Some('/') => self.consume_for_binop(chars, "|/", Token::PGSquareRoot),
-                        Some('|') => {
-                            chars.next(); // consume the second '|'
-                            match chars.peek() {
-                                Some('/') => {
-                                    self.consume_for_binop(chars, "||/", Token::PGCubeRoot)
-                                }
-                                _ => self.start_binop(chars, "||", Token::StringConcat),
-                            }
-                        }
-                        Some('&') if self.dialect.supports_geometric_types() => {
-                            chars.next(); // consume
-                            match chars.peek() {
-                                Some('>') => self.consume_for_binop(
-                                    chars,
-                                    "|&>",
-                                    Token::VerticalBarAmpersandRightAngleBracket,
-                                ),
-                                _ => self.start_binop_opt(chars, "|&", None),
-                            }
-                        }
-                        Some('>') if self.dialect.supports_geometric_types() => {
-                            chars.next(); // consume
-                            match chars.peek() {
-                                Some('>') => self.consume_for_binop(
-                                    chars,
-                                    "|>>",
-                                    Token::VerticalBarShiftRight,
-                                ),
-                                _ => self.start_binop_opt(chars, "|>", None),
-                            }
-                        }
-                        Some('>') if self.dialect.supports_pipe_operator() => {
-                            self.consume_for_binop(chars, "|>", Token::VerticalBarRightAngleBracket)
-                        }
-                        // Bitshift '|' operator
-                        _ => self.start_binop(chars, "|", Token::Pipe),
-                    }
-                }
-                '=' => {
-                    chars.next(); // consume
-                    match chars.peek() {
-                        Some('>') => self.consume_and_return(chars, Token::RArrow),
-                        Some('=') => self.consume_and_return(chars, Token::DoubleEq),
-                        _ => Ok(Some(Token::Eq)),
-                    }
-                }
-                '!' => {
-                    chars.next(); // consume
-                    match chars.peek() {
-                        Some('=') => self.consume_and_return(chars, Token::Neq),
-                        Some('!') => self.consume_and_return(chars, Token::DoubleExclamationMark),
-                        Some('~') => {
-                            chars.next();
-                            match chars.peek() {
-                                Some('*') => self
-                                    .consume_and_return(chars, Token::ExclamationMarkTildeAsterisk),
-                                Some('~') => {
-                                    chars.next();
-                                    match chars.peek() {
-                                        Some('*') => self.consume_and_return(
-                                            chars,
-                                            Token::ExclamationMarkDoubleTildeAsterisk,
-                                        ),
-                                        _ => Ok(Some(Token::ExclamationMarkDoubleTilde)),
-                                    }
-                                }
-                                _ => Ok(Some(Token::ExclamationMarkTilde)),
-                            }
-                        }
-                        _ => Ok(Some(Token::ExclamationMark)),
-                    }
-                }
-                '<' => {
-                    chars.next(); // consume
-                    match chars.peek() {
-                        Some('=') => {
-                            chars.next();
-                            match chars.peek() {
-                                Some('>') => self.consume_for_binop(chars, "<=>", Token::Spaceship),
-                                _ => self.start_binop(chars, "<=", Token::LtEq),
-                            }
-                        }
-                        Some('|') if self.dialect.supports_geometric_types() => {
-                            self.consume_for_binop(chars, "<<|", Token::ShiftLeftVerticalBar)
-                        }
-                        Some('>') => self.consume_for_binop(chars, "<>", Token::Neq),
-                        Some('<') if self.dialect.supports_geometric_types() => {
-                            chars.next(); // consume
-                            match chars.peek() {
-                                Some('|') => self.consume_for_binop(
-                                    chars,
-                                    "<<|",
-                                    Token::ShiftLeftVerticalBar,
-                                ),
-                                _ => self.start_binop(chars, "<<", Token::ShiftLeft),
-                            }
-                        }
-                        Some('<') => self.consume_for_binop(chars, "<<", Token::ShiftLeft),
-                        Some('-') if self.dialect.supports_geometric_types() => {
-                            chars.next(); // consume
-                            match chars.peek() {
-                                Some('>') => {
-                                    self.consume_for_binop(chars, "<->", Token::TwoWayArrow)
-                                }
-                                _ => self.start_binop_opt(chars, "<-", None),
-                            }
-                        }
-                        Some('^') if self.dialect.supports_geometric_types() => {
-                            self.consume_for_binop(chars, "<^", Token::LeftAngleBracketCaret)
-                        }
-                        Some('@') => self.consume_for_binop(chars, "<@", Token::ArrowAt),
-                        _ => self.start_binop(chars, "<", Token::Lt),
-                    }
-                }
-                '>' => {
-                    chars.next(); // consume
-                    match chars.peek() {
-                        Some('=') => self.consume_for_binop(chars, ">=", Token::GtEq),
-                        Some('>') => self.consume_for_binop(chars, ">>", Token::ShiftRight),
-                        Some('^') if self.dialect.supports_geometric_types() => {
-                            self.consume_for_binop(chars, ">^", Token::RightAngleBracketCaret)
-                        }
-                        _ => self.start_binop(chars, ">", Token::Gt),
-                    }
-                }
-                ':' => {
+                // match binary literal that starts with 0x
+                if s == "0" && chars.peek() == Some(&'x') {
                     chars.next();
-                    match chars.peek() {
-                        Some(':') => self.consume_and_return(chars, Token::DoubleColon),
-                        Some('=') => self.consume_and_return(chars, Token::Assignment),
-                        _ => Ok(Some(Token::Colon)),
-                    }
+                    let s2 = peeking_next_take_while(chars, |ch, next_ch| {
+                        ch.is_ascii_hexdigit() || is_number_separator(ch, next_ch)
+                    });
+                    return Ok(Some(Token::HexStringLiteral(s2)));
                 }
-                ';' => self.consume_and_return(chars, Token::SemiColon),
-                '\\' => self.consume_and_return(chars, Token::Backslash),
-                '[' => self.consume_and_return(chars, Token::LBracket),
-                ']' => self.consume_and_return(chars, Token::RBracket),
-                '&' => {
-                    chars.next(); // consume the '&'
-                    match chars.peek() {
-                        Some('>') if self.dialect.supports_geometric_types() => {
-                            chars.next();
-                            self.consume_and_return(chars, Token::AmpersandRightAngleBracket)
-                        }
-                        Some('<') if self.dialect.supports_geometric_types() => {
-                            chars.next(); // consume
-                            match chars.peek() {
-                                Some('|') => self.consume_and_return(
-                                    chars,
-                                    Token::AmpersandLeftAngleBracketVerticalBar,
-                                ),
-                                _ => {
-                                    self.start_binop(chars, "&<", Token::AmpersandLeftAngleBracket)
-                                }
-                            }
-                        }
-                        Some('&') => {
-                            chars.next(); // consume the second '&'
-                            self.start_binop(chars, "&&", Token::Overlap)
-                        }
-                        // Bitshift '&' operator
-                        _ => self.start_binop(chars, "&", Token::Ampersand),
-                    }
+
+                // match one period
+                if let Some('.') = chars.peek() {
+                    s.push('.');
+                    chars.next();
                 }
-                '^' => {
-                    chars.next(); // consume the '^'
-                    match chars.peek() {
-                        Some('@') => self.consume_and_return(chars, Token::CaretAt),
-                        _ => Ok(Some(Token::Caret)),
-                    }
-                }
-                '{' => self.consume_and_return(chars, Token::LBrace),
-                '}' => self.consume_and_return(chars, Token::RBrace),
-                '#' if dialect_of!(self is SnowflakeDialect | BigQueryDialect | MySqlDialect | HiveDialect) =>
+
+                // If the dialect supports identifiers that start with a numeric prefix
+                // and we have now consumed a dot, check if the previous token was a Word.
+                // If so, what follows is definitely not part of a decimal number and
+                // we should yield the dot as a dedicated token so compound identifiers
+                // starting with digits can be parsed correctly.
+                if s == "."
+                    && self.dialect.supports_numeric_prefix()
+                    && !preceded_by_whitespace
+                    && !matches!(prev_token, Some(Token::Plus | Token::Minus))
                 {
-                    chars.next(); // consume the '#', starting a snowflake single-line comment
-                    let comment = self.tokenize_single_line_comment(chars);
-                    Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "#".to_owned(),
-                        comment,
-                    })))
+                    return Ok(Some(Token::Period));
                 }
-                '~' => {
-                    chars.next(); // consume
-                    match chars.peek() {
-                        Some('*') => self.consume_for_binop(chars, "~*", Token::TildeAsterisk),
-                        Some('=') if self.dialect.supports_geometric_types() => {
-                            self.consume_for_binop(chars, "~=", Token::TildeEqual)
+
+                // Consume fractional digits.
+                s += &peeking_next_take_while(chars, |ch, next_ch| {
+                    ch.is_ascii_digit() || is_number_separator(ch, next_ch)
+                });
+
+                // No fraction -> Token::Period
+                if s == "." {
+                    return Ok(Some(Token::Period));
+                }
+
+                // Parse exponent as number
+                let mut exponent_part = String::new();
+                if chars.peek() == Some(&'e') || chars.peek() == Some(&'E') {
+                    let mut char_clone = chars.peekable.clone();
+                    exponent_part.push(char_clone.next().unwrap());
+
+                    // Optional sign
+                    match char_clone.peek() {
+                        Some(&c) if matches!(c, '+' | '-') => {
+                            exponent_part.push(c);
+                            char_clone.next();
                         }
-                        Some('~') => {
-                            chars.next();
-                            match chars.peek() {
-                                Some('*') => {
-                                    self.consume_for_binop(chars, "~~*", Token::DoubleTildeAsterisk)
-                                }
-                                _ => self.start_binop(chars, "~~", Token::DoubleTilde),
+                        _ => (),
+                    }
+
+                    match char_clone.peek() {
+                        // Definitely an exponent, get original iterator up to speed and use it
+                        Some(&c) if c.is_ascii_digit() => {
+                            for _ in 0..exponent_part.len() {
+                                chars.next();
                             }
+                            exponent_part += &peeking_take_while(chars, |ch| ch.is_ascii_digit());
+                            s += exponent_part.as_str();
                         }
-                        _ => self.start_binop(chars, "~", Token::Tilde),
+                        // Not an exponent, discard the work done
+                        _ => (),
                     }
                 }
-                '#' => {
+
+                // If the dialect supports identifiers that start with a numeric prefix,
+                // we need to check if the value is in fact an identifier and must thus
+                // be tokenized as a word.
+                if self.dialect.supports_numeric_prefix() {
+                    if exponent_part.is_empty() {
+                        // If it is not a number with an exponent, it may be
+                        // an identifier starting with digits.
+                        let word =
+                            peeking_take_while(chars, |ch| self.dialect.is_identifier_part(ch));
+
+                        if !word.is_empty() {
+                            s += word.as_str();
+                            return Ok(Some(Token::make_word(s, None)));
+                        }
+                    } else if prev_token == Some(&Token::Period) {
+                        // If the previous token was a period, thus not belonging to a number,
+                        // the value we have is part of an identifier.
+                        return Ok(Some(Token::make_word(s, None)));
+                    }
+                }
+
+                let long = if chars.peek() == Some(&'L') {
                     chars.next();
-                    match chars.peek() {
-                        Some('-') => self.consume_for_binop(chars, "#-", Token::HashMinus),
-                        Some('>') => {
-                            chars.next();
-                            match chars.peek() {
-                                Some('>') => {
-                                    self.consume_for_binop(chars, "#>>", Token::HashLongArrow)
-                                }
-                                _ => self.start_binop(chars, "#>", Token::HashArrow),
-                            }
+                    true
+                } else {
+                    false
+                };
+                Ok(Some(Token::Number(s, long)))
+            }
+            // punctuation
+            '(' => self.consume_and_return(chars, Token::LParen),
+            ')' => self.consume_and_return(chars, Token::RParen),
+            ',' => self.consume_and_return(chars, Token::Comma),
+            // operators
+            '-' => {
+                chars.next(); // consume the '-'
+
+                match chars.peek() {
+                    Some('-') => {
+                        let mut is_comment = true;
+                        if self.dialect.requires_single_line_comment_whitespace() {
+                            is_comment = Some(' ') == chars.peekable.clone().nth(1);
                         }
-                        Some(' ') => Ok(Some(Token::Sharp)),
-                        Some('#') if self.dialect.supports_geometric_types() => {
-                            self.consume_for_binop(chars, "##", Token::DoubleSharp)
+
+                        if is_comment {
+                            self.handle_colon_space_error(chars, prev_token, true)?;
+                            chars.next(); // consume second '-'
+                                          // Consume the rest of the line as comment
+                            let _comment = self.tokenize_single_line_comment(chars);
+                            *location = chars.location();
+                            return self.next_token(
+                                location,
+                                chars,
+                                prev_token,
+                                prev_keyword,
+                                true,
+                            );
                         }
-                        Some(sch) if self.dialect.is_identifier_start('#') => {
-                            self.tokenize_identifier_or_keyword([ch, *sch], chars)
-                        }
-                        _ => self.start_binop(chars, "#", Token::Sharp),
+
+                        self.start_binop(chars, "-", Token::Minus)
                     }
-                }
-                '@' => {
-                    chars.next();
-                    match chars.peek() {
-                        Some('@') if self.dialect.supports_geometric_types() => {
-                            self.consume_and_return(chars, Token::AtAt)
+                    Some('>') => {
+                        chars.next();
+                        match chars.peek() {
+                            Some('>') => self.consume_for_binop(chars, "->>", Token::LongArrow),
+                            _ => self.start_binop(chars, "->", Token::Arrow),
                         }
-                        Some('-') if self.dialect.supports_geometric_types() => {
-                            chars.next();
-                            match chars.peek() {
-                                Some('@') => self.consume_and_return(chars, Token::AtDashAt),
-                                _ => self.start_binop_opt(chars, "@-", None),
-                            }
-                        }
-                        Some('>') => self.consume_and_return(chars, Token::AtArrow),
-                        Some('?') => self.consume_and_return(chars, Token::AtQuestion),
-                        Some('@') => {
-                            chars.next();
-                            match chars.peek() {
-                                Some(' ') => Ok(Some(Token::AtAt)),
-                                Some(tch) if self.dialect.is_identifier_start('@') => {
-                                    self.tokenize_identifier_or_keyword([ch, '@', *tch], chars)
-                                }
-                                _ => Ok(Some(Token::AtAt)),
-                            }
-                        }
-                        Some(' ') => Ok(Some(Token::AtSign)),
-                        // We break on quotes here, because no dialect allows identifiers starting
-                        // with @ and containing quotation marks (e.g. `@'foo'`) unless they are
-                        // quoted, which is tokenized as a quoted string, not here (e.g.
-                        // `"@'foo'"`). Further, at least two dialects parse `@` followed by a
-                        // quoted string as two separate tokens, which this allows. For example,
-                        // Postgres parses `@'1'` as the absolute value of '1' which is implicitly
-                        // cast to a numeric type. And when parsing MySQL-style grantees (e.g.
-                        // `GRANT ALL ON *.* to 'root'@'localhost'`), we also want separate tokens
-                        // for the user, the `@`, and the host.
-                        Some('\'') => Ok(Some(Token::AtSign)),
-                        Some('\"') => Ok(Some(Token::AtSign)),
-                        Some('`') => Ok(Some(Token::AtSign)),
-                        Some(sch) if self.dialect.is_identifier_start('@') => {
-                            self.tokenize_identifier_or_keyword([ch, *sch], chars)
-                        }
-                        _ => Ok(Some(Token::AtSign)),
                     }
+                    // a regular '-' operator
+                    _ => self.start_binop(chars, "-", Token::Minus),
                 }
-                // Postgres uses ? for jsonb operators, not prepared statements
-                '?' if self.dialect.supports_geometric_types() => {
-                    chars.next(); // consume
-                    match chars.peek() {
-                        Some('|') => {
-                            chars.next();
-                            match chars.peek() {
-                                Some('|') => self.consume_and_return(
+            }
+            '/' => {
+                chars.next(); // consume the '/'
+                match chars.peek() {
+                    Some('*') => {
+                        self.handle_colon_space_error(chars, prev_token, true)?;
+                        chars.next(); // consume the '*', starting a multi-line comment
+                        let _comment = self.consume_multiline_comment(chars)?;
+                        *location = chars.location();
+                        self.next_token(location, chars, prev_token, prev_keyword, true)
+                    }
+                    Some('/') if dialect_of!(self is SnowflakeDialect) => {
+                        self.handle_colon_space_error(chars, prev_token, true)?;
+                        chars.next(); // consume the second '/', starting a snowflake single-line comment
+                                      // Consume the rest of the line as comment
+                        let _comment = self.tokenize_single_line_comment(chars);
+                        *location = chars.location();
+                        self.next_token(location, chars, prev_token, prev_keyword, true)
+                    }
+                    Some('/') if dialect_of!(self is DuckDbDialect | GenericDialect) => {
+                        self.consume_and_return(chars, Token::DuckIntDiv)
+                    }
+                    // a regular '/' operator
+                    _ => Ok(Some(Token::Div)),
+                }
+            }
+            '+' => self.consume_and_return(chars, Token::Plus),
+            '*' => self.consume_and_return(chars, Token::Mul),
+            '%' => {
+                chars.next(); // advance past '%'
+                match chars.peek() {
+                    Some(s) if s.is_whitespace() => Ok(Some(Token::Mod)),
+                    Some(sch) if self.dialect.is_identifier_start('%') => {
+                        self.tokenize_identifier_or_keyword([ch, *sch], chars, prev_keyword)
+                    }
+                    _ => self.start_binop(chars, "%", Token::Mod),
+                }
+            }
+            '|' => {
+                chars.next(); // consume the '|'
+                match chars.peek() {
+                    Some('/') => self.consume_for_binop(chars, "|/", Token::PGSquareRoot),
+                    Some('|') => {
+                        chars.next(); // consume the second '|'
+                        match chars.peek() {
+                            Some('/') => self.consume_for_binop(chars, "||/", Token::PGCubeRoot),
+                            _ => self.start_binop(chars, "||", Token::StringConcat),
+                        }
+                    }
+                    Some('&') if self.dialect.supports_geometric_types() => {
+                        chars.next(); // consume
+                        match chars.peek() {
+                            Some('>') => self.consume_for_binop(
+                                chars,
+                                "|&>",
+                                Token::VerticalBarAmpersandRightAngleBracket,
+                            ),
+                            _ => self.start_binop_opt(chars, "|&", None),
+                        }
+                    }
+                    Some('>') if self.dialect.supports_geometric_types() => {
+                        chars.next(); // consume
+                        match chars.peek() {
+                            Some('>') => {
+                                self.consume_for_binop(chars, "|>>", Token::VerticalBarShiftRight)
+                            }
+                            _ => self.start_binop_opt(chars, "|>", None),
+                        }
+                    }
+                    Some('>') if self.dialect.supports_pipe_operator() => {
+                        self.consume_for_binop(chars, "|>", Token::VerticalBarRightAngleBracket)
+                    }
+                    // Bitshift '|' operator
+                    _ => self.start_binop(chars, "|", Token::Pipe),
+                }
+            }
+            '=' => {
+                chars.next(); // consume
+                match chars.peek() {
+                    Some('>') => self.consume_and_return(chars, Token::RArrow),
+                    Some('=') => self.consume_and_return(chars, Token::DoubleEq),
+                    _ => Ok(Some(Token::Eq)),
+                }
+            }
+            '!' => {
+                chars.next(); // consume
+                match chars.peek() {
+                    Some('=') => self.consume_and_return(chars, Token::Neq),
+                    Some('!') => self.consume_and_return(chars, Token::DoubleExclamationMark),
+                    Some('~') => {
+                        chars.next();
+                        match chars.peek() {
+                            Some('*') => {
+                                self.consume_and_return(chars, Token::ExclamationMarkTildeAsterisk)
+                            }
+                            Some('~') => {
+                                chars.next();
+                                match chars.peek() {
+                                    Some('*') => self.consume_and_return(
+                                        chars,
+                                        Token::ExclamationMarkDoubleTildeAsterisk,
+                                    ),
+                                    _ => Ok(Some(Token::ExclamationMarkDoubleTilde)),
+                                }
+                            }
+                            _ => Ok(Some(Token::ExclamationMarkTilde)),
+                        }
+                    }
+                    _ => Ok(Some(Token::ExclamationMark)),
+                }
+            }
+            '<' => {
+                chars.next(); // consume
+                match chars.peek() {
+                    Some('=') => {
+                        chars.next();
+                        match chars.peek() {
+                            Some('>') => self.consume_for_binop(chars, "<=>", Token::Spaceship),
+                            _ => self.start_binop(chars, "<=", Token::LtEq),
+                        }
+                    }
+                    Some('|') if self.dialect.supports_geometric_types() => {
+                        self.consume_for_binop(chars, "<<|", Token::ShiftLeftVerticalBar)
+                    }
+                    Some('>') => self.consume_for_binop(chars, "<>", Token::Neq),
+                    Some('<') if self.dialect.supports_geometric_types() => {
+                        chars.next(); // consume
+                        match chars.peek() {
+                            Some('|') => {
+                                self.consume_for_binop(chars, "<<|", Token::ShiftLeftVerticalBar)
+                            }
+                            _ => self.start_binop(chars, "<<", Token::ShiftLeft),
+                        }
+                    }
+                    Some('<') => self.consume_for_binop(chars, "<<", Token::ShiftLeft),
+                    Some('-') if self.dialect.supports_geometric_types() => {
+                        chars.next(); // consume
+                        match chars.peek() {
+                            Some('>') => self.consume_for_binop(chars, "<->", Token::TwoWayArrow),
+                            _ => self.start_binop_opt(chars, "<-", None),
+                        }
+                    }
+                    Some('^') if self.dialect.supports_geometric_types() => {
+                        self.consume_for_binop(chars, "<^", Token::LeftAngleBracketCaret)
+                    }
+                    Some('@') => self.consume_for_binop(chars, "<@", Token::ArrowAt),
+                    _ => self.start_binop(chars, "<", Token::Lt),
+                }
+            }
+            '>' => {
+                chars.next(); // consume
+                match chars.peek() {
+                    Some('=') => self.consume_for_binop(chars, ">=", Token::GtEq),
+                    Some('>') => self.consume_for_binop(chars, ">>", Token::ShiftRight),
+                    Some('^') if self.dialect.supports_geometric_types() => {
+                        self.consume_for_binop(chars, ">^", Token::RightAngleBracketCaret)
+                    }
+                    _ => self.start_binop(chars, ">", Token::Gt),
+                }
+            }
+            ':' => {
+                chars.next();
+                match chars.peek() {
+                    Some(':') => self.consume_and_return(chars, Token::DoubleColon),
+                    Some('=') => self.consume_and_return(chars, Token::Assignment),
+                    _ => Ok(Some(Token::Colon)),
+                }
+            }
+            ';' => self.consume_and_return(chars, Token::SemiColon),
+            '\\' => self.consume_and_return(chars, Token::Backslash),
+            '[' => self.consume_and_return(chars, Token::LBracket),
+            ']' => self.consume_and_return(chars, Token::RBracket),
+            '&' => {
+                chars.next(); // consume the '&'
+                match chars.peek() {
+                    Some('>') if self.dialect.supports_geometric_types() => {
+                        chars.next();
+                        self.consume_and_return(chars, Token::AmpersandRightAngleBracket)
+                    }
+                    Some('<') if self.dialect.supports_geometric_types() => {
+                        chars.next(); // consume
+                        match chars.peek() {
+                            Some('|') => self.consume_and_return(
+                                chars,
+                                Token::AmpersandLeftAngleBracketVerticalBar,
+                            ),
+                            _ => self.start_binop(chars, "&<", Token::AmpersandLeftAngleBracket),
+                        }
+                    }
+                    Some('&') => {
+                        chars.next(); // consume the second '&'
+                        self.start_binop(chars, "&&", Token::Overlap)
+                    }
+                    // Bitshift '&' operator
+                    _ => self.start_binop(chars, "&", Token::Ampersand),
+                }
+            }
+            '^' => {
+                chars.next(); // consume the '^'
+                match chars.peek() {
+                    Some('@') => self.consume_and_return(chars, Token::CaretAt),
+                    _ => Ok(Some(Token::Caret)),
+                }
+            }
+            '{' => self.consume_and_return(chars, Token::LBrace),
+            '}' => self.consume_and_return(chars, Token::RBrace),
+            '#' if dialect_of!(self is SnowflakeDialect | BigQueryDialect | MySqlDialect | HiveDialect) =>
+            {
+                self.handle_colon_space_error(chars, prev_token, true)?;
+                chars.next(); // consume the '#', starting a snowflake single-line comment
+                              // Consume the rest of the line as comment
+                let _comment = self.tokenize_single_line_comment(chars);
+                *location = chars.location();
+                self.next_token(location, chars, prev_token, prev_keyword, true)
+            }
+            '~' => {
+                chars.next(); // consume
+                match chars.peek() {
+                    Some('*') => self.consume_for_binop(chars, "~*", Token::TildeAsterisk),
+                    Some('=') if self.dialect.supports_geometric_types() => {
+                        self.consume_for_binop(chars, "~=", Token::TildeEqual)
+                    }
+                    Some('~') => {
+                        chars.next();
+                        match chars.peek() {
+                            Some('*') => {
+                                self.consume_for_binop(chars, "~~*", Token::DoubleTildeAsterisk)
+                            }
+                            _ => self.start_binop(chars, "~~", Token::DoubleTilde),
+                        }
+                    }
+                    Some('/') if self.dialect.supports_path_like_identifiers() => {
+                        // regular identifier starting with an "E" or "e"
+                        let s = self.tokenize_word("~", chars, prev_keyword)?;
+                        Ok(Some(Token::make_word(s, None)))
+                    }
+                    _ => self.start_binop(chars, "~", Token::Tilde),
+                }
+            }
+            '#' => {
+                chars.next();
+                match chars.peek() {
+                    Some('-') => self.consume_for_binop(chars, "#-", Token::HashMinus),
+                    Some('>') => {
+                        chars.next();
+                        match chars.peek() {
+                            Some('>') => self.consume_for_binop(chars, "#>>", Token::HashLongArrow),
+                            _ => self.start_binop(chars, "#>", Token::HashArrow),
+                        }
+                    }
+                    Some(' ') => Ok(Some(Token::Sharp)),
+                    Some('#') if self.dialect.supports_geometric_types() => {
+                        self.consume_for_binop(chars, "##", Token::DoubleSharp)
+                    }
+                    Some(sch) if self.dialect.is_identifier_start('#') => {
+                        self.tokenize_identifier_or_keyword([ch, *sch], chars, prev_keyword)
+                    }
+                    _ => self.start_binop(chars, "#", Token::Sharp),
+                }
+            }
+            '@' => {
+                chars.next();
+                match chars.peek() {
+                    Some('@') if self.dialect.supports_geometric_types() => {
+                        self.consume_and_return(chars, Token::AtAt)
+                    }
+                    Some('-') if self.dialect.supports_geometric_types() => {
+                        chars.next();
+                        match chars.peek() {
+                            Some('@') => self.consume_and_return(chars, Token::AtDashAt),
+                            _ => self.start_binop_opt(chars, "@-", None),
+                        }
+                    }
+                    Some('>') => self.consume_and_return(chars, Token::AtArrow),
+                    Some('?') => self.consume_and_return(chars, Token::AtQuestion),
+                    Some('@') => {
+                        chars.next();
+                        match chars.peek() {
+                            Some(' ') => Ok(Some(Token::AtAt)),
+                            Some(tch) if self.dialect.is_identifier_start('@') => self
+                                .tokenize_identifier_or_keyword(
+                                    [ch, '@', *tch],
                                     chars,
-                                    Token::QuestionMarkDoubleVerticalBar,
+                                    prev_keyword,
                                 ),
-                                _ => Ok(Some(Token::QuestionPipe)),
-                            }
+                            _ => Ok(Some(Token::AtAt)),
                         }
-
-                        Some('&') => self.consume_and_return(chars, Token::QuestionAnd),
-                        Some('-') => {
-                            chars.next(); // consume
-                            match chars.peek() {
-                                Some('|') => self
-                                    .consume_and_return(chars, Token::QuestionMarkDashVerticalBar),
-                                _ => Ok(Some(Token::QuestionMarkDash)),
-                            }
-                        }
-                        Some('#') => self.consume_and_return(chars, Token::QuestionMarkSharp),
-                        _ => self.consume_and_return(chars, Token::Question),
                     }
+                    Some(' ') => Ok(Some(Token::AtSign)),
+                    // We break on quotes here, because no dialect allows identifiers starting
+                    // with @ and containing quotation marks (e.g. `@'foo'`) unless they are
+                    // quoted, which is tokenized as a quoted string, not here (e.g.
+                    // `"@'foo'"`). Further, at least two dialects parse `@` followed by a
+                    // quoted string as two separate tokens, which this allows. For example,
+                    // Postgres parses `@'1'` as the absolute value of '1' which is implicitly
+                    // cast to a numeric type. And when parsing MySQL-style grantees (e.g.
+                    // `GRANT ALL ON *.* to 'root'@'localhost'`), we also want separate tokens
+                    // for the user, the `@`, and the host.
+                    Some('\'') => Ok(Some(Token::AtSign)),
+                    Some('\"') => Ok(Some(Token::AtSign)),
+                    Some('`') => Ok(Some(Token::AtSign)),
+                    Some(sch) if self.dialect.is_identifier_start('@') => {
+                        self.tokenize_identifier_or_keyword([ch, *sch], chars, prev_keyword)
+                    }
+                    _ => Ok(Some(Token::AtSign)),
                 }
-                '?' => {
-                    chars.next();
-                    let s = peeking_take_while(chars, |ch| ch.is_numeric());
-                    Ok(Some(Token::Placeholder(String::from("?") + &s)))
-                }
+            }
+            // Postgres uses ? for jsonb operators, not prepared statements
+            '?' if self.dialect.supports_geometric_types() => {
+                chars.next(); // consume
+                match chars.peek() {
+                    Some('|') => {
+                        chars.next();
+                        match chars.peek() {
+                            Some('|') => {
+                                self.consume_and_return(chars, Token::QuestionMarkDoubleVerticalBar)
+                            }
+                            _ => Ok(Some(Token::QuestionPipe)),
+                        }
+                    }
 
-                // identifier or keyword
-                ch if self.dialect.is_identifier_start(ch) => {
-                    self.tokenize_identifier_or_keyword([ch], chars)
+                    Some('&') => self.consume_and_return(chars, Token::QuestionAnd),
+                    Some('-') => {
+                        chars.next(); // consume
+                        match chars.peek() {
+                            Some('|') => {
+                                self.consume_and_return(chars, Token::QuestionMarkDashVerticalBar)
+                            }
+                            _ => Ok(Some(Token::QuestionMarkDash)),
+                        }
+                    }
+                    Some('#') => self.consume_and_return(chars, Token::QuestionMarkSharp),
+                    _ => self.consume_and_return(chars, Token::Question),
                 }
-                '$' => Ok(Some(self.tokenize_dollar_preceded_value(chars)?)),
+            }
+            '?' => {
+                chars.next();
+                let s = peeking_take_while(chars, |ch| ch.is_numeric());
+                Ok(Some(Token::Placeholder(String::from("?") + &s)))
+            }
 
-                // whitespace check (including unicode chars) should be last as it covers some of the chars above
-                ch if ch.is_whitespace() => {
-                    self.consume_and_return(chars, Token::Whitespace(Whitespace::Space))
-                }
-                other => self.consume_and_return(chars, Token::Char(other)),
-            },
-            None => Ok(None),
+            // identifier or keyword
+            ch if self.dialect.is_identifier_start(ch) => {
+                self.tokenize_identifier_or_keyword([ch], chars, prev_keyword)
+            }
+            '$' => Ok(Some(self.tokenize_dollar_preceded_value(chars)?)),
+
+            // whitespace check (including unicode chars) should be last as it covers some of the chars above
+            ch if ch.is_whitespace() => {
+                self.handle_colon_space_error(chars, prev_token, preceded_by_whitespace)?;
+                chars.next(); // consume
+                *location = chars.location();
+                self.next_token(location, chars, prev_token, prev_keyword, true)
+            }
+            other => self.consume_and_return(chars, Token::Char(other)),
         }
     }
 
@@ -1877,12 +1962,66 @@ impl<'a> Tokenizer<'a> {
     }
 
     /// Tokenize an identifier or keyword, after the first char is already consumed.
-    fn tokenize_word(&self, first_chars: impl Into<String>, chars: &mut State) -> String {
+    fn tokenize_word(
+        &self,
+        first_chars: impl Into<String>,
+        chars: &mut State,
+        prev_keyword: Option<Keyword>,
+    ) -> Result<String, TokenizerError> {
         let mut s = first_chars.into();
         s.push_str(&peeking_take_while(chars, |ch| {
             self.dialect.is_identifier_part(ch)
         }));
-        s
+
+        while !matches!(prev_keyword, Some(Keyword::SELECT))
+            && self.dialect.supports_path_like_identifiers()
+            && chars.peek().map(|&ch| ch == '/').unwrap_or(false)
+            && chars
+                .peekable
+                .clone()
+                .nth(1)
+                .map(|ch| ch.is_alphabetic())
+                .unwrap_or(false)
+        {
+            s.push('/');
+            chars.next(); // consume the '/'
+
+            s.push_str(&peeking_take_while(chars, |ch| {
+                self.dialect.is_identifier_part(ch)
+            }));
+        }
+
+        if !matches!(prev_keyword, Some(Keyword::SELECT))
+            && self.dialect.supports_hyphenated_identifiers()
+        {
+            while chars.peek() == Some(&'-') {
+                chars.next(); // consume the '-'
+                let mut alphabetic_characters = false;
+                let mut new_identifier = String::new();
+                new_identifier.push_str(&peeking_take_while(chars, |ch| {
+                    alphabetic_characters |= ch.is_alphabetic();
+                    self.dialect.is_identifier_part(ch)
+                }));
+
+                if let Some(ch) = new_identifier.chars().next() {
+                    if ch.is_numeric() && alphabetic_characters {
+                        return self.tokenizer_error(
+                            chars.location(),
+                            "Identifier cannot start with a digit and contain alphabetic characters after hyphen",
+                        );
+                    }
+                } else {
+                    // No characters after the hyphen, meaning it's not a valid identifier.
+                    return self
+                        .tokenizer_error(chars.location(), "Identifier cannot end with a hyphen");
+                }
+
+                s.push('-');
+                s.push_str(&new_identifier);
+            }
+        }
+
+        Ok(s)
     }
 
     /// Read a quoted identifier
@@ -2101,10 +2240,10 @@ impl<'a> Tokenizer<'a> {
         self.tokenizer_error(error_loc, "Unterminated string literal")
     }
 
-    fn tokenize_multiline_comment(
+    fn consume_multiline_comment(
         &self,
         chars: &mut State,
-    ) -> Result<Option<Token>, TokenizerError> {
+    ) -> Result<Option<String>, TokenizerError> {
         let mut s = String::new();
         let mut nested = 1;
         let supports_nested_comments = self.dialect.supports_nested_comments();
@@ -2121,7 +2260,7 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume the '/'
                     nested -= 1;
                     if nested == 0 {
-                        break Ok(Some(Token::Whitespace(Whitespace::MultiLineComment(s))));
+                        break Ok(Some(s));
                     }
                     s.push('*');
                     s.push('/');
@@ -2444,7 +2583,6 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1"), false),
         ];
 
@@ -2459,7 +2597,6 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from(".1"), false),
         ];
 
@@ -2475,7 +2612,6 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Word(Word {
                 value: "foo".to_string(),
                 quote_style: None,
@@ -2496,7 +2632,6 @@ mod tests {
         let tokens = tokenizer.tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Number("10".to_string(), false),
             Token::make_word("_000", None),
         ];
@@ -2506,17 +2641,13 @@ mod tests {
             "SELECT 10_000, _10_000, 10_00_, 10___0",
             vec![
                 Token::make_keyword("SELECT"),
-                Token::Whitespace(Whitespace::Space),
                 Token::Number("10_000".to_string(), false),
                 Token::Comma,
-                Token::Whitespace(Whitespace::Space),
                 Token::make_word("_10_000", None), // leading underscore tokenizes as a word (parsed as column identifier)
                 Token::Comma,
-                Token::Whitespace(Whitespace::Space),
                 Token::Number("10_00".to_string(), false),
                 Token::make_word("_", None), // trailing underscores tokenizes as a word (syntax error in some dialects)
                 Token::Comma,
-                Token::Whitespace(Whitespace::Space),
                 Token::Number("10".to_string(), false),
                 Token::make_word("___0", None), // multiple underscores tokenizes as a word (syntax error in some dialects)
             ],
@@ -2531,24 +2662,18 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1e10"), false),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1e-10"), false),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1e+10"), false),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1"), false),
             Token::make_word("ea", None),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1e-10"), false),
             Token::make_word("a", None),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1e-10"), false),
             Token::Minus,
             Token::Number(String::from("10"), false),
@@ -2565,7 +2690,6 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("sqrt", None),
             Token::LParen,
             Token::Number(String::from("1"), false),
@@ -2583,11 +2707,8 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString(String::from("a")),
-            Token::Whitespace(Whitespace::Space),
             Token::StringConcat,
-            Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString(String::from("b")),
         ];
 
@@ -2601,15 +2722,10 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("one", None),
-            Token::Whitespace(Whitespace::Space),
             Token::Pipe,
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("two", None),
-            Token::Whitespace(Whitespace::Space),
             Token::Caret,
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("three", None),
         ];
         compare(expected, tokens);
@@ -2624,32 +2740,20 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("true"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("XOR"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("true"),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("false"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("XOR"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("false"),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("true"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("XOR"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("false"),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("false"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("XOR"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("true"),
         ];
         compare(expected, tokens);
@@ -2663,23 +2767,14 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Mul,
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("customer", None),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("WHERE"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("id", None),
-            Token::Whitespace(Whitespace::Space),
             Token::Eq,
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1"), false),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("LIMIT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("5"), false),
         ];
 
@@ -2694,21 +2789,13 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("EXPLAIN"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Mul,
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("customer", None),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("WHERE"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("id", None),
-            Token::Whitespace(Whitespace::Space),
             Token::Eq,
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1"), false),
         ];
 
@@ -2723,23 +2810,14 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("EXPLAIN"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("ANALYZE"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Mul,
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("customer", None),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("WHERE"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("id", None),
-            Token::Whitespace(Whitespace::Space),
             Token::Eq,
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1"), false),
         ];
 
@@ -2754,19 +2832,12 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Mul,
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("customer", None),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("WHERE"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("salary", None),
-            Token::Whitespace(Whitespace::Space),
             Token::Neq,
-            Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString(String::from("Not Provided")),
         ];
 
@@ -2780,11 +2851,7 @@ mod tests {
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         // println!("tokens: {:#?}", tokens);
-        let expected = vec![
-            Token::Whitespace(Whitespace::Newline),
-            Token::Char('💝'),
-            Token::make_word("مصطفىh", None),
-        ];
+        let expected = vec![Token::Char('💝'), Token::make_word("مصطفىh", None)];
         compare(expected, tokens);
     }
 
@@ -2839,16 +2906,10 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         // println!("tokens: {:#?}", tokens);
         let expected = vec![
-            Token::Whitespace(Whitespace::Newline),
-            Token::Whitespace(Whitespace::Newline),
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Mul,
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("table"),
-            Token::Whitespace(Whitespace::Tab),
             Token::Char('💝'),
             Token::make_word("مصطفىh", None),
         ];
@@ -2862,7 +2923,6 @@ mod tests {
                 String::from("SELECT $tag$dollar '$' quoted strings have $tags like this$ or like this $$$tag$"),
                 vec![
                     Token::make_keyword("SELECT"),
-                    Token::Whitespace(Whitespace::Space),
                     Token::DollarQuotedString(DollarQuotedString {
                         value: "dollar '$' quoted strings have $tags like this$ or like this $$".into(),
                         tag: Some("tag".into()),
@@ -2873,7 +2933,6 @@ mod tests {
                 String::from("SELECT $abc$x$ab$abc$"),
                 vec![
                     Token::make_keyword("SELECT"),
-                    Token::Whitespace(Whitespace::Space),
                     Token::DollarQuotedString(DollarQuotedString {
                         value: "x$ab".into(),
                         tag: Some("abc".into()),
@@ -2884,7 +2943,6 @@ mod tests {
                 String::from("SELECT $abc$$abc$"),
                 vec![
                     Token::make_keyword("SELECT"),
-                    Token::Whitespace(Whitespace::Space),
                     Token::DollarQuotedString(DollarQuotedString {
                         value: "".into(),
                         tag: Some("abc".into()),
@@ -2961,16 +3019,12 @@ mod tests {
             tokens,
             vec![
                 Token::make_keyword("SELECT"),
-                Token::Whitespace(Whitespace::Space),
                 Token::Placeholder("$$".into()),
                 Token::Comma,
-                Token::Whitespace(Whitespace::Space),
                 Token::Placeholder("$$ABC$$".into()),
                 Token::Comma,
-                Token::Whitespace(Whitespace::Space),
                 Token::Placeholder("$ABC$".into()),
                 Token::Comma,
-                Token::Whitespace(Whitespace::Space),
                 Token::Placeholder("$ABC".into()),
             ]
         );
@@ -2983,7 +3037,6 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::DollarQuotedString(DollarQuotedString {
                 value: "dollar $nested$ string".into(),
                 tag: Some("tag".into()),
@@ -2999,7 +3052,6 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::DollarQuotedString(DollarQuotedString {
                 value: "".into(),
                 tag: None,
@@ -3016,7 +3068,6 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::DollarQuotedString(DollarQuotedString {
                 value: "within dollar '$' quoted strings have $tags like this$ ".into(),
                 tag: None,
@@ -3067,9 +3118,7 @@ mod tests {
 
         let expected = vec![
             Token::make_word("a", None),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("IS"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("NULL"),
         ];
 
@@ -3083,31 +3132,17 @@ mod tests {
                 String::from("0--this is a comment\n1"),
                 vec![
                     Token::Number("0".to_string(), false),
-                    Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "--".to_string(),
-                        comment: "this is a comment\n".to_string(),
-                    }),
                     Token::Number("1".to_string(), false),
                 ],
             ),
             (
                 String::from("0--this is a comment\r1"),
-                vec![
-                    Token::Number("0".to_string(), false),
-                    Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "--".to_string(),
-                        comment: "this is a comment\r1".to_string(),
-                    }),
-                ],
+                vec![Token::Number("0".to_string(), false)],
             ),
             (
                 String::from("0--this is a comment\r\n1"),
                 vec![
                     Token::Number("0".to_string(), false),
-                    Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "--".to_string(),
-                        comment: "this is a comment\r\n".to_string(),
-                    }),
                     Token::Number("1".to_string(), false),
                 ],
             ),
@@ -3129,10 +3164,6 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
             Token::Number("1".to_string(), false),
-            Token::Whitespace(Whitespace::SingleLineComment {
-                prefix: "--".to_string(),
-                comment: "\r".to_string(),
-            }),
             Token::Number("0".to_string(), false),
         ];
         compare(expected, tokens);
@@ -3144,11 +3175,7 @@ mod tests {
 
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
-        let expected = vec![Token::Whitespace(Whitespace::SingleLineComment {
-            prefix: "--".to_string(),
-            comment: "this is a comment".to_string(),
-        })];
-        compare(expected, tokens);
+        assert!(tokens.is_empty());
     }
 
     #[test]
@@ -3159,9 +3186,6 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
             Token::Number("0".to_string(), false),
-            Token::Whitespace(Whitespace::MultiLineComment(
-                "multi-line\n* /comment".to_string(),
-            )),
             Token::Number("1".to_string(), false),
         ];
         compare(expected, tokens);
@@ -3173,10 +3197,6 @@ mod tests {
             "0/*multi-line\n* \n/* comment \n /*comment*/*/ */ /comment*/1",
             vec![
                 Token::Number("0".to_string(), false),
-                Token::Whitespace(Whitespace::MultiLineComment(
-                    "multi-line\n* \n/* comment \n /*comment*/*/ ".into(),
-                )),
-                Token::Whitespace(Whitespace::Space),
                 Token::Div,
                 Token::Word(Word {
                     value: "comment".to_string(),
@@ -3193,9 +3213,6 @@ mod tests {
             "0/*multi-line\n* \n/* comment \n /*comment/**/ */ /comment*/*/1",
             vec![
                 Token::Number("0".to_string(), false),
-                Token::Whitespace(Whitespace::MultiLineComment(
-                    "multi-line\n* \n/* comment \n /*comment/**/ */ /comment*/".into(),
-                )),
                 Token::Number("1".to_string(), false),
             ],
         );
@@ -3204,9 +3221,7 @@ mod tests {
             "SELECT 1/* a /* b */ c */0",
             vec![
                 Token::make_keyword("SELECT"),
-                Token::Whitespace(Whitespace::Space),
                 Token::Number("1".to_string(), false),
-                Token::Whitespace(Whitespace::MultiLineComment(" a /* b */ c ".to_string())),
                 Token::Number("0".to_string(), false),
             ],
         );
@@ -3218,9 +3233,7 @@ mod tests {
             "select 1/*/**/*/0",
             vec![
                 Token::make_keyword("select"),
-                Token::Whitespace(Whitespace::Space),
                 Token::Number("1".to_string(), false),
-                Token::Whitespace(Whitespace::MultiLineComment("/**/".to_string())),
                 Token::Number("0".to_string(), false),
             ],
         );
@@ -3232,11 +3245,7 @@ mod tests {
             "SELECT 1/*/* nested comment */*/0",
             vec![
                 Token::make_keyword("SELECT"),
-                Token::Whitespace(Whitespace::Space),
                 Token::Number("1".to_string(), false),
-                Token::Whitespace(Whitespace::MultiLineComment(
-                    "/* nested comment ".to_string(),
-                )),
                 Token::Mul,
                 Token::Div,
                 Token::Number("0".to_string(), false),
@@ -3250,12 +3259,7 @@ mod tests {
 
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
-        let expected = vec![
-            Token::Whitespace(Whitespace::Newline),
-            Token::Whitespace(Whitespace::MultiLineComment("* Comment *".to_string())),
-            Token::Whitespace(Whitespace::Newline),
-        ];
-        compare(expected, tokens);
+        assert!(tokens.is_empty());
     }
 
     #[test]
@@ -3264,12 +3268,7 @@ mod tests {
 
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
-        let expected = vec![
-            Token::Whitespace(Whitespace::Space),
-            Token::Whitespace(Whitespace::Space),
-            Token::Whitespace(Whitespace::Newline),
-        ];
-        compare(expected, tokens);
+        assert!(tokens.is_empty());
     }
 
     #[test]
@@ -3295,13 +3294,9 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
             Token::make_word("line1", None),
-            Token::Whitespace(Whitespace::Newline),
             Token::make_word("line2", None),
-            Token::Whitespace(Whitespace::Newline),
             Token::make_word("line3", None),
-            Token::Whitespace(Whitespace::Newline),
             Token::make_word("line4", None),
-            Token::Whitespace(Whitespace::Newline),
         ];
         compare(expected, tokens);
     }
@@ -3313,15 +3308,10 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("TOP"),
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("5"), false),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("bar", Some('[')),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("foo", None),
         ];
         compare(expected, tokens);
@@ -3334,32 +3324,20 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("col", None),
-            Token::Whitespace(Whitespace::Space),
             Token::Tilde,
-            Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("^a".into()),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("col", None),
-            Token::Whitespace(Whitespace::Space),
             Token::TildeAsterisk,
-            Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("^a".into()),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("col", None),
-            Token::Whitespace(Whitespace::Space),
             Token::ExclamationMarkTilde,
-            Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("^a".into()),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("col", None),
-            Token::Whitespace(Whitespace::Space),
             Token::ExclamationMarkTildeAsterisk,
-            Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("^a".into()),
         ];
         compare(expected, tokens);
@@ -3372,32 +3350,20 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("col", None),
-            Token::Whitespace(Whitespace::Space),
             Token::DoubleTilde,
-            Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("_a%".into()),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("col", None),
-            Token::Whitespace(Whitespace::Space),
             Token::DoubleTildeAsterisk,
-            Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("_a%".into()),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("col", None),
-            Token::Whitespace(Whitespace::Space),
             Token::ExclamationMarkDoubleTilde,
-            Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("_a%".into()),
             Token::Comma,
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("col", None),
-            Token::Whitespace(Whitespace::Space),
             Token::ExclamationMarkDoubleTildeAsterisk,
-            Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("_a%".into()),
         ];
         compare(expected, tokens);
@@ -3409,13 +3375,9 @@ mod tests {
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![
-            Token::Whitespace(Whitespace::Space),
             Token::make_word(r#"a " b"#, Some('"')),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word(r#"a ""#, Some('"')),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word(r#"c """#, Some('"')),
-            Token::Whitespace(Whitespace::Space),
         ];
         compare(expected, tokens);
     }
@@ -3442,13 +3404,9 @@ mod tests {
             .tokenize()
             .unwrap();
         let expected = vec![
-            Token::Whitespace(Whitespace::Space),
             Token::make_word(r#"a "" b"#, Some('"')),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word(r#"a """#, Some('"')),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word(r#"c """""#, Some('"')),
-            Token::Whitespace(Whitespace::Space),
         ];
         compare(expected, tokens);
     }
@@ -3462,23 +3420,8 @@ mod tests {
             .unwrap();
         let expected = vec![
             TokenWithSpan::at(Token::make_keyword("SELECT"), (1, 1).into(), (1, 7).into()),
-            TokenWithSpan::at(
-                Token::Whitespace(Whitespace::Space),
-                (1, 7).into(),
-                (1, 8).into(),
-            ),
             TokenWithSpan::at(Token::make_word("a", None), (1, 8).into(), (1, 9).into()),
             TokenWithSpan::at(Token::Comma, (1, 9).into(), (1, 10).into()),
-            TokenWithSpan::at(
-                Token::Whitespace(Whitespace::Newline),
-                (1, 10).into(),
-                (2, 1).into(),
-            ),
-            TokenWithSpan::at(
-                Token::Whitespace(Whitespace::Space),
-                (2, 1).into(),
-                (2, 2).into(),
-            ),
             TokenWithSpan::at(Token::make_word("b", None), (2, 2).into(), (2, 3).into()),
         ];
         compare(expected, tokens);
@@ -3600,11 +3543,8 @@ mod tests {
         let tokens = Tokenizer::new(dialect, sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Mul,
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
-            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1"), false),
         ];
         compare(expected, tokens);
@@ -3802,9 +3742,7 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("CREATE"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("USER"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("root", Some('`')),
             Token::AtSign,
             Token::make_word("%", Some('`')),
@@ -3820,7 +3758,6 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::AtSign,
             Token::SingleQuotedString("1".to_string()),
         ];
@@ -3835,12 +3772,9 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::AtSign,
             Token::DoubleQuotedString("bar".to_string()),
-            Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
-            Token::Whitespace(Whitespace::Space),
             Token::make_word("foo", None),
         ];
         compare(expected, tokens);
@@ -3853,7 +3787,6 @@ mod tests {
                 "select n'''''\\'",
                 vec![
                     Token::make_keyword("select"),
-                    Token::Whitespace(Whitespace::Space),
                     Token::NationalStringLiteral("''\\".to_string()),
                 ],
             );
@@ -3866,7 +3799,6 @@ mod tests {
                 "select n'''''\\''",
                 vec![
                     Token::make_keyword("select"),
-                    Token::Whitespace(Whitespace::Space),
                     Token::NationalStringLiteral("'''".to_string()),
                 ],
             );
@@ -3878,7 +3810,6 @@ mod tests {
             "select e'...'",
             vec![
                 Token::make_keyword("select"),
-                Token::Whitespace(Whitespace::Space),
                 Token::make_word("e", None),
                 Token::SingleQuotedString("...".to_string()),
             ],
@@ -3888,7 +3819,6 @@ mod tests {
             "select E'...'",
             vec![
                 Token::make_keyword("select"),
-                Token::Whitespace(Whitespace::Space),
                 Token::make_word("E", None),
                 Token::SingleQuotedString("...".to_string()),
             ],
@@ -3901,7 +3831,6 @@ mod tests {
             "select e'\\''",
             vec![
                 Token::make_keyword("select"),
-                Token::Whitespace(Whitespace::Space),
                 Token::EscapedStringLiteral("'".to_string()),
             ],
         );
@@ -3910,7 +3839,6 @@ mod tests {
             "select E'\\''",
             vec![
                 Token::make_keyword("select"),
-                Token::Whitespace(Whitespace::Space),
                 Token::EscapedStringLiteral("'".to_string()),
             ],
         );
@@ -3923,7 +3851,6 @@ mod tests {
                 "SELECT --'abc'",
                 vec![
                     Token::make_keyword("SELECT"),
-                    Token::Whitespace(Whitespace::Space),
                     Token::Minus,
                     Token::Minus,
                     Token::SingleQuotedString("abc".to_string()),
@@ -3931,70 +3858,25 @@ mod tests {
             );
 
         all_dialects_where(|dialect| dialect.requires_single_line_comment_whitespace())
-            .tokenizes_to(
-                "SELECT -- 'abc'",
-                vec![
-                    Token::make_keyword("SELECT"),
-                    Token::Whitespace(Whitespace::Space),
-                    Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "--".to_string(),
-                        comment: " 'abc'".to_string(),
-                    }),
-                ],
-            );
+            .tokenizes_to("SELECT -- 'abc'", vec![Token::make_keyword("SELECT")]);
 
         all_dialects_where(|dialect| dialect.requires_single_line_comment_whitespace())
             .tokenizes_to(
                 "SELECT --",
-                vec![
-                    Token::make_keyword("SELECT"),
-                    Token::Whitespace(Whitespace::Space),
-                    Token::Minus,
-                    Token::Minus,
-                ],
+                vec![Token::make_keyword("SELECT"), Token::Minus, Token::Minus],
             );
     }
 
     #[test]
     fn test_whitespace_not_required_after_single_line_comment() {
         all_dialects_where(|dialect| !dialect.requires_single_line_comment_whitespace())
-            .tokenizes_to(
-                "SELECT --'abc'",
-                vec![
-                    Token::make_keyword("SELECT"),
-                    Token::Whitespace(Whitespace::Space),
-                    Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "--".to_string(),
-                        comment: "'abc'".to_string(),
-                    }),
-                ],
-            );
+            .tokenizes_to("SELECT --'abc'", vec![Token::make_keyword("SELECT")]);
 
         all_dialects_where(|dialect| !dialect.requires_single_line_comment_whitespace())
-            .tokenizes_to(
-                "SELECT -- 'abc'",
-                vec![
-                    Token::make_keyword("SELECT"),
-                    Token::Whitespace(Whitespace::Space),
-                    Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "--".to_string(),
-                        comment: " 'abc'".to_string(),
-                    }),
-                ],
-            );
+            .tokenizes_to("SELECT -- 'abc'", vec![Token::make_keyword("SELECT")]);
 
         all_dialects_where(|dialect| !dialect.requires_single_line_comment_whitespace())
-            .tokenizes_to(
-                "SELECT --",
-                vec![
-                    Token::make_keyword("SELECT"),
-                    Token::Whitespace(Whitespace::Space),
-                    Token::Whitespace(Whitespace::SingleLineComment {
-                        prefix: "--".to_string(),
-                        comment: "".to_string(),
-                    }),
-                ],
-            );
+            .tokenizes_to("SELECT --", vec![Token::make_keyword("SELECT")]);
     }
 
     #[test]
@@ -4033,7 +3915,6 @@ mod tests {
 
         let expected = vec![
             Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
             Token::Word(Word {
                 value: "table".to_string(),
                 quote_style: None,

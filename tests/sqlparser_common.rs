@@ -9921,10 +9921,13 @@ fn parse_merge() {
                 clauses,
                 vec![
                     MergeClause {
+                        when_token: AttachedToken::empty(),
                         clause_kind: MergeClauseKind::NotMatched,
                         predicate: None,
                         action: MergeAction::Insert(MergeInsertExpr {
+                            insert_token: AttachedToken::empty(),
                             columns: vec![Ident::new("A"), Ident::new("B"), Ident::new("C")],
+                            kind_token: AttachedToken::empty(),
                             kind: MergeInsertKind::Values(Values {
                                 value_keyword: false,
                                 explicit_row: false,
@@ -9946,6 +9949,7 @@ fn parse_merge() {
                         }),
                     },
                     MergeClause {
+                        when_token: AttachedToken::empty(),
                         clause_kind: MergeClauseKind::Matched,
                         predicate: Some(Expr::BinaryOp {
                             left: Box::new(Expr::CompoundIdentifier(vec![
@@ -9958,6 +9962,7 @@ fn parse_merge() {
                             )),
                         }),
                         action: MergeAction::Update {
+                            update_token: AttachedToken::empty(),
                             assignments: vec![
                                 Assignment {
                                     target: AssignmentTarget::ColumnName(ObjectName::from(vec![
@@ -9983,9 +9988,12 @@ fn parse_merge() {
                         },
                     },
                     MergeClause {
+                        when_token: AttachedToken::empty(),
                         clause_kind: MergeClauseKind::Matched,
                         predicate: None,
-                        action: MergeAction::Delete,
+                        action: MergeAction::Delete {
+                            delete_token: AttachedToken::empty(),
+                        },
                     },
                 ]
             );

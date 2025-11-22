@@ -367,7 +367,7 @@ fn parse_create_function() {
         END\
     ";
     assert_eq!(
-        ParserError::ParserError("Unparsable function body".to_owned()),
+        ParserError::SpannedParserError("Unparsable function body".to_owned(), Span::empty()),
         ms().parse_sql_statements(create_multi_statement_tvf_without_table_definition)
             .unwrap_err()
     );
@@ -379,8 +379,9 @@ fn parse_create_function() {
         RETURN 'hi'\
     ";
     assert_eq!(
-        ParserError::ParserError(
-            "Expected a subquery (or bare SELECT statement) after RETURN".to_owned()
+        ParserError::SpannedParserError(
+            "Expected a subquery (or bare SELECT statement) after RETURN".to_owned(),
+            Span::empty(),
         ),
         ms().parse_sql_statements(create_inline_tvf_without_subquery_or_bare_select)
             .unwrap_err()
@@ -1334,7 +1335,7 @@ fn parse_convert() {
 
     let error_sql = "SELECT CONVERT(INT, 'foo',) FROM T";
     assert_eq!(
-        ParserError::ParserError("Expected: an expression, found: )".to_owned()),
+        ParserError::SpannedParserError("Expected: an expression, found: )".to_owned(), Span::empty()),
         ms().parse_sql_statements(error_sql).unwrap_err()
     );
 }

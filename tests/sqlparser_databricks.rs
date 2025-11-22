@@ -82,7 +82,7 @@ fn test_databricks_exists() {
     let res = databricks().parse_sql_statements("SELECT EXISTS (");
     assert_eq!(
         // TODO: improve this error message...
-        ParserError::ParserError("Expected: an expression, found: EOF".to_string()),
+        ParserError::SpannedParserError("Expected: an expression, found: EOF".to_string(), Span::empty()),
         res.unwrap_err(),
     );
 }
@@ -280,7 +280,7 @@ fn parse_use() {
     for sql in &invalid_cases {
         assert_eq!(
             databricks().parse_sql_statements(sql).unwrap_err(),
-            ParserError::ParserError("Expected: identifier, found: EOF".to_string()),
+            ParserError::SpannedParserError("Expected: identifier, found: EOF".to_string(), Span::empty()),
         );
     }
 }

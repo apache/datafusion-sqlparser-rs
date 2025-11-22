@@ -4189,7 +4189,7 @@ impl fmt::Display for OperatorPurpose {
     }
 }
 
-/// DROP OPERATOR statement
+/// `DROP OPERATOR` statement
 /// See <https://www.postgresql.org/docs/current/sql-dropoperator.html>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

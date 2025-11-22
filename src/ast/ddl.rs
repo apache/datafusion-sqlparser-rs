@@ -4210,9 +4210,9 @@ pub struct DropOperator {
 pub struct OperatorSignature {
     /// Operator name
     pub name: ObjectName,
-    /// Left operand type (None for prefix operators)
+    /// Left operand type
     pub left_type: Option<DataType>,
-    /// Right operand type (always required)
+    /// Right operand type
     pub right_type: DataType,
 }
 

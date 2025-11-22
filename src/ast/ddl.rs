@@ -4199,7 +4199,7 @@ pub struct DropOperator {
     pub if_exists: bool,
     /// One or more operators to drop with their signatures
     pub operators: Vec<OperatorSignature>,
-    /// CASCADE or RESTRICT
+    /// `CASCADE or RESTRICT`
     pub drop_behavior: Option<DropBehavior>,
 }
 

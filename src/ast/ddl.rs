@@ -4198,7 +4198,7 @@ pub struct DropOperator {
     /// `IF EXISTS` clause
     pub if_exists: bool,
     /// One or more operators to drop with their signatures
-    pub operators: Vec<OperatorSignature>,
+    pub operators: Vec<DropOperatorSignature>,
     /// `CASCADE or RESTRICT`
     pub drop_behavior: Option<DropBehavior>,
 }
@@ -4207,7 +4207,7 @@ pub struct DropOperator {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct OperatorSignature {
+pub struct DropOperatorSignature {
     /// Operator name
     pub name: ObjectName,
     /// Left operand type
@@ -4216,7 +4216,7 @@ pub struct OperatorSignature {
     pub right_type: DataType,
 }
 
-impl fmt::Display for OperatorSignature {
+impl fmt::Display for DropOperatorSignature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} (", self.name)?;
         if let Some(left_type) = &self.left_type {

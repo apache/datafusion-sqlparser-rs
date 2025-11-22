@@ -71,7 +71,7 @@ pub use self::ddl::{
     GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
     IdentityPropertyKind, IdentityPropertyOrder, IndexColumn, IndexOption, IndexType,
     KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes, OperatorClassItem,
-    OperatorPurpose, OperatorSignature, Owner, Partition, ProcedureParam, ReferentialAction,
+    OperatorPurpose, DropOperatorSignature, Owner, Partition, ProcedureParam, ReferentialAction,
     RenameTableNameKind, ReplicaIdentity, TagsColumnOption, TriggerObjectKind, Truncate,
     UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
     UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,

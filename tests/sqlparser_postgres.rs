@@ -6765,7 +6765,7 @@ fn parse_create_operator() {
 
 #[test]
 fn parse_drop_operator() {
-    use sqlparser::ast::{DataType, DropBehavior, DropOperator, OperatorSignature};
+    use sqlparser::ast::{DataType, DropBehavior, DropOperator, DropOperatorSignature};
 
     // Test DROP OPERATOR with NONE for prefix operator
     let sql = "DROP OPERATOR ~ (NONE, BIT)";
@@ -6773,7 +6773,7 @@ fn parse_drop_operator() {
         pg().verified_stmt(sql),
         Statement::DropOperator(DropOperator {
             if_exists: false,
-            operators: vec![OperatorSignature {
+            operators: vec![DropOperatorSignature {
                 name: ObjectName::from(vec![Ident::new("~")]),
                 left_type: None,
                 right_type: DataType::Bit(None),
@@ -6801,7 +6801,7 @@ fn parse_drop_operator() {
                     pg().verified_stmt(&sql),
                     Statement::DropOperator(DropOperator {
                         if_exists: if_exist,
-                        operators: vec![OperatorSignature {
+                        operators: vec![DropOperatorSignature {
                             name: ObjectName::from(vec![Ident::new(*op)]),
                             left_type: Some(DataType::Integer(None)),
                             right_type: DataType::Integer(None),
@@ -6819,7 +6819,7 @@ fn parse_drop_operator() {
         pg().verified_stmt(sql),
         Statement::DropOperator(DropOperator {
             if_exists: false,
-            operators: vec![OperatorSignature {
+            operators: vec![DropOperatorSignature {
                 name: ObjectName::from(vec![Ident::new("myschema"), Ident::new("@@")]),
                 left_type: Some(DataType::Text),
                 right_type: DataType::Text,
@@ -6835,12 +6835,12 @@ fn parse_drop_operator() {
         Statement::DropOperator(DropOperator {
             if_exists: true,
             operators: vec![
-                OperatorSignature {
+                DropOperatorSignature {
                     name: ObjectName::from(vec![Ident::new("+")]),
                     left_type: Some(DataType::Integer(None)),
                     right_type: DataType::Integer(None),
                 },
-                OperatorSignature {
+                DropOperatorSignature {
                     name: ObjectName::from(vec![Ident::new("-")]),
                     left_type: Some(DataType::Integer(None)),
                     right_type: DataType::Integer(None),

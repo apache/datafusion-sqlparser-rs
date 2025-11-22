@@ -36,10 +36,10 @@ impl Desugarer {
         }
     }
 
-    // Helper function to create edge table
-    fn create_edge_table(alias: Ident) -> TableFactor {
+    // Helper function to create a table factor with common defaults
+    fn create_table_factor(table_name: &str, alias: Ident) -> TableFactor {
         TableFactor::Table {
-            name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("edges"))]),
+            name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new(table_name))]),
             alias: Some(TableAlias { name: alias, columns: vec![] }),
             args: None,
             with_hints: vec![],
@@ -50,6 +50,35 @@ impl Desugarer {
             sample: None,
             index_hints: vec![],
         }
+    }
+
+    // Helper function to combine multiple expressions with AND operator
+    fn combine_filters_with_and(filters: Vec<Expr>) -> Option<Expr> {
+        if filters.is_empty() {
+            return None;
+        }
+        
+        let mut combined = filters[0].clone();
+        for expr in filters.iter().skip(1) {
+            combined = Expr::BinaryOp {
+                left: Box::new(combined),
+                op: BinaryOperator::And,
+                right: Box::new(expr.clone()),
+            };
+        }
+        Some(combined)
+    }
+
+    // Helper function to create edge table with automatic alias generation
+    fn create_edge_table(relationship: &RelationshipPattern, edge_counter: &mut i32) -> TableFactor {
+        let alias = if let Some(ref var) = relationship.details.variable {
+            var.clone()
+        } else {
+            let alias = Ident::new(format!("e{}", edge_counter));
+            *edge_counter += 1;
+            alias
+        };
+        Self::create_table_factor("edges", alias)
     }
 
     // Helper function to create join condition
@@ -380,32 +409,15 @@ impl Desugarer {
         })
     }
 
-    fn create_table_factor_from_node(node:NodePattern) -> Result<TableFactor, ParserError>{
-
+    fn create_table_factor_from_node(node: NodePattern, node_counter: &mut i32) -> Result<TableFactor, ParserError> {
         let table_alias = if let Some(ref var) = node.variable {
             var.clone()
         } else {
-            return Err(ParserError::ParserError(
-                "Node patterns must have variables".to_string()
-            ));
+            let alias = Ident::new(format!("n{}", node_counter));
+            *node_counter += 1;
+            alias
         };
-
-        // Build the table factor
-        Ok(TableFactor::Table {
-            name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("nodes"))]),
-            alias: Some(TableAlias {
-                name: table_alias.clone(),
-                columns: vec![],
-            }),
-            args: None,
-            with_hints: vec![],
-            version: None,
-            with_ordinality: false,
-            partitions: vec![],
-            json_path: None,
-            sample: None,
-            index_hints: vec![],
-        })
+        Ok(Self::create_table_factor("nodes", table_alias))
     }
 
     /// Desugar Cypher relationship pattern into SELECT statement for relationship insertion.
@@ -471,58 +483,31 @@ impl Desugarer {
     fn desugar_nodes_only_for_match(pattern: Pattern) -> Result<Select, ParserError> {
         let mut filters = Vec::new();
         let mut first_table: Option<TableWithJoins> = None;
+        let mut node_counter = 1;
 
         // Process each node pattern to build FROM clause and WHERE filters
         for (idx, pattern_part) in pattern.parts.iter().enumerate() {
             match &pattern_part.anon_pattern_part {
                 PatternElement::Simple(simple_element) => {
-                    // Get the variable name or generate one
-                    let table_alias = if let Some(ref var) = simple_element.node.variable {
-                        var.clone()
-                    } else {
-                        return Err(ParserError::ParserError(
-                            "Node patterns in MATCH must have variables".to_string()
-                        ));
-                    };
-
-                    // Build the table factor
-                    let table_factor = TableFactor::Table {
-                        name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("nodes"))]),
-                        alias: Some(TableAlias {
-                            name: table_alias.clone(),
-                            columns: vec![],
-                        }),
-                        args: None,
-                        with_hints: vec![],
-                        version: None,
-                        with_ordinality: false,
-                        partitions: vec![],
-                        json_path: None,
-                        sample: None,
-                        index_hints: vec![],
-                    };
+                    let table_factor = Self::create_table_factor_from_node(simple_element.node.clone(), &mut node_counter)?;
+                    let table_alias = Self::extract_alias(&table_factor)?;
 
                     // Build FROM clause with explicit CROSS JOINs
                     if idx == 0 {
-                        // First table goes in FROM
                         first_table = Some(TableWithJoins {
                             relation: table_factor,
                             joins: vec![],
                         });
-                    } else {
-                        // Subsequent tables are CROSS JOINed
-                        if let Some(ref mut first) = first_table {
-                            first.joins.push(Join {
-                                relation: table_factor,
-                                global: false,
-                                join_operator: JoinOperator::CrossJoin(JoinConstraint::None),
-                            });
-                        }
+                    } else if let Some(ref mut first) = first_table {
+                        first.joins.push(Join {
+                            relation: table_factor,
+                            global: false,
+                            join_operator: JoinOperator::CrossJoin(JoinConstraint::None),
+                        });
                     }
 
-                    let node_filter = Self::desugar_node_filter(simple_element.node.clone(), &table_alias.clone())?;
-                    if let Some(combined_expr) = node_filter {
-                        filters.push(combined_expr);
+                    if let Some(filter) = Self::desugar_node_filter(simple_element.node.clone(), &table_alias)? {
+                        filters.push(filter);
                     }
                 }
                 _ => {
@@ -533,20 +518,7 @@ impl Desugarer {
             }
         }
 
-        // Combine all filters with AND
-        let selection = if !filters.is_empty() {
-            let mut combined = filters[0].clone();
-            for expr in filters.iter().skip(1) {
-                combined = Expr::BinaryOp {
-                    left: Box::new(combined),
-                    op: BinaryOperator::And,
-                    right: Box::new(expr.clone()),
-                };
-            }
-            Some(combined)
-        } else {
-            None
-        };
+        let selection = Self::combine_filters_with_and(filters);
 
         // Build the SELECT statement
         let from_tables = if let Some(first) = first_table {
@@ -582,10 +554,11 @@ impl Desugarer {
     }
 
     fn desugar_pattern_for_match(pattern: Pattern) -> Result<Select, ParserError> {
-
         let mut first_table: Option<TableWithJoins> = None;
         let mut edge_filters = Vec::new();
         let mut node_filters = Vec::new();
+        let mut node_counter = 1;
+        let mut edge_counter = 1;
 
         // Process all pattern parts
         for pattern_part in &pattern.parts {
@@ -599,7 +572,7 @@ impl Desugarer {
             };
 
             // Start with the first node in the pattern
-            let mut current_node = Self::create_table_factor_from_node(simple_element.node.clone())?;
+            let mut current_node = Self::create_table_factor_from_node(simple_element.node.clone(), &mut node_counter)?;
             let current_alias = Self::extract_alias(&current_node)?;
             let first_node_filter = Self::desugar_node_filter(simple_element.node.clone(), &current_alias)?;
             if let Some(combined_expr) = first_node_filter {
@@ -608,21 +581,17 @@ impl Desugarer {
 
             // Process each relationship chain element
             for chain_elem in &simple_element.chain {
-                let rel_alias = chain_elem.relationship.details.variable.as_ref()
-                    .ok_or_else(|| ParserError::ParserError("Relationships in MATCH must have variables".to_string()))?
-                    .clone();
-
-                let edge_table = Self::create_edge_table(rel_alias.clone());
-                let edge_filter = Self::desugar_relationship_filter(chain_elem.relationship.clone(), &rel_alias)?;
-                if let Some(combined_expr) = edge_filter {
-                    edge_filters.push(combined_expr);
+                let edge_table = Self::create_edge_table(&chain_elem.relationship, &mut edge_counter);
+                let rel_alias = Self::extract_alias(&edge_table)?;
+                
+                if let Some(filter) = Self::desugar_relationship_filter(chain_elem.relationship.clone(), &rel_alias)? {
+                    edge_filters.push(filter);
                 }
 
-                let target_node = Self::create_table_factor_from_node(chain_elem.node.clone())?;
+                let target_node = Self::create_table_factor_from_node(chain_elem.node.clone(), &mut node_counter)?;
                 let target_alias = Self::extract_alias(&target_node)?;
-                let target_filter = Self::desugar_node_filter(chain_elem.node.clone(), &target_alias)?;
-                if let Some(combined_expr) = target_filter {
-                    node_filters.push(combined_expr);
+                if let Some(filter) = Self::desugar_node_filter(chain_elem.node.clone(), &target_alias)? {
+                    node_filters.push(filter);
                 }
 
                 // Start with first edge table in FROM clause
@@ -671,22 +640,8 @@ impl Desugarer {
         }
 
         // Combine filters: edge filters first, then node filters
-        let mut all_filters = edge_filters;
-        all_filters.extend(node_filters);
-        
-        let selection = if !all_filters.is_empty() {
-            let mut combined = all_filters[0].clone();
-            for expr in all_filters.iter().skip(1) {
-                combined = Expr::BinaryOp {
-                    left: Box::new(combined),
-                    op: BinaryOperator::And,
-                    right: Box::new(expr.clone()),
-                };
-            }
-            Some(combined)
-        } else {
-            None
-        };
+        edge_filters.extend(node_filters);
+        let selection = Self::combine_filters_with_and(edge_filters);
 
         Ok(Select {
             select_token: AttachedToken::empty(),

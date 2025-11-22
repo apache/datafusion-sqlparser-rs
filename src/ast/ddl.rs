@@ -4195,7 +4195,7 @@ impl fmt::Display for OperatorPurpose {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct DropOperator {
-    /// IF EXISTS clause
+    /// `IF EXISTS` clause
     pub if_exists: bool,
     /// One or more operators to drop with their signatures
     pub operators: Vec<OperatorSignature>,

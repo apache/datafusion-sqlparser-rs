@@ -160,7 +160,7 @@ impl Desugarer {
             let value_expr = Expr::BinaryOp {
                 left: left_expr,
                 op: BinaryOperator::Eq,
-                right: Box::new(Expr::Value(Value::SingleQuotedString(entry.value.clone()).into())),
+                right: Box::new(Expr::Value(Value::SingleQuotedString(entry.value.to_string()).into())),
             };
             entries.push(value_expr);
         }

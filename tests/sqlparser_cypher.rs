@@ -1263,3 +1263,25 @@ fn parse_cypher_match_with_long_chain(){
         _ => panic!("Parsing failed"),
     };
 }
+
+#[test]
+fn parse_cypher_match_simple_alias(){
+    let cypher = "MATCH (a:Person)-[r:KNOWS]-(b:Person) RETURN a, b";
+    let dialect = CypherDialect {};
+
+    match Parser::parse_sql(&dialect, cypher) {
+        Ok(ast) => {
+            // Convert each statement back to a string
+            let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
+            let expected_sql = "SELECT a.*, b.* \
+                FROM edges AS r \
+                JOIN nodes AS a ON r.Source_id = a.id \
+                JOIN nodes AS b ON r.Target_id = b.id \
+                WHERE r.Label = 'KNOWS' \
+                AND a.Label = 'Person' \
+                AND b.Label = 'Person'";
+            assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
+        }
+        _ => panic!("Parsing failed"),
+    };
+}

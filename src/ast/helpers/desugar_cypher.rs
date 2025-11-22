@@ -903,41 +903,39 @@ impl Desugarer {
         for item in returning_clause.body.projections {
             match item {
                 ProjectionItem::Expr { expr, alias } => {
-                    if let Some(a) = alias {
-                        match expr {
-                            Expr::CompoundIdentifier(idents) if idents.len() == 2 => {
-                                let key_expr = Expr::BinaryOp {
-                                    left: Box::new(Expr::CompoundIdentifier(vec![
-                                        idents[0].clone(),
-                                        Ident::new("Properties"),
-                                    ])),
-                                    op: BinaryOperator::LongArrow,
-                                    right: Box::new(Expr::Value(Value::SingleQuotedString(idents[1].to_string()).into())),
-                                };
+                    match expr {
+                        // Handle property access: a.name -> a.Properties ->> 'name'
+                        Expr::CompoundIdentifier(idents) if idents.len() == 2 => {
+                            let key_expr = Expr::BinaryOp {
+                                left: Box::new(Expr::CompoundIdentifier(vec![
+                                    idents[0].clone(),
+                                    Ident::new("Properties"),
+                                ])),
+                                op: BinaryOperator::LongArrow,
+                                right: Box::new(Expr::Value(Value::SingleQuotedString(idents[1].to_string()).into())),
+                            };
+                            
+                            if let Some(a) = alias {
                                 projections.push(SelectItem::ExprWithAlias {
                                     expr: key_expr,
                                     alias: a,
                                 });
-                                continue;
-                            },
-                            _ => return Err(ParserError::ParserError("RETURN aliasing is only supported for property access expressions.".to_string())),                            
-                        }
-                    } else {
-                        match expr {
-                            Expr::CompoundIdentifier(idents) if idents.len() == 2 => {
-                                let key_expr = Expr::BinaryOp {
-                                    left: Box::new(Expr::CompoundIdentifier(vec![
-                                        idents[0].clone(),
-                                        Ident::new("Properties"),
-                                    ])),
-                                    op: BinaryOperator::LongArrow,
-                                    right: Box::new(Expr::Value(Value::SingleQuotedString(idents[1].to_string()).into())),
-                                };
+                            } else {
                                 projections.push(SelectItem::UnnamedExpr(key_expr));
-                                continue;
-                            },
-                            _ => return Err(ParserError::ParserError("RETURN aliasing is only supported for property access expressions.".to_string())),                            
-                        }
+                            }
+                        },
+                        // Handle simple identifier: a -> a.* (select all columns from that table)
+                        Expr::Identifier(ident) => {
+                            projections.push(SelectItem::QualifiedWildcard(
+                                SelectItemQualifiedWildcardKind::ObjectName(
+                                    ObjectName(vec![ObjectNamePart::Identifier(ident)])
+                                ),
+                                WildcardAdditionalOptions::default(),
+                            ));
+                        },
+                        _ => return Err(ParserError::ParserError(
+                            "RETURN only supports identifiers (e.g., 'a') or property access expressions (e.g., 'a.name')".to_string()
+                        )),
                     }
                 },
                 ProjectionItem::All => {

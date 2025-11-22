@@ -62,7 +62,7 @@ impl Desugarer {
     }
 
     /// Desugar Cypher property map into JSON string format for INSERT statements
-    fn cypher_properties_to_string(properties: Map) -> Result<String, ParserError>{
+    fn properties_to_string(properties: Map) -> Result<String, ParserError>{
         let entries: Vec<String> = properties.entries.into_iter()
                             .map(|kv| {
                                 // Format key as JSON string
@@ -190,13 +190,13 @@ impl Desugarer {
         }
     }
 
-    fn desugar_cypher_node_filter(node: NodePattern, table_alias: &Ident) -> Result<Option<Expr>, ParserError> {
+    fn desugar_node_filter(node: NodePattern, table_alias: &Ident) -> Result<Option<Expr>, ParserError> {
 
         let filter = Self::desugar_filters(node.properties.clone(), node.labels.first(), table_alias)?;
         Ok(filter)
     }
 
-    fn desugar_cypher_relationship_filter(relationship: RelationshipPattern, table_alias: &Ident) -> Result<Option<Expr>, ParserError> {
+    fn desugar_relationship_filter(relationship: RelationshipPattern, table_alias: &Ident) -> Result<Option<Expr>, ParserError> {
 
         if relationship.details.length.is_some() {
             return Err(ParserError::ParserError("Relationship length is not supported for Desugaring".to_string()));
@@ -205,14 +205,14 @@ impl Desugarer {
         Ok(filter)
     }
 
-    fn desugar_cypher_where(where_clause: CypherWhereClause) -> Result<Expr, ParserError> {
+    fn desugar_where(where_clause: CypherWhereClause) -> Result<Expr, ParserError> {
 
         match where_clause.expr{
             Expr::BinaryOp {left, op, right } => {
                 match op {
                     BinaryOperator::And | BinaryOperator::Or => {
-                        let left_expr = Self::desugar_cypher_where(CypherWhereClause { expr: *left })?;
-                        let right_expr = Self::desugar_cypher_where(CypherWhereClause { expr: *right })?;
+                        let left_expr = Self::desugar_where(CypherWhereClause { expr: *left })?;
+                        let right_expr = Self::desugar_where(CypherWhereClause { expr: *right })?;
                         return Ok(Expr::BinaryOp {
                             left: Box::new(left_expr),
                             op,
@@ -276,7 +276,7 @@ impl Desugarer {
     }
 
     // Desugar Cypher node pattern into INSERT INTO nodes statement for individual CTE statement
-    fn desugar_cypher_node_insert(node:NodePattern) -> Result<Box<SetExpr>, ParserError>{
+    fn create_insert_from_node(node:NodePattern) -> Result<Box<SetExpr>, ParserError>{
 
         let mut columns = Vec::new();
         let mut node_values = Vec::new();
@@ -293,7 +293,7 @@ impl Desugarer {
         };
         match node.properties {
             Some(Expr::Map(map)) => {
-                let properties_str = Self::cypher_properties_to_string(map.clone())?;
+                let properties_str = Self::properties_to_string(map.clone())?;
                 columns.push(Ident::new("Properties"));
                 node_values.push(
                     Expr::Value(Value::SingleQuotedString(properties_str.to_string()).into()),
@@ -350,9 +350,9 @@ impl Desugarer {
     }
 
     // Desugar Cypher node pattern into INSERT INTO nodes statement wrapped in CTE for node and relationship creation
-    fn desugar_cypher_node_cte(node_counter: &mut i32, initial_node: NodePattern) -> Result<Cte, ParserError> {
+    fn create_cte_from_node(node_counter: &mut i32, initial_node: NodePattern) -> Result<Cte, ParserError> {
 
-        let node_insert = Self::desugar_cypher_node_insert(initial_node.clone())?;
+        let node_insert = Self::create_insert_from_node(initial_node.clone())?;
         let node_alias = Ident::new(format!("node{}", node_counter));
         let subquery = Query {
             with: None,
@@ -380,7 +380,7 @@ impl Desugarer {
         })
     }
 
-    fn desugar_cypher_node_join(node:NodePattern) -> Result<TableFactor, ParserError>{
+    fn create_table_factor_from_node(node:NodePattern) -> Result<TableFactor, ParserError>{
 
         let table_alias = if let Some(ref var) = node.variable {
             var.clone()
@@ -409,7 +409,7 @@ impl Desugarer {
     }
 
     /// Desugar Cypher relationship pattern into SELECT statement for relationship insertion.
-    fn desugar_cypher_relationship_select(relationship: RelationshipPattern, s_idx:usize, t_idx:usize) -> Result<Select, ParserError> {
+    fn create_select_from_relationship(relationship: RelationshipPattern, s_idx:usize, t_idx:usize) -> Result<Select, ParserError> {
         let rel_type = relationship.details.types.first().map(|id| id.value.clone()).unwrap_or_default();
         let type_expr = Expr::Value(Value::SingleQuotedString(rel_type).into());
 
@@ -421,7 +421,7 @@ impl Desugarer {
 
         let props_expr = match relationship.details.properties.clone() {
             Some(Expr::Map(map)) => {
-                let properties_str = Self::cypher_properties_to_string(map)?;
+                let properties_str = Self::properties_to_string(map)?;
                 Expr::Value(Value::SingleQuotedString(properties_str.to_string()).into())
             }
             _ => Expr::Value(Value::SingleQuotedString("{}".to_string()).into()),
@@ -468,7 +468,7 @@ impl Desugarer {
         })
     }
 
-    fn desugar_cypher_match_nodes_only(pattern: Pattern) -> Result<Select, ParserError> {
+    fn desugar_nodes_only_for_match(pattern: Pattern) -> Result<Select, ParserError> {
         let mut filters = Vec::new();
         let mut first_table: Option<TableWithJoins> = None;
 
@@ -520,7 +520,7 @@ impl Desugarer {
                         }
                     }
 
-                    let node_filter = Self::desugar_cypher_node_filter(simple_element.node.clone(), &table_alias.clone())?;
+                    let node_filter = Self::desugar_node_filter(simple_element.node.clone(), &table_alias.clone())?;
                     if let Some(combined_expr) = node_filter {
                         filters.push(combined_expr);
                     }
@@ -581,7 +581,7 @@ impl Desugarer {
         })        
     }
 
-    fn desugar_cypher_match_with_relationships(pattern: Pattern) -> Result<Select, ParserError> {
+    fn desugar_pattern_for_match(pattern: Pattern) -> Result<Select, ParserError> {
 
         let mut first_table: Option<TableWithJoins> = None;
         let mut edge_filters = Vec::new();
@@ -599,9 +599,9 @@ impl Desugarer {
             };
 
             // Start with the first node in the pattern
-            let mut current_node = Self::desugar_cypher_node_join(simple_element.node.clone())?;
+            let mut current_node = Self::create_table_factor_from_node(simple_element.node.clone())?;
             let current_alias = Self::extract_alias(&current_node)?;
-            let first_node_filter = Self::desugar_cypher_node_filter(simple_element.node.clone(), &current_alias)?;
+            let first_node_filter = Self::desugar_node_filter(simple_element.node.clone(), &current_alias)?;
             if let Some(combined_expr) = first_node_filter {
                 node_filters.push(combined_expr);
             }
@@ -613,14 +613,14 @@ impl Desugarer {
                     .clone();
 
                 let edge_table = Self::create_edge_table(rel_alias.clone());
-                let edge_filter = Self::desugar_cypher_relationship_filter(chain_elem.relationship.clone(), &rel_alias)?;
+                let edge_filter = Self::desugar_relationship_filter(chain_elem.relationship.clone(), &rel_alias)?;
                 if let Some(combined_expr) = edge_filter {
                     edge_filters.push(combined_expr);
                 }
 
-                let target_node = Self::desugar_cypher_node_join(chain_elem.node.clone())?;
+                let target_node = Self::create_table_factor_from_node(chain_elem.node.clone())?;
                 let target_alias = Self::extract_alias(&target_node)?;
-                let target_filter = Self::desugar_cypher_node_filter(chain_elem.node.clone(), &target_alias)?;
+                let target_filter = Self::desugar_node_filter(chain_elem.node.clone(), &target_alias)?;
                 if let Some(combined_expr) = target_filter {
                     node_filters.push(combined_expr);
                 }
@@ -716,7 +716,7 @@ impl Desugarer {
 
     /// Desugar simple node-only CREATE patterns into INSERT INTO nodes statement.
     /// Handles patterns like: CREATE (a:Person {name: 'Alice'}), (b:Person {name: 'Bob'})
-    fn desugar_cypher_create_nodes_only(create_clause: CypherCreateClause) -> Result<Statement, ParserError> {
+    fn desugar_nodes_only_for_create(create_clause: CypherCreateClause) -> Result<Statement, ParserError> {
         let mut columns = Vec::new();
         let mut values = Vec::new();
 
@@ -734,7 +734,7 @@ impl Desugarer {
                     }
                     
                     if let Some(Expr::Map(map)) = &simple_element.node.properties {
-                        let properties_str = Self::cypher_properties_to_string(map.clone())?;
+                        let properties_str = Self::properties_to_string(map.clone())?;
                         if !columns.contains(&Ident::new("Properties")) {
                             columns.push(Ident::new("Properties"));
                         }
@@ -797,7 +797,7 @@ impl Desugarer {
 
     /// Desugar relationship CREATE patterns into CTEs + INSERT INTO edges statement.
     /// Handles patterns like: CREATE (a:Person)-[:KNOWS]->(b:Person)
-    fn desugar_cypher_create_with_relationships(create_clause: CypherCreateClause) -> Result<Statement, ParserError> {
+    fn desugar_pattern_for_create(create_clause: CypherCreateClause) -> Result<Statement, ParserError> {
         let mut cte_tables = Vec::new();
         let mut node_counter = 1;
 
@@ -806,14 +806,14 @@ impl Desugarer {
             if let PatternElement::Simple(simple) = &pattern_part.anon_pattern_part {
                 // Create CTE for initial node
                 let initial_node = simple.node.clone();
-                let initial_cte = Self::desugar_cypher_node_cte(&mut node_counter, initial_node)?;
+                let initial_cte = Self::create_cte_from_node(&mut node_counter, initial_node)?;
                 cte_tables.push(initial_cte);
                 node_counter += 1;
 
                 // Create CTEs for chained nodes
                 for chain_elem in &simple.chain {
                     let chained_node = chain_elem.node.clone();
-                    let chain_cte = Self::desugar_cypher_node_cte(&mut node_counter, chained_node)?;
+                    let chain_cte = Self::create_cte_from_node(&mut node_counter, chained_node)?;
                     cte_tables.push(chain_cte);
                     node_counter += 1;
                 }
@@ -856,7 +856,7 @@ impl Desugarer {
         // Build SELECT for each relationship
         let mut selects: Vec<Select> = Vec::new();
         for (rel, s_idx, t_idx) in rels.iter() {
-            let select = Self::desugar_cypher_relationship_select(rel.clone(), *s_idx, *t_idx)?;
+            let select = Self::create_select_from_relationship(rel.clone(), *s_idx, *t_idx)?;
             selects.push(select);
         }
 
@@ -935,7 +935,7 @@ impl Desugarer {
         Ok(Statement::Query(Box::new(final_query)))
     }
 
-    fn desugar_cypher_return(returning_clause: ReturningClause, mut select: Select) -> Result<Select, ParserError> {
+    fn desugar_return(returning_clause: ReturningClause, mut select: Select) -> Result<Select, ParserError> {
         
         let mut projections = Vec::new();
         
@@ -997,16 +997,16 @@ impl Desugarer {
         Ok(select)
     }
 
-    fn desugar_cypher_reading(reading_query: CypherReadingClause) -> Result<Select, ParserError> {
+    fn desugar_reading_clause(reading_query: CypherReadingClause) -> Result<Select, ParserError> {
         match reading_query {
             CypherReadingClause::Match(match_clause) => {
-                Ok(Self::desugar_cypher_match(match_clause)?)
+                Ok(Self::desugar_match(match_clause)?)
             },
         }
     }
 
     // Desugar Cypher MATCH clause into SQL SELECT statement(s).
-    fn desugar_cypher_match(match_clause: CypherMatchClause) -> Result<Select, ParserError> {
+    fn desugar_match(match_clause: CypherMatchClause) -> Result<Select, ParserError> {
 
         if match_clause.optional {
             return Err(ParserError::ParserError(
@@ -1020,14 +1020,14 @@ impl Desugarer {
                 .any(|p| matches!(&p.anon_pattern_part, PatternElement::Simple(s) if !s.chain.is_empty()));
                 
             let mut select =if has_relationships {
-                Self::desugar_cypher_match_with_relationships(match_clause.pattern)?
+                Self::desugar_pattern_for_match(match_clause.pattern)?
             } else {
-                Self::desugar_cypher_match_nodes_only(match_clause.pattern)?
+                Self::desugar_nodes_only_for_match(match_clause.pattern)?
             };
             
             // Add WHERE clause if present
             if let Some(where_clause) = match_clause.where_clause {
-                let where_expr = Self::desugar_cypher_where(where_clause)?;
+                let where_expr = Self::desugar_where(where_clause)?;
                 select.selection = match select.selection {
                     Some(existing) => Some(Expr::BinaryOp {
                         left: Box::new(existing),
@@ -1043,24 +1043,24 @@ impl Desugarer {
     }
 
     /// Desugar Cypher CREATE clause into SQL INSERT statement(s).
-    fn desugar_cypher_create(create_clause: CypherCreateClause) -> Result<Statement, ParserError> {
+    fn desugar_create(create_clause: CypherCreateClause) -> Result<Statement, ParserError> {
         
         // Determine if pattern contains relationships or just nodes
         let has_relationships = create_clause.pattern.parts.iter()
             .any(|p| matches!(&p.anon_pattern_part, PatternElement::Simple(s) if !s.chain.is_empty()));
         
         if has_relationships {
-            Self::desugar_cypher_create_with_relationships(create_clause)
+            Self::desugar_pattern_for_create(create_clause)
         } else {
-            Self::desugar_cypher_create_nodes_only(create_clause)
+            Self::desugar_nodes_only_for_create(create_clause)
         }
     }
 
     pub fn desugar_cypher_query(query: SinglePartQuery) -> Result<Statement, ParserError> {
         match query {
             SinglePartQuery::Reading(reading_query) => {
-                let reading = Self::desugar_cypher_reading(reading_query.reading_clause)?;
-                let select = Self::desugar_cypher_return(reading_query.returning_clause, reading)?;
+                let reading = Self::desugar_reading_clause(reading_query.reading_clause)?;
+                let select = Self::desugar_return(reading_query.returning_clause, reading)?;
 
                 Ok(Statement::Query(Box::new(Query {
                     with: None,
@@ -1076,7 +1076,7 @@ impl Desugarer {
                 })))
             },
             SinglePartQuery::Updating(updating_query) => {
-                Self::desugar_cypher_create(updating_query.create_clause)
+                Self::desugar_create(updating_query.create_clause)
             },
         }
     }
@@ -1088,7 +1088,7 @@ mod tests {
     use crate::ast::helpers::desugar_cypher::Desugarer;
 
     #[test]
-    fn test_cypher_properties_to_string(){
+    fn test_properties_to_string(){
 
         let properties = Map {
             entries: vec![
@@ -1152,7 +1152,7 @@ mod tests {
         };
 
         let alias = Ident::new("n");
-        let desugared = Desugarer::desugar_cypher_node_filter(node_pattern, &alias).unwrap();
+        let desugared = Desugarer::desugar_node_filter(node_pattern, &alias).unwrap();
         let expected = Some(Expr::BinaryOp {
             left: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Label")])),
@@ -1194,7 +1194,7 @@ mod tests {
         };
 
         let alias = Ident::new("r");
-        let desugared = Desugarer::desugar_cypher_relationship_filter(relationship_pattern, &alias).unwrap();
+        let desugared = Desugarer::desugar_relationship_filter(relationship_pattern, &alias).unwrap();
         let expected = Some(Expr::BinaryOp {
             left: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("r"), Ident::new("Label")])),
@@ -1265,7 +1265,7 @@ mod tests {
             ],
         };
 
-        let desugared = Desugarer::desugar_cypher_match_nodes_only(pattern).unwrap();
+        let desugared = Desugarer::desugar_nodes_only_for_match(pattern).unwrap();
         let expected = Select {
             select_token: AttachedToken::empty(),
             distinct: None,
@@ -1378,7 +1378,7 @@ mod tests {
             },
         };
 
-        let desugared = Desugarer::desugar_cypher_where(where_clause).unwrap();
+        let desugared = Desugarer::desugar_where(where_clause).unwrap();
         let expected = Expr::BinaryOp {
             left: Box::new(
                 Expr::Cast {
@@ -1417,7 +1417,7 @@ mod tests {
             },
         };
 
-        let desugared = Desugarer::desugar_cypher_where(where_clause).unwrap();
+        let desugared = Desugarer::desugar_where(where_clause).unwrap();
         let expected = Expr::BinaryOp {
             left: Box::new(
                 Expr::BinaryOp {
@@ -1471,7 +1471,7 @@ mod tests {
             },
         };
 
-        let desugared = Desugarer::desugar_cypher_where(where_clause).unwrap();
+        let desugared = Desugarer::desugar_where(where_clause).unwrap();
         let expected = Expr::BinaryOp {
             left: Box::new(
                 Expr::BinaryOp {
@@ -1547,7 +1547,7 @@ mod tests {
             flavor: SelectFlavor::Standard,
         };
 
-        let desugared = Desugarer::desugar_cypher_return(returning_clause, select).unwrap();
+        let desugared = Desugarer::desugar_return(returning_clause, select).unwrap();
         let expected = Select {
             select_token: AttachedToken::empty(),
             distinct: Some(Distinct::Distinct),

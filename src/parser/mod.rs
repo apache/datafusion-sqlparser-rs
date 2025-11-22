@@ -7531,7 +7531,7 @@ impl<'a> Parser<'a> {
     ///
     pub fn parse_drop_operator(&mut self) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-        let operators = self.parse_comma_separated(|p| p.parse_operator_signature())?;
+        let operators = self.parse_comma_separated(|p| p.parse_drop_operator_signature())?;
         let drop_behavior = self.parse_optional_drop_behavior();
         Ok(Statement::DropOperator(DropOperator {
             if_exists,
@@ -7542,7 +7542,7 @@ impl<'a> Parser<'a> {
 
     /// Parse an operator signature for a [Statement::DropOperator]
     /// Format: `name ( { left_type | NONE } , right_type )`
-    fn parse_operator_signature(&mut self) -> Result<DropOperatorSignature, ParserError> {
+    fn parse_drop_operator_signature(&mut self) -> Result<DropOperatorSignature, ParserError> {
         let name = self.parse_operator_name()?;
         self.expect_token(&Token::LParen)?;
 

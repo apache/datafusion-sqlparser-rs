@@ -4208,7 +4208,7 @@ pub struct DropOperator {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct OperatorSignature {
-    /// Operator name (can be schema-qualified)
+    /// Operator name
     pub name: ObjectName,
     /// Left operand type (None for prefix operators)
     pub left_type: Option<DataType>,

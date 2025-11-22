@@ -157,10 +157,22 @@ impl Desugarer {
                 Err(ParserError::ParserError("Unsupported value type for property desugaring".to_string()))?
             };
             
+            // Convert the value, handling double-quoted strings by converting to single-quoted
+            let right_value = if let Expr::Value(v) = entry.value.as_ref() {
+                match &v.value {
+                    Value::DoubleQuotedString(s) => {
+                        Box::new(Expr::Value(Value::SingleQuotedString(s.clone()).into()))
+                    },
+                    _ => entry.value.clone()
+                }
+            } else {
+                entry.value.clone()
+            };
+            
             let value_expr = Expr::BinaryOp {
                 left: left_expr,
                 op: BinaryOperator::Eq,
-                right: Box::new(Expr::Value(Value::SingleQuotedString(entry.value.to_string()).into())),
+                right: right_value,
             };
             entries.push(value_expr);
         }

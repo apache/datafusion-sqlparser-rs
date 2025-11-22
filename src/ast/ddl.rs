@@ -4203,7 +4203,7 @@ pub struct DropOperator {
     pub drop_behavior: Option<DropBehavior>,
 }
 
-/// Operator signature for DROP OPERATOR
+/// Operator signature for a `DROP OPERATOR` statement
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

@@ -195,4 +195,20 @@ impl Dialect for GenericDialect {
     fn supports_interval_options(&self) -> bool {
         true
     }
+
+    fn supports_merge_insert_qualified_columns(&self) -> bool {
+        true
+    }
+
+    fn supports_merge_insert_predicate(&self) -> bool {
+        true
+    }
+
+    fn supports_merge_update_predicate(&self) -> bool {
+        true
+    }
+
+    fn supports_merge_update_delete_predicate(&self) -> bool {
+        true
+    }
 }

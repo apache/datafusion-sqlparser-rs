@@ -1813,6 +1813,7 @@ fn parse_merge() {
             explicit_row: false,
             rows: vec![vec![Expr::value(number("1")), Expr::value(number("2"))]],
         }),
+        insert_predicate: None,
     });
     let update_action = MergeAction::Update {
         update_token: AttachedToken::empty(),
@@ -1826,6 +1827,8 @@ fn parse_merge() {
                 value: Expr::value(number("2")),
             },
         ],
+        update_predicate: None,
+        delete_predicate: None,
     };
 
     match bigquery_and_generic().verified_stmt(sql) {
@@ -1926,6 +1929,7 @@ fn parse_merge() {
                             columns: vec![Ident::new("product"), Ident::new("quantity"),],
                             kind_token: AttachedToken::empty(),
                             kind: MergeInsertKind::Row,
+                            insert_predicate: None,
                         })
                     },
                     MergeClause {
@@ -1937,6 +1941,7 @@ fn parse_merge() {
                             columns: vec![Ident::new("product"), Ident::new("quantity"),],
                             kind_token: AttachedToken::empty(),
                             kind: MergeInsertKind::Row,
+                            insert_predicate: None,
                         })
                     },
                     MergeClause {
@@ -1947,7 +1952,8 @@ fn parse_merge() {
                             insert_token: AttachedToken::empty(),
                             columns: vec![],
                             kind_token: AttachedToken::empty(),
-                            kind: MergeInsertKind::Row
+                            kind: MergeInsertKind::Row,
+                            insert_predicate: None,
                         })
                     },
                     MergeClause {
@@ -1958,7 +1964,8 @@ fn parse_merge() {
                             insert_token: AttachedToken::empty(),
                             columns: vec![],
                             kind_token: AttachedToken::empty(),
-                            kind: MergeInsertKind::Row
+                            kind: MergeInsertKind::Row,
+                            insert_predicate: None,
                         })
                     },
                     MergeClause {
@@ -1990,7 +1997,8 @@ fn parse_merge() {
                                     Expr::value(number("1")),
                                     Expr::Identifier(Ident::new("DEFAULT")),
                                 ]]
-                            })
+                            }),
+                            insert_predicate: None,
                         })
                     },
                     MergeClause {
@@ -2008,7 +2016,8 @@ fn parse_merge() {
                                     Expr::value(number("1")),
                                     Expr::Identifier(Ident::new("DEFAULT")),
                                 ]]
-                            })
+                            }),
+                            insert_predicate: None,
                         })
                     },
                 ],

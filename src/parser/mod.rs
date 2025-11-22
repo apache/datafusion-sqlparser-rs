@@ -7529,11 +7529,6 @@ impl<'a> Parser<'a> {
 
     /// Parse a[Statement::DropOperator] statement.
     ///
-    /// ```sql
-    /// DROP OPERATOR [ IF EXISTS ] name ( { left_type | NONE } , right_type ) [, ...] [ CASCADE | RESTRICT ]
-    /// ```
-    ///
-    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-dropoperator.html)
     pub fn parse_drop_operator(&mut self) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let operators = self.parse_comma_separated(|p| p.parse_operator_signature())?;

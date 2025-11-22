@@ -7527,7 +7527,7 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    /// Parse a PostgreSQL-specific [Statement::DropOperator] statement.
+    /// Parse a[Statement::DropOperator] statement.
     ///
     /// ```sql
     /// DROP OPERATOR [ IF EXISTS ] name ( { left_type | NONE } , right_type ) [, ...] [ CASCADE | RESTRICT ]

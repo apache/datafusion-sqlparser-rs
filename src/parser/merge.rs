@@ -18,12 +18,13 @@ use alloc::{boxed::Box, format, string::ToString, vec, vec::Vec};
 use crate::{
     ast::{
         Ident, Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr, MergeInsertKind,
-        MergeUpdateExpr, ObjectName, ObjectNamePart, OutputClause, SetExpr, Statement, TableFactor,
+        MergeUpdateExpr, ObjectName, ObjectNamePart, OutputClause, SetExpr, Spanned, Statement,
+        TableFactor,
     },
     dialect::{BigQueryDialect, GenericDialect, MySqlDialect},
     keywords::Keyword,
     parser::IsOptional,
-    tokenizer::TokenWithSpan,
+    tokenizer::{Location, TokenWithSpan},
 };
 
 use super::{Parser, ParserError};
@@ -232,42 +233,48 @@ impl Parser<'_> {
                 if let Some(alias) = alias {
                     if alias.columns.is_empty() {
                         // ~ only the alias is supported at this point
-                        unqualify_columns(cols, None, Some(&alias.name)).map_err(|e| {
-                            ParserError::ParserError(format!(
-                                "Invalid column for INSERT in a {clause_kind} merge clause: {e}"
-                            ))
-                        })
+                        match unqualify_columns(cols, None, Some(&alias.name)) {
+                            Ok(column) => Ok(column),
+                            Err((err, loc)) => parser_err!(
+                                format_args!("Invalid column for INSERT in a {clause_kind} merge clause: {err}"),
+                                loc
+                            ),
+                        }
                     } else {
-                        Err(ParserError::ParserError(format!(
-                            "Invalid target ALIAS for INSERT in a {clause_kind} merge clause; must be an identifier"
-                        )))
+                        parser_err!(
+                            format_args!("Invalid target ALIAS for INSERT in a {clause_kind} merge clause; must be an identifier"),
+                            alias.name.span.start
+                        )
                     }
                 } else {
                     // ~ allow the full qualifier, but also just the table name
                     if name.0.len() == 1 {
-                        unqualify_columns(cols, Some(name), None).map_err(|e| {
-                            ParserError::ParserError(format!(
-                                "Invalid column for INSERT in a {clause_kind} merge clause: {e}"
-                            ))
-                        })
-                    } else if let Some(table_name) =
+                        match unqualify_columns(cols, Some(name), None) {
+                            Ok(column) => Ok(column),
+                            Err((err, loc)) => parser_err!(
+                                format_args!("Invalid column for INSERT in a {clause_kind} merge clause: {err}"),
+                                loc)
+                        }
+                    } else if let Some(unqualified_name) =
                         name.0.last().and_then(ObjectNamePart::as_ident)
                     {
-                        unqualify_columns(cols, Some(name), Some(table_name)).map_err(|e| {
-                            ParserError::ParserError(format!(
-                                "Invalid column for INSERT in a {clause_kind} merge clause: {e}"
-                            ))
-                        })
+                        match unqualify_columns(cols, Some(name), Some(unqualified_name)) {
+                            Ok(column) => Ok(column),
+                            Err((err, loc)) => parser_err!(
+                                format_args!("Invalid column for INSERT in a {clause_kind} merge clause: {err}"),
+                                loc)
+                        }
                     } else {
-                        Err(ParserError::ParserError(format!(
-                            "Invalid target table NAME for INSERT in a {clause_kind} merge clause; must be an identifier"
-                        )))
+                        parser_err!(
+                            format_args!("Invalid target table NAME for INSERT in a {clause_kind} merge clause; must be an identifier"),
+                            name.span().start
+                        )
                     }
                 }
             } else {
-                Err(ParserError::ParserError(format!(
-                    "Invalid target for INSERT in a {clause_kind} merge clause; must be a TABLE identifier"
-                )))
+                parser_err!(
+                    format_args!("Invalid target for INSERT in a {clause_kind} merge clause; must be a TABLE identifier"),
+                    target_table.span().start)
             }
         } else {
             self.parse_parenthesized_column_list(IsOptional::Optional, allow_empty)
@@ -302,8 +309,8 @@ impl Parser<'_> {
     }
 }
 
-/// Helper to unqualify a list of columns with either a qualified prefix or a
-/// qualifier identifier
+/// Helper to unqualify a list of columns with either a qualified prefix
+/// (`allowed_qualifier_1`) or a qualifier identifier (`allowed_qualifier_2`.)
 ///
 /// Oracle allows `INSERT ([qualifier.]column_name, ...)` in MERGE statements
 /// with `qualifier` referring to the alias of the target table (if one is
@@ -313,13 +320,13 @@ fn unqualify_columns(
     columns: Vec<ObjectName>,
     allowed_qualifier_1: Option<&ObjectName>,
     allowed_qualifier_2: Option<&Ident>,
-) -> Result<Vec<Ident>, &'static str> {
+) -> Result<Vec<Ident>, (&'static str, Location)> {
     // ~ helper to turn a column name (part) into a plain `ident`
     // possibly bailing with error
-    fn to_ident(name: ObjectNamePart) -> Result<Ident, &'static str> {
+    fn to_ident(name: ObjectNamePart) -> Result<Ident, (&'static str, Location)> {
         match name {
             ObjectNamePart::Identifier(ident) => Ok(ident),
-            ObjectNamePart::Function(_) => Err("not an identifier"),
+            ObjectNamePart::Function(_) => Err(("not an identifier", name.span().start)),
         }
     }
 
@@ -353,7 +360,7 @@ fn unqualify_columns(
     let mut unqualified = Vec::<Ident>::with_capacity(columns.len());
     for mut name in columns {
         if name.0.is_empty() {
-            return Err("empty column name");
+            return Err(("empty column name", name.span().start));
         }
 
         if name.0.len() == 1 {
@@ -390,7 +397,7 @@ fn unqualify_columns(
             }
         }
 
-        return Err("not matching target table");
+        return Err(("not matching target table", name.span().start));
     }
     Ok(unqualified)
 }

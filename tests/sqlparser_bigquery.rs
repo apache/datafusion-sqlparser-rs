@@ -1690,7 +1690,7 @@ fn parse_table_identifiers() {
 fn parse_hyphenated_table_identifiers() {
     bigquery().one_statement_parses_to(
         "select * from foo-bar f join baz-qux b on f.id = b.id",
-        "SELECT * FROM foo-bar AS f JOIN baz-qux AS b ON f.id = b.id",
+        "SELECT * FROM foo-bar f JOIN baz-qux b ON f.id = b.id",
     );
 
     assert_eq!(
@@ -1766,7 +1766,7 @@ fn parse_join_constraint_unnest_alias() {
         .joins,
         vec![Join {
             relation: TableFactor::UNNEST {
-                alias: table_alias("f"),
+                alias: table_alias(true, "f"),
                 array_exprs: vec![Expr::CompoundIdentifier(vec![
                     Ident::new("t1"),
                     Ident::new("a")
@@ -1841,10 +1841,7 @@ fn parse_merge() {
             assert_eq!(
                 TableFactor::Table {
                     name: ObjectName::from(vec![Ident::new("inventory")]),
-                    alias: Some(TableAlias {
-                        name: Ident::new("T"),
-                        columns: vec![],
-                    }),
+                    alias: table_alias(true, "T"),
                     args: Default::default(),
                     with_hints: Default::default(),
                     version: Default::default(),
@@ -1859,10 +1856,7 @@ fn parse_merge() {
             assert_eq!(
                 TableFactor::Table {
                     name: ObjectName::from(vec![Ident::new("newArrivals")]),
-                    alias: Some(TableAlias {
-                        name: Ident::new("S"),
-                        columns: vec![],
-                    }),
+                    alias: table_alias(true, "S"),
                     args: Default::default(),
                     with_hints: Default::default(),
                     version: Default::default(),

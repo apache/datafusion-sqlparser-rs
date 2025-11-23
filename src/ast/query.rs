@@ -1902,7 +1902,7 @@ impl fmt::Display for TableFactor {
                     write!(f, " {sample}")?;
                 }
                 if let Some(alias) = alias {
-                    write!(f, " AS {alias}")?;
+                    write!(f, " {alias}")?;
                 }
                 if !index_hints.is_empty() {
                     write!(f, " {}", display_separated(index_hints, " "))?;
@@ -1932,7 +1932,7 @@ impl fmt::Display for TableFactor {
                 NewLine.fmt(f)?;
                 f.write_str(")")?;
                 if let Some(alias) = alias {
-                    write!(f, " AS {alias}")?;
+                    write!(f, " {alias}")?;
                 }
                 Ok(())
             }
@@ -1948,14 +1948,14 @@ impl fmt::Display for TableFactor {
                 write!(f, "{name}")?;
                 write!(f, "({})", display_comma_separated(args))?;
                 if let Some(alias) = alias {
-                    write!(f, " AS {alias}")?;
+                    write!(f, " {alias}")?;
                 }
                 Ok(())
             }
             TableFactor::TableFunction { expr, alias } => {
                 write!(f, "TABLE({expr})")?;
                 if let Some(alias) = alias {
-                    write!(f, " AS {alias}")?;
+                    write!(f, " {alias}")?;
                 }
                 Ok(())
             }
@@ -1973,13 +1973,13 @@ impl fmt::Display for TableFactor {
                 }
 
                 if let Some(alias) = alias {
-                    write!(f, " AS {alias}")?;
+                    write!(f, " {alias}")?;
                 }
                 if *with_offset {
                     write!(f, " WITH OFFSET")?;
                 }
                 if let Some(alias) = with_offset_alias {
-                    write!(f, " AS {alias}")?;
+                    write!(f, " {alias}")?;
                 }
                 Ok(())
             }
@@ -1995,7 +1995,7 @@ impl fmt::Display for TableFactor {
                     columns = display_comma_separated(columns)
                 )?;
                 if let Some(alias) = alias {
-                    write!(f, " AS {alias}")?;
+                    write!(f, " {alias}")?;
                 }
                 Ok(())
             }
@@ -2014,7 +2014,7 @@ impl fmt::Display for TableFactor {
                     write!(f, " WITH ({})", display_comma_separated(columns))?;
                 }
                 if let Some(alias) = alias {
-                    write!(f, " AS {alias}")?;
+                    write!(f, " {alias}")?;
                 }
                 Ok(())
             }
@@ -2024,7 +2024,7 @@ impl fmt::Display for TableFactor {
             } => {
                 write!(f, "({table_with_joins})")?;
                 if let Some(alias) = alias {
-                    write!(f, " AS {alias}")?;
+                    write!(f, " {alias}")?;
                 }
                 Ok(())
             }
@@ -2051,8 +2051,8 @@ impl fmt::Display for TableFactor {
                     write!(f, " DEFAULT ON NULL ({expr})")?;
                 }
                 write!(f, ")")?;
-                if alias.is_some() {
-                    write!(f, " AS {}", alias.as_ref().unwrap())?;
+                if let Some(alias) = alias {
+                    write!(f, " {alias}")?;
                 }
                 Ok(())
             }
@@ -2075,8 +2075,8 @@ impl fmt::Display for TableFactor {
                     name,
                     display_comma_separated(columns)
                 )?;
-                if alias.is_some() {
-                    write!(f, " AS {}", alias.as_ref().unwrap())?;
+                if let Some(alias) = alias {
+                    write!(f, " {alias}")?;
                 }
                 Ok(())
             }
@@ -2109,8 +2109,8 @@ impl fmt::Display for TableFactor {
                 }
                 write!(f, "PATTERN ({pattern}) ")?;
                 write!(f, "DEFINE {})", display_comma_separated(symbols))?;
-                if alias.is_some() {
-                    write!(f, " AS {}", alias.as_ref().unwrap())?;
+                if let Some(alias) = alias {
+                    write!(f, " {alias}")?;
                 }
                 Ok(())
             }
@@ -2135,7 +2135,7 @@ impl fmt::Display for TableFactor {
                     columns = display_comma_separated(columns)
                 )?;
                 if let Some(alias) = alias {
-                    write!(f, " AS {alias}")?;
+                    write!(f, " {alias}")?;
                 }
                 Ok(())
             }
@@ -2168,7 +2168,7 @@ impl fmt::Display for TableFactor {
                 write!(f, ")")?;
 
                 if let Some(alias) = alias {
-                    write!(f, " AS {alias}")?;
+                    write!(f, " {alias}")?;
                 }
 
                 Ok(())
@@ -2181,13 +2181,17 @@ impl fmt::Display for TableFactor {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TableAlias {
+    /// Tells whether the alias was introduced with an explicit, preceding "AS"
+    /// keyword, e.g. `AS name`. Typically, the keyword is preceding the name
+    /// (e.g. `.. FROM table AS t ..`).
+    pub explicit: bool,
     pub name: Ident,
     pub columns: Vec<TableAliasColumnDef>,
 }
 
 impl fmt::Display for TableAlias {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.name)?;
+        write!(f, "{}{}", if self.explicit { "AS " } else { "" }, self.name)?;
         if !self.columns.is_empty() {
             write!(f, " ({})", display_comma_separated(&self.columns))?;
         }

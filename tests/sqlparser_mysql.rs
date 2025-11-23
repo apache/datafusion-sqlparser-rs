@@ -2638,10 +2638,7 @@ fn parse_update_with_joins() {
                 TableWithJoins {
                     relation: TableFactor::Table {
                         name: ObjectName::from(vec![Ident::new("orders")]),
-                        alias: Some(TableAlias {
-                            name: Ident::new("o"),
-                            columns: vec![]
-                        }),
+                        alias: table_alias(true, "o"),
                         args: None,
                         with_hints: vec![],
                         version: None,
@@ -2654,10 +2651,7 @@ fn parse_update_with_joins() {
                     joins: vec![Join {
                         relation: TableFactor::Table {
                             name: ObjectName::from(vec![Ident::new("customers")]),
-                            alias: Some(TableAlias {
-                                name: Ident::new("c"),
-                                columns: vec![]
-                            }),
+                            alias: table_alias(true, "c"),
                             args: None,
                             with_hints: vec![],
                             version: None,
@@ -3716,10 +3710,7 @@ fn parse_json_table() {
                     on_error: Some(JsonTableColumnErrorHandling::Null),
                 }),
             ],
-            alias: Some(TableAlias {
-                name: Ident::new("t"),
-                columns: vec![],
-            }),
+            alias: table_alias(true, "t"),
         }
     );
 }

@@ -9797,22 +9797,22 @@ fn parse_merge() {
     let sql_no_into = "MERGE s.bar AS dest USING (SELECT * FROM s.foo) AS stg ON dest.D = stg.D AND dest.E = stg.E WHEN NOT MATCHED THEN INSERT (A, B, C) VALUES (stg.A, stg.B, stg.C) WHEN MATCHED AND dest.A = 'a' THEN UPDATE SET dest.F = stg.F, dest.G = stg.G WHEN MATCHED THEN DELETE";
     match (verified_stmt(sql), verified_stmt(sql_no_into)) {
         (
-            Statement::Merge {
+            Statement::Merge(Merge {
                 into,
                 table,
                 source,
                 on,
                 clauses,
                 ..
-            },
-            Statement::Merge {
+            }),
+            Statement::Merge(Merge {
                 into: no_into,
                 table: table_no_into,
                 source: source_no_into,
                 on: on_no_into,
                 clauses: clauses_no_into,
                 ..
-            },
+            }),
         ) => {
             assert!(into);
             assert!(!no_into);
@@ -9961,7 +9961,7 @@ fn parse_merge() {
                                 (Value::SingleQuotedString("a".to_string())).with_empty_span()
                             )),
                         }),
-                        action: MergeAction::Update {
+                        action: MergeAction::Update(MergeUpdateExpr {
                             update_token: AttachedToken::empty(),
                             assignments: vec![
                                 Assignment {
@@ -9987,7 +9987,7 @@ fn parse_merge() {
                             ],
                             update_predicate: None,
                             delete_predicate: None,
-                        },
+                        }),
                     },
                     MergeClause {
                         when_token: AttachedToken::empty(),

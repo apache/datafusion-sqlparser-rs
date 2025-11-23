@@ -1815,7 +1815,7 @@ fn parse_merge() {
         }),
         insert_predicate: None,
     });
-    let update_action = MergeAction::Update {
+    let update_action = MergeAction::Update(MergeUpdateExpr {
         update_token: AttachedToken::empty(),
         assignments: vec![
             Assignment {
@@ -1829,17 +1829,17 @@ fn parse_merge() {
         ],
         update_predicate: None,
         delete_predicate: None,
-    };
+    });
 
     match bigquery_and_generic().verified_stmt(sql) {
-        Statement::Merge {
+        Statement::Merge(Merge {
             into,
             table,
             source,
             on,
             clauses,
             ..
-        } => {
+        }) => {
             assert!(!into);
             assert_eq!(
                 TableFactor::Table {

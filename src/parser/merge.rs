@@ -17,8 +17,8 @@ use alloc::{boxed::Box, format, string::ToString, vec, vec::Vec};
 
 use crate::{
     ast::{
-        Ident, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr, MergeInsertKind,
-        ObjectName, ObjectNamePart, SetExpr, Statement, TableFactor,
+        Ident, Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr, MergeInsertKind,
+        MergeUpdateExpr, ObjectName, ObjectNamePart, OutputClause, SetExpr, Statement, TableFactor,
     },
     dialect::{BigQueryDialect, GenericDialect, MySqlDialect},
     keywords::Keyword,
@@ -54,7 +54,7 @@ impl Parser<'_> {
             None => None,
         };
 
-        Ok(Statement::Merge {
+        Ok(Statement::Merge(Merge {
             merge_token: merge_token.into(),
             into,
             table,
@@ -62,7 +62,7 @@ impl Parser<'_> {
             on: Box::new(on),
             clauses,
             output,
-        })
+        }))
     }
 
     fn parse_merge_clauses(
@@ -134,12 +134,12 @@ impl Parser<'_> {
                     } else {
                         None
                     };
-                    MergeAction::Update {
+                    MergeAction::Update(MergeUpdateExpr {
                         update_token: update_token.into(),
                         assignments,
                         update_predicate,
                         delete_predicate,
-                    }
+                    })
                 }
                 Some(Keyword::DELETE) => {
                     if matches!(
@@ -272,6 +272,33 @@ impl Parser<'_> {
         } else {
             self.parse_parenthesized_column_list(IsOptional::Optional, allow_empty)
         }
+    }
+
+    fn parse_output(
+        &mut self,
+        start_keyword: Keyword,
+        start_token: TokenWithSpan,
+    ) -> Result<OutputClause, ParserError> {
+        let select_items = self.parse_projection()?;
+        let into_table = if start_keyword == Keyword::OUTPUT && self.peek_keyword(Keyword::INTO) {
+            self.expect_keyword_is(Keyword::INTO)?;
+            Some(self.parse_select_into()?)
+        } else {
+            None
+        };
+
+        Ok(if start_keyword == Keyword::OUTPUT {
+            OutputClause::Output {
+                output_token: start_token.into(),
+                select_items,
+                into_table,
+            }
+        } else {
+            OutputClause::Returning {
+                returning_token: start_token.into(),
+                select_items,
+            }
+        })
     }
 }
 

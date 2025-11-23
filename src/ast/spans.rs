@@ -38,15 +38,15 @@ use super::{
     FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
     IfStatement, IlikeSelectItem, IndexColumn, Insert, Interpolate, InterpolateExpr, Join,
     JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
-    MatchRecognizePattern, Measure, MergeAction, MergeClause, MergeInsertExpr, MergeInsertKind,
-    NamedParenthesizedList, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict,
-    OnConflictAction, OnInsert, OpenStatement, OrderBy, OrderByExpr, OrderByKind, OutputClause,
-    Partition, PivotValueSource, ProjectionSelect, Query, RaiseStatement, RaiseStatementValue,
-    ReferentialAction, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
-    SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias,
-    TableAliasColumnDef, TableConstraint, TableFactor, TableObject, TableOptionsClustered,
-    TableWithJoins, Update, UpdateTableFromKind, Use, Value, Values, ViewColumnDef, WhileStatement,
-    WildcardAdditionalOptions, With, WithFill,
+    MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
+    MergeInsertKind, MergeUpdateExpr, NamedParenthesizedList, NamedWindowDefinition, ObjectName,
+    ObjectNamePart, Offset, OnConflict, OnConflictAction, OnInsert, OpenStatement, OrderBy,
+    OrderByExpr, OrderByKind, OutputClause, Partition, PivotValueSource, ProjectionSelect, Query,
+    RaiseStatement, RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
+    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
+    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
+    TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Value, Values,
+    ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -451,20 +451,7 @@ impl Spanned for Statement {
             Statement::Explain { .. } => Span::empty(),
             Statement::Savepoint { .. } => Span::empty(),
             Statement::ReleaseSavepoint { .. } => Span::empty(),
-            Statement::Merge {
-                merge_token,
-                into: _,
-                table: _,
-                source: _,
-                on,
-                clauses,
-                output,
-            } => union_spans(
-                [merge_token.0.span, on.span()]
-                    .into_iter()
-                    .chain(clauses.iter().map(Spanned::span))
-                    .chain(output.iter().map(Spanned::span)),
-            ),
+            Statement::Merge(merge) => merge.span(),
             Statement::Cache { .. } => Span::empty(),
             Statement::UNCache { .. } => Span::empty(),
             Statement::CreateSequence { .. } => Span::empty(),
@@ -921,6 +908,17 @@ impl Spanned for Update {
                 .chain(selection.iter().map(|i| i.span()))
                 .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
                 .chain(limit.iter().map(|i| i.span())),
+        )
+    }
+}
+
+impl Spanned for Merge {
+    fn span(&self) -> Span {
+        union_spans(
+            [self.merge_token.0.span, self.on.span()]
+                .into_iter()
+                .chain(self.clauses.iter().map(Spanned::span))
+                .chain(self.output.iter().map(Spanned::span)),
         )
     }
 }
@@ -2419,17 +2417,7 @@ impl Spanned for MergeAction {
     fn span(&self) -> Span {
         match self {
             MergeAction::Insert(expr) => expr.span(),
-            MergeAction::Update {
-                update_token,
-                assignments,
-                update_predicate,
-                delete_predicate,
-            } => union_spans(
-                core::iter::once(update_token.0.span)
-                    .chain(assignments.iter().map(Spanned::span))
-                    .chain(update_predicate.iter().map(Spanned::span))
-                    .chain(delete_predicate.iter().map(Spanned::span)),
-            ),
+            MergeAction::Update(expr) => expr.span(),
             MergeAction::Delete { delete_token } => delete_token.0.span,
         }
     }
@@ -2449,6 +2437,17 @@ impl Spanned for MergeInsertExpr {
             .into_iter()
             .chain(self.insert_predicate.iter().map(Spanned::span))
             .chain(self.columns.iter().map(|i| i.span)),
+        )
+    }
+}
+
+impl Spanned for MergeUpdateExpr {
+    fn span(&self) -> Span {
+        union_spans(
+            core::iter::once(self.update_token.0.span)
+                .chain(self.assignments.iter().map(Spanned::span))
+                .chain(self.update_predicate.iter().map(Spanned::span))
+                .chain(self.delete_predicate.iter().map(Spanned::span)),
         )
     }
 }
@@ -2772,7 +2771,7 @@ WHERE id = 1
         assert_eq!(stmt_span.end, (16, 67).into());
 
         // ~ individual tokens within the statement
-        let Statement::Merge {
+        let Statement::Merge(Merge {
             merge_token,
             into: _,
             table: _,
@@ -2780,7 +2779,7 @@ WHERE id = 1
             on: _,
             clauses,
             output,
-        } = &r[0]
+        }) = &r[0]
         else {
             panic!("not a MERGE statement");
         };
@@ -2818,12 +2817,12 @@ WHERE id = 1
             clauses[1].when_token.0.span,
             Span::new(Location::new(12, 17), Location::new(12, 21))
         );
-        if let MergeAction::Update {
+        if let MergeAction::Update(MergeUpdateExpr {
             update_token,
             assignments: _,
             update_predicate: _,
             delete_predicate: _,
-        } = &clauses[1].action
+        }) = &clauses[1].action
         {
             assert_eq!(
                 update_token.0.span,
@@ -2896,7 +2895,7 @@ WHERE id = 1
         );
 
         // ~ individual tokens within the statement
-        if let Statement::Merge { output, .. } = &r[0] {
+        if let Statement::Merge(Merge { output, .. }) = &r[0] {
             if let Some(OutputClause::Returning {
                 returning_token, ..
             }) = output
@@ -2930,7 +2929,7 @@ WHERE id = 1
         );
 
         // ~ individual tokens within the statement
-        if let Statement::Merge { output, .. } = &r[0] {
+        if let Statement::Merge(Merge { output, .. }) = &r[0] {
             if let Some(OutputClause::Output { output_token, .. }) = output {
                 assert_eq!(
                     output_token.0.span,

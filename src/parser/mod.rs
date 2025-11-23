@@ -17304,33 +17304,6 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_output(
-        &mut self,
-        start_keyword: Keyword,
-        start_token: TokenWithSpan,
-    ) -> Result<OutputClause, ParserError> {
-        let select_items = self.parse_projection()?;
-        let into_table = if start_keyword == Keyword::OUTPUT && self.peek_keyword(Keyword::INTO) {
-            self.expect_keyword_is(Keyword::INTO)?;
-            Some(self.parse_select_into()?)
-        } else {
-            None
-        };
-
-        Ok(if start_keyword == Keyword::OUTPUT {
-            OutputClause::Output {
-                output_token: start_token.into(),
-                select_items,
-                into_table,
-            }
-        } else {
-            OutputClause::Returning {
-                returning_token: start_token.into(),
-                select_items,
-            }
-        })
-    }
-
     fn parse_select_into(&mut self) -> Result<SelectInto, ParserError> {
         let temporary = self
             .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])

@@ -59,19 +59,22 @@ pub use self::dcl::{
     AlterRoleOperation, CreateRole, ResetConfig, RoleOption, SecondaryRoles, SetConfigValue, Use,
 };
 pub use self::ddl::{
-    AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterPolicyOperation,
-    AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm, AlterTableLock,
-    AlterTableOperation, AlterType, AlterTypeAddValue, AlterTypeAddValuePosition,
-    AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue, ClusteredBy, ColumnDef,
-    ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy, ColumnPolicyProperty,
-    ConstraintCharacteristics, CreateConnector, CreateDomain, CreateExtension, CreateFunction,
-    CreateIndex, CreateTable, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
+    Alignment, AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation,
+    AlterPolicyOperation, AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm,
+    AlterTableLock, AlterTableOperation, AlterTableType, AlterType, AlterTypeAddValue,
+    AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
+    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy,
+    ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain,
+    CreateExtension, CreateFunction, CreateIndex, CreateOperator, CreateOperatorClass,
+    CreateOperatorFamily, CreateTable, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
     DropBehavior, DropExtension, DropFunction, DropTrigger, GeneratedAs, GeneratedExpressionMode,
     IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
     IdentityPropertyOrder, IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck,
-    NullsDistinctOption, Owner, Partition, ProcedureParam, ReferentialAction, RenameTableNameKind,
-    ReplicaIdentity, TagsColumnOption, TriggerObjectKind, Truncate,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
+    NullsDistinctOption, OperatorArgTypes, OperatorClassItem, OperatorPurpose, Owner, Partition,
+    ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity, TagsColumnOption,
+    TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
+    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, ViewColumnDef,
 };
 pub use self::dml::{Delete, Insert, Update};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -2789,10 +2792,11 @@ impl fmt::Display for Declare {
 }
 
 /// Sql options of a `CREATE TABLE` statement.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CreateTableOptions {
+    #[default]
     None,
     /// Options specified using the `WITH` keyword.
     /// e.g. `WITH (description = "123")`
@@ -2819,12 +2823,6 @@ pub enum CreateTableOptions {
     Plain(Vec<SqlOption>),
 
     TableProperties(Vec<SqlOption>),
-}
-
-impl Default for CreateTableOptions {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 impl fmt::Display for CreateTableOptions {
@@ -2926,6 +2924,15 @@ pub enum Set {
     /// MySQL-style
     /// SET a = 1, b = 2, ..;
     MultipleAssignments { assignments: Vec<SetAssignment> },
+    /// Session authorization for Postgres/Redshift
+    ///
+    /// ```sql
+    /// SET SESSION AUTHORIZATION { user_name | DEFAULT }
+    /// ```
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-set-session-authorization.html>
+    /// See <https://docs.aws.amazon.com/redshift/latest/dg/r_SET_SESSION_AUTHORIZATION.html>
+    SetSessionAuthorization(SetSessionAuthorizationParam),
     /// MS-SQL session
     ///
     /// See <https://learn.microsoft.com/en-us/sql/t-sql/statements/set-statements-transact-sql>
@@ -3000,6 +3007,7 @@ impl Display for Set {
                     modifier = context_modifier.map(|m| format!("{m}")).unwrap_or_default()
                 )
             }
+            Self::SetSessionAuthorization(kind) => write!(f, "SET SESSION AUTHORIZATION {kind}"),
             Self::SetSessionParam(kind) => write!(f, "SET {kind}"),
             Self::SetTransaction {
                 modes,
@@ -3341,6 +3349,21 @@ pub enum Statement {
     /// ```
     /// See [Hive](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362034#LanguageManualDDL-CreateDataConnectorCreateConnector)
     CreateConnector(CreateConnector),
+    /// ```sql
+    /// CREATE OPERATOR
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createoperator.html)
+    CreateOperator(CreateOperator),
+    /// ```sql
+    /// CREATE OPERATOR FAMILY
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createopfamily.html)
+    CreateOperatorFamily(CreateOperatorFamily),
+    /// ```sql
+    /// CREATE OPERATOR CLASS
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createopclass.html)
+    CreateOperatorClass(CreateOperatorClass),
     /// ```sql
     /// ALTER TABLE
     /// ```
@@ -4043,6 +4066,8 @@ pub enum Statement {
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
     /// [MSSQL](https://learn.microsoft.com/en-us/sql/t-sql/statements/merge-transact-sql?view=sql-server-ver16)
     Merge {
+        /// The `MERGE` token that starts the statement.
+        merge_token: AttachedToken,
         /// optional INTO keyword
         into: bool,
         /// Specifies the table to merge
@@ -4067,7 +4092,6 @@ pub enum Statement {
         /// Table flag
         table_flag: Option<ObjectName>,
         /// Table name
-
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         has_as: bool,
@@ -4104,7 +4128,7 @@ pub enum Statement {
     /// ```
     CreateType {
         name: ObjectName,
-        representation: UserDefinedTypeRepresentation,
+        representation: Option<UserDefinedTypeRepresentation>,
     },
     /// ```sql
     /// PRAGMA <schema-name>.<pragma-name> = <pragma-value>
@@ -4265,6 +4289,14 @@ pub enum Statement {
     /// ```
     /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_VACUUM_command.html)
     Vacuum(VacuumStatement),
+    /// Restore the value of a run-time parameter to the default value.
+    ///
+    /// ```sql
+    /// RESET configuration_parameter;
+    /// RESET ALL;
+    /// ```
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-reset.html)
+    Reset(ResetStatement),
 }
 
 impl From<Analyze> for Statement {
@@ -4888,6 +4920,11 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::CreateConnector(create_connector) => create_connector.fmt(f),
+            Statement::CreateOperator(create_operator) => create_operator.fmt(f),
+            Statement::CreateOperatorFamily(create_operator_family) => {
+                create_operator_family.fmt(f)
+            }
+            Statement::CreateOperatorClass(create_operator_class) => create_operator_class.fmt(f),
             Statement::AlterTable(alter_table) => write!(f, "{alter_table}"),
             Statement::AlterIndex { name, operation } => {
                 write!(f, "ALTER INDEX {name} {operation}")
@@ -5454,6 +5491,7 @@ impl fmt::Display for Statement {
                 write!(f, "RELEASE SAVEPOINT {name}")
             }
             Statement::Merge {
+                merge_token: _,
                 into,
                 table,
                 source,
@@ -5646,7 +5684,11 @@ impl fmt::Display for Statement {
                 name,
                 representation,
             } => {
-                write!(f, "CREATE TYPE {name} AS {representation}")
+                write!(f, "CREATE TYPE {name}")?;
+                if let Some(repr) = representation {
+                    write!(f, " {repr}")?;
+                }
+                Ok(())
             }
             Statement::Pragma { name, value, is_eq } => {
                 write!(f, "PRAGMA {name}")?;
@@ -5759,6 +5801,7 @@ impl fmt::Display for Statement {
             Statement::AlterSchema(s) => write!(f, "{s}"),
             Statement::Vacuum(s) => write!(f, "{s}"),
             Statement::AlterUser(s) => write!(f, "{s}"),
+            Statement::Reset(s) => write!(f, "{s}"),
         }
     }
 }
@@ -8581,6 +8624,8 @@ impl Display for MergeInsertKind {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct MergeInsertExpr {
+    /// The `INSERT` token that starts the sub-expression.
+    pub insert_token: AttachedToken,
     /// Columns (if any) specified by the insert.
     ///
     /// Example:
@@ -8589,6 +8634,8 @@ pub struct MergeInsertExpr {
     /// INSERT (product, quantity) ROW
     /// ```
     pub columns: Vec<Ident>,
+    /// The token, `[VALUES | ROW]` starting `kind`.
+    pub kind_token: AttachedToken,
     /// The insert type used by the statement.
     pub kind: MergeInsertKind,
 }
@@ -8628,9 +8675,16 @@ pub enum MergeAction {
     /// ```sql
     /// UPDATE SET quantity = T.quantity + S.quantity
     /// ```
-    Update { assignments: Vec<Assignment> },
+    Update {
+        /// The `UPDATE` token that starts the sub-expression.
+        update_token: AttachedToken,
+        assignments: Vec<Assignment>,
+    },
     /// A plain `DELETE` clause
-    Delete,
+    Delete {
+        /// The `DELETE` token that starts the sub-expression.
+        delete_token: AttachedToken,
+    },
 }
 
 impl Display for MergeAction {
@@ -8639,10 +8693,10 @@ impl Display for MergeAction {
             MergeAction::Insert(insert) => {
                 write!(f, "INSERT {insert}")
             }
-            MergeAction::Update { assignments } => {
+            MergeAction::Update { assignments, .. } => {
                 write!(f, "UPDATE SET {}", display_comma_separated(assignments))
             }
-            MergeAction::Delete => {
+            MergeAction::Delete { .. } => {
                 write!(f, "DELETE")
             }
         }
@@ -8661,6 +8715,8 @@ impl Display for MergeAction {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct MergeClause {
+    /// The `WHEN` token that starts the sub-expression.
+    pub when_token: AttachedToken,
     pub clause_kind: MergeClauseKind,
     pub predicate: Option<Expr>,
     pub action: MergeAction,
@@ -8669,6 +8725,7 @@ pub struct MergeClause {
 impl Display for MergeClause {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let MergeClause {
+            when_token: _,
             clause_kind,
             predicate,
             action,
@@ -8692,10 +8749,12 @@ impl Display for MergeClause {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum OutputClause {
     Output {
+        output_token: AttachedToken,
         select_items: Vec<SelectItem>,
         into_table: Option<SelectInto>,
     },
     Returning {
+        returning_token: AttachedToken,
         select_items: Vec<SelectItem>,
     },
 }
@@ -8704,6 +8763,7 @@ impl fmt::Display for OutputClause {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             OutputClause::Output {
+                output_token: _,
                 select_items,
                 into_table,
             } => {
@@ -8715,7 +8775,10 @@ impl fmt::Display for OutputClause {
                 }
                 Ok(())
             }
-            OutputClause::Returning { select_items } => {
+            OutputClause::Returning {
+                returning_token: _,
+                select_items,
+            } => {
                 f.write_str("RETURNING ")?;
                 display_comma_separated(select_items).fmt(f)
             }
@@ -9820,6 +9883,42 @@ impl fmt::Display for TableObject {
     }
 }
 
+/// Represents a SET SESSION AUTHORIZATION statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SetSessionAuthorizationParam {
+    pub scope: ContextModifier,
+    pub kind: SetSessionAuthorizationParamKind,
+}
+
+impl fmt::Display for SetSessionAuthorizationParam {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.kind)
+    }
+}
+
+/// Represents the parameter kind for SET SESSION AUTHORIZATION
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SetSessionAuthorizationParamKind {
+    /// Default authorization
+    Default,
+
+    /// User name
+    User(Ident),
+}
+
+impl fmt::Display for SetSessionAuthorizationParamKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SetSessionAuthorizationParamKind::Default => write!(f, "DEFAULT"),
+            SetSessionAuthorizationParamKind::User(name) => write!(f, "{}", name),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -10521,6 +10620,38 @@ impl fmt::Display for VacuumStatement {
     }
 }
 
+/// Variants of the RESET statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum Reset {
+    /// Resets all session parameters to their default values.
+    ALL,
+
+    /// Resets a specific session parameter to its default value.
+    ConfigurationParameter(ObjectName),
+}
+
+/// Resets a session parameter to its default value.
+/// ```sql
+/// RESET { ALL | <configuration_parameter> }
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ResetStatement {
+    pub reset: Reset,
+}
+
+impl fmt::Display for ResetStatement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.reset {
+            Reset::ALL => write!(f, "RESET ALL"),
+            Reset::ConfigurationParameter(param) => write!(f, "RESET {}", param),
+        }
+    }
+}
+
 impl From<Set> for Statement {
     fn from(s: Set) -> Self {
         Self::Set(s)
@@ -10758,6 +10889,12 @@ impl From<CreateUser> for Statement {
 impl From<VacuumStatement> for Statement {
     fn from(v: VacuumStatement) -> Self {
         Self::Vacuum(v)
+    }
+}
+
+impl From<ResetStatement> for Statement {
+    fn from(r: ResetStatement) -> Self {
+        Self::Reset(r)
     }
 }
 

@@ -1805,13 +1805,17 @@ fn parse_merge() {
         "WHEN NOT MATCHED THEN INSERT VALUES (1, DEFAULT)",
     );
     let insert_action = MergeAction::Insert(MergeInsertExpr {
+        insert_token: AttachedToken::empty(),
         columns: vec![Ident::new("product"), Ident::new("quantity")],
+        kind_token: AttachedToken::empty(),
         kind: MergeInsertKind::Values(Values {
+            value_keyword: false,
             explicit_row: false,
             rows: vec![vec![Expr::value(number("1")), Expr::value(number("2"))]],
         }),
     });
     let update_action = MergeAction::Update {
+        update_token: AttachedToken::empty(),
         assignments: vec![
             Assignment {
                 target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new("a")])),
@@ -1874,83 +1878,113 @@ fn parse_merge() {
             assert_eq!(
                 vec![
                     MergeClause {
+                        when_token: AttachedToken::empty(),
                         clause_kind: MergeClauseKind::NotMatched,
                         predicate: Some(Expr::value(number("1"))),
                         action: insert_action.clone(),
                     },
                     MergeClause {
+                        when_token: AttachedToken::empty(),
                         clause_kind: MergeClauseKind::NotMatchedByTarget,
                         predicate: Some(Expr::value(number("1"))),
                         action: insert_action.clone(),
                     },
                     MergeClause {
+                        when_token: AttachedToken::empty(),
                         clause_kind: MergeClauseKind::NotMatchedByTarget,
                         predicate: None,
                         action: insert_action,
                     },
                     MergeClause {
+                        when_token: AttachedToken::empty(),
                         clause_kind: MergeClauseKind::NotMatchedBySource,
                         predicate: Some(Expr::value(number("2"))),
-                        action: MergeAction::Delete
+                        action: MergeAction::Delete {
+                            delete_token: AttachedToken::empty(),
+                        }
                     },
                     MergeClause {
+                        when_token: AttachedToken::empty(),
                         clause_kind: MergeClauseKind::NotMatchedBySource,
                         predicate: None,
-                        action: MergeAction::Delete
+                        action: MergeAction::Delete {
+                            delete_token: AttachedToken::empty()
+                        }
                     },
                     MergeClause {
+                        when_token: AttachedToken::empty(),
                         clause_kind: MergeClauseKind::NotMatchedBySource,
                         predicate: Some(Expr::value(number("1"))),
                         action: update_action.clone(),
                     },
                     MergeClause {
+                        when_token: AttachedToken::empty(),
                         clause_kind: MergeClauseKind::NotMatched,
                         predicate: Some(Expr::value(number("1"))),
                         action: MergeAction::Insert(MergeInsertExpr {
+                            insert_token: AttachedToken::empty(),
                             columns: vec![Ident::new("product"), Ident::new("quantity"),],
+                            kind_token: AttachedToken::empty(),
                             kind: MergeInsertKind::Row,
                         })
                     },
                     MergeClause {
+                        when_token: AttachedToken::empty(),
                         clause_kind: MergeClauseKind::NotMatched,
                         predicate: None,
                         action: MergeAction::Insert(MergeInsertExpr {
+                            insert_token: AttachedToken::empty(),
                             columns: vec![Ident::new("product"), Ident::new("quantity"),],
+                            kind_token: AttachedToken::empty(),
                             kind: MergeInsertKind::Row,
                         })
                     },
                     MergeClause {
+                        when_token: AttachedToken::empty(),
                         clause_kind: MergeClauseKind::NotMatched,
                         predicate: Some(Expr::value(number("1"))),
                         action: MergeAction::Insert(MergeInsertExpr {
+                            insert_token: AttachedToken::empty(),
                             columns: vec![],
+                            kind_token: AttachedToken::empty(),
                             kind: MergeInsertKind::Row
                         })
                     },
                     MergeClause {
+                        when_token: AttachedToken::empty(),
                         clause_kind: MergeClauseKind::NotMatched,
                         predicate: None,
                         action: MergeAction::Insert(MergeInsertExpr {
+                            insert_token: AttachedToken::empty(),
                             columns: vec![],
+                            kind_token: AttachedToken::empty(),
                             kind: MergeInsertKind::Row
                         })
                     },
                     MergeClause {
+                        when_token: AttachedToken::empty(),
                         clause_kind: MergeClauseKind::Matched,
                         predicate: Some(Expr::value(number("1"))),
-                        action: MergeAction::Delete,
+                        action: MergeAction::Delete {
+                            delete_token: AttachedToken::empty(),
+                        },
                     },
                     MergeClause {
+                        when_token: AttachedToken::empty(),
                         clause_kind: MergeClauseKind::Matched,
                         predicate: None,
                         action: update_action,
                     },
                     MergeClause {
+                        when_token: AttachedToken::empty(),
                         clause_kind: MergeClauseKind::NotMatched,
                         predicate: None,
                         action: MergeAction::Insert(MergeInsertExpr {
+                            insert_token: AttachedToken::empty(),
                             columns: vec![Ident::new("a"), Ident::new("b"),],
+                            kind_token: AttachedToken::empty(),
                             kind: MergeInsertKind::Values(Values {
+                                value_keyword: false,
                                 explicit_row: false,
                                 rows: vec![vec![
                                     Expr::value(number("1")),
@@ -1960,11 +1994,15 @@ fn parse_merge() {
                         })
                     },
                     MergeClause {
+                        when_token: AttachedToken::empty(),
                         clause_kind: MergeClauseKind::NotMatched,
                         predicate: None,
                         action: MergeAction::Insert(MergeInsertExpr {
+                            insert_token: AttachedToken::empty(),
                             columns: vec![],
+                            kind_token: AttachedToken::empty(),
                             kind: MergeInsertKind::Values(Values {
+                                value_keyword: false,
                                 explicit_row: false,
                                 rows: vec![vec![
                                     Expr::value(number("1")),

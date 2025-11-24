@@ -126,36 +126,31 @@ impl Desugarer {
 
         let mut entries: Vec<Expr> = Vec::new();
         for entry in &properties.entries {
-            let key_expr = Expr::BinaryOp {
-                left: Box::new(Expr::CompoundIdentifier(vec![
-                    table_alias.clone(),
-                    Ident::new("Properties"),
-                ])),
-                op: BinaryOperator::LongArrow,
-                right: Box::new(Expr::Value(Value::SingleQuotedString(entry.key.to_string()).into())),
-            };
-
-            // Apply type casting for numeric values
-            let left_expr = if let Expr::Value(v) = entry.value.as_ref() {
-                if let Value::Number(num_str, _) = &v.value {
-                    let cast_type = if num_str.contains('.') {
-                        DataType::Float(ExactNumberInfo::None)
-                    } else {
-                        DataType::Int(None)
-                    };
-                    
-                    Box::new(Expr::Cast {
-                        kind: CastKind::DoubleColon,
-                        expr: Box::new(Expr::Nested(Box::new(key_expr))),
-                        data_type: cast_type,
-                        format: None,
-                    })
-                } else {
-                    Box::new(key_expr)
-                }
-            } else {
-                Err(ParserError::ParserError("Unsupported value type for property desugaring".to_string()))?
-            };
+            // Create json_extract(p.Properties, '$.name') expression
+            let left_expr = Expr::Function(Function {
+                name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("json_extract"))]),
+                parameters: FunctionArguments::None,
+                args: FunctionArguments::List(FunctionArgumentList {
+                    duplicate_treatment: None,
+                    args: vec![
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                            Expr::CompoundIdentifier(vec![
+                                table_alias.clone(),
+                                Ident::new("Properties"),
+                            ])
+                        )),
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                            Expr::Value(Value::SingleQuotedString(format!("$.{}", entry.key)).into())
+                        )),
+                    ],
+                    clauses: vec![],
+                }),
+                filter: None,
+                null_treatment: None,
+                over: None,
+                within_group: vec![],
+                uses_odbc_syntax: false,
+            });
             
             // Convert the value, handling double-quoted strings by converting to single-quoted
             let right_value = if let Expr::Value(v) = entry.value.as_ref() {
@@ -170,7 +165,7 @@ impl Desugarer {
             };
             
             let value_expr = Expr::BinaryOp {
-                left: left_expr,
+                left: Box::new(left_expr),
                 op: BinaryOperator::Eq,
                 right: right_value,
             };
@@ -268,40 +263,31 @@ impl Desugarer {
                             return Err(ParserError::ParserError("WHERE clause identifier not valid".to_string()));
                         }
                         
-                        // Determine if we need type casting based on the right operand
-                        let needs_cast = match right.as_ref() {
-                            Expr::Value(v) => matches!(v.value, Value::Number(_, _)),
-                            _ => false,
-                        };
-                        
-                        let mut key_expr = Expr::BinaryOp {
-                            left: Box::new(Expr::CompoundIdentifier(vec![
-                                idents[0].clone(),
-                                Ident::new("Properties"),
-                            ])),
-                            op: BinaryOperator::LongArrow,
-                            right: Box::new(Expr::Value(Value::SingleQuotedString(idents[1].to_string()).into())),
-                        };
-                        
-                        // Add type casting if comparing with a number
-                        if needs_cast {
-                            if let Expr::Value(v) = right.as_ref() {
-                                if let Value::Number(num_str, _) = &v.value {
-                                    let cast_type = if num_str.contains('.') {
-                                        DataType::Float(ExactNumberInfo::None)
-                                    } else {
-                                        DataType::Int(None)
-                                    };
-                                    
-                                    key_expr = Expr::Cast {
-                                        kind: CastKind::DoubleColon,
-                                        expr: Box::new(Expr::Nested(Box::new(key_expr))),
-                                        data_type: cast_type,
-                                        format: None,
-                                    };
-                                }
-                            }
-                        }
+                        // Create json_extract(p.Properties, '$.name') expression
+                        let key_expr = Expr::Function(Function {
+                            name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("json_extract"))]),
+                            parameters: FunctionArguments::None,
+                            args: FunctionArguments::List(FunctionArgumentList {
+                                duplicate_treatment: None,
+                                args: vec![
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                        Expr::CompoundIdentifier(vec![
+                                            idents[0].clone(),
+                                            Ident::new("Properties"),
+                                        ])
+                                    )),
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                        Expr::Value(Value::SingleQuotedString(format!("$.{}", idents[1])).into())
+                                    )),
+                                ],
+                                clauses: vec![],
+                            }),
+                            filter: None,
+                            null_treatment: None,
+                            over: None,
+                            within_group: vec![],
+                            uses_odbc_syntax: false,
+                        });
                         
                         Ok(Expr::BinaryOp {
                             left: Box::new(key_expr),
@@ -916,16 +902,32 @@ impl Desugarer {
             match item {
                 ProjectionItem::Expr { expr, alias } => {
                     match expr {
-                        // Handle property access: a.name -> a.Properties ->> 'name'
+                        // Handle property access: a.name -> json_extract(a.Properties, '$.name')
                         Expr::CompoundIdentifier(idents) if idents.len() == 2 => {
-                            let key_expr = Expr::BinaryOp {
-                                left: Box::new(Expr::CompoundIdentifier(vec![
-                                    idents[0].clone(),
-                                    Ident::new("Properties"),
-                                ])),
-                                op: BinaryOperator::LongArrow,
-                                right: Box::new(Expr::Value(Value::SingleQuotedString(idents[1].to_string()).into())),
-                            };
+                            let key_expr = Expr::Function(Function {
+                                name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("json_extract"))]),
+                                parameters: FunctionArguments::None,
+                                args: FunctionArguments::List(FunctionArgumentList {
+                                    duplicate_treatment: None,
+                                    args: vec![
+                                        FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                            Expr::CompoundIdentifier(vec![
+                                                idents[0].clone(),
+                                                Ident::new("Properties"),
+                                            ])
+                                        )),
+                                        FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                            Expr::Value(Value::SingleQuotedString(format!("$.{}", idents[1])).into())
+                                        )),
+                                    ],
+                                    clauses: vec![],
+                                }),
+                                filter: None,
+                                null_treatment: None,
+                                over: None,
+                                within_group: vec![],
+                                uses_odbc_syntax: false,
+                            });
                             
                             if let Some(a) = alias {
                                 projections.push(SelectItem::ExprWithAlias {
@@ -1072,28 +1074,53 @@ mod tests {
         let desugared = Desugarer::desugar_properties_map(properties, &dummy_alias).unwrap();
         let expected = Some(Expr::BinaryOp {
             left: Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::BinaryOp {
-                    left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties")])),
-                    op: BinaryOperator::LongArrow,
-                    right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()).into())),
-                }),
+                left: Box::new(Expr::Function(Function {
+                    name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("json_extract"))]),
+                    parameters: FunctionArguments::None,
+                    args: FunctionArguments::List(FunctionArgumentList {
+                        duplicate_treatment: None,
+                        args: vec![
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties")])
+                            )),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                Expr::Value(Value::SingleQuotedString("$.name".to_string()).into())
+                            )),
+                        ],
+                        clauses: vec![],
+                    }),
+                    filter: None,
+                    null_treatment: None,
+                    over: None,
+                    within_group: vec![],
+                    uses_odbc_syntax: false,
+                })),
                 op: BinaryOperator::Eq,
                 right: Box::new(Expr::Value(Value::SingleQuotedString("Alice".to_string()).into())),
             }),
             op: BinaryOperator::And,
             right: Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::Cast {
-                    kind: CastKind::DoubleColon,
-                    expr: Box::new(Expr::Nested(Box::new(
-                        Expr::BinaryOp {
-                            left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties")])),
-                            op: BinaryOperator::LongArrow,
-                            right: Box::new(Expr::Value(Value::SingleQuotedString("age".to_string()).into())),
-                        }
-                    ))),
-                    data_type: DataType::Int(None),
-                    format: None,
-                }),
+                left: Box::new(Expr::Function(Function {
+                    name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("json_extract"))]),
+                    parameters: FunctionArguments::None,
+                    args: FunctionArguments::List(FunctionArgumentList {
+                        duplicate_treatment: None,
+                        args: vec![
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties")])
+                            )),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                Expr::Value(Value::SingleQuotedString("$.age".to_string()).into())
+                            )),
+                        ],
+                        clauses: vec![],
+                    }),
+                    filter: None,
+                    null_treatment: None,
+                    over: None,
+                    within_group: vec![],
+                    uses_odbc_syntax: false,
+                })),
                 op: BinaryOperator::Eq,
                 right: Box::new(Expr::Value(Value::Number("30".to_string(), false).into())),
             }),
@@ -1126,11 +1153,27 @@ mod tests {
             }),
             op: BinaryOperator::And,
             right: Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::BinaryOp {
-                    left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties")])),
-                    op: BinaryOperator::LongArrow,
-                    right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()).into())),
-                }),
+                left: Box::new(Expr::Function(Function {
+                    name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("json_extract"))]),
+                    parameters: FunctionArguments::None,
+                    args: FunctionArguments::List(FunctionArgumentList {
+                        duplicate_treatment: None,
+                        args: vec![
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties")])
+                            )),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                Expr::Value(Value::SingleQuotedString("$.name".to_string()).into())
+                            )),
+                        ],
+                        clauses: vec![],
+                    }),
+                    filter: None,
+                    null_treatment: None,
+                    over: None,
+                    within_group: vec![],
+                    uses_odbc_syntax: false,
+                })),
                 op: BinaryOperator::Eq,
                 right: Box::new(Expr::Value(Value::SingleQuotedString("Alice".to_string()).into())),
             }),
@@ -1168,18 +1211,27 @@ mod tests {
             }),
             op: BinaryOperator::And,
             right: Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::Cast {
-                    kind: CastKind::DoubleColon,
-                    expr: Box::new(Expr::Nested(Box::new(
-                        Expr::BinaryOp {
-                            left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("r"), Ident::new("Properties")])),
-                            op: BinaryOperator::LongArrow,
-                            right: Box::new(Expr::Value(Value::SingleQuotedString("since".to_string()).into())),
-                        }
-                    ))),
-                    data_type: DataType::Int(None),
-                    format: None,
-                }),
+                left: Box::new(Expr::Function(Function {
+                    name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("json_extract"))]),
+                    parameters: FunctionArguments::None,
+                    args: FunctionArguments::List(FunctionArgumentList {
+                        duplicate_treatment: None,
+                        args: vec![
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                Expr::CompoundIdentifier(vec![Ident::new("r"), Ident::new("Properties")])
+                            )),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                Expr::Value(Value::SingleQuotedString("$.since".to_string()).into())
+                            )),
+                        ],
+                        clauses: vec![],
+                    }),
+                    filter: None,
+                    null_treatment: None,
+                    over: None,
+                    within_group: vec![],
+                    uses_odbc_syntax: false,
+                })),
                 op: BinaryOperator::Eq,
                 right: Box::new(Expr::Value(Value::Number("2020".to_string(), false).into())),
             }),
@@ -1290,11 +1342,27 @@ mod tests {
                     }),
                     op: BinaryOperator::And,
                     right: Box::new(Expr::BinaryOp {
-                        left: Box::new(Expr::BinaryOp {
-                            left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("a"), Ident::new("Properties")])),
-                            op: BinaryOperator::LongArrow,
-                            right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()).into())),
-                        }),
+                        left: Box::new(Expr::Function(Function {
+                            name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("json_extract"))]),
+                            parameters: FunctionArguments::None,
+                            args: FunctionArguments::List(FunctionArgumentList {
+                                duplicate_treatment: None,
+                                args: vec![
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                        Expr::CompoundIdentifier(vec![Ident::new("a"), Ident::new("Properties")])
+                                    )),
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                        Expr::Value(Value::SingleQuotedString("$.name".to_string()).into())
+                                    )),
+                                ],
+                                clauses: vec![],
+                            }),
+                            filter: None,
+                            null_treatment: None,
+                            over: None,
+                            within_group: vec![],
+                            uses_odbc_syntax: false,
+                        })),
                         op: BinaryOperator::Eq,
                         right: Box::new(Expr::Value(Value::SingleQuotedString("Alice".to_string()).into())),
                     }),
@@ -1308,11 +1376,27 @@ mod tests {
                     }),
                     op: BinaryOperator::And,
                     right: Box::new(Expr::BinaryOp {
-                        left: Box::new(Expr::BinaryOp {
-                            left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("b"), Ident::new("Properties")])),
-                            op: BinaryOperator::LongArrow,
-                            right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()).into())),
-                        }),
+                        left: Box::new(Expr::Function(Function {
+                            name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("json_extract"))]),
+                            parameters: FunctionArguments::None,
+                            args: FunctionArguments::List(FunctionArgumentList {
+                                duplicate_treatment: None,
+                                args: vec![
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                        Expr::CompoundIdentifier(vec![Ident::new("b"), Ident::new("Properties")])
+                                    )),
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                        Expr::Value(Value::SingleQuotedString("$.name".to_string()).into())
+                                    )),
+                                ],
+                                clauses: vec![],
+                            }),
+                            filter: None,
+                            null_treatment: None,
+                            over: None,
+                            within_group: vec![],
+                            uses_odbc_syntax: false,
+                        })),
                         op: BinaryOperator::Eq,
                         right: Box::new(Expr::Value(Value::SingleQuotedString("Bob".to_string()).into())),
                     }),
@@ -1346,18 +1430,28 @@ mod tests {
         let desugared = Desugarer::desugar_where(where_clause).unwrap();
         let expected = Expr::BinaryOp {
             left: Box::new(
-                Expr::Cast {
-                    kind: CastKind::DoubleColon,
-                    expr: Box::new(Expr::Nested(Box::new(
-                        Expr::BinaryOp {
-                            left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties"),])),
-                            op: BinaryOperator::LongArrow,
-                            right: Box::new(Expr::Value(Value::SingleQuotedString("age".to_string()).into())),
-                        }
-                    ))),
-                    data_type: DataType::Int(None),
-                    format: None,
-                }),
+                Expr::Function(Function {
+                    name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("json_extract"))]),
+                    parameters: FunctionArguments::None,
+                    args: FunctionArguments::List(FunctionArgumentList {
+                        duplicate_treatment: None,
+                        args: vec![
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties")])
+                            )),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                Expr::Value(Value::SingleQuotedString("$.age".to_string()).into())
+                            )),
+                        ],
+                        clauses: vec![],
+                    }),
+                    filter: None,
+                    null_treatment: None,
+                    over: None,
+                    within_group: vec![],
+                    uses_odbc_syntax: false,
+                })
+            ),
             op: BinaryOperator::Gt,
             right: Box::new(Expr::Value(Value::Number("30".to_string(), false).into())),
         };
@@ -1387,18 +1481,27 @@ mod tests {
             left: Box::new(
                 Expr::BinaryOp {
                     left: Box::new(
-                        Expr::Cast {
-                            kind: CastKind::DoubleColon,
-                            expr: Box::new(Expr::Nested(Box::new(
-                                Expr::BinaryOp {
-                                    left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties"),])),
-                                    op: BinaryOperator::LongArrow,
-                                    right: Box::new(Expr::Value(Value::SingleQuotedString("age".to_string()).into())),
-                                }
-                            ))),
-                            data_type: DataType::Int(None),
-                            format: None,
-                        }
+                        Expr::Function(Function {
+                            name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("json_extract"))]),
+                            parameters: FunctionArguments::None,
+                            args: FunctionArguments::List(FunctionArgumentList {
+                                duplicate_treatment: None,
+                                args: vec![
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                        Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties")])
+                                    )),
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                        Expr::Value(Value::SingleQuotedString("$.age".to_string()).into())
+                                    )),
+                                ],
+                                clauses: vec![],
+                            }),
+                            filter: None,
+                            null_treatment: None,
+                            over: None,
+                            within_group: vec![],
+                            uses_odbc_syntax: false,
+                        })
                     ),
                     op: BinaryOperator::Gt,
                     right: Box::new(Expr::Value(Value::Number("30".to_string(), false).into())),
@@ -1406,11 +1509,27 @@ mod tests {
             op: BinaryOperator::And,
             right: Box::new(
                 Expr::BinaryOp {
-                    left: Box::new(Expr::BinaryOp {
-                        left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties"),])),
-                        op: BinaryOperator::LongArrow,
-                        right: Box::new(Expr::Value(Value::SingleQuotedString("city".to_string()).into())),
-                    }),
+                    left: Box::new(Expr::Function(Function {
+                        name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("json_extract"))]),
+                        parameters: FunctionArguments::None,
+                        args: FunctionArguments::List(FunctionArgumentList {
+                            duplicate_treatment: None,
+                            args: vec![
+                                FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                    Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties")])
+                                )),
+                                FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                    Expr::Value(Value::SingleQuotedString("$.city".to_string()).into())
+                                )),
+                            ],
+                            clauses: vec![],
+                        }),
+                        filter: None,
+                        null_treatment: None,
+                        over: None,
+                        within_group: vec![],
+                        uses_odbc_syntax: false,
+                    })),
                     op: BinaryOperator::Eq,
                     right: Box::new(Expr::Value(Value::SingleQuotedString("London".to_string()).into())),
                 }),
@@ -1441,18 +1560,27 @@ mod tests {
             left: Box::new(
                 Expr::BinaryOp {
                     left: Box::new(
-                        Expr::Cast {
-                            kind: CastKind::DoubleColon,
-                            expr: Box::new(Expr::Nested(Box::new(
-                                Expr::BinaryOp {
-                                    left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties"),])),
-                                    op: BinaryOperator::LongArrow,
-                                    right: Box::new(Expr::Value(Value::SingleQuotedString("age".to_string()).into())),
-                                }
-                            ))),
-                            data_type: DataType::Int(None),
-                            format: None,
-                        }
+                        Expr::Function(Function {
+                            name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("json_extract"))]),
+                            parameters: FunctionArguments::None,
+                            args: FunctionArguments::List(FunctionArgumentList {
+                                duplicate_treatment: None,
+                                args: vec![
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                        Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties")])
+                                    )),
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                        Expr::Value(Value::SingleQuotedString("$.age".to_string()).into())
+                                    )),
+                                ],
+                                clauses: vec![],
+                            }),
+                            filter: None,
+                            null_treatment: None,
+                            over: None,
+                            within_group: vec![],
+                            uses_odbc_syntax: false,
+                        })
                     ),
                     op: BinaryOperator::Lt,
                     right: Box::new(Expr::Value(Value::Number("25".to_string(), false).into())),
@@ -1460,11 +1588,27 @@ mod tests {
             op: BinaryOperator::Or,
             right: Box::new(
                 Expr::BinaryOp {
-                    left: Box::new(Expr::BinaryOp {
-                        left: Box::new(Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties"),])),
-                        op: BinaryOperator::LongArrow,
-                        right: Box::new(Expr::Value(Value::SingleQuotedString("city".to_string()).into())),
-                    }),
+                    left: Box::new(Expr::Function(Function {
+                        name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("json_extract"))]),
+                        parameters: FunctionArguments::None,
+                        args: FunctionArguments::List(FunctionArgumentList {
+                            duplicate_treatment: None,
+                            args: vec![
+                                FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                    Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties")])
+                                )),
+                                FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                    Expr::Value(Value::SingleQuotedString("$.city".to_string()).into())
+                                )),
+                            ],
+                            clauses: vec![],
+                        }),
+                        filter: None,
+                        null_treatment: None,
+                        over: None,
+                        within_group: vec![],
+                        uses_odbc_syntax: false,
+                    })),
                     op: BinaryOperator::Eq,
                     right: Box::new(Expr::Value(Value::SingleQuotedString("New York".to_string()).into())),
                 }),
@@ -1520,14 +1664,27 @@ mod tests {
             top_before_distinct: false,
             projection: vec![
                 SelectItem::ExprWithAlias {
-                    expr: Expr::BinaryOp {
-                        left: Box::new(Expr::CompoundIdentifier(vec![
-                            Ident::new("n"),
-                            Ident::new("Properties"),
-                        ])),
-                        op: BinaryOperator::LongArrow,
-                        right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()).into())),
-                    },
+                    expr: Expr::Function(Function {
+                        name: ObjectName(vec![ObjectNamePart::Identifier(Ident::new("json_extract"))]),
+                        parameters: FunctionArguments::None,
+                        args: FunctionArguments::List(FunctionArgumentList {
+                            duplicate_treatment: None,
+                            args: vec![
+                                FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                    Expr::CompoundIdentifier(vec![Ident::new("n"), Ident::new("Properties")])
+                                )),
+                                FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                    Expr::Value(Value::SingleQuotedString("$.name".to_string()).into())
+                                )),
+                            ],
+                            clauses: vec![],
+                        }),
+                        filter: None,
+                        null_treatment: None,
+                        over: None,
+                        within_group: vec![],
+                        uses_odbc_syntax: false,
+                    }),
                     alias: Ident::new("person_name"),
                 },
                 SelectItem::Wildcard(WildcardAdditionalOptions::default()),

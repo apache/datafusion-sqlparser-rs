@@ -1023,7 +1023,7 @@ fn parse_cypher_single_node_match(){
             // Convert each statement back to a string
             let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
 
-            let expected_sql = "SELECT a.Properties ->> 'name' AS personName \
+            let expected_sql = "SELECT json_extract(a.Properties, '$.name') AS personName \
                 FROM nodes AS a \
                 WHERE a.Label = 'Person'";
             assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
@@ -1042,10 +1042,10 @@ fn parse_cypher_node_match_with_where(){
             // Convert each statement back to a string
             let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
 
-            let expected_sql = "SELECT a.Properties ->> 'name' AS personName \
+            let expected_sql = "SELECT json_extract(a.Properties, '$.name') AS personName \
                 FROM nodes AS a \
                 WHERE a.Label = 'Person' \
-                AND (a.Properties ->> 'age')::INT > 30";
+                AND json_extract(a.Properties, '$.age') > 30";
             assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
         }
         _ => panic!("Parsing failed"),
@@ -1062,10 +1062,10 @@ fn parse_cypher_node_match_with_where_and_distinct(){
             // Convert each statement back to a string
             let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
 
-            let expected_sql = "SELECT DISTINCT a.Properties ->> 'name' AS personName \
+            let expected_sql = "SELECT DISTINCT json_extract(a.Properties, '$.name') AS personName \
                 FROM nodes AS a \
                 WHERE a.Label = 'Person' \
-                AND (a.Properties ->> 'age')::INT > 30";
+                AND json_extract(a.Properties, '$.age') > 30";
             assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
         }
         _ => panic!("Parsing failed"),
@@ -1082,8 +1082,8 @@ fn parse_cypher_node_match_with_aliasing(){
             // Convert each statement back to a string
             let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
 
-            let expected_sql = "SELECT p.Properties ->> 'name' AS personName, \
-                p.Properties ->> 'age' AS personAge \
+            let expected_sql = "SELECT json_extract(p.Properties, '$.name') AS personName, \
+                json_extract(p.Properties, '$.age') AS personAge \
                 FROM nodes AS p \
                 WHERE p.Label = 'Person'";
             assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
@@ -1102,11 +1102,11 @@ fn parse_cypher_node_match_with_properties(){
             // Convert each statement back to a string
             let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
 
-            let expected_sql = "SELECT a.Properties ->> 'name' AS personName \
+            let expected_sql = "SELECT json_extract(a.Properties, '$.name') AS personName \
                 FROM nodes AS a \
                 WHERE a.Label = 'Person' \
-                AND a.Properties ->> 'name' = 'Alice' \
-                AND (a.Properties ->> 'age')::INT = 30";
+                AND json_extract(a.Properties, '$.name') = 'Alice' \
+                AND json_extract(a.Properties, '$.age') = 30";
             assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
         }
         _ => panic!("Parsing failed"),
@@ -1123,8 +1123,8 @@ fn parse_cypher_multiple_node_match(){
             // Convert each statement back to a string
             let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
 
-            let expected_sql = "SELECT a.Properties ->> 'name' AS personName, \
-                b.Properties ->> 'name' AS friendName \
+            let expected_sql = "SELECT json_extract(a.Properties, '$.name') AS personName, \
+                json_extract(b.Properties, '$.name') AS friendName \
                 FROM nodes AS a \
                 CROSS JOIN nodes AS b \
                 WHERE a.Label = 'Person' \
@@ -1144,8 +1144,8 @@ fn parse_cypher_match_with_relationship(){
         Ok(ast) => {
             // Convert each statement back to a string
             let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
-            let expected_sql = "SELECT a.Properties ->> 'name' AS personName, \
-                b.Properties ->> 'name' AS friendName \
+            let expected_sql = "SELECT json_extract(a.Properties, '$.name') AS personName, \
+                json_extract(b.Properties, '$.name') AS friendName \
                 FROM edges AS r \
                 JOIN nodes AS a ON r.Source_id = a.id \
                 JOIN nodes AS b ON r.Target_id = b.id \
@@ -1167,13 +1167,13 @@ fn parse_cypher_match_with_relationship_and_properties(){
         Ok(ast) => {
             // Convert each statement back to a string
             let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
-            let expected_sql = "SELECT a.Properties ->> 'name' AS personName, \
-                b.Properties ->> 'name' AS friendName \
+            let expected_sql = "SELECT json_extract(a.Properties, '$.name') AS personName, \
+                json_extract(b.Properties, '$.name') AS friendName \
                 FROM edges AS r \
                 JOIN nodes AS a ON r.Source_id = a.id \
                 JOIN nodes AS b ON r.Target_id = b.id \
                 WHERE r.Label = 'KNOWS' \
-                AND (r.Properties ->> 'since')::INT = 2020 \
+                AND json_extract(r.Properties, '$.since') = 2020 \
                 AND a.Label = 'Person' \
                 AND b.Label = 'Person'";
             assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
@@ -1191,15 +1191,15 @@ fn parse_cypher_match_with_relationship_and_where(){
         Ok(ast) => {
             // Convert each statement back to a string
             let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
-            let expected_sql = "SELECT a.Properties ->> 'name' AS personName, \
-                b.Properties ->> 'name' AS friendName \
+            let expected_sql = "SELECT json_extract(a.Properties, '$.name') AS personName, \
+                json_extract(b.Properties, '$.name') AS friendName \
                 FROM edges AS r \
                 JOIN nodes AS a ON r.Source_id = a.id \
                 JOIN nodes AS b ON r.Target_id = b.id \
                 WHERE r.Label = 'KNOWS' \
                 AND a.Label = 'Person' \
                 AND b.Label = 'Person' \
-                AND (r.Properties ->> 'since')::INT > 2015";
+                AND json_extract(r.Properties, '$.since') > 2015";
             assert_eq!(sql, expected_sql, "Desugared SQL did not match expected output");
         }
         _ => panic!("Parsing failed"),
@@ -1215,8 +1215,8 @@ fn parse_cypher_match_with_chain(){
         Ok(ast) => {
             // Convert each statement back to a string
             let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
-            let expected_sql = "SELECT a.Properties ->> 'name' AS personName, \
-                c.Properties ->> 'name' AS companyName \
+            let expected_sql = "SELECT json_extract(a.Properties, '$.name') AS personName, \
+                json_extract(c.Properties, '$.name') AS companyName \
                 FROM edges AS r1 \
                 JOIN nodes AS a ON r1.Source_id = a.id \
                 JOIN nodes AS b ON r1.Target_id = b.id \
@@ -1242,8 +1242,8 @@ fn parse_cypher_match_with_long_chain(){
         Ok(ast) => {
             // Convert each statement back to a string
             let sql: String = ast.into_iter().map(|stmt| stmt.to_string()).collect::<Vec<String>>().join(", ");
-            let expected_sql = "SELECT a.Properties ->> 'name' AS personName, \
-                d.Properties ->> 'name' AS cityName \
+            let expected_sql = "SELECT json_extract(a.Properties, '$.name') AS personName, \
+                json_extract(d.Properties, '$.name') AS cityName \
                 FROM edges AS r1 \
                 JOIN nodes AS a ON r1.Source_id = a.id \
                 JOIN nodes AS b ON r1.Target_id = b.id \

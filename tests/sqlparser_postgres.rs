@@ -6770,7 +6770,7 @@ fn parse_drop_operator() {
     // Test DROP OPERATOR with NONE for prefix operator
     let sql = "DROP OPERATOR ~ (NONE, BIT)";
     assert_eq!(
-        pg().verified_stmt(sql),
+        pg_and_generic().verified_stmt(sql),
         Statement::DropOperator(DropOperator {
             if_exists: false,
             operators: vec![DropOperatorSignature {

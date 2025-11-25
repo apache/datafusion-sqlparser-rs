@@ -5204,9 +5204,7 @@ impl<'a> Parser<'a> {
             }
             if self.parse_keyword(Keyword::AS) {
                 ensure_not_set(&body.function_body, "AS")?;
-                body.function_body = Some(CreateFunctionBody::AsBeforeOptions(
-                    self.parse_create_function_body_string()?,
-                ));
+                body.function_body = Some(self.parse_create_function_body_string()?);
             } else if self.parse_keyword(Keyword::LANGUAGE) {
                 ensure_not_set(&body.language, "LANGUAGE")?;
                 body.language = Some(self.parse_identifier()?);
@@ -5298,7 +5296,7 @@ impl<'a> Parser<'a> {
         let name = self.parse_object_name(false)?;
         self.expect_keyword_is(Keyword::AS)?;
 
-        let as_ = self.parse_create_function_body_string()?;
+        let body = self.parse_create_function_body_string()?;
         let using = self.parse_optional_create_function_using()?;
 
         Ok(Statement::CreateFunction(CreateFunction {
@@ -5306,7 +5304,7 @@ impl<'a> Parser<'a> {
             or_replace,
             temporary,
             name,
-            function_body: Some(CreateFunctionBody::AsBeforeOptions(as_)),
+            function_body: Some(body),
             using,
             if_not_exists: false,
             args: None,
@@ -5368,7 +5366,10 @@ impl<'a> Parser<'a> {
             let expr = self.parse_expr()?;
             if options.is_none() {
                 options = self.maybe_parse_options(Keyword::OPTIONS)?;
-                Some(CreateFunctionBody::AsBeforeOptions(expr))
+                Some(CreateFunctionBody::AsBeforeOptions {
+                    body: expr,
+                    link_symbol: None,
+                })
             } else {
                 Some(CreateFunctionBody::AsAfterOptions(expr))
             }
@@ -10521,7 +10522,7 @@ impl<'a> Parser<'a> {
 
     /// Parse the body of a `CREATE FUNCTION` specified as a string.
     /// e.g. `CREATE FUNCTION ... AS $$ body $$`.
-    fn parse_create_function_body_string(&mut self) -> Result<Expr, ParserError> {
+    fn parse_create_function_body_string(&mut self) -> Result<CreateFunctionBody, ParserError> {
         // Helper closure to parse a single string value (quoted or dollar-quoted)
         let parse_string_expr = |parser: &mut Parser| -> Result<Expr, ParserError> {
             let peek_token = parser.peek_token();
@@ -10538,17 +10539,16 @@ impl<'a> Parser<'a> {
             }
         };
 
-        let first_expr = parse_string_expr(self)?;
-
         // Check if there's a comma, indicating multiple strings (e.g., AS 'obj_file', 'link_symbol')
         // This is used for C language functions: AS 'MODULE_PATHNAME', 'link_symbol'
-        if self.consume_token(&Token::Comma) {
-            let mut exprs = vec![first_expr];
-            exprs.extend(self.parse_comma_separated(parse_string_expr)?);
-            Ok(Expr::Tuple(exprs))
-        } else {
-            Ok(first_expr)
-        }
+        Ok(CreateFunctionBody::AsBeforeOptions {
+            body: parse_string_expr(self)?,
+            link_symbol: if self.consume_token(&Token::Comma) {
+                Some(parse_string_expr(self)?)
+            } else {
+                None
+            },
+        })
     }
 
     /// Parse a literal string

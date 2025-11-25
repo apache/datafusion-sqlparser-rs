@@ -4259,9 +4259,12 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
-            function_body: Some(CreateFunctionBody::AsBeforeOptions(Expr::Value(
-                (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF str1 <> str2 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
-            ))),
+            function_body: Some(CreateFunctionBody::AsBeforeOptions {
+                body: Expr::Value(
+                    (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF str1 <> str2 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
+                ),
+                link_symbol: None,
+            }),
             if_not_exists: false,
             using: None,
             determinism_specifier: None,
@@ -4297,9 +4300,12 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
-            function_body: Some(CreateFunctionBody::AsBeforeOptions(Expr::Value(
-                (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF int1 <> 0 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
-            ))),
+            function_body: Some(CreateFunctionBody::AsBeforeOptions {
+                body: Expr::Value(
+                    (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF int1 <> 0 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
+                ),
+                link_symbol: None,
+            }),
             if_not_exists: false,
             using: None,
             determinism_specifier: None,
@@ -4339,9 +4345,12 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
-            function_body: Some(CreateFunctionBody::AsBeforeOptions(Expr::Value(
-                (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF a <> b THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
-            ))),
+            function_body: Some(CreateFunctionBody::AsBeforeOptions {
+                body: Expr::Value(
+                    (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF a <> b THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
+                ),
+                link_symbol: None,
+            }),
             if_not_exists: false,
             using: None,
             determinism_specifier: None,
@@ -4381,9 +4390,12 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
-            function_body: Some(CreateFunctionBody::AsBeforeOptions(Expr::Value(
-                (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF int1 <> int2 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
-            ))),
+            function_body: Some(CreateFunctionBody::AsBeforeOptions {
+                body: Expr::Value(
+                    (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF int1 <> int2 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
+                ),
+                link_symbol: None,
+            }),
             if_not_exists: false,
             using: None,
             determinism_specifier: None,
@@ -4416,13 +4428,16 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
-            function_body: Some(CreateFunctionBody::AsBeforeOptions(Expr::Value(
-                (Value::DollarQuotedString(DollarQuotedString {
-                    value: "\n    BEGIN\n        RETURN TRUE;\n    END;\n    ".to_owned(),
-                    tag: None
-                }))
-                .with_empty_span()
-            ))),
+            function_body: Some(CreateFunctionBody::AsBeforeOptions {
+                body: Expr::Value(
+                    (Value::DollarQuotedString(DollarQuotedString {
+                        value: "\n    BEGIN\n        RETURN TRUE;\n    END;\n    ".to_owned(),
+                        tag: None
+                    }))
+                    .with_empty_span()
+                ),
+                link_symbol: None,
+            }),
             if_not_exists: false,
             using: None,
             determinism_specifier: None,
@@ -4454,9 +4469,12 @@ fn parse_create_function() {
             behavior: Some(FunctionBehavior::Immutable),
             called_on_null: Some(FunctionCalledOnNull::Strict),
             parallel: Some(FunctionParallel::Safe),
-            function_body: Some(CreateFunctionBody::AsBeforeOptions(Expr::Value(
-                (Value::SingleQuotedString("select $1 + $2;".into())).with_empty_span()
-            ))),
+            function_body: Some(CreateFunctionBody::AsBeforeOptions {
+                body: Expr::Value(
+                    (Value::SingleQuotedString("select $1 + $2;".into())).with_empty_span()
+                ),
+                link_symbol: None,
+            }),
             if_not_exists: false,
             using: None,
             determinism_specifier: None,
@@ -4509,12 +4527,14 @@ fn parse_create_function_c_with_module_pathname() {
             behavior: Some(FunctionBehavior::Immutable),
             called_on_null: None,
             parallel: Some(FunctionParallel::Safe),
-            function_body: Some(CreateFunctionBody::AsBeforeOptions(Expr::Tuple(vec![
-                Expr::Value(
+            function_body: Some(CreateFunctionBody::AsBeforeOptions {
+                body: Expr::Value(
                     (Value::SingleQuotedString("MODULE_PATHNAME".into())).with_empty_span()
                 ),
-                Expr::Value((Value::SingleQuotedString("cas_in_wrapper".into())).with_empty_span()),
-            ]))),
+                link_symbol: Some(Expr::Value(
+                    (Value::SingleQuotedString("cas_in_wrapper".into())).with_empty_span()
+                )),
+            }),
             if_not_exists: false,
             using: None,
             determinism_specifier: None,
@@ -6118,8 +6138,8 @@ fn parse_trigger_related_functions() {
             args: Some(vec![]),
             return_type: Some(DataType::Trigger),
             function_body: Some(
-                CreateFunctionBody::AsBeforeOptions(
-                    Expr::Value((
+                CreateFunctionBody::AsBeforeOptions {
+                    body: Expr::Value((
                         Value::DollarQuotedString(
                             DollarQuotedString {
                                 value: "\n        BEGIN\n            -- Check that empname and salary are given\n            IF NEW.empname IS NULL THEN\n                RAISE EXCEPTION 'empname cannot be null';\n            END IF;\n            IF NEW.salary IS NULL THEN\n                RAISE EXCEPTION '% cannot have null salary', NEW.empname;\n            END IF;\n\n            -- Who works for us when they must pay for it?\n            IF NEW.salary < 0 THEN\n                RAISE EXCEPTION '% cannot have a negative salary', NEW.empname;\n            END IF;\n\n            -- Remember who changed the payroll when\n            NEW.last_date := current_timestamp;\n            NEW.last_user := current_user;\n            RETURN NEW;\n        END;\n    ".to_owned(),
@@ -6129,7 +6149,8 @@ fn parse_trigger_related_functions() {
                             },
                         )
                     ).with_empty_span()),
-                ),
+                    link_symbol: None,
+                },
             ),
             behavior: None,
             called_on_null: None,

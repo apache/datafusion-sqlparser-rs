@@ -9099,8 +9099,19 @@ pub enum CreateFunctionBody {
     /// OPTIONS(description="desc");
     /// ```
     ///
+    /// For PostgreSQL C functions with object file and link symbol:
+    /// ```sql
+    /// CREATE FUNCTION cas_in(input cstring) RETURNS cas
+    /// AS 'MODULE_PATHNAME', 'cas_in_wrapper'
+    /// ```
+    ///
     /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11
-    AsBeforeOptions(Expr),
+    AsBeforeOptions {
+        /// The primary expression (object file path for C functions, or regular expression)
+        body: Expr,
+        /// Optional link symbol for C language functions
+        link_symbol: Option<Expr>,
+    },
     /// A function body expression using the 'AS' keyword and shows up
     /// after any `OPTIONS` clause.
     ///

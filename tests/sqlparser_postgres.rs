@@ -23,6 +23,7 @@
 mod test_utils;
 
 use helpers::attached_token::AttachedToken;
+use sqlparser::ast::{DataType, DropBehavior, DropOperator, DropOperatorSignature};
 use sqlparser::tokenizer::Span;
 use test_utils::*;
 
@@ -6765,8 +6766,6 @@ fn parse_create_operator() {
 
 #[test]
 fn parse_drop_operator() {
-    use sqlparser::ast::{DataType, DropBehavior, DropOperator, DropOperatorSignature};
-
     // Test DROP OPERATOR with NONE for prefix operator
     let sql = "DROP OPERATOR ~ (NONE, BIT)";
     assert_eq!(

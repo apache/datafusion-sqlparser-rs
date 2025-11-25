@@ -9929,7 +9929,11 @@ fn parse_merge() {
                         predicate: None,
                         action: MergeAction::Insert(MergeInsertExpr {
                             insert_token: AttachedToken::empty(),
-                            columns: vec![Ident::new("A").into(), Ident::new("B").into(), Ident::new("C").into()],
+                            columns: vec![
+                                Ident::new("A").into(),
+                                Ident::new("B").into(),
+                                Ident::new("C").into()
+                            ],
                             kind_token: AttachedToken::empty(),
                             kind: MergeInsertKind::Values(Values {
                                 value_keyword: false,

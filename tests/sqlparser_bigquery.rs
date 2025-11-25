@@ -1920,7 +1920,10 @@ fn parse_merge() {
                         predicate: Some(Expr::value(number("1"))),
                         action: MergeAction::Insert(MergeInsertExpr {
                             insert_token: AttachedToken::empty(),
-                            columns: vec![Ident::new("product").into(), Ident::new("quantity").into(),],
+                            columns: vec![
+                                Ident::new("product").into(),
+                                Ident::new("quantity").into(),
+                            ],
                             kind_token: AttachedToken::empty(),
                             kind: MergeInsertKind::Row,
                             insert_predicate: None,
@@ -1932,7 +1935,10 @@ fn parse_merge() {
                         predicate: None,
                         action: MergeAction::Insert(MergeInsertExpr {
                             insert_token: AttachedToken::empty(),
-                            columns: vec![Ident::new("product").into(), Ident::new("quantity").into(),],
+                            columns: vec![
+                                Ident::new("product").into(),
+                                Ident::new("quantity").into(),
+                            ],
                             kind_token: AttachedToken::empty(),
                             kind: MergeInsertKind::Row,
                             insert_predicate: None,

@@ -17,7 +17,8 @@ use alloc::{boxed::Box, format, string::ToString, vec, vec::Vec};
 
 use crate::{
     ast::{
-        Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr, MergeInsertKind, MergeUpdateExpr, ObjectName, ObjectNamePart, OutputClause, SetExpr, Statement
+        Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr, MergeInsertKind,
+        MergeUpdateExpr, ObjectName, ObjectNamePart, OutputClause, SetExpr, Statement,
     },
     dialect::{BigQueryDialect, GenericDialect, MySqlDialect},
     keywords::Keyword,
@@ -211,7 +212,10 @@ impl Parser<'_> {
         Ok(clauses)
     }
 
-    fn parse_merge_clause_insert_columns(&mut self, allow_empty: bool) -> Result<Vec<ObjectName>, ParserError> {
+    fn parse_merge_clause_insert_columns(
+        &mut self,
+        allow_empty: bool,
+    ) -> Result<Vec<ObjectName>, ParserError> {
         if self.dialect.supports_merge_insert_qualified_columns() {
             self.parse_parenthesized_qualified_column_list(IsOptional::Optional, allow_empty)
         } else {
@@ -228,7 +232,8 @@ impl Parser<'_> {
         allow_empty: bool,
     ) -> Result<Vec<ObjectName>, ParserError> {
         self.parse_parenthesized_column_list_inner(optional, allow_empty, |p| {
-            p.parse_identifier().map(|ident| ObjectName(vec![ObjectNamePart::Identifier(ident)]))
+            p.parse_identifier()
+                .map(|ident| ObjectName(vec![ObjectNamePart::Identifier(ident)]))
         })
     }
 

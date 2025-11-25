@@ -2436,7 +2436,7 @@ impl Spanned for MergeInsertExpr {
             ]
             .into_iter()
             .chain(self.insert_predicate.iter().map(Spanned::span))
-            .chain(self.columns.iter().map(|i| i.span)),
+            .chain(self.columns.iter().map(|i| i.span())),
         )
     }
 }

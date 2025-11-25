@@ -1806,7 +1806,7 @@ fn parse_merge() {
     );
     let insert_action = MergeAction::Insert(MergeInsertExpr {
         insert_token: AttachedToken::empty(),
-        columns: vec![Ident::new("product"), Ident::new("quantity")],
+        columns: vec![Ident::new("product").into(), Ident::new("quantity").into()],
         kind_token: AttachedToken::empty(),
         kind: MergeInsertKind::Values(Values {
             value_keyword: false,
@@ -1920,7 +1920,7 @@ fn parse_merge() {
                         predicate: Some(Expr::value(number("1"))),
                         action: MergeAction::Insert(MergeInsertExpr {
                             insert_token: AttachedToken::empty(),
-                            columns: vec![Ident::new("product"), Ident::new("quantity"),],
+                            columns: vec![Ident::new("product").into(), Ident::new("quantity").into(),],
                             kind_token: AttachedToken::empty(),
                             kind: MergeInsertKind::Row,
                             insert_predicate: None,
@@ -1932,7 +1932,7 @@ fn parse_merge() {
                         predicate: None,
                         action: MergeAction::Insert(MergeInsertExpr {
                             insert_token: AttachedToken::empty(),
-                            columns: vec![Ident::new("product"), Ident::new("quantity"),],
+                            columns: vec![Ident::new("product").into(), Ident::new("quantity").into(),],
                             kind_token: AttachedToken::empty(),
                             kind: MergeInsertKind::Row,
                             insert_predicate: None,
@@ -1982,7 +1982,7 @@ fn parse_merge() {
                         predicate: None,
                         action: MergeAction::Insert(MergeInsertExpr {
                             insert_token: AttachedToken::empty(),
-                            columns: vec![Ident::new("a"), Ident::new("b"),],
+                            columns: vec![Ident::new("a").into(), Ident::new("b").into(),],
                             kind_token: AttachedToken::empty(),
                             kind: MergeInsertKind::Values(Values {
                                 value_keyword: false,

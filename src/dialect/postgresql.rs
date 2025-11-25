@@ -280,4 +280,12 @@ impl Dialect for PostgreSqlDialect {
     fn supports_interval_options(&self) -> bool {
         true
     }
+
+    /// [Postgres] supports column names with a subfield name or an array
+    /// subscript in the MERGE INSERT column lists.
+    ///
+    /// [Postgres]: https://www.postgresql.org/docs/current/sql-merge.html
+    fn supports_merge_insert_qualified_columns(&self) -> bool {
+        true
+    }
 }

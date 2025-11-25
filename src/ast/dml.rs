@@ -539,7 +539,7 @@ pub struct MergeInsertExpr {
     /// INSERT (product, quantity) VALUES(product, quantity)
     /// INSERT (product, quantity) ROW
     /// ```
-    pub columns: Vec<Ident>,
+    pub columns: Vec<ObjectName>,
     /// The token, `[VALUES | ROW]` starting `kind`.
     pub kind_token: AttachedToken,
     /// The insert type used by the statement.

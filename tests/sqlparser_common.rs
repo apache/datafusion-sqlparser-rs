@@ -1641,6 +1641,10 @@ fn ms_and_generic() -> TestedDialects {
     TestedDialects::new(vec![Box::new(MsSqlDialect {}), Box::new(GenericDialect {})])
 }
 
+fn only_ms() -> TestedDialects {
+    TestedDialects::new(vec![Box::new(MsSqlDialect {})])
+}
+
 fn only_generic() -> TestedDialects {
     TestedDialects::new(vec![Box::new(GenericDialect {})])
 }
@@ -9925,7 +9929,7 @@ fn parse_merge() {
                         predicate: None,
                         action: MergeAction::Insert(MergeInsertExpr {
                             insert_token: AttachedToken::empty(),
-                            columns: vec![Ident::new("A"), Ident::new("B"), Ident::new("C")],
+                            columns: vec![Ident::new("A").into(), Ident::new("B").into(), Ident::new("C").into()],
                             kind_token: AttachedToken::empty(),
                             kind: MergeInsertKind::Values(Values {
                                 value_keyword: false,
@@ -10097,39 +10101,23 @@ WHERE NOT FOO_IMPORT.NAME LIKE '%.DO_NOT_INSERT'";
 }
 
 #[test]
+fn test_merge_with_insert_simple_columns() {
+    let sql = "\
+MERGE INTO FOO USING FOO_IMPORT ON (FOO.ID = FOO_IMPORT.ID) \
+WHEN NOT MATCHED THEN \
+INSERT (ID, NAME) \
+VALUES (1, 'abc')";
+    all_dialects().verified_stmt(sql);
+}
+
+#[test]
 fn test_merge_with_insert_qualified_columns() {
     let sql = "\
 MERGE INTO FOO USING FOO_IMPORT ON (FOO.ID = FOO_IMPORT.ID) \
 WHEN NOT MATCHED THEN \
 INSERT (FOO.ID, FOO.NAME) \
-VALUES (1, 2)";
-
-    let expected = "\
-MERGE INTO FOO USING FOO_IMPORT ON (FOO.ID = FOO_IMPORT.ID) \
-WHEN NOT MATCHED THEN \
-INSERT (ID, NAME) \
-VALUES (1, 2)";
-
-    only_generic().one_statement_parses_to(sql, expected);
-}
-
-#[test]
-fn test_merge_with_insert_qualified_columns_via_alias() {
-    let sql = "\
-MERGE INTO FOO F USING FOO_IMPORT ON (F.ID = FOO_IMPORT.ID) \
-WHEN NOT MATCHED THEN \
-INSERT (F.ID, F.NAME) \
-VALUES (1, 2)";
-
-    // note: this serialized form will break execution on an Oracle database
-    // as it doesn't allow the "AS" keyword; Issue #1784
-    let expected = "\
-MERGE INTO FOO AS F USING FOO_IMPORT ON (F.ID = FOO_IMPORT.ID) \
-WHEN NOT MATCHED THEN \
-INSERT (ID, NAME) \
-VALUES (1, 2)";
-
-    only_generic().one_statement_parses_to(sql, expected);
+VALUES (1, 'abc')";
+    pg_and_generic().verified_stmt(sql);
 }
 
 #[test]
@@ -10138,15 +10126,25 @@ fn test_merge_with_insert_qualified_columns_with_schema() {
 MERGE INTO PLAYGROUND.FOO USING FOO_IMPORT ON (PLAYGROUND.FOO.ID = FOO_IMPORT.ID) \
 WHEN NOT MATCHED THEN \
 INSERT (PLAYGROUND.FOO.ID, PLAYGROUND.FOO.NAME) \
-VALUES (1, 2)";
+VALUES (1, 'abc')";
+    pg_and_generic().verified_stmt(sql);
+}
 
-    let expected = "\
+#[test]
+fn test_merge_insert_with_qualified_columns_not_supported() {
+    let sql = "\
+MERGE INTO FOO USING FOO_IMPORT ON (FOO.ID = FOO_IMPORT.ID) \
+WHEN NOT MATCHED THEN \
+INSERT (FOO.ID, FOO.NAME) \
+VALUES (1, 'abc')";
+    assert!(only_ms().parse_sql_statements(sql).is_err());
+
+    let sql = "\
 MERGE INTO PLAYGROUND.FOO USING FOO_IMPORT ON (PLAYGROUND.FOO.ID = FOO_IMPORT.ID) \
 WHEN NOT MATCHED THEN \
-INSERT (ID, NAME) \
-VALUES (1, 2)";
-
-    only_generic().one_statement_parses_to(sql, expected);
+INSERT (PLAYGROUND.FOO.ID, PLAYGROUND.FOO.NAME) \
+VALUES (1, 'abc')";
+    assert!(only_ms().parse_sql_statements(sql).is_err());
 }
 
 #[test]

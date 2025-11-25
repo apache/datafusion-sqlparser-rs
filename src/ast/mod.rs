@@ -347,6 +347,12 @@ impl From<Vec<Ident>> for ObjectName {
     }
 }
 
+impl From<Ident> for ObjectName {
+    fn from(ident: Ident) -> Self {
+        ObjectName(vec![ObjectNamePart::Identifier(ident)])
+    }
+}
+
 impl fmt::Display for ObjectName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", display_separated(&self.0, "."))

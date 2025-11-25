@@ -17,14 +17,12 @@ use alloc::{boxed::Box, format, string::ToString, vec, vec::Vec};
 
 use crate::{
     ast::{
-        Ident, Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr, MergeInsertKind,
-        MergeUpdateExpr, ObjectName, ObjectNamePart, OutputClause, SetExpr, Spanned, Statement,
-        TableFactor,
+        Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr, MergeInsertKind, MergeUpdateExpr, ObjectName, ObjectNamePart, OutputClause, SetExpr, Statement
     },
     dialect::{BigQueryDialect, GenericDialect, MySqlDialect},
     keywords::Keyword,
     parser::IsOptional,
-    tokenizer::{Location, TokenWithSpan},
+    tokenizer::TokenWithSpan,
 };
 
 use super::{Parser, ParserError};
@@ -49,7 +47,7 @@ impl Parser<'_> {
         let source = self.parse_table_factor()?;
         self.expect_keyword_is(Keyword::ON)?;
         let on = self.parse_expr()?;
-        let clauses = self.parse_merge_clauses(&table)?;
+        let clauses = self.parse_merge_clauses()?;
         let output = match self.parse_one_of_keywords(&[Keyword::OUTPUT, Keyword::RETURNING]) {
             Some(keyword) => Some(self.parse_output(keyword, self.get_current_token().clone())?),
             None => None,
@@ -66,10 +64,7 @@ impl Parser<'_> {
         }))
     }
 
-    fn parse_merge_clauses(
-        &mut self,
-        target_table: &TableFactor,
-    ) -> Result<Vec<MergeClause>, ParserError> {
+    fn parse_merge_clauses(&mut self) -> Result<Vec<MergeClause>, ParserError> {
         let mut clauses = vec![];
         loop {
             if !(self.parse_keyword(Keyword::WHEN)) {
@@ -172,11 +167,7 @@ impl Parser<'_> {
                     let insert_token = self.get_current_token().clone();
                     let is_mysql = dialect_of!(self is MySqlDialect);
 
-                    let columns = self.parse_merge_clause_insert_columns(
-                        target_table,
-                        &clause_kind,
-                        is_mysql,
-                    )?;
+                    let columns = self.parse_merge_clause_insert_columns(is_mysql)?;
                     let (kind, kind_token) = if dialect_of!(self is BigQueryDialect | GenericDialect)
                         && self.parse_keyword(Keyword::ROW)
                     {
@@ -220,65 +211,25 @@ impl Parser<'_> {
         Ok(clauses)
     }
 
-    fn parse_merge_clause_insert_columns(
-        &mut self,
-        target_table: &TableFactor,
-        clause_kind: &MergeClauseKind,
-        allow_empty: bool,
-    ) -> Result<Vec<Ident>, ParserError> {
+    fn parse_merge_clause_insert_columns(&mut self, allow_empty: bool) -> Result<Vec<ObjectName>, ParserError> {
         if self.dialect.supports_merge_insert_qualified_columns() {
-            let cols =
-                self.parse_parenthesized_qualified_column_list(IsOptional::Optional, allow_empty)?;
-            if let TableFactor::Table { name, alias, .. } = target_table {
-                if let Some(alias) = alias {
-                    if alias.columns.is_empty() {
-                        // ~ only the alias is supported at this point
-                        match unqualify_columns(cols, None, Some(&alias.name)) {
-                            Ok(column) => Ok(column),
-                            Err((err, loc)) => parser_err!(
-                                format_args!("Invalid column for INSERT in a {clause_kind} merge clause: {err}"),
-                                loc
-                            ),
-                        }
-                    } else {
-                        parser_err!(
-                            format_args!("Invalid target ALIAS for INSERT in a {clause_kind} merge clause; must be an identifier"),
-                            alias.name.span.start
-                        )
-                    }
-                } else {
-                    // ~ allow the full qualifier, but also just the table name
-                    if name.0.len() == 1 {
-                        match unqualify_columns(cols, Some(name), None) {
-                            Ok(column) => Ok(column),
-                            Err((err, loc)) => parser_err!(
-                                format_args!("Invalid column for INSERT in a {clause_kind} merge clause: {err}"),
-                                loc)
-                        }
-                    } else if let Some(unqualified_name) =
-                        name.0.last().and_then(ObjectNamePart::as_ident)
-                    {
-                        match unqualify_columns(cols, Some(name), Some(unqualified_name)) {
-                            Ok(column) => Ok(column),
-                            Err((err, loc)) => parser_err!(
-                                format_args!("Invalid column for INSERT in a {clause_kind} merge clause: {err}"),
-                                loc)
-                        }
-                    } else {
-                        parser_err!(
-                            format_args!("Invalid target table NAME for INSERT in a {clause_kind} merge clause; must be an identifier"),
-                            name.span().start
-                        )
-                    }
-                }
-            } else {
-                parser_err!(
-                    format_args!("Invalid target for INSERT in a {clause_kind} merge clause; must be a TABLE identifier"),
-                    target_table.span().start)
-            }
+            self.parse_parenthesized_qualified_column_list(IsOptional::Optional, allow_empty)
         } else {
-            self.parse_parenthesized_column_list(IsOptional::Optional, allow_empty)
+            self.parse_parenthesized_column_list_as_object_names(IsOptional::Optional, allow_empty)
         }
+    }
+
+    /// Just like [Parser::parse_parenthesized_column_list] parses a
+    /// parenthesized list of (simple) column names but returns them as object
+    /// names.
+    fn parse_parenthesized_column_list_as_object_names(
+        &mut self,
+        optional: IsOptional,
+        allow_empty: bool,
+    ) -> Result<Vec<ObjectName>, ParserError> {
+        self.parse_parenthesized_column_list_inner(optional, allow_empty, |p| {
+            p.parse_identifier().map(|ident| ObjectName(vec![ObjectNamePart::Identifier(ident)]))
+        })
     }
 
     fn parse_output(
@@ -307,97 +258,4 @@ impl Parser<'_> {
             }
         })
     }
-}
-
-/// Helper to unqualify a list of columns with either a qualified prefix
-/// (`allowed_qualifier_1`) or a qualifier identifier (`allowed_qualifier_2`.)
-///
-/// Oracle allows `INSERT ([qualifier.]column_name, ...)` in MERGE statements
-/// with `qualifier` referring to the alias of the target table (if one is
-/// present) or, if no alias is present, to the target table name itself -
-/// either qualified or unqualified.
-fn unqualify_columns(
-    columns: Vec<ObjectName>,
-    allowed_qualifier_1: Option<&ObjectName>,
-    allowed_qualifier_2: Option<&Ident>,
-) -> Result<Vec<Ident>, (&'static str, Location)> {
-    // ~ helper to turn a column name (part) into a plain `ident`
-    // possibly bailing with error
-    fn to_ident(name: ObjectNamePart) -> Result<Ident, (&'static str, Location)> {
-        match name {
-            ObjectNamePart::Identifier(ident) => Ok(ident),
-            ObjectNamePart::Function(_) => Err(("not an identifier", name.span().start)),
-        }
-    }
-
-    // ~ helper to return the last part of `name` if it is
-    // preceded by `prefix`
-    fn unqualify_column(
-        mut name: ObjectName,
-        prefix: &ObjectName,
-    ) -> Result<ObjectNamePart, ObjectName> {
-        let mut name_iter = name.0.iter();
-        let mut prefix_iter = prefix.0.iter();
-        loop {
-            match (name_iter.next(), prefix_iter.next()) {
-                (Some(_), None) => {
-                    if name_iter.next().is_none() {
-                        return Ok(name.0.pop().expect("missing name part"));
-                    } else {
-                        return Err(name);
-                    }
-                }
-                (Some(c), Some(q)) if c == q => {
-                    // ~ continue matching next part
-                }
-                _ => {
-                    return Err(name);
-                }
-            }
-        }
-    }
-
-    let mut unqualified = Vec::<Ident>::with_capacity(columns.len());
-    for mut name in columns {
-        if name.0.is_empty() {
-            return Err(("empty column name", name.span().start));
-        }
-
-        if name.0.len() == 1 {
-            unqualified.push(to_ident(name.0.pop().expect("missing name part"))?);
-            continue;
-        }
-
-        // ~ try matching by the primary prefix
-        if let Some(allowed_qualifier) = allowed_qualifier_1 {
-            match unqualify_column(name, allowed_qualifier) {
-                Ok(ident) => {
-                    unqualified.push(to_ident(ident)?);
-                    continue;
-                }
-                Err(n) => {
-                    // ~ continue trying with the alternate prefix below
-                    name = n;
-                }
-            }
-        }
-
-        // ~ try matching by the alternate prefix
-        if let Some(allowed_qualifier) = allowed_qualifier_2 {
-            if name.0.len() == 2
-                && name
-                    .0
-                    .first()
-                    .and_then(ObjectNamePart::as_ident)
-                    .map(|i| i == allowed_qualifier)
-                    .unwrap_or(false)
-            {
-                unqualified.push(to_ident(name.0.pop().expect("missing name part"))?);
-                continue;
-            }
-        }
-
-        return Err(("not matching target table", name.span().start));
-    }
-    Ok(unqualified)
 }

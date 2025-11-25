@@ -314,7 +314,7 @@ impl Display for Update {
     }
 }
 
-/// MERGE statement.
+/// A `MERGE` statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

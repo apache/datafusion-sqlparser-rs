@@ -11182,10 +11182,15 @@ impl<'a> Parser<'a> {
         fn validator(explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
             parser.dialect.is_table_factor_alias(explicit, kw, parser)
         }
+        let explicit = self.peek_keyword(Keyword::AS);
         match self.parse_optional_alias_inner(None, validator)? {
             Some(name) => {
                 let columns = self.parse_table_alias_column_defs()?;
-                Ok(Some(TableAlias { name, columns }))
+                Ok(Some(TableAlias {
+                    explicit,
+                    name,
+                    columns,
+                }))
             }
             None => Ok(None),
         }
@@ -12817,6 +12822,7 @@ impl<'a> Parser<'a> {
             let closing_paren_token = self.expect_token(&Token::RParen)?;
 
             let alias = TableAlias {
+                explicit: false,
                 name,
                 columns: vec![],
             };
@@ -12843,7 +12849,11 @@ impl<'a> Parser<'a> {
             let query = self.parse_query()?;
             let closing_paren_token = self.expect_token(&Token::RParen)?;
 
-            let alias = TableAlias { name, columns };
+            let alias = TableAlias {
+                explicit: false,
+                name,
+                columns,
+            };
             Cte {
                 alias,
                 query,

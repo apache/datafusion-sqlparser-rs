@@ -368,8 +368,9 @@ pub fn single_quoted_string(s: impl Into<String>) -> Value {
     Value::SingleQuotedString(s.into())
 }
 
-pub fn table_alias(name: impl Into<String>) -> Option<TableAlias> {
+pub fn table_alias(explicit: bool, name: impl Into<String>) -> Option<TableAlias> {
     Some(TableAlias {
+        explicit,
         name: Ident::new(name),
         columns: vec![],
     })
@@ -405,13 +406,14 @@ pub fn table_from_name(name: ObjectName) -> TableFactor {
     }
 }
 
-pub fn table_with_alias(name: impl Into<String>, alias: impl Into<String>) -> TableFactor {
+pub fn table_with_alias(
+    name: impl Into<String>,
+    with_as_keyword: bool,
+    alias: impl Into<String>,
+) -> TableFactor {
     TableFactor::Table {
         name: ObjectName::from(vec![Ident::new(name)]),
-        alias: Some(TableAlias {
-            name: Ident::new(alias),
-            columns: vec![],
-        }),
+        alias: table_alias(with_as_keyword, alias),
         args: None,
         with_hints: vec![],
         version: None,

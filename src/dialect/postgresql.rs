@@ -281,11 +281,18 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
-    /// [Postgres] supports column names with a subfield name or an array
-    /// subscript in the MERGE INSERT column lists.
-    ///
-    /// [Postgres]: https://www.postgresql.org/docs/current/sql-merge.html
-    fn supports_merge_insert_qualified_columns(&self) -> bool {
-        true
+    /// See <https://www.postgresql.org/docs/current/sql-merge.html>
+    fn supports_merge_insert_predicate(&self) -> bool {
+        false
+    }
+
+    /// See <https://www.postgresql.org/docs/current/sql-merge.html>
+    fn supports_merge_update_delete_predicate(&self) -> bool {
+        false
+    }
+
+    /// See <https://www.postgresql.org/docs/current/sql-merge.html>
+    fn supports_merge_update_predicate(&self) -> bool {
+        false
     }
 }

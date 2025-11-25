@@ -641,6 +641,7 @@ pub trait Dialect: Debug + Any {
     ///      -- here: qualified with array subscripts
     ///      INSERT (FOO.ID[1], FOO.NAME[1:12])
     ///      VALUES (FOO_IMP.ID, UPPER(FOO_IMP.NAME))
+    /// ```
     /// or
     /// ```sql
     /// MERGE INTO FOO X
@@ -652,10 +653,9 @@ pub trait Dialect: Debug + Any {
     ///      VALUES (FOO_IMP.ID, UPPER(FOO_IMP.NAME))
     /// ```
     ///
-    /// The default implementation always returns `false` not allowing the
-    /// qualifiers.
+    /// By default, qualifiers are allowed.
     fn supports_merge_insert_qualified_columns(&self) -> bool {
-        false
+        true
     }
 
     /// Returns `true` if the dialect supports specify an INSERT predicate in
@@ -672,13 +672,12 @@ pub trait Dialect: Debug + Any {
     ///       WHERE NOT FOO_IMP.NAME like '%.IGNORE'
     /// ```
     ///
-    /// The default implementation always returns `false` indicating no
-    /// support for the additional predicate.
+    /// By default, the additional predicate support is enabled.
     ///
     /// See also [Dialect::supports_merge_update_predicate] and
     /// [Dialect::supports_merge_update_delete_predicate].
     fn supports_merge_insert_predicate(&self) -> bool {
-        false
+        true
     }
 
     /// Indicates the supports of UPDATE predicates in MERGE
@@ -694,13 +693,12 @@ pub trait Dialect: Debug + Any {
     ///       WHERE FOO.NAME <> 'pete'
     /// ```
     ///
-    /// The default implementation always returns false indicating no support
-    /// for the additional predicate.
+    /// By default, the additional predicate is enabled.
     ///
     /// See also [Dialect::supports_merge_insert_predicate] and
     /// [Dialect::supports_merge_update_delete_predicate].
     fn supports_merge_update_predicate(&self) -> bool {
-        false
+        true
     }
 
     /// Indicates the supports of UPDATE ... DELETEs and associated predicates
@@ -716,13 +714,13 @@ pub trait Dialect: Debug + Any {
     ///      DELETE WHERE UPPER(FOO.NAME) == FOO.NAME
     /// ```
     ///
-    /// The default implementation always returns false indicating no support
-    /// for the `UPDATE ... DELETE` and its associated predicate.
+    /// By default, the support for the `UPDATE ... DELETE` and its associated
+    /// predicate is enabled.
     ///
     /// See also [Dialect::supports_merge_insert_predicate] and
     /// [Dialect::supports_merge_update_predicate].
     fn supports_merge_update_delete_predicate(&self) -> bool {
-        false
+        true
     }
 
     /// Dialect-specific infix parser override

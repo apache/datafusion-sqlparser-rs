@@ -15,10 +15,13 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::ast::{
-    ddl::AlterSchema, query::SelectItemQualifiedWildcardKind, AlterSchemaOperation, AlterTable,
-    ColumnOptions, CreateOperator, CreateOperatorClass, CreateOperatorFamily, CreateView,
-    ExportData, Owner, TypedString,
+use crate::{
+    ast::{
+        ddl::AlterSchema, query::SelectItemQualifiedWildcardKind, AlterSchemaOperation, AlterTable,
+        ColumnOptions, CreateOperator, CreateOperatorClass, CreateOperatorFamily, CreateView,
+        ExportData, Owner, TypedString,
+    },
+    tokenizer::TokenWithSpan,
 };
 use core::iter;
 
@@ -94,6 +97,12 @@ pub trait Spanned {
     ///
     /// [`Location`]: crate::tokenizer::Location
     fn span(&self) -> Span;
+}
+
+impl Spanned for TokenWithSpan {
+    fn span(&self) -> Span {
+        self.span
+    }
 }
 
 impl Spanned for Query {
@@ -2079,9 +2088,12 @@ impl Spanned for FunctionArgExpr {
 
 impl Spanned for TableAlias {
     fn span(&self) -> Span {
-        let TableAlias { name, columns } = self;
-
-        union_spans(iter::once(name.span).chain(columns.iter().map(|i| i.span())))
+        let TableAlias {
+            explicit: _,
+            name,
+            columns,
+        } = self;
+        union_spans(core::iter::once(name.span).chain(columns.iter().map(Spanned::span)))
     }
 }
 

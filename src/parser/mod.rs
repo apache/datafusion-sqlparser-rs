@@ -5831,15 +5831,19 @@ impl<'a> Parser<'a> {
         let hive_distribution = self.parse_hive_distribution()?;
         let hive_formats = self.parse_hive_formats()?;
 
-        let file_format = if let Some(ff) = &hive_formats.storage {
-            match ff {
-                HiveIOFormat::FileFormat { format } => Some(*format),
-                _ => None,
+        let file_format = if let Some(ref hf) = hive_formats {
+            if let Some(ref ff) = hf.storage {
+                match ff {
+                    HiveIOFormat::FileFormat { format } => Some(*format),
+                    _ => None,
+                }
+            } else {
+                None
             }
         } else {
             None
         };
-        let location = hive_formats.location.clone();
+        let location = hive_formats.as_ref().and_then(|hf| hf.location.clone());
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
         let table_options = if !table_properties.is_empty() {
             CreateTableOptions::TableProperties(table_properties)
@@ -5850,7 +5854,7 @@ impl<'a> Parser<'a> {
             .columns(columns)
             .constraints(constraints)
             .hive_distribution(hive_distribution)
-            .hive_formats(Some(hive_formats))
+            .hive_formats(hive_formats)
             .table_options(table_options)
             .or_replace(or_replace)
             .if_not_exists(if_not_exists)
@@ -7537,8 +7541,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_hive_formats(&mut self) -> Result<HiveFormat, ParserError> {
-        let mut hive_format = HiveFormat::default();
+    pub fn parse_hive_formats(&mut self) -> Result<Option<HiveFormat>, ParserError> {
+        let mut hive_format: Option<HiveFormat> = None;
         loop {
             match self.parse_one_of_keywords(&[
                 Keyword::ROW,
@@ -7547,7 +7551,9 @@ impl<'a> Parser<'a> {
                 Keyword::WITH,
             ]) {
                 Some(Keyword::ROW) => {
-                    hive_format.row_format = Some(self.parse_row_format()?);
+                    hive_format
+                        .get_or_insert_with(HiveFormat::default)
+                        .row_format = Some(self.parse_row_format()?);
                 }
                 Some(Keyword::STORED) => {
                     self.expect_keyword_is(Keyword::AS)?;
@@ -7555,24 +7561,29 @@ impl<'a> Parser<'a> {
                         let input_format = self.parse_expr()?;
                         self.expect_keyword_is(Keyword::OUTPUTFORMAT)?;
                         let output_format = self.parse_expr()?;
-                        hive_format.storage = Some(HiveIOFormat::IOF {
-                            input_format,
-                            output_format,
-                        });
+                        hive_format.get_or_insert_with(HiveFormat::default).storage =
+                            Some(HiveIOFormat::IOF {
+                                input_format,
+                                output_format,
+                            });
                     } else {
                         let format = self.parse_file_format()?;
-                        hive_format.storage = Some(HiveIOFormat::FileFormat { format });
+                        hive_format.get_or_insert_with(HiveFormat::default).storage =
+                            Some(HiveIOFormat::FileFormat { format });
                     }
                 }
                 Some(Keyword::LOCATION) => {
-                    hive_format.location = Some(self.parse_literal_string()?);
+                    hive_format.get_or_insert_with(HiveFormat::default).location =
+                        Some(self.parse_literal_string()?);
                 }
                 Some(Keyword::WITH) => {
                     self.prev_token();
                     let properties = self
                         .parse_options_with_keywords(&[Keyword::WITH, Keyword::SERDEPROPERTIES])?;
                     if !properties.is_empty() {
-                        hive_format.serde_properties = Some(properties);
+                        hive_format
+                            .get_or_insert_with(HiveFormat::default)
+                            .serde_properties = Some(properties);
                     } else {
                         break;
                     }
@@ -7787,7 +7798,7 @@ impl<'a> Parser<'a> {
             .if_not_exists(if_not_exists)
             .transient(transient)
             .hive_distribution(hive_distribution)
-            .hive_formats(Some(hive_formats))
+            .hive_formats(hive_formats)
             .global(global)
             .query(query)
             .without_rowid(without_rowid)

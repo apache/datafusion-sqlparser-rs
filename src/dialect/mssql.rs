@@ -123,26 +123,6 @@ impl Dialect for MsSqlDialect {
         true
     }
 
-    /// Set <https://learn.microsoft.com/en-us/sql/t-sql/statements/merge-transact-sql>
-    fn supports_merge_insert_predicate(&self) -> bool {
-        false
-    }
-
-    /// Set <https://learn.microsoft.com/en-us/sql/t-sql/statements/merge-transact-sql>
-    fn supports_merge_insert_qualified_columns(&self) -> bool {
-        false
-    }
-
-    /// Set <https://learn.microsoft.com/en-us/sql/t-sql/statements/merge-transact-sql>
-    fn supports_merge_update_delete_predicate(&self) -> bool {
-        false
-    }
-
-    /// Set <https://learn.microsoft.com/en-us/sql/t-sql/statements/merge-transact-sql>
-    fn supports_merge_update_predicate(&self) -> bool {
-        false
-    }
-
     /// See <https://learn.microsoft.com/en-us/sql/relational-databases/security/authentication-access/server-level-roles>
     fn get_reserved_grantees_types(&self) -> &[GranteesType] {
         &[GranteesType::Public]

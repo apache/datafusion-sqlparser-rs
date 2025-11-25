@@ -18,7 +18,7 @@ use alloc::{boxed::Box, format, string::ToString, vec, vec::Vec};
 use crate::{
     ast::{
         Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr, MergeInsertKind,
-        MergeUpdateExpr, ObjectName, ObjectNamePart, OutputClause, SetExpr, Statement,
+        MergeUpdateExpr, ObjectName, OutputClause, SetExpr, Statement,
     },
     dialect::{BigQueryDialect, GenericDialect, MySqlDialect},
     keywords::Keyword,
@@ -116,16 +116,12 @@ impl Parser<'_> {
                     let update_token = self.get_current_token().clone();
                     self.expect_keyword_is(Keyword::SET)?;
                     let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
-                    let update_predicate = if self.dialect.supports_merge_update_predicate()
-                        && self.parse_keyword(Keyword::WHERE)
-                    {
+                    let update_predicate = if self.parse_keyword(Keyword::WHERE) {
                         Some(self.parse_expr()?)
                     } else {
                         None
                     };
-                    let delete_predicate = if self.dialect.supports_merge_update_delete_predicate()
-                        && self.parse_keyword(Keyword::DELETE)
-                    {
+                    let delete_predicate = if self.parse_keyword(Keyword::DELETE) {
                         let _ = self.expect_keyword(Keyword::WHERE)?;
                         Some(self.parse_expr()?)
                     } else {
@@ -179,9 +175,7 @@ impl Parser<'_> {
                         let values = self.parse_values(is_mysql, false)?;
                         (MergeInsertKind::Values(values), values_token)
                     };
-                    let insert_predicate = if self.dialect.supports_merge_insert_predicate()
-                        && self.parse_keyword(Keyword::WHERE)
-                    {
+                    let insert_predicate = if self.parse_keyword(Keyword::WHERE) {
                         Some(self.parse_expr()?)
                     } else {
                         None
@@ -216,25 +210,7 @@ impl Parser<'_> {
         &mut self,
         allow_empty: bool,
     ) -> Result<Vec<ObjectName>, ParserError> {
-        if self.dialect.supports_merge_insert_qualified_columns() {
-            self.parse_parenthesized_qualified_column_list(IsOptional::Optional, allow_empty)
-        } else {
-            self.parse_parenthesized_column_list_as_object_names(IsOptional::Optional, allow_empty)
-        }
-    }
-
-    /// Just like [Parser::parse_parenthesized_column_list] parses a
-    /// parenthesized list of (simple) column names but returns them as object
-    /// names.
-    fn parse_parenthesized_column_list_as_object_names(
-        &mut self,
-        optional: IsOptional,
-        allow_empty: bool,
-    ) -> Result<Vec<ObjectName>, ParserError> {
-        self.parse_parenthesized_column_list_inner(optional, allow_empty, |p| {
-            p.parse_identifier()
-                .map(|ident| ObjectName(vec![ObjectNamePart::Identifier(ident)]))
-        })
+        self.parse_parenthesized_qualified_column_list(IsOptional::Optional, allow_empty)
     }
 
     fn parse_output(

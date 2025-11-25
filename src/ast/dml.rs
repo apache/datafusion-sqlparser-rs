@@ -545,8 +545,6 @@ pub struct MergeInsertExpr {
     /// The insert type used by the statement.
     pub kind: MergeInsertKind,
     /// An optional condition to restrict the insertion (Oracle specific)
-    ///
-    /// Enabled via [`Dialect::supports_merge_insert_predicate`](crate::dialect::Dialect::supports_merge_insert_predicate).
     pub insert_predicate: Option<Expr>,
 }
 
@@ -582,12 +580,8 @@ pub struct MergeUpdateExpr {
     /// The update assiment expressions
     pub assignments: Vec<Assignment>,
     /// `where_clause` for the update (Oralce specific)
-    ///
-    /// Enabled via [`Dialect::supports_merge_update_predicate`](crate::dialect::Dialect::supports_merge_update_predicate).
     pub update_predicate: Option<Expr>,
     /// `delete_clause` for the update "delete where" (Oracle specific)
-    ///
-    /// Enabled via [`Dialect::supports_merge_update_delete_predicate`](crate::dialect::Dialect::supports_merge_update_delete_predicate).
     pub delete_predicate: Option<Expr>,
 }
 

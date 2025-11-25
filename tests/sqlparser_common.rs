@@ -1641,14 +1641,6 @@ fn ms_and_generic() -> TestedDialects {
     TestedDialects::new(vec![Box::new(MsSqlDialect {}), Box::new(GenericDialect {})])
 }
 
-fn only_ms() -> TestedDialects {
-    TestedDialects::new(vec![Box::new(MsSqlDialect {})])
-}
-
-fn only_generic() -> TestedDialects {
-    TestedDialects::new(vec![Box::new(GenericDialect {})])
-}
-
 #[test]
 fn parse_json_ops_without_colon() {
     use self::BinaryOperator::*;
@@ -10101,7 +10093,7 @@ WHEN NOT MATCHED THEN \
 INSERT (ID, NAME) \
 VALUES (FOO_IMPORT.ID, UPPER(FOO_IMPORT.NAME)) \
 WHERE NOT FOO_IMPORT.NAME LIKE '%.DO_NOT_INSERT'";
-    only_generic().verified_stmt(sql);
+    all_dialects().verified_stmt(sql);
 }
 
 #[test]
@@ -10121,7 +10113,7 @@ MERGE INTO FOO USING FOO_IMPORT ON (FOO.ID = FOO_IMPORT.ID) \
 WHEN NOT MATCHED THEN \
 INSERT (FOO.ID, FOO.NAME) \
 VALUES (1, 'abc')";
-    pg_and_generic().verified_stmt(sql);
+    all_dialects().verified_stmt(sql);
 }
 
 #[test]
@@ -10131,24 +10123,7 @@ MERGE INTO PLAYGROUND.FOO USING FOO_IMPORT ON (PLAYGROUND.FOO.ID = FOO_IMPORT.ID
 WHEN NOT MATCHED THEN \
 INSERT (PLAYGROUND.FOO.ID, PLAYGROUND.FOO.NAME) \
 VALUES (1, 'abc')";
-    pg_and_generic().verified_stmt(sql);
-}
-
-#[test]
-fn test_merge_insert_with_qualified_columns_not_supported() {
-    let sql = "\
-MERGE INTO FOO USING FOO_IMPORT ON (FOO.ID = FOO_IMPORT.ID) \
-WHEN NOT MATCHED THEN \
-INSERT (FOO.ID, FOO.NAME) \
-VALUES (1, 'abc')";
-    assert!(only_ms().parse_sql_statements(sql).is_err());
-
-    let sql = "\
-MERGE INTO PLAYGROUND.FOO USING FOO_IMPORT ON (PLAYGROUND.FOO.ID = FOO_IMPORT.ID) \
-WHEN NOT MATCHED THEN \
-INSERT (PLAYGROUND.FOO.ID, PLAYGROUND.FOO.NAME) \
-VALUES (1, 'abc')";
-    assert!(only_ms().parse_sql_statements(sql).is_err());
+    all_dialects().verified_stmt(sql);
 }
 
 #[test]

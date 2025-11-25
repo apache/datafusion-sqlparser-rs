@@ -280,19 +280,4 @@ impl Dialect for PostgreSqlDialect {
     fn supports_interval_options(&self) -> bool {
         true
     }
-
-    /// See <https://www.postgresql.org/docs/current/sql-merge.html>
-    fn supports_merge_insert_predicate(&self) -> bool {
-        false
-    }
-
-    /// See <https://www.postgresql.org/docs/current/sql-merge.html>
-    fn supports_merge_update_delete_predicate(&self) -> bool {
-        false
-    }
-
-    /// See <https://www.postgresql.org/docs/current/sql-merge.html>
-    fn supports_merge_update_predicate(&self) -> bool {
-        false
-    }
 }

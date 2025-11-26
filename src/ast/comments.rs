@@ -102,7 +102,7 @@ impl From<Comments> for Vec<CommentWithSpan> {
 }
 
 /// A source code comment with information of its entire span.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommentWithSpan {
     /// The source code comment iself
     pub comment: Comment,
@@ -119,7 +119,7 @@ impl Deref for CommentWithSpan {
 }
 
 /// A unified type of the different source code comment formats.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Comment {
     /// A single line comment, typically introduced with a prefix and spanning
     /// until end-of-line or end-of-file in the source code.

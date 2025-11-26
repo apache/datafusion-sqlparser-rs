@@ -3099,8 +3099,12 @@ impl fmt::Display for CreateFunction {
         if let Some(remote_connection) = &self.remote_connection {
             write!(f, " REMOTE WITH CONNECTION {remote_connection}")?;
         }
-        if let Some(CreateFunctionBody::AsBeforeOptions(function_body)) = &self.function_body {
-            write!(f, " AS {function_body}")?;
+        if let Some(CreateFunctionBody::AsBeforeOptions { body, link_symbol }) = &self.function_body
+        {
+            write!(f, " AS {body}")?;
+            if let Some(link_symbol) = link_symbol {
+                write!(f, ", {link_symbol}")?;
+            }
         }
         if let Some(CreateFunctionBody::Return(function_body)) = &self.function_body {
             write!(f, " RETURN {function_body}")?;
@@ -4186,5 +4190,64 @@ impl fmt::Display for OperatorPurpose {
                 write!(f, "FOR ORDER BY {sort_family}")
             }
         }
+    }
+}
+
+/// `DROP OPERATOR` statement
+/// See <https://www.postgresql.org/docs/current/sql-dropoperator.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DropOperator {
+    /// `IF EXISTS` clause
+    pub if_exists: bool,
+    /// One or more operators to drop with their signatures
+    pub operators: Vec<DropOperatorSignature>,
+    /// `CASCADE or RESTRICT`
+    pub drop_behavior: Option<DropBehavior>,
+}
+
+/// Operator signature for a `DROP OPERATOR` statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DropOperatorSignature {
+    /// Operator name
+    pub name: ObjectName,
+    /// Left operand type
+    pub left_type: Option<DataType>,
+    /// Right operand type
+    pub right_type: DataType,
+}
+
+impl fmt::Display for DropOperatorSignature {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} (", self.name)?;
+        if let Some(left_type) = &self.left_type {
+            write!(f, "{}", left_type)?;
+        } else {
+            write!(f, "NONE")?;
+        }
+        write!(f, ", {})", self.right_type)
+    }
+}
+
+impl fmt::Display for DropOperator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "DROP OPERATOR")?;
+        if self.if_exists {
+            write!(f, " IF EXISTS")?;
+        }
+        write!(f, " {}", display_comma_separated(&self.operators))?;
+        if let Some(drop_behavior) = &self.drop_behavior {
+            write!(f, " {}", drop_behavior)?;
+        }
+        Ok(())
+    }
+}
+
+impl Spanned for DropOperator {
+    fn span(&self) -> Span {
+        Span::empty()
     }
 }

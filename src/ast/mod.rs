@@ -67,14 +67,15 @@ pub use self::ddl::{
     ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain,
     CreateExtension, CreateFunction, CreateIndex, CreateOperator, CreateOperatorClass,
     CreateOperatorFamily, CreateTable, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
-    DropBehavior, DropExtension, DropFunction, DropTrigger, GeneratedAs, GeneratedExpressionMode,
-    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
-    IdentityPropertyOrder, IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck,
-    NullsDistinctOption, OperatorArgTypes, OperatorClassItem, OperatorPurpose, Owner, Partition,
-    ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity, TagsColumnOption,
-    TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
-    UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
-    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, ViewColumnDef,
+    DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorSignature, DropTrigger,
+    GeneratedAs, GeneratedExpressionMode, IdentityParameters, IdentityProperty,
+    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, IndexColumn,
+    IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes,
+    OperatorClassItem, OperatorPurpose, Owner, Partition, ProcedureParam, ReferentialAction,
+    RenameTableNameKind, ReplicaIdentity, TagsColumnOption, TriggerObjectKind, Truncate,
+    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
+    UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
+    UserDefinedTypeStorage, ViewColumnDef,
 };
 pub use self::dml::{Copy, Delete, Insert, Update};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -3560,6 +3561,12 @@ pub enum Statement {
     /// <https://www.postgresql.org/docs/current/sql-dropextension.html>
     DropExtension(DropExtension),
     /// ```sql
+    /// DROP OPERATOR [ IF EXISTS ] name ( { left_type | NONE } , right_type ) [, ...] [ CASCADE | RESTRICT ]
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-dropoperator.html>
+    DropOperator(DropOperator),
+    /// ```sql
     /// FETCH
     /// ```
     /// Retrieve rows from a query using a cursor
@@ -4786,6 +4793,7 @@ impl fmt::Display for Statement {
             Statement::CreateIndex(create_index) => create_index.fmt(f),
             Statement::CreateExtension(create_extension) => write!(f, "{create_extension}"),
             Statement::DropExtension(drop_extension) => write!(f, "{drop_extension}"),
+            Statement::DropOperator(drop_operator) => write!(f, "{drop_operator}"),
             Statement::CreateRole(create_role) => write!(f, "{create_role}"),
             Statement::CreateSecret {
                 or_replace,
@@ -9050,7 +9058,20 @@ pub enum CreateFunctionBody {
     /// ```
     ///
     /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11
-    AsBeforeOptions(Expr),
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createfunction.html
+    AsBeforeOptions {
+        /// The primary expression.
+        body: Expr,
+        /// Link symbol if the primary expression contains the name of shared library file.
+        ///
+        /// Example:
+        /// ```sql
+        /// CREATE FUNCTION cas_in(input cstring) RETURNS cas
+        /// AS 'MODULE_PATHNAME', 'cas_in_wrapper'
+        /// ```
+        /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createfunction.html
+        link_symbol: Option<Expr>,
+    },
     /// A function body expression using the 'AS' keyword and shows up
     /// after any `OPTIONS` clause.
     ///

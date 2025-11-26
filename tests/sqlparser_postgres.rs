@@ -23,6 +23,7 @@
 mod test_utils;
 
 use helpers::attached_token::AttachedToken;
+use sqlparser::ast::{DataType, DropBehavior, DropOperator, DropOperatorSignature};
 use sqlparser::tokenizer::Span;
 use test_utils::*;
 
@@ -4281,9 +4282,12 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
-            function_body: Some(CreateFunctionBody::AsBeforeOptions(Expr::Value(
-                (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF str1 <> str2 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
-            ))),
+            function_body: Some(CreateFunctionBody::AsBeforeOptions {
+                body: Expr::Value(
+                    (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF str1 <> str2 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
+                ),
+                link_symbol: None,
+            }),
             if_not_exists: false,
             using: None,
             determinism_specifier: None,
@@ -4319,9 +4323,12 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
-            function_body: Some(CreateFunctionBody::AsBeforeOptions(Expr::Value(
-                (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF int1 <> 0 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
-            ))),
+            function_body: Some(CreateFunctionBody::AsBeforeOptions {
+                body: Expr::Value(
+                    (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF int1 <> 0 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
+                ),
+                link_symbol: None,
+            }),
             if_not_exists: false,
             using: None,
             determinism_specifier: None,
@@ -4361,9 +4368,12 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
-            function_body: Some(CreateFunctionBody::AsBeforeOptions(Expr::Value(
-                (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF a <> b THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
-            ))),
+            function_body: Some(CreateFunctionBody::AsBeforeOptions {
+                body: Expr::Value(
+                    (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF a <> b THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
+                ),
+                link_symbol: None,
+            }),
             if_not_exists: false,
             using: None,
             determinism_specifier: None,
@@ -4403,9 +4413,12 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
-            function_body: Some(CreateFunctionBody::AsBeforeOptions(Expr::Value(
-                (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF int1 <> int2 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
-            ))),
+            function_body: Some(CreateFunctionBody::AsBeforeOptions {
+                body: Expr::Value(
+                    (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF int1 <> int2 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
+                ),
+                link_symbol: None,
+            }),
             if_not_exists: false,
             using: None,
             determinism_specifier: None,
@@ -4438,13 +4451,16 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
-            function_body: Some(CreateFunctionBody::AsBeforeOptions(Expr::Value(
-                (Value::DollarQuotedString(DollarQuotedString {
-                    value: "\n    BEGIN\n        RETURN TRUE;\n    END;\n    ".to_owned(),
-                    tag: None
-                }))
-                .with_empty_span()
-            ))),
+            function_body: Some(CreateFunctionBody::AsBeforeOptions {
+                body: Expr::Value(
+                    (Value::DollarQuotedString(DollarQuotedString {
+                        value: "\n    BEGIN\n        RETURN TRUE;\n    END;\n    ".to_owned(),
+                        tag: None
+                    }))
+                    .with_empty_span()
+                ),
+                link_symbol: None,
+            }),
             if_not_exists: false,
             using: None,
             determinism_specifier: None,
@@ -4476,9 +4492,12 @@ fn parse_create_function() {
             behavior: Some(FunctionBehavior::Immutable),
             called_on_null: Some(FunctionCalledOnNull::Strict),
             parallel: Some(FunctionParallel::Safe),
-            function_body: Some(CreateFunctionBody::AsBeforeOptions(Expr::Value(
-                (Value::SingleQuotedString("select $1 + $2;".into())).with_empty_span()
-            ))),
+            function_body: Some(CreateFunctionBody::AsBeforeOptions {
+                body: Expr::Value(
+                    (Value::SingleQuotedString("select $1 + $2;".into())).with_empty_span()
+                ),
+                link_symbol: None,
+            }),
             if_not_exists: false,
             using: None,
             determinism_specifier: None,
@@ -4507,6 +4526,52 @@ fn parse_create_function_detailed() {
 fn parse_incorrect_create_function_parallel() {
     let sql = "CREATE FUNCTION add(INTEGER, INTEGER) RETURNS INTEGER LANGUAGE SQL PARALLEL BLAH AS 'select $1 + $2;'";
     assert!(pg().parse_sql_statements(sql).is_err());
+}
+
+#[test]
+fn parse_create_function_c_with_module_pathname() {
+    let sql = "CREATE FUNCTION cas_in(input cstring) RETURNS cas LANGUAGE c IMMUTABLE PARALLEL SAFE AS 'MODULE_PATHNAME', 'cas_in_wrapper'";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::CreateFunction(CreateFunction {
+            or_alter: false,
+            or_replace: false,
+            temporary: false,
+            name: ObjectName::from(vec![Ident::new("cas_in")]),
+            args: Some(vec![OperateFunctionArg::with_name(
+                "input",
+                DataType::Custom(ObjectName::from(vec![Ident::new("cstring")]), vec![]),
+            ),]),
+            return_type: Some(DataType::Custom(
+                ObjectName::from(vec![Ident::new("cas")]),
+                vec![]
+            )),
+            language: Some("c".into()),
+            behavior: Some(FunctionBehavior::Immutable),
+            called_on_null: None,
+            parallel: Some(FunctionParallel::Safe),
+            function_body: Some(CreateFunctionBody::AsBeforeOptions {
+                body: Expr::Value(
+                    (Value::SingleQuotedString("MODULE_PATHNAME".into())).with_empty_span()
+                ),
+                link_symbol: Some(Expr::Value(
+                    (Value::SingleQuotedString("cas_in_wrapper".into())).with_empty_span()
+                )),
+            }),
+            if_not_exists: false,
+            using: None,
+            determinism_specifier: None,
+            options: None,
+            remote_connection: None,
+        })
+    );
+
+    // Test that attribute order flexibility works (IMMUTABLE before LANGUAGE)
+    let sql_alt_order = "CREATE FUNCTION cas_in(input cstring) RETURNS cas IMMUTABLE PARALLEL SAFE LANGUAGE c AS 'MODULE_PATHNAME', 'cas_in_wrapper'";
+    pg_and_generic().one_statement_parses_to(
+        sql_alt_order,
+        "CREATE FUNCTION cas_in(input cstring) RETURNS cas LANGUAGE c IMMUTABLE PARALLEL SAFE AS 'MODULE_PATHNAME', 'cas_in_wrapper'"
+    );
 }
 
 #[test]
@@ -6037,12 +6102,7 @@ fn parse_trigger_related_functions() {
             ],
             constraints: vec![],
             hive_distribution: HiveDistributionStyle::NONE,
-            hive_formats: Some(HiveFormat {
-                row_format: None,
-                serde_properties: None,
-                storage: None,
-                location: None
-            }),
+            hive_formats: None,
             file_format: None,
             location: None,
             query: None,
@@ -6096,8 +6156,8 @@ fn parse_trigger_related_functions() {
             args: Some(vec![]),
             return_type: Some(DataType::Trigger),
             function_body: Some(
-                CreateFunctionBody::AsBeforeOptions(
-                    Expr::Value((
+                CreateFunctionBody::AsBeforeOptions {
+                    body: Expr::Value((
                         Value::DollarQuotedString(
                             DollarQuotedString {
                                 value: "\n        BEGIN\n            -- Check that empname and salary are given\n            IF NEW.empname IS NULL THEN\n                RAISE EXCEPTION 'empname cannot be null';\n            END IF;\n            IF NEW.salary IS NULL THEN\n                RAISE EXCEPTION '% cannot have null salary', NEW.empname;\n            END IF;\n\n            -- Who works for us when they must pay for it?\n            IF NEW.salary < 0 THEN\n                RAISE EXCEPTION '% cannot have a negative salary', NEW.empname;\n            END IF;\n\n            -- Remember who changed the payroll when\n            NEW.last_date := current_timestamp;\n            NEW.last_user := current_user;\n            RETURN NEW;\n        END;\n    ".to_owned(),
@@ -6107,7 +6167,8 @@ fn parse_trigger_related_functions() {
                             },
                         )
                     ).with_empty_span()),
-                ),
+                    link_symbol: None,
+                },
             ),
             behavior: None,
             called_on_null: None,
@@ -6783,6 +6844,92 @@ fn parse_create_operator() {
     // Test nested empty parentheses error
     assert!(pg().parse_sql_statements("CREATE OPERATOR > (()").is_err());
     assert!(pg().parse_sql_statements("CREATE OPERATOR > ())").is_err());
+}
+
+#[test]
+fn parse_drop_operator() {
+    // Test DROP OPERATOR with NONE for prefix operator
+    let sql = "DROP OPERATOR ~ (NONE, BIT)";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::DropOperator(DropOperator {
+            if_exists: false,
+            operators: vec![DropOperatorSignature {
+                name: ObjectName::from(vec![Ident::new("~")]),
+                left_type: None,
+                right_type: DataType::Bit(None),
+            }],
+            drop_behavior: None,
+        })
+    );
+
+    for if_exist in [true, false] {
+        for cascading in [
+            None,
+            Some(DropBehavior::Cascade),
+            Some(DropBehavior::Restrict),
+        ] {
+            for op in &["<", ">", "<=", ">=", "<>", "||", "&&", "<<", ">>"] {
+                let sql = format!(
+                    "DROP OPERATOR{} {op} (INTEGER, INTEGER){}",
+                    if if_exist { " IF EXISTS" } else { "" },
+                    match cascading {
+                        Some(cascading) => format!(" {cascading}"),
+                        None => String::new(),
+                    }
+                );
+                assert_eq!(
+                    pg_and_generic().verified_stmt(&sql),
+                    Statement::DropOperator(DropOperator {
+                        if_exists: if_exist,
+                        operators: vec![DropOperatorSignature {
+                            name: ObjectName::from(vec![Ident::new(*op)]),
+                            left_type: Some(DataType::Integer(None)),
+                            right_type: DataType::Integer(None),
+                        }],
+                        drop_behavior: cascading,
+                    })
+                );
+            }
+        }
+    }
+
+    // Test DROP OPERATOR with schema-qualified operator name
+    let sql = "DROP OPERATOR myschema.@@ (TEXT, TEXT)";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::DropOperator(DropOperator {
+            if_exists: false,
+            operators: vec![DropOperatorSignature {
+                name: ObjectName::from(vec![Ident::new("myschema"), Ident::new("@@")]),
+                left_type: Some(DataType::Text),
+                right_type: DataType::Text,
+            }],
+            drop_behavior: None,
+        })
+    );
+
+    // Test DROP OPERATOR with multiple operators, IF EXISTS and CASCADE
+    let sql = "DROP OPERATOR IF EXISTS + (INTEGER, INTEGER), - (INTEGER, INTEGER) CASCADE";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::DropOperator(DropOperator {
+            if_exists: true,
+            operators: vec![
+                DropOperatorSignature {
+                    name: ObjectName::from(vec![Ident::new("+")]),
+                    left_type: Some(DataType::Integer(None)),
+                    right_type: DataType::Integer(None),
+                },
+                DropOperatorSignature {
+                    name: ObjectName::from(vec![Ident::new("-")]),
+                    left_type: Some(DataType::Integer(None)),
+                    right_type: DataType::Integer(None),
+                }
+            ],
+            drop_behavior: Some(DropBehavior::Cascade),
+        })
+    );
 }
 
 #[test]

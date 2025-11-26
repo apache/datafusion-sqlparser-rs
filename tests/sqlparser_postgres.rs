@@ -23,6 +23,7 @@
 mod test_utils;
 
 use helpers::attached_token::AttachedToken;
+use sqlparser::ast::{DataType, DropBehavior, DropOperator, DropOperatorSignature};
 use sqlparser::tokenizer::Span;
 use test_utils::*;
 
@@ -6761,6 +6762,92 @@ fn parse_create_operator() {
     // Test nested empty parentheses error
     assert!(pg().parse_sql_statements("CREATE OPERATOR > (()").is_err());
     assert!(pg().parse_sql_statements("CREATE OPERATOR > ())").is_err());
+}
+
+#[test]
+fn parse_drop_operator() {
+    // Test DROP OPERATOR with NONE for prefix operator
+    let sql = "DROP OPERATOR ~ (NONE, BIT)";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::DropOperator(DropOperator {
+            if_exists: false,
+            operators: vec![DropOperatorSignature {
+                name: ObjectName::from(vec![Ident::new("~")]),
+                left_type: None,
+                right_type: DataType::Bit(None),
+            }],
+            drop_behavior: None,
+        })
+    );
+
+    for if_exist in [true, false] {
+        for cascading in [
+            None,
+            Some(DropBehavior::Cascade),
+            Some(DropBehavior::Restrict),
+        ] {
+            for op in &["<", ">", "<=", ">=", "<>", "||", "&&", "<<", ">>"] {
+                let sql = format!(
+                    "DROP OPERATOR{} {op} (INTEGER, INTEGER){}",
+                    if if_exist { " IF EXISTS" } else { "" },
+                    match cascading {
+                        Some(cascading) => format!(" {cascading}"),
+                        None => String::new(),
+                    }
+                );
+                assert_eq!(
+                    pg_and_generic().verified_stmt(&sql),
+                    Statement::DropOperator(DropOperator {
+                        if_exists: if_exist,
+                        operators: vec![DropOperatorSignature {
+                            name: ObjectName::from(vec![Ident::new(*op)]),
+                            left_type: Some(DataType::Integer(None)),
+                            right_type: DataType::Integer(None),
+                        }],
+                        drop_behavior: cascading,
+                    })
+                );
+            }
+        }
+    }
+
+    // Test DROP OPERATOR with schema-qualified operator name
+    let sql = "DROP OPERATOR myschema.@@ (TEXT, TEXT)";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::DropOperator(DropOperator {
+            if_exists: false,
+            operators: vec![DropOperatorSignature {
+                name: ObjectName::from(vec![Ident::new("myschema"), Ident::new("@@")]),
+                left_type: Some(DataType::Text),
+                right_type: DataType::Text,
+            }],
+            drop_behavior: None,
+        })
+    );
+
+    // Test DROP OPERATOR with multiple operators, IF EXISTS and CASCADE
+    let sql = "DROP OPERATOR IF EXISTS + (INTEGER, INTEGER), - (INTEGER, INTEGER) CASCADE";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::DropOperator(DropOperator {
+            if_exists: true,
+            operators: vec![
+                DropOperatorSignature {
+                    name: ObjectName::from(vec![Ident::new("+")]),
+                    left_type: Some(DataType::Integer(None)),
+                    right_type: DataType::Integer(None),
+                },
+                DropOperatorSignature {
+                    name: ObjectName::from(vec![Ident::new("-")]),
+                    left_type: Some(DataType::Integer(None)),
+                    right_type: DataType::Integer(None),
+                }
+            ],
+            drop_behavior: Some(DropBehavior::Cascade),
+        })
+    );
 }
 
 #[test]

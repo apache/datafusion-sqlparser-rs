@@ -5832,15 +5832,19 @@ impl<'a> Parser<'a> {
         let hive_distribution = self.parse_hive_distribution()?;
         let hive_formats = self.parse_hive_formats()?;
 
-        let file_format = if let Some(ff) = &hive_formats.storage {
-            match ff {
-                HiveIOFormat::FileFormat { format } => Some(*format),
-                _ => None,
+        let file_format = if let Some(ref hf) = hive_formats {
+            if let Some(ref ff) = hf.storage {
+                match ff {
+                    HiveIOFormat::FileFormat { format } => Some(*format),
+                    _ => None,
+                }
+            } else {
+                None
             }
         } else {
             None
         };
-        let location = hive_formats.location.clone();
+        let location = hive_formats.as_ref().and_then(|hf| hf.location.clone());
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
         let table_options = if !table_properties.is_empty() {
             CreateTableOptions::TableProperties(table_properties)
@@ -5851,7 +5855,7 @@ impl<'a> Parser<'a> {
             .columns(columns)
             .constraints(constraints)
             .hive_distribution(hive_distribution)
-            .hive_formats(Some(hive_formats))
+            .hive_formats(hive_formats)
             .table_options(table_options)
             .or_replace(or_replace)
             .if_not_exists(if_not_exists)
@@ -6768,9 +6772,11 @@ impl<'a> Parser<'a> {
             return self.parse_drop_trigger();
         } else if self.parse_keyword(Keyword::EXTENSION) {
             return self.parse_drop_extension();
+        } else if self.parse_keyword(Keyword::OPERATOR) {
+            return self.parse_drop_operator();
         } else {
             return self.expected(
-                "CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW or USER after DROP",
+                "CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW or USER after DROP",
                 self.peek_token(),
             );
         };
@@ -7526,6 +7532,46 @@ impl<'a> Parser<'a> {
         }))
     }
 
+    /// Parse a[Statement::DropOperator] statement.
+    ///
+    pub fn parse_drop_operator(&mut self) -> Result<Statement, ParserError> {
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let operators = self.parse_comma_separated(|p| p.parse_drop_operator_signature())?;
+        let drop_behavior = self.parse_optional_drop_behavior();
+        Ok(Statement::DropOperator(DropOperator {
+            if_exists,
+            operators,
+            drop_behavior,
+        }))
+    }
+
+    /// Parse an operator signature for a [Statement::DropOperator]
+    /// Format: `name ( { left_type | NONE } , right_type )`
+    fn parse_drop_operator_signature(&mut self) -> Result<DropOperatorSignature, ParserError> {
+        let name = self.parse_operator_name()?;
+        self.expect_token(&Token::LParen)?;
+
+        // Parse left operand type (or NONE for prefix operators)
+        let left_type = if self.parse_keyword(Keyword::NONE) {
+            None
+        } else {
+            Some(self.parse_data_type()?)
+        };
+
+        self.expect_token(&Token::Comma)?;
+
+        // Parse right operand type (always required)
+        let right_type = self.parse_data_type()?;
+
+        self.expect_token(&Token::RParen)?;
+
+        Ok(DropOperatorSignature {
+            name,
+            left_type,
+            right_type,
+        })
+    }
+
     //TODO: Implement parsing for Skewed
     pub fn parse_hive_distribution(&mut self) -> Result<HiveDistributionStyle, ParserError> {
         if self.parse_keywords(&[Keyword::PARTITIONED, Keyword::BY]) {
@@ -7538,8 +7584,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_hive_formats(&mut self) -> Result<HiveFormat, ParserError> {
-        let mut hive_format = HiveFormat::default();
+    pub fn parse_hive_formats(&mut self) -> Result<Option<HiveFormat>, ParserError> {
+        let mut hive_format: Option<HiveFormat> = None;
         loop {
             match self.parse_one_of_keywords(&[
                 Keyword::ROW,
@@ -7548,7 +7594,9 @@ impl<'a> Parser<'a> {
                 Keyword::WITH,
             ]) {
                 Some(Keyword::ROW) => {
-                    hive_format.row_format = Some(self.parse_row_format()?);
+                    hive_format
+                        .get_or_insert_with(HiveFormat::default)
+                        .row_format = Some(self.parse_row_format()?);
                 }
                 Some(Keyword::STORED) => {
                     self.expect_keyword_is(Keyword::AS)?;
@@ -7556,24 +7604,29 @@ impl<'a> Parser<'a> {
                         let input_format = self.parse_expr()?;
                         self.expect_keyword_is(Keyword::OUTPUTFORMAT)?;
                         let output_format = self.parse_expr()?;
-                        hive_format.storage = Some(HiveIOFormat::IOF {
-                            input_format,
-                            output_format,
-                        });
+                        hive_format.get_or_insert_with(HiveFormat::default).storage =
+                            Some(HiveIOFormat::IOF {
+                                input_format,
+                                output_format,
+                            });
                     } else {
                         let format = self.parse_file_format()?;
-                        hive_format.storage = Some(HiveIOFormat::FileFormat { format });
+                        hive_format.get_or_insert_with(HiveFormat::default).storage =
+                            Some(HiveIOFormat::FileFormat { format });
                     }
                 }
                 Some(Keyword::LOCATION) => {
-                    hive_format.location = Some(self.parse_literal_string()?);
+                    hive_format.get_or_insert_with(HiveFormat::default).location =
+                        Some(self.parse_literal_string()?);
                 }
                 Some(Keyword::WITH) => {
                     self.prev_token();
                     let properties = self
                         .parse_options_with_keywords(&[Keyword::WITH, Keyword::SERDEPROPERTIES])?;
                     if !properties.is_empty() {
-                        hive_format.serde_properties = Some(properties);
+                        hive_format
+                            .get_or_insert_with(HiveFormat::default)
+                            .serde_properties = Some(properties);
                     } else {
                         break;
                     }
@@ -7788,7 +7841,7 @@ impl<'a> Parser<'a> {
             .if_not_exists(if_not_exists)
             .transient(transient)
             .hive_distribution(hive_distribution)
-            .hive_formats(Some(hive_formats))
+            .hive_formats(hive_formats)
             .global(global)
             .query(query)
             .without_rowid(without_rowid)

@@ -4725,6 +4725,17 @@ fn parse_create_external_table_lowercase() {
 }
 
 #[test]
+fn parse_create_table_hive_formats_none_when_no_options() {
+    let sql = "CREATE TABLE simple_table (id INT, name VARCHAR(100))";
+    match verified_stmt(sql) {
+        Statement::CreateTable(CreateTable { hive_formats, .. }) => {
+            assert_eq!(hive_formats, None);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_alter_table() {
     let add_column = "ALTER TABLE tab ADD COLUMN foo TEXT;";
     match alter_table_op(one_statement_parses_to(

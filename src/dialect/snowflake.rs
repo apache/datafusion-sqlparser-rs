@@ -393,7 +393,7 @@ impl Dialect for SnowflakeDialect {
 
     fn is_column_alias(&self, kw: &Keyword, parser: &mut Parser) -> bool {
         match kw {
-            // The following keywords can be considered an alias as long as 
+            // The following keywords can be considered an alias as long as
             // they are not followed by other tokens that may change their meaning
             // e.g. `SELECT * EXCEPT (col1) FROM tbl`
             Keyword::EXCEPT
@@ -408,7 +408,7 @@ impl Dialect for SnowflakeDialect {
             Keyword::LIMIT | Keyword::OFFSET if peek_for_limit_options(parser) => false,
 
             // `FETCH` can be considered an alias as long as it's not followed by `FIRST`` or `NEXT`
-            // which would give it a different meanings, for example: 
+            // which would give it a different meanings, for example:
             // `SELECT 1 FETCH FIRST 10 ROWS` - not an alias
             // `SELECT 1 FETCH 10` - not an alias
             Keyword::FETCH if parser.peek_one_of_keywords(&[Keyword::FIRST, Keyword::NEXT]).is_some()
@@ -417,8 +417,8 @@ impl Dialect for SnowflakeDialect {
                 false
             }
 
-            // Reserved keywords by the Snowflake dialect, which seem to be less strictive 
-            // than what is listed in `keywords::RESERVED_FOR_COLUMN_ALIAS`. The following 
+            // Reserved keywords by the Snowflake dialect, which seem to be less strictive
+            // than what is listed in `keywords::RESERVED_FOR_COLUMN_ALIAS`. The following
             // keywords were tested with the this statement: `SELECT 1 <KW>`.
             Keyword::FROM
             | Keyword::GROUP
@@ -688,7 +688,7 @@ pub fn parse_create_table(
         .iceberg(iceberg)
         .global(global)
         .dynamic(dynamic)
-        .hive_formats(Some(Default::default()));
+        .hive_formats(None);
 
     // Snowflake does not enforce order of the parameters in the statement. The parser needs to
     // parse the statement in a loop.

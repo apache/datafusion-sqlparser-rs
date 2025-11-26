@@ -92,10 +92,31 @@ fn parse_mssql_single_quoted_aliases() {
 
 #[test]
 fn parse_mssql_delimited_identifiers() {
-    let _ = ms().one_statement_parses_to(
+    let s = ms().one_statement_parses_to(
         "SELECT [a.b!] [FROM] FROM foo [WHERE]",
-        "SELECT [a.b!] AS [FROM] FROM foo AS [WHERE]",
+        "SELECT [a.b!] AS [FROM] FROM foo [WHERE]",
     );
+    if let Statement::Query(q) = s {
+        match &q.body.as_select().expect("not a SELECT").from[..] {
+            [from] => match &from.relation {
+                TableFactor::Table { name, alias, .. } => {
+                    assert_eq!(&format!("{name}"), "foo");
+                    assert_eq!(
+                        alias,
+                        &Some(TableAlias {
+                            explicit: false,
+                            name: Ident::with_quote('[', "WHERE"),
+                            columns: vec![]
+                        })
+                    );
+                }
+                _ => panic!("unexpected FROM type"),
+            },
+            _ => panic!("unexpected number of FROMs"),
+        }
+    } else {
+        panic!("statement not parsed as QUERY");
+    }
 }
 
 #[test]
@@ -454,10 +475,7 @@ fn parse_mssql_openjson() {
         vec![TableWithJoins {
             relation: TableFactor::Table {
                 name: ObjectName::from(vec![Ident::new("t_test_table")]),
-                alias: Some(TableAlias {
-                    name: Ident::new("A"),
-                    columns: vec![]
-                }),
+                alias: table_alias(true, "A"),
                 args: None,
                 with_hints: vec![],
                 version: None,
@@ -494,10 +512,7 @@ fn parse_mssql_openjson() {
                             as_json: true
                         }
                     ],
-                    alias: Some(TableAlias {
-                        name: Ident::new("B"),
-                        columns: vec![]
-                    })
+                    alias: table_alias(true, "B")
                 },
                 global: false,
                 join_operator: JoinOperator::CrossApply
@@ -514,10 +529,7 @@ fn parse_mssql_openjson() {
         vec![TableWithJoins {
             relation: TableFactor::Table {
                 name: ObjectName::from(vec![Ident::new("t_test_table"),]),
-                alias: Some(TableAlias {
-                    name: Ident::new("A"),
-                    columns: vec![]
-                }),
+                alias: table_alias(true, "A"),
                 args: None,
                 with_hints: vec![],
                 version: None,
@@ -554,10 +566,7 @@ fn parse_mssql_openjson() {
                             as_json: true
                         }
                     ],
-                    alias: Some(TableAlias {
-                        name: Ident::new("B"),
-                        columns: vec![]
-                    })
+                    alias: table_alias(true, "B")
                 },
                 global: false,
                 join_operator: JoinOperator::CrossApply
@@ -574,10 +583,7 @@ fn parse_mssql_openjson() {
         vec![TableWithJoins {
             relation: TableFactor::Table {
                 name: ObjectName::from(vec![Ident::new("t_test_table")]),
-                alias: Some(TableAlias {
-                    name: Ident::new("A"),
-                    columns: vec![]
-                }),
+                alias: table_alias(true, "A"),
                 args: None,
                 with_hints: vec![],
                 version: None,
@@ -614,10 +620,7 @@ fn parse_mssql_openjson() {
                             as_json: false
                         }
                     ],
-                    alias: Some(TableAlias {
-                        name: Ident::new("B"),
-                        columns: vec![]
-                    })
+                    alias: table_alias(true, "B")
                 },
                 global: false,
                 join_operator: JoinOperator::CrossApply
@@ -634,10 +637,7 @@ fn parse_mssql_openjson() {
         vec![TableWithJoins {
             relation: TableFactor::Table {
                 name: ObjectName::from(vec![Ident::new("t_test_table")]),
-                alias: Some(TableAlias {
-                    name: Ident::new("A"),
-                    columns: vec![]
-                }),
+                alias: table_alias(true, "A"),
                 args: None,
                 with_hints: vec![],
                 version: None,
@@ -654,10 +654,7 @@ fn parse_mssql_openjson() {
                     ),
                     json_path: Some(Value::SingleQuotedString("$.config".into())),
                     columns: vec![],
-                    alias: Some(TableAlias {
-                        name: Ident::new("B"),
-                        columns: vec![]
-                    })
+                    alias: table_alias(true, "B")
                 },
                 global: false,
                 join_operator: JoinOperator::CrossApply
@@ -674,10 +671,7 @@ fn parse_mssql_openjson() {
         vec![TableWithJoins {
             relation: TableFactor::Table {
                 name: ObjectName::from(vec![Ident::new("t_test_table")]),
-                alias: Some(TableAlias {
-                    name: Ident::new("A"),
-                    columns: vec![]
-                }),
+                alias: table_alias(true, "A"),
                 args: None,
                 with_hints: vec![],
                 version: None,
@@ -694,10 +688,7 @@ fn parse_mssql_openjson() {
                     ),
                     json_path: None,
                     columns: vec![],
-                    alias: Some(TableAlias {
-                        name: Ident::new("B"),
-                        columns: vec![]
-                    })
+                    alias: table_alias(true, "B")
                 },
                 global: false,
                 join_operator: JoinOperator::CrossApply

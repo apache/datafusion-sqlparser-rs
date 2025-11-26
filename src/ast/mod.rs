@@ -4051,6 +4051,8 @@ pub enum Statement {
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
     /// [MSSQL](https://learn.microsoft.com/en-us/sql/t-sql/statements/merge-transact-sql?view=sql-server-ver16)
     Merge {
+        /// The `MERGE` token that starts the statement.
+        merge_token: AttachedToken,
         /// optional INTO keyword
         into: bool,
         /// Specifies the table to merge
@@ -4075,7 +4077,6 @@ pub enum Statement {
         /// Table flag
         table_flag: Option<ObjectName>,
         /// Table name
-
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         has_as: bool,
@@ -5438,6 +5439,7 @@ impl fmt::Display for Statement {
                 write!(f, "RELEASE SAVEPOINT {name}")
             }
             Statement::Merge {
+                merge_token: _,
                 into,
                 table,
                 source,
@@ -8570,6 +8572,8 @@ impl Display for MergeInsertKind {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct MergeInsertExpr {
+    /// The `INSERT` token that starts the sub-expression.
+    pub insert_token: AttachedToken,
     /// Columns (if any) specified by the insert.
     ///
     /// Example:
@@ -8578,6 +8582,8 @@ pub struct MergeInsertExpr {
     /// INSERT (product, quantity) ROW
     /// ```
     pub columns: Vec<Ident>,
+    /// The token, `[VALUES | ROW]` starting `kind`.
+    pub kind_token: AttachedToken,
     /// The insert type used by the statement.
     pub kind: MergeInsertKind,
 }
@@ -8617,9 +8623,16 @@ pub enum MergeAction {
     /// ```sql
     /// UPDATE SET quantity = T.quantity + S.quantity
     /// ```
-    Update { assignments: Vec<Assignment> },
+    Update {
+        /// The `UPDATE` token that starts the sub-expression.
+        update_token: AttachedToken,
+        assignments: Vec<Assignment>,
+    },
     /// A plain `DELETE` clause
-    Delete,
+    Delete {
+        /// The `DELETE` token that starts the sub-expression.
+        delete_token: AttachedToken,
+    },
 }
 
 impl Display for MergeAction {
@@ -8628,10 +8641,10 @@ impl Display for MergeAction {
             MergeAction::Insert(insert) => {
                 write!(f, "INSERT {insert}")
             }
-            MergeAction::Update { assignments } => {
+            MergeAction::Update { assignments, .. } => {
                 write!(f, "UPDATE SET {}", display_comma_separated(assignments))
             }
-            MergeAction::Delete => {
+            MergeAction::Delete { .. } => {
                 write!(f, "DELETE")
             }
         }
@@ -8650,6 +8663,8 @@ impl Display for MergeAction {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct MergeClause {
+    /// The `WHEN` token that starts the sub-expression.
+    pub when_token: AttachedToken,
     pub clause_kind: MergeClauseKind,
     pub predicate: Option<Expr>,
     pub action: MergeAction,
@@ -8658,6 +8673,7 @@ pub struct MergeClause {
 impl Display for MergeClause {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let MergeClause {
+            when_token: _,
             clause_kind,
             predicate,
             action,
@@ -8681,10 +8697,12 @@ impl Display for MergeClause {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum OutputClause {
     Output {
+        output_token: AttachedToken,
         select_items: Vec<SelectItem>,
         into_table: Option<SelectInto>,
     },
     Returning {
+        returning_token: AttachedToken,
         select_items: Vec<SelectItem>,
     },
 }
@@ -8693,6 +8711,7 @@ impl fmt::Display for OutputClause {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             OutputClause::Output {
+                output_token: _,
                 select_items,
                 into_table,
             } => {
@@ -8704,7 +8723,10 @@ impl fmt::Display for OutputClause {
                 }
                 Ok(())
             }
-            OutputClause::Returning { select_items } => {
+            OutputClause::Returning {
+                returning_token: _,
+                select_items,
+            } => {
                 f.write_str("RETURNING ")?;
                 display_comma_separated(select_items).fmt(f)
             }

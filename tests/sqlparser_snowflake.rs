@@ -1186,17 +1186,17 @@ fn test_single_table_in_parenthesis() {
 fn test_single_table_in_parenthesis_with_alias() {
     snowflake_and_generic().one_statement_parses_to(
         "SELECT * FROM (a NATURAL JOIN (b) c )",
-        "SELECT * FROM (a NATURAL JOIN b AS c)",
+        "SELECT * FROM (a NATURAL JOIN b c)",
     );
 
     snowflake_and_generic().one_statement_parses_to(
         "SELECT * FROM (a NATURAL JOIN ((b)) c )",
-        "SELECT * FROM (a NATURAL JOIN b AS c)",
+        "SELECT * FROM (a NATURAL JOIN b c)",
     );
 
     snowflake_and_generic().one_statement_parses_to(
         "SELECT * FROM (a NATURAL JOIN ( (b) c ) )",
-        "SELECT * FROM (a NATURAL JOIN b AS c)",
+        "SELECT * FROM (a NATURAL JOIN b c)",
     );
 
     snowflake_and_generic().one_statement_parses_to(
@@ -1205,8 +1205,12 @@ fn test_single_table_in_parenthesis_with_alias() {
     );
 
     snowflake_and_generic().one_statement_parses_to(
+        "SELECT * FROM (a as alias1 NATURAL JOIN ( (b) c ) )",
+        "SELECT * FROM (a AS alias1 NATURAL JOIN b c)",
+    );
+    snowflake_and_generic().one_statement_parses_to(
         "SELECT * FROM (a alias1 NATURAL JOIN ( (b) c ) )",
-        "SELECT * FROM (a AS alias1 NATURAL JOIN b AS c)",
+        "SELECT * FROM (a alias1 NATURAL JOIN b c)",
     );
 
     snowflake_and_generic().one_statement_parses_to(
@@ -1215,7 +1219,7 @@ fn test_single_table_in_parenthesis_with_alias() {
     );
 
     snowflake_and_generic().one_statement_parses_to(
-        "SELECT * FROM (a NATURAL JOIN b) c",
+        "SELECT * FROM (a NATURAL JOIN b) AS c",
         "SELECT * FROM (a NATURAL JOIN b) AS c",
     );
 
@@ -3040,9 +3044,9 @@ fn asof_joins() {
     assert_eq!(
         query.from[0],
         TableWithJoins {
-            relation: table_with_alias("trades_unixtime", "tu"),
+            relation: table_with_alias("trades_unixtime", true, "tu"),
             joins: vec![Join {
-                relation: table_with_alias("quotes_unixtime", "qu"),
+                relation: table_with_alias("quotes_unixtime", true, "qu"),
                 global: false,
                 join_operator: JoinOperator::AsOf {
                     match_condition: Expr::BinaryOp {
@@ -3633,10 +3637,37 @@ fn test_sql_keywords_as_table_aliases() {
         "OPEN",
     ];
 
+    fn assert_implicit_alias(mut select: Select, canonical_with_explicit_alias: &str) {
+        if let TableFactor::Table { alias, .. } = &mut select
+            .from
+            .get_mut(0)
+            .as_mut()
+            .expect("missing FROM")
+            .relation
+        {
+            let alias = alias.as_mut().expect("missing ALIAS");
+            assert!(!alias.explicit);
+            alias.explicit = true;
+            assert_eq!(&format!("{select}"), canonical_with_explicit_alias);
+        } else {
+            panic!("unexpected FROM <table-factor>");
+        }
+    }
+
+    fn assert_no_alias(select: Select) {
+        if let TableFactor::Table { alias, .. } =
+            &select.from.first().expect("missing FROM").relation
+        {
+            assert_eq!(alias, &None);
+        } else {
+            panic!("unexpected FROM <table-factor>");
+        }
+    }
+
     for kw in unreserved_kws {
         snowflake().verified_stmt(&format!("SELECT * FROM tbl AS {kw}"));
-        snowflake().one_statement_parses_to(
-            &format!("SELECT * FROM tbl {kw}"),
+        assert_implicit_alias(
+            snowflake().verified_only_select(&format!("SELECT * FROM tbl {kw}")),
             &format!("SELECT * FROM tbl AS {kw}"),
         );
     }
@@ -3652,13 +3683,17 @@ fn test_sql_keywords_as_table_aliases() {
     }
 
     // LIMIT is alias
-    snowflake().one_statement_parses_to("SELECT * FROM tbl LIMIT", "SELECT * FROM tbl AS LIMIT");
+    assert_implicit_alias(
+        snowflake().verified_only_select("SELECT * FROM tbl LIMIT"),
+        "SELECT * FROM tbl AS LIMIT",
+    );
+
     // LIMIT is not an alias
-    snowflake().verified_stmt("SELECT * FROM tbl LIMIT 1");
-    snowflake().verified_stmt("SELECT * FROM tbl LIMIT $1");
-    snowflake().verified_stmt("SELECT * FROM tbl LIMIT ''");
-    snowflake().verified_stmt("SELECT * FROM tbl LIMIT NULL");
-    snowflake().verified_stmt("SELECT * FROM tbl LIMIT $$$$");
+    assert_no_alias(snowflake().verified_only_select("SELECT * FROM tbl LIMIT 1"));
+    assert_no_alias(snowflake().verified_only_select("SELECT * FROM tbl LIMIT $1"));
+    assert_no_alias(snowflake().verified_only_select("SELECT * FROM tbl LIMIT ''"));
+    assert_no_alias(snowflake().verified_only_select("SELECT * FROM tbl LIMIT NULL"));
+    assert_no_alias(snowflake().verified_only_select("SELECT * FROM tbl LIMIT $$$$"));
 }
 
 #[test]
@@ -3900,14 +3935,7 @@ fn test_nested_join_without_parentheses() {
                 table_with_joins: Box::new(TableWithJoins {
                     relation: TableFactor::Table {
                         name: ObjectName::from(vec![Ident::new("customers".to_string())]),
-                        alias: Some(TableAlias {
-                            name: Ident {
-                                value: "c".to_string(),
-                                quote_style: None,
-                                span: Span::empty(),
-                            },
-                            columns: vec![],
-                        }),
+                        alias: table_alias(true, "c"),
                         args: None,
                         with_hints: vec![],
                         version: None,
@@ -3920,14 +3948,7 @@ fn test_nested_join_without_parentheses() {
                     joins: vec![Join {
                         relation: TableFactor::Table {
                             name: ObjectName::from(vec![Ident::new("products".to_string())]),
-                            alias: Some(TableAlias {
-                                name: Ident {
-                                    value: "p".to_string(),
-                                    quote_style: None,
-                                    span: Span::empty(),
-                                },
-                                columns: vec![],
-                            }),
+                            alias: table_alias(true, "p"),
                             args: None,
                             with_hints: vec![],
                             version: None,
@@ -3981,14 +4002,7 @@ fn test_nested_join_without_parentheses() {
                 table_with_joins: Box::new(TableWithJoins {
                     relation: TableFactor::Table {
                         name: ObjectName::from(vec![Ident::new("customers".to_string())]),
-                        alias: Some(TableAlias {
-                            name: Ident {
-                                value: "c".to_string(),
-                                quote_style: None,
-                                span: Span::empty(),
-                            },
-                            columns: vec![],
-                        }),
+                        alias: table_alias(true, "c"),
                         args: None,
                         with_hints: vec![],
                         version: None,
@@ -4001,14 +4015,7 @@ fn test_nested_join_without_parentheses() {
                     joins: vec![Join {
                         relation: TableFactor::Table {
                             name: ObjectName::from(vec![Ident::new("products".to_string())]),
-                            alias: Some(TableAlias {
-                                name: Ident {
-                                    value: "p".to_string(),
-                                    quote_style: None,
-                                    span: Span::empty(),
-                                },
-                                columns: vec![],
-                            }),
+                            alias: table_alias(true, "p"),
                             args: None,
                             with_hints: vec![],
                             version: None,
@@ -4062,14 +4069,7 @@ fn test_nested_join_without_parentheses() {
                 table_with_joins: Box::new(TableWithJoins {
                     relation: TableFactor::Table {
                         name: ObjectName::from(vec![Ident::new("customers".to_string())]),
-                        alias: Some(TableAlias {
-                            name: Ident {
-                                value: "c".to_string(),
-                                quote_style: None,
-                                span: Span::empty(),
-                            },
-                            columns: vec![],
-                        }),
+                        alias: table_alias(true, "c"),
                         args: None,
                         with_hints: vec![],
                         version: None,
@@ -4082,14 +4082,7 @@ fn test_nested_join_without_parentheses() {
                     joins: vec![Join {
                         relation: TableFactor::Table {
                             name: ObjectName::from(vec![Ident::new("products".to_string())]),
-                            alias: Some(TableAlias {
-                                name: Ident {
-                                    value: "p".to_string(),
-                                    quote_style: None,
-                                    span: Span::empty(),
-                                },
-                                columns: vec![],
-                            }),
+                            alias: table_alias(true, "p"),
                             args: None,
                             with_hints: vec![],
                             version: None,
@@ -4143,14 +4136,7 @@ fn test_nested_join_without_parentheses() {
                 table_with_joins: Box::new(TableWithJoins {
                     relation: TableFactor::Table {
                         name: ObjectName::from(vec![Ident::new("customers".to_string())]),
-                        alias: Some(TableAlias {
-                            name: Ident {
-                                value: "c".to_string(),
-                                quote_style: None,
-                                span: Span::empty(),
-                            },
-                            columns: vec![],
-                        }),
+                        alias: table_alias(true, "c"),
                         args: None,
                         with_hints: vec![],
                         version: None,
@@ -4163,14 +4149,7 @@ fn test_nested_join_without_parentheses() {
                     joins: vec![Join {
                         relation: TableFactor::Table {
                             name: ObjectName::from(vec![Ident::new("products".to_string())]),
-                            alias: Some(TableAlias {
-                                name: Ident {
-                                    value: "p".to_string(),
-                                    quote_style: None,
-                                    span: Span::empty(),
-                                },
-                                columns: vec![],
-                            }),
+                            alias: table_alias(true, "p"),
                             args: None,
                             with_hints: vec![],
                             version: None,
@@ -4224,14 +4203,7 @@ fn test_nested_join_without_parentheses() {
                 table_with_joins: Box::new(TableWithJoins {
                     relation: TableFactor::Table {
                         name: ObjectName::from(vec![Ident::new("customers".to_string())]),
-                        alias: Some(TableAlias {
-                            name: Ident {
-                                value: "c".to_string(),
-                                quote_style: None,
-                                span: Span::empty(),
-                            },
-                            columns: vec![],
-                        }),
+                        alias: table_alias(true, "c"),
                         args: None,
                         with_hints: vec![],
                         version: None,
@@ -4244,14 +4216,7 @@ fn test_nested_join_without_parentheses() {
                     joins: vec![Join {
                         relation: TableFactor::Table {
                             name: ObjectName::from(vec![Ident::new("products".to_string())]),
-                            alias: Some(TableAlias {
-                                name: Ident {
-                                    value: "p".to_string(),
-                                    quote_style: None,
-                                    span: Span::empty(),
-                                },
-                                columns: vec![],
-                            }),
+                            alias: table_alias(true, "p"),
                             args: None,
                             with_hints: vec![],
                             version: None,

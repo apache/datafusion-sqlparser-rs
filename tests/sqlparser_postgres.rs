@@ -5131,7 +5131,7 @@ fn parse_join_constraint_unnest_alias() {
         .joins,
         vec![Join {
             relation: TableFactor::UNNEST {
-                alias: table_alias("f"),
+                alias: table_alias(true, "f"),
                 array_exprs: vec![Expr::CompoundIdentifier(vec![
                     Ident::new("t1"),
                     Ident::new("a")

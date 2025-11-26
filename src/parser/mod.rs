@@ -10539,8 +10539,6 @@ impl<'a> Parser<'a> {
             }
         };
 
-        // Check if there's a comma, indicating multiple strings (e.g., AS 'obj_file', 'link_symbol')
-        // This is used for C language functions: AS 'MODULE_PATHNAME', 'link_symbol'
         Ok(CreateFunctionBody::AsBeforeOptions {
             body: parse_string_expr(self)?,
             link_symbol: if self.consume_token(&Token::Comma) {

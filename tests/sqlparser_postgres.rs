@@ -6797,7 +6797,7 @@ fn parse_drop_operator() {
                     }
                 );
                 assert_eq!(
-                    pg().verified_stmt(&sql),
+                    pg_and_generic().verified_stmt(&sql),
                     Statement::DropOperator(DropOperator {
                         if_exists: if_exist,
                         operators: vec![DropOperatorSignature {
@@ -6815,7 +6815,7 @@ fn parse_drop_operator() {
     // Test DROP OPERATOR with schema-qualified operator name
     let sql = "DROP OPERATOR myschema.@@ (TEXT, TEXT)";
     assert_eq!(
-        pg().verified_stmt(sql),
+        pg_and_generic().verified_stmt(sql),
         Statement::DropOperator(DropOperator {
             if_exists: false,
             operators: vec![DropOperatorSignature {
@@ -6830,7 +6830,7 @@ fn parse_drop_operator() {
     // Test DROP OPERATOR with multiple operators, IF EXISTS and CASCADE
     let sql = "DROP OPERATOR IF EXISTS + (INTEGER, INTEGER), - (INTEGER, INTEGER) CASCADE";
     assert_eq!(
-        pg().verified_stmt(sql),
+        pg_and_generic().verified_stmt(sql),
         Statement::DropOperator(DropOperator {
             if_exists: true,
             operators: vec![

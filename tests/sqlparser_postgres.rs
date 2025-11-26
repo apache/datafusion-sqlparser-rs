@@ -6016,12 +6016,7 @@ fn parse_trigger_related_functions() {
             ],
             constraints: vec![],
             hive_distribution: HiveDistributionStyle::NONE,
-            hive_formats: Some(HiveFormat {
-                row_format: None,
-                serde_properties: None,
-                storage: None,
-                location: None
-            }),
+            hive_formats: None,
             file_format: None,
             location: None,
             query: None,

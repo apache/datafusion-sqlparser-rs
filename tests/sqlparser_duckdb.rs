@@ -739,12 +739,7 @@ fn test_duckdb_union_datatype() {
             ],
             constraints: Default::default(),
             hive_distribution: HiveDistributionStyle::NONE,
-            hive_formats: Some(HiveFormat {
-                row_format: Default::default(),
-                serde_properties: Default::default(),
-                storage: Default::default(),
-                location: Default::default()
-            }),
+            hive_formats: None,
             file_format: Default::default(),
             location: Default::default(),
             query: Default::default(),

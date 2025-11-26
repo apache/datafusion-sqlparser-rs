@@ -3099,8 +3099,12 @@ impl fmt::Display for CreateFunction {
         if let Some(remote_connection) = &self.remote_connection {
             write!(f, " REMOTE WITH CONNECTION {remote_connection}")?;
         }
-        if let Some(CreateFunctionBody::AsBeforeOptions(function_body)) = &self.function_body {
-            write!(f, " AS {function_body}")?;
+        if let Some(CreateFunctionBody::AsBeforeOptions { body, link_symbol }) = &self.function_body
+        {
+            write!(f, " AS {body}")?;
+            if let Some(link_symbol) = link_symbol {
+                write!(f, ", {link_symbol}")?;
+            }
         }
         if let Some(CreateFunctionBody::Return(function_body)) = &self.function_body {
             write!(f, " RETURN {function_body}")?;

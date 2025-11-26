@@ -9108,7 +9108,20 @@ pub enum CreateFunctionBody {
     /// ```
     ///
     /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11
-    AsBeforeOptions(Expr),
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createfunction.html
+    AsBeforeOptions {
+        /// The primary expression.
+        body: Expr,
+        /// Link symbol if the primary expression contains the name of shared library file.
+        ///
+        /// Example:
+        /// ```sql
+        /// CREATE FUNCTION cas_in(input cstring) RETURNS cas
+        /// AS 'MODULE_PATHNAME', 'cas_in_wrapper'
+        /// ```
+        /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createfunction.html
+        link_symbol: Option<Expr>,
+    },
     /// A function body expression using the 'AS' keyword and shows up
     /// after any `OPTIONS` clause.
     ///

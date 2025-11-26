@@ -5204,9 +5204,7 @@ impl<'a> Parser<'a> {
             }
             if self.parse_keyword(Keyword::AS) {
                 ensure_not_set(&body.function_body, "AS")?;
-                body.function_body = Some(CreateFunctionBody::AsBeforeOptions(
-                    self.parse_create_function_body_string()?,
-                ));
+                body.function_body = Some(self.parse_create_function_body_string()?);
             } else if self.parse_keyword(Keyword::LANGUAGE) {
                 ensure_not_set(&body.language, "LANGUAGE")?;
                 body.language = Some(self.parse_identifier()?);
@@ -5298,7 +5296,7 @@ impl<'a> Parser<'a> {
         let name = self.parse_object_name(false)?;
         self.expect_keyword_is(Keyword::AS)?;
 
-        let as_ = self.parse_create_function_body_string()?;
+        let body = self.parse_create_function_body_string()?;
         let using = self.parse_optional_create_function_using()?;
 
         Ok(Statement::CreateFunction(CreateFunction {
@@ -5306,7 +5304,7 @@ impl<'a> Parser<'a> {
             or_replace,
             temporary,
             name,
-            function_body: Some(CreateFunctionBody::AsBeforeOptions(as_)),
+            function_body: Some(body),
             using,
             if_not_exists: false,
             args: None,
@@ -5368,7 +5366,10 @@ impl<'a> Parser<'a> {
             let expr = self.parse_expr()?;
             if options.is_none() {
                 options = self.maybe_parse_options(Keyword::OPTIONS)?;
-                Some(CreateFunctionBody::AsBeforeOptions(expr))
+                Some(CreateFunctionBody::AsBeforeOptions {
+                    body: expr,
+                    link_symbol: None,
+                })
             } else {
                 Some(CreateFunctionBody::AsAfterOptions(expr))
             }
@@ -10574,19 +10575,30 @@ impl<'a> Parser<'a> {
 
     /// Parse the body of a `CREATE FUNCTION` specified as a string.
     /// e.g. `CREATE FUNCTION ... AS $$ body $$`.
-    fn parse_create_function_body_string(&mut self) -> Result<Expr, ParserError> {
-        let peek_token = self.peek_token();
-        let span = peek_token.span;
-        match peek_token.token {
-            Token::DollarQuotedString(s) if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
-            {
-                self.next_token();
-                Ok(Expr::Value(Value::DollarQuotedString(s).with_span(span)))
+    fn parse_create_function_body_string(&mut self) -> Result<CreateFunctionBody, ParserError> {
+        let parse_string_expr = |parser: &mut Parser| -> Result<Expr, ParserError> {
+            let peek_token = parser.peek_token();
+            let span = peek_token.span;
+            match peek_token.token {
+                Token::DollarQuotedString(s) if dialect_of!(parser is PostgreSqlDialect | GenericDialect) =>
+                {
+                    parser.next_token();
+                    Ok(Expr::Value(Value::DollarQuotedString(s).with_span(span)))
+                }
+                _ => Ok(Expr::Value(
+                    Value::SingleQuotedString(parser.parse_literal_string()?).with_span(span),
+                )),
             }
-            _ => Ok(Expr::Value(
-                Value::SingleQuotedString(self.parse_literal_string()?).with_span(span),
-            )),
-        }
+        };
+
+        Ok(CreateFunctionBody::AsBeforeOptions {
+            body: parse_string_expr(self)?,
+            link_symbol: if self.consume_token(&Token::Comma) {
+                Some(parse_string_expr(self)?)
+            } else {
+                None
+            },
+        })
     }
 
     /// Parse a literal string

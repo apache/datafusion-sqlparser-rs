@@ -24,6 +24,7 @@ mod generic;
 mod hive;
 mod mssql;
 mod mysql;
+mod oracle;
 mod postgresql;
 mod redshift;
 mod snowflake;
@@ -45,6 +46,7 @@ pub use self::generic::GenericDialect;
 pub use self::hive::HiveDialect;
 pub use self::mssql::MsSqlDialect;
 pub use self::mysql::MySqlDialect;
+pub use self::oracle::OracleDialect;
 pub use self::postgresql::PostgreSqlDialect;
 pub use self::redshift::RedshiftSqlDialect;
 pub use self::snowflake::SnowflakeDialect;
@@ -83,6 +85,26 @@ macro_rules! dialect_is {
         ($($dialect.is::<$dialect_type>())||+)
     }
 }
+
+const DEFAULT_PREC_VALUE_PERIOD: u8 = 100;
+const DEFAULT_PREC_VALUE_DOUBLE_COLON: u8 = 50;
+const DEFAULT_PREC_VALUE_AT_TZ: u8 = 41;
+const DEFAULT_PREC_VALUE_MUL_DIV_MOD_OP: u8 = 40;
+const DEFAULT_PREC_VALUE_PLUS_MINUS: u8 = 30;
+const DEFAULT_PREC_VALUE_XOR: u8 = 24;
+const DEFAULT_PREC_VALUE_AMPERSAND: u8 = 23;
+const DEFAULT_PREC_VALUE_CARET: u8 = 22;
+const DEFAULT_PREC_VALUE_PIPE: u8 = 21;
+const DEFAULT_PREC_VALUE_BETWEEN: u8 = 20;
+const DEFAULT_PREC_VALUE_EQ: u8 = 20;
+const DEFAULT_PREC_VALUE_LIKE: u8 = 19;
+const DEFAULT_PREC_VALUE_IS: u8 = 17;
+const DEFAULT_PREC_VALUE_PG_OTHER: u8 = 16;
+const DEFAULT_PREC_VALUE_UNARY_NOT: u8 = 15;
+const DEFAULT_PREC_VALUE_AND: u8 = 10;
+const DEFAULT_PREC_VALUE_OR: u8 = 5;
+
+const DEFAULT_PREC_VALUE_UNKNOWN: u8 = 0;
 
 /// Encapsulates the differences between SQL implementations.
 ///
@@ -773,6 +795,36 @@ pub trait Dialect: Debug + Any {
         }
     }
 
+    /// Decide the lexical Precedence of operators.
+    ///
+    /// Uses (APPROXIMATELY) <https://www.postgresql.org/docs/7.0/operators.htm#AEN2026> as a reference
+    fn prec_value(&self, prec: Precedence) -> u8 {
+        match prec {
+            Precedence::Period => DEFAULT_PREC_VALUE_PERIOD,
+            Precedence::DoubleColon => DEFAULT_PREC_VALUE_DOUBLE_COLON,
+            Precedence::AtTz => DEFAULT_PREC_VALUE_AT_TZ,
+            Precedence::MulDivModOp => DEFAULT_PREC_VALUE_MUL_DIV_MOD_OP,
+            Precedence::PlusMinus => DEFAULT_PREC_VALUE_PLUS_MINUS,
+            Precedence::Xor => DEFAULT_PREC_VALUE_XOR,
+            Precedence::Ampersand => DEFAULT_PREC_VALUE_AMPERSAND,
+            Precedence::Caret => DEFAULT_PREC_VALUE_CARET,
+            Precedence::Pipe => DEFAULT_PREC_VALUE_PIPE,
+            Precedence::Between => DEFAULT_PREC_VALUE_BETWEEN,
+            Precedence::Eq => DEFAULT_PREC_VALUE_EQ,
+            Precedence::Like => DEFAULT_PREC_VALUE_LIKE,
+            Precedence::Is => DEFAULT_PREC_VALUE_IS,
+            Precedence::PgOther => DEFAULT_PREC_VALUE_PG_OTHER,
+            Precedence::UnaryNot => DEFAULT_PREC_VALUE_UNARY_NOT,
+            Precedence::And => DEFAULT_PREC_VALUE_AND,
+            Precedence::Or => DEFAULT_PREC_VALUE_OR,
+        }
+    }
+
+    /// Returns the precedence when the precedence is otherwise unknown
+    fn prec_unknown(&self) -> u8 {
+        DEFAULT_PREC_VALUE_UNKNOWN
+    }
+
     /// Dialect-specific statement parser override
     ///
     /// This method is called to parse the next statement.
@@ -794,36 +846,6 @@ pub trait Dialect: Debug + Any {
     ) -> Result<Option<Result<Option<ColumnOption>, ParserError>>, ParserError> {
         // return None to fall back to the default behavior
         Ok(None)
-    }
-
-    /// Decide the lexical Precedence of operators.
-    ///
-    /// Uses (APPROXIMATELY) <https://www.postgresql.org/docs/7.0/operators.htm#AEN2026> as a reference
-    fn prec_value(&self, prec: Precedence) -> u8 {
-        match prec {
-            Precedence::Period => 100,
-            Precedence::DoubleColon => 50,
-            Precedence::AtTz => 41,
-            Precedence::MulDivModOp => 40,
-            Precedence::PlusMinus => 30,
-            Precedence::Xor => 24,
-            Precedence::Ampersand => 23,
-            Precedence::Caret => 22,
-            Precedence::Pipe => 21,
-            Precedence::Between => 20,
-            Precedence::Eq => 20,
-            Precedence::Like => 19,
-            Precedence::Is => 17,
-            Precedence::PgOther => 16,
-            Precedence::UnaryNot => 15,
-            Precedence::And => 10,
-            Precedence::Or => 5,
-        }
-    }
-
-    /// Returns the precedence when the precedence is otherwise unknown
-    fn prec_unknown(&self) -> u8 {
-        0
     }
 
     /// Returns true if this dialect requires the `TABLE` keyword after `DESCRIBE`
@@ -1260,6 +1282,7 @@ pub fn dialect_from_str(dialect_name: impl AsRef<str>) -> Option<Box<dyn Dialect
         "ansi" => Some(Box::new(AnsiDialect {})),
         "duckdb" => Some(Box::new(DuckDbDialect {})),
         "databricks" => Some(Box::new(DatabricksDialect {})),
+        "oracle" => Some(Box::new(OracleDialect {})),
         _ => None,
     }
 }

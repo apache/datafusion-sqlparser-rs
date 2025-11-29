@@ -6911,6 +6911,61 @@ fn parse_drop_operator() {
 }
 
 #[test]
+fn parse_drop_operator_family() {
+    for if_exists in [true, false] {
+        for drop_behavior in [
+            None,
+            Some(DropBehavior::Cascade),
+            Some(DropBehavior::Restrict),
+        ] {
+            for index_method in &["btree", "hash", "gist", "gin", "spgist", "brin"] {
+                for (names_str, names_vec) in [
+                    (
+                        "float_ops",
+                        vec![ObjectName::from(vec![Ident::new("float_ops")])],
+                    ),
+                    (
+                        "myschema.custom_ops",
+                        vec![ObjectName::from(vec![
+                            Ident::new("myschema"),
+                            Ident::new("custom_ops"),
+                        ])],
+                    ),
+                    (
+                        "ops1, ops2, schema.ops3",
+                        vec![
+                            ObjectName::from(vec![Ident::new("ops1")]),
+                            ObjectName::from(vec![Ident::new("ops2")]),
+                            ObjectName::from(vec![Ident::new("schema"), Ident::new("ops3")]),
+                        ],
+                    ),
+                ] {
+                    let sql = format!(
+                        "DROP OPERATOR FAMILY{} {} USING {}{}",
+                        if if_exists { " IF EXISTS" } else { "" },
+                        names_str,
+                        index_method,
+                        match drop_behavior {
+                            Some(behavior) => format!(" {}", behavior),
+                            None => String::new(),
+                        }
+                    );
+                    assert_eq!(
+                        pg_and_generic().verified_stmt(&sql),
+                        Statement::DropOperatorFamily(DropOperatorFamily {
+                            if_exists,
+                            names: names_vec,
+                            using: Ident::new(*index_method),
+                            drop_behavior,
+                        })
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn parse_create_operator_family() {
     for index_method in &["btree", "hash", "gist", "gin", "spgist", "brin"] {
         assert_eq!(

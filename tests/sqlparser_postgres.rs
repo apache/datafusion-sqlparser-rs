@@ -23,7 +23,9 @@
 mod test_utils;
 
 use helpers::attached_token::AttachedToken;
-use sqlparser::ast::{DataType, DropBehavior, DropOperator, DropOperatorSignature};
+use sqlparser::ast::{
+    DataType, DropBehavior, DropOperator, DropOperatorClass, DropOperatorSignature,
+};
 use sqlparser::tokenizer::Span;
 use test_utils::*;
 
@@ -6908,6 +6910,14 @@ fn parse_drop_operator() {
             drop_behavior: Some(DropBehavior::Cascade),
         })
     );
+
+    // Test error: DROP OPERATOR with no operators
+    let sql = "DROP OPERATOR (INTEGER, INTEGER)";
+    assert!(pg().parse_sql_statements(sql).is_err());
+
+    // Test error: DROP OPERATOR IF EXISTS with no operators
+    let sql = "DROP OPERATOR IF EXISTS (INTEGER, INTEGER)";
+    assert!(pg().parse_sql_statements(sql).is_err());
 }
 
 #[test]
@@ -6963,6 +6973,77 @@ fn parse_drop_operator_family() {
             }
         }
     }
+
+    // Test error: DROP OPERATOR FAMILY with no names
+    let sql = "DROP OPERATOR FAMILY USING btree";
+    assert!(pg().parse_sql_statements(sql).is_err());
+
+    // Test error: DROP OPERATOR FAMILY IF EXISTS with no names
+    let sql = "DROP OPERATOR FAMILY IF EXISTS USING btree";
+    assert!(pg().parse_sql_statements(sql).is_err());
+}
+
+#[test]
+fn parse_drop_operator_class() {
+    for if_exists in [true, false] {
+        for drop_behavior in [
+            None,
+            Some(DropBehavior::Cascade),
+            Some(DropBehavior::Restrict),
+        ] {
+            for index_method in &["btree", "hash", "gist", "gin", "spgist", "brin"] {
+                for (names_str, names_vec) in [
+                    (
+                        "widget_ops",
+                        vec![ObjectName::from(vec![Ident::new("widget_ops")])],
+                    ),
+                    (
+                        "myschema.int4_ops",
+                        vec![ObjectName::from(vec![
+                            Ident::new("myschema"),
+                            Ident::new("int4_ops"),
+                        ])],
+                    ),
+                    (
+                        "ops1, ops2, schema.ops3",
+                        vec![
+                            ObjectName::from(vec![Ident::new("ops1")]),
+                            ObjectName::from(vec![Ident::new("ops2")]),
+                            ObjectName::from(vec![Ident::new("schema"), Ident::new("ops3")]),
+                        ],
+                    ),
+                ] {
+                    let sql = format!(
+                        "DROP OPERATOR CLASS{} {} USING {}{}",
+                        if if_exists { " IF EXISTS" } else { "" },
+                        names_str,
+                        index_method,
+                        match drop_behavior {
+                            Some(behavior) => format!(" {}", behavior),
+                            None => String::new(),
+                        }
+                    );
+                    assert_eq!(
+                        pg_and_generic().verified_stmt(&sql),
+                        Statement::DropOperatorClass(DropOperatorClass {
+                            if_exists,
+                            names: names_vec.clone(),
+                            using: Ident::new(*index_method),
+                            drop_behavior,
+                        })
+                    );
+                }
+            }
+        }
+    }
+
+    // Test error: DROP OPERATOR CLASS with no names
+    let sql = "DROP OPERATOR CLASS USING btree";
+    assert!(pg().parse_sql_statements(sql).is_err());
+
+    // Test error: DROP OPERATOR CLASS IF EXISTS with no names
+    let sql = "DROP OPERATOR CLASS IF EXISTS USING btree";
+    assert!(pg().parse_sql_statements(sql).is_err());
 }
 
 #[test]

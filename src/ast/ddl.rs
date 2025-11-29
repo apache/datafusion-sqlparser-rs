@@ -4288,3 +4288,40 @@ impl Spanned for DropOperatorFamily {
         Span::empty()
     }
 }
+
+/// `DROP OPERATOR CLASS` statement
+/// See <https://www.postgresql.org/docs/current/sql-dropopclass.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DropOperatorClass {
+    /// `IF EXISTS` clause
+    pub if_exists: bool,
+    /// One or more operator classes to drop
+    pub names: Vec<ObjectName>,
+    /// Index method (btree, hash, gist, gin, etc.)
+    pub using: Ident,
+    /// `CASCADE or RESTRICT`
+    pub drop_behavior: Option<DropBehavior>,
+}
+
+impl fmt::Display for DropOperatorClass {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "DROP OPERATOR CLASS")?;
+        if self.if_exists {
+            write!(f, " IF EXISTS")?;
+        }
+        write!(f, " {}", display_comma_separated(&self.names))?;
+        write!(f, " USING {}", self.using)?;
+        if let Some(drop_behavior) = &self.drop_behavior {
+            write!(f, " {}", drop_behavior)?;
+        }
+        Ok(())
+    }
+}
+
+impl Spanned for DropOperatorClass {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}

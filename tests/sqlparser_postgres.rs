@@ -2045,7 +2045,7 @@ fn parse_pg_returning() {
 fn test_operator(operator: &str, dialect: &TestedDialects, expected: BinaryOperator) {
     let operator_tokens =
         sqlparser::tokenizer::Tokenizer::new(&PostgreSqlDialect {}, &format!("a{operator}b"))
-            .tokenize()
+            .tokenized_owned()
             .unwrap();
     assert_eq!(
         operator_tokens.len(),

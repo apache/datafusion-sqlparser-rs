@@ -369,6 +369,7 @@ impl Spanned for Statement {
             Statement::CreateExtension(create_extension) => create_extension.span(),
             Statement::DropExtension(drop_extension) => drop_extension.span(),
             Statement::DropOperator(drop_operator) => drop_operator.span(),
+            Statement::DropOperatorFamily(drop_operator_family) => drop_operator_family.span(),
             Statement::CreateSecret { .. } => Span::empty(),
             Statement::CreateServer { .. } => Span::empty(),
             Statement::CreateConnector { .. } => Span::empty(),

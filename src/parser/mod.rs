@@ -6709,7 +6709,12 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::EXTENSION) {
             return self.parse_drop_extension();
         } else if self.parse_keyword(Keyword::OPERATOR) {
-            return self.parse_drop_operator();
+            // Check if this is DROP OPERATOR FAMILY
+            return if self.parse_keyword(Keyword::FAMILY) {
+                self.parse_drop_operator_family()
+            } else {
+                self.parse_drop_operator()
+            };
         } else {
             return self.expected(
                 "CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW or USER after DROP",
@@ -7506,6 +7511,23 @@ impl<'a> Parser<'a> {
             left_type,
             right_type,
         })
+    }
+
+    /// Parse a [Statement::DropOperatorFamily]
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-dropopfamily.html)
+    pub fn parse_drop_operator_family(&mut self) -> Result<Statement, ParserError> {
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let names = self.parse_comma_separated(|p| p.parse_object_name(false))?;
+        self.expect_keyword(Keyword::USING)?;
+        let using = self.parse_identifier()?;
+        let drop_behavior = self.parse_optional_drop_behavior();
+        Ok(Statement::DropOperatorFamily(DropOperatorFamily {
+            if_exists,
+            names,
+            using,
+            drop_behavior,
+        }))
     }
 
     //TODO: Implement parsing for Skewed

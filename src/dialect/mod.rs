@@ -53,7 +53,7 @@ use crate::ast::{ColumnOption, Expr, GranteesType, Ident, ObjectNamePart, Statem
 pub use crate::keywords;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
-use crate::tokenizer::Token;
+use crate::tokenizer::BorrowedToken;
 
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
@@ -655,16 +655,16 @@ pub trait Dialect: Debug + Any {
         let token = parser.peek_token();
         debug!("get_next_precedence_full() {token:?}");
         match token.token {
-            Token::Word(w) if w.keyword == Keyword::OR => Ok(p!(Or)),
-            Token::Word(w) if w.keyword == Keyword::AND => Ok(p!(And)),
-            Token::Word(w) if w.keyword == Keyword::XOR => Ok(p!(Xor)),
+            BorrowedToken::Word(w) if w.keyword == Keyword::OR => Ok(p!(Or)),
+            BorrowedToken::Word(w) if w.keyword == Keyword::AND => Ok(p!(And)),
+            BorrowedToken::Word(w) if w.keyword == Keyword::XOR => Ok(p!(Xor)),
 
-            Token::Word(w) if w.keyword == Keyword::AT => {
+            BorrowedToken::Word(w) if w.keyword == Keyword::AT => {
                 match (
                     parser.peek_nth_token(1).token,
                     parser.peek_nth_token(2).token,
                 ) {
-                    (Token::Word(w), Token::Word(w2))
+                    (BorrowedToken::Word(w), BorrowedToken::Word(w2))
                         if w.keyword == Keyword::TIME && w2.keyword == Keyword::ZONE =>
                     {
                         Ok(p!(AtTz))
@@ -673,102 +673,112 @@ pub trait Dialect: Debug + Any {
                 }
             }
 
-            Token::Word(w) if w.keyword == Keyword::NOT => match parser.peek_nth_token(1).token {
-                // The precedence of NOT varies depending on keyword that
-                // follows it. If it is followed by IN, BETWEEN, or LIKE,
-                // it takes on the precedence of those tokens. Otherwise, it
-                // is not an infix operator, and therefore has zero
-                // precedence.
-                Token::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
-                Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
-                Token::Word(w) if w.keyword == Keyword::LIKE => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::MATCH => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::MEMBER => Ok(p!(Like)),
-                Token::Word(w)
-                    if w.keyword == Keyword::NULL && !parser.in_column_definition_state() =>
-                {
-                    Ok(p!(Is))
+            BorrowedToken::Word(w) if w.keyword == Keyword::NOT => {
+                match parser.peek_nth_token(1).token {
+                    // The precedence of NOT varies depending on keyword that
+                    // follows it. If it is followed by IN, BETWEEN, or LIKE,
+                    // it takes on the precedence of those tokens. Otherwise, it
+                    // is not an infix operator, and therefore has zero
+                    // precedence.
+                    BorrowedToken::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
+                    BorrowedToken::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
+                    BorrowedToken::Word(w) if w.keyword == Keyword::LIKE => Ok(p!(Like)),
+                    BorrowedToken::Word(w) if w.keyword == Keyword::ILIKE => Ok(p!(Like)),
+                    BorrowedToken::Word(w) if w.keyword == Keyword::RLIKE => Ok(p!(Like)),
+                    BorrowedToken::Word(w) if w.keyword == Keyword::REGEXP => Ok(p!(Like)),
+                    BorrowedToken::Word(w) if w.keyword == Keyword::MATCH => Ok(p!(Like)),
+                    BorrowedToken::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
+                    BorrowedToken::Word(w) if w.keyword == Keyword::MEMBER => Ok(p!(Like)),
+                    BorrowedToken::Word(w)
+                        if w.keyword == Keyword::NULL && !parser.in_column_definition_state() =>
+                    {
+                        Ok(p!(Is))
+                    }
+                    _ => Ok(self.prec_unknown()),
                 }
-                _ => Ok(self.prec_unknown()),
-            },
-            Token::Word(w) if w.keyword == Keyword::NOTNULL && self.supports_notnull_operator() => {
+            }
+            BorrowedToken::Word(w)
+                if w.keyword == Keyword::NOTNULL && self.supports_notnull_operator() =>
+            {
                 Ok(p!(Is))
             }
-            Token::Word(w) if w.keyword == Keyword::IS => Ok(p!(Is)),
-            Token::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
-            Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
-            Token::Word(w) if w.keyword == Keyword::OVERLAPS => Ok(p!(Between)),
-            Token::Word(w) if w.keyword == Keyword::LIKE => Ok(p!(Like)),
-            Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(p!(Like)),
-            Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(p!(Like)),
-            Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(p!(Like)),
-            Token::Word(w) if w.keyword == Keyword::MATCH => Ok(p!(Like)),
-            Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
-            Token::Word(w) if w.keyword == Keyword::MEMBER => Ok(p!(Like)),
-            Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(p!(Between)),
-            Token::Word(w) if w.keyword == Keyword::DIV => Ok(p!(MulDivModOp)),
-            Token::Period => Ok(p!(Period)),
-            Token::Assignment
-            | Token::Eq
-            | Token::Lt
-            | Token::LtEq
-            | Token::Neq
-            | Token::Gt
-            | Token::GtEq
-            | Token::DoubleEq
-            | Token::Tilde
-            | Token::TildeAsterisk
-            | Token::ExclamationMarkTilde
-            | Token::ExclamationMarkTildeAsterisk
-            | Token::DoubleTilde
-            | Token::DoubleTildeAsterisk
-            | Token::ExclamationMarkDoubleTilde
-            | Token::ExclamationMarkDoubleTildeAsterisk
-            | Token::Spaceship => Ok(p!(Eq)),
-            Token::Pipe
-            | Token::QuestionMarkDash
-            | Token::DoubleSharp
-            | Token::Overlap
-            | Token::AmpersandLeftAngleBracket
-            | Token::AmpersandRightAngleBracket
-            | Token::QuestionMarkDashVerticalBar
-            | Token::AmpersandLeftAngleBracketVerticalBar
-            | Token::VerticalBarAmpersandRightAngleBracket
-            | Token::TwoWayArrow
-            | Token::LeftAngleBracketCaret
-            | Token::RightAngleBracketCaret
-            | Token::QuestionMarkSharp
-            | Token::QuestionMarkDoubleVerticalBar
-            | Token::QuestionPipe
-            | Token::TildeEqual
-            | Token::AtSign
-            | Token::ShiftLeftVerticalBar
-            | Token::VerticalBarShiftRight => Ok(p!(Pipe)),
-            Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => Ok(p!(Caret)),
-            Token::Ampersand => Ok(p!(Ampersand)),
-            Token::Plus | Token::Minus => Ok(p!(PlusMinus)),
-            Token::Mul | Token::Div | Token::DuckIntDiv | Token::Mod | Token::StringConcat => {
-                Ok(p!(MulDivModOp))
-            }
-            Token::DoubleColon | Token::ExclamationMark | Token::LBracket | Token::CaretAt => {
-                Ok(p!(DoubleColon))
-            }
-            Token::Arrow
-            | Token::LongArrow
-            | Token::HashArrow
-            | Token::HashLongArrow
-            | Token::AtArrow
-            | Token::ArrowAt
-            | Token::HashMinus
-            | Token::AtQuestion
-            | Token::AtAt
-            | Token::Question
-            | Token::QuestionAnd
-            | Token::CustomBinaryOperator(_) => Ok(p!(PgOther)),
+            BorrowedToken::Word(w) if w.keyword == Keyword::IS => Ok(p!(Is)),
+            BorrowedToken::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
+            BorrowedToken::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
+            BorrowedToken::Word(w) if w.keyword == Keyword::OVERLAPS => Ok(p!(Between)),
+            BorrowedToken::Word(w) if w.keyword == Keyword::LIKE => Ok(p!(Like)),
+            BorrowedToken::Word(w) if w.keyword == Keyword::ILIKE => Ok(p!(Like)),
+            BorrowedToken::Word(w) if w.keyword == Keyword::RLIKE => Ok(p!(Like)),
+            BorrowedToken::Word(w) if w.keyword == Keyword::REGEXP => Ok(p!(Like)),
+            BorrowedToken::Word(w) if w.keyword == Keyword::MATCH => Ok(p!(Like)),
+            BorrowedToken::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
+            BorrowedToken::Word(w) if w.keyword == Keyword::MEMBER => Ok(p!(Like)),
+            BorrowedToken::Word(w) if w.keyword == Keyword::OPERATOR => Ok(p!(Between)),
+            BorrowedToken::Word(w) if w.keyword == Keyword::DIV => Ok(p!(MulDivModOp)),
+            BorrowedToken::Period => Ok(p!(Period)),
+            BorrowedToken::Assignment
+            | BorrowedToken::Eq
+            | BorrowedToken::Lt
+            | BorrowedToken::LtEq
+            | BorrowedToken::Neq
+            | BorrowedToken::Gt
+            | BorrowedToken::GtEq
+            | BorrowedToken::DoubleEq
+            | BorrowedToken::Tilde
+            | BorrowedToken::TildeAsterisk
+            | BorrowedToken::ExclamationMarkTilde
+            | BorrowedToken::ExclamationMarkTildeAsterisk
+            | BorrowedToken::DoubleTilde
+            | BorrowedToken::DoubleTildeAsterisk
+            | BorrowedToken::ExclamationMarkDoubleTilde
+            | BorrowedToken::ExclamationMarkDoubleTildeAsterisk
+            | BorrowedToken::Spaceship => Ok(p!(Eq)),
+            BorrowedToken::Pipe
+            | BorrowedToken::QuestionMarkDash
+            | BorrowedToken::DoubleSharp
+            | BorrowedToken::Overlap
+            | BorrowedToken::AmpersandLeftAngleBracket
+            | BorrowedToken::AmpersandRightAngleBracket
+            | BorrowedToken::QuestionMarkDashVerticalBar
+            | BorrowedToken::AmpersandLeftAngleBracketVerticalBar
+            | BorrowedToken::VerticalBarAmpersandRightAngleBracket
+            | BorrowedToken::TwoWayArrow
+            | BorrowedToken::LeftAngleBracketCaret
+            | BorrowedToken::RightAngleBracketCaret
+            | BorrowedToken::QuestionMarkSharp
+            | BorrowedToken::QuestionMarkDoubleVerticalBar
+            | BorrowedToken::QuestionPipe
+            | BorrowedToken::TildeEqual
+            | BorrowedToken::AtSign
+            | BorrowedToken::ShiftLeftVerticalBar
+            | BorrowedToken::VerticalBarShiftRight => Ok(p!(Pipe)),
+            BorrowedToken::Caret
+            | BorrowedToken::Sharp
+            | BorrowedToken::ShiftRight
+            | BorrowedToken::ShiftLeft => Ok(p!(Caret)),
+            BorrowedToken::Ampersand => Ok(p!(Ampersand)),
+            BorrowedToken::Plus | BorrowedToken::Minus => Ok(p!(PlusMinus)),
+            BorrowedToken::Mul
+            | BorrowedToken::Div
+            | BorrowedToken::DuckIntDiv
+            | BorrowedToken::Mod
+            | BorrowedToken::StringConcat => Ok(p!(MulDivModOp)),
+            BorrowedToken::DoubleColon
+            | BorrowedToken::ExclamationMark
+            | BorrowedToken::LBracket
+            | BorrowedToken::CaretAt => Ok(p!(DoubleColon)),
+            BorrowedToken::Arrow
+            | BorrowedToken::LongArrow
+            | BorrowedToken::HashArrow
+            | BorrowedToken::HashLongArrow
+            | BorrowedToken::AtArrow
+            | BorrowedToken::ArrowAt
+            | BorrowedToken::HashMinus
+            | BorrowedToken::AtQuestion
+            | BorrowedToken::AtAt
+            | BorrowedToken::Question
+            | BorrowedToken::QuestionAnd
+            | BorrowedToken::CustomBinaryOperator(_) => Ok(p!(PgOther)),
             _ => Ok(self.prec_unknown()),
         }
     }

@@ -26,7 +26,7 @@ use crate::{
     },
     dialect::{MsSqlDialect, PostgreSqlDialect},
     keywords::Keyword,
-    tokenizer::Token,
+    tokenizer::BorrowedToken,
 };
 
 impl Parser<'_> {
@@ -74,18 +74,18 @@ impl Parser<'_> {
             };
 
             let using = if self.parse_keyword(Keyword::USING) {
-                self.expect_token(&Token::LParen)?;
+                self.expect_token(&BorrowedToken::LParen)?;
                 let expr = self.parse_expr()?;
-                self.expect_token(&Token::RParen)?;
+                self.expect_token(&BorrowedToken::RParen)?;
                 Some(expr)
             } else {
                 None
             };
 
             let with_check = if self.parse_keywords(&[Keyword::WITH, Keyword::CHECK]) {
-                self.expect_token(&Token::LParen)?;
+                self.expect_token(&BorrowedToken::LParen)?;
                 let expr = self.parse_expr()?;
-                self.expect_token(&Token::RParen)?;
+                self.expect_token(&BorrowedToken::RParen)?;
                 Some(expr)
             } else {
                 None
@@ -216,7 +216,7 @@ impl Parser<'_> {
         let add_mfa_method_otp =
             if self.parse_keywords(&[Keyword::ADD, Keyword::MFA, Keyword::METHOD, Keyword::OTP]) {
                 let count = if self.parse_keyword(Keyword::COUNT) {
-                    self.expect_token(&Token::Eq)?;
+                    self.expect_token(&BorrowedToken::Eq)?;
                     Some(self.parse_value()?.into())
                 } else {
                     None
@@ -336,7 +336,7 @@ impl Parser<'_> {
             let member_name = self.parse_identifier()?;
             AlterRoleOperation::DropMember { member_name }
         } else if self.parse_keywords(&[Keyword::WITH, Keyword::NAME]) {
-            if self.consume_token(&Token::Eq) {
+            if self.consume_token(&BorrowedToken::Eq) {
                 let role_name = self.parse_identifier()?;
                 AlterRoleOperation::RenameRole { role_name }
             } else {
@@ -380,7 +380,7 @@ impl Parser<'_> {
                     in_database,
                 }
             // { TO | = } { value | DEFAULT }
-            } else if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
+            } else if self.consume_token(&BorrowedToken::Eq) || self.parse_keyword(Keyword::TO) {
                 if self.parse_keyword(Keyword::DEFAULT) {
                     AlterRoleOperation::Set {
                         config_name,

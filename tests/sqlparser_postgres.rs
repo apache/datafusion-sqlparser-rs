@@ -6976,11 +6976,11 @@ fn parse_drop_operator_family() {
 
     // Test error: DROP OPERATOR FAMILY with no names
     let sql = "DROP OPERATOR FAMILY USING btree";
-    assert!(pg().parse_sql_statements(sql).is_err());
+    assert!(pg_and_generic().parse_sql_statements(sql).is_err());
 
     // Test error: DROP OPERATOR FAMILY IF EXISTS with no names
     let sql = "DROP OPERATOR FAMILY IF EXISTS USING btree";
-    assert!(pg().parse_sql_statements(sql).is_err());
+    assert!(pg_and_generic().parse_sql_statements(sql).is_err());
 }
 
 #[test]
@@ -7039,18 +7039,18 @@ fn parse_drop_operator_class() {
 
     // Test error: DROP OPERATOR CLASS with no names
     let sql = "DROP OPERATOR CLASS USING btree";
-    assert!(pg().parse_sql_statements(sql).is_err());
+    assert!(pg_and_generic().parse_sql_statements(sql).is_err());
 
     // Test error: DROP OPERATOR CLASS IF EXISTS with no names
     let sql = "DROP OPERATOR CLASS IF EXISTS USING btree";
-    assert!(pg().parse_sql_statements(sql).is_err());
+    assert!(pg_and_generic().parse_sql_statements(sql).is_err());
 }
 
 #[test]
 fn parse_create_operator_family() {
     for index_method in &["btree", "hash", "gist", "gin", "spgist", "brin"] {
         assert_eq!(
-            pg().verified_stmt(&format!(
+            pg_and_generic().verified_stmt(&format!(
                 "CREATE OPERATOR FAMILY my_family USING {index_method}"
             )),
             Statement::CreateOperatorFamily(CreateOperatorFamily {
@@ -7059,7 +7059,7 @@ fn parse_create_operator_family() {
             })
         );
         assert_eq!(
-            pg().verified_stmt(&format!(
+            pg_and_generic().verified_stmt(&format!(
                 "CREATE OPERATOR FAMILY myschema.test_family USING {index_method}"
             )),
             Statement::CreateOperatorFamily(CreateOperatorFamily {
@@ -7085,7 +7085,7 @@ fn parse_create_operator_class() {
                 let sql = format!(
                     "CREATE OPERATOR CLASS {class_name} {default_clause}FOR TYPE INT4 USING btree{family_clause} AS OPERATOR 1 <"
                 );
-                match pg().verified_stmt(&sql) {
+                match pg_and_generic().verified_stmt(&sql) {
                     Statement::CreateOperatorClass(CreateOperatorClass {
                         name,
                         default,
@@ -7115,7 +7115,7 @@ fn parse_create_operator_class() {
     }
 
     // Test comprehensive operator class with all fields
-    match pg().verified_stmt("CREATE OPERATOR CLASS CAS_btree_ops DEFAULT FOR TYPE CAS USING btree FAMILY CAS_btree_ops AS OPERATOR 1 <, OPERATOR 2 <=, OPERATOR 3 =, OPERATOR 4 >=, OPERATOR 5 >, FUNCTION 1 cas_cmp(CAS, CAS)") {
+    match pg_and_generic().verified_stmt("CREATE OPERATOR CLASS CAS_btree_ops DEFAULT FOR TYPE CAS USING btree FAMILY CAS_btree_ops AS OPERATOR 1 <, OPERATOR 2 <=, OPERATOR 3 =, OPERATOR 4 >=, OPERATOR 5 >, FUNCTION 1 cas_cmp(CAS, CAS)") {
         Statement::CreateOperatorClass(CreateOperatorClass {
             name,
             default: true,
@@ -7134,7 +7134,7 @@ fn parse_create_operator_class() {
     }
 
     // Test operator with argument types
-    match pg().verified_stmt(
+    match pg_and_generic().verified_stmt(
         "CREATE OPERATOR CLASS test_ops FOR TYPE INT4 USING gist AS OPERATOR 1 < (INT4, INT4)",
     ) {
         Statement::CreateOperatorClass(CreateOperatorClass { ref items, .. }) => {
@@ -7159,7 +7159,7 @@ fn parse_create_operator_class() {
     }
 
     // Test operator FOR SEARCH
-    match pg().verified_stmt(
+    match pg_and_generic().verified_stmt(
         "CREATE OPERATOR CLASS test_ops FOR TYPE INT4 USING gist AS OPERATOR 1 < FOR SEARCH",
     ) {
         Statement::CreateOperatorClass(CreateOperatorClass { ref items, .. }) => {
@@ -7203,7 +7203,7 @@ fn parse_create_operator_class() {
     }
 
     // Test function with operator class arg types
-    match pg().verified_stmt("CREATE OPERATOR CLASS test_ops FOR TYPE INT4 USING btree AS FUNCTION 1 (INT4, INT4) btcmp(INT4, INT4)") {
+    match pg_and_generic().verified_stmt("CREATE OPERATOR CLASS test_ops FOR TYPE INT4 USING btree AS FUNCTION 1 (INT4, INT4) btcmp(INT4, INT4)") {
         Statement::CreateOperatorClass(CreateOperatorClass {
             ref items,
             ..
@@ -7226,11 +7226,11 @@ fn parse_create_operator_class() {
     }
 
     // Test function with no arguments (empty parentheses normalizes to no parentheses)
-    pg().one_statement_parses_to(
+    pg_and_generic().one_statement_parses_to(
         "CREATE OPERATOR CLASS test_ops FOR TYPE INT4 USING btree AS FUNCTION 1 my_func()",
         "CREATE OPERATOR CLASS test_ops FOR TYPE INT4 USING btree AS FUNCTION 1 my_func",
     );
-    match pg().verified_stmt(
+    match pg_and_generic().verified_stmt(
         "CREATE OPERATOR CLASS test_ops FOR TYPE INT4 USING btree AS FUNCTION 1 my_func",
     ) {
         Statement::CreateOperatorClass(CreateOperatorClass { ref items, .. }) => {
@@ -7255,7 +7255,7 @@ fn parse_create_operator_class() {
     }
 
     // Test multiple items including STORAGE
-    match pg().verified_stmt("CREATE OPERATOR CLASS gist_ops FOR TYPE geometry USING gist AS OPERATOR 1 <<, FUNCTION 1 gist_consistent(internal, geometry, INT4), STORAGE box") {
+    match pg_and_generic().verified_stmt("CREATE OPERATOR CLASS gist_ops FOR TYPE geometry USING gist AS OPERATOR 1 <<, FUNCTION 1 gist_consistent(internal, geometry, INT4), STORAGE box") {
         Statement::CreateOperatorClass(CreateOperatorClass {
             ref items,
             ..

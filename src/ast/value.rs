@@ -167,6 +167,12 @@ pub enum Value {
     TripleDoubleQuotedRawStringLiteral(String),
     /// N'string value'
     NationalStringLiteral(String),
+    /// Quote delimited literal. Examples `Q'{ab'c}'`, `Q'|ab'c|'`, `Q'|ab|c|'`
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Literals.html)
+    QuoteDelimitedStringLiteral(char, String, char),
+    /// "National" quote delimited literal. Examples `Q'{ab'c}'`, `Q'|ab'c|'`, `Q'|ab|c|'`
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Literals.html)
+    NationalQuoteDelimitedStringLiteral(char, String, char),
     /// X'hex value'
     HexStringLiteral(String),
 
@@ -205,6 +211,8 @@ impl Value {
             | Value::EscapedStringLiteral(s)
             | Value::UnicodeStringLiteral(s)
             | Value::NationalStringLiteral(s)
+            | Value::QuoteDelimitedStringLiteral(_, s, _)
+            | Value::NationalQuoteDelimitedStringLiteral(_, s, _)
             | Value::HexStringLiteral(s) => Some(s),
             Value::DollarQuotedString(s) => Some(s.value),
             _ => None,
@@ -242,6 +250,8 @@ impl fmt::Display for Value {
             Value::EscapedStringLiteral(v) => write!(f, "E'{}'", escape_escaped_string(v)),
             Value::UnicodeStringLiteral(v) => write!(f, "U&'{}'", escape_unicode_string(v)),
             Value::NationalStringLiteral(v) => write!(f, "N'{v}'"),
+            Value::QuoteDelimitedStringLiteral(q1, s, q2) => write!(f, "Q'{q1}{s}{q2}'"),
+            Value::NationalQuoteDelimitedStringLiteral(q1, s, q2) => write!(f, "NQ'{q1}{s}{q2}'"),
             Value::HexStringLiteral(v) => write!(f, "X'{v}'"),
             Value::Boolean(v) => write!(f, "{v}"),
             Value::SingleQuotedByteStringLiteral(v) => write!(f, "B'{v}'"),

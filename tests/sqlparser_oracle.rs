@@ -24,11 +24,12 @@ extern crate core;
 use pretty_assertions::assert_eq;
 
 use sqlparser::{
-    ast::{Expr, SelectItem, Value},
+    ast::{Expr, Ident, SelectItem, Value},
     dialect::OracleDialect,
+    tokenizer::Span,
 };
 #[cfg(test)]
-use test_utils::TestedDialects;
+use test_utils::{expr_from_projection, TestedDialects};
 
 mod test_utils;
 
@@ -60,6 +61,170 @@ fn plusminus_have_lower_precedence_than_strconcat() {
             &format!("SELECT (1 {op} (2 || 'asdf')) FROM dual")
         );
     }
+}
+
+#[test]
+fn parse_quote_delimited_string() {
+    let sql = "SELECT Q'.abc.', \
+                      Q'Xab'cX', \
+                      Q'|abc'''|', \
+                      Q'{abc}d}', \
+                      Q'[]abc[]', \
+                      Q'<a'bc>', \
+                      Q'<<<a'bc>', \
+                      Q'('abc'('abc)', \
+                      Q'(abc'def))', \
+                      Q'(abc'def)))' \
+                 FROM dual";
+    let select = oracle_dialect().verified_only_select(sql);
+    assert_eq!(10, select.projection.len());
+    assert_eq!(
+        &Expr::Value(Value::QuoteDelimitedStringLiteral('.', "abc".into(), '.').with_empty_span()),
+        expr_from_projection(&select.projection[0])
+    );
+    assert_eq!(
+        &Expr::Value(
+            (Value::QuoteDelimitedStringLiteral('X', "ab'c".into(), 'X')).with_empty_span()
+        ),
+        expr_from_projection(&select.projection[1])
+    );
+    assert_eq!(
+        &Expr::Value(
+            (Value::QuoteDelimitedStringLiteral('|', "abc'''".into(), '|')).with_empty_span()
+        ),
+        expr_from_projection(&select.projection[2])
+    );
+    assert_eq!(
+        &Expr::Value(
+            (Value::QuoteDelimitedStringLiteral('{', "abc}d".into(), '}')).with_empty_span()
+        ),
+        expr_from_projection(&select.projection[3])
+    );
+    assert_eq!(
+        &Expr::Value(
+            (Value::QuoteDelimitedStringLiteral('[', "]abc[".into(), ']')).with_empty_span()
+        ),
+        expr_from_projection(&select.projection[4])
+    );
+    assert_eq!(
+        &Expr::Value(
+            (Value::QuoteDelimitedStringLiteral('<', "a'bc".into(), '>')).with_empty_span()
+        ),
+        expr_from_projection(&select.projection[5])
+    );
+    assert_eq!(
+        &Expr::Value(
+            (Value::QuoteDelimitedStringLiteral('<', "<<a'bc".into(), '>')).with_empty_span()
+        ),
+        expr_from_projection(&select.projection[6])
+    );
+    assert_eq!(
+        &Expr::Value(
+            (Value::QuoteDelimitedStringLiteral('(', "'abc'('abc".into(), ')')).with_empty_span()
+        ),
+        expr_from_projection(&select.projection[7])
+    );
+    assert_eq!(
+        &Expr::Value(
+            (Value::QuoteDelimitedStringLiteral('(', "abc'def)".into(), ')')).with_empty_span()
+        ),
+        expr_from_projection(&select.projection[8])
+    );
+    assert_eq!(
+        &Expr::Value(
+            (Value::QuoteDelimitedStringLiteral('(', "abc'def))".into(), ')')).with_empty_span()
+        ),
+        expr_from_projection(&select.projection[9])
+    );
+}
+
+#[test]
+fn parse_quote_delimited_string_lowercase() {
+    let sql = "select q'!a'b'c!d!' from dual";
+    let select =
+        oracle_dialect().verified_only_select_with_canonical(sql, "SELECT Q'!a'b'c!d!' FROM dual");
+    assert_eq!(1, select.projection.len());
+    assert_eq!(
+        &Expr::Value(
+            Value::QuoteDelimitedStringLiteral('!', "a'b'c!d".into(), '!').with_empty_span()
+        ),
+        expr_from_projection(&select.projection[0])
+    );
+}
+
+#[test]
+fn parse_quote_delimited_string_but_is_a_word() {
+    let sql = "SELECT q, quux, q.abc FROM dual q";
+    let select = oracle_dialect().verified_only_select(sql);
+    assert_eq!(3, select.projection.len());
+    assert_eq!(
+        &Expr::Identifier(Ident::with_span(Span::empty(), "q")),
+        expr_from_projection(&select.projection[0])
+    );
+    assert_eq!(
+        &Expr::Identifier(Ident::with_span(Span::empty(), "quux")),
+        expr_from_projection(&select.projection[1])
+    );
+    assert_eq!(
+        &Expr::CompoundIdentifier(vec![
+            Ident::with_span(Span::empty(), "q"),
+            Ident::with_span(Span::empty(), "abc")
+        ]),
+        expr_from_projection(&select.projection[2])
+    );
+}
+
+#[test]
+fn parse_national_quote_delimited_string() {
+    let sql = "SELECT NQ'.abc.' FROM dual";
+    let select = oracle_dialect().verified_only_select(sql);
+    assert_eq!(1, select.projection.len());
+    assert_eq!(
+        &Expr::Value(
+            Value::NationalQuoteDelimitedStringLiteral('.', "abc".into(), '.').with_empty_span()
+        ),
+        expr_from_projection(&select.projection[0])
+    );
+}
+
+#[test]
+fn parse_national_quote_delimited_string_lowercase() {
+    for prefix in ["nq", "Nq", "nQ", "NQ"] {
+        let select = oracle_dialect().verified_only_select_with_canonical(
+            &format!("select {prefix}'!a'b'c!d!' from dual"),
+            "SELECT NQ'!a'b'c!d!' FROM dual",
+        );
+        assert_eq!(1, select.projection.len());
+        assert_eq!(
+            &Expr::Value(
+                Value::NationalQuoteDelimitedStringLiteral('!', "a'b'c!d".into(), '!')
+                    .with_empty_span()
+            ),
+            expr_from_projection(&select.projection[0])
+        );
+    }
+}
+
+#[test]
+fn parse_national_quote_delimited_string_but_is_a_word() {
+    let sql = "SELECT nq, nqoo, nq.abc FROM dual q";
+    let select = oracle_dialect().verified_only_select(sql);
+    assert_eq!(3, select.projection.len());
+    assert_eq!(
+        &Expr::Identifier(Ident::with_span(Span::empty(), "nq")),
+        expr_from_projection(&select.projection[0])
+    );
+    assert_eq!(
+        &Expr::Identifier(Ident::with_span(Span::empty(), "nqoo")),
+        expr_from_projection(&select.projection[1])
+    );
+    assert_eq!(
+        &Expr::CompoundIdentifier(vec![
+            Ident::with_span(Span::empty(), "nq"),
+            Ident::with_span(Span::empty(), "abc")
+        ]),
+        expr_from_projection(&select.projection[2])
+    );
 }
 
 fn oracle_dialect() -> TestedDialects {

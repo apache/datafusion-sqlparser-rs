@@ -1704,6 +1704,8 @@ impl<'a> Parser<'a> {
             | Token::TripleSingleQuotedRawStringLiteral(_)
             | Token::TripleDoubleQuotedRawStringLiteral(_)
             | Token::NationalStringLiteral(_)
+            | Token::QuoteDelimitedStringLiteral(_, _, _)
+            | Token::NationalQuoteDelimitedStringLiteral(_, _, _)
             | Token::HexStringLiteral(_) => {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
@@ -2716,6 +2718,8 @@ impl<'a> Parser<'a> {
                     | Token::EscapedStringLiteral(_)
                     | Token::UnicodeStringLiteral(_)
                     | Token::NationalStringLiteral(_)
+                    | Token::QuoteDelimitedStringLiteral(_, _, _)
+                    | Token::NationalQuoteDelimitedStringLiteral(_, _, _)
                     | Token::HexStringLiteral(_) => Some(Box::new(self.parse_expr()?)),
                     _ => self.expected(
                         "either filler, WITH, or WITHOUT in LISTAGG",
@@ -10482,6 +10486,12 @@ impl<'a> Parser<'a> {
             }
             Token::NationalStringLiteral(ref s) => {
                 ok_value(Value::NationalStringLiteral(s.to_string()))
+            }
+            Token::QuoteDelimitedStringLiteral(q1, s, q2) => {
+                ok_value(Value::QuoteDelimitedStringLiteral(q1, s, q2))
+            }
+            Token::NationalQuoteDelimitedStringLiteral(q1, s, q2) => {
+                ok_value(Value::NationalQuoteDelimitedStringLiteral(q1, s, q2))
             }
             Token::EscapedStringLiteral(ref s) => {
                 ok_value(Value::EscapedStringLiteral(s.to_string()))

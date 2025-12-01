@@ -1003,7 +1003,7 @@ impl fmt::Display for AlterTypeOperation {
 pub struct AlterOperator {
     /// Operator name (can be schema-qualified)
     pub name: ObjectName,
-    /// Left operand type (`NONE` if no left operand)
+    /// Left operand type (`None` if no left operand)
     pub left_type: Option<DataType>,
     /// Right operand type
     pub right_type: DataType,

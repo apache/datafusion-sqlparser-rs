@@ -15,7 +15,14 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use super::Dialect;
+use log::debug;
+
+use crate::{
+    parser::{Parser, ParserError},
+    tokenizer::Token,
+};
+
+use super::{Dialect, Precedence};
 
 /// A [`Dialect`] for [Oracle Databases](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/index.html)
 #[derive(Debug)]
@@ -73,6 +80,35 @@ impl Dialect for OracleDialect {
 
     fn supports_set_stmt_without_operator(&self) -> bool {
         true
+    }
+
+    fn get_next_precedence(&self, _parser: &Parser) -> Option<Result<u8, ParserError>> {
+        let t = _parser.peek_token();
+        debug!("get_next_precedence() {t:?}");
+
+        match t.token {
+            Token::StringConcat => Some(Ok(self.prec_value(Precedence::PlusMinus))),
+            _ => None,
+        }
+    }
+
+    fn prec_value(&self, prec: Precedence) -> u8 {
+        match prec {
+            Precedence::Period => 100,
+            Precedence::DoubleColon => 50,
+            Precedence::AtTz => 41,
+            Precedence::MulDivModOp => 40,
+            Precedence::PlusMinus => 30,
+            Precedence::Xor => 24,
+            Precedence::Ampersand => 23,
+            Precedence::Caret => 22,
+            Precedence::Pipe => 21,
+            Precedence::Between | Precedence::Eq | Precedence::Like | Precedence::Is => 20,
+            Precedence::PgOther => 16,
+            Precedence::UnaryNot => 15,
+            Precedence::And => 10,
+            Precedence::Or => 5,
+        }
     }
 
     fn supports_group_by_expr(&self) -> bool {

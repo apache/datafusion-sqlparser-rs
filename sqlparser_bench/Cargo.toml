@@ -26,7 +26,7 @@ edition = "2018"
 sqlparser = { path = "../" }
 
 [dev-dependencies]
-criterion = "0.7"
+criterion = "0.8"
 
 [[bench]]
 name = "sqlparser_bench"

@@ -6479,12 +6479,7 @@ impl<'a> Parser<'a> {
         let mut is_procedure = false;
         let mut left_arg: Option<DataType> = None;
         let mut right_arg: Option<DataType> = None;
-        let mut commutator: Option<ObjectName> = None;
-        let mut negator: Option<ObjectName> = None;
-        let mut restrict: Option<ObjectName> = None;
-        let mut join: Option<ObjectName> = None;
-        let mut hashes = false;
-        let mut merges = false;
+        let mut options: Vec<OperatorOption> = Vec::new();
 
         loop {
             let keyword = self.expect_one_of_keywords(&[
@@ -6501,11 +6496,11 @@ impl<'a> Parser<'a> {
             ])?;
 
             match keyword {
-                Keyword::HASHES if !hashes => {
-                    hashes = true;
+                Keyword::HASHES if !options.iter().any(|o| matches!(o, OperatorOption::Hashes)) => {
+                    options.push(OperatorOption::Hashes);
                 }
-                Keyword::MERGES if !merges => {
-                    merges = true;
+                Keyword::MERGES if !options.iter().any(|o| matches!(o, OperatorOption::Merges)) => {
+                    options.push(OperatorOption::Merges);
                 }
                 Keyword::FUNCTION | Keyword::PROCEDURE if function.is_none() => {
                     self.expect_token(&Token::Eq)?;
@@ -6520,33 +6515,49 @@ impl<'a> Parser<'a> {
                     self.expect_token(&Token::Eq)?;
                     right_arg = Some(self.parse_data_type()?);
                 }
-                Keyword::COMMUTATOR if commutator.is_none() => {
+                Keyword::COMMUTATOR
+                    if !options
+                        .iter()
+                        .any(|o| matches!(o, OperatorOption::Commutator(_))) =>
+                {
                     self.expect_token(&Token::Eq)?;
                     if self.parse_keyword(Keyword::OPERATOR) {
                         self.expect_token(&Token::LParen)?;
-                        commutator = Some(self.parse_operator_name()?);
+                        let op = self.parse_operator_name()?;
                         self.expect_token(&Token::RParen)?;
+                        options.push(OperatorOption::Commutator(op));
                     } else {
-                        commutator = Some(self.parse_operator_name()?);
+                        options.push(OperatorOption::Commutator(self.parse_operator_name()?));
                     }
                 }
-                Keyword::NEGATOR if negator.is_none() => {
+                Keyword::NEGATOR
+                    if !options
+                        .iter()
+                        .any(|o| matches!(o, OperatorOption::Negator(_))) =>
+                {
                     self.expect_token(&Token::Eq)?;
                     if self.parse_keyword(Keyword::OPERATOR) {
                         self.expect_token(&Token::LParen)?;
-                        negator = Some(self.parse_operator_name()?);
+                        let op = self.parse_operator_name()?;
                         self.expect_token(&Token::RParen)?;
+                        options.push(OperatorOption::Negator(op));
                     } else {
-                        negator = Some(self.parse_operator_name()?);
+                        options.push(OperatorOption::Negator(self.parse_operator_name()?));
                     }
                 }
-                Keyword::RESTRICT if restrict.is_none() => {
+                Keyword::RESTRICT
+                    if !options
+                        .iter()
+                        .any(|o| matches!(o, OperatorOption::Restrict(_))) =>
+                {
                     self.expect_token(&Token::Eq)?;
-                    restrict = Some(self.parse_object_name(false)?);
+                    options.push(OperatorOption::Restrict(Some(
+                        self.parse_object_name(false)?,
+                    )));
                 }
-                Keyword::JOIN if join.is_none() => {
+                Keyword::JOIN if !options.iter().any(|o| matches!(o, OperatorOption::Join(_))) => {
                     self.expect_token(&Token::Eq)?;
-                    join = Some(self.parse_object_name(false)?);
+                    options.push(OperatorOption::Join(Some(self.parse_object_name(false)?)));
                 }
                 _ => {
                     return Err(ParserError::ParserError(format!(
@@ -6575,12 +6586,7 @@ impl<'a> Parser<'a> {
             is_procedure,
             left_arg,
             right_arg,
-            commutator,
-            negator,
-            restrict,
-            join,
-            hashes,
-            merges,
+            options,
         }))
     }
 
@@ -9780,6 +9786,7 @@ impl<'a> Parser<'a> {
             Keyword::ICEBERG,
             Keyword::SCHEMA,
             Keyword::USER,
+            Keyword::OPERATOR,
         ])?;
         match object_type {
             Keyword::SCHEMA => {
@@ -9812,6 +9819,7 @@ impl<'a> Parser<'a> {
                     operation,
                 })
             }
+            Keyword::OPERATOR => self.parse_alter_operator(),
             Keyword::ROLE => self.parse_alter_role(),
             Keyword::POLICY => self.parse_alter_policy(),
             Keyword::CONNECTOR => self.parse_alter_connector(),
@@ -9929,6 +9937,114 @@ impl<'a> Parser<'a> {
                 self.peek_token_ref(),
             )
         }
+    }
+
+    /// Parse a [Statement::AlterOperator]
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-alteroperator.html)
+    pub fn parse_alter_operator(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_operator_name()?;
+
+        // Parse (left_type, right_type)
+        self.expect_token(&Token::LParen)?;
+
+        let left_type = if self.parse_keyword(Keyword::NONE) {
+            None
+        } else {
+            Some(self.parse_data_type()?)
+        };
+
+        self.expect_token(&Token::Comma)?;
+        let right_type = self.parse_data_type()?;
+        self.expect_token(&Token::RParen)?;
+
+        // Parse the operation
+        let operation = if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            let owner = if self.parse_keyword(Keyword::CURRENT_ROLE) {
+                Owner::CurrentRole
+            } else if self.parse_keyword(Keyword::CURRENT_USER) {
+                Owner::CurrentUser
+            } else if self.parse_keyword(Keyword::SESSION_USER) {
+                Owner::SessionUser
+            } else {
+                Owner::Ident(self.parse_identifier()?)
+            };
+            AlterOperatorOperation::OwnerTo(owner)
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+            let schema_name = self.parse_object_name(false)?;
+            AlterOperatorOperation::SetSchema { schema_name }
+        } else if self.parse_keyword(Keyword::SET) {
+            self.expect_token(&Token::LParen)?;
+
+            let mut options = Vec::new();
+            loop {
+                let keyword = self.expect_one_of_keywords(&[
+                    Keyword::RESTRICT,
+                    Keyword::JOIN,
+                    Keyword::COMMUTATOR,
+                    Keyword::NEGATOR,
+                    Keyword::HASHES,
+                    Keyword::MERGES,
+                ])?;
+
+                match keyword {
+                    Keyword::RESTRICT => {
+                        self.expect_token(&Token::Eq)?;
+                        let proc_name = if self.parse_keyword(Keyword::NONE) {
+                            None
+                        } else {
+                            Some(self.parse_object_name(false)?)
+                        };
+                        options.push(OperatorOption::Restrict(proc_name));
+                    }
+                    Keyword::JOIN => {
+                        self.expect_token(&Token::Eq)?;
+                        let proc_name = if self.parse_keyword(Keyword::NONE) {
+                            None
+                        } else {
+                            Some(self.parse_object_name(false)?)
+                        };
+                        options.push(OperatorOption::Join(proc_name));
+                    }
+                    Keyword::COMMUTATOR => {
+                        self.expect_token(&Token::Eq)?;
+                        let op_name = self.parse_operator_name()?;
+                        options.push(OperatorOption::Commutator(op_name));
+                    }
+                    Keyword::NEGATOR => {
+                        self.expect_token(&Token::Eq)?;
+                        let op_name = self.parse_operator_name()?;
+                        options.push(OperatorOption::Negator(op_name));
+                    }
+                    Keyword::HASHES => {
+                        options.push(OperatorOption::Hashes);
+                    }
+                    Keyword::MERGES => {
+                        options.push(OperatorOption::Merges);
+                    }
+                    _ => unreachable!(),
+                }
+
+                if !self.consume_token(&Token::Comma) {
+                    break;
+                }
+            }
+
+            self.expect_token(&Token::RParen)?;
+            AlterOperatorOperation::Set { options }
+        } else {
+            return self.expected_ref(
+                "OWNER TO, SET SCHEMA, or SET after ALTER OPERATOR",
+                self.peek_token_ref(),
+            );
+        };
+
+        Ok(Statement::AlterOperator(AlterOperator {
+            name,
+            left_type,
+            right_type,
+            operation,
+        }))
     }
 
     // Parse a [Statement::AlterSchema]

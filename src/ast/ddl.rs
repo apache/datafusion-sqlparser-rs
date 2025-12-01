@@ -995,6 +995,103 @@ impl fmt::Display for AlterTypeOperation {
     }
 }
 
+/// `ALTER OPERATOR` statement
+/// See <https://www.postgresql.org/docs/current/sql-alteroperator.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterOperator {
+    /// Operator name (can be schema-qualified)
+    pub name: ObjectName,
+    /// Left operand type (`NONE` if no left operand)
+    pub left_type: Option<DataType>,
+    /// Right operand type
+    pub right_type: DataType,
+    /// The operation to perform
+    pub operation: AlterOperatorOperation,
+}
+
+/// An [AlterOperator] operation
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterOperatorOperation {
+    /// `OWNER TO { new_owner | CURRENT_ROLE | CURRENT_USER | SESSION_USER }`
+    OwnerTo(Owner),
+    /// `SET SCHEMA new_schema`
+    SetSchema { schema_name: ObjectName },
+    /// `SET ( options )`
+    Set {
+        /// List of operator options to set
+        options: Vec<OperatorOption>,
+    },
+}
+
+/// Option for `ALTER OPERATOR SET` operation
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum OperatorOption {
+    /// `RESTRICT = { res_proc | NONE }`
+    Restrict(Option<ObjectName>),
+    /// `JOIN = { join_proc | NONE }`
+    Join(Option<ObjectName>),
+    /// `COMMUTATOR = com_op`
+    Commutator(ObjectName),
+    /// `NEGATOR = neg_op`
+    Negator(ObjectName),
+    /// `HASHES`
+    Hashes,
+    /// `MERGES`
+    Merges,
+}
+
+impl fmt::Display for AlterOperator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ALTER OPERATOR {} (", self.name)?;
+        if let Some(left_type) = &self.left_type {
+            write!(f, "{}", left_type)?;
+        } else {
+            write!(f, "NONE")?;
+        }
+        write!(f, ", {}) {}", self.right_type, self.operation)
+    }
+}
+
+impl fmt::Display for AlterOperatorOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::OwnerTo(owner) => write!(f, "OWNER TO {}", owner),
+            Self::SetSchema { schema_name } => write!(f, "SET SCHEMA {}", schema_name),
+            Self::Set { options } => {
+                write!(f, "SET (")?;
+                for (i, option) in options.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", option)?;
+                }
+                write!(f, ")")
+            }
+        }
+    }
+}
+
+impl fmt::Display for OperatorOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Restrict(Some(proc_name)) => write!(f, "RESTRICT = {}", proc_name),
+            Self::Restrict(None) => write!(f, "RESTRICT = NONE"),
+            Self::Join(Some(proc_name)) => write!(f, "JOIN = {}", proc_name),
+            Self::Join(None) => write!(f, "JOIN = NONE"),
+            Self::Commutator(op_name) => write!(f, "COMMUTATOR = {}", op_name),
+            Self::Negator(op_name) => write!(f, "NEGATOR = {}", op_name),
+            Self::Hashes => write!(f, "HASHES"),
+            Self::Merges => write!(f, "MERGES"),
+        }
+    }
+}
+
 /// An `ALTER COLUMN` (`Statement::AlterTable`) operation
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -3979,18 +4076,8 @@ pub struct CreateOperator {
     pub left_arg: Option<DataType>,
     /// RIGHTARG parameter (right operand type)
     pub right_arg: Option<DataType>,
-    /// COMMUTATOR parameter (commutator operator)
-    pub commutator: Option<ObjectName>,
-    /// NEGATOR parameter (negator operator)
-    pub negator: Option<ObjectName>,
-    /// RESTRICT parameter (restriction selectivity function)
-    pub restrict: Option<ObjectName>,
-    /// JOIN parameter (join selectivity function)
-    pub join: Option<ObjectName>,
-    /// HASHES flag
-    pub hashes: bool,
-    /// MERGES flag
-    pub merges: bool,
+    /// Operator options (COMMUTATOR, NEGATOR, RESTRICT, JOIN, HASHES, MERGES)
+    pub options: Vec<OperatorOption>,
 }
 
 /// CREATE OPERATOR FAMILY statement
@@ -4042,23 +4129,9 @@ impl fmt::Display for CreateOperator {
         if let Some(right_arg) = &self.right_arg {
             params.push(format!("RIGHTARG = {}", right_arg));
         }
-        if let Some(commutator) = &self.commutator {
-            params.push(format!("COMMUTATOR = {}", commutator));
-        }
-        if let Some(negator) = &self.negator {
-            params.push(format!("NEGATOR = {}", negator));
-        }
-        if let Some(restrict) = &self.restrict {
-            params.push(format!("RESTRICT = {}", restrict));
-        }
-        if let Some(join) = &self.join {
-            params.push(format!("JOIN = {}", join));
-        }
-        if self.hashes {
-            params.push("HASHES".to_string());
-        }
-        if self.merges {
-            params.push("MERGES".to_string());
+
+        for option in &self.options {
+            params.push(option.to_string());
         }
 
         write!(f, "{}", params.join(", "))?;

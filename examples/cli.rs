@@ -58,6 +58,7 @@ $ cargo run --example cli - [--dialectname]
         "--clickhouse" => Box::new(ClickHouseDialect {}),
         "--duckdb" => Box::new(DuckDbDialect {}),
         "--sqlite" => Box::new(SQLiteDialect {}),
+        "--oracle" => Box::new(OracleDialect {}),
         "--generic" | "" => Box::new(GenericDialect {}),
         s => panic!("Unexpected parameter: {s}"),
     };

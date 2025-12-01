@@ -26,11 +26,11 @@ use crate::{
     },
     dialect::{MsSqlDialect, PostgreSqlDialect},
     keywords::Keyword,
-    tokenizer::Token,
+    tokenizer::BorrowedToken,
 };
 
 impl Parser<'_> {
-    pub fn parse_alter_role(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_alter_role(&self) -> Result<Statement, ParserError> {
         if dialect_of!(self is PostgreSqlDialect) {
             return self.parse_pg_alter_role();
         } else if dialect_of!(self is MsSqlDialect) {
@@ -53,7 +53,7 @@ impl Parser<'_> {
     /// ```
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterpolicy.html)
-    pub fn parse_alter_policy(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_alter_policy(&self) -> Result<Statement, ParserError> {
         let name = self.parse_identifier()?;
         self.expect_keyword_is(Keyword::ON)?;
         let table_name = self.parse_object_name(false)?;
@@ -74,18 +74,18 @@ impl Parser<'_> {
             };
 
             let using = if self.parse_keyword(Keyword::USING) {
-                self.expect_token(&Token::LParen)?;
+                self.expect_token(&BorrowedToken::LParen)?;
                 let expr = self.parse_expr()?;
-                self.expect_token(&Token::RParen)?;
+                self.expect_token(&BorrowedToken::RParen)?;
                 Some(expr)
             } else {
                 None
             };
 
             let with_check = if self.parse_keywords(&[Keyword::WITH, Keyword::CHECK]) {
-                self.expect_token(&Token::LParen)?;
+                self.expect_token(&BorrowedToken::LParen)?;
                 let expr = self.parse_expr()?;
-                self.expect_token(&Token::RParen)?;
+                self.expect_token(&BorrowedToken::RParen)?;
                 Some(expr)
             } else {
                 None
@@ -110,7 +110,7 @@ impl Parser<'_> {
     ///
     /// ALTER CONNECTOR connector_name SET OWNER [USER|ROLE] user_or_role;
     /// ```
-    pub fn parse_alter_connector(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_alter_connector(&self) -> Result<Statement, ParserError> {
         let name = self.parse_identifier()?;
         self.expect_keyword_is(Keyword::SET)?;
 
@@ -147,7 +147,7 @@ impl Parser<'_> {
     /// ```sql
     /// ALTER USER [ IF EXISTS ] [ <name> ] [ OPTIONS ]
     /// ```
-    pub fn parse_alter_user(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_alter_user(&self) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let name = self.parse_identifier()?;
         let rename_to = if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
@@ -216,7 +216,7 @@ impl Parser<'_> {
         let add_mfa_method_otp =
             if self.parse_keywords(&[Keyword::ADD, Keyword::MFA, Keyword::METHOD, Keyword::OTP]) {
                 let count = if self.parse_keyword(Keyword::COUNT) {
-                    self.expect_token(&Token::Eq)?;
+                    self.expect_token(&BorrowedToken::Eq)?;
                     Some(self.parse_value()?.into())
                 } else {
                     None
@@ -314,7 +314,7 @@ impl Parser<'_> {
         }))
     }
 
-    fn parse_mfa_method(&mut self) -> Result<MfaMethodKind, ParserError> {
+    fn parse_mfa_method(&self) -> Result<MfaMethodKind, ParserError> {
         if self.parse_keyword(Keyword::PASSKEY) {
             Ok(MfaMethodKind::PassKey)
         } else if self.parse_keyword(Keyword::TOTP) {
@@ -326,7 +326,7 @@ impl Parser<'_> {
         }
     }
 
-    fn parse_mssql_alter_role(&mut self) -> Result<Statement, ParserError> {
+    fn parse_mssql_alter_role(&self) -> Result<Statement, ParserError> {
         let role_name = self.parse_identifier()?;
 
         let operation = if self.parse_keywords(&[Keyword::ADD, Keyword::MEMBER]) {
@@ -336,7 +336,7 @@ impl Parser<'_> {
             let member_name = self.parse_identifier()?;
             AlterRoleOperation::DropMember { member_name }
         } else if self.parse_keywords(&[Keyword::WITH, Keyword::NAME]) {
-            if self.consume_token(&Token::Eq) {
+            if self.consume_token(&BorrowedToken::Eq) {
                 let role_name = self.parse_identifier()?;
                 AlterRoleOperation::RenameRole { role_name }
             } else {
@@ -352,7 +352,7 @@ impl Parser<'_> {
         })
     }
 
-    fn parse_pg_alter_role(&mut self) -> Result<Statement, ParserError> {
+    fn parse_pg_alter_role(&self) -> Result<Statement, ParserError> {
         let role_name = self.parse_identifier()?;
 
         // [ IN DATABASE _`database_name`_ ]
@@ -380,7 +380,7 @@ impl Parser<'_> {
                     in_database,
                 }
             // { TO | = } { value | DEFAULT }
-            } else if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
+            } else if self.consume_token(&BorrowedToken::Eq) || self.parse_keyword(Keyword::TO) {
                 if self.parse_keyword(Keyword::DEFAULT) {
                     AlterRoleOperation::Set {
                         config_name,
@@ -436,7 +436,7 @@ impl Parser<'_> {
         })
     }
 
-    fn parse_pg_role_option(&mut self) -> Result<RoleOption, ParserError> {
+    fn parse_pg_role_option(&self) -> Result<RoleOption, ParserError> {
         let option = match self.parse_one_of_keywords(&[
             Keyword::BYPASSRLS,
             Keyword::NOBYPASSRLS,

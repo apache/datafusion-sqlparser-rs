@@ -17,6 +17,11 @@
 
 //! Recursive visitors for ast Nodes. See [`Visitor`] for more details.
 
+#[cfg(not(feature = "std"))]
+use alloc::borrow::Cow;
+#[cfg(feature = "std")]
+use std::borrow::Cow;
+
 use crate::ast::{Expr, ObjectName, Query, Statement, TableFactor, Value};
 use core::ops::ControlFlow;
 
@@ -117,6 +122,19 @@ visit_noop!(u8, u16, u32, u64, i8, i16, i32, i64, char, bool, String);
 
 #[cfg(feature = "bigdecimal")]
 visit_noop!(bigdecimal::BigDecimal);
+
+// Implement Visit and VisitMut for Cow<str> to support the lifetime parameter in BorrowedToken
+impl<'a> Visit for Cow<'a, str> {
+    fn visit<V: Visitor>(&self, _visitor: &mut V) -> ControlFlow<V::Break> {
+        ControlFlow::Continue(())
+    }
+}
+
+impl<'a> VisitMut for Cow<'a, str> {
+    fn visit<V: VisitorMut>(&mut self, _visitor: &mut V) -> ControlFlow<V::Break> {
+        ControlFlow::Continue(())
+    }
+}
 
 /// A visitor that can be used to walk an AST tree.
 ///
@@ -751,7 +769,7 @@ mod tests {
 
     fn do_visit<V: Visitor<Break = ()>>(sql: &str, visitor: &mut V) -> Statement {
         let dialect = GenericDialect {};
-        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+        let tokens = Tokenizer::new(&dialect, sql).tokenized_owned().unwrap();
         let s = Parser::new(&dialect)
             .with_tokens(tokens)
             .parse_statement()
@@ -942,7 +960,9 @@ mod tests {
         let sql = format!("SELECT x where {cond}");
 
         let dialect = GenericDialect {};
-        let tokens = Tokenizer::new(&dialect, sql.as_str()).tokenize().unwrap();
+        let tokens = Tokenizer::new(&dialect, sql.as_str())
+            .tokenized_owned()
+            .unwrap();
         let s = Parser::new(&dialect)
             .with_tokens(tokens)
             .parse_statement()
@@ -983,7 +1003,7 @@ mod visit_mut_tests {
 
     fn do_visit_mut<V: VisitorMut<Break = ()>>(sql: &str, visitor: &mut V) -> Statement {
         let dialect = GenericDialect {};
-        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+        let tokens = Tokenizer::new(&dialect, sql).tokenized_owned().unwrap();
         let mut s = Parser::new(&dialect)
             .with_tokens(tokens)
             .parse_statement()

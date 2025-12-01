@@ -2407,7 +2407,7 @@ pub mod tests {
     #[test]
     fn test_join() {
         let dialect = &GenericDialect;
-        let mut test = SpanTest::new(
+        let test = SpanTest::new(
             dialect,
             "SELECT id, name FROM users LEFT JOIN companies ON users.company_id = companies.id",
         );
@@ -2432,7 +2432,7 @@ pub mod tests {
     #[test]
     pub fn test_union() {
         let dialect = &GenericDialect;
-        let mut test = SpanTest::new(
+        let test = SpanTest::new(
             dialect,
             "SELECT a FROM postgres.public.source UNION SELECT a FROM postgres.public.source",
         );
@@ -2449,7 +2449,7 @@ pub mod tests {
     #[test]
     pub fn test_subquery() {
         let dialect = &GenericDialect;
-        let mut test = SpanTest::new(
+        let test = SpanTest::new(
             dialect,
             "SELECT a FROM (SELECT a FROM postgres.public.source) AS b",
         );
@@ -2474,7 +2474,7 @@ pub mod tests {
     #[test]
     pub fn test_cte() {
         let dialect = &GenericDialect;
-        let mut test = SpanTest::new(dialect, "WITH cte_outer AS (SELECT a FROM postgres.public.source), cte_ignored AS (SELECT a FROM cte_outer), cte_inner AS (SELECT a FROM cte_outer) SELECT a FROM cte_inner");
+        let test = SpanTest::new(dialect, "WITH cte_outer AS (SELECT a FROM postgres.public.source), cte_ignored AS (SELECT a FROM cte_outer), cte_inner AS (SELECT a FROM cte_outer) SELECT a FROM cte_inner");
 
         let query = test.0.parse_query().unwrap();
 
@@ -2486,7 +2486,7 @@ pub mod tests {
     #[test]
     pub fn test_snowflake_lateral_flatten() {
         let dialect = &SnowflakeDialect;
-        let mut test = SpanTest::new(dialect, "SELECT FLATTENED.VALUE:field::TEXT AS FIELD FROM SNOWFLAKE.SCHEMA.SOURCE AS S, LATERAL FLATTEN(INPUT => S.JSON_ARRAY) AS FLATTENED");
+        let test = SpanTest::new(dialect, "SELECT FLATTENED.VALUE:field::TEXT AS FIELD FROM SNOWFLAKE.SCHEMA.SOURCE AS S, LATERAL FLATTEN(INPUT => S.JSON_ARRAY) AS FLATTENED");
 
         let query = test.0.parse_select().unwrap();
 
@@ -2498,7 +2498,7 @@ pub mod tests {
     #[test]
     pub fn test_wildcard_from_cte() {
         let dialect = &GenericDialect;
-        let mut test = SpanTest::new(
+        let test = SpanTest::new(
             dialect,
             "WITH cte AS (SELECT a FROM postgres.public.source) SELECT cte.* FROM cte",
         );
@@ -2524,7 +2524,7 @@ pub mod tests {
     #[test]
     fn test_case_expr_span() {
         let dialect = &GenericDialect;
-        let mut test = SpanTest::new(dialect, "CASE 1 WHEN 2 THEN 3 ELSE 4 END");
+        let test = SpanTest::new(dialect, "CASE 1 WHEN 2 THEN 3 ELSE 4 END");
         let expr = test.0.parse_expr().unwrap();
         let expr_span = expr.span();
         assert_eq!(

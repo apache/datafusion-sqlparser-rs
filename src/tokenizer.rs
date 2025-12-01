@@ -23,12 +23,15 @@
 
 #[cfg(not(feature = "std"))]
 use alloc::{
-    borrow::ToOwned,
+    borrow::{Cow, ToOwned},
     format,
     string::{String, ToString},
     vec,
     vec::Vec,
 };
+#[cfg(feature = "std")]
+use std::borrow::Cow;
+
 use core::iter::Peekable;
 use core::num::NonZeroU8;
 use core::str::Chars;
@@ -48,11 +51,11 @@ use crate::dialect::{
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 use crate::{ast::DollarQuotedString, dialect::HiveDialect};
 
-/// SQL Token enumeration
+/// SQL Token enumeration with lifetime parameter for future zero-copy support
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum Token {
+pub enum BorrowedToken<'a> {
     /// An end-of-file marker, not a real token
     EOF,
     /// A keyword (like SELECT) or an optionally quoted SQL identifier
@@ -277,126 +280,284 @@ pub enum Token {
     /// This is used to represent any custom binary operator that is not part of the SQL standard.
     /// PostgreSQL allows defining custom binary operators using CREATE OPERATOR.
     CustomBinaryOperator(String),
+    /// Marker to carry the lifetime parameter (never constructed)
+    _Phantom(Cow<'a, str>),
 }
 
-impl fmt::Display for Token {
+/// Type alias for backward compatibility - Token without explicit lifetime uses 'static
+pub type Token = BorrowedToken<'static>;
+
+impl<'a> fmt::Display for BorrowedToken<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Token::EOF => f.write_str("EOF"),
-            Token::Word(ref w) => write!(f, "{w}"),
-            Token::Number(ref n, l) => write!(f, "{}{long}", n, long = if *l { "L" } else { "" }),
-            Token::Char(ref c) => write!(f, "{c}"),
-            Token::SingleQuotedString(ref s) => write!(f, "'{s}'"),
-            Token::TripleSingleQuotedString(ref s) => write!(f, "'''{s}'''"),
-            Token::DoubleQuotedString(ref s) => write!(f, "\"{s}\""),
-            Token::TripleDoubleQuotedString(ref s) => write!(f, "\"\"\"{s}\"\"\""),
-            Token::DollarQuotedString(ref s) => write!(f, "{s}"),
-            Token::NationalStringLiteral(ref s) => write!(f, "N'{s}'"),
-            Token::EscapedStringLiteral(ref s) => write!(f, "E'{s}'"),
-            Token::UnicodeStringLiteral(ref s) => write!(f, "U&'{s}'"),
-            Token::HexStringLiteral(ref s) => write!(f, "X'{s}'"),
-            Token::SingleQuotedByteStringLiteral(ref s) => write!(f, "B'{s}'"),
-            Token::TripleSingleQuotedByteStringLiteral(ref s) => write!(f, "B'''{s}'''"),
-            Token::DoubleQuotedByteStringLiteral(ref s) => write!(f, "B\"{s}\""),
-            Token::TripleDoubleQuotedByteStringLiteral(ref s) => write!(f, "B\"\"\"{s}\"\"\""),
-            Token::SingleQuotedRawStringLiteral(ref s) => write!(f, "R'{s}'"),
-            Token::DoubleQuotedRawStringLiteral(ref s) => write!(f, "R\"{s}\""),
-            Token::TripleSingleQuotedRawStringLiteral(ref s) => write!(f, "R'''{s}'''"),
-            Token::TripleDoubleQuotedRawStringLiteral(ref s) => write!(f, "R\"\"\"{s}\"\"\""),
-            Token::Comma => f.write_str(","),
-            Token::Whitespace(ws) => write!(f, "{ws}"),
-            Token::DoubleEq => f.write_str("=="),
-            Token::Spaceship => f.write_str("<=>"),
-            Token::Eq => f.write_str("="),
-            Token::Neq => f.write_str("<>"),
-            Token::Lt => f.write_str("<"),
-            Token::Gt => f.write_str(">"),
-            Token::LtEq => f.write_str("<="),
-            Token::GtEq => f.write_str(">="),
-            Token::Plus => f.write_str("+"),
-            Token::Minus => f.write_str("-"),
-            Token::Mul => f.write_str("*"),
-            Token::Div => f.write_str("/"),
-            Token::DuckIntDiv => f.write_str("//"),
-            Token::StringConcat => f.write_str("||"),
-            Token::Mod => f.write_str("%"),
-            Token::LParen => f.write_str("("),
-            Token::RParen => f.write_str(")"),
-            Token::Period => f.write_str("."),
-            Token::Colon => f.write_str(":"),
-            Token::DoubleColon => f.write_str("::"),
-            Token::Assignment => f.write_str(":="),
-            Token::SemiColon => f.write_str(";"),
-            Token::Backslash => f.write_str("\\"),
-            Token::LBracket => f.write_str("["),
-            Token::RBracket => f.write_str("]"),
-            Token::Ampersand => f.write_str("&"),
-            Token::Caret => f.write_str("^"),
-            Token::Pipe => f.write_str("|"),
-            Token::LBrace => f.write_str("{"),
-            Token::RBrace => f.write_str("}"),
-            Token::RArrow => f.write_str("=>"),
-            Token::Sharp => f.write_str("#"),
-            Token::DoubleSharp => f.write_str("##"),
-            Token::ExclamationMark => f.write_str("!"),
-            Token::DoubleExclamationMark => f.write_str("!!"),
-            Token::Tilde => f.write_str("~"),
-            Token::TildeAsterisk => f.write_str("~*"),
-            Token::ExclamationMarkTilde => f.write_str("!~"),
-            Token::ExclamationMarkTildeAsterisk => f.write_str("!~*"),
-            Token::DoubleTilde => f.write_str("~~"),
-            Token::DoubleTildeAsterisk => f.write_str("~~*"),
-            Token::ExclamationMarkDoubleTilde => f.write_str("!~~"),
-            Token::ExclamationMarkDoubleTildeAsterisk => f.write_str("!~~*"),
-            Token::AtSign => f.write_str("@"),
-            Token::CaretAt => f.write_str("^@"),
-            Token::ShiftLeft => f.write_str("<<"),
-            Token::ShiftRight => f.write_str(">>"),
-            Token::Overlap => f.write_str("&&"),
-            Token::PGSquareRoot => f.write_str("|/"),
-            Token::PGCubeRoot => f.write_str("||/"),
-            Token::AtDashAt => f.write_str("@-@"),
-            Token::QuestionMarkDash => f.write_str("?-"),
-            Token::AmpersandLeftAngleBracket => f.write_str("&<"),
-            Token::AmpersandRightAngleBracket => f.write_str("&>"),
-            Token::AmpersandLeftAngleBracketVerticalBar => f.write_str("&<|"),
-            Token::VerticalBarAmpersandRightAngleBracket => f.write_str("|&>"),
-            Token::VerticalBarRightAngleBracket => f.write_str("|>"),
-            Token::TwoWayArrow => f.write_str("<->"),
-            Token::LeftAngleBracketCaret => f.write_str("<^"),
-            Token::RightAngleBracketCaret => f.write_str(">^"),
-            Token::QuestionMarkSharp => f.write_str("?#"),
-            Token::QuestionMarkDashVerticalBar => f.write_str("?-|"),
-            Token::QuestionMarkDoubleVerticalBar => f.write_str("?||"),
-            Token::TildeEqual => f.write_str("~="),
-            Token::ShiftLeftVerticalBar => f.write_str("<<|"),
-            Token::VerticalBarShiftRight => f.write_str("|>>"),
-            Token::Placeholder(ref s) => write!(f, "{s}"),
-            Token::Arrow => write!(f, "->"),
-            Token::LongArrow => write!(f, "->>"),
-            Token::HashArrow => write!(f, "#>"),
-            Token::HashLongArrow => write!(f, "#>>"),
-            Token::AtArrow => write!(f, "@>"),
-            Token::ArrowAt => write!(f, "<@"),
-            Token::HashMinus => write!(f, "#-"),
-            Token::AtQuestion => write!(f, "@?"),
-            Token::AtAt => write!(f, "@@"),
-            Token::Question => write!(f, "?"),
-            Token::QuestionAnd => write!(f, "?&"),
-            Token::QuestionPipe => write!(f, "?|"),
-            Token::CustomBinaryOperator(s) => f.write_str(s),
+            BorrowedToken::EOF => f.write_str("EOF"),
+            BorrowedToken::Word(ref w) => write!(f, "{w}"),
+            BorrowedToken::Number(ref n, l) => {
+                write!(f, "{}{long}", n, long = if *l { "L" } else { "" })
+            }
+            BorrowedToken::Char(ref c) => write!(f, "{c}"),
+            BorrowedToken::SingleQuotedString(ref s) => write!(f, "'{s}'"),
+            BorrowedToken::TripleSingleQuotedString(ref s) => write!(f, "'''{s}'''"),
+            BorrowedToken::DoubleQuotedString(ref s) => write!(f, "\"{s}\""),
+            BorrowedToken::TripleDoubleQuotedString(ref s) => write!(f, "\"\"\"{s}\"\"\""),
+            BorrowedToken::DollarQuotedString(ref s) => write!(f, "{s}"),
+            BorrowedToken::NationalStringLiteral(ref s) => write!(f, "N'{s}'"),
+            BorrowedToken::EscapedStringLiteral(ref s) => write!(f, "E'{s}'"),
+            BorrowedToken::UnicodeStringLiteral(ref s) => write!(f, "U&'{s}'"),
+            BorrowedToken::HexStringLiteral(ref s) => write!(f, "X'{s}'"),
+            BorrowedToken::SingleQuotedByteStringLiteral(ref s) => write!(f, "B'{s}'"),
+            BorrowedToken::TripleSingleQuotedByteStringLiteral(ref s) => write!(f, "B'''{s}'''"),
+            BorrowedToken::DoubleQuotedByteStringLiteral(ref s) => write!(f, "B\"{s}\""),
+            BorrowedToken::TripleDoubleQuotedByteStringLiteral(ref s) => {
+                write!(f, "B\"\"\"{s}\"\"\"")
+            }
+            BorrowedToken::SingleQuotedRawStringLiteral(ref s) => write!(f, "R'{s}'"),
+            BorrowedToken::DoubleQuotedRawStringLiteral(ref s) => write!(f, "R\"{s}\""),
+            BorrowedToken::TripleSingleQuotedRawStringLiteral(ref s) => write!(f, "R'''{s}'''"),
+            BorrowedToken::TripleDoubleQuotedRawStringLiteral(ref s) => {
+                write!(f, "R\"\"\"{s}\"\"\"")
+            }
+            BorrowedToken::Comma => f.write_str(","),
+            BorrowedToken::Whitespace(ws) => write!(f, "{ws}"),
+            BorrowedToken::DoubleEq => f.write_str("=="),
+            BorrowedToken::Spaceship => f.write_str("<=>"),
+            BorrowedToken::Eq => f.write_str("="),
+            BorrowedToken::Neq => f.write_str("<>"),
+            BorrowedToken::Lt => f.write_str("<"),
+            BorrowedToken::Gt => f.write_str(">"),
+            BorrowedToken::LtEq => f.write_str("<="),
+            BorrowedToken::GtEq => f.write_str(">="),
+            BorrowedToken::Plus => f.write_str("+"),
+            BorrowedToken::Minus => f.write_str("-"),
+            BorrowedToken::Mul => f.write_str("*"),
+            BorrowedToken::Div => f.write_str("/"),
+            BorrowedToken::DuckIntDiv => f.write_str("//"),
+            BorrowedToken::StringConcat => f.write_str("||"),
+            BorrowedToken::Mod => f.write_str("%"),
+            BorrowedToken::LParen => f.write_str("("),
+            BorrowedToken::RParen => f.write_str(")"),
+            BorrowedToken::Period => f.write_str("."),
+            BorrowedToken::Colon => f.write_str(":"),
+            BorrowedToken::DoubleColon => f.write_str("::"),
+            BorrowedToken::Assignment => f.write_str(":="),
+            BorrowedToken::SemiColon => f.write_str(";"),
+            BorrowedToken::Backslash => f.write_str("\\"),
+            BorrowedToken::LBracket => f.write_str("["),
+            BorrowedToken::RBracket => f.write_str("]"),
+            BorrowedToken::Ampersand => f.write_str("&"),
+            BorrowedToken::Caret => f.write_str("^"),
+            BorrowedToken::Pipe => f.write_str("|"),
+            BorrowedToken::LBrace => f.write_str("{"),
+            BorrowedToken::RBrace => f.write_str("}"),
+            BorrowedToken::RArrow => f.write_str("=>"),
+            BorrowedToken::Sharp => f.write_str("#"),
+            BorrowedToken::DoubleSharp => f.write_str("##"),
+            BorrowedToken::ExclamationMark => f.write_str("!"),
+            BorrowedToken::DoubleExclamationMark => f.write_str("!!"),
+            BorrowedToken::Tilde => f.write_str("~"),
+            BorrowedToken::TildeAsterisk => f.write_str("~*"),
+            BorrowedToken::ExclamationMarkTilde => f.write_str("!~"),
+            BorrowedToken::ExclamationMarkTildeAsterisk => f.write_str("!~*"),
+            BorrowedToken::DoubleTilde => f.write_str("~~"),
+            BorrowedToken::DoubleTildeAsterisk => f.write_str("~~*"),
+            BorrowedToken::ExclamationMarkDoubleTilde => f.write_str("!~~"),
+            BorrowedToken::ExclamationMarkDoubleTildeAsterisk => f.write_str("!~~*"),
+            BorrowedToken::AtSign => f.write_str("@"),
+            BorrowedToken::CaretAt => f.write_str("^@"),
+            BorrowedToken::ShiftLeft => f.write_str("<<"),
+            BorrowedToken::ShiftRight => f.write_str(">>"),
+            BorrowedToken::Overlap => f.write_str("&&"),
+            BorrowedToken::PGSquareRoot => f.write_str("|/"),
+            BorrowedToken::PGCubeRoot => f.write_str("||/"),
+            BorrowedToken::AtDashAt => f.write_str("@-@"),
+            BorrowedToken::QuestionMarkDash => f.write_str("?-"),
+            BorrowedToken::AmpersandLeftAngleBracket => f.write_str("&<"),
+            BorrowedToken::AmpersandRightAngleBracket => f.write_str("&>"),
+            BorrowedToken::AmpersandLeftAngleBracketVerticalBar => f.write_str("&<|"),
+            BorrowedToken::VerticalBarAmpersandRightAngleBracket => f.write_str("|&>"),
+            BorrowedToken::VerticalBarRightAngleBracket => f.write_str("|>"),
+            BorrowedToken::TwoWayArrow => f.write_str("<->"),
+            BorrowedToken::LeftAngleBracketCaret => f.write_str("<^"),
+            BorrowedToken::RightAngleBracketCaret => f.write_str(">^"),
+            BorrowedToken::QuestionMarkSharp => f.write_str("?#"),
+            BorrowedToken::QuestionMarkDashVerticalBar => f.write_str("?-|"),
+            BorrowedToken::QuestionMarkDoubleVerticalBar => f.write_str("?||"),
+            BorrowedToken::TildeEqual => f.write_str("~="),
+            BorrowedToken::ShiftLeftVerticalBar => f.write_str("<<|"),
+            BorrowedToken::VerticalBarShiftRight => f.write_str("|>>"),
+            BorrowedToken::Placeholder(ref s) => write!(f, "{s}"),
+            BorrowedToken::Arrow => write!(f, "->"),
+            BorrowedToken::LongArrow => write!(f, "->>"),
+            BorrowedToken::HashArrow => write!(f, "#>"),
+            BorrowedToken::HashLongArrow => write!(f, "#>>"),
+            BorrowedToken::AtArrow => write!(f, "@>"),
+            BorrowedToken::ArrowAt => write!(f, "<@"),
+            BorrowedToken::HashMinus => write!(f, "#-"),
+            BorrowedToken::AtQuestion => write!(f, "@?"),
+            BorrowedToken::AtAt => write!(f, "@@"),
+            BorrowedToken::Question => write!(f, "?"),
+            BorrowedToken::QuestionAnd => write!(f, "?&"),
+            BorrowedToken::QuestionPipe => write!(f, "?|"),
+            BorrowedToken::CustomBinaryOperator(s) => f.write_str(s),
+            BorrowedToken::_Phantom(_) => unreachable!("_Phantom should never be constructed"),
         }
     }
 }
 
-impl Token {
+impl<'a> BorrowedToken<'a> {
+    /// Converts a borrowed token to a static token by taking ownership and moving the data
+    pub fn to_static(self) -> Token {
+        match self {
+            BorrowedToken::EOF => BorrowedToken::EOF,
+            BorrowedToken::Word(w) => BorrowedToken::Word(w),
+            BorrowedToken::Number(n, l) => BorrowedToken::Number(n, l),
+            BorrowedToken::Char(c) => BorrowedToken::Char(c),
+            BorrowedToken::SingleQuotedString(s) => BorrowedToken::SingleQuotedString(s),
+            BorrowedToken::DoubleQuotedString(s) => BorrowedToken::DoubleQuotedString(s),
+            BorrowedToken::TripleSingleQuotedString(s) => {
+                BorrowedToken::TripleSingleQuotedString(s)
+            }
+            BorrowedToken::TripleDoubleQuotedString(s) => {
+                BorrowedToken::TripleDoubleQuotedString(s)
+            }
+            BorrowedToken::DollarQuotedString(s) => BorrowedToken::DollarQuotedString(s),
+            BorrowedToken::SingleQuotedByteStringLiteral(s) => {
+                BorrowedToken::SingleQuotedByteStringLiteral(s)
+            }
+            BorrowedToken::DoubleQuotedByteStringLiteral(s) => {
+                BorrowedToken::DoubleQuotedByteStringLiteral(s)
+            }
+            BorrowedToken::TripleSingleQuotedByteStringLiteral(s) => {
+                BorrowedToken::TripleSingleQuotedByteStringLiteral(s)
+            }
+            BorrowedToken::TripleDoubleQuotedByteStringLiteral(s) => {
+                BorrowedToken::TripleDoubleQuotedByteStringLiteral(s)
+            }
+            BorrowedToken::SingleQuotedRawStringLiteral(s) => {
+                BorrowedToken::SingleQuotedRawStringLiteral(s)
+            }
+            BorrowedToken::DoubleQuotedRawStringLiteral(s) => {
+                BorrowedToken::DoubleQuotedRawStringLiteral(s)
+            }
+            BorrowedToken::TripleSingleQuotedRawStringLiteral(s) => {
+                BorrowedToken::TripleSingleQuotedRawStringLiteral(s)
+            }
+            BorrowedToken::TripleDoubleQuotedRawStringLiteral(s) => {
+                BorrowedToken::TripleDoubleQuotedRawStringLiteral(s)
+            }
+            BorrowedToken::NationalStringLiteral(s) => BorrowedToken::NationalStringLiteral(s),
+            BorrowedToken::EscapedStringLiteral(s) => BorrowedToken::EscapedStringLiteral(s),
+            BorrowedToken::UnicodeStringLiteral(s) => BorrowedToken::UnicodeStringLiteral(s),
+            BorrowedToken::HexStringLiteral(s) => BorrowedToken::HexStringLiteral(s),
+            BorrowedToken::Comma => BorrowedToken::Comma,
+            BorrowedToken::Whitespace(ws) => BorrowedToken::Whitespace(ws),
+            BorrowedToken::DoubleEq => BorrowedToken::DoubleEq,
+            BorrowedToken::Eq => BorrowedToken::Eq,
+            BorrowedToken::Neq => BorrowedToken::Neq,
+            BorrowedToken::Lt => BorrowedToken::Lt,
+            BorrowedToken::Gt => BorrowedToken::Gt,
+            BorrowedToken::LtEq => BorrowedToken::LtEq,
+            BorrowedToken::GtEq => BorrowedToken::GtEq,
+            BorrowedToken::Spaceship => BorrowedToken::Spaceship,
+            BorrowedToken::Plus => BorrowedToken::Plus,
+            BorrowedToken::Minus => BorrowedToken::Minus,
+            BorrowedToken::Mul => BorrowedToken::Mul,
+            BorrowedToken::Div => BorrowedToken::Div,
+            BorrowedToken::DuckIntDiv => BorrowedToken::DuckIntDiv,
+            BorrowedToken::Mod => BorrowedToken::Mod,
+            BorrowedToken::StringConcat => BorrowedToken::StringConcat,
+            BorrowedToken::LParen => BorrowedToken::LParen,
+            BorrowedToken::RParen => BorrowedToken::RParen,
+            BorrowedToken::Period => BorrowedToken::Period,
+            BorrowedToken::Colon => BorrowedToken::Colon,
+            BorrowedToken::DoubleColon => BorrowedToken::DoubleColon,
+            BorrowedToken::Assignment => BorrowedToken::Assignment,
+            BorrowedToken::SemiColon => BorrowedToken::SemiColon,
+            BorrowedToken::Backslash => BorrowedToken::Backslash,
+            BorrowedToken::LBracket => BorrowedToken::LBracket,
+            BorrowedToken::RBracket => BorrowedToken::RBracket,
+            BorrowedToken::Ampersand => BorrowedToken::Ampersand,
+            BorrowedToken::Pipe => BorrowedToken::Pipe,
+            BorrowedToken::Caret => BorrowedToken::Caret,
+            BorrowedToken::LBrace => BorrowedToken::LBrace,
+            BorrowedToken::RBrace => BorrowedToken::RBrace,
+            BorrowedToken::RArrow => BorrowedToken::RArrow,
+            BorrowedToken::Sharp => BorrowedToken::Sharp,
+            BorrowedToken::DoubleSharp => BorrowedToken::DoubleSharp,
+            BorrowedToken::Tilde => BorrowedToken::Tilde,
+            BorrowedToken::TildeAsterisk => BorrowedToken::TildeAsterisk,
+            BorrowedToken::ExclamationMarkTilde => BorrowedToken::ExclamationMarkTilde,
+            BorrowedToken::ExclamationMarkTildeAsterisk => {
+                BorrowedToken::ExclamationMarkTildeAsterisk
+            }
+            BorrowedToken::DoubleTilde => BorrowedToken::DoubleTilde,
+            BorrowedToken::DoubleTildeAsterisk => BorrowedToken::DoubleTildeAsterisk,
+            BorrowedToken::ExclamationMarkDoubleTilde => BorrowedToken::ExclamationMarkDoubleTilde,
+            BorrowedToken::ExclamationMarkDoubleTildeAsterisk => {
+                BorrowedToken::ExclamationMarkDoubleTildeAsterisk
+            }
+            BorrowedToken::ShiftLeft => BorrowedToken::ShiftLeft,
+            BorrowedToken::ShiftRight => BorrowedToken::ShiftRight,
+            BorrowedToken::Overlap => BorrowedToken::Overlap,
+            BorrowedToken::ExclamationMark => BorrowedToken::ExclamationMark,
+            BorrowedToken::DoubleExclamationMark => BorrowedToken::DoubleExclamationMark,
+            BorrowedToken::AtSign => BorrowedToken::AtSign,
+            BorrowedToken::CaretAt => BorrowedToken::CaretAt,
+            BorrowedToken::PGSquareRoot => BorrowedToken::PGSquareRoot,
+            BorrowedToken::PGCubeRoot => BorrowedToken::PGCubeRoot,
+            BorrowedToken::Placeholder(s) => BorrowedToken::Placeholder(s),
+            BorrowedToken::Arrow => BorrowedToken::Arrow,
+            BorrowedToken::LongArrow => BorrowedToken::LongArrow,
+            BorrowedToken::HashArrow => BorrowedToken::HashArrow,
+            BorrowedToken::AtDashAt => BorrowedToken::AtDashAt,
+            BorrowedToken::QuestionMarkDash => BorrowedToken::QuestionMarkDash,
+            BorrowedToken::AmpersandLeftAngleBracket => BorrowedToken::AmpersandLeftAngleBracket,
+            BorrowedToken::AmpersandRightAngleBracket => BorrowedToken::AmpersandRightAngleBracket,
+            BorrowedToken::AmpersandLeftAngleBracketVerticalBar => {
+                BorrowedToken::AmpersandLeftAngleBracketVerticalBar
+            }
+            BorrowedToken::VerticalBarAmpersandRightAngleBracket => {
+                BorrowedToken::VerticalBarAmpersandRightAngleBracket
+            }
+            BorrowedToken::TwoWayArrow => BorrowedToken::TwoWayArrow,
+            BorrowedToken::LeftAngleBracketCaret => BorrowedToken::LeftAngleBracketCaret,
+            BorrowedToken::RightAngleBracketCaret => BorrowedToken::RightAngleBracketCaret,
+            BorrowedToken::QuestionMarkSharp => BorrowedToken::QuestionMarkSharp,
+            BorrowedToken::QuestionMarkDashVerticalBar => {
+                BorrowedToken::QuestionMarkDashVerticalBar
+            }
+            BorrowedToken::QuestionMarkDoubleVerticalBar => {
+                BorrowedToken::QuestionMarkDoubleVerticalBar
+            }
+            BorrowedToken::TildeEqual => BorrowedToken::TildeEqual,
+            BorrowedToken::ShiftLeftVerticalBar => BorrowedToken::ShiftLeftVerticalBar,
+            BorrowedToken::VerticalBarShiftRight => BorrowedToken::VerticalBarShiftRight,
+            BorrowedToken::VerticalBarRightAngleBracket => {
+                BorrowedToken::VerticalBarRightAngleBracket
+            }
+            BorrowedToken::HashLongArrow => BorrowedToken::HashLongArrow,
+            BorrowedToken::AtArrow => BorrowedToken::AtArrow,
+            BorrowedToken::ArrowAt => BorrowedToken::ArrowAt,
+            BorrowedToken::HashMinus => BorrowedToken::HashMinus,
+            BorrowedToken::AtQuestion => BorrowedToken::AtQuestion,
+            BorrowedToken::AtAt => BorrowedToken::AtAt,
+            BorrowedToken::Question => BorrowedToken::Question,
+            BorrowedToken::QuestionAnd => BorrowedToken::QuestionAnd,
+            BorrowedToken::QuestionPipe => BorrowedToken::QuestionPipe,
+            BorrowedToken::CustomBinaryOperator(s) => BorrowedToken::CustomBinaryOperator(s),
+            BorrowedToken::_Phantom(_) => unreachable!("_Phantom should never be constructed"),
+        }
+    }
+}
+
+impl BorrowedToken<'static> {
     pub fn make_keyword(keyword: &str) -> Self {
-        Token::make_word(keyword, None)
+        BorrowedToken::make_word(keyword, None)
     }
 
     pub fn make_word(word: &str, quote_style: Option<char>) -> Self {
         let word_uppercase = word.to_uppercase();
-        Token::Word(Word {
+        BorrowedToken::Word(Word {
             value: word.to_string(),
             quote_style,
             keyword: if quote_style.is_none() {
@@ -653,7 +814,7 @@ impl Span {
 
 /// Backwards compatibility struct for [`TokenWithSpan`]
 #[deprecated(since = "0.53.0", note = "please use `TokenWithSpan` instead")]
-pub type TokenWithLocation = TokenWithSpan;
+pub type TokenWithLocation<'a> = TokenWithSpan<'a>;
 
 /// A [Token] with [Span] attached to it
 ///
@@ -680,46 +841,58 @@ pub type TokenWithLocation = TokenWithSpan;
 #[derive(Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct TokenWithSpan {
-    pub token: Token,
+pub struct TokenWithSpan<'a> {
+    pub token: BorrowedToken<'a>,
     pub span: Span,
 }
 
-impl TokenWithSpan {
-    /// Create a new [`TokenWithSpan`] from a [`Token`] and a [`Span`]
-    pub fn new(token: Token, span: Span) -> Self {
+impl<'a> TokenWithSpan<'a> {
+    /// Create a new [`TokenWithSpan`] from a [`BorrowedToken`] and a [`Span`]
+    pub fn new(token: BorrowedToken<'a>, span: Span) -> Self {
         Self { token, span }
     }
 
     /// Wrap a token with an empty span
-    pub fn wrap(token: Token) -> Self {
+    pub fn wrap(token: BorrowedToken<'a>) -> Self {
         Self::new(token, Span::empty())
     }
 
     /// Wrap a token with a location from `start` to `end`
-    pub fn at(token: Token, start: Location, end: Location) -> Self {
+    pub fn at(token: BorrowedToken<'a>, start: Location, end: Location) -> Self {
         Self::new(token, Span::new(start, end))
     }
 
     /// Return an EOF token with no location
     pub fn new_eof() -> Self {
-        Self::wrap(Token::EOF)
+        Self::wrap(BorrowedToken::EOF)
+    }
+
+    /// Convert to a `'static` lifetime by cloning the underlying data.
+    ///
+    /// This is used when tokens need to be stored in AST nodes that must be owned.
+    /// Currently all data is already owned (String), so this is just a clone.
+    /// When Cow is introduced, this will convert Cow::Borrowed → Cow::Owned.
+    pub fn to_static(self) -> TokenWithSpan<'static> {
+        TokenWithSpan {
+            token: self.token.to_static(),
+            span: self.span,
+        }
     }
 }
 
-impl PartialEq<Token> for TokenWithSpan {
-    fn eq(&self, other: &Token) -> bool {
+impl<'a> PartialEq<BorrowedToken<'a>> for TokenWithSpan<'a> {
+    fn eq(&self, other: &BorrowedToken<'a>) -> bool {
         &self.token == other
     }
 }
 
-impl PartialEq<TokenWithSpan> for Token {
-    fn eq(&self, other: &TokenWithSpan) -> bool {
+impl<'a> PartialEq<TokenWithSpan<'a>> for BorrowedToken<'a> {
+    fn eq(&self, other: &TokenWithSpan<'a>) -> bool {
         self == &other.token
     }
 }
 
-impl fmt::Display for TokenWithSpan {
+impl<'a> fmt::Display for TokenWithSpan<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.token.fmt(f)
     }
@@ -889,23 +1062,35 @@ impl<'a> Tokenizer<'a> {
     }
 
     /// Tokenize the statement and produce a vector of tokens
-    pub fn tokenize(&mut self) -> Result<Vec<Token>, TokenizerError> {
+    pub fn tokenize(&mut self) -> Result<Vec<BorrowedToken<'a>>, TokenizerError> {
         let twl = self.tokenize_with_location()?;
         Ok(twl.into_iter().map(|t| t.token).collect())
     }
 
+    pub fn tokenized_owned(&mut self) -> Result<Vec<Token>, TokenizerError> {
+        let tokens = self.tokenize()?;
+        Ok(tokens.into_iter().map(|t| t.to_static()).collect())
+    }
+
     /// Tokenize the statement and produce a vector of tokens with location information
-    pub fn tokenize_with_location(&mut self) -> Result<Vec<TokenWithSpan>, TokenizerError> {
-        let mut tokens: Vec<TokenWithSpan> = vec![];
+    pub fn tokenize_with_location(&mut self) -> Result<Vec<TokenWithSpan<'a>>, TokenizerError> {
+        let mut tokens: Vec<TokenWithSpan<'a>> = vec![];
         self.tokenize_with_location_into_buf(&mut tokens)
             .map(|_| tokens)
+    }
+
+    pub fn tokenized_with_location_owned(
+        &mut self,
+    ) -> Result<Vec<TokenWithSpan<'static>>, TokenizerError> {
+        let tokens = self.tokenize_with_location()?;
+        Ok(tokens.into_iter().map(|t| t.to_static()).collect())
     }
 
     /// Tokenize the statement and append tokens with location information into the provided buffer.
     /// If an error is thrown, the buffer will contain all tokens that were successfully parsed before the error.
     pub fn tokenize_with_location_into_buf(
         &mut self,
-        buf: &mut Vec<TokenWithSpan>,
+        buf: &mut Vec<TokenWithSpan<'a>>,
     ) -> Result<(), TokenizerError> {
         let mut state = State {
             peekable: self.query.chars().peekable(),
@@ -958,7 +1143,7 @@ impl<'a> Tokenizer<'a> {
     fn next_token(
         &self,
         chars: &mut State<'a>,
-        prev_token: Option<&Token>,
+        prev_token: Option<&BorrowedToken<'a>>,
     ) -> Result<Option<Token>, TokenizerError> {
         match chars.peek() {
             Some(&ch) => match ch {
@@ -1216,7 +1401,7 @@ impl<'a> Tokenizer<'a> {
                     // if the prev token is not a word, then this is not a valid sql
                     // word or number.
                     if ch == '.' && chars.peekable.clone().nth(1) == Some('_') {
-                        if let Some(Token::Word(_)) = prev_token {
+                        if let Some(&BorrowedToken::Word(_)) = prev_token {
                             chars.next();
                             return Ok(Some(Token::Period));
                         }
@@ -1260,7 +1445,7 @@ impl<'a> Tokenizer<'a> {
                     // we should yield the dot as a dedicated token so compound identifiers
                     // starting with digits can be parsed correctly.
                     if s == "." && self.dialect.supports_numeric_prefix() {
-                        if let Some(Token::Word(_)) = prev_token {
+                        if let Some(&BorrowedToken::Word(_)) = prev_token {
                             return Ok(Some(Token::Period));
                         }
                     }
@@ -1319,7 +1504,7 @@ impl<'a> Tokenizer<'a> {
                                 s += word.as_str();
                                 return Ok(Some(Token::make_word(s.as_str(), None)));
                             }
-                        } else if prev_token == Some(&Token::Period) {
+                        } else if matches!(prev_token, Some(&BorrowedToken::Period)) {
                             // If the previous token was a period, thus not belonging to a number,
                             // the value we have is part of an identifier.
                             return Ok(Some(Token::make_word(s.as_str(), None)));
@@ -1783,80 +1968,106 @@ impl<'a> Tokenizer<'a> {
     }
 
     /// Tokenize dollar preceded value (i.e: a string/placeholder)
-    fn tokenize_dollar_preceded_value(&self, chars: &mut State) -> Result<Token, TokenizerError> {
-        let mut s = String::new();
-        let mut value = String::new();
+    fn tokenize_dollar_preceded_value(
+        &self,
+        chars: &mut State<'a>,
+    ) -> Result<Token, TokenizerError> {
+        chars.next(); // consume first $
 
-        chars.next();
-
-        // If the dialect does not support dollar-quoted strings, then `$$` is rather a placeholder.
+        // Case 1: $$text$$ (untagged dollar-quoted string)
         if matches!(chars.peek(), Some('$')) && !self.dialect.supports_dollar_placeholder() {
-            chars.next();
+            let (value, tag) = self.tokenize_dollar_quoted_string_borrowed(chars, None)?;
+            return Ok(Token::DollarQuotedString(DollarQuotedString {
+                value: value.into_owned(),
+                tag: tag.map(|t| t.into_owned()),
+            }));
+        }
 
-            let mut is_terminated = false;
-            let mut prev: Option<char> = None;
+        // If it's not $$ we have 2 options :
+        //   Case 2: $tag$text$tag$ (tagged dollar-quoted string) if dialect supports it
+        //   Case 3: $placeholder (e.g., $1, $name)
+        let tag_start = chars.byte_pos;
+        let _tag_slice = peeking_take_while_ref(chars, |ch| {
+            ch.is_alphanumeric()
+                || ch == '_'
+                || matches!(ch, '$' if self.dialect.supports_dollar_placeholder())
+        });
+        let tag_end = chars.byte_pos;
 
-            while let Some(&ch) = chars.peek() {
-                if prev == Some('$') {
-                    if ch == '$' {
-                        chars.next();
-                        is_terminated = true;
-                        break;
-                    } else {
-                        s.push('$');
-                        s.push(ch);
+        // Case 2: $tag$text$tag$ (tagged dollar-quoted string)
+        if matches!(chars.peek(), Some('$')) && !self.dialect.supports_dollar_placeholder() {
+            let tag_value = &chars.source[tag_start..tag_end];
+            let (value, tag) =
+                self.tokenize_dollar_quoted_string_borrowed(chars, Some(tag_value))?;
+            return Ok(Token::DollarQuotedString(DollarQuotedString {
+                value: value.into_owned(),
+                tag: tag.map(|t| t.into_owned()),
+            }));
+        }
+
+        // Case 3: $placeholder (e.g., $1, $name)
+        let tag_value = &chars.source[tag_start..tag_end];
+        Ok(Token::Placeholder(format!("${}", tag_value)))
+    }
+
+    /// Tokenize a dollar-quoted string ($$text$$ or $tag$text$tag$), returning borrowed slices.
+    /// tag_prefix: None for $$, Some("tag") for $tag$
+    /// Returns (value: Cow<'a, str>, tag: Option<Cow<'a, str>>)
+    fn tokenize_dollar_quoted_string_borrowed(
+        &self,
+        chars: &mut State<'a>,
+        tag_prefix: Option<&'a str>,
+    ) -> Result<(Cow<'a, str>, Option<Cow<'a, str>>), TokenizerError> {
+        chars.next(); // consume $ after tag (or second $ for $$)
+        let content_start = chars.byte_pos;
+
+        match tag_prefix {
+            None => {
+                // Case: $$text$$
+                let mut prev: Option<char> = None;
+
+                while let Some(&ch) = chars.peek() {
+                    if prev == Some('$') && ch == '$' {
+                        chars.next(); // consume final $
+                                      // content_end is before the first $ of $$
+                        let content_end = chars.byte_pos - 2;
+                        let value = &chars.source[content_start..content_end];
+                        return Ok((Cow::Borrowed(value), None));
                     }
-                } else if ch != '$' {
-                    s.push(ch);
+
+                    prev = Some(ch);
+                    chars.next();
                 }
 
-                prev = Some(ch);
-                chars.next();
-            }
-
-            return if chars.peek().is_none() && !is_terminated {
                 self.tokenizer_error(chars.location(), "Unterminated dollar-quoted string")
-            } else {
-                Ok(Token::DollarQuotedString(DollarQuotedString {
-                    value: s,
-                    tag: None,
-                }))
-            };
-        } else {
-            value.push_str(&peeking_take_while(chars, |ch| {
-                ch.is_alphanumeric()
-                    || ch == '_'
-                    // Allow $ as a placeholder character if the dialect supports it
-                    || matches!(ch, '$' if self.dialect.supports_dollar_placeholder())
-            }));
+            }
+            Some(tag) => {
+                // Case: $tag$text$tag$
+                let end_delimiter = format!("${}$", tag);
 
-            // If the dialect does not support dollar-quoted strings, don't look for the end delimiter.
-            if matches!(chars.peek(), Some('$')) && !self.dialect.supports_dollar_placeholder() {
-                chars.next();
-
-                let mut temp = String::new();
-                let end_delimiter = format!("${value}$");
-
+                // Scan for the end delimiter
+                let buffer_start = content_start;
                 loop {
                     match chars.next() {
-                        Some(ch) => {
-                            temp.push(ch);
+                        Some(_) => {
+                            let current_pos = chars.byte_pos;
+                            let buffer = &chars.source[buffer_start..current_pos];
 
-                            if temp.ends_with(&end_delimiter) {
-                                if let Some(temp) = temp.strip_suffix(&end_delimiter) {
-                                    s.push_str(temp);
-                                }
-                                break;
+                            if buffer.ends_with(&end_delimiter) {
+                                // Found the end delimiter
+                                let content_end = current_pos - end_delimiter.len();
+                                let value = &chars.source[content_start..content_end];
+                                return Ok((
+                                    Cow::Borrowed(value),
+                                    if tag.is_empty() {
+                                        None
+                                    } else {
+                                        Some(Cow::Borrowed(tag))
+                                    },
+                                ));
                             }
                         }
                         None => {
-                            if temp.ends_with(&end_delimiter) {
-                                if let Some(temp) = temp.strip_suffix(&end_delimiter) {
-                                    s.push_str(temp);
-                                }
-                                break;
-                            }
-
                             return self.tokenizer_error(
                                 chars.location(),
                                 "Unterminated dollar-quoted, expected $",
@@ -1864,15 +2075,8 @@ impl<'a> Tokenizer<'a> {
                         }
                     }
                 }
-            } else {
-                return Ok(Token::Placeholder(String::from("$") + &value));
             }
         }
-
-        Ok(Token::DollarQuotedString(DollarQuotedString {
-            value: s,
-            tag: if value.is_empty() { None } else { Some(value) },
-        }))
     }
 
     fn tokenizer_error<R>(
@@ -1887,19 +2091,30 @@ impl<'a> Tokenizer<'a> {
     }
 
     // Consume characters until newline
-    fn tokenize_single_line_comment(&self, chars: &mut State) -> String {
-        let mut comment = peeking_take_while(chars, |ch| match ch {
+    fn tokenize_single_line_comment(&self, chars: &mut State<'a>) -> String {
+        self.tokenize_single_line_comment_borrowed(chars)
+            .to_string()
+    }
+
+    /// Tokenize a single-line comment, returning a borrowed slice.
+    /// Returns a slice that includes the terminating newline character.
+    fn tokenize_single_line_comment_borrowed(&self, chars: &mut State<'a>) -> &'a str {
+        let start_pos = chars.byte_pos;
+
+        // Consume until newline
+        peeking_take_while_ref(chars, |ch| match ch {
             '\n' => false,                                           // Always stop at \n
             '\r' if dialect_of!(self is PostgreSqlDialect) => false, // Stop at \r for Postgres
             _ => true, // Keep consuming for other characters
         });
 
+        // Consume the newline character
         if let Some(ch) = chars.next() {
             assert!(ch == '\n' || ch == '\r');
-            comment.push(ch);
         }
 
-        comment
+        // Return slice including the newline
+        &chars.source[start_pos..chars.byte_pos]
     }
 
     /// Tokenize an identifier or keyword, after the first char(s) have already been consumed.
@@ -1938,7 +2153,7 @@ impl<'a> Tokenizer<'a> {
     fn tokenize_quoted_identifier(
         &self,
         quote_start: char,
-        chars: &mut State,
+        chars: &mut State<'a>,
     ) -> Result<String, TokenizerError> {
         let error_loc = chars.location();
         chars.next(); // consume the opening quote
@@ -2152,9 +2367,21 @@ impl<'a> Tokenizer<'a> {
 
     fn tokenize_multiline_comment(
         &self,
-        chars: &mut State,
+        chars: &mut State<'a>,
     ) -> Result<Option<Token>, TokenizerError> {
-        let mut s = String::new();
+        let s = self.tokenize_multiline_comment_borrowed(chars)?;
+        Ok(Some(Token::Whitespace(Whitespace::MultiLineComment(
+            s.to_string(),
+        ))))
+    }
+
+    /// Tokenize a multi-line comment, returning a borrowed slice.
+    /// Returns a slice that excludes the opening `/*` (already consumed) and the final closing `*/`.
+    fn tokenize_multiline_comment_borrowed(
+        &self,
+        chars: &mut State<'a>,
+    ) -> Result<&'a str, TokenizerError> {
+        let start_pos = chars.byte_pos;
         let mut nested = 1;
         let supports_nested_comments = self.dialect.supports_nested_comments();
 
@@ -2162,24 +2389,22 @@ impl<'a> Tokenizer<'a> {
             match chars.next() {
                 Some('/') if matches!(chars.peek(), Some('*')) && supports_nested_comments => {
                     chars.next(); // consume the '*'
-                    s.push('/');
-                    s.push('*');
                     nested += 1;
                 }
                 Some('*') if matches!(chars.peek(), Some('/')) => {
                     chars.next(); // consume the '/'
                     nested -= 1;
                     if nested == 0 {
-                        break Ok(Some(Token::Whitespace(Whitespace::MultiLineComment(s))));
+                        // We've consumed the final */, so exclude it from the slice
+                        let end_pos = chars.byte_pos - 2; // Subtract 2 bytes for '*' and '/'
+                        return Ok(&chars.source[start_pos..end_pos]);
                     }
-                    s.push('*');
-                    s.push('/');
                 }
-                Some(ch) => {
-                    s.push(ch);
+                Some(_) => {
+                    // Just consume the character, don't need to push to string
                 }
                 None => {
-                    break self.tokenizer_error(
+                    return self.tokenizer_error(
                         chars.location(),
                         "Unexpected EOF while in a multi-line comment",
                     );
@@ -2188,27 +2413,66 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    fn parse_quoted_ident(&self, chars: &mut State, quote_end: char) -> (String, Option<char>) {
+    fn parse_quoted_ident(&self, chars: &mut State<'a>, quote_end: char) -> (String, Option<char>) {
+        let (cow, last_char) = self.parse_quoted_ident_borrowed(chars, quote_end);
+        (cow.into_owned(), last_char)
+    }
+
+    /// Parse quoted identifier, returning borrowed slice when possible.
+    /// Returns `(Cow<'a, str>, Option<char>)` where the `Option<char>` is the closing quote.
+    fn parse_quoted_ident_borrowed(
+        &self,
+        chars: &mut State<'a>,
+        quote_end: char,
+    ) -> (Cow<'a, str>, Option<char>) {
+        let content_start = chars.byte_pos;
+        let mut has_doubled_quotes = false;
         let mut last_char = None;
-        let mut s = String::new();
+
+        // Scan to find the end and detect doubled quotes
         while let Some(ch) = chars.next() {
             if ch == quote_end {
                 if chars.peek() == Some(&quote_end) {
-                    chars.next();
-                    s.push(ch);
-                    if !self.unescape {
-                        // In no-escape mode, the given query has to be saved completely
-                        s.push(ch);
-                    }
+                    has_doubled_quotes = true;
+                    chars.next(); // consume the second quote
                 } else {
                     last_char = Some(quote_end);
                     break;
                 }
-            } else {
-                s.push(ch);
             }
         }
-        (s, last_char)
+
+        let content_end = if last_char.is_some() {
+            chars.byte_pos - 1 // exclude the closing quote
+        } else {
+            chars.byte_pos
+        };
+
+        let content = &chars.source[content_start..content_end];
+
+        // If no doubled quotes, we can always borrow
+        if !has_doubled_quotes {
+            return (Cow::Borrowed(content), last_char);
+        }
+
+        // If unescape=false, keep the content as-is (with doubled quotes)
+        if !self.unescape {
+            return (Cow::Borrowed(content), last_char);
+        }
+
+        // Need to unescape: process doubled quotes
+        let mut result = String::new();
+        let mut chars_iter = content.chars();
+
+        while let Some(ch) = chars_iter.next() {
+            result.push(ch);
+            if ch == quote_end {
+                // This is the first of a doubled quote, skip the second one
+                chars_iter.next();
+            }
+        }
+
+        (Cow::Owned(result), last_char)
     }
 
     #[allow(clippy::unnecessary_wraps)]
@@ -2304,7 +2568,69 @@ fn peeking_next_take_while(
 }
 
 fn unescape_single_quoted_string(chars: &mut State<'_>) -> Option<String> {
-    Unescape::new(chars).unescape()
+    borrow_or_unescape_single_quoted_string(chars, true).map(|cow| cow.into_owned())
+}
+
+/// Scans a single-quoted string and returns either a borrowed slice or an unescaped owned string.
+///
+/// Strategy: Scan once to find the end and detect escape sequences.
+/// - If no escapes exist (or unescape=false), return Cow::Borrowed
+/// - If escapes exist and unescape=true, reprocess using existing Unescape logic
+fn borrow_or_unescape_single_quoted_string<'a>(
+    chars: &mut State<'a>,
+    unescape: bool,
+) -> Option<Cow<'a, str>> {
+    let content_start = chars.byte_pos;
+    chars.next(); // consume opening '
+
+    // Scan to find end and check for escape sequences
+    let mut has_escapes = false;
+
+    loop {
+        match chars.next() {
+            Some('\'') => {
+                // Check for doubled single quote (escape)
+                if chars.peek() == Some(&'\'') {
+                    has_escapes = true;
+                    chars.next(); // consume the second '
+                } else {
+                    // End of string found (including closing ')
+                    let content_end = chars.byte_pos;
+                    let full_content = &chars.source[content_start..content_end];
+
+                    // If no unescaping needed, return borrowed (without quotes)
+                    if !unescape || !has_escapes {
+                        // Strip opening and closing quotes
+                        return Some(Cow::Borrowed(&full_content[1..full_content.len() - 1]));
+                    }
+
+                    // Need to unescape - reprocess using existing logic
+                    // Create a temporary State from the content
+                    let mut temp_state = State {
+                        peekable: full_content.chars().peekable(),
+                        source: full_content,
+                        line: 0,
+                        col: 0,
+                        byte_pos: 0,
+                    };
+
+                    return Unescape::new(&mut temp_state).unescape().map(Cow::Owned);
+                }
+            }
+            Some('\\') => {
+                has_escapes = true;
+                // Skip next character (it's escaped)
+                chars.next();
+            }
+            Some(_) => {
+                // Regular character, continue scanning
+            }
+            None => {
+                // Unexpected EOF
+                return None;
+            }
+        }
+    }
 }
 
 struct Unescape<'a: 'b, 'b> {
@@ -2452,8 +2778,83 @@ impl<'a: 'b, 'b> Unescape<'a, 'b> {
 }
 
 fn unescape_unicode_single_quoted_string(chars: &mut State<'_>) -> Result<String, TokenizerError> {
+    borrow_or_unescape_unicode_single_quoted_string(chars, true).map(|cow| cow.into_owned())
+}
+
+/// Scans a unicode-escaped single-quoted string and returns either a borrowed slice or an unescaped owned string.
+///
+/// Strategy: Scan once to find the end and detect escape sequences.
+/// - If no escapes exist (or unescape=false), return Cow::Borrowed
+/// - If escapes exist and unescape=true, reprocess with unicode escaping logic
+fn borrow_or_unescape_unicode_single_quoted_string<'a>(
+    chars: &mut State<'a>,
+    unescape: bool,
+) -> Result<Cow<'a, str>, TokenizerError> {
+    let content_start = chars.byte_pos;
+    let error_loc = chars.location();
+    chars.next(); // consume the opening quote
+
+    // Scan to find end and check for escape sequences
+    let mut has_escapes = false;
+
+    loop {
+        match chars.next() {
+            Some('\'') => {
+                // Check for doubled single quote (escape)
+                if chars.peek() == Some(&'\'') {
+                    has_escapes = true;
+                    chars.next(); // consume the second '
+                } else {
+                    // End of string found (including closing ')
+                    let content_end = chars.byte_pos;
+                    let full_content = &chars.source[content_start..content_end];
+
+                    // If no unescaping needed, return borrowed (without quotes)
+                    if !unescape || !has_escapes {
+                        // Strip opening and closing quotes
+                        return Ok(Cow::Borrowed(&full_content[1..full_content.len() - 1]));
+                    }
+
+                    // Need to unescape - reprocess with unicode logic
+                    // Create a temporary State from the content
+                    let mut temp_state = State {
+                        peekable: full_content.chars().peekable(),
+                        source: full_content,
+                        line: 0,
+                        col: 0,
+                        byte_pos: 0,
+                    };
+
+                    return process_unicode_string_with_escapes(&mut temp_state, error_loc)
+                        .map(Cow::Owned);
+                }
+            }
+            Some('\\') => {
+                has_escapes = true;
+                // Skip next character (it's escaped or part of unicode sequence)
+                chars.next();
+            }
+            Some(_) => {
+                // Regular character, continue scanning
+            }
+            None => {
+                return Err(TokenizerError {
+                    message: "Unterminated unicode encoded string literal".to_string(),
+                    location: error_loc,
+                });
+            }
+        }
+    }
+}
+
+/// Process a unicode-escaped string using the original unescape logic
+fn process_unicode_string_with_escapes(
+    chars: &mut State<'_>,
+    error_loc: Location,
+) -> Result<String, TokenizerError> {
     let mut unescaped = String::new();
     chars.next(); // consume the opening quote
+
     while let Some(c) = chars.next() {
         match c {
             '\'' => {
@@ -2480,9 +2881,10 @@ fn unescape_unicode_single_quoted_string(chars: &mut State<'_>) -> Result<String
             }
         }
     }
+
     Err(TokenizerError {
         message: "Unterminated unicode encoded string literal".to_string(),
-        location: chars.location(),
+        location: error_loc,
     })
 }
 

@@ -6773,9 +6773,11 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::EXTENSION) {
             return self.parse_drop_extension();
         } else if self.parse_keyword(Keyword::OPERATOR) {
-            // Check if this is DROP OPERATOR FAMILY
+            // Check if this is DROP OPERATOR FAMILY or DROP OPERATOR CLASS
             return if self.parse_keyword(Keyword::FAMILY) {
                 self.parse_drop_operator_family()
+            } else if self.parse_keyword(Keyword::CLASS) {
+                self.parse_drop_operator_class()
             } else {
                 self.parse_drop_operator()
             };
@@ -7587,6 +7589,23 @@ impl<'a> Parser<'a> {
         let using = self.parse_identifier()?;
         let drop_behavior = self.parse_optional_drop_behavior();
         Ok(Statement::DropOperatorFamily(DropOperatorFamily {
+            if_exists,
+            names,
+            using,
+            drop_behavior,
+        }))
+    }
+
+    /// Parse a [Statement::DropOperatorClass]
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-dropopclass.html)
+    pub fn parse_drop_operator_class(&mut self) -> Result<Statement, ParserError> {
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let names = self.parse_comma_separated(|p| p.parse_object_name(false))?;
+        self.expect_keyword(Keyword::USING)?;
+        let using = self.parse_identifier()?;
+        let drop_behavior = self.parse_optional_drop_behavior();
+        Ok(Statement::DropOperatorClass(DropOperatorClass {
             if_exists,
             names,
             using,

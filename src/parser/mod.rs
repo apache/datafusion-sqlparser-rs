@@ -12247,7 +12247,7 @@ impl<'a> Parser<'a> {
         let (tables, with_from_keyword) = if !self.parse_keyword(Keyword::FROM) {
             // `FROM` keyword is optional in BigQuery SQL.
             // https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#delete_statement
-            if dialect_of!(self is BigQueryDialect | GenericDialect) {
+            if dialect_of!(self is BigQueryDialect | OracleDialect | GenericDialect) {
                 (vec![], false)
             } else {
                 let tables = self.parse_comma_separated(|p| p.parse_object_name(false))?;

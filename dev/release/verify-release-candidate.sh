@@ -129,8 +129,10 @@ test_source_distribution() {
     exit 1
   fi
 
+  # Can't test using dry-run because sqlparser depends on sqlparser_derive
+  # see https://github.com/crate-ci/cargo-release/issues/691#issuecomment-2059866021
   # Check that publish works
-  cargo publish --dry-run
+  # cargo publish --dry-run
 }
 
 TEST_SUCCESS=no

@@ -4635,3 +4635,9 @@ fn test_alter_dynamic_table() {
     snowflake().verified_stmt("ALTER DYNAMIC TABLE my_dyn_table SUSPEND");
     snowflake().verified_stmt("ALTER DYNAMIC TABLE my_dyn_table RESUME");
 }
+
+#[test]
+fn test_alter_external_table() {
+    snowflake().verified_stmt("ALTER EXTERNAL TABLE some_table REFRESH");
+    snowflake().verified_stmt("ALTER EXTERNAL TABLE my_database.my_schema.my_external_table REFRESH");
+}

@@ -3880,8 +3880,11 @@ pub enum AlterTableType {
     /// <https://docs.snowflake.com/en/sql-reference/sql/alter-iceberg-table>
     Iceberg,
     /// Dynamic table type
-    /// <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
+    /// <https://docs.snowflake.com/en/sql-reference/sql/alter-dynamic-table>
     Dynamic,
+    /// External table type
+    /// <https://docs.snowflake.com/en/sql-reference/sql/alter-external-table>
+    External,
 }
 
 /// ALTER TABLE statement
@@ -3911,6 +3914,7 @@ impl fmt::Display for AlterTable {
         match &self.table_type {
             Some(AlterTableType::Iceberg) => write!(f, "ALTER ICEBERG TABLE ")?,
             Some(AlterTableType::Dynamic) => write!(f, "ALTER DYNAMIC TABLE ")?,
+            Some(AlterTableType::External) => write!(f, "ALTER EXTERNAL TABLE ")?,
             None => write!(f, "ALTER TABLE ")?,
         }
 

@@ -9778,6 +9778,7 @@ impl<'a> Parser<'a> {
             Keyword::POLICY,
             Keyword::CONNECTOR,
             Keyword::ICEBERG,
+            Keyword::EXTERNAL,
             Keyword::SCHEMA,
             Keyword::USER,
         ])?;
@@ -9789,10 +9790,14 @@ impl<'a> Parser<'a> {
             }
             Keyword::VIEW => self.parse_alter_view(),
             Keyword::TYPE => self.parse_alter_type(),
-            Keyword::TABLE => self.parse_alter_table(false),
+            Keyword::TABLE => self.parse_alter_table(None),
             Keyword::ICEBERG => {
                 self.expect_keyword(Keyword::TABLE)?;
-                self.parse_alter_table(true)
+                self.parse_alter_table(Some(AlterTableType::Iceberg))
+            }
+            Keyword::EXTERNAL => {
+                self.expect_keyword(Keyword::TABLE)?;
+                self.parse_alter_table(Some(AlterTableType::External))
             }
             Keyword::INDEX => {
                 let index_name = self.parse_object_name(false)?;
@@ -9822,7 +9827,10 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a [Statement::AlterTable]
-    pub fn parse_alter_table(&mut self, iceberg: bool) -> Result<Statement, ParserError> {
+    pub fn parse_alter_table(
+        &mut self,
+        table_type: Option<AlterTableType>,
+    ) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let only = self.parse_keyword(Keyword::ONLY); // [ ONLY ]
         let table_name = self.parse_object_name(false)?;
@@ -9855,11 +9863,7 @@ impl<'a> Parser<'a> {
             operations,
             location,
             on_cluster,
-            table_type: if iceberg {
-                Some(AlterTableType::Iceberg)
-            } else {
-                None
-            },
+            table_type,
             end_token: AttachedToken(end_token),
         }
         .into())

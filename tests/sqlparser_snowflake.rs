@@ -4639,6 +4639,7 @@ fn test_alter_dynamic_table() {
 #[test]
 fn test_alter_external_table() {
     snowflake().verified_stmt("ALTER EXTERNAL TABLE some_table REFRESH");
+    snowflake().verified_stmt("ALTER EXTERNAL TABLE some_table REFRESH 'year=2025/month=12/'");
     snowflake().verified_stmt("ALTER EXTERNAL TABLE my_database.my_schema.my_external_table REFRESH");
     snowflake().verified_stmt("ALTER EXTERNAL TABLE some_table RENAME TO new_table_name");
     snowflake().verified_stmt("ALTER EXTERNAL TABLE some_table ADD PARTITION COLUMN column_name VARCHAR");

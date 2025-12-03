@@ -624,7 +624,7 @@ fn parse_alter_dynamic_table(parser: &mut Parser) -> Result<Statement, ParserErr
 
     // Parse the operation (REFRESH, SUSPEND, or RESUME)
     let operation = if parser.parse_keyword(Keyword::REFRESH) {
-        AlterTableOperation::Refresh
+        AlterTableOperation::Refresh { subpath: None }
     } else if parser.parse_keyword(Keyword::SUSPEND) {
         AlterTableOperation::Suspend
     } else if parser.parse_keyword(Keyword::RESUME) {
@@ -662,7 +662,15 @@ fn parse_alter_external_table(parser: &mut Parser) -> Result<Statement, ParserEr
 
     // Parse the operation
     let operation = if parser.parse_keyword(Keyword::REFRESH) {
-        AlterTableOperation::Refresh
+        // Optional subpath for refreshing specific partitions
+        let subpath = match parser.peek_token().token {
+            Token::SingleQuotedString(s) => {
+                parser.next_token();
+                Some(s)
+            }
+            _ => None,
+        };
+        AlterTableOperation::Refresh { subpath }
     } else if parser.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
         let new_table_name = parser.parse_object_name(false)?;
         AlterTableOperation::RenameTable {

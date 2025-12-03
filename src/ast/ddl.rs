@@ -371,10 +371,15 @@ pub enum AlterTableOperation {
     DropClusteringKey,
     SuspendRecluster,
     ResumeRecluster,
-    /// `REFRESH`
+    /// `REFRESH [ '<subpath>' ]`
     ///
-    /// Note: this is Snowflake specific for dynamic tables <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
-    Refresh,
+    /// Note: this is Snowflake specific for dynamic/external tables
+    /// <https://docs.snowflake.com/en/sql-reference/sql/alter-dynamic-table>
+    /// <https://docs.snowflake.com/en/sql-reference/sql/alter-external-table>
+    Refresh {
+        /// Optional subpath for external table refresh
+        subpath: Option<String>,
+    },
     /// `SUSPEND`
     ///
     /// Note: this is Snowflake specific for dynamic tables <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
@@ -863,8 +868,12 @@ impl fmt::Display for AlterTableOperation {
                 write!(f, "RESUME RECLUSTER")?;
                 Ok(())
             }
-            AlterTableOperation::Refresh => {
-                write!(f, "REFRESH")
+            AlterTableOperation::Refresh { subpath } => {
+                write!(f, "REFRESH")?;
+                if let Some(path) = subpath {
+                    write!(f, " '{path}'")?;
+                }
+                Ok(())
             }
             AlterTableOperation::Suspend => {
                 write!(f, "SUSPEND")
@@ -3880,8 +3889,11 @@ pub enum AlterTableType {
     /// <https://docs.snowflake.com/en/sql-reference/sql/alter-iceberg-table>
     Iceberg,
     /// Dynamic table type
-    /// <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
+    /// <https://docs.snowflake.com/en/sql-reference/sql/alter-dynamic-table>
     Dynamic,
+    /// External table type
+    /// <https://docs.snowflake.com/en/sql-reference/sql/alter-external-table>
+    External,
 }
 
 /// ALTER TABLE statement
@@ -3911,6 +3923,7 @@ impl fmt::Display for AlterTable {
         match &self.table_type {
             Some(AlterTableType::Iceberg) => write!(f, "ALTER ICEBERG TABLE ")?,
             Some(AlterTableType::Dynamic) => write!(f, "ALTER DYNAMIC TABLE ")?,
+            Some(AlterTableType::External) => write!(f, "ALTER EXTERNAL TABLE ")?,
             None => write!(f, "ALTER TABLE ")?,
         }
 

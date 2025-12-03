@@ -683,9 +683,22 @@ fn parse_alter_external_table(parser: &mut Parser) -> Result<Statement, ParserEr
             column_name,
             data_type,
         }
+    } else if parser.parse_keyword(Keyword::SET) {
+        // Parse SET key = value options (e.g., SET AUTO_REFRESH = TRUE)
+        let mut options = vec![];
+        loop {
+            let key = parser.parse_identifier()?;
+            parser.expect_token(&Token::Eq)?;
+            let value = parser.parse_expr()?;
+            options.push(SqlOption::KeyValue { key, value });
+            if !parser.consume_token(&Token::Comma) {
+                break;
+            }
+        }
+        AlterTableOperation::SetOptions { options }
     } else {
         return parser.expected(
-            "REFRESH, RENAME TO, or ADD PARTITION COLUMN after ALTER EXTERNAL TABLE",
+            "REFRESH, RENAME TO, ADD PARTITION COLUMN, or SET after ALTER EXTERNAL TABLE",
             parser.peek_token(),
         );
     };

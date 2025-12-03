@@ -437,6 +437,16 @@ pub enum AlterTableOperation {
     SetOptionsParens {
         options: Vec<SqlOption>,
     },
+    /// `SET key = value` options without parentheses.
+    ///
+    /// Example:
+    /// ```sql
+    /// SET AUTO_REFRESH = TRUE
+    /// ```
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/alter-external-table)
+    SetOptions {
+        options: Vec<SqlOption>,
+    },
 }
 
 /// An `ALTER Policy` (`Statement::AlterPolicy`) operation
@@ -913,6 +923,9 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::SetOptionsParens { options } => {
                 write!(f, "SET ({})", display_comma_separated(options))
+            }
+            AlterTableOperation::SetOptions { options } => {
+                write!(f, "SET {}", display_comma_separated(options))
             }
         }
     }

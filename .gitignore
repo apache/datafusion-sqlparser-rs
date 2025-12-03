@@ -19,3 +19,6 @@ Cargo.lock
 *.swp
 
 .DS_store
+
+# dhat profiler output files
+dhat*.json

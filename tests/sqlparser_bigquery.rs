@@ -2629,7 +2629,7 @@ fn test_export_data() {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken(TokenWithSpan::new(
                         Token::Word(Word {
-                            value: "SELECT".to_string(),
+                            value: "SELECT".to_string().into(),
                             quote_style: None,
                             keyword: Keyword::SELECT,
                         }),
@@ -2733,7 +2733,7 @@ fn test_export_data() {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken(TokenWithSpan::new(
                         Token::Word(Word {
-                            value: "SELECT".to_string(),
+                            value: "SELECT".to_string().into(),
                             quote_style: None,
                             keyword: Keyword::SELECT,
                         }),

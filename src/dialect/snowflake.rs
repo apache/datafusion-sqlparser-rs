@@ -1251,7 +1251,7 @@ pub fn parse_copy_into(parser: &Parser) -> Result<Statement, ParserError> {
                 continue_loop = false;
                 let next_token = parser.next_token();
                 match next_token.token {
-                    BorrowedToken::SingleQuotedString(s) => files.push(s),
+                    BorrowedToken::SingleQuotedString(s) => files.push(s.into_owned()),
                     _ => parser.expected("file token", next_token)?,
                 };
                 if parser.next_token().token.eq(&BorrowedToken::Comma) {
@@ -1266,7 +1266,7 @@ pub fn parse_copy_into(parser: &Parser) -> Result<Statement, ParserError> {
             parser.expect_token(&BorrowedToken::Eq)?;
             let next_token = parser.next_token();
             pattern = Some(match next_token.token {
-                BorrowedToken::SingleQuotedString(s) => s,
+                BorrowedToken::SingleQuotedString(s) => s.into_owned(),
                 _ => parser.expected("pattern", next_token)?,
             });
         // VALIDATION MODE
@@ -1417,7 +1417,7 @@ fn parse_stage_params(parser: &Parser) -> Result<StageParamsObject, ParserError>
     if parser.parse_keyword(Keyword::URL) {
         parser.expect_token(&BorrowedToken::Eq)?;
         url = Some(match parser.next_token().token {
-            BorrowedToken::SingleQuotedString(word) => Ok(word),
+            BorrowedToken::SingleQuotedString(word) => Ok(word.into_owned()),
             _ => parser.expected("a URL statement", parser.peek_token()),
         }?)
     }
@@ -1432,7 +1432,7 @@ fn parse_stage_params(parser: &Parser) -> Result<StageParamsObject, ParserError>
     if parser.parse_keyword(Keyword::ENDPOINT) {
         parser.expect_token(&BorrowedToken::Eq)?;
         endpoint = Some(match parser.next_token().token {
-            BorrowedToken::SingleQuotedString(word) => Ok(word),
+            BorrowedToken::SingleQuotedString(word) => Ok(word.into_owned()),
             _ => parser.expected("an endpoint statement", parser.peek_token()),
         }?)
     }
@@ -1486,7 +1486,7 @@ fn parse_session_options(parser: &Parser, set: bool) -> Result<Vec<KeyValueOptio
                     options.push(option);
                 } else {
                     options.push(KeyValueOption {
-                        option_name: key.value,
+                        option_name: key.value.to_string(),
                         option_value: KeyValueOptionKind::Single(Value::Placeholder(empty())),
                     });
                 }

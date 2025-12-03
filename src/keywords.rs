@@ -1248,3 +1248,57 @@ pub const RESERVED_FOR_IDENTIFIER: &[Keyword] = &[
     Keyword::STRUCT,
     Keyword::TRIM,
 ];
+
+#[cfg(feature = "std")]
+use std::collections::HashMap;
+#[cfg(feature = "std")]
+use std::sync::OnceLock;
+#[cfg(feature = "std")]
+use unicase::UniCase;
+
+/// Lazy-initialized HashMap for O(1) keyword lookups
+#[cfg(feature = "std")]
+static KEYWORD_MAP: OnceLock<HashMap<UniCase<&'static str>, Keyword>> = OnceLock::new();
+
+/// Get the HashMap of keywords, initializing it on first access
+#[cfg(feature = "std")]
+fn get_keyword_map() -> &'static HashMap<UniCase<&'static str>, Keyword> {
+    KEYWORD_MAP.get_or_init(|| {
+        let mut map = HashMap::with_capacity(ALL_KEYWORDS.len());
+        for (keyword_str, keyword_enum) in ALL_KEYWORDS.iter().zip(ALL_KEYWORDS_INDEX.iter()) {
+            map.insert(UniCase::ascii(*keyword_str), *keyword_enum);
+        }
+        map
+    })
+}
+
+/// Look up a keyword by string, case-insensitively, with O(1) complexity
+///
+/// # Arguments
+/// * `word` - The word to look up (case-insensitive)
+///
+/// # Returns
+/// * `Some(Keyword)` if the word is a keyword
+/// * `None` if the word is not a keyword
+///
+/// # Example
+/// ```
+/// use sqlparser::keywords::{get_keyword, Keyword};
+///
+/// assert_eq!(get_keyword("SELECT"), Some(Keyword::SELECT));
+/// assert_eq!(get_keyword("select"), Some(Keyword::SELECT));
+/// assert_eq!(get_keyword("my_table"), None);
+/// ```
+#[cfg(feature = "std")]
+pub fn get_keyword(word: &str) -> Option<Keyword> {
+    get_keyword_map().get(&UniCase::ascii(word)).copied()
+}
+
+/// Fallback for no_std: use binary search (same as before)
+#[cfg(not(feature = "std"))]
+pub fn get_keyword(word: &str) -> Option<Keyword> {
+    ALL_KEYWORDS
+        .binary_search_by(|k| unicase::UniCase::ascii(k).cmp(&unicase::UniCase::ascii(&word)))
+        .ok()
+        .map(|idx| ALL_KEYWORDS_INDEX[idx])
+}

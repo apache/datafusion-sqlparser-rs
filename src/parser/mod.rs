@@ -14,6 +14,7 @@
 
 #[cfg(not(feature = "std"))]
 use alloc::{
+    borrow::Cow,
     boxed::Box,
     format,
     string::{String, ToString},
@@ -25,6 +26,8 @@ use core::{
     str::FromStr,
 };
 use helpers::attached_token::AttachedToken;
+#[cfg(feature = "std")]
+use std::borrow::Cow;
 
 use log::debug;
 
@@ -1793,8 +1796,11 @@ impl<'a> Parser<'a> {
                         break;
                     }
                     BorrowedToken::SingleQuotedString(s) => {
-                        let expr =
-                            Expr::Identifier(Ident::with_quote_and_span('\'', next_token.span, s));
+                        let expr = Expr::Identifier(Ident::with_quote_and_span(
+                            '\'',
+                            next_token.span,
+                            s.as_ref(),
+                        ));
                         chain.push(AccessExpr::Dot(expr));
                         self.advance_token(); // The consumed string
                     }
@@ -3893,7 +3899,7 @@ impl<'a> Parser<'a> {
                 // any keyword here unquoted.
                 keyword: _,
             }) => Ok(JsonPathElem::Dot {
-                key: value,
+                key: value.to_string(),
                 quoted: quote_style.is_some(),
             }),
 
@@ -7744,7 +7750,9 @@ impl<'a> Parser<'a> {
             if dialect_of!(self is HiveDialect) && self.parse_keyword(Keyword::COMMENT) {
                 let next_token = self.next_token();
                 match next_token.token {
-                    BorrowedToken::SingleQuotedString(str) => Some(CommentDef::WithoutEq(str)),
+                    BorrowedToken::SingleQuotedString(str) => {
+                        Some(CommentDef::WithoutEq(str.into_owned()))
+                    }
                     _ => self.expected("comment", next_token)?,
                 }
             } else {
@@ -7965,11 +7973,11 @@ impl<'a> Parser<'a> {
 
             let comment = match (has_eq, value.token) {
                 (true, BorrowedToken::SingleQuotedString(s)) => {
-                    Ok(Some(SqlOption::Comment(CommentDef::WithEq(s))))
+                    Ok(Some(SqlOption::Comment(CommentDef::WithEq(s.into_owned()))))
                 }
-                (false, BorrowedToken::SingleQuotedString(s)) => {
-                    Ok(Some(SqlOption::Comment(CommentDef::WithoutEq(s))))
-                }
+                (false, BorrowedToken::SingleQuotedString(s)) => Ok(Some(SqlOption::Comment(
+                    CommentDef::WithoutEq(s.into_owned()),
+                ))),
                 (_, token) => self.expected(
                     "BorrowedToken::SingleQuotedString",
                     TokenWithSpan::wrap(token),
@@ -8014,8 +8022,8 @@ impl<'a> Parser<'a> {
             let value = self.next_token();
 
             let tablespace = match value.token {
-                BorrowedToken::Word(Word { value: name, .. })
-                | BorrowedToken::SingleQuotedString(name) => {
+                BorrowedToken::Word(Word { value: name, .. }) => {
+                    let name = name.to_string();
                     let storage = match self.parse_keyword(Keyword::STORAGE) {
                         true => {
                             let _ = self.consume_token(&BorrowedToken::Eq);
@@ -8035,6 +8043,28 @@ impl<'a> Parser<'a> {
 
                     Ok(Some(SqlOption::TableSpace(TablespaceOption {
                         name,
+                        storage,
+                    })))
+                }
+                BorrowedToken::SingleQuotedString(name) => {
+                    let storage = match self.parse_keyword(Keyword::STORAGE) {
+                        true => {
+                            let _ = self.consume_token(&BorrowedToken::Eq);
+                            let storage_token = self.next_token();
+                            match &storage_token.token {
+                                BorrowedToken::Word(w) => match w.value.to_uppercase().as_str() {
+                                    "DISK" => Some(StorageType::Disk),
+                                    "MEMORY" => Some(StorageType::Memory),
+                                    _ => self.expected("DISK or MEMORY", storage_token)?,
+                                },
+                                _ => self.expected("BorrowedToken::Word", storage_token)?,
+                            }
+                        }
+                        false => None,
+                    };
+
+                    Ok(Some(SqlOption::TableSpace(TablespaceOption {
+                        name: name.into_owned(),
                         storage,
                     })))
                 }
@@ -8176,7 +8206,7 @@ impl<'a> Parser<'a> {
     pub fn parse_comment_value(&self) -> Result<String, ParserError> {
         let next_token = self.next_token();
         let value = match next_token.token {
-            BorrowedToken::SingleQuotedString(str) => str,
+            BorrowedToken::SingleQuotedString(str) => str.into_owned(),
             BorrowedToken::DollarQuotedString(str) => str.value,
             _ => self.expected("string literal", next_token)?,
         };
@@ -10381,8 +10411,8 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::NULL => ok_value(Value::Null),
                 Keyword::NoKeyword if w.quote_style.is_some() => match w.quote_style {
-                    Some('"') => ok_value(Value::DoubleQuotedString(w.value)),
-                    Some('\'') => ok_value(Value::SingleQuotedString(w.value)),
+                    Some('"') => ok_value(Value::DoubleQuotedString(w.value.into_owned())),
+                    Some('\'') => ok_value(Value::SingleQuotedString(w.value.into_owned())),
                     _ => self.expected(
                         "A value?",
                         TokenWithSpan {
@@ -10484,11 +10514,18 @@ impl<'a> Parser<'a> {
 
     fn maybe_concat_string_literal(&self, mut str: String) -> String {
         if self.dialect.supports_string_literal_concatenation() {
-            while let BorrowedToken::SingleQuotedString(ref s)
-            | BorrowedToken::DoubleQuotedString(ref s) = self.peek_token_ref().token
-            {
-                str.push_str(s.clone().as_str());
-                self.advance_token();
+            loop {
+                match &self.peek_token_ref().token {
+                    BorrowedToken::SingleQuotedString(s) => {
+                        str.push_str(s.as_ref());
+                        self.advance_token();
+                    }
+                    BorrowedToken::DoubleQuotedString(s) => {
+                        str.push_str(s);
+                        self.advance_token();
+                    }
+                    _ => break,
+                }
             }
         }
         str
@@ -10584,8 +10621,8 @@ impl<'a> Parser<'a> {
                 value,
                 keyword: Keyword::NoKeyword,
                 ..
-            }) => Ok(value),
-            BorrowedToken::SingleQuotedString(s) => Ok(s),
+            }) => Ok(value.into_owned()),
+            BorrowedToken::SingleQuotedString(s) => Ok(s.into_owned()),
             BorrowedToken::DoubleQuotedString(s) => Ok(s),
             BorrowedToken::EscapedStringLiteral(s) if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
                 Ok(s)
@@ -11100,7 +11137,7 @@ impl<'a> Parser<'a> {
         loop {
             let next_token = self.next_token();
             match next_token.token {
-                BorrowedToken::SingleQuotedString(value) => values.push(value),
+                BorrowedToken::SingleQuotedString(value) => values.push(value.into_owned()),
                 _ => self.expected("a string", next_token)?,
             }
             let next_token = self.next_token();
@@ -12125,7 +12162,7 @@ impl<'a> Parser<'a> {
                 match next_token.token {
                     BorrowedToken::Word(w) => modifiers.push(w.to_string()),
                     BorrowedToken::Number(n, _) => modifiers.push(n),
-                    BorrowedToken::SingleQuotedString(s) => modifiers.push(s),
+                    BorrowedToken::SingleQuotedString(s) => modifiers.push(s.into_owned()),
 
                     BorrowedToken::Comma => {
                         continue;
@@ -13261,7 +13298,7 @@ impl<'a> Parser<'a> {
         if token2 == BorrowedToken::Period {
             match token1.token {
                 BorrowedToken::Word(w) => {
-                    schema_name = w.value;
+                    schema_name = w.value.to_string();
                 }
                 _ => {
                     return self.expected("Schema name", token1);
@@ -13269,7 +13306,7 @@ impl<'a> Parser<'a> {
             }
             match token3.token {
                 BorrowedToken::Word(w) => {
-                    table_name = w.value;
+                    table_name = w.value.to_string();
                 }
                 _ => {
                     return self.expected("Table name", token3);
@@ -13282,7 +13319,7 @@ impl<'a> Parser<'a> {
         } else {
             match token1.token {
                 BorrowedToken::Word(w) => {
-                    table_name = w.value;
+                    table_name = w.value.to_string();
                 }
                 _ => {
                     return self.expected("Table name", token1);
@@ -14408,7 +14445,9 @@ impl<'a> Parser<'a> {
                 None => {
                     let next_token = self.next_token();
                     if let BorrowedToken::Word(w) = next_token.token {
-                        Expr::Value(Value::Placeholder(w.value).with_span(next_token.span))
+                        Expr::Value(
+                            Value::Placeholder(w.value.into_owned()).with_span(next_token.span),
+                        )
                     } else {
                         return parser_err!(
                             "Expecting number or byte length e.g. 100M",
@@ -14962,7 +15001,7 @@ impl<'a> Parser<'a> {
         let r#type = self.parse_data_type()?;
         let path = if let BorrowedToken::SingleQuotedString(path) = self.peek_token().token {
             self.next_token();
-            Some(path)
+            Some(path.into_owned())
         } else {
             None
         };
@@ -16491,7 +16530,7 @@ impl<'a> Parser<'a> {
         let opt_ilike = if self.parse_keyword(Keyword::ILIKE) {
             let next_token = self.next_token();
             let pattern = match next_token.token {
-                BorrowedToken::SingleQuotedString(s) => s,
+                BorrowedToken::SingleQuotedString(s) => s.into_owned(),
                 _ => return self.expected("ilike pattern", next_token),
             };
             Some(IlikeSelectItem { pattern })
@@ -17128,7 +17167,11 @@ impl<'a> Parser<'a> {
             (true, _) => BorrowedToken::RParen,
             (false, BorrowedToken::EOF) => BorrowedToken::EOF,
             (false, BorrowedToken::Word(w)) if end_kws.contains(&w.keyword) => {
-                BorrowedToken::Word(w)
+                BorrowedToken::Word(Word {
+                    value: Cow::Owned(w.value.into_owned()),
+                    quote_style: w.quote_style,
+                    keyword: w.keyword,
+                })
             }
             (false, _) => BorrowedToken::SemiColon,
         };
@@ -18327,27 +18370,27 @@ impl<'a> Parser<'a> {
         self.expect_token(&BorrowedToken::Eq)?;
         match self.peek_token().token {
             BorrowedToken::SingleQuotedString(_) => Ok(KeyValueOption {
-                option_name: key.value.clone(),
+                option_name: key.value.to_string(),
                 option_value: KeyValueOptionKind::Single(self.parse_value()?.into()),
             }),
             BorrowedToken::Word(word)
                 if word.keyword == Keyword::TRUE || word.keyword == Keyword::FALSE =>
             {
                 Ok(KeyValueOption {
-                    option_name: key.value.clone(),
+                    option_name: key.value.to_string(),
                     option_value: KeyValueOptionKind::Single(self.parse_value()?.into()),
                 })
             }
             BorrowedToken::Number(..) => Ok(KeyValueOption {
-                option_name: key.value.clone(),
+                option_name: key.value.to_string(),
                 option_value: KeyValueOptionKind::Single(self.parse_value()?.into()),
             }),
             BorrowedToken::Word(word) => {
                 self.next_token();
                 Ok(KeyValueOption {
-                    option_name: key.value.clone(),
+                    option_name: key.value.to_string(),
                     option_value: KeyValueOptionKind::Single(Value::Placeholder(
-                        word.value.clone(),
+                        word.value.to_string(),
                     )),
                 })
             }
@@ -18365,12 +18408,12 @@ impl<'a> Parser<'a> {
                     Some(values) => {
                         let values = values.into_iter().map(|v| v.value).collect();
                         Ok(KeyValueOption {
-                            option_name: key.value.clone(),
+                            option_name: key.value.to_string(),
                             option_value: KeyValueOptionKind::Multi(values),
                         })
                     }
                     None => Ok(KeyValueOption {
-                        option_name: key.value.clone(),
+                        option_name: key.value.to_string(),
                         option_value: KeyValueOptionKind::KeyValueOptions(Box::new(
                             self.parse_key_value_options(true, &[])?,
                         )),
@@ -18405,11 +18448,11 @@ fn maybe_prefixed_expr(expr: Expr, prefix: Option<Ident>) -> Expr {
     }
 }
 
-impl Word {
+impl Word<'_> {
     #[deprecated(since = "0.54.0", note = "please use `into_ident` instead")]
     pub fn to_ident(&self, span: Span) -> Ident {
         Ident {
-            value: self.value.clone(),
+            value: self.value.to_string(),
             quote_style: self.quote_style,
             span,
         }
@@ -18418,7 +18461,7 @@ impl Word {
     /// Convert this word into an [`Ident`] identifier
     pub fn into_ident(self, span: Span) -> Ident {
         Ident {
-            value: self.value,
+            value: self.value.into_owned(),
             quote_style: self.quote_style,
             span,
         }

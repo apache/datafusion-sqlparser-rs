@@ -31,7 +31,7 @@ use crate::ast::{
     ColumnPolicy, ColumnPolicyProperty, ContactEntry, CopyIntoSnowflakeKind, CreateTableLikeKind,
     DollarQuotedString, Ident, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
     IdentityPropertyKind, IdentityPropertyOrder, InitializeKind, ObjectName, ObjectNamePart,
-    RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement,
+    RefreshModeKind, RenameTableNameKind, RowAccessPolicy, ShowObjects, SqlOption, Statement,
     StorageSerializationPolicy, TagsColumnOption, Value, WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
@@ -660,11 +660,19 @@ fn parse_alter_external_table(parser: &mut Parser) -> Result<Statement, ParserEr
     let if_exists = parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
     let table_name = parser.parse_object_name(true)?;
 
-    // Parse the operation (REFRESH for now, can be extended)
+    // Parse the operation
     let operation = if parser.parse_keyword(Keyword::REFRESH) {
         AlterTableOperation::Refresh
+    } else if parser.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+        let new_table_name = parser.parse_object_name(false)?;
+        AlterTableOperation::RenameTable {
+            table_name: RenameTableNameKind::To(new_table_name),
+        }
     } else {
-        return parser.expected("REFRESH after ALTER EXTERNAL TABLE", parser.peek_token());
+        return parser.expected(
+            "REFRESH or RENAME TO after ALTER EXTERNAL TABLE",
+            parser.peek_token(),
+        );
     };
 
     let end_token = if parser.peek_token_ref().token == Token::SemiColon {

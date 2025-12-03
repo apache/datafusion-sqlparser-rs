@@ -387,6 +387,34 @@ pub enum AlterTableOperation {
         column_name: Ident,
         data_type: DataType,
     },
+    /// `ADD FILES ( '<path>' [, '<path>', ...] )`
+    ///
+    /// Note: this is Snowflake specific for external tables <https://docs.snowflake.com/en/sql-reference/sql/alter-external-table>
+    AddFiles {
+        files: Vec<String>,
+    },
+    /// `REMOVE FILES ( '<path>' [, '<path>', ...] )`
+    ///
+    /// Note: this is Snowflake specific for external tables <https://docs.snowflake.com/en/sql-reference/sql/alter-external-table>
+    RemoveFiles {
+        files: Vec<String>,
+    },
+    /// `ADD PARTITION ( <part_col_name> = '<string>' [, ...] ) LOCATION '<path>'`
+    ///
+    /// Note: this is Snowflake specific for external tables <https://docs.snowflake.com/en/sql-reference/sql/alter-external-table>
+    AddPartition {
+        /// Partition column values as key-value pairs
+        partition: Vec<(Ident, String)>,
+        /// Location path
+        location: String,
+    },
+    /// `DROP PARTITION LOCATION '<path>'`
+    ///
+    /// Note: this is Snowflake specific for external tables <https://docs.snowflake.com/en/sql-reference/sql/alter-external-table>
+    DropPartitionLocation {
+        /// Location path
+        location: String,
+    },
     /// `SUSPEND`
     ///
     /// Note: this is Snowflake specific for dynamic tables <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
@@ -897,6 +925,46 @@ impl fmt::Display for AlterTableOperation {
                 data_type,
             } => {
                 write!(f, "ADD PARTITION COLUMN {column_name} {data_type}")
+            }
+            AlterTableOperation::AddFiles { files } => {
+                write!(
+                    f,
+                    "ADD FILES ({})",
+                    files
+                        .iter()
+                        .map(|f| format!("'{f}'"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            AlterTableOperation::RemoveFiles { files } => {
+                write!(
+                    f,
+                    "REMOVE FILES ({})",
+                    files
+                        .iter()
+                        .map(|f| format!("'{f}'"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            AlterTableOperation::AddPartition {
+                partition,
+                location,
+            } => {
+                write!(
+                    f,
+                    "ADD PARTITION ({}) LOCATION '{}'",
+                    partition
+                        .iter()
+                        .map(|(k, v)| format!("{k} = '{v}'"))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    location
+                )
+            }
+            AlterTableOperation::DropPartitionLocation { location } => {
+                write!(f, "DROP PARTITION LOCATION '{location}'")
             }
             AlterTableOperation::Suspend => {
                 write!(f, "SUSPEND")
@@ -3953,13 +4021,28 @@ impl fmt::Display for AlterTable {
             None => write!(f, "ALTER TABLE ")?,
         }
 
-        if self.if_exists {
+        // For external table ADD PARTITION / DROP PARTITION operations,
+        // IF EXISTS comes after the table name per Snowflake syntax
+        let if_exists_after_table_name = self.table_type == Some(AlterTableType::External)
+            && self.operations.iter().any(|op| {
+                matches!(
+                    op,
+                    AlterTableOperation::AddPartition { .. }
+                        | AlterTableOperation::DropPartitionLocation { .. }
+                )
+            });
+
+        if self.if_exists && !if_exists_after_table_name {
             write!(f, "IF EXISTS ")?;
         }
         if self.only {
             write!(f, "ONLY ")?;
         }
-        write!(f, "{} ", &self.name)?;
+        write!(f, "{}", &self.name)?;
+        if self.if_exists && if_exists_after_table_name {
+            write!(f, " IF EXISTS")?;
+        }
+        write!(f, " ")?;
         if let Some(cluster) = &self.on_cluster {
             write!(f, "ON CLUSTER {cluster} ")?;
         }

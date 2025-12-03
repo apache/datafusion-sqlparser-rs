@@ -1147,6 +1147,12 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::ResumeRecluster => Span::empty(),
             AlterTableOperation::Refresh { .. } => Span::empty(),
             AlterTableOperation::AddPartitionColumn { column_name, .. } => column_name.span,
+            AlterTableOperation::AddFiles { .. } => Span::empty(),
+            AlterTableOperation::RemoveFiles { .. } => Span::empty(),
+            AlterTableOperation::AddPartition { partition, .. } => {
+                union_spans(partition.iter().map(|(k, _)| k.span))
+            }
+            AlterTableOperation::DropPartitionLocation { .. } => Span::empty(),
             AlterTableOperation::Suspend => Span::empty(),
             AlterTableOperation::Resume => Span::empty(),
             AlterTableOperation::Algorithm { .. } => Span::empty(),

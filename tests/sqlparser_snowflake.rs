@@ -4644,4 +4644,30 @@ fn test_alter_external_table() {
     snowflake().verified_stmt("ALTER EXTERNAL TABLE some_table RENAME TO new_table_name");
     snowflake().verified_stmt("ALTER EXTERNAL TABLE some_table ADD PARTITION COLUMN column_name VARCHAR");
     snowflake().verified_stmt("ALTER EXTERNAL TABLE some_table SET AUTO_REFRESH = true");
+    snowflake().verified_stmt("ALTER EXTERNAL TABLE some_table ADD FILES ('file1.parquet')");
+    snowflake().verified_stmt(
+        "ALTER EXTERNAL TABLE some_table ADD FILES ('path/file1.parquet', 'path/file2.parquet')",
+    );
+    snowflake().verified_stmt("ALTER EXTERNAL TABLE some_table REMOVE FILES ('file1.parquet')");
+    snowflake().verified_stmt(
+        "ALTER EXTERNAL TABLE some_table REMOVE FILES ('path/file1.parquet', 'path/file2.parquet')",
+    );
+    // ADD PARTITION with location
+    snowflake()
+        .verified_stmt("ALTER EXTERNAL TABLE some_table ADD PARTITION (year = '2024') LOCATION 's3://bucket/path/'");
+    snowflake().verified_stmt(
+        "ALTER EXTERNAL TABLE some_table ADD PARTITION (year = '2024', month = '12') LOCATION 's3://bucket/path/'",
+    );
+    // DROP PARTITION location
+    snowflake()
+        .verified_stmt("ALTER EXTERNAL TABLE some_table DROP PARTITION LOCATION 's3://bucket/path/'");
+    // Test IF EXISTS (before table name for most operations)
+    snowflake().verified_stmt("ALTER EXTERNAL TABLE IF EXISTS some_table REFRESH");
+    // Test IF EXISTS (after table name for ADD/DROP PARTITION per Snowflake syntax)
+    snowflake().verified_stmt(
+        "ALTER EXTERNAL TABLE some_table IF EXISTS ADD PARTITION (year = '2024') LOCATION 's3://bucket/path/'",
+    );
+    snowflake().verified_stmt(
+        "ALTER EXTERNAL TABLE some_table IF EXISTS DROP PARTITION LOCATION 's3://bucket/path/'",
+    );
 }

@@ -657,8 +657,14 @@ fn parse_alter_dynamic_table(parser: &mut Parser) -> Result<Statement, ParserErr
 /// Parse snowflake alter external table.
 /// <https://docs.snowflake.com/en/sql-reference/sql/alter-external-table>
 fn parse_alter_external_table(parser: &mut Parser) -> Result<Statement, ParserError> {
-    let if_exists = parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+    // IF EXISTS can appear before the table name for most operations
+    let mut if_exists = parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
     let table_name = parser.parse_object_name(true)?;
+
+    // IF EXISTS can also appear after the table name for ADD/DROP PARTITION operations
+    if !if_exists {
+        if_exists = parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+    }
 
     // Parse the operation
     let operation = if parser.parse_keyword(Keyword::REFRESH) {
@@ -683,6 +689,27 @@ fn parse_alter_external_table(parser: &mut Parser) -> Result<Statement, ParserEr
             column_name,
             data_type,
         }
+    } else if parser.parse_keywords(&[Keyword::ADD, Keyword::PARTITION]) {
+        // ADD PARTITION ( <col> = '<val>' [, ...] ) LOCATION '<path>'
+        let partition = parse_partition_key_values(parser)?;
+        parser.expect_keyword(Keyword::LOCATION)?;
+        let location = parse_single_quoted_string(parser)?;
+        AlterTableOperation::AddPartition {
+            partition,
+            location,
+        }
+    } else if parser.parse_keywords(&[Keyword::DROP, Keyword::PARTITION, Keyword::LOCATION]) {
+        // DROP PARTITION LOCATION '<path>'
+        let location = parse_single_quoted_string(parser)?;
+        AlterTableOperation::DropPartitionLocation { location }
+    } else if parser.parse_keywords(&[Keyword::ADD, Keyword::FILES]) {
+        // Parse ADD FILES ( '<path>' [, '<path>', ...] )
+        let files = parse_parenthesized_file_list(parser)?;
+        AlterTableOperation::AddFiles { files }
+    } else if parser.parse_keywords(&[Keyword::REMOVE, Keyword::FILES]) {
+        // Parse REMOVE FILES ( '<path>' [, '<path>', ...] )
+        let files = parse_parenthesized_file_list(parser)?;
+        AlterTableOperation::RemoveFiles { files }
     } else if parser.parse_keyword(Keyword::SET) {
         // Parse SET key = value options (e.g., SET AUTO_REFRESH = TRUE)
         let mut options = vec![];
@@ -698,7 +725,7 @@ fn parse_alter_external_table(parser: &mut Parser) -> Result<Statement, ParserEr
         AlterTableOperation::SetOptions { options }
     } else {
         return parser.expected(
-            "REFRESH, RENAME TO, ADD PARTITION COLUMN, or SET after ALTER EXTERNAL TABLE",
+            "REFRESH, RENAME TO, ADD, DROP, or SET after ALTER EXTERNAL TABLE",
             parser.peek_token(),
         );
     };
@@ -719,6 +746,50 @@ fn parse_alter_external_table(parser: &mut Parser) -> Result<Statement, ParserEr
         table_type: Some(AlterTableType::External),
         end_token: AttachedToken(end_token),
     }))
+}
+
+/// Parse a parenthesized list of single-quoted file paths.
+fn parse_parenthesized_file_list(parser: &mut Parser) -> Result<Vec<String>, ParserError> {
+    parser.expect_token(&Token::LParen)?;
+    let mut files = vec![];
+    loop {
+        match parser.next_token().token {
+            Token::SingleQuotedString(s) => files.push(s),
+            _ => {
+                return parser.expected("a single-quoted string", parser.peek_token());
+            }
+        }
+        if !parser.consume_token(&Token::Comma) {
+            break;
+        }
+    }
+    parser.expect_token(&Token::RParen)?;
+    Ok(files)
+}
+
+/// Parse partition key-value pairs: ( <col> = '<val>' [, <col> = '<val>', ...] )
+fn parse_partition_key_values(parser: &mut Parser) -> Result<Vec<(Ident, String)>, ParserError> {
+    parser.expect_token(&Token::LParen)?;
+    let mut pairs = vec![];
+    loop {
+        let key = parser.parse_identifier()?;
+        parser.expect_token(&Token::Eq)?;
+        let value = parse_single_quoted_string(parser)?;
+        pairs.push((key, value));
+        if !parser.consume_token(&Token::Comma) {
+            break;
+        }
+    }
+    parser.expect_token(&Token::RParen)?;
+    Ok(pairs)
+}
+
+/// Parse a single-quoted string and return its content.
+fn parse_single_quoted_string(parser: &mut Parser) -> Result<String, ParserError> {
+    match parser.next_token().token {
+        Token::SingleQuotedString(s) => Ok(s),
+        _ => parser.expected("a single-quoted string", parser.peek_token()),
+    }
 }
 
 /// Parse snowflake alter session.

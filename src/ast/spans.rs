@@ -1146,6 +1146,7 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::SuspendRecluster => Span::empty(),
             AlterTableOperation::ResumeRecluster => Span::empty(),
             AlterTableOperation::Refresh => Span::empty(),
+            AlterTableOperation::AddPartitionColumn { column_name, .. } => column_name.span,
             AlterTableOperation::Suspend => Span::empty(),
             AlterTableOperation::Resume => Span::empty(),
             AlterTableOperation::Algorithm { .. } => Span::empty(),

@@ -668,9 +668,16 @@ fn parse_alter_external_table(parser: &mut Parser) -> Result<Statement, ParserEr
         AlterTableOperation::RenameTable {
             table_name: RenameTableNameKind::To(new_table_name),
         }
+    } else if parser.parse_keywords(&[Keyword::ADD, Keyword::PARTITION, Keyword::COLUMN]) {
+        let column_name = parser.parse_identifier()?;
+        let data_type = parser.parse_data_type()?;
+        AlterTableOperation::AddPartitionColumn {
+            column_name,
+            data_type,
+        }
     } else {
         return parser.expected(
-            "REFRESH or RENAME TO after ALTER EXTERNAL TABLE",
+            "REFRESH, RENAME TO, or ADD PARTITION COLUMN after ALTER EXTERNAL TABLE",
             parser.peek_token(),
         );
     };

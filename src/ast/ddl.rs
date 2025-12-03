@@ -375,6 +375,13 @@ pub enum AlterTableOperation {
     ///
     /// Note: this is Snowflake specific for dynamic tables <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
     Refresh,
+    /// `ADD PARTITION COLUMN <column_name> <data_type>`
+    ///
+    /// Note: this is Snowflake specific for external tables <https://docs.snowflake.com/en/sql-reference/sql/alter-external-table>
+    AddPartitionColumn {
+        column_name: Ident,
+        data_type: DataType,
+    },
     /// `SUSPEND`
     ///
     /// Note: this is Snowflake specific for dynamic tables <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
@@ -865,6 +872,12 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::Refresh => {
                 write!(f, "REFRESH")
+            }
+            AlterTableOperation::AddPartitionColumn {
+                column_name,
+                data_type,
+            } => {
+                write!(f, "ADD PARTITION COLUMN {column_name} {data_type}")
             }
             AlterTableOperation::Suspend => {
                 write!(f, "SUSPEND")

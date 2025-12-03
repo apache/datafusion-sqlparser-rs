@@ -17953,3 +17953,22 @@ fn test_parse_set_session_authorization() {
         }))
     );
 }
+
+#[test]
+fn parse_select_distinct_parenthesized_wildcard() {
+    // Test SELECT DISTINCT(*) which uses a parenthesized wildcard
+    // The parentheses are syntactic sugar and get normalized to just *
+    let sql = "SELECT DISTINCT (*) FROM table1";
+    let canonical = "SELECT DISTINCT * FROM table1";
+    let select = all_dialects().verified_only_select_with_canonical(sql, canonical);
+    assert_eq!(select.distinct, Some(Distinct::Distinct));
+    assert_eq!(select.projection.len(), 1);
+    assert!(matches!(select.projection[0], SelectItem::Wildcard(_)));
+
+    // Also test without spaces: SELECT DISTINCT(*)
+    let sql_no_spaces = "SELECT DISTINCT(*) FROM table1";
+    let select2 = all_dialects().verified_only_select_with_canonical(sql_no_spaces, canonical);
+    assert_eq!(select2.distinct, Some(Distinct::Distinct));
+    assert_eq!(select2.projection.len(), 1);
+    assert!(matches!(select2.projection[0], SelectItem::Wildcard(_)));
+}

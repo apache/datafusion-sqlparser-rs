@@ -1268,6 +1268,15 @@ impl<'a> Parser<'a> {
             Token::Mul => {
                 return Ok(Expr::Wildcard(AttachedToken(next_token)));
             }
+            // Handle parenthesized wildcard: (*)
+            Token::LParen => {
+                let inner_token = self.next_token();
+                if inner_token.token == Token::Mul && self.peek_token().token == Token::RParen {
+                    self.next_token(); // consume RParen
+                    return Ok(Expr::Wildcard(AttachedToken(inner_token)));
+                }
+                // Not a (*), reset and fall through to parse_expr
+            }
             _ => (),
         };
 

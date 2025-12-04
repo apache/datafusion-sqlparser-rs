@@ -2900,7 +2900,9 @@ impl fmt::Display for CreateTable {
             if let Some(file_format) = self.file_format {
                 write!(f, " STORED AS {file_format}")?;
             }
-            write!(f, " LOCATION '{}'", self.location.as_ref().unwrap())?;
+            if let Some(location) = &self.location {
+                write!(f, " LOCATION '{location}'")?;
+            }
         }
 
         match &self.table_options {

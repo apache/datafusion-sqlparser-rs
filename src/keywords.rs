@@ -67,6 +67,15 @@ macro_rules! define_keywords {
         pub const ALL_KEYWORDS: &[&str] = &[
             $($ident),*
         ];
+
+        impl core::fmt::Display for Keyword {
+            fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                match self {
+                    Keyword::NoKeyword => write!(f, "NoKeyword"),
+                    $(Keyword::$ident => write!(f, "{}", $ident),)*
+                }
+            }
+        }
     };
 }
 

@@ -1887,7 +1887,7 @@ impl fmt::Display for ColumnOption {
                         GeneratedAs::Always => "ALWAYS",
                         GeneratedAs::ByDefault => "BY DEFAULT",
                         // ExpStored goes with an expression, handled above
-                        GeneratedAs::ExpStored => unreachable!(),
+                        GeneratedAs::ExpStored => "",
                     };
                     write!(f, "GENERATED {when} AS IDENTITY")?;
                     if sequence_options.is_some() {

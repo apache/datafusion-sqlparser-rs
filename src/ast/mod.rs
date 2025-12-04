@@ -9820,8 +9820,8 @@ impl fmt::Display for ShowCharset {
         } else {
             write!(f, " CHARACTER SET")?;
         }
-        if self.filter.is_some() {
-            write!(f, " {}", self.filter.as_ref().unwrap())?;
+        if let Some(filter) = &self.filter {
+            write!(f, " {filter}")?;
         }
         Ok(())
     }

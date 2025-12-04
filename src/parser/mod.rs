@@ -1194,7 +1194,11 @@ impl<'a> Parser<'a> {
                     let mut id_parts: Vec<Ident> = vec![match t {
                         Token::Word(w) => w.into_ident(next_token.span),
                         Token::SingleQuotedString(s) => Ident::with_quote('\'', s),
-                        _ => unreachable!(), // We matched above
+                        _ => {
+                            return Err(ParserError::ParserError(
+                                "Internal parser error: unexpected token type".to_string(),
+                            ))
+                        }
                     }];
 
                     while self.consume_token(&Token::Period) {
@@ -1641,7 +1645,11 @@ impl<'a> Parser<'a> {
                     Token::PGSquareRoot => UnaryOperator::PGSquareRoot,
                     Token::PGCubeRoot => UnaryOperator::PGCubeRoot,
                     Token::AtSign => UnaryOperator::PGAbs,
-                    _ => unreachable!(),
+                    _ => {
+                        return Err(ParserError::ParserError(
+                            "Internal parser error: unexpected unary operator token".to_string(),
+                        ))
+                    }
                 };
                 Ok(Expr::UnaryOp {
                     op,
@@ -1709,18 +1717,22 @@ impl<'a> Parser<'a> {
                 Ok(Expr::Value(self.parse_value()?))
             }
             Token::LParen => {
-                let expr = if let Some(expr) = self.try_parse_expr_sub_query()? {
-                    expr
-                } else if let Some(lambda) = self.try_parse_lambda()? {
-                    return Ok(lambda);
-                } else {
-                    let exprs = self.parse_comma_separated(Parser::parse_expr)?;
-                    match exprs.len() {
-                        0 => unreachable!(), // parse_comma_separated ensures 1 or more
-                        1 => Expr::Nested(Box::new(exprs.into_iter().next().unwrap())),
-                        _ => Expr::Tuple(exprs),
-                    }
-                };
+                let expr =
+                    if let Some(expr) = self.try_parse_expr_sub_query()? {
+                        expr
+                    } else if let Some(lambda) = self.try_parse_lambda()? {
+                        return Ok(lambda);
+                    } else {
+                        let exprs = self.parse_comma_separated(Parser::parse_expr)?;
+                        match exprs.len() {
+                            0 => return Err(ParserError::ParserError(
+                                "Internal parser error: parse_comma_separated returned empty list"
+                                    .to_string(),
+                            )),
+                            1 => Expr::Nested(Box::new(exprs.into_iter().next().unwrap())),
+                            _ => Expr::Tuple(exprs),
+                        }
+                    };
                 self.expect_token(&Token::RParen)?;
                 Ok(expr)
             }
@@ -3591,7 +3603,9 @@ impl<'a> Parser<'a> {
                         right: Box::new(right),
                         is_some: keyword == Keyword::SOME,
                     },
-                    _ => unreachable!(),
+                    unexpected_keyword => return Err(ParserError::ParserError(
+                        format!("Internal parser error: expected any of {{ALL, ANY, SOME}}, got {unexpected_keyword:?}"),
+                    )),
                 })
             } else {
                 Ok(Expr::BinaryOp {
@@ -5590,13 +5604,14 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let option = self
-            .parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT])
-            .map(|keyword| match keyword {
-                Keyword::CASCADE => ReferentialAction::Cascade,
-                Keyword::RESTRICT => ReferentialAction::Restrict,
-                _ => unreachable!(),
-            });
+        let option = match self.parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT]) {
+            Some(Keyword::CASCADE) => Some(ReferentialAction::Cascade),
+            Some(Keyword::RESTRICT) => Some(ReferentialAction::Restrict),
+            Some(unexpected_keyword) => return Err(ParserError::ParserError(
+                format!("Internal parser error: expected any of {{CASCADE, RESTRICT}}, got {unexpected_keyword:?}"),
+            )),
+            None => None,
+        };
         Ok(Statement::DropTrigger(DropTrigger {
             if_exists,
             trigger_name,
@@ -5646,7 +5661,9 @@ impl<'a> Parser<'a> {
                 match self.expect_one_of_keywords(&[Keyword::ROW, Keyword::STATEMENT])? {
                     Keyword::ROW => TriggerObject::Row,
                     Keyword::STATEMENT => TriggerObject::Statement,
-                    _ => unreachable!(),
+                    unexpected_keyword => return Err(ParserError::ParserError(
+                        format!("Internal parser error: unexpected keyword `{unexpected_keyword}` in ROW/STATEMENT"),
+                    )),
                 };
 
             Some(if include_each {
@@ -5709,7 +5726,9 @@ impl<'a> Parser<'a> {
                 Keyword::INSTEAD => self
                     .expect_keyword_is(Keyword::OF)
                     .map(|_| TriggerPeriod::InsteadOf)?,
-                _ => unreachable!(),
+                unexpected_keyword => return Err(ParserError::ParserError(
+                    format!("Internal parser error: unexpected keyword `{unexpected_keyword}` in trigger period"),
+                )),
             },
         )
     }
@@ -5733,7 +5752,9 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::DELETE => TriggerEvent::Delete,
                 Keyword::TRUNCATE => TriggerEvent::Truncate,
-                _ => unreachable!(),
+                unexpected_keyword => return Err(ParserError::ParserError(
+                    format!("Internal parser error: unexpected keyword `{unexpected_keyword}` in trigger event"),
+                )),
             },
         )
     }
@@ -5767,7 +5788,9 @@ impl<'a> Parser<'a> {
             {
                 Keyword::FUNCTION => TriggerExecBodyType::Function,
                 Keyword::PROCEDURE => TriggerExecBodyType::Procedure,
-                _ => unreachable!(),
+                unexpected_keyword => return Err(ParserError::ParserError(
+                    format!("Internal parser error: unexpected keyword `{unexpected_keyword}` in trigger exec body"),
+                )),
             },
             func_desc: self.parse_function_desc()?,
         })
@@ -6284,7 +6307,9 @@ impl<'a> Parser<'a> {
             Some(Keyword::CURRENT_USER) => Owner::CurrentUser,
             Some(Keyword::CURRENT_ROLE) => Owner::CurrentRole,
             Some(Keyword::SESSION_USER) => Owner::SessionUser,
-            Some(_) => unreachable!(),
+            Some(unexpected_keyword) => return Err(ParserError::ParserError(
+                format!("Internal parser error: unexpected keyword `{unexpected_keyword}` in owner"),
+            )),
             None => {
                 match self.parse_identifier() {
                     Ok(ident) => Owner::Ident(ident),
@@ -6346,7 +6371,9 @@ impl<'a> Parser<'a> {
             Some(match keyword {
                 Keyword::PERMISSIVE => CreatePolicyType::Permissive,
                 Keyword::RESTRICTIVE => CreatePolicyType::Restrictive,
-                _ => unreachable!(),
+                unexpected_keyword => return Err(ParserError::ParserError(
+                    format!("Internal parser error: unexpected keyword `{unexpected_keyword}` in policy type"),
+                )),
             })
         } else {
             None
@@ -6366,7 +6393,9 @@ impl<'a> Parser<'a> {
                 Keyword::INSERT => CreatePolicyCommand::Insert,
                 Keyword::UPDATE => CreatePolicyCommand::Update,
                 Keyword::DELETE => CreatePolicyCommand::Delete,
-                _ => unreachable!(),
+                unexpected_keyword => return Err(ParserError::ParserError(
+                    format!("Internal parser error: unexpected keyword `{unexpected_keyword}` in policy command"),
+                )),
             })
         } else {
             None
@@ -6479,12 +6508,7 @@ impl<'a> Parser<'a> {
         let mut is_procedure = false;
         let mut left_arg: Option<DataType> = None;
         let mut right_arg: Option<DataType> = None;
-        let mut commutator: Option<ObjectName> = None;
-        let mut negator: Option<ObjectName> = None;
-        let mut restrict: Option<ObjectName> = None;
-        let mut join: Option<ObjectName> = None;
-        let mut hashes = false;
-        let mut merges = false;
+        let mut options: Vec<OperatorOption> = Vec::new();
 
         loop {
             let keyword = self.expect_one_of_keywords(&[
@@ -6501,11 +6525,11 @@ impl<'a> Parser<'a> {
             ])?;
 
             match keyword {
-                Keyword::HASHES if !hashes => {
-                    hashes = true;
+                Keyword::HASHES if !options.iter().any(|o| matches!(o, OperatorOption::Hashes)) => {
+                    options.push(OperatorOption::Hashes);
                 }
-                Keyword::MERGES if !merges => {
-                    merges = true;
+                Keyword::MERGES if !options.iter().any(|o| matches!(o, OperatorOption::Merges)) => {
+                    options.push(OperatorOption::Merges);
                 }
                 Keyword::FUNCTION | Keyword::PROCEDURE if function.is_none() => {
                     self.expect_token(&Token::Eq)?;
@@ -6520,33 +6544,49 @@ impl<'a> Parser<'a> {
                     self.expect_token(&Token::Eq)?;
                     right_arg = Some(self.parse_data_type()?);
                 }
-                Keyword::COMMUTATOR if commutator.is_none() => {
+                Keyword::COMMUTATOR
+                    if !options
+                        .iter()
+                        .any(|o| matches!(o, OperatorOption::Commutator(_))) =>
+                {
                     self.expect_token(&Token::Eq)?;
                     if self.parse_keyword(Keyword::OPERATOR) {
                         self.expect_token(&Token::LParen)?;
-                        commutator = Some(self.parse_operator_name()?);
+                        let op = self.parse_operator_name()?;
                         self.expect_token(&Token::RParen)?;
+                        options.push(OperatorOption::Commutator(op));
                     } else {
-                        commutator = Some(self.parse_operator_name()?);
+                        options.push(OperatorOption::Commutator(self.parse_operator_name()?));
                     }
                 }
-                Keyword::NEGATOR if negator.is_none() => {
+                Keyword::NEGATOR
+                    if !options
+                        .iter()
+                        .any(|o| matches!(o, OperatorOption::Negator(_))) =>
+                {
                     self.expect_token(&Token::Eq)?;
                     if self.parse_keyword(Keyword::OPERATOR) {
                         self.expect_token(&Token::LParen)?;
-                        negator = Some(self.parse_operator_name()?);
+                        let op = self.parse_operator_name()?;
                         self.expect_token(&Token::RParen)?;
+                        options.push(OperatorOption::Negator(op));
                     } else {
-                        negator = Some(self.parse_operator_name()?);
+                        options.push(OperatorOption::Negator(self.parse_operator_name()?));
                     }
                 }
-                Keyword::RESTRICT if restrict.is_none() => {
+                Keyword::RESTRICT
+                    if !options
+                        .iter()
+                        .any(|o| matches!(o, OperatorOption::Restrict(_))) =>
+                {
                     self.expect_token(&Token::Eq)?;
-                    restrict = Some(self.parse_object_name(false)?);
+                    options.push(OperatorOption::Restrict(Some(
+                        self.parse_object_name(false)?,
+                    )));
                 }
-                Keyword::JOIN if join.is_none() => {
+                Keyword::JOIN if !options.iter().any(|o| matches!(o, OperatorOption::Join(_))) => {
                     self.expect_token(&Token::Eq)?;
-                    join = Some(self.parse_object_name(false)?);
+                    options.push(OperatorOption::Join(Some(self.parse_object_name(false)?)));
                 }
                 _ => {
                     return Err(ParserError::ParserError(format!(
@@ -6575,12 +6615,7 @@ impl<'a> Parser<'a> {
             is_procedure,
             left_arg,
             right_arg,
-            commutator,
-            negator,
-            restrict,
-            join,
-            hashes,
-            merges,
+            options,
         }))
     }
 
@@ -6997,7 +7032,9 @@ impl<'a> Parser<'a> {
                 match keyword {
                     Keyword::WITH => Some(true),
                     Keyword::WITHOUT => Some(false),
-                    _ => unreachable!(),
+                    unexpected_keyword => return Err(ParserError::ParserError(
+                        format!("Internal parser error: unexpected keyword `{unexpected_keyword}` in cursor hold"),
+                    )),
                 }
             }
             None => None,
@@ -9764,7 +9801,9 @@ impl<'a> Parser<'a> {
             Keyword::PART => Ok(Partition::Part(self.parse_expr()?)),
             Keyword::PARTITION => Ok(Partition::Expr(self.parse_expr()?)),
             // unreachable because expect_one_of_keywords used above
-            _ => unreachable!(),
+            unexpected_keyword => Err(ParserError::ParserError(
+                format!("Internal parser error: expected any of {{PART, PARTITION}}, got {unexpected_keyword:?}"),
+            )),
         }
     }
 
@@ -9780,6 +9819,7 @@ impl<'a> Parser<'a> {
             Keyword::ICEBERG,
             Keyword::SCHEMA,
             Keyword::USER,
+            Keyword::OPERATOR,
         ])?;
         match object_type {
             Keyword::SCHEMA => {
@@ -9812,12 +9852,15 @@ impl<'a> Parser<'a> {
                     operation,
                 })
             }
+            Keyword::OPERATOR => self.parse_alter_operator(),
             Keyword::ROLE => self.parse_alter_role(),
             Keyword::POLICY => self.parse_alter_policy(),
             Keyword::CONNECTOR => self.parse_alter_connector(),
             Keyword::USER => self.parse_alter_user(),
             // unreachable because expect_one_of_keywords used above
-            _ => unreachable!(),
+            unexpected_keyword => Err(ParserError::ParserError(
+                format!("Internal parser error: expected any of {{VIEW, TYPE, TABLE, INDEX, ROLE, POLICY, CONNECTOR, ICEBERG, SCHEMA, USER, OPERATOR}}, got {unexpected_keyword:?}"),
+            )),
         }
     }
 
@@ -9929,6 +9972,116 @@ impl<'a> Parser<'a> {
                 self.peek_token_ref(),
             )
         }
+    }
+
+    /// Parse a [Statement::AlterOperator]
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-alteroperator.html)
+    pub fn parse_alter_operator(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_operator_name()?;
+
+        // Parse (left_type, right_type)
+        self.expect_token(&Token::LParen)?;
+
+        let left_type = if self.parse_keyword(Keyword::NONE) {
+            None
+        } else {
+            Some(self.parse_data_type()?)
+        };
+
+        self.expect_token(&Token::Comma)?;
+        let right_type = self.parse_data_type()?;
+        self.expect_token(&Token::RParen)?;
+
+        // Parse the operation
+        let operation = if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            let owner = if self.parse_keyword(Keyword::CURRENT_ROLE) {
+                Owner::CurrentRole
+            } else if self.parse_keyword(Keyword::CURRENT_USER) {
+                Owner::CurrentUser
+            } else if self.parse_keyword(Keyword::SESSION_USER) {
+                Owner::SessionUser
+            } else {
+                Owner::Ident(self.parse_identifier()?)
+            };
+            AlterOperatorOperation::OwnerTo(owner)
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+            let schema_name = self.parse_object_name(false)?;
+            AlterOperatorOperation::SetSchema { schema_name }
+        } else if self.parse_keyword(Keyword::SET) {
+            self.expect_token(&Token::LParen)?;
+
+            let mut options = Vec::new();
+            loop {
+                let keyword = self.expect_one_of_keywords(&[
+                    Keyword::RESTRICT,
+                    Keyword::JOIN,
+                    Keyword::COMMUTATOR,
+                    Keyword::NEGATOR,
+                    Keyword::HASHES,
+                    Keyword::MERGES,
+                ])?;
+
+                match keyword {
+                    Keyword::RESTRICT => {
+                        self.expect_token(&Token::Eq)?;
+                        let proc_name = if self.parse_keyword(Keyword::NONE) {
+                            None
+                        } else {
+                            Some(self.parse_object_name(false)?)
+                        };
+                        options.push(OperatorOption::Restrict(proc_name));
+                    }
+                    Keyword::JOIN => {
+                        self.expect_token(&Token::Eq)?;
+                        let proc_name = if self.parse_keyword(Keyword::NONE) {
+                            None
+                        } else {
+                            Some(self.parse_object_name(false)?)
+                        };
+                        options.push(OperatorOption::Join(proc_name));
+                    }
+                    Keyword::COMMUTATOR => {
+                        self.expect_token(&Token::Eq)?;
+                        let op_name = self.parse_operator_name()?;
+                        options.push(OperatorOption::Commutator(op_name));
+                    }
+                    Keyword::NEGATOR => {
+                        self.expect_token(&Token::Eq)?;
+                        let op_name = self.parse_operator_name()?;
+                        options.push(OperatorOption::Negator(op_name));
+                    }
+                    Keyword::HASHES => {
+                        options.push(OperatorOption::Hashes);
+                    }
+                    Keyword::MERGES => {
+                        options.push(OperatorOption::Merges);
+                    }
+                    unexpected_keyword => return Err(ParserError::ParserError(
+                        format!("Internal parser error: unexpected keyword `{unexpected_keyword}` in operator option"),
+                    )),
+                }
+
+                if !self.consume_token(&Token::Comma) {
+                    break;
+                }
+            }
+
+            self.expect_token(&Token::RParen)?;
+            AlterOperatorOperation::Set { options }
+        } else {
+            return self.expected_ref(
+                "OWNER TO, SET SCHEMA, or SET after ALTER OPERATOR",
+                self.peek_token_ref(),
+            );
+        };
+
+        Ok(Statement::AlterOperator(AlterOperator {
+            name,
+            left_type,
+            right_type,
+            operation,
+        }))
     }
 
     // Parse a [Statement::AlterSchema]
@@ -14175,7 +14328,9 @@ impl<'a> Parser<'a> {
                     table = match kw {
                         Keyword::PIVOT => self.parse_pivot_table_factor(table)?,
                         Keyword::UNPIVOT => self.parse_unpivot_table_factor(table)?,
-                        _ => unreachable!(),
+                        unexpected_keyword => return Err(ParserError::ParserError(
+                            format!("Internal parser error: unexpected keyword `{unexpected_keyword}` in pivot/unpivot"),
+                        )),
                     }
                 }
                 return Ok(table);
@@ -14433,7 +14588,9 @@ impl<'a> Parser<'a> {
                 table = match kw {
                     Keyword::PIVOT => self.parse_pivot_table_factor(table)?,
                     Keyword::UNPIVOT => self.parse_unpivot_table_factor(table)?,
-                    _ => unreachable!(),
+                    unexpected_keyword => return Err(ParserError::ParserError(
+                        format!("Internal parser error: unexpected keyword `{unexpected_keyword}` in pivot/unpivot"),
+                    )),
                 }
             }
 
@@ -15532,7 +15689,9 @@ impl<'a> Parser<'a> {
                         }
                     }
                     Some(Keyword::TABLE) | None => Some(GrantObjects::Tables(objects?)),
-                    _ => unreachable!(),
+                    Some(unexpected_keyword) => return Err(ParserError::ParserError(
+                        format!("Internal parser error: unexpected keyword `{unexpected_keyword}` in grant objects"),
+                    )),
                 }
             }
         } else {
@@ -16402,7 +16561,9 @@ impl<'a> Parser<'a> {
             let kind = match self.expect_one_of_keywords(&[Keyword::MIN, Keyword::MAX])? {
                 Keyword::MIN => HavingBoundKind::Min,
                 Keyword::MAX => HavingBoundKind::Max,
-                _ => unreachable!(),
+                unexpected_keyword => return Err(ParserError::ParserError(
+                    format!("Internal parser error: unexpected keyword `{unexpected_keyword}` in having bound"),
+                )),
             };
             clauses.push(FunctionArgumentClause::Having(HavingBound(
                 kind,
@@ -16930,7 +17091,9 @@ impl<'a> Parser<'a> {
         let lock_type = match self.expect_one_of_keywords(&[Keyword::UPDATE, Keyword::SHARE])? {
             Keyword::UPDATE => LockType::Update,
             Keyword::SHARE => LockType::Share,
-            _ => unreachable!(),
+            unexpected_keyword => return Err(ParserError::ParserError(
+                format!("Internal parser error: expected any of {{UPDATE, SHARE}}, got {unexpected_keyword:?}"),
+            )),
         };
         let of = if self.parse_keyword(Keyword::OF) {
             Some(self.parse_object_name(false)?)

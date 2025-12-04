@@ -153,6 +153,7 @@
 // Splitting complex nodes (expressions, statements, types) into separate types
 // would bloat the API and hide intent. Extra memory is a worthwhile tradeoff.
 #![allow(clippy::large_enum_variant)]
+#![forbid(clippy::unreachable)]
 
 // Allow proc-macros to find this crate
 extern crate self as sqlparser;

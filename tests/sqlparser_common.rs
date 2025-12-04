@@ -10006,6 +10006,45 @@ fn parse_merge() {
 
     let sql = "MERGE INTO s.bar AS dest USING newArrivals AS S ON (1 > 1) WHEN NOT MATCHED THEN INSERT VALUES (stg.A, stg.B, stg.C)";
     verified_stmt(sql);
+
+    // MERGE with predicates
+    let sql = "\
+MERGE INTO FOO \
+USING FOO_IMPORT \
+ON (FOO.ID = FOO_IMPORT.ID) \
+WHEN MATCHED THEN \
+UPDATE SET FOO.NAME = FOO_IMPORT.NAME \
+WHERE 1 = 1 \
+DELETE WHERE FOO.NAME LIKE '%.DELETE' \
+WHEN NOT MATCHED THEN \
+INSERT (ID, NAME) \
+VALUES (FOO_IMPORT.ID, UPPER(FOO_IMPORT.NAME)) \
+WHERE NOT FOO_IMPORT.NAME LIKE '%.DO_NOT_INSERT'";
+    all_dialects().verified_stmt(sql);
+
+    // MERGE with simple insert columns
+    let sql = "\
+MERGE INTO FOO USING FOO_IMPORT ON (FOO.ID = FOO_IMPORT.ID) \
+WHEN NOT MATCHED THEN \
+INSERT (ID, NAME) \
+VALUES (1, 'abc')";
+    all_dialects().verified_stmt(sql);
+
+    // MERGE with qualified insert columns
+    let sql = "\
+MERGE INTO FOO USING FOO_IMPORT ON (FOO.ID = FOO_IMPORT.ID) \
+WHEN NOT MATCHED THEN \
+INSERT (FOO.ID, FOO.NAME) \
+VALUES (1, 'abc')";
+    all_dialects().verified_stmt(sql);
+
+    // MERGE with schema qualified insert columns
+    let sql = "\
+MERGE INTO PLAYGROUND.FOO USING FOO_IMPORT ON (PLAYGROUND.FOO.ID = FOO_IMPORT.ID) \
+WHEN NOT MATCHED THEN \
+INSERT (PLAYGROUND.FOO.ID, PLAYGROUND.FOO.NAME) \
+VALUES (1, 'abc')";
+    all_dialects().verified_stmt(sql);
 }
 
 #[test]
@@ -10077,53 +10116,6 @@ fn test_merge_with_delimiter() {
         Ok(_) => {}
         _ => unreachable!(),
     }
-}
-
-#[test]
-fn test_merge_with_predicates() {
-    let sql = "\
-MERGE INTO FOO \
-USING FOO_IMPORT \
-ON (FOO.ID = FOO_IMPORT.ID) \
-WHEN MATCHED THEN \
-UPDATE SET FOO.NAME = FOO_IMPORT.NAME \
-WHERE 1 = 1 \
-DELETE WHERE FOO.NAME LIKE '%.DELETE' \
-WHEN NOT MATCHED THEN \
-INSERT (ID, NAME) \
-VALUES (FOO_IMPORT.ID, UPPER(FOO_IMPORT.NAME)) \
-WHERE NOT FOO_IMPORT.NAME LIKE '%.DO_NOT_INSERT'";
-    all_dialects().verified_stmt(sql);
-}
-
-#[test]
-fn test_merge_with_insert_simple_columns() {
-    let sql = "\
-MERGE INTO FOO USING FOO_IMPORT ON (FOO.ID = FOO_IMPORT.ID) \
-WHEN NOT MATCHED THEN \
-INSERT (ID, NAME) \
-VALUES (1, 'abc')";
-    all_dialects().verified_stmt(sql);
-}
-
-#[test]
-fn test_merge_with_insert_qualified_columns() {
-    let sql = "\
-MERGE INTO FOO USING FOO_IMPORT ON (FOO.ID = FOO_IMPORT.ID) \
-WHEN NOT MATCHED THEN \
-INSERT (FOO.ID, FOO.NAME) \
-VALUES (1, 'abc')";
-    all_dialects().verified_stmt(sql);
-}
-
-#[test]
-fn test_merge_with_insert_qualified_columns_with_schema() {
-    let sql = "\
-MERGE INTO PLAYGROUND.FOO USING FOO_IMPORT ON (PLAYGROUND.FOO.ID = FOO_IMPORT.ID) \
-WHEN NOT MATCHED THEN \
-INSERT (PLAYGROUND.FOO.ID, PLAYGROUND.FOO.NAME) \
-VALUES (1, 'abc')";
-    all_dialects().verified_stmt(sql);
 }
 
 #[test]

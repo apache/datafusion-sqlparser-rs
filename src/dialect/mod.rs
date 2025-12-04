@@ -180,6 +180,53 @@ pub trait Dialect: Debug + Any {
     /// Determine if a character is a valid unquoted identifier character
     fn is_identifier_part(&self, ch: char) -> bool;
 
+    /// Returns whether the dialect supports hyphenated identifiers.
+    ///
+    /// Hyphenated identifiers contain hyphens within the name (e.g., `my-table`).
+    /// Supported by BigQuery for project, dataset, and table names.
+    ///
+    /// ```rust
+    /// # use sqlparser::{dialect::BigQueryDialect, parser::Parser};
+    /// let sql = "SELECT * FROM my-project.my-dataset.my-table";
+    /// assert!(Parser::parse_sql(&BigQueryDialect, sql).is_ok());
+    /// ```
+    ///
+    /// For dialects that do not support hyphenated identifiers,
+    /// the parser will interpret the hyphen as a minus operator,
+    /// and may result in a syntax error if the context is not valid.
+    ///
+    /// ```rust
+    /// # use sqlparser::{dialect::PostgreSqlDialect, parser::Parser};
+    /// let sql = "SELECT * FROM my-project.my-dataset.my-table";
+    /// assert!(Parser::parse_sql(&PostgreSqlDialect{}, sql).is_err());
+    /// ```
+    fn supports_hyphenated_identifiers(&self) -> bool {
+        false
+    }
+
+    /// Returns whether the dialect supports path-like identifiers.
+    ///
+    /// Path-like identifiers contain forward slashes for hierarchical paths
+    /// (e.g., `@namespace.stage_name/path`). Used in Snowflake for stage locations.
+    ///
+    /// ```rust
+    /// # use sqlparser::{dialect::SnowflakeDialect, parser::Parser};
+    /// let sql = "COPY INTO a.b FROM @namespace.stage_name/path";
+    /// assert!(Parser::parse_sql(&SnowflakeDialect, sql).is_ok());
+    /// ```
+    ///
+    /// For dialects that do not support path-like identifiers,
+    /// the parser will raise a syntax error when encountering such identifiers.
+    ///
+    /// ```rust
+    /// # use sqlparser::{dialect::PostgreSqlDialect, parser::Parser};
+    /// let sql = "COPY INTO a.b FROM @namespace.stage_name/path";
+    /// assert!(Parser::parse_sql(&PostgreSqlDialect{}, sql).is_err());
+    /// ```
+    fn supports_path_like_identifiers(&self) -> bool {
+        false
+    }
+
     /// Most dialects do not have custom operators. Override this method to provide custom operators.
     fn is_custom_operator_part(&self, _ch: char) -> bool {
         false

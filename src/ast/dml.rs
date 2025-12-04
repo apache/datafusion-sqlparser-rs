@@ -16,7 +16,12 @@
 // under the License.
 
 #[cfg(not(feature = "std"))]
-use alloc::{boxed::Box, format, string::ToString, vec::Vec};
+use alloc::{
+    boxed::Box,
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
 
 use core::fmt::{self, Display};
 #[cfg(feature = "serde")]
@@ -27,10 +32,10 @@ use sqlparser_derive::{Visit, VisitMut};
 use crate::display_utils::{indented_list, Indent, SpaceOrNewline};
 
 use super::{
-    display_comma_separated, helpers::attached_token::AttachedToken, query::InputFormatClause,
-    Assignment, Expr, FromTable, Ident, InsertAliases, MysqlInsertPriority, ObjectName, OnInsert,
-    OrderByExpr, Query, SelectItem, Setting, SqliteOnConflict, TableObject, TableWithJoins,
-    UpdateTableFromKind,
+    display_comma_separated, display_separated, helpers::attached_token::AttachedToken,
+    query::InputFormatClause, Assignment, CopyLegacyOption, CopyOption, CopySource, CopyTarget,
+    Expr, FromTable, Ident, InsertAliases, MysqlInsertPriority, ObjectName, OnInsert, OrderByExpr,
+    Query, SelectItem, Setting, SqliteOnConflict, TableObject, TableWithJoins, UpdateTableFromKind,
 };
 
 /// INSERT statement.
@@ -306,6 +311,92 @@ impl Display for Update {
         if let Some(limit) = &self.limit {
             SpaceOrNewline.fmt(f)?;
             write!(f, "LIMIT {limit}")?;
+        }
+        Ok(())
+    }
+}
+
+/// COPY statement.
+///
+/// Represents a PostgreSQL COPY statement for bulk data transfer between
+/// a file and a table. The statement can copy data FROM a file to a table
+/// or TO a file from a table or query.
+///
+/// # Syntax
+///
+/// ```sql
+/// COPY table_name [(column_list)] FROM { 'filename' | STDIN | PROGRAM 'command' }
+/// COPY { table_name [(column_list)] | (query) } TO { 'filename' | STDOUT | PROGRAM 'command' }
+/// ```
+///
+/// # Examples
+///
+/// ```
+/// # use sqlparser::ast::{Copy, CopySource, CopyTarget, ObjectName};
+/// # use sqlparser::dialect::PostgreSqlDialect;
+/// # use sqlparser::parser::Parser;
+/// let sql = "COPY users FROM 'data.csv'";
+/// let dialect = PostgreSqlDialect {};
+/// let ast = Parser::parse_sql(&dialect, sql).unwrap();
+/// ```
+///
+/// See [PostgreSQL documentation](https://www.postgresql.org/docs/current/sql-copy.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Copy {
+    /// The source of 'COPY TO', or the target of 'COPY FROM'.
+    /// Can be a table name with optional column list, or a query (for COPY TO only).
+    pub source: CopySource,
+    /// Direction of the copy operation.
+    /// - `true` for COPY TO (table/query to file)
+    /// - `false` for COPY FROM (file to table)
+    pub to: bool,
+    /// The target of 'COPY TO', or the source of 'COPY FROM'.
+    /// Can be a file, STDIN, STDOUT, or a PROGRAM command.
+    pub target: CopyTarget,
+    /// Modern COPY options (PostgreSQL 9.0+), specified within parentheses.
+    /// Examples: FORMAT, DELIMITER, NULL, HEADER, QUOTE, ESCAPE, etc.
+    pub options: Vec<CopyOption>,
+    /// Legacy COPY options (pre-PostgreSQL 9.0), specified without parentheses.
+    /// Also used by AWS Redshift extensions like IAM_ROLE, MANIFEST, etc.
+    pub legacy_options: Vec<CopyLegacyOption>,
+    /// CSV data rows for COPY FROM STDIN statements.
+    /// Each row is a vector of optional strings (None represents NULL).
+    /// Populated only when copying from STDIN with inline data.
+    pub values: Option<String>,
+}
+
+impl Display for Copy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "COPY")?;
+        match &self.source {
+            CopySource::Query(query) => write!(f, " ({query})")?,
+            CopySource::Table {
+                table_name,
+                columns,
+            } => {
+                write!(f, " {table_name}")?;
+                if !columns.is_empty() {
+                    write!(f, " ({})", display_comma_separated(columns))?;
+                }
+            }
+        }
+        write!(
+            f,
+            " {} {}",
+            if self.to { "TO" } else { "FROM" },
+            self.target
+        )?;
+        if !self.options.is_empty() {
+            write!(f, " ({})", display_comma_separated(&self.options))?;
+        }
+        if !self.legacy_options.is_empty() {
+            write!(f, " {}", display_separated(&self.legacy_options, " "))?;
+        }
+
+        if let Some(values) = &self.values {
+            write!(f, ";{values}\\.")?;
         }
         Ok(())
     }

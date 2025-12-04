@@ -29,7 +29,7 @@ use crate::{
 use super::{Parser, ParserError};
 
 impl Parser<'_> {
-    /// Parse a MERGE statement, returning a `Box`ed SetExpr
+    /// Parse a `MERGE` statement, returning a `Box`ed SetExpr
     ///
     /// This is used to reduce the size of the stack frames in debug builds
     pub(super) fn parse_merge_setexpr_boxed(

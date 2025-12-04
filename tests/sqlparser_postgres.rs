@@ -6737,24 +6737,26 @@ fn parse_create_operator() {
                 length: 255,
                 unit: None
             }))),
-            commutator: Some(ObjectName::from(vec![
-                Ident::new("schema"),
-                Ident::new(">")
-            ])),
-            negator: Some(ObjectName::from(vec![
-                Ident::new("schema"),
-                Ident::new("<=")
-            ])),
-            restrict: Some(ObjectName::from(vec![
-                Ident::new("myschema"),
-                Ident::new("sel_func")
-            ])),
-            join: Some(ObjectName::from(vec![
-                Ident::new("myschema"),
-                Ident::new("join_func")
-            ])),
-            hashes: true,
-            merges: true,
+            options: vec![
+                OperatorOption::Commutator(ObjectName::from(vec![
+                    Ident::new("schema"),
+                    Ident::new(">")
+                ])),
+                OperatorOption::Negator(ObjectName::from(vec![
+                    Ident::new("schema"),
+                    Ident::new("<=")
+                ])),
+                OperatorOption::Restrict(Some(ObjectName::from(vec![
+                    Ident::new("myschema"),
+                    Ident::new("sel_func")
+                ]))),
+                OperatorOption::Join(Some(ObjectName::from(vec![
+                    Ident::new("myschema"),
+                    Ident::new("join_func")
+                ]))),
+                OperatorOption::Hashes,
+                OperatorOption::Merges,
+            ],
         })
     );
 
@@ -6770,12 +6772,7 @@ fn parse_create_operator() {
                 is_procedure: false,
                 left_arg: None,
                 right_arg: None,
-                commutator: None,
-                negator: None,
-                restrict: None,
-                join: None,
-                hashes: false,
-                merges: false,
+                options: vec![],
             })
         );
     }
@@ -6800,13 +6797,9 @@ fn parse_create_operator() {
         ),
     ] {
         match pg().verified_stmt(&format!("CREATE OPERATOR {name} (FUNCTION = f)")) {
-            Statement::CreateOperator(CreateOperator {
-                name,
-                hashes: false,
-                merges: false,
-                ..
-            }) => {
+            Statement::CreateOperator(CreateOperator { name, options, .. }) => {
                 assert_eq!(name, expected_name);
+                assert!(options.is_empty());
             }
             _ => unreachable!(),
         }
@@ -6940,6 +6933,202 @@ fn parse_drop_operator() {
     // Test error: DROP OPERATOR IF EXISTS with no operators
     let sql = "DROP OPERATOR IF EXISTS (INTEGER, INTEGER)";
     assert!(pg().parse_sql_statements(sql).is_err());
+}
+
+#[test]
+fn parse_alter_operator() {
+    use sqlparser::ast::{AlterOperator, AlterOperatorOperation, OperatorOption, Owner};
+
+    // Test ALTER OPERATOR ... OWNER TO with different owner types
+    for (owner_sql, owner_ast) in [
+        ("joe", Owner::Ident(Ident::new("joe"))),
+        ("CURRENT_USER", Owner::CurrentUser),
+        ("CURRENT_ROLE", Owner::CurrentRole),
+        ("SESSION_USER", Owner::SessionUser),
+    ] {
+        for (op_name, op_name_ast, left_type_sql, left_type_ast, right_type_sql, right_type_ast) in [
+            (
+                "+",
+                ObjectName::from(vec![Ident::new("+")]),
+                "INTEGER",
+                Some(DataType::Integer(None)),
+                "INTEGER",
+                DataType::Integer(None),
+            ),
+            (
+                "~",
+                ObjectName::from(vec![Ident::new("~")]),
+                "NONE",
+                None,
+                "BIT",
+                DataType::Bit(None),
+            ),
+            (
+                "@@",
+                ObjectName::from(vec![Ident::new("@@")]),
+                "TEXT",
+                Some(DataType::Text),
+                "TEXT",
+                DataType::Text,
+            ),
+        ] {
+            let sql = format!(
+                "ALTER OPERATOR {} ({}, {}) OWNER TO {}",
+                op_name, left_type_sql, right_type_sql, owner_sql
+            );
+            assert_eq!(
+                pg_and_generic().verified_stmt(&sql),
+                Statement::AlterOperator(AlterOperator {
+                    name: op_name_ast.clone(),
+                    left_type: left_type_ast.clone(),
+                    right_type: right_type_ast.clone(),
+                    operation: AlterOperatorOperation::OwnerTo(owner_ast.clone()),
+                })
+            );
+        }
+    }
+
+    // Test ALTER OPERATOR ... SET SCHEMA
+    for (op_name, op_name_ast, schema_name, schema_name_ast) in [
+        (
+            "+",
+            ObjectName::from(vec![Ident::new("+")]),
+            "new_schema",
+            ObjectName::from(vec![Ident::new("new_schema")]),
+        ),
+        (
+            "myschema.@@",
+            ObjectName::from(vec![Ident::new("myschema"), Ident::new("@@")]),
+            "other_schema",
+            ObjectName::from(vec![Ident::new("other_schema")]),
+        ),
+    ] {
+        let sql = format!(
+            "ALTER OPERATOR {} (TEXT, TEXT) SET SCHEMA {}",
+            op_name, schema_name
+        );
+        assert_eq!(
+            pg_and_generic().verified_stmt(&sql),
+            Statement::AlterOperator(AlterOperator {
+                name: op_name_ast,
+                left_type: Some(DataType::Text),
+                right_type: DataType::Text,
+                operation: AlterOperatorOperation::SetSchema {
+                    schema_name: schema_name_ast,
+                },
+            })
+        );
+    }
+
+    // Test ALTER OPERATOR ... SET with RESTRICT and JOIN
+    for (restrict_val, restrict_ast, join_val, join_ast) in [
+        (
+            "_int_contsel",
+            Some(ObjectName::from(vec![Ident::new("_int_contsel")])),
+            "_int_contjoinsel",
+            Some(ObjectName::from(vec![Ident::new("_int_contjoinsel")])),
+        ),
+        (
+            "NONE",
+            None,
+            "my_joinsel",
+            Some(ObjectName::from(vec![Ident::new("my_joinsel")])),
+        ),
+        (
+            "my_sel",
+            Some(ObjectName::from(vec![Ident::new("my_sel")])),
+            "NONE",
+            None,
+        ),
+    ] {
+        let sql = format!(
+            "ALTER OPERATOR && (TEXT, TEXT) SET (RESTRICT = {}, JOIN = {})",
+            restrict_val, join_val
+        );
+        assert_eq!(
+            pg_and_generic().verified_stmt(&sql),
+            Statement::AlterOperator(AlterOperator {
+                name: ObjectName::from(vec![Ident::new("&&")]),
+                left_type: Some(DataType::Text),
+                right_type: DataType::Text,
+                operation: AlterOperatorOperation::Set {
+                    options: vec![
+                        OperatorOption::Restrict(restrict_ast),
+                        OperatorOption::Join(join_ast),
+                    ],
+                },
+            })
+        );
+    }
+
+    // Test ALTER OPERATOR ... SET with COMMUTATOR and NEGATOR
+    for (operator, commutator, negator) in [("&&", "&&", ">"), ("+", "+", "-"), ("<", "<", ">=")] {
+        let sql = format!(
+            "ALTER OPERATOR {} (INTEGER, INTEGER) SET (COMMUTATOR = {}, NEGATOR = {})",
+            operator, commutator, negator
+        );
+        assert_eq!(
+            pg_and_generic().verified_stmt(&sql),
+            Statement::AlterOperator(AlterOperator {
+                name: ObjectName::from(vec![Ident::new(operator)]),
+                left_type: Some(DataType::Integer(None)),
+                right_type: DataType::Integer(None),
+                operation: AlterOperatorOperation::Set {
+                    options: vec![
+                        OperatorOption::Commutator(ObjectName::from(vec![Ident::new(commutator)])),
+                        OperatorOption::Negator(ObjectName::from(vec![Ident::new(negator)])),
+                    ],
+                },
+            })
+        );
+    }
+
+    // Test ALTER OPERATOR ... SET with HASHES and MERGES (individually and combined)
+    for (operator, options_sql, options_ast) in [
+        ("=", "HASHES", vec![OperatorOption::Hashes]),
+        ("<", "MERGES", vec![OperatorOption::Merges]),
+        (
+            "<=",
+            "HASHES, MERGES",
+            vec![OperatorOption::Hashes, OperatorOption::Merges],
+        ),
+    ] {
+        let sql = format!(
+            "ALTER OPERATOR {} (INTEGER, INTEGER) SET ({})",
+            operator, options_sql
+        );
+        assert_eq!(
+            pg_and_generic().verified_stmt(&sql),
+            Statement::AlterOperator(AlterOperator {
+                name: ObjectName::from(vec![Ident::new(operator)]),
+                left_type: Some(DataType::Integer(None)),
+                right_type: DataType::Integer(None),
+                operation: AlterOperatorOperation::Set {
+                    options: options_ast
+                },
+            })
+        );
+    }
+
+    // Test ALTER OPERATOR ... SET with multiple options combined
+    let sql =
+        "ALTER OPERATOR + (INTEGER, INTEGER) SET (COMMUTATOR = +, NEGATOR = -, HASHES, MERGES)";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperator(AlterOperator {
+            name: ObjectName::from(vec![Ident::new("+")]),
+            left_type: Some(DataType::Integer(None)),
+            right_type: DataType::Integer(None),
+            operation: AlterOperatorOperation::Set {
+                options: vec![
+                    OperatorOption::Commutator(ObjectName::from(vec![Ident::new("+")])),
+                    OperatorOption::Negator(ObjectName::from(vec![Ident::new("-")])),
+                    OperatorOption::Hashes,
+                    OperatorOption::Merges,
+                ],
+            },
+        })
+    );
 }
 
 #[test]

@@ -99,15 +99,15 @@ impl fmt::Display for StageParamsObject {
 
 impl fmt::Display for StageLoadSelectItem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.alias.is_some() {
-            write!(f, "{}.", self.alias.as_ref().unwrap())?;
+        if let Some(alias) = &self.alias {
+            write!(f, "{alias}.")?;
         }
         write!(f, "${}", self.file_col_num)?;
-        if self.element.is_some() {
-            write!(f, ":{}", self.element.as_ref().unwrap())?;
+        if let Some(element) = &self.element {
+            write!(f, ":{element}")?;
         }
-        if self.item_as.is_some() {
-            write!(f, " AS {}", self.item_as.as_ref().unwrap())?;
+        if let Some(item_as) = &self.item_as {
+            write!(f, " AS {item_as}")?;
         }
         Ok(())
     }

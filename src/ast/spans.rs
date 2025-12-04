@@ -252,6 +252,7 @@ impl Spanned for Values {
 /// - [Statement::CreateSecret]
 /// - [Statement::CreateRole]
 /// - [Statement::AlterType]
+/// - [Statement::AlterOperator]
 /// - [Statement::AlterRole]
 /// - [Statement::AttachDatabase]
 /// - [Statement::AttachDuckDBDatabase]
@@ -394,6 +395,7 @@ impl Spanned for Statement {
             ),
             // These statements need to be implemented
             Statement::AlterType { .. } => Span::empty(),
+            Statement::AlterOperator { .. } => Span::empty(),
             Statement::AlterRole { .. } => Span::empty(),
             Statement::AlterSession { .. } => Span::empty(),
             Statement::AttachDatabase { .. } => Span::empty(),

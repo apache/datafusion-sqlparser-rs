@@ -104,10 +104,10 @@ impl fmt::Display for StageLoadSelectItem {
         }
         write!(f, "${}", self.file_col_num)?;
         if let Some(element) = &self.element {
-            write!(f, ":{}", element)?;
+            write!(f, ":{element}")?;
         }
         if let Some(item_as) = &self.item_as {
-            write!(f, " AS {}", item_as)?;
+            write!(f, " AS {item_as}")?;
         }
         Ok(())
     }

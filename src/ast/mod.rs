@@ -67,7 +67,7 @@ pub use self::ddl::{
     ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain,
     CreateExtension, CreateFunction, CreateIndex, CreateOperator, CreateOperatorClass,
     CreateOperatorFamily, CreateTable, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
-    DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorFamily,
+    DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily,
     DropOperatorSignature, DropTrigger, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
     IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
     IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption,
@@ -3573,6 +3573,12 @@ pub enum Statement {
     /// <https://www.postgresql.org/docs/current/sql-dropopfamily.html>
     DropOperatorFamily(DropOperatorFamily),
     /// ```sql
+    /// DROP OPERATOR CLASS [ IF EXISTS ] name USING index_method [ CASCADE | RESTRICT ]
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-dropopclass.html>
+    DropOperatorClass(DropOperatorClass),
+    /// ```sql
     /// FETCH
     /// ```
     /// Retrieve rows from a query using a cursor
@@ -4802,6 +4808,9 @@ impl fmt::Display for Statement {
             Statement::DropOperator(drop_operator) => write!(f, "{drop_operator}"),
             Statement::DropOperatorFamily(drop_operator_family) => {
                 write!(f, "{drop_operator_family}")
+            }
+            Statement::DropOperatorClass(drop_operator_class) => {
+                write!(f, "{drop_operator_class}")
             }
             Statement::CreateRole(create_role) => write!(f, "{create_role}"),
             Statement::CreateSecret {

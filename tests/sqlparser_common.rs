@@ -34,8 +34,8 @@ use sqlparser::ast::TableFactor::{Pivot, Unpivot};
 use sqlparser::ast::*;
 use sqlparser::dialect::{
     AnsiDialect, BigQueryDialect, ClickHouseDialect, DatabricksDialect, Dialect, DuckDbDialect,
-    GenericDialect, HiveDialect, MsSqlDialect, MySqlDialect, PostgreSqlDialect, RedshiftSqlDialect,
-    SQLiteDialect, SnowflakeDialect,
+    GenericDialect, HiveDialect, MsSqlDialect, MySqlDialect, OracleDialect, PostgreSqlDialect,
+    RedshiftSqlDialect, SQLiteDialect, SnowflakeDialect,
 };
 use sqlparser::keywords::{Keyword, ALL_KEYWORDS};
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
@@ -712,7 +712,9 @@ fn parse_delete_statement() {
 fn parse_delete_without_from_error() {
     let sql = "DELETE \"table\" WHERE 1";
 
-    let dialects = all_dialects_except(|d| d.is::<BigQueryDialect>() || d.is::<GenericDialect>());
+    let dialects = all_dialects_except(|d| {
+        d.is::<BigQueryDialect>() || d.is::<OracleDialect>() || d.is::<GenericDialect>()
+    });
     let res = dialects.parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError("Expected: FROM, found: WHERE".to_string()),
@@ -723,7 +725,9 @@ fn parse_delete_without_from_error() {
 #[test]
 fn parse_delete_statement_for_multi_tables() {
     let sql = "DELETE schema1.table1, schema2.table2 FROM schema1.table1 JOIN schema2.table2 ON schema2.table2.col1 = schema1.table1.col1 WHERE schema2.table2.col2 = 1";
-    let dialects = all_dialects_except(|d| d.is::<BigQueryDialect>() || d.is::<GenericDialect>());
+    let dialects = all_dialects_except(|d| {
+        d.is::<BigQueryDialect>() || d.is::<OracleDialect>() || d.is::<GenericDialect>()
+    });
     match dialects.verified_stmt(sql) {
         Statement::Delete(Delete {
             tables,
@@ -12943,7 +12947,7 @@ fn test_match_recognize_patterns() {
     fn check(pattern: &str, expect: MatchRecognizePattern) {
         let select =
             all_dialects_where(|d| d.supports_match_recognize()).verified_only_select(&format!(
-                "SELECT * FROM my_table MATCH_RECOGNIZE(PATTERN ({pattern}) DEFINE DUMMY AS true)" // "select * from my_table match_recognize ("
+                "SELECT * FROM my_table MATCH_RECOGNIZE(PATTERN ({pattern}) DEFINE DUMMY AS 1 = 1)" // "select * from my_table match_recognize ("
             ));
         let TableFactor::MatchRecognize {
             pattern: actual, ..

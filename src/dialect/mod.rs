@@ -24,6 +24,7 @@ mod generic;
 mod hive;
 mod mssql;
 mod mysql;
+mod oracle;
 mod postgresql;
 mod redshift;
 mod snowflake;
@@ -45,6 +46,7 @@ pub use self::generic::GenericDialect;
 pub use self::hive::HiveDialect;
 pub use self::mssql::MsSqlDialect;
 pub use self::mysql::MySqlDialect;
+pub use self::oracle::OracleDialect;
 pub use self::postgresql::PostgreSqlDialect;
 pub use self::redshift::RedshiftSqlDialect;
 pub use self::snowflake::SnowflakeDialect;
@@ -1307,6 +1309,7 @@ pub fn dialect_from_str(dialect_name: impl AsRef<str>) -> Option<Box<dyn Dialect
         "ansi" => Some(Box::new(AnsiDialect {})),
         "duckdb" => Some(Box::new(DuckDbDialect {})),
         "databricks" => Some(Box::new(DatabricksDialect {})),
+        "oracle" => Some(Box::new(OracleDialect {})),
         _ => None,
     }
 }

@@ -10,7 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! SQL Parser for MERGE
+//! SQL Parser for a `MERGE` statement
 
 #[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, format, string::ToString, vec, vec::Vec};

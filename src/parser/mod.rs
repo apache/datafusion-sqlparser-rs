@@ -3921,7 +3921,7 @@ impl<'a> Parser<'a> {
                 expr: Box::new(expr),
             })
         } else if Token::LBracket == *tok && self.dialect.supports_partiql()
-            || (dialect_of!(self is SnowflakeDialect | GenericDialect) && Token::Colon == *tok)
+            || (Token::Colon == *tok)
         {
             self.prev_token();
             self.parse_json_access(expr)
@@ -3957,7 +3957,8 @@ impl<'a> Parser<'a> {
         let lower_bound = if self.consume_token(&Token::Colon) {
             None
         } else {
-            Some(self.parse_expr()?)
+            // parse expr until we hit a colon (or any token with lower precedence)
+            Some(self.parse_subexpr(self.dialect.prec_value(Precedence::Colon))?)
         };
 
         // check for end
@@ -3985,7 +3986,8 @@ impl<'a> Parser<'a> {
                 stride: None,
             });
         } else {
-            Some(self.parse_expr()?)
+            // parse expr until we hit a colon (or any token with lower precedence)
+            Some(self.parse_subexpr(self.dialect.prec_value(Precedence::Colon))?)
         };
 
         // check for end

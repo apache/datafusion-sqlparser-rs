@@ -1270,12 +1270,14 @@ impl<'a> Parser<'a> {
             }
             // Handle parenthesized wildcard: (*)
             Token::LParen => {
-                let inner_token = self.next_token();
-                if inner_token.token == Token::Mul && self.peek_token().token == Token::RParen {
+                let [maybe_mul, maybe_rparen] = self.peek_tokens_ref();
+                if maybe_mul.token == Token::Mul && maybe_rparen.token == Token::RParen {
+                    let mul_token = self.next_token(); // consume Mul
                     self.next_token(); // consume RParen
-                    return Ok(Expr::Wildcard(AttachedToken(inner_token)));
+                    return Ok(Expr::Wildcard(AttachedToken(mul_token)));
                 }
-                // Not a (*), reset and fall through to parse_expr
+                // Not a (*), fall through to reset index and call parse_expr
+                self.prev_token();
             }
             _ => (),
         };

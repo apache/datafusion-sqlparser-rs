@@ -17955,7 +17955,7 @@ fn test_parse_set_session_authorization() {
 }
 
 #[test]
-fn parse_select_distinct_parenthesized_wildcard() {
+fn parse_select_parenthesized_wildcard() {
     // Test SELECT DISTINCT(*) which uses a parenthesized wildcard
     // The parentheses are syntactic sugar and get normalized to just *
     let sql = "SELECT DISTINCT (*) FROM table1";

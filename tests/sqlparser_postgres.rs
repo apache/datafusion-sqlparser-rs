@@ -7282,7 +7282,6 @@ fn parse_alter_operator_family() {
         )
         .is_err());
 
-
     // Non-integer strategy number
     assert!(pg()
         .parse_sql_statements(

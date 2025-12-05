@@ -60,22 +60,24 @@ pub use self::dcl::{
 };
 pub use self::ddl::{
     Alignment, AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterOperator,
-    AlterOperatorOperation, AlterPolicyOperation, AlterSchema, AlterSchemaOperation, AlterTable,
-    AlterTableAlgorithm, AlterTableLock, AlterTableOperation, AlterTableType, AlterType,
-    AlterTypeAddValue, AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename,
-    AlterTypeRenameValue, ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions,
-    ColumnPolicy, ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain,
+    AlterOperatorFamily, AlterOperatorFamilyOperation, AlterOperatorOperation,
+    AlterPolicyOperation, AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm,
+    AlterTableLock, AlterTableOperation, AlterTableType, AlterType, AlterTypeAddValue,
+    AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
+    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy,
+    ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain,
     CreateExtension, CreateFunction, CreateIndex, CreateOperator, CreateOperatorClass,
     CreateOperatorFamily, CreateTable, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
     DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily,
     DropOperatorSignature, DropTrigger, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
     IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
     IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption,
-    OperatorArgTypes, OperatorClassItem, OperatorOption, OperatorPurpose, Owner, Partition,
-    ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity, TagsColumnOption,
-    TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
-    UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
-    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, ViewColumnDef,
+    OperatorArgTypes, OperatorClassItem, OperatorFamilyDropItem, OperatorFamilyItem,
+    OperatorOption, OperatorPurpose, Owner, Partition, ProcedureParam, ReferentialAction,
+    RenameTableNameKind, ReplicaIdentity, TagsColumnOption, TriggerObjectKind, Truncate,
+    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
+    UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
+    UserDefinedTypeStorage, ViewColumnDef,
 };
 pub use self::dml::{Delete, Insert, Update};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -3401,6 +3403,11 @@ pub enum Statement {
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alteroperator.html)
     AlterOperator(AlterOperator),
     /// ```sql
+    /// ALTER OPERATOR FAMILY
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alteropfamily.html)
+    AlterOperatorFamily(AlterOperatorFamily),
+    /// ```sql
     /// ALTER ROLE
     /// ```
     AlterRole {
@@ -4977,6 +4984,9 @@ impl fmt::Display for Statement {
                 write!(f, "ALTER TYPE {name} {operation}")
             }
             Statement::AlterOperator(alter_operator) => write!(f, "{alter_operator}"),
+            Statement::AlterOperatorFamily(alter_operator_family) => {
+                write!(f, "{alter_operator_family}")
+            }
             Statement::AlterRole { name, operation } => {
                 write!(f, "ALTER ROLE {name} {operation}")
             }

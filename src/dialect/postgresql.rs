@@ -136,6 +136,8 @@ impl Dialect for PostgreSqlDialect {
             | Token::ShiftRight
             | Token::ShiftLeft
             | Token::CustomBinaryOperator(_) => Some(Ok(PG_OTHER_PREC)),
+            // lowest prec to prevent it from turning into a binary op
+            Token::Colon => Some(Ok(self.prec_unknown())),
             _ => None,
         }
     }

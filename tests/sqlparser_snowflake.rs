@@ -1265,37 +1265,8 @@ fn parse_lateral_flatten() {
 // https://docs.snowflake.com/en/user-guide/querying-semistructured
 #[test]
 fn parse_semi_structured_data_traversal() {
-    // most basic case
-    let sql = "SELECT a:b FROM t";
-    let select = snowflake().verified_only_select(sql);
-    assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonAccess {
-            value: Box::new(Expr::Identifier(Ident::new("a"))),
-            path: JsonPath {
-                path: vec![JsonPathElem::Dot {
-                    key: "b".to_owned(),
-                    quoted: false
-                }]
-            },
-        }),
-        select.projection[0]
-    );
-
-    // identifier can be quoted
-    let sql = r#"SELECT a:"my long object key name" FROM t"#;
-    let select = snowflake().verified_only_select(sql);
-    assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonAccess {
-            value: Box::new(Expr::Identifier(Ident::new("a"))),
-            path: JsonPath {
-                path: vec![JsonPathElem::Dot {
-                    key: "my long object key name".to_owned(),
-                    quoted: true
-                }]
-            },
-        }),
-        select.projection[0]
-    );
+    // see `tests/sqlparser_common.rs` -> `parse_semi_structured_data_traversal` for more test
+    // cases. This test only has Snowflake-specific syntax like array access.
 
     // expressions are allowed in bracket notation
     let sql = r#"SELECT a[2 + 2] FROM t"#;
@@ -1314,88 +1285,6 @@ fn parse_semi_structured_data_traversal() {
             },
         }),
         select.projection[0]
-    );
-
-    snowflake().verified_stmt("SELECT a:b::INT FROM t");
-
-    // unquoted keywords are permitted in the object key
-    let sql = "SELECT a:select, a:from FROM t";
-    let select = snowflake().verified_only_select(sql);
-    assert_eq!(
-        vec![
-            SelectItem::UnnamedExpr(Expr::JsonAccess {
-                value: Box::new(Expr::Identifier(Ident::new("a"))),
-                path: JsonPath {
-                    path: vec![JsonPathElem::Dot {
-                        key: "select".to_owned(),
-                        quoted: false
-                    }]
-                },
-            }),
-            SelectItem::UnnamedExpr(Expr::JsonAccess {
-                value: Box::new(Expr::Identifier(Ident::new("a"))),
-                path: JsonPath {
-                    path: vec![JsonPathElem::Dot {
-                        key: "from".to_owned(),
-                        quoted: false
-                    }]
-                },
-            })
-        ],
-        select.projection
-    );
-
-    // multiple levels can be traversed
-    // https://docs.snowflake.com/en/user-guide/querying-semistructured#dot-notation
-    let sql = r#"SELECT a:foo."bar".baz"#;
-    let select = snowflake().verified_only_select(sql);
-    assert_eq!(
-        vec![SelectItem::UnnamedExpr(Expr::JsonAccess {
-            value: Box::new(Expr::Identifier(Ident::new("a"))),
-            path: JsonPath {
-                path: vec![
-                    JsonPathElem::Dot {
-                        key: "foo".to_owned(),
-                        quoted: false,
-                    },
-                    JsonPathElem::Dot {
-                        key: "bar".to_owned(),
-                        quoted: true,
-                    },
-                    JsonPathElem::Dot {
-                        key: "baz".to_owned(),
-                        quoted: false,
-                    }
-                ]
-            },
-        })],
-        select.projection
-    );
-
-    // dot and bracket notation can be mixed (starting with : case)
-    // https://docs.snowflake.com/en/user-guide/querying-semistructured#dot-notation
-    let sql = r#"SELECT a:foo[0].bar"#;
-    let select = snowflake().verified_only_select(sql);
-    assert_eq!(
-        vec![SelectItem::UnnamedExpr(Expr::JsonAccess {
-            value: Box::new(Expr::Identifier(Ident::new("a"))),
-            path: JsonPath {
-                path: vec![
-                    JsonPathElem::Dot {
-                        key: "foo".to_owned(),
-                        quoted: false,
-                    },
-                    JsonPathElem::Bracket {
-                        key: Expr::value(number("0")),
-                    },
-                    JsonPathElem::Dot {
-                        key: "bar".to_owned(),
-                        quoted: false,
-                    }
-                ]
-            },
-        })],
-        select.projection
     );
 
     // dot and bracket notation can be mixed (starting with bracket case)

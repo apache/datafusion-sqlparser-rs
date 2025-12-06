@@ -603,7 +603,7 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Return true if the dialect supports specifying multiple options
+    /// Returns true if the dialect supports specifying multiple options
     /// in a `CREATE TABLE` statement for the structure of the new table. For example:
     /// `CREATE TABLE t (a INT, b INT) AS SELECT 1 AS b, 2 AS a`
     fn supports_create_table_multi_schema_info_sources(&self) -> bool {

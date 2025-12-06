@@ -9793,22 +9793,22 @@ fn parse_merge() {
     let sql_no_into = "MERGE s.bar AS dest USING (SELECT * FROM s.foo) AS stg ON dest.D = stg.D AND dest.E = stg.E WHEN NOT MATCHED THEN INSERT (A, B, C) VALUES (stg.A, stg.B, stg.C) WHEN MATCHED AND dest.A = 'a' THEN UPDATE SET dest.F = stg.F, dest.G = stg.G WHEN MATCHED THEN DELETE";
     match (verified_stmt(sql), verified_stmt(sql_no_into)) {
         (
-            Statement::Merge {
+            Statement::Merge(Merge {
                 into,
                 table,
                 source,
                 on,
                 clauses,
                 ..
-            },
-            Statement::Merge {
+            }),
+            Statement::Merge(Merge {
                 into: no_into,
                 table: table_no_into,
                 source: source_no_into,
                 on: on_no_into,
                 clauses: clauses_no_into,
                 ..
-            },
+            }),
         ) => {
             assert!(into);
             assert!(!no_into);
@@ -9921,7 +9921,11 @@ fn parse_merge() {
                         predicate: None,
                         action: MergeAction::Insert(MergeInsertExpr {
                             insert_token: AttachedToken::empty(),
-                            columns: vec![Ident::new("A"), Ident::new("B"), Ident::new("C")],
+                            columns: vec![
+                                Ident::new("A").into(),
+                                Ident::new("B").into(),
+                                Ident::new("C").into()
+                            ],
                             kind_token: AttachedToken::empty(),
                             kind: MergeInsertKind::Values(Values {
                                 value_keyword: false,
@@ -9941,6 +9945,7 @@ fn parse_merge() {
                                     ]),
                                 ]]
                             }),
+                            insert_predicate: None,
                         }),
                     },
                     MergeClause {
@@ -9956,7 +9961,7 @@ fn parse_merge() {
                                 (Value::SingleQuotedString("a".to_string())).with_empty_span()
                             )),
                         }),
-                        action: MergeAction::Update {
+                        action: MergeAction::Update(MergeUpdateExpr {
                             update_token: AttachedToken::empty(),
                             assignments: vec![
                                 Assignment {
@@ -9980,7 +9985,9 @@ fn parse_merge() {
                                     ]),
                                 },
                             ],
-                        },
+                            update_predicate: None,
+                            delete_predicate: None,
+                        }),
                     },
                     MergeClause {
                         when_token: AttachedToken::empty(),
@@ -9999,6 +10006,45 @@ fn parse_merge() {
 
     let sql = "MERGE INTO s.bar AS dest USING newArrivals AS S ON (1 > 1) WHEN NOT MATCHED THEN INSERT VALUES (stg.A, stg.B, stg.C)";
     verified_stmt(sql);
+
+    // MERGE with predicates
+    let sql = "\
+MERGE INTO FOO \
+USING FOO_IMPORT \
+ON (FOO.ID = FOO_IMPORT.ID) \
+WHEN MATCHED THEN \
+UPDATE SET FOO.NAME = FOO_IMPORT.NAME \
+WHERE 1 = 1 \
+DELETE WHERE FOO.NAME LIKE '%.DELETE' \
+WHEN NOT MATCHED THEN \
+INSERT (ID, NAME) \
+VALUES (FOO_IMPORT.ID, UPPER(FOO_IMPORT.NAME)) \
+WHERE NOT FOO_IMPORT.NAME LIKE '%.DO_NOT_INSERT'";
+    all_dialects().verified_stmt(sql);
+
+    // MERGE with simple insert columns
+    let sql = "\
+MERGE INTO FOO USING FOO_IMPORT ON (FOO.ID = FOO_IMPORT.ID) \
+WHEN NOT MATCHED THEN \
+INSERT (ID, NAME) \
+VALUES (1, 'abc')";
+    all_dialects().verified_stmt(sql);
+
+    // MERGE with qualified insert columns
+    let sql = "\
+MERGE INTO FOO USING FOO_IMPORT ON (FOO.ID = FOO_IMPORT.ID) \
+WHEN NOT MATCHED THEN \
+INSERT (FOO.ID, FOO.NAME) \
+VALUES (1, 'abc')";
+    all_dialects().verified_stmt(sql);
+
+    // MERGE with schema qualified insert columns
+    let sql = "\
+MERGE INTO PLAYGROUND.FOO USING FOO_IMPORT ON (PLAYGROUND.FOO.ID = FOO_IMPORT.ID) \
+WHEN NOT MATCHED THEN \
+INSERT (PLAYGROUND.FOO.ID, PLAYGROUND.FOO.NAME) \
+VALUES (1, 'abc')";
+    all_dialects().verified_stmt(sql);
 }
 
 #[test]

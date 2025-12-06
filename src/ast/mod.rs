@@ -77,7 +77,10 @@ pub use self::ddl::{
     UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
     UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, ViewColumnDef,
 };
-pub use self::dml::{Delete, Insert, Update};
+pub use self::dml::{
+    Delete, Insert, Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr,
+    MergeInsertKind, MergeUpdateExpr, OutputClause, Update,
+};
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
     AfterMatchSkip, ConnectBy, Cte, CteAsMaterialized, Distinct, EmptyMatchesMode,
@@ -341,6 +344,12 @@ pub struct ObjectName(pub Vec<ObjectNamePart>);
 impl From<Vec<Ident>> for ObjectName {
     fn from(idents: Vec<Ident>) -> Self {
         ObjectName(idents.into_iter().map(ObjectNamePart::Identifier).collect())
+    }
+}
+
+impl From<Ident> for ObjectName {
+    fn from(ident: Ident) -> Self {
+        ObjectName(vec![ObjectNamePart::Identifier(ident)])
     }
 }
 
@@ -4087,22 +4096,7 @@ pub enum Statement {
     /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/merge)
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
     /// [MSSQL](https://learn.microsoft.com/en-us/sql/t-sql/statements/merge-transact-sql?view=sql-server-ver16)
-    Merge {
-        /// The `MERGE` token that starts the statement.
-        merge_token: AttachedToken,
-        /// optional INTO keyword
-        into: bool,
-        /// Specifies the table to merge
-        table: TableFactor,
-        /// Specifies the table or subquery to join with the target table
-        source: TableFactor,
-        /// Specifies the expression on which to join the target table and source
-        on: Box<Expr>,
-        /// Specifies the actions to perform when values match or do not match.
-        clauses: Vec<MergeClause>,
-        // Specifies the output to save changes in MSSQL
-        output: Option<OutputClause>,
-    },
+    Merge(Merge),
     /// ```sql
     /// CACHE [ FLAG ] TABLE <table_name> [ OPTIONS('K1' = 'V1', 'K2' = V2) ] [ AS ] [ <query> ]
     /// ```
@@ -5520,27 +5514,7 @@ impl fmt::Display for Statement {
             Statement::ReleaseSavepoint { name } => {
                 write!(f, "RELEASE SAVEPOINT {name}")
             }
-            Statement::Merge {
-                merge_token: _,
-                into,
-                table,
-                source,
-                on,
-                clauses,
-                output,
-            } => {
-                write!(
-                    f,
-                    "MERGE{int} {table} USING {source} ",
-                    int = if *into { " INTO" } else { "" }
-                )?;
-                write!(f, "ON {on} ")?;
-                write!(f, "{}", display_separated(clauses, " "))?;
-                if let Some(output) = output {
-                    write!(f, " {output}")?;
-                }
-                Ok(())
-            }
+            Statement::Merge(merge) => merge.fmt(f),
             Statement::Cache {
                 table_name,
                 table_flag,
@@ -8560,257 +8534,6 @@ impl fmt::Display for CopyLegacyCsvOption {
             ForceQuote(columns) => write!(f, "FORCE QUOTE {}", display_comma_separated(columns)),
             ForceNotNull(columns) => {
                 write!(f, "FORCE NOT NULL {}", display_comma_separated(columns))
-            }
-        }
-    }
-}
-
-/// Variant of `WHEN` clause used within a `MERGE` Statement.
-///
-/// Example:
-/// ```sql
-/// MERGE INTO T USING U ON FALSE WHEN MATCHED THEN DELETE
-/// ```
-/// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/merge)
-/// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum MergeClauseKind {
-    /// `WHEN MATCHED`
-    Matched,
-    /// `WHEN NOT MATCHED`
-    NotMatched,
-    /// `WHEN MATCHED BY TARGET`
-    ///
-    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
-    NotMatchedByTarget,
-    /// `WHEN MATCHED BY SOURCE`
-    ///
-    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
-    NotMatchedBySource,
-}
-
-impl Display for MergeClauseKind {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            MergeClauseKind::Matched => write!(f, "MATCHED"),
-            MergeClauseKind::NotMatched => write!(f, "NOT MATCHED"),
-            MergeClauseKind::NotMatchedByTarget => write!(f, "NOT MATCHED BY TARGET"),
-            MergeClauseKind::NotMatchedBySource => write!(f, "NOT MATCHED BY SOURCE"),
-        }
-    }
-}
-
-/// The type of expression used to insert rows within a `MERGE` statement.
-///
-/// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/merge)
-/// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum MergeInsertKind {
-    /// The insert expression is defined from an explicit `VALUES` clause
-    ///
-    /// Example:
-    /// ```sql
-    /// INSERT VALUES(product, quantity)
-    /// ```
-    Values(Values),
-    /// The insert expression is defined using only the `ROW` keyword.
-    ///
-    /// Example:
-    /// ```sql
-    /// INSERT ROW
-    /// ```
-    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
-    Row,
-}
-
-impl Display for MergeInsertKind {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            MergeInsertKind::Values(values) => {
-                write!(f, "{values}")
-            }
-            MergeInsertKind::Row => {
-                write!(f, "ROW")
-            }
-        }
-    }
-}
-
-/// The expression used to insert rows within a `MERGE` statement.
-///
-/// Examples
-/// ```sql
-/// INSERT (product, quantity) VALUES(product, quantity)
-/// INSERT ROW
-/// ```
-///
-/// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/merge)
-/// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct MergeInsertExpr {
-    /// The `INSERT` token that starts the sub-expression.
-    pub insert_token: AttachedToken,
-    /// Columns (if any) specified by the insert.
-    ///
-    /// Example:
-    /// ```sql
-    /// INSERT (product, quantity) VALUES(product, quantity)
-    /// INSERT (product, quantity) ROW
-    /// ```
-    pub columns: Vec<Ident>,
-    /// The token, `[VALUES | ROW]` starting `kind`.
-    pub kind_token: AttachedToken,
-    /// The insert type used by the statement.
-    pub kind: MergeInsertKind,
-}
-
-impl Display for MergeInsertExpr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if !self.columns.is_empty() {
-            write!(f, "({}) ", display_comma_separated(self.columns.as_slice()))?;
-        }
-        write!(f, "{}", self.kind)
-    }
-}
-
-/// Underlying statement of a when clause within a `MERGE` Statement
-///
-/// Example
-/// ```sql
-/// INSERT (product, quantity) VALUES(product, quantity)
-/// ```
-///
-/// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/merge)
-/// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum MergeAction {
-    /// An `INSERT` clause
-    ///
-    /// Example:
-    /// ```sql
-    /// INSERT (product, quantity) VALUES(product, quantity)
-    /// ```
-    Insert(MergeInsertExpr),
-    /// An `UPDATE` clause
-    ///
-    /// Example:
-    /// ```sql
-    /// UPDATE SET quantity = T.quantity + S.quantity
-    /// ```
-    Update {
-        /// The `UPDATE` token that starts the sub-expression.
-        update_token: AttachedToken,
-        assignments: Vec<Assignment>,
-    },
-    /// A plain `DELETE` clause
-    Delete {
-        /// The `DELETE` token that starts the sub-expression.
-        delete_token: AttachedToken,
-    },
-}
-
-impl Display for MergeAction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            MergeAction::Insert(insert) => {
-                write!(f, "INSERT {insert}")
-            }
-            MergeAction::Update { assignments, .. } => {
-                write!(f, "UPDATE SET {}", display_comma_separated(assignments))
-            }
-            MergeAction::Delete { .. } => {
-                write!(f, "DELETE")
-            }
-        }
-    }
-}
-
-/// A when clause within a `MERGE` Statement
-///
-/// Example:
-/// ```sql
-/// WHEN NOT MATCHED BY SOURCE AND product LIKE '%washer%' THEN DELETE
-/// ```
-/// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/merge)
-/// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct MergeClause {
-    /// The `WHEN` token that starts the sub-expression.
-    pub when_token: AttachedToken,
-    pub clause_kind: MergeClauseKind,
-    pub predicate: Option<Expr>,
-    pub action: MergeAction,
-}
-
-impl Display for MergeClause {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let MergeClause {
-            when_token: _,
-            clause_kind,
-            predicate,
-            action,
-        } = self;
-
-        write!(f, "WHEN {clause_kind}")?;
-        if let Some(pred) = predicate {
-            write!(f, " AND {pred}")?;
-        }
-        write!(f, " THEN {action}")
-    }
-}
-
-/// A Output Clause in the end of a 'MERGE' Statement
-///
-/// Example:
-/// OUTPUT $action, deleted.* INTO dbo.temp_products;
-/// [mssql](https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql)
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum OutputClause {
-    Output {
-        output_token: AttachedToken,
-        select_items: Vec<SelectItem>,
-        into_table: Option<SelectInto>,
-    },
-    Returning {
-        returning_token: AttachedToken,
-        select_items: Vec<SelectItem>,
-    },
-}
-
-impl fmt::Display for OutputClause {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            OutputClause::Output {
-                output_token: _,
-                select_items,
-                into_table,
-            } => {
-                f.write_str("OUTPUT ")?;
-                display_comma_separated(select_items).fmt(f)?;
-                if let Some(into_table) = into_table {
-                    f.write_str(" ")?;
-                    into_table.fmt(f)?;
-                }
-                Ok(())
-            }
-            OutputClause::Returning {
-                returning_token: _,
-                select_items,
-            } => {
-                f.write_str("RETURNING ")?;
-                display_comma_separated(select_items).fmt(f)
             }
         }
     }

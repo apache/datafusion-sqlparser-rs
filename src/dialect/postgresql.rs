@@ -31,7 +31,7 @@ use log::debug;
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
-use crate::tokenizer::Token;
+use crate::tokenizer::BorrowedToken;
 
 /// A [`Dialect`] for [PostgreSQL](https://www.postgresql.org/)
 #[derive(Debug)]
@@ -110,32 +110,32 @@ impl Dialect for PostgreSqlDialect {
         // we only return some custom value here when the behaviour (not merely the numeric value) differs
         // from the default implementation
         match token.token {
-            Token::Word(w)
+            BorrowedToken::Word(w)
                 if w.keyword == Keyword::COLLATE && !parser.in_column_definition_state() =>
             {
                 Some(Ok(COLLATE_PREC))
             }
-            Token::LBracket => Some(Ok(BRACKET_PREC)),
-            Token::Arrow
-            | Token::LongArrow
-            | Token::HashArrow
-            | Token::HashLongArrow
-            | Token::AtArrow
-            | Token::ArrowAt
-            | Token::HashMinus
-            | Token::AtQuestion
-            | Token::AtAt
-            | Token::Question
-            | Token::QuestionAnd
-            | Token::QuestionPipe
-            | Token::ExclamationMark
-            | Token::Overlap
-            | Token::CaretAt
-            | Token::StringConcat
-            | Token::Sharp
-            | Token::ShiftRight
-            | Token::ShiftLeft
-            | Token::CustomBinaryOperator(_) => Some(Ok(PG_OTHER_PREC)),
+            BorrowedToken::LBracket => Some(Ok(BRACKET_PREC)),
+            BorrowedToken::Arrow
+            | BorrowedToken::LongArrow
+            | BorrowedToken::HashArrow
+            | BorrowedToken::HashLongArrow
+            | BorrowedToken::AtArrow
+            | BorrowedToken::ArrowAt
+            | BorrowedToken::HashMinus
+            | BorrowedToken::AtQuestion
+            | BorrowedToken::AtAt
+            | BorrowedToken::Question
+            | BorrowedToken::QuestionAnd
+            | BorrowedToken::QuestionPipe
+            | BorrowedToken::ExclamationMark
+            | BorrowedToken::Overlap
+            | BorrowedToken::CaretAt
+            | BorrowedToken::StringConcat
+            | BorrowedToken::Sharp
+            | BorrowedToken::ShiftRight
+            | BorrowedToken::ShiftLeft
+            | BorrowedToken::CustomBinaryOperator(_) => Some(Ok(PG_OTHER_PREC)),
             _ => None,
         }
     }

@@ -37,7 +37,7 @@ use crate::ast::{
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{IsOptional, Parser, ParserError};
-use crate::tokenizer::Token;
+use crate::tokenizer::BorrowedToken;
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
 #[cfg(not(feature = "std"))]
@@ -211,7 +211,7 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
-    fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
+    fn parse_statement(&self, parser: &Parser) -> Option<Result<Statement, ParserError>> {
         if parser.parse_keyword(Keyword::BEGIN) {
             return Some(parser.parse_begin_exception_end());
         }
@@ -318,7 +318,7 @@ impl Dialect for SnowflakeDialect {
 
     fn parse_column_option(
         &self,
-        parser: &mut Parser,
+        parser: &Parser,
     ) -> Result<Option<Result<Option<ColumnOption>, ParserError>>, ParserError> {
         parser.maybe_parse(|parser| {
             let with = parser.parse_keyword(Keyword::WITH);
@@ -350,7 +350,7 @@ impl Dialect for SnowflakeDialect {
         let token = parser.peek_token();
         // Snowflake supports the `:` cast operator unlike other dialects
         match token.token {
-            Token::Colon => Some(Ok(self.prec_value(Precedence::DoubleColon))),
+            BorrowedToken::Colon => Some(Ok(self.prec_value(Precedence::DoubleColon))),
             _ => None,
         }
     }
@@ -391,14 +391,14 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
-    fn is_column_alias(&self, kw: &Keyword, parser: &mut Parser) -> bool {
+    fn is_column_alias(&self, kw: &Keyword, parser: &Parser) -> bool {
         match kw {
             // The following keywords can be considered an alias as long as 
             // they are not followed by other tokens that may change their meaning
             // e.g. `SELECT * EXCEPT (col1) FROM tbl`
             Keyword::EXCEPT
             // e.g. `INSERT INTO t SELECT 1 RETURNING *`
-            | Keyword::RETURNING if !matches!(parser.peek_token_ref().token, Token::Comma | Token::EOF) =>
+            | Keyword::RETURNING if !matches!(parser.peek_token_ref().token, BorrowedToken::Comma | BorrowedToken::EOF) =>
             {
                 false
             }
@@ -437,7 +437,7 @@ impl Dialect for SnowflakeDialect {
         }
     }
 
-    fn is_table_alias(&self, kw: &Keyword, parser: &mut Parser) -> bool {
+    fn is_table_alias(&self, kw: &Keyword, parser: &Parser) -> bool {
         match kw {
             // The following keywords can be considered an alias as long as
             // they are not followed by other tokens that may change their meaning
@@ -448,7 +448,10 @@ impl Dialect for SnowflakeDialect {
             | Keyword::UNPIVOT
             | Keyword::EXCEPT
             | Keyword::MATCH_RECOGNIZE
-                if !matches!(parser.peek_token_ref().token, Token::SemiColon | Token::EOF) =>
+                if !matches!(
+                    parser.peek_token_ref().token,
+                    BorrowedToken::SemiColon | BorrowedToken::EOF
+                ) =>
             {
                 false
             }
@@ -521,11 +524,13 @@ impl Dialect for SnowflakeDialect {
         }
     }
 
-    fn is_table_factor(&self, kw: &Keyword, parser: &mut Parser) -> bool {
+    fn is_table_factor(&self, kw: &Keyword, parser: &Parser) -> bool {
         match kw {
             Keyword::LIMIT if peek_for_limit_options(parser) => false,
             // Table function
-            Keyword::TABLE if matches!(parser.peek_token_ref().token, Token::LParen) => true,
+            Keyword::TABLE if matches!(parser.peek_token_ref().token, BorrowedToken::LParen) => {
+                true
+            }
             _ => !RESERVED_KEYWORDS_FOR_TABLE_FACTOR.contains(kw),
         }
     }
@@ -583,18 +588,20 @@ impl Dialect for SnowflakeDialect {
 // a LIMIT/FETCH keyword.
 fn peek_for_limit_options(parser: &Parser) -> bool {
     match &parser.peek_token_ref().token {
-        Token::Number(_, _) | Token::Placeholder(_) => true,
-        Token::SingleQuotedString(val) if val.is_empty() => true,
-        Token::DollarQuotedString(DollarQuotedString { value, .. }) if value.is_empty() => true,
-        Token::Word(w) if w.keyword == Keyword::NULL => true,
+        BorrowedToken::Number(_, _) | BorrowedToken::Placeholder(_) => true,
+        BorrowedToken::SingleQuotedString(val) if val.is_empty() => true,
+        BorrowedToken::DollarQuotedString(DollarQuotedString { value, .. }) if value.is_empty() => {
+            true
+        }
+        BorrowedToken::Word(w) if w.keyword == Keyword::NULL => true,
         _ => false,
     }
 }
 
-fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statement, ParserError> {
+fn parse_file_staging_command(kw: Keyword, parser: &Parser) -> Result<Statement, ParserError> {
     let stage = parse_snowflake_stage_name(parser)?;
     let pattern = if parser.parse_keyword(Keyword::PATTERN) {
-        parser.expect_token(&Token::Eq)?;
+        parser.expect_token(&BorrowedToken::Eq)?;
         Some(parser.parse_literal_string()?)
     } else {
         None
@@ -613,7 +620,7 @@ fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statem
 
 /// Parse snowflake alter dynamic table.
 /// <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
-fn parse_alter_dynamic_table(parser: &mut Parser) -> Result<Statement, ParserError> {
+fn parse_alter_dynamic_table(parser: &Parser) -> Result<Statement, ParserError> {
     // Use parse_object_name(true) to support IDENTIFIER() function
     let table_name = parser.parse_object_name(true)?;
 
@@ -631,7 +638,7 @@ fn parse_alter_dynamic_table(parser: &mut Parser) -> Result<Statement, ParserErr
         );
     };
 
-    let end_token = if parser.peek_token_ref().token == Token::SemiColon {
+    let end_token = if parser.peek_token_ref().token == BorrowedToken::SemiColon {
         parser.peek_token_ref().clone()
     } else {
         parser.get_current_token().clone()
@@ -645,13 +652,13 @@ fn parse_alter_dynamic_table(parser: &mut Parser) -> Result<Statement, ParserErr
         location: None,
         on_cluster: None,
         table_type: Some(AlterTableType::Dynamic),
-        end_token: AttachedToken(end_token),
+        end_token: AttachedToken(end_token.to_static()),
     }))
 }
 
 /// Parse snowflake alter session.
 /// <https://docs.snowflake.com/en/sql-reference/sql/alter-session>
-fn parse_alter_session(parser: &mut Parser, set: bool) -> Result<Statement, ParserError> {
+fn parse_alter_session(parser: &Parser, set: bool) -> Result<Statement, ParserError> {
     let session_options = parse_session_options(parser, set)?;
     Ok(Statement::AlterSession {
         set,
@@ -674,7 +681,7 @@ pub fn parse_create_table(
     transient: bool,
     iceberg: bool,
     dynamic: bool,
-    parser: &mut Parser,
+    parser: &Parser,
 ) -> Result<Statement, ParserError> {
     let if_not_exists = parser.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
     let table_name = parser.parse_object_name(false)?;
@@ -701,7 +708,7 @@ pub fn parse_create_table(
     loop {
         let next_token = parser.next_token();
         match &next_token.token {
-            Token::Word(word) => match word.keyword {
+            BorrowedToken::Word(word) => match word.keyword {
                 Keyword::COPY => {
                     parser.expect_keyword_is(Keyword::GRANTS)?;
                     builder = builder.copy_grants(true);
@@ -732,36 +739,36 @@ pub fn parse_create_table(
                 }
                 Keyword::CLUSTER => {
                     parser.expect_keyword_is(Keyword::BY)?;
-                    parser.expect_token(&Token::LParen)?;
+                    parser.expect_token(&BorrowedToken::LParen)?;
                     let cluster_by = Some(WrappedCollection::Parentheses(
                         parser.parse_comma_separated(|p| p.parse_expr())?,
                     ));
-                    parser.expect_token(&Token::RParen)?;
+                    parser.expect_token(&BorrowedToken::RParen)?;
 
                     builder = builder.cluster_by(cluster_by)
                 }
                 Keyword::ENABLE_SCHEMA_EVOLUTION => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     builder = builder.enable_schema_evolution(Some(parser.parse_boolean_string()?));
                 }
                 Keyword::CHANGE_TRACKING => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     builder = builder.change_tracking(Some(parser.parse_boolean_string()?));
                 }
                 Keyword::DATA_RETENTION_TIME_IN_DAYS => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     let data_retention_time_in_days = parser.parse_literal_uint()?;
                     builder =
                         builder.data_retention_time_in_days(Some(data_retention_time_in_days));
                 }
                 Keyword::MAX_DATA_EXTENSION_TIME_IN_DAYS => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     let max_data_extension_time_in_days = parser.parse_literal_uint()?;
                     builder = builder
                         .max_data_extension_time_in_days(Some(max_data_extension_time_in_days));
                 }
                 Keyword::DEFAULT_DDL_COLLATION => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     let default_ddl_collation = parser.parse_literal_string()?;
                     builder = builder.default_ddl_collation(Some(default_ddl_collation));
                 }
@@ -784,17 +791,17 @@ pub fn parse_create_table(
                     parser.expect_keywords(&[Keyword::ACCESS, Keyword::POLICY])?;
                     let policy = parser.parse_object_name(false)?;
                     parser.expect_keyword_is(Keyword::ON)?;
-                    parser.expect_token(&Token::LParen)?;
+                    parser.expect_token(&BorrowedToken::LParen)?;
                     let columns = parser.parse_comma_separated(|p| p.parse_identifier())?;
-                    parser.expect_token(&Token::RParen)?;
+                    parser.expect_token(&BorrowedToken::RParen)?;
 
                     builder =
                         builder.with_row_access_policy(Some(RowAccessPolicy::new(policy, columns)))
                 }
                 Keyword::TAG => {
-                    parser.expect_token(&Token::LParen)?;
+                    parser.expect_token(&BorrowedToken::LParen)?;
                     let tags = parser.parse_comma_separated(Parser::parse_tag)?;
-                    parser.expect_token(&Token::RParen)?;
+                    parser.expect_token(&BorrowedToken::RParen)?;
                     builder = builder.with_tags(Some(tags));
                 }
                 Keyword::ON if parser.parse_keyword(Keyword::COMMIT) => {
@@ -802,23 +809,23 @@ pub fn parse_create_table(
                     builder = builder.on_commit(on_commit);
                 }
                 Keyword::EXTERNAL_VOLUME => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     builder.external_volume = Some(parser.parse_literal_string()?);
                 }
                 Keyword::CATALOG => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     builder.catalog = Some(parser.parse_literal_string()?);
                 }
                 Keyword::BASE_LOCATION => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     builder.base_location = Some(parser.parse_literal_string()?);
                 }
                 Keyword::CATALOG_SYNC => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     builder.catalog_sync = Some(parser.parse_literal_string()?);
                 }
                 Keyword::STORAGE_SERIALIZATION_POLICY => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
 
                     builder.storage_serialization_policy =
                         Some(parse_storage_serialization_policy(parser)?);
@@ -827,12 +834,12 @@ pub fn parse_create_table(
                     builder = builder.if_not_exists(true);
                 }
                 Keyword::TARGET_LAG => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     let target_lag = parser.parse_literal_string()?;
                     builder = builder.target_lag(Some(target_lag));
                 }
                 Keyword::WAREHOUSE => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     let warehouse = parser.parse_identifier()?;
                     builder = builder.warehouse(Some(warehouse));
                 }
@@ -842,7 +849,7 @@ pub fn parse_create_table(
                     builder = builder.version(version);
                 }
                 Keyword::REFRESH_MODE => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     let refresh_mode = match parser.parse_one_of_keywords(&[
                         Keyword::AUTO,
                         Keyword::FULL,
@@ -856,7 +863,7 @@ pub fn parse_create_table(
                     builder = builder.refresh_mode(refresh_mode);
                 }
                 Keyword::INITIALIZE => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     let initialize = match parser
                         .parse_one_of_keywords(&[Keyword::ON_CREATE, Keyword::ON_SCHEDULE])
                     {
@@ -873,15 +880,15 @@ pub fn parse_create_table(
                     return parser.expected("end of statement", next_token);
                 }
             },
-            Token::LParen => {
+            BorrowedToken::LParen => {
                 parser.prev_token();
                 let (columns, constraints) = parser.parse_columns()?;
                 builder = builder.columns(columns).constraints(constraints);
             }
-            Token::EOF => {
+            BorrowedToken::EOF => {
                 break;
             }
-            Token::SemiColon => {
+            BorrowedToken::SemiColon => {
                 parser.prev_token();
                 break;
             }
@@ -912,7 +919,7 @@ pub fn parse_create_table(
 pub fn parse_create_database(
     or_replace: bool,
     transient: bool,
-    parser: &mut Parser,
+    parser: &Parser,
 ) -> Result<Statement, ParserError> {
     let if_not_exists = parser.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
     let name = parser.parse_object_name(false)?;
@@ -925,58 +932,58 @@ pub fn parse_create_database(
     loop {
         let next_token = parser.next_token();
         match &next_token.token {
-            Token::Word(word) => match word.keyword {
+            BorrowedToken::Word(word) => match word.keyword {
                 Keyword::CLONE => {
                     builder = builder.clone_clause(Some(parser.parse_object_name(false)?));
                 }
                 Keyword::DATA_RETENTION_TIME_IN_DAYS => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     builder =
                         builder.data_retention_time_in_days(Some(parser.parse_literal_uint()?));
                 }
                 Keyword::MAX_DATA_EXTENSION_TIME_IN_DAYS => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     builder =
                         builder.max_data_extension_time_in_days(Some(parser.parse_literal_uint()?));
                 }
                 Keyword::EXTERNAL_VOLUME => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     builder = builder.external_volume(Some(parser.parse_literal_string()?));
                 }
                 Keyword::CATALOG => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     builder = builder.catalog(Some(parser.parse_literal_string()?));
                 }
                 Keyword::REPLACE_INVALID_CHARACTERS => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     builder =
                         builder.replace_invalid_characters(Some(parser.parse_boolean_string()?));
                 }
                 Keyword::DEFAULT_DDL_COLLATION => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     builder = builder.default_ddl_collation(Some(parser.parse_literal_string()?));
                 }
                 Keyword::STORAGE_SERIALIZATION_POLICY => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     let policy = parse_storage_serialization_policy(parser)?;
                     builder = builder.storage_serialization_policy(Some(policy));
                 }
                 Keyword::COMMENT => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     builder = builder.comment(Some(parser.parse_literal_string()?));
                 }
                 Keyword::CATALOG_SYNC => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     builder = builder.catalog_sync(Some(parser.parse_literal_string()?));
                 }
                 Keyword::CATALOG_SYNC_NAMESPACE_FLATTEN_DELIMITER => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     builder = builder.catalog_sync_namespace_flatten_delimiter(Some(
                         parser.parse_literal_string()?,
                     ));
                 }
                 Keyword::CATALOG_SYNC_NAMESPACE_MODE => {
-                    parser.expect_token(&Token::Eq)?;
+                    parser.expect_token(&BorrowedToken::Eq)?;
                     let mode =
                         match parser.parse_one_of_keywords(&[Keyword::NEST, Keyword::FLATTEN]) {
                             Some(Keyword::NEST) => CatalogSyncNamespaceMode::Nest,
@@ -989,19 +996,19 @@ pub fn parse_create_database(
                 }
                 Keyword::WITH => {
                     if parser.parse_keyword(Keyword::TAG) {
-                        parser.expect_token(&Token::LParen)?;
+                        parser.expect_token(&BorrowedToken::LParen)?;
                         let tags = parser.parse_comma_separated(Parser::parse_tag)?;
-                        parser.expect_token(&Token::RParen)?;
+                        parser.expect_token(&BorrowedToken::RParen)?;
                         builder = builder.with_tags(Some(tags));
                     } else if parser.parse_keyword(Keyword::CONTACT) {
-                        parser.expect_token(&Token::LParen)?;
+                        parser.expect_token(&BorrowedToken::LParen)?;
                         let contacts = parser.parse_comma_separated(|p| {
                             let purpose = p.parse_identifier()?.value;
-                            p.expect_token(&Token::Eq)?;
+                            p.expect_token(&BorrowedToken::Eq)?;
                             let contact = p.parse_identifier()?.value;
                             Ok(ContactEntry { purpose, contact })
                         })?;
-                        parser.expect_token(&Token::RParen)?;
+                        parser.expect_token(&BorrowedToken::RParen)?;
                         builder = builder.with_contacts(Some(contacts));
                     } else {
                         return parser.expected("TAG or CONTACT", next_token);
@@ -1009,7 +1016,7 @@ pub fn parse_create_database(
                 }
                 _ => return parser.expected("end of statement", next_token),
             },
-            Token::SemiColon | Token::EOF => break,
+            BorrowedToken::SemiColon | BorrowedToken::EOF => break,
             _ => return parser.expected("end of statement", next_token),
         }
     }
@@ -1017,11 +1024,11 @@ pub fn parse_create_database(
 }
 
 pub fn parse_storage_serialization_policy(
-    parser: &mut Parser,
+    parser: &Parser,
 ) -> Result<StorageSerializationPolicy, ParserError> {
     let next_token = parser.next_token();
     match &next_token.token {
-        Token::Word(w) => match w.keyword {
+        BorrowedToken::Word(w) => match w.keyword {
             Keyword::COMPATIBLE => Ok(StorageSerializationPolicy::Compatible),
             Keyword::OPTIMIZED => Ok(StorageSerializationPolicy::Optimized),
             _ => parser.expected("storage_serialization_policy", next_token),
@@ -1033,7 +1040,7 @@ pub fn parse_storage_serialization_policy(
 pub fn parse_create_stage(
     or_replace: bool,
     temporary: bool,
-    parser: &mut Parser,
+    parser: &Parser,
 ) -> Result<Statement, ParserError> {
     //[ IF NOT EXISTS ]
     let if_not_exists = parser.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
@@ -1048,25 +1055,25 @@ pub fn parse_create_stage(
 
     // [ directoryTableParams ]
     if parser.parse_keyword(Keyword::DIRECTORY) {
-        parser.expect_token(&Token::Eq)?;
+        parser.expect_token(&BorrowedToken::Eq)?;
         directory_table_params = parser.parse_key_value_options(true, &[])?.options;
     }
 
     // [ file_format]
     if parser.parse_keyword(Keyword::FILE_FORMAT) {
-        parser.expect_token(&Token::Eq)?;
+        parser.expect_token(&BorrowedToken::Eq)?;
         file_format = parser.parse_key_value_options(true, &[])?.options;
     }
 
     // [ copy_options ]
     if parser.parse_keyword(Keyword::COPY_OPTIONS) {
-        parser.expect_token(&Token::Eq)?;
+        parser.expect_token(&BorrowedToken::Eq)?;
         copy_options = parser.parse_key_value_options(true, &[])?.options;
     }
 
     // [ comment ]
     if parser.parse_keyword(Keyword::COMMENT) {
-        parser.expect_token(&Token::Eq)?;
+        parser.expect_token(&BorrowedToken::Eq)?;
         comment = Some(parser.parse_comment_value()?);
     }
 
@@ -1092,41 +1099,41 @@ pub fn parse_create_stage(
     })
 }
 
-pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserError> {
+pub fn parse_stage_name_identifier(parser: &Parser) -> Result<Ident, ParserError> {
     let mut ident = String::new();
     while let Some(next_token) = parser.next_token_no_skip() {
         match &next_token.token {
-            Token::Whitespace(_) | Token::SemiColon => break,
-            Token::Period => {
+            BorrowedToken::Whitespace(_) | BorrowedToken::SemiColon => break,
+            BorrowedToken::Period => {
                 parser.prev_token();
                 break;
             }
-            Token::RParen => {
+            BorrowedToken::RParen => {
                 parser.prev_token();
                 break;
             }
-            Token::AtSign => ident.push('@'),
-            Token::Tilde => ident.push('~'),
-            Token::Mod => ident.push('%'),
-            Token::Div => ident.push('/'),
-            Token::Plus => ident.push('+'),
-            Token::Minus => ident.push('-'),
-            Token::Number(n, _) => ident.push_str(n),
-            Token::Word(w) => ident.push_str(&w.to_string()),
+            BorrowedToken::AtSign => ident.push('@'),
+            BorrowedToken::Tilde => ident.push('~'),
+            BorrowedToken::Mod => ident.push('%'),
+            BorrowedToken::Div => ident.push('/'),
+            BorrowedToken::Plus => ident.push('+'),
+            BorrowedToken::Minus => ident.push('-'),
+            BorrowedToken::Number(n, _) => ident.push_str(n),
+            BorrowedToken::Word(w) => ident.push_str(&w.to_string()),
             _ => return parser.expected("stage name identifier", parser.peek_token()),
         }
     }
     Ok(Ident::new(ident))
 }
 
-pub fn parse_snowflake_stage_name(parser: &mut Parser) -> Result<ObjectName, ParserError> {
+pub fn parse_snowflake_stage_name(parser: &Parser) -> Result<ObjectName, ParserError> {
     match parser.next_token().token {
-        Token::AtSign => {
+        BorrowedToken::AtSign => {
             parser.prev_token();
             let mut idents = vec![];
             loop {
                 idents.push(parse_stage_name_identifier(parser)?);
-                if !parser.consume_token(&Token::Period) {
+                if !parser.consume_token(&BorrowedToken::Period) {
                     break;
                 }
             }
@@ -1141,12 +1148,14 @@ pub fn parse_snowflake_stage_name(parser: &mut Parser) -> Result<ObjectName, Par
 
 /// Parses a `COPY INTO` statement. Snowflake has two variants, `COPY INTO <table>`
 /// and `COPY INTO <location>` which have different syntax.
-pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
+pub fn parse_copy_into(parser: &Parser) -> Result<Statement, ParserError> {
     let kind = match parser.peek_token().token {
         // Indicates an internal stage
-        Token::AtSign => CopyIntoSnowflakeKind::Location,
+        BorrowedToken::AtSign => CopyIntoSnowflakeKind::Location,
         // Indicates an external stage, i.e. s3://, gcs:// or azure://
-        Token::SingleQuotedString(s) if s.contains("://") => CopyIntoSnowflakeKind::Location,
+        BorrowedToken::SingleQuotedString(s) if s.contains("://") => {
+            CopyIntoSnowflakeKind::Location
+        }
         _ => CopyIntoSnowflakeKind::Table,
     };
 
@@ -1180,13 +1189,15 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
     }
 
     let into_columns = match &parser.peek_token().token {
-        Token::LParen => Some(parser.parse_parenthesized_column_list(IsOptional::Optional, true)?),
+        BorrowedToken::LParen => {
+            Some(parser.parse_parenthesized_column_list(IsOptional::Optional, true)?)
+        }
         _ => None,
     };
 
     parser.expect_keyword_is(Keyword::FROM)?;
     match parser.next_token().token {
-        Token::LParen if kind == CopyIntoSnowflakeKind::Table => {
+        BorrowedToken::LParen if kind == CopyIntoSnowflakeKind::Table => {
             // Data load with transformations
             parser.expect_keyword_is(Keyword::SELECT)?;
             from_transformations = parse_select_items_for_data_load(parser)?;
@@ -1199,12 +1210,12 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
             from_stage_alias = parser
                 .maybe_parse_table_alias()?
                 .map(|table_alias| table_alias.name);
-            parser.expect_token(&Token::RParen)?;
+            parser.expect_token(&BorrowedToken::RParen)?;
         }
-        Token::LParen if kind == CopyIntoSnowflakeKind::Location => {
+        BorrowedToken::LParen if kind == CopyIntoSnowflakeKind::Location => {
             // Data unload with a query
             from_query = Some(parser.parse_query()?);
-            parser.expect_token(&Token::RParen)?;
+            parser.expect_token(&BorrowedToken::RParen)?;
         }
         _ => {
             parser.prev_token();
@@ -1214,7 +1225,7 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
             // as
             from_stage_alias = if parser.parse_keyword(Keyword::AS) {
                 Some(match parser.next_token().token {
-                    Token::Word(w) => Ok(Ident::new(w.value)),
+                    BorrowedToken::Word(w) => Ok(Ident::new(w.value)),
                     _ => parser.expected("stage alias", parser.peek_token()),
                 }?)
             } else {
@@ -1226,53 +1237,53 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
     loop {
         // FILE_FORMAT
         if parser.parse_keyword(Keyword::FILE_FORMAT) {
-            parser.expect_token(&Token::Eq)?;
+            parser.expect_token(&BorrowedToken::Eq)?;
             file_format = parser.parse_key_value_options(true, &[])?.options;
         // PARTITION BY
         } else if parser.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
             partition = Some(Box::new(parser.parse_expr()?))
         // FILES
         } else if parser.parse_keyword(Keyword::FILES) {
-            parser.expect_token(&Token::Eq)?;
-            parser.expect_token(&Token::LParen)?;
+            parser.expect_token(&BorrowedToken::Eq)?;
+            parser.expect_token(&BorrowedToken::LParen)?;
             let mut continue_loop = true;
             while continue_loop {
                 continue_loop = false;
                 let next_token = parser.next_token();
                 match next_token.token {
-                    Token::SingleQuotedString(s) => files.push(s),
+                    BorrowedToken::SingleQuotedString(s) => files.push(s),
                     _ => parser.expected("file token", next_token)?,
                 };
-                if parser.next_token().token.eq(&Token::Comma) {
+                if parser.next_token().token.eq(&BorrowedToken::Comma) {
                     continue_loop = true;
                 } else {
                     parser.prev_token(); // not a comma, need to go back
                 }
             }
-            parser.expect_token(&Token::RParen)?;
+            parser.expect_token(&BorrowedToken::RParen)?;
         // PATTERN
         } else if parser.parse_keyword(Keyword::PATTERN) {
-            parser.expect_token(&Token::Eq)?;
+            parser.expect_token(&BorrowedToken::Eq)?;
             let next_token = parser.next_token();
             pattern = Some(match next_token.token {
-                Token::SingleQuotedString(s) => s,
+                BorrowedToken::SingleQuotedString(s) => s,
                 _ => parser.expected("pattern", next_token)?,
             });
         // VALIDATION MODE
         } else if parser.parse_keyword(Keyword::VALIDATION_MODE) {
-            parser.expect_token(&Token::Eq)?;
+            parser.expect_token(&BorrowedToken::Eq)?;
             validation_mode = Some(parser.next_token().token.to_string());
         // COPY OPTIONS
         } else if parser.parse_keyword(Keyword::COPY_OPTIONS) {
-            parser.expect_token(&Token::Eq)?;
+            parser.expect_token(&BorrowedToken::Eq)?;
             copy_options = parser.parse_key_value_options(true, &[])?.options;
         } else {
             match parser.next_token().token {
-                Token::SemiColon | Token::EOF => break,
-                Token::Comma => continue,
+                BorrowedToken::SemiColon | BorrowedToken::EOF => break,
+                BorrowedToken::Comma => continue,
                 // In `COPY INTO <location>` the copy options do not have a shared key
                 // like in `COPY INTO <table>`
-                Token::Word(key) => copy_options.push(parser.parse_key_value_option(&key)?),
+                BorrowedToken::Word(key) => copy_options.push(parser.parse_key_value_option(&key)?),
                 _ => return parser.expected("another copy option, ; or EOF'", parser.peek_token()),
             }
         }
@@ -1303,7 +1314,7 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
 }
 
 fn parse_select_items_for_data_load(
-    parser: &mut Parser,
+    parser: &Parser,
 ) -> Result<Option<Vec<StageLoadSelectItemKind>>, ParserError> {
     let mut select_items: Vec<StageLoadSelectItemKind> = vec![];
     loop {
@@ -1315,7 +1326,7 @@ fn parse_select_items_for_data_load(
                 parser.parse_select_item()?,
             )),
         }
-        if matches!(parser.peek_token_ref().token, Token::Comma) {
+        if matches!(parser.peek_token_ref().token, BorrowedToken::Comma) {
             parser.advance_token();
         } else {
             break;
@@ -1324,9 +1335,7 @@ fn parse_select_items_for_data_load(
     Ok(Some(select_items))
 }
 
-fn parse_select_item_for_data_load(
-    parser: &mut Parser,
-) -> Result<StageLoadSelectItem, ParserError> {
+fn parse_select_item_for_data_load(parser: &Parser) -> Result<StageLoadSelectItem, ParserError> {
     let mut alias: Option<Ident> = None;
     let mut file_col_num: i32 = 0;
     let mut element: Option<Ident> = None;
@@ -1334,13 +1343,13 @@ fn parse_select_item_for_data_load(
 
     let next_token = parser.next_token();
     match next_token.token {
-        Token::Placeholder(w) => {
+        BorrowedToken::Placeholder(w) => {
             file_col_num = w.to_string().split_off(1).parse::<i32>().map_err(|e| {
                 ParserError::ParserError(format!("Could not parse '{w}' as i32: {e}"))
             })?;
             Ok(())
         }
-        Token::Word(w) => {
+        BorrowedToken::Word(w) => {
             alias = Some(Ident::new(w.value));
             Ok(())
         }
@@ -1348,11 +1357,11 @@ fn parse_select_item_for_data_load(
     }?;
 
     if alias.is_some() {
-        parser.expect_token(&Token::Period)?;
+        parser.expect_token(&BorrowedToken::Period)?;
         // now we get col_num token
         let col_num_token = parser.next_token();
         match col_num_token.token {
-            Token::Placeholder(w) => {
+            BorrowedToken::Placeholder(w) => {
                 file_col_num = w.to_string().split_off(1).parse::<i32>().map_err(|e| {
                     ParserError::ParserError(format!("Could not parse '{w}' as i32: {e}"))
                 })?;
@@ -1364,10 +1373,10 @@ fn parse_select_item_for_data_load(
 
     // try extracting optional element
     match parser.next_token().token {
-        Token::Colon => {
+        BorrowedToken::Colon => {
             // parse element
             element = Some(Ident::new(match parser.next_token().token {
-                Token::Word(w) => Ok(w.value),
+                BorrowedToken::Word(w) => Ok(w.value),
                 _ => parser.expected("file_col_num", parser.peek_token()),
             }?));
         }
@@ -1380,7 +1389,7 @@ fn parse_select_item_for_data_load(
     // as
     if parser.parse_keyword(Keyword::AS) {
         item_as = Some(match parser.next_token().token {
-            Token::Word(w) => Ok(Ident::new(w.value)),
+            BorrowedToken::Word(w) => Ok(Ident::new(w.value)),
             _ => parser.expected("column item alias", parser.peek_token()),
         }?);
     }
@@ -1393,7 +1402,7 @@ fn parse_select_item_for_data_load(
     })
 }
 
-fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserError> {
+fn parse_stage_params(parser: &Parser) -> Result<StageParamsObject, ParserError> {
     let (mut url, mut storage_integration, mut endpoint) = (None, None, None);
     let mut encryption: KeyValueOptions = KeyValueOptions {
         options: vec![],
@@ -1406,31 +1415,31 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
 
     // URL
     if parser.parse_keyword(Keyword::URL) {
-        parser.expect_token(&Token::Eq)?;
+        parser.expect_token(&BorrowedToken::Eq)?;
         url = Some(match parser.next_token().token {
-            Token::SingleQuotedString(word) => Ok(word),
+            BorrowedToken::SingleQuotedString(word) => Ok(word),
             _ => parser.expected("a URL statement", parser.peek_token()),
         }?)
     }
 
     // STORAGE INTEGRATION
     if parser.parse_keyword(Keyword::STORAGE_INTEGRATION) {
-        parser.expect_token(&Token::Eq)?;
+        parser.expect_token(&BorrowedToken::Eq)?;
         storage_integration = Some(parser.next_token().token.to_string());
     }
 
     // ENDPOINT
     if parser.parse_keyword(Keyword::ENDPOINT) {
-        parser.expect_token(&Token::Eq)?;
+        parser.expect_token(&BorrowedToken::Eq)?;
         endpoint = Some(match parser.next_token().token {
-            Token::SingleQuotedString(word) => Ok(word),
+            BorrowedToken::SingleQuotedString(word) => Ok(word),
             _ => parser.expected("an endpoint statement", parser.peek_token()),
         }?)
     }
 
     // CREDENTIALS
     if parser.parse_keyword(Keyword::CREDENTIALS) {
-        parser.expect_token(&Token::Eq)?;
+        parser.expect_token(&BorrowedToken::Eq)?;
         credentials = KeyValueOptions {
             options: parser.parse_key_value_options(true, &[])?.options,
             delimiter: KeyValueOptionsDelimiter::Space,
@@ -1439,7 +1448,7 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
 
     // ENCRYPTION
     if parser.parse_keyword(Keyword::ENCRYPTION) {
-        parser.expect_token(&Token::Eq)?;
+        parser.expect_token(&BorrowedToken::Eq)?;
         encryption = KeyValueOptions {
             options: parser.parse_key_value_options(true, &[])?.options,
             delimiter: KeyValueOptionsDelimiter::Space,
@@ -1459,21 +1468,18 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
 /// ABORT_DETACHED_QUERY = { TRUE | FALSE }
 ///      [ ACTIVE_PYTHON_PROFILER = { 'LINE' | 'MEMORY' } ]
 ///      [ BINARY_INPUT_FORMAT = '\<string\>' ]
-fn parse_session_options(
-    parser: &mut Parser,
-    set: bool,
-) -> Result<Vec<KeyValueOption>, ParserError> {
+fn parse_session_options(parser: &Parser, set: bool) -> Result<Vec<KeyValueOption>, ParserError> {
     let mut options: Vec<KeyValueOption> = Vec::new();
     let empty = String::new;
     loop {
         let next_token = parser.peek_token();
         match next_token.token {
-            Token::SemiColon | Token::EOF => break,
-            Token::Comma => {
+            BorrowedToken::SemiColon | BorrowedToken::EOF => break,
+            BorrowedToken::Comma => {
                 parser.advance_token();
                 continue;
             }
-            Token::Word(key) => {
+            BorrowedToken::Word(key) => {
                 parser.advance_token();
                 if set {
                     let option = parser.parse_key_value_option(&key)?;
@@ -1505,12 +1511,12 @@ fn parse_session_options(
 /// [ (seed , increment) | START num INCREMENT num ] [ ORDER | NOORDER ]
 /// ```
 /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
-fn parse_identity_property(parser: &mut Parser) -> Result<IdentityProperty, ParserError> {
-    let parameters = if parser.consume_token(&Token::LParen) {
+fn parse_identity_property(parser: &Parser) -> Result<IdentityProperty, ParserError> {
+    let parameters = if parser.consume_token(&BorrowedToken::LParen) {
         let seed = parser.parse_number()?;
-        parser.expect_token(&Token::Comma)?;
+        parser.expect_token(&BorrowedToken::Comma)?;
         let increment = parser.parse_number()?;
-        parser.expect_token(&Token::RParen)?;
+        parser.expect_token(&BorrowedToken::RParen)?;
 
         Some(IdentityPropertyFormatKind::FunctionCall(
             IdentityParameters { seed, increment },
@@ -1541,14 +1547,14 @@ fn parse_identity_property(parser: &mut Parser) -> Result<IdentityProperty, Pars
 /// ```
 /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
 fn parse_column_policy_property(
-    parser: &mut Parser,
+    parser: &Parser,
     with: bool,
 ) -> Result<ColumnPolicyProperty, ParserError> {
     let policy_name = parser.parse_object_name(false)?;
     let using_columns = if parser.parse_keyword(Keyword::USING) {
-        parser.expect_token(&Token::LParen)?;
+        parser.expect_token(&BorrowedToken::LParen)?;
         let columns = parser.parse_comma_separated(|p| p.parse_identifier())?;
-        parser.expect_token(&Token::RParen)?;
+        parser.expect_token(&BorrowedToken::RParen)?;
         Some(columns)
     } else {
         None
@@ -1567,17 +1573,17 @@ fn parse_column_policy_property(
 /// ( <tag_name> = '<tag_value>' [ , <tag_name> = '<tag_value>' , ... ] )
 /// ```
 /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
-fn parse_column_tags(parser: &mut Parser, with: bool) -> Result<TagsColumnOption, ParserError> {
-    parser.expect_token(&Token::LParen)?;
+fn parse_column_tags(parser: &Parser, with: bool) -> Result<TagsColumnOption, ParserError> {
+    parser.expect_token(&BorrowedToken::LParen)?;
     let tags = parser.parse_comma_separated(Parser::parse_tag)?;
-    parser.expect_token(&Token::RParen)?;
+    parser.expect_token(&BorrowedToken::RParen)?;
 
     Ok(TagsColumnOption { with, tags })
 }
 
 /// Parse snowflake show objects.
 /// <https://docs.snowflake.com/en/sql-reference/sql/show-objects>
-fn parse_show_objects(terse: bool, parser: &mut Parser) -> Result<Statement, ParserError> {
+fn parse_show_objects(terse: bool, parser: &Parser) -> Result<Statement, ParserError> {
     let show_options = parser.parse_show_stmt_options()?;
     Ok(Statement::ShowObjects(ShowObjects {
         terse,

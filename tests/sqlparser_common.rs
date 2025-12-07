@@ -311,8 +311,7 @@ fn parse_insert_default_values() {
 fn parse_insert_select_returning() {
     // Dialects that support `RETURNING` as a column identifier do
     // not support this syntax.
-    let dialects =
-        all_dialects_where(|d| !d.is_column_alias(&Keyword::RETURNING, &mut Parser::new(d)));
+    let dialects = all_dialects_where(|d| !d.is_column_alias(&Keyword::RETURNING, &Parser::new(d)));
 
     dialects.verified_stmt("INSERT INTO t SELECT 1 RETURNING 2");
     let stmt = dialects.verified_stmt("INSERT INTO t SELECT x RETURNING x AS y");
@@ -5655,7 +5654,7 @@ fn parse_named_window_functions() {
                WINDOW w AS (PARTITION BY x), win AS (ORDER BY y)";
     supported_dialects.verified_stmt(sql);
 
-    let select = all_dialects_except(|d| d.is_table_alias(&Keyword::WINDOW, &mut Parser::new(d)))
+    let select = all_dialects_except(|d| d.is_table_alias(&Keyword::WINDOW, &Parser::new(d)))
         .verified_only_select(sql);
 
     const EXPECTED_PROJ_QTY: usize = 2;
@@ -5686,7 +5685,7 @@ fn parse_named_window_functions() {
 
 #[test]
 fn parse_window_clause() {
-    let dialects = all_dialects_except(|d| d.is_table_alias(&Keyword::WINDOW, &mut Parser::new(d)));
+    let dialects = all_dialects_except(|d| d.is_table_alias(&Keyword::WINDOW, &Parser::new(d)));
     let sql = "SELECT * \
     FROM mytable \
     WINDOW \
@@ -5705,7 +5704,7 @@ fn parse_window_clause() {
     let dialects = all_dialects_except(|d| {
         d.is::<BigQueryDialect>()
             || d.is::<GenericDialect>()
-            || d.is_table_alias(&Keyword::WINDOW, &mut Parser::new(d))
+            || d.is_table_alias(&Keyword::WINDOW, &Parser::new(d))
     });
     let res = dialects.parse_sql_statements(sql);
     assert_eq!(
@@ -5716,7 +5715,7 @@ fn parse_window_clause() {
 
 #[test]
 fn test_parse_named_window() {
-    let dialects = all_dialects_except(|d| d.is_table_alias(&Keyword::WINDOW, &mut Parser::new(d)));
+    let dialects = all_dialects_except(|d| d.is_table_alias(&Keyword::WINDOW, &Parser::new(d)));
     let sql = "SELECT \
     MIN(c12) OVER window1 AS min1, \
     MAX(c12) OVER window2 AS max1 \
@@ -5875,8 +5874,8 @@ fn test_parse_named_window() {
 #[test]
 fn parse_window_and_qualify_clause() {
     let dialects = all_dialects_except(|d| {
-        d.is_table_alias(&Keyword::WINDOW, &mut Parser::new(d))
-            || d.is_table_alias(&Keyword::QUALIFY, &mut Parser::new(d))
+        d.is_table_alias(&Keyword::WINDOW, &Parser::new(d))
+            || d.is_table_alias(&Keyword::QUALIFY, &Parser::new(d))
     });
     let sql = "SELECT \
     MIN(c12) OVER window1 AS min1 \
@@ -7614,7 +7613,7 @@ fn parse_join_syntax_variants() {
         "SELECT c1 FROM t1 FULL JOIN t2 USING(c1)",
     );
 
-    let dialects = all_dialects_except(|d| d.is_table_alias(&Keyword::OUTER, &mut Parser::new(d)));
+    let dialects = all_dialects_except(|d| d.is_table_alias(&Keyword::OUTER, &Parser::new(d)));
     let res = dialects.parse_sql_statements("SELECT * FROM a OUTER JOIN b ON 1");
     assert_eq!(
         ParserError::ParserError("Expected: APPLY, found: JOIN".to_string()),
@@ -7829,7 +7828,7 @@ fn parse_union_except_intersect_minus() {
 
     // Dialects that support `MINUS` as column identifier
     // do not support `MINUS` as a set operator.
-    let dialects = all_dialects_where(|d| !d.is_column_alias(&Keyword::MINUS, &mut Parser::new(d)));
+    let dialects = all_dialects_where(|d| !d.is_column_alias(&Keyword::MINUS, &Parser::new(d)));
     dialects.verified_stmt("SELECT 1 MINUS SELECT 2");
     dialects.verified_stmt("SELECT 1 MINUS ALL SELECT 2");
     dialects.verified_stmt("SELECT 1 MINUS DISTINCT SELECT 1");
@@ -8592,8 +8591,7 @@ fn parse_invalid_subquery_without_parens() {
 fn parse_offset() {
     // Dialects that support `OFFSET` as column identifiers
     // don't support this syntax.
-    let dialects =
-        all_dialects_where(|d| !d.is_column_alias(&Keyword::OFFSET, &mut Parser::new(d)));
+    let dialects = all_dialects_where(|d| !d.is_column_alias(&Keyword::OFFSET, &Parser::new(d)));
 
     let expected_limit_clause = &Some(LimitClause::LimitOffset {
         limit: None,
@@ -12454,7 +12452,7 @@ fn test_buffer_reuse() {
     Tokenizer::new(&d, q)
         .tokenize_with_location_into_buf(&mut buf)
         .unwrap();
-    let mut p = Parser::new(&d).with_tokens_with_locations(buf);
+    let p = Parser::new(&d).with_tokens_with_locations(buf);
     p.parse_statements().unwrap();
     let _ = p.into_tokens();
 }
@@ -15368,7 +15366,7 @@ fn parse_case_statement() {
 #[test]
 fn test_case_statement_span() {
     let sql = "CASE 1 WHEN 2 THEN SELECT 1; SELECT 2; ELSE SELECT 3; END CASE";
-    let mut parser = Parser::new(&GenericDialect {}).try_with_sql(sql).unwrap();
+    let parser = Parser::new(&GenericDialect {}).try_with_sql(sql).unwrap();
     assert_eq!(
         parser.parse_statement().unwrap().span(),
         Span::new(Location::new(1, 1), Location::new(1, sql.len() as u64 + 1))
@@ -15449,7 +15447,7 @@ fn parse_if_statement() {
 #[test]
 fn test_if_statement_span() {
     let sql = "IF 1=1 THEN SELECT 1; ELSEIF 1=2 THEN SELECT 2; ELSE SELECT 3; END IF";
-    let mut parser = Parser::new(&GenericDialect {}).try_with_sql(sql).unwrap();
+    let parser = Parser::new(&GenericDialect {}).try_with_sql(sql).unwrap();
     assert_eq!(
         parser.parse_statement().unwrap().span(),
         Span::new(Location::new(1, 1), Location::new(1, sql.len() as u64 + 1))
@@ -15463,7 +15461,7 @@ fn test_if_statement_multiline_span() {
     let sql_line3 = "ELSE SELECT 3;";
     let sql_line4 = "END IF";
     let sql = [sql_line1, sql_line2, sql_line3, sql_line4].join("\n");
-    let mut parser = Parser::new(&GenericDialect {}).try_with_sql(&sql).unwrap();
+    let parser = Parser::new(&GenericDialect {}).try_with_sql(&sql).unwrap();
     assert_eq!(
         parser.parse_statement().unwrap().span(),
         Span::new(
@@ -15476,7 +15474,7 @@ fn test_if_statement_multiline_span() {
 #[test]
 fn test_conditional_statement_span() {
     let sql = "IF 1=1 THEN SELECT 1; ELSEIF 1=2 THEN SELECT 2; ELSE SELECT 3; END IF";
-    let mut parser = Parser::new(&GenericDialect {}).try_with_sql(sql).unwrap();
+    let parser = Parser::new(&GenericDialect {}).try_with_sql(sql).unwrap();
     match parser.parse_statement().unwrap() {
         Statement::If(IfStatement {
             if_block,
@@ -16958,7 +16956,7 @@ fn test_select_exclude() {
     let dialects = all_dialects_where(|d| {
         d.supports_select_wildcard_exclude()
             && !d.supports_select_exclude()
-            && d.is_column_alias(&Keyword::EXCLUDE, &mut Parser::new(d))
+            && d.is_column_alias(&Keyword::EXCLUDE, &Parser::new(d))
     });
     assert_eq!(
         dialects
@@ -16973,7 +16971,7 @@ fn test_select_exclude() {
     let dialects = all_dialects_where(|d| {
         d.supports_select_wildcard_exclude()
             && !d.supports_select_exclude()
-            && !d.is_column_alias(&Keyword::EXCLUDE, &mut Parser::new(d))
+            && !d.is_column_alias(&Keyword::EXCLUDE, &Parser::new(d))
     });
     assert_eq!(
         dialects

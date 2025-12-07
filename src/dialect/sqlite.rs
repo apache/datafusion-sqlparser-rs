@@ -65,7 +65,7 @@ impl Dialect for SQLiteDialect {
         self.is_identifier_start(ch) || ch.is_ascii_digit()
     }
 
-    fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
+    fn parse_statement(&self, parser: &Parser) -> Option<Result<Statement, ParserError>> {
         if parser.parse_keyword(Keyword::REPLACE) {
             parser.prev_token();
             Some(parser.parse_insert(parser.get_current_token().clone()))
@@ -76,7 +76,7 @@ impl Dialect for SQLiteDialect {
 
     fn parse_infix(
         &self,
-        parser: &mut crate::parser::Parser,
+        parser: &crate::parser::Parser,
         expr: &crate::ast::Expr,
         _precedence: u8,
     ) -> Option<Result<crate::ast::Expr, ParserError>> {

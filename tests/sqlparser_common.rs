@@ -12120,6 +12120,8 @@ fn parse_execute_stored_procedure() {
         }
         _ => unreachable!(),
     }
+    // Test optional parentheses around procedure name
+    ms_and_generic().one_statement_parses_to("EXEC ('name')", "EXECUTE 'name'");
 }
 
 #[test]

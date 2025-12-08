@@ -11503,16 +11503,17 @@ impl<'a> Parser<'a> {
 
         let next_token = self.next_token();
         match next_token.token {
-            // By default, if a word is located after the `AS` keyword we consider it an alias
-            // as long as it's not reserved.
+            // Accepts a keyword as an alias if the AS keyword explicitly indicate an alias or if the
+            // caller provided a list of reserved keywords and the keyword is not on that list.
             Token::Word(w)
-                if after_as || reserved_kwds.is_some_and(|x| !x.contains(&w.keyword)) =>
+                if reserved_kwds.is_some()
+                    && (after_as || reserved_kwds.is_some_and(|x| !x.contains(&w.keyword))) =>
             {
                 Ok(Some(w.into_ident(next_token.span)))
             }
-            // This pattern allows for customizing the acceptance of words as aliases based on the caller's
-            // context, such as to what SQL element this word is a potential alias of (select item alias, table name
-            // alias, etc.) or dialect-specific logic that goes beyond a simple list of reserved keywords.
+            // Accepts a keyword as alias based on the caller's context, such as to what SQL element
+            // this word is a potential alias of using the validator call-back. This allows for
+            // dialect-specific logic.
             Token::Word(w) if validator(after_as, &w.keyword, self) => {
                 Ok(Some(w.into_ident(next_token.span)))
             }

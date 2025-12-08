@@ -6130,6 +6130,8 @@ fn parse_trigger_related_functions() {
             cluster_by: None,
             clustered_by: None,
             inherits: None,
+            partition_of: None,
+            for_values: None,
             strict: false,
             copy_grants: false,
             enable_schema_evolution: None,
@@ -7921,4 +7923,192 @@ fn parse_identifiers_semicolon_handling() {
     pg_and_generic().statements_parse_to(statement, statement);
     let statement = "SHOW search_path; SHOW ALL; SHOW ALL";
     pg_and_generic().statements_parse_to(statement, statement);
+}
+
+#[test]
+fn parse_create_table_partition_of_range() {
+    // RANGE partition with FROM ... TO
+    let sql = "CREATE TABLE measurement_y2006m02 PARTITION OF measurement FOR VALUES FROM ('2006-02-01') TO ('2006-03-01')";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!("measurement_y2006m02", create_table.name.to_string());
+            assert_eq!(
+                Some(ObjectName::from(vec![Ident::new("measurement")])),
+                create_table.partition_of
+            );
+            match create_table.for_values {
+                Some(ForValues::From { from, to }) => {
+                    assert_eq!(1, from.len());
+                    assert_eq!(1, to.len());
+                    match &from[0] {
+                        PartitionBoundValue::Expr(Expr::Value(v)) => {
+                            assert_eq!("'2006-02-01'", v.to_string());
+                        }
+                        _ => panic!("Expected Expr value in from"),
+                    }
+                    match &to[0] {
+                        PartitionBoundValue::Expr(Expr::Value(v)) => {
+                            assert_eq!("'2006-03-01'", v.to_string());
+                        }
+                        _ => panic!("Expected Expr value in to"),
+                    }
+                }
+                _ => panic!("Expected ForValues::From"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_create_table_partition_of_range_with_minvalue_maxvalue() {
+    // RANGE partition with MINVALUE/MAXVALUE
+    let sql =
+        "CREATE TABLE orders_old PARTITION OF orders FOR VALUES FROM (MINVALUE) TO ('2020-01-01')";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!("orders_old", create_table.name.to_string());
+            assert_eq!(
+                Some(ObjectName::from(vec![Ident::new("orders")])),
+                create_table.partition_of
+            );
+            match create_table.for_values {
+                Some(ForValues::From { from, to }) => {
+                    assert_eq!(PartitionBoundValue::MinValue, from[0]);
+                    match &to[0] {
+                        PartitionBoundValue::Expr(Expr::Value(v)) => {
+                            assert_eq!("'2020-01-01'", v.to_string());
+                        }
+                        _ => panic!("Expected Expr value in to"),
+                    }
+                }
+                _ => panic!("Expected ForValues::From"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+
+    // With MAXVALUE
+    let sql =
+        "CREATE TABLE orders_new PARTITION OF orders FOR VALUES FROM ('2024-01-01') TO (MAXVALUE)";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => match create_table.for_values {
+            Some(ForValues::From { from, to }) => {
+                match &from[0] {
+                    PartitionBoundValue::Expr(Expr::Value(v)) => {
+                        assert_eq!("'2024-01-01'", v.to_string());
+                    }
+                    _ => panic!("Expected Expr value in from"),
+                }
+                assert_eq!(PartitionBoundValue::MaxValue, to[0]);
+            }
+            _ => panic!("Expected ForValues::From"),
+        },
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_create_table_partition_of_list() {
+    // LIST partition
+    let sql = "CREATE TABLE orders_us PARTITION OF orders FOR VALUES IN ('US', 'CA', 'MX')";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!("orders_us", create_table.name.to_string());
+            assert_eq!(
+                Some(ObjectName::from(vec![Ident::new("orders")])),
+                create_table.partition_of
+            );
+            match create_table.for_values {
+                Some(ForValues::In(values)) => {
+                    assert_eq!(3, values.len());
+                }
+                _ => panic!("Expected ForValues::In"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_create_table_partition_of_hash() {
+    // HASH partition
+    let sql = "CREATE TABLE orders_p0 PARTITION OF orders FOR VALUES WITH (MODULUS 4, REMAINDER 0)";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!("orders_p0", create_table.name.to_string());
+            assert_eq!(
+                Some(ObjectName::from(vec![Ident::new("orders")])),
+                create_table.partition_of
+            );
+            match create_table.for_values {
+                Some(ForValues::With { modulus, remainder }) => {
+                    assert_eq!(4, modulus);
+                    assert_eq!(0, remainder);
+                }
+                _ => panic!("Expected ForValues::With"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_create_table_partition_of_default() {
+    // DEFAULT partition
+    let sql = "CREATE TABLE orders_default PARTITION OF orders DEFAULT";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!("orders_default", create_table.name.to_string());
+            assert_eq!(
+                Some(ObjectName::from(vec![Ident::new("orders")])),
+                create_table.partition_of
+            );
+            assert_eq!(Some(ForValues::Default), create_table.for_values);
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_create_table_partition_of_multicolumn_range() {
+    // Multi-column RANGE partition
+    let sql = "CREATE TABLE sales_2023_q1 PARTITION OF sales FOR VALUES FROM ('2023-01-01', 1) TO ('2023-04-01', 1)";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!("sales_2023_q1", create_table.name.to_string());
+            match create_table.for_values {
+                Some(ForValues::From { from, to }) => {
+                    assert_eq!(2, from.len());
+                    assert_eq!(2, to.len());
+                }
+                _ => panic!("Expected ForValues::From"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_create_table_partition_of_with_constraint() {
+    // With table constraint (not column constraint which has different syntax in PARTITION OF)
+    let sql = "CREATE TABLE orders_2023 PARTITION OF orders (\
+CONSTRAINT check_date CHECK (order_date >= '2023-01-01')\
+) FOR VALUES FROM ('2023-01-01') TO ('2024-01-01')";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!("orders_2023", create_table.name.to_string());
+            assert_eq!(
+                Some(ObjectName::from(vec![Ident::new("orders")])),
+                create_table.partition_of
+            );
+            // Check that table constraint was parsed
+            assert_eq!(1, create_table.constraints.len());
+            match create_table.for_values {
+                Some(ForValues::From { .. }) => {}
+                _ => panic!("Expected ForValues::From"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
 }

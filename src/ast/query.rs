@@ -174,15 +174,6 @@ impl SetExpr {
             None
         }
     }
-
-    /// If this `SetExpr` is a `SELECT`, returns a mutable [`Select`].
-    pub fn as_select_mut(&mut self) -> Option<&mut Select> {
-        if let Self::Select(select) = self {
-            Some(&mut **select)
-        } else {
-            None
-        }
-    }
 }
 
 impl fmt::Display for SetExpr {

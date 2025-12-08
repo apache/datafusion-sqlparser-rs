@@ -15,67 +15,91 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#![warn(clippy::all)]
 //! Test SQL syntax, specific to [sqlparser::dialect::OracleDialect].
-
-extern crate core;
 
 #[cfg(test)]
 use pretty_assertions::assert_eq;
 
 use sqlparser::{
-    ast::{Expr, SelectItem, Value},
+    ast::{BinaryOperator, Expr, Value, ValueWithSpan},
     dialect::OracleDialect,
+    tokenizer::Span,
 };
-#[cfg(test)]
-use test_utils::TestedDialects;
+use test_utils::{expr_from_projection, number, TestedDialects};
 
 mod test_utils;
 
-#[test]
-fn muldiv_have_higher_precedence_than_strconcat() {
-    // ~ oracle: `||` has a lower precedence than `*` and `/`
-    let sql = "SELECT 3 / 5 || 'asdf' || 7 * 9 FROM dual";
-    let mut query = oracle_dialect().verified_query(sql);
-    nest_binary_ops(&mut query.body.as_select_mut().expect("not a SELECT").projection[0]);
-    assert_eq!(
-        &format!("{query}"),
-        "SELECT (((3 / 5) || 'asdf') || (7 * 9)) FROM dual"
-    );
-}
-
-#[test]
-fn plusminus_have_same_precedence_as_strconcat() {
-    // ~ oracle: `+`, `-`, and `||` have the same precedence and parse from left-to-right
-    let sql = "SELECT 3 + 5 || '.3' || 7 - 9 FROM dual";
-    let mut query = oracle_dialect().verified_query(sql);
-    nest_binary_ops(&mut query.body.as_select_mut().expect("not a SELECT").projection[0]);
-    assert_eq!(
-        &format!("{query}"),
-        "SELECT ((((3 + 5) || '.3') || 7) - 9) FROM dual"
-    );
-}
-
-fn oracle_dialect() -> TestedDialects {
+fn oracle() -> TestedDialects {
     TestedDialects::new(vec![Box::new(OracleDialect)])
 }
 
-/// Wraps [Expr::BinaryExpr]s in `item` with a [Expr::Nested] recursively.
-fn nest_binary_ops(item: &mut SelectItem) {
-    // ~ idealy, we could use `VisitorMut` at this point
-    fn nest(expr: &mut Expr) {
-        // ~ ideally we could use VisitorMut here
-        if let Expr::BinaryOp { left, op: _, right } = expr {
-            nest(&mut *left);
-            nest(&mut *right);
-            let inner = std::mem::replace(expr, Expr::Value(Value::Null.into()));
-            *expr = Expr::Nested(Box::new(inner));
+/// Oracle: `||` has a lower precedence than `*` and `/`
+#[test]
+fn muldiv_have_higher_precedence_than_strconcat() {
+    // ...............  A .. B ...... C .. D ...........
+    let sql = "SELECT 3 / 5 || 'asdf' || 7 * 9 FROM dual";
+    let select = oracle().verified_only_select(sql);
+    assert_eq!(1, select.projection.len());
+    assert_eq!(
+        expr_from_projection(&select.projection[0]),
+        // (C || D)
+        &Expr::BinaryOp {
+            // (A || B)
+            left: Box::new(Expr::BinaryOp {
+                // A
+                left: Box::new(Expr::BinaryOp {
+                    left: Box::new(Expr::Value(number("3").into())),
+                    op: BinaryOperator::Divide,
+                    right: Box::new(Expr::Value(number("5").into())),
+                }),
+                op: BinaryOperator::StringConcat,
+                right: Box::new(Expr::Value(ValueWithSpan {
+                    value: Value::SingleQuotedString("asdf".into()),
+                    span: Span::empty(),
+                })),
+            }),
+            op: BinaryOperator::StringConcat,
+            // D
+            right: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Value(number("7").into())),
+                op: BinaryOperator::Multiply,
+                right: Box::new(Expr::Value(number("9").into())),
+            }),
         }
-    }
-    match item {
-        SelectItem::UnnamedExpr(expr) => nest(expr),
-        SelectItem::ExprWithAlias { expr, alias: _ } => nest(expr),
-        SelectItem::QualifiedWildcard(_, _) => {}
-        SelectItem::Wildcard(_) => {}
-    }
+    );
+}
+
+/// Oracle: `+`, `-`, and `||` have the same precedence and parse from left-to-right
+#[test]
+fn plusminus_have_same_precedence_as_strconcat() {
+    // ................ A .. B .... C .. D ............
+    let sql = "SELECT 3 + 5 || '.3' || 7 - 9 FROM dual";
+    let select = oracle().verified_only_select(sql);
+    assert_eq!(1, select.projection.len());
+    assert_eq!(
+        expr_from_projection(&select.projection[0]),
+        // D
+        &Expr::BinaryOp {
+            left: Box::new(Expr::BinaryOp {
+                // B
+                left: Box::new(Expr::BinaryOp {
+                    // A
+                    left: Box::new(Expr::BinaryOp {
+                        left: Box::new(Expr::Value(number("3").into())),
+                        op: BinaryOperator::Plus,
+                        right: Box::new(Expr::Value(number("5").into())),
+                    }),
+                    op: BinaryOperator::StringConcat,
+                    right: Box::new(Expr::Value(ValueWithSpan {
+                        value: Value::SingleQuotedString(".3".into()),
+                        span: Span::empty(),
+                    })),
+                }),
+                op: BinaryOperator::StringConcat,
+                right: Box::new(Expr::Value(number("7").into())),
+            }),
+            op: BinaryOperator::Minus,
+            right: Box::new(Expr::Value(number("9").into()))
+        }
+    );
 }

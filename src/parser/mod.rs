@@ -7887,6 +7887,15 @@ impl<'a> Parser<'a> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name(allow_unquoted_hyphen)?;
 
+        // PostgreSQL PARTITION OF for child partition tables
+        let partition_of = if dialect_of!(self is PostgreSqlDialect | GenericDialect)
+            && self.parse_keywords(&[Keyword::PARTITION, Keyword::OF])
+        {
+            Some(self.parse_object_name(allow_unquoted_hyphen)?)
+        } else {
+            None
+        };
+
         // Clickhouse has `ON CLUSTER 'cluster'` syntax for DDLs
         let on_cluster = self.parse_optional_on_cluster()?;
 
@@ -7910,6 +7919,13 @@ impl<'a> Parser<'a> {
             } else {
                 None
             };
+
+        // PostgreSQL PARTITION OF: partition bound specification
+        let for_values = if partition_of.is_some() {
+            Some(self.parse_partition_for_values()?)
+        } else {
+            None
+        };
 
         // SQLite supports `WITHOUT ROWID` at the end of `CREATE TABLE`
         let without_rowid = self.parse_keywords(&[Keyword::WITHOUT, Keyword::ROWID]);
@@ -7988,6 +8004,8 @@ impl<'a> Parser<'a> {
             .partition_by(create_table_config.partition_by)
             .cluster_by(create_table_config.cluster_by)
             .inherits(create_table_config.inherits)
+            .partition_of(partition_of)
+            .for_values(for_values)
             .table_options(create_table_config.table_options)
             .primary_key(primary_key)
             .strict(strict)
@@ -8044,6 +8062,60 @@ impl<'a> Parser<'a> {
                 "Expecting DELETE ROWS, PRESERVE ROWS or DROP",
                 self.peek_token()
             )
+        }
+    }
+
+    /// Parse PostgreSQL partition bound specification for PARTITION OF.
+    ///
+    /// Parses: `FOR VALUES partition_bound_spec | DEFAULT`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtable.html)
+    fn parse_partition_for_values(&mut self) -> Result<ForValues, ParserError> {
+        if self.parse_keyword(Keyword::DEFAULT) {
+            return Ok(ForValues::Default);
+        }
+
+        self.expect_keywords(&[Keyword::FOR, Keyword::VALUES])?;
+
+        if self.parse_keyword(Keyword::IN) {
+            // FOR VALUES IN (expr, ...)
+            self.expect_token(&Token::LParen)?;
+            let values = self.parse_comma_separated(Parser::parse_expr)?;
+            self.expect_token(&Token::RParen)?;
+            Ok(ForValues::In(values))
+        } else if self.parse_keyword(Keyword::FROM) {
+            // FOR VALUES FROM (...) TO (...)
+            self.expect_token(&Token::LParen)?;
+            let from = self.parse_comma_separated(Parser::parse_partition_bound_value)?;
+            self.expect_token(&Token::RParen)?;
+            self.expect_keyword(Keyword::TO)?;
+            self.expect_token(&Token::LParen)?;
+            let to = self.parse_comma_separated(Parser::parse_partition_bound_value)?;
+            self.expect_token(&Token::RParen)?;
+            Ok(ForValues::From { from, to })
+        } else if self.parse_keyword(Keyword::WITH) {
+            // FOR VALUES WITH (MODULUS n, REMAINDER r)
+            self.expect_token(&Token::LParen)?;
+            self.expect_keyword(Keyword::MODULUS)?;
+            let modulus = self.parse_literal_uint()?;
+            self.expect_token(&Token::Comma)?;
+            self.expect_keyword(Keyword::REMAINDER)?;
+            let remainder = self.parse_literal_uint()?;
+            self.expect_token(&Token::RParen)?;
+            Ok(ForValues::With { modulus, remainder })
+        } else {
+            self.expected("IN, FROM, or WITH after FOR VALUES", self.peek_token())
+        }
+    }
+
+    /// Parse a single partition bound value (MINVALUE, MAXVALUE, or expression).
+    fn parse_partition_bound_value(&mut self) -> Result<PartitionBoundValue, ParserError> {
+        if self.parse_keyword(Keyword::MINVALUE) {
+            Ok(PartitionBoundValue::MinValue)
+        } else if self.parse_keyword(Keyword::MAXVALUE) {
+            Ok(PartitionBoundValue::MaxValue)
+        } else {
+            Ok(PartitionBoundValue::Expr(self.parse_expr()?))
         }
     }
 

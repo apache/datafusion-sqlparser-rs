@@ -1717,7 +1717,7 @@ impl<'a> Tokenizer<'a> {
                             }
                         }
                         Some('#') => self.consume_and_return(chars, Token::QuestionMarkSharp),
-                        _ => self.consume_and_return(chars, Token::Question),
+                        _ => Ok(Some(Token::Question)),
                     }
                 }
                 '?' => {

@@ -17368,7 +17368,11 @@ impl<'a> Parser<'a> {
         {
             None
         } else {
+            let has_parentheses = self.consume_token(&Token::LParen);
             let name = self.parse_object_name(false)?;
+            if has_parentheses {
+                self.expect_token(&Token::RParen)?;
+            }
             Some(name)
         };
 

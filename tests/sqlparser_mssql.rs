@@ -2501,8 +2501,45 @@ fn test_tsql_no_semicolon_delimiter() {
 DECLARE @X AS NVARCHAR(MAX)='x'
 DECLARE @Y AS NVARCHAR(MAX)='y'
     "#;
-
     let stmts = tsql().parse_sql_statements(sql).unwrap();
     assert_eq!(stmts.len(), 2);
     assert!(stmts.iter().all(|s| matches!(s, Statement::Declare { .. })));
+
+    let sql = r#"
+SELECT col FROM tbl
+IF x=1
+  SELECT 1
+ELSE
+  SELECT 2
+    "#;
+    let stmts = tsql().parse_sql_statements(sql).unwrap();
+    assert_eq!(stmts.len(), 2);
+    assert!(matches!(&stmts[0], Statement::Query(_)));
+    assert!(matches!(&stmts[1], Statement::If(_)));
+}
+
+#[test]
+fn test_sql_keywords_as_table_aliases() {
+    // Some keywords that should not be parsed as an alias implicitly or explicitly
+    let reserved_kws = vec!["IF", "ELSE"];
+    for kw in reserved_kws {
+        for explicit in &["", "AS "] {
+            assert!(tsql()
+                .parse_sql_statements(&format!("SELECT * FROM tbl {explicit}{kw}"))
+                .is_err());
+        }
+    }
+}
+
+#[test]
+fn test_sql_keywords_as_column_aliases() {
+    // Some keywords that should not be parsed as an alias implicitly or explicitly
+    let reserved_kws = vec!["IF", "ELSE"];
+    for kw in reserved_kws {
+        for explicit in &["", "AS "] {
+            assert!(tsql()
+                .parse_sql_statements(&format!("SELECT col {explicit}{kw} FROM tbl"))
+                .is_err());
+        }
+    }
 }

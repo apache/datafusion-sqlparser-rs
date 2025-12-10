@@ -21,13 +21,11 @@ use crate::ast::{
     GranteesType, IfStatement, Statement,
 };
 use crate::dialect::Dialect;
-use crate::keywords::{self, Keyword};
+use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
 #[cfg(not(feature = "std"))]
 use alloc::{vec, vec::Vec};
-
-const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[Keyword::IF, Keyword::ELSE];
 
 /// A [`Dialect`] for [Microsoft SQL Server](https://www.microsoft.com/en-us/sql-server/)
 #[derive(Debug)]
@@ -128,8 +126,22 @@ impl Dialect for MsSqlDialect {
         &[GranteesType::Public]
     }
 
-    fn is_column_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
-        !keywords::RESERVED_FOR_COLUMN_ALIAS.contains(kw) && !RESERVED_FOR_COLUMN_ALIAS.contains(kw)
+    fn is_select_item_alias(&self, explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
+        match kw {
+            // List of keywords that cannot be used as select item aliases in MSSQL
+            // regardless of whether the alias is explicit or implicit
+            Keyword::IF | Keyword::ELSE => false,
+            _ => explicit || self.is_column_alias(kw, parser),
+        }
+    }
+
+    fn is_table_factor_alias(&self, explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
+        match kw {
+            // List of keywords that cannot be used as table aliases in MSSQL
+            // regardless of whether the alias is explicit or implicit
+            Keyword::IF | Keyword::ELSE => false,
+            _ => explicit || self.is_table_alias(kw, parser),
+        }
     }
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {

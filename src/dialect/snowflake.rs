@@ -221,6 +221,11 @@ impl Dialect for SnowflakeDialect {
             return Some(parse_alter_dynamic_table(parser));
         }
 
+        if parser.parse_keywords(&[Keyword::ALTER, Keyword::EXTERNAL, Keyword::TABLE]) {
+            // ALTER EXTERNAL TABLE
+            return Some(parse_alter_external_table(parser));
+        }
+
         if parser.parse_keywords(&[Keyword::ALTER, Keyword::SESSION]) {
             // ALTER SESSION
             let set = match parser.parse_one_of_keywords(&[Keyword::SET, Keyword::UNSET]) {
@@ -619,7 +624,7 @@ fn parse_alter_dynamic_table(parser: &mut Parser) -> Result<Statement, ParserErr
 
     // Parse the operation (REFRESH, SUSPEND, or RESUME)
     let operation = if parser.parse_keyword(Keyword::REFRESH) {
-        AlterTableOperation::Refresh
+        AlterTableOperation::Refresh { subpath: None }
     } else if parser.parse_keyword(Keyword::SUSPEND) {
         AlterTableOperation::Suspend
     } else if parser.parse_keyword(Keyword::RESUME) {
@@ -645,6 +650,45 @@ fn parse_alter_dynamic_table(parser: &mut Parser) -> Result<Statement, ParserErr
         location: None,
         on_cluster: None,
         table_type: Some(AlterTableType::Dynamic),
+        end_token: AttachedToken(end_token),
+    }))
+}
+
+/// Parse snowflake alter external table.
+/// <https://docs.snowflake.com/en/sql-reference/sql/alter-external-table>
+fn parse_alter_external_table(parser: &mut Parser) -> Result<Statement, ParserError> {
+    let if_exists = parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+    let table_name = parser.parse_object_name(true)?;
+
+    // Parse the operation (REFRESH for now)
+    let operation = if parser.parse_keyword(Keyword::REFRESH) {
+        // Optional subpath for refreshing specific partitions
+        let subpath = match parser.peek_token().token {
+            Token::SingleQuotedString(s) => {
+                parser.next_token();
+                Some(s)
+            }
+            _ => None,
+        };
+        AlterTableOperation::Refresh { subpath }
+    } else {
+        return parser.expected("REFRESH after ALTER EXTERNAL TABLE", parser.peek_token());
+    };
+
+    let end_token = if parser.peek_token_ref().token == Token::SemiColon {
+        parser.peek_token_ref().clone()
+    } else {
+        parser.get_current_token().clone()
+    };
+
+    Ok(Statement::AlterTable(AlterTable {
+        name: table_name,
+        if_exists,
+        only: false,
+        operations: vec![operation],
+        location: None,
+        on_cluster: None,
+        table_type: Some(AlterTableType::External),
         end_token: AttachedToken(end_token),
     }))
 }

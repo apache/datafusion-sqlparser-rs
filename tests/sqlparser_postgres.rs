@@ -2572,11 +2572,17 @@ fn parse_create_indices_with_operator_classes() {
         IndexType::SPGiST,
         IndexType::Custom("CustomIndexType".into()),
     ];
-    let operator_classes: [Option<Ident>; 4] = [
+    let operator_classes: [Option<ObjectName>; 4] = [
         None,
-        Some("gin_trgm_ops".into()),
-        Some("gist_trgm_ops".into()),
-        Some("totally_not_valid".into()),
+        Some(ObjectName(vec![ObjectNamePart::Identifier(Ident::new(
+            "gin_trgm_ops",
+        ))])),
+        Some(ObjectName(vec![ObjectNamePart::Identifier(Ident::new(
+            "gist_trgm_ops",
+        ))])),
+        Some(ObjectName(vec![ObjectNamePart::Identifier(Ident::new(
+            "totally_not_valid",
+        ))])),
     ];
 
     for expected_index_type in indices {
@@ -2710,6 +2716,36 @@ fn parse_create_indices_with_operator_classes() {
                 _ => unreachable!(),
             }
         }
+    }
+}
+
+#[test]
+fn parse_create_index_with_schema_qualified_operator_class() {
+    let sql = "CREATE INDEX my_index ON my_table USING HNSW (embedding public.vector_cosine_ops)";
+
+    match pg().verified_stmt(sql) {
+        Statement::CreateIndex(CreateIndex { columns, .. }) => {
+            assert_eq!(1, columns.len());
+            let idx_col = &columns[0];
+
+            // Verify the column name
+            match &idx_col.column.expr {
+                Expr::Identifier(ident) => {
+                    assert_eq!("embedding", ident.value);
+                }
+                _ => panic!("Expected identifier expression"),
+            }
+
+            // Verify the schema-qualified operator class
+            assert_eq!(
+                Some(ObjectName(vec![
+                    ObjectNamePart::Identifier(Ident::new("public")),
+                    ObjectNamePart::Identifier(Ident::new("vector_cosine_ops")),
+                ])),
+                idx_col.operator_class
+            );
+        }
+        _ => unreachable!(),
     }
 }
 

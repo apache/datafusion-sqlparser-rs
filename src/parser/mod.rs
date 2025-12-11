@@ -16892,10 +16892,10 @@ impl<'a> Parser<'a> {
     fn parse_order_by_expr_inner(
         &mut self,
         with_operator_class: bool,
-    ) -> Result<(OrderByExpr, Option<Ident>), ParserError> {
+    ) -> Result<(OrderByExpr, Option<ObjectName>), ParserError> {
         let expr = self.parse_expr()?;
 
-        let operator_class: Option<Ident> = if with_operator_class {
+        let operator_class: Option<ObjectName> = if with_operator_class {
             // We check that if non of the following keywords are present, then we parse an
             // identifier as operator class.
             if self
@@ -16904,7 +16904,7 @@ impl<'a> Parser<'a> {
             {
                 None
             } else {
-                self.maybe_parse(|parser| parser.parse_identifier())?
+                self.maybe_parse(|parser| parser.parse_object_name(false))?
             }
         } else {
             None

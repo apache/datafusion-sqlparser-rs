@@ -61,7 +61,7 @@ use crate::tokenizer::{Span, Token};
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct IndexColumn {
     pub column: OrderByExpr,
-    pub operator_class: Option<Ident>,
+    pub operator_class: Option<ObjectName>,
 }
 
 impl From<Ident> for IndexColumn {

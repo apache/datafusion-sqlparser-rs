@@ -29,14 +29,19 @@ use crate::tokenizer::{Location, Span};
 pub struct Comments(Vec<CommentWithSpan>);
 
 impl Comments {
-    pub(crate) fn push(&mut self, comment: CommentWithSpan) {
-        debug_assert!(
-            self.0
-                .last()
-                .map(|last| last.span < comment.span)
-                .unwrap_or(true)
-        );
-        self.0.push(comment);
+    /// Accepts `comment` if its the first or is located strictly after the
+    /// last accepted comment.  In other words, this method will skip the
+    /// comment if its comming out of order (as encountered in the parsed
+    /// source code.)
+    pub(crate) fn offer(&mut self, comment: CommentWithSpan) {
+        if self
+            .0
+            .last()
+            .map(|last| last.span < comment.span)
+            .unwrap_or(true)
+        {
+            self.0.push(comment);
+        }
     }
 
     /// Finds comments starting within the given location range. The order of
@@ -221,25 +226,25 @@ mod tests {
             // */
             // ```
             let mut c = Comments(Vec::new());
-            c.push(CommentWithSpan {
+            c.offer(CommentWithSpan {
                 comment: Comment::SingleLine {
                     content: " abc".into(),
                     prefix: "--".into(),
                 },
                 span: Span::new((1, 1).into(), (1, 7).into()),
             });
-            c.push(CommentWithSpan {
+            c.offer(CommentWithSpan {
                 comment: Comment::MultiLine(" hello ".into()),
                 span: Span::new((2, 3).into(), (2, 14).into()),
             });
-            c.push(CommentWithSpan {
+            c.offer(CommentWithSpan {
                 comment: Comment::SingleLine {
                     content: ", world".into(),
                     prefix: "--".into(),
                 },
                 span: Span::new((2, 14).into(), (2, 21).into()),
             });
-            c.push(CommentWithSpan {
+            c.offer(CommentWithSpan {
                 comment: Comment::MultiLine(" def\n ghi\n jkl\n".into()),
                 span: Span::new((3, 3).into(), (7, 1).into()),
             });

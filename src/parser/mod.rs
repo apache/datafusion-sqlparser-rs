@@ -551,7 +551,7 @@ impl<'a> Parser<'a> {
         for t in self.tokens.into_iter() {
             match t.token {
                 Token::Whitespace(Whitespace::SingleLineComment { comment, prefix }) => {
-                    comments.push(comments::CommentWithSpan {
+                    comments.offer(comments::CommentWithSpan {
                         comment: comments::Comment::SingleLine {
                             content: comment,
                             prefix,
@@ -560,7 +560,7 @@ impl<'a> Parser<'a> {
                     });
                 }
                 Token::Whitespace(Whitespace::MultiLineComment(comment)) => {
-                    comments.push(comments::CommentWithSpan {
+                    comments.offer(comments::CommentWithSpan {
                         comment: comments::Comment::MultiLine(comment),
                         span: t.span,
                     });

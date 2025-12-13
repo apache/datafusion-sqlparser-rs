@@ -28,11 +28,12 @@ pub struct Comments(Vec<CommentWithSpan>);
 
 impl Comments {
     pub(crate) fn push(&mut self, comment: CommentWithSpan) {
-        debug_assert!(self
-            .0
-            .last()
-            .map(|last| last.span < comment.span)
-            .unwrap_or(true));
+        debug_assert!(
+            self.0
+                .last()
+                .map(|last| last.span < comment.span)
+                .unwrap_or(true)
+        );
         self.0.push(comment);
     }
 
@@ -44,6 +45,8 @@ impl Comments {
             self.start_index(range.start_bound()),
             self.end_index(range.end_bound()),
         );
+        debug_assert!((0..=self.0.len()).contains(&start));
+        debug_assert!((0..=self.0.len()).contains(&end));
         // in case the user specified a reverse range
         Iter(if start <= end {
             self.0[start..end].iter()
@@ -54,7 +57,7 @@ impl Comments {
 
     /// Find the index of the first comment starting "before" the given location.
     ///
-    /// The returned index is _inclusive._
+    /// The returned index is _inclusive_ and within the range of `0..=self.0.len()`.
     fn start_index(&self, location: Bound<&Location>) -> usize {
         match location {
             Bound::Included(location) => {
@@ -75,7 +78,7 @@ impl Comments {
 
     /// Find the index of the first comment starting "after" the given location.
     ///
-    /// The returned index is _exclusive._
+    /// The returned index is _exclusive_ and within the range of `0..=self.0.len()`.
     fn end_index(&self, location: Bound<&Location>) -> usize {
         match location {
             Bound::Included(location) => {

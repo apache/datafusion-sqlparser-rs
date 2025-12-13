@@ -44,7 +44,7 @@ impl Comments {
             self.start_index(range.start_bound()),
             self.end_index(range.end_bound()),
         );
-        // ~ in case the user specified a rever range
+        // in case the user specified a reverse range
         Iter(if start <= end {
             self.0[start..end].iter()
         } else {

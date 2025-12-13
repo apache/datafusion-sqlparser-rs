@@ -32,14 +32,17 @@ use recursion::RecursionCounter;
 use IsLateral::*;
 use IsOptional::*;
 
-use crate::ast::helpers::{
-    key_value_options::{
-        KeyValueOption, KeyValueOptionKind, KeyValueOptions, KeyValueOptionsDelimiter,
-    },
-    stmt_create_table::{CreateTableBuilder, CreateTableConfiguration},
-};
 use crate::ast::Statement::CreatePolicy;
 use crate::ast::*;
+use crate::ast::{
+    comments,
+    helpers::{
+        key_value_options::{
+            KeyValueOption, KeyValueOptionKind, KeyValueOptions, KeyValueOptionsDelimiter,
+        },
+        stmt_create_table::{CreateTableBuilder, CreateTableConfiguration},
+    },
+};
 use crate::dialect::*;
 use crate::keywords::{Keyword, ALL_KEYWORDS};
 use crate::tokenizer::*;
@@ -528,6 +531,44 @@ impl<'a> Parser<'a> {
     /// ```
     pub fn parse_sql(dialect: &dyn Dialect, sql: &str) -> Result<Vec<Statement>, ParserError> {
         Parser::new(dialect).try_with_sql(sql)?.parse_statements()
+    }
+
+    /// Parses the given `sql` into an Abstract Syntax Tree (AST), returning
+    /// also encountered source code comments.
+    ///
+    /// See [Parser::parse_sql].
+    pub fn parse_sql_with_comments(
+        dialect: &'a dyn Dialect,
+        sql: &str,
+    ) -> Result<(Vec<Statement>, comments::Comments), ParserError> {
+        let mut p = Parser::new(dialect).try_with_sql(sql)?;
+        p.parse_statements().map(|stmts| (stmts, p.into_comments()))
+    }
+
+    /// Consumes this parser returning comments from the parsed token stream.
+    fn into_comments(self) -> comments::Comments {
+        let mut comments = comments::Comments::default();
+        for t in self.tokens.into_iter() {
+            match t.token {
+                Token::Whitespace(Whitespace::SingleLineComment { comment, prefix }) => {
+                    comments.offer(comments::CommentWithSpan {
+                        comment: comments::Comment::SingleLine {
+                            content: comment,
+                            prefix,
+                        },
+                        span: t.span,
+                    });
+                }
+                Token::Whitespace(Whitespace::MultiLineComment(comment)) => {
+                    comments.offer(comments::CommentWithSpan {
+                        comment: comments::Comment::MultiLine(comment),
+                        span: t.span,
+                    });
+                }
+                _ => {}
+            }
+        }
+        comments
     }
 
     /// Parse a single top-level statement (such as SELECT, INSERT, CREATE, etc.),

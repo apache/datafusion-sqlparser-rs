@@ -11,6 +11,8 @@
 // limitations under the License.
 
 //! Provides a representation of source code comments in parsed SQL code.
+//!
+//! See [Comments::find] for an example.
 
 #[cfg(not(feature = "std"))]
 use alloc::{string::String, vec::Vec};
@@ -40,6 +42,45 @@ impl Comments {
     /// Finds comments starting within the given location range. The order of
     /// iterator reflects the order of the comments as encountered in the parsed
     /// source code.
+    ///
+    /// # Example
+    /// ```rust
+    /// use sqlparser::{dialect::GenericDialect, parser::Parser, tokenizer::Location};
+    ///
+    /// let sql = r#"/*
+    ///  header comment ...
+    ///  ... spanning multiple lines
+    /// */
+    ///
+    ///  -- first statement
+    ///  SELECT 'hello' /* world */ FROM DUAL;
+    ///
+    ///  -- second statement
+    ///  SELECT 123 FROM DUAL;
+    ///
+    ///  -- trailing comment
+    /// "#;
+    ///
+    /// let (ast, comments) = Parser::parse_sql_with_comments(&GenericDialect, sql).unwrap();
+    ///
+    /// // all comments appearing before line seven, i.e. before the first statement itself
+    /// assert_eq!(
+    ///    &comments.find(..Location::new(7, 1)).map(|c| c.as_str()).collect::<Vec<_>>(),
+    ///    &["\n header comment ...\n ... spanning multiple lines\n", " first statement\n"]);
+    ///
+    /// // all comments appearing within the first statement
+    /// assert_eq!(
+    ///    &comments.find(Location::new(7, 1)..Location::new(8,1)).map(|c| c.as_str()).collect::<Vec<_>>(),
+    ///    &[" world "]);
+    ///
+    /// // all comments appearing within or after the first statement
+    /// assert_eq!(
+    ///    &comments.find(Location::new(7, 1)..).map(|c| c.as_str()).collect::<Vec<_>>(),
+    ///    &[" world ", " second statement\n", " trailing comment\n"]);
+    /// ```
+    ///
+    /// The [Spanned](crate::ast::Spanned) trait allows you to access location
+    /// information for certain AST nodes.
     pub fn find<R: RangeBounds<Location>>(&self, range: R) -> Iter<'_> {
         let (start, end) = (
             self.start_index(range.start_bound()),

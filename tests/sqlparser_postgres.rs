@@ -7914,3 +7914,20 @@ fn parse_create_operator_class() {
         )
         .is_err());
 }
+
+#[test]
+fn tokenize_question_mark() {
+    let sql = "SELECT x ? y";
+    pg().tokenizes_to(
+        sql,
+        vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("x", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::Question,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("y", None),
+        ],
+    )
+}

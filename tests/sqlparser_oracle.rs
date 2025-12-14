@@ -21,7 +21,10 @@
 use pretty_assertions::assert_eq;
 
 use sqlparser::{
-    ast::{BinaryOperator, Expr, Ident, QuoteDelimitedString, Value, ValueWithSpan}, dialect::OracleDialect, parser::ParserError, tokenizer::Span
+    ast::{BinaryOperator, Expr, Ident, QuoteDelimitedString, Value, ValueWithSpan},
+    dialect::OracleDialect,
+    parser::ParserError,
+    tokenizer::Span,
 };
 use test_utils::{expr_from_projection, number, TestedDialects};
 
@@ -188,19 +191,28 @@ fn parse_invalid_quote_delimited_strings() {
     for q in [' ', '\t', '\r', '\n'] {
         assert_eq!(
             oracle().parse_sql_statements(&format!("SELECT Q'{q}abc{q}' FROM dual")),
-            Err(ParserError::TokenizerError("Invalid space, tab, newline, or EOF after 'Q'' at Line: 1, Column: 10".into())),
-            "with quote char {q:?}");
+            Err(ParserError::TokenizerError(
+                "Invalid space, tab, newline, or EOF after 'Q'' at Line: 1, Column: 10".into()
+            )),
+            "with quote char {q:?}"
+        );
     }
     // ~ invalid eof after quote
     assert_eq!(
         oracle().parse_sql_statements("SELECT Q'"),
-        Err(ParserError::TokenizerError("Invalid space, tab, newline, or EOF after 'Q'' at Line: 1, Column: 10".into())),
-        "with EOF quote char");
+        Err(ParserError::TokenizerError(
+            "Invalid space, tab, newline, or EOF after 'Q'' at Line: 1, Column: 10".into()
+        )),
+        "with EOF quote char"
+    );
     // ~ unterminated string
     assert_eq!(
         oracle().parse_sql_statements("SELECT Q'|asdfa...."),
-        Err(ParserError::TokenizerError("Unterminated string literal at Line: 1, Column: 9".into())),
-        "with EOF quote char");
+        Err(ParserError::TokenizerError(
+            "Unterminated string literal at Line: 1, Column: 9".into()
+        )),
+        "with EOF quote char"
+    );
 }
 
 #[test]

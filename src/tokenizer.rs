@@ -40,11 +40,11 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
+use crate::dialect::Dialect;
 use crate::dialect::{
     BigQueryDialect, DuckDbDialect, GenericDialect, MySqlDialect, PostgreSqlDialect,
     SnowflakeDialect,
 };
-use crate::dialect::{Dialect, OracleDialect};
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 use crate::{
     ast::{DollarQuotedString, QuoteDelimitedString},
@@ -1043,7 +1043,8 @@ impl<'a> Tokenizer<'a> {
                                 self.tokenize_single_quoted_string(chars, '\'', backslash_escape)?;
                             Ok(Some(Token::NationalStringLiteral(s)))
                         }
-                        Some(&q @ 'q') | Some(&q @ 'Q') if dialect_of!(self is OracleDialect | GenericDialect) =>
+                        Some(&q @ 'q') | Some(&q @ 'Q')
+                            if self.dialect.supports_quote_delimited_string() =>
                         {
                             chars.next(); // consume and check the next char
                             if let Some('\'') = chars.peek() {
@@ -1061,7 +1062,7 @@ impl<'a> Tokenizer<'a> {
                         }
                     }
                 }
-                q @ 'Q' | q @ 'q' if dialect_of!(self is OracleDialect | GenericDialect) => {
+                q @ 'Q' | q @ 'q' if self.dialect.supports_quote_delimited_string() => {
                     chars.next(); // consume and check the next char
                     if let Some('\'') = chars.peek() {
                         self.tokenize_quote_delimited_string(chars, &[q])

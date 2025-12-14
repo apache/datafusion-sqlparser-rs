@@ -46,7 +46,10 @@ use crate::dialect::{
 };
 use crate::dialect::{Dialect, OracleDialect};
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
-use crate::{ast::DollarQuotedString, dialect::HiveDialect};
+use crate::{
+    ast::{DollarQuotedString, QuoteDelimitedString},
+    dialect::HiveDialect,
+};
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -99,11 +102,11 @@ pub enum Token {
     /// "National" string literal: i.e: N'string'
     NationalStringLiteral(String),
     /// Quote delimited literal. Examples `Q'{ab'c}'`, `Q'|ab'c|'`, `Q'|ab|c|'`
-    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/19/sqlrf/Literals.html#GUID-1824CBAA-6E16-4921-B2A6-112FB02248DA)
-    QuoteDelimitedStringLiteral(char, String, char),
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Literals.html#GUID-1824CBAA-6E16-4921-B2A6-112FB02248DA)
+    QuoteDelimitedStringLiteral(QuoteDelimitedString),
     /// "Nationa" quote delimited literal. Examples `NQ'{ab'c}'`, `NQ'|ab'c|'`, `NQ'|ab|c|'`
-    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Literals.html)
-    NationalQuoteDelimitedStringLiteral(char, String, char),
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Literals.html#GUID-1824CBAA-6E16-4921-B2A6-112FB02248DA)
+    NationalQuoteDelimitedStringLiteral(QuoteDelimitedString),
     /// "escaped" string literal, which are an extension to the SQL standard: i.e: e'first \n second' or E 'first \n second'
     EscapedStringLiteral(String),
     /// Unicode string literal: i.e: U&'first \000A second'
@@ -298,10 +301,8 @@ impl fmt::Display for Token {
             Token::TripleDoubleQuotedString(ref s) => write!(f, "\"\"\"{s}\"\"\""),
             Token::DollarQuotedString(ref s) => write!(f, "{s}"),
             Token::NationalStringLiteral(ref s) => write!(f, "N'{s}'"),
-            Token::QuoteDelimitedStringLiteral(q1, ref s, q2) => write!(f, "Q'{q1}{s}{q2}'"),
-            Token::NationalQuoteDelimitedStringLiteral(q1, ref s, q2) => {
-                write!(f, "NQ'{q1}{s}{q2}'")
-            }
+            Token::QuoteDelimitedStringLiteral(ref s) => s.fmt(f),
+            Token::NationalQuoteDelimitedStringLiteral(ref s) => write!(f, "N{s}"),
             Token::EscapedStringLiteral(ref s) => write!(f, "E'{s}'"),
             Token::UnicodeStringLiteral(ref s) => write!(f, "U&'{s}'"),
             Token::HexStringLiteral(ref s) => write!(f, "X'{s}'"),
@@ -2024,9 +2025,9 @@ impl<'a> Tokenizer<'a> {
     }
 
     /// Reads a quote delimited string without "backslash escaping" or a word
-    /// depending on whether `chars.next()` delivers a `'`.
+    /// depending on `chars.next()` delivering a `'`.
     ///
-    /// See <https://docs.oracle.com/en/database/oracle/oracle-database/19/sqlrf/Literals.html>
+    /// See <https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Literals.html#GUID-1824CBAA-6E16-4921-B2A6-112FB02248DA>
     fn tokenize_word_or_quote_delimited_string(
         &self,
         chars: &mut State,
@@ -2036,14 +2037,14 @@ impl<'a> Tokenizer<'a> {
         // turns an identified quote string literal,
         // ie. `(start-quote-char, string-literal, end-quote-char)`
         // into a token
-        as_literal: fn(char, String, char) -> Token,
+        as_literal: fn(QuoteDelimitedString) -> Token,
     ) -> Result<Token, TokenizerError> {
         match chars.peek() {
             Some('\'') => {
                 chars.next();
                 // ~ determine the "quote character(s)"
                 let error_loc = chars.location();
-                let (start_quote_char, end_quote_char) = match chars.next() {
+                let (start_quote, end_quote) = match chars.next() {
                     // ~ "newline" is not allowed by Oracle's SQL Reference,
                     // but works with sql*plus nevertheless
                     None | Some(' ') | Some('\t') | Some('\r') | Some('\n') => {
@@ -2067,15 +2068,19 @@ impl<'a> Tokenizer<'a> {
                     ),
                 };
                 // read the string literal until the "quote character" following a by literal quote
-                let mut s = String::new();
+                let mut value = String::new();
                 while let Some(ch) = chars.next() {
-                    if ch == end_quote_char {
+                    if ch == end_quote {
                         if let Some('\'') = chars.peek() {
                             chars.next(); // ~ consume the quote
-                            return Ok(as_literal(start_quote_char, s, end_quote_char));
+                            return Ok(as_literal(QuoteDelimitedString {
+                                start_quote,
+                                value,
+                                end_quote,
+                            }));
                         }
                     }
-                    s.push(ch);
+                    value.push(ch);
                 }
                 self.tokenizer_error(error_loc, "Unterminated string literal")
             }

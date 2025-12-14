@@ -19,6 +19,7 @@
 use alloc::string::String;
 
 use core::fmt;
+use std::fmt::Write;
 
 #[cfg(feature = "bigdecimal")]
 use bigdecimal::BigDecimal;
@@ -168,11 +169,11 @@ pub enum Value {
     /// N'string value'
     NationalStringLiteral(String),
     /// Quote delimited literal. Examples `Q'{ab'c}'`, `Q'|ab'c|'`, `Q'|ab|c|'`
-    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Literals.html)
-    QuoteDelimitedStringLiteral(char, String, char),
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Literals.html#GUID-1824CBAA-6E16-4921-B2A6-112FB02248DA)
+    QuoteDelimitedStringLiteral(QuoteDelimitedString),
     /// "National" quote delimited literal. Examples `Q'{ab'c}'`, `Q'|ab'c|'`, `Q'|ab|c|'`
-    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Literals.html)
-    NationalQuoteDelimitedStringLiteral(char, String, char),
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Literals.html#GUID-1824CBAA-6E16-4921-B2A6-112FB02248DA)
+    NationalQuoteDelimitedStringLiteral(QuoteDelimitedString),
     /// X'hex value'
     HexStringLiteral(String),
 
@@ -211,10 +212,10 @@ impl Value {
             | Value::EscapedStringLiteral(s)
             | Value::UnicodeStringLiteral(s)
             | Value::NationalStringLiteral(s)
-            | Value::QuoteDelimitedStringLiteral(_, s, _)
-            | Value::NationalQuoteDelimitedStringLiteral(_, s, _)
             | Value::HexStringLiteral(s) => Some(s),
             Value::DollarQuotedString(s) => Some(s.value),
+            Value::QuoteDelimitedStringLiteral(s) => Some(s.value),
+            Value::NationalQuoteDelimitedStringLiteral(s) => Some(s.value),
             _ => None,
         }
     }
@@ -250,8 +251,8 @@ impl fmt::Display for Value {
             Value::EscapedStringLiteral(v) => write!(f, "E'{}'", escape_escaped_string(v)),
             Value::UnicodeStringLiteral(v) => write!(f, "U&'{}'", escape_unicode_string(v)),
             Value::NationalStringLiteral(v) => write!(f, "N'{v}'"),
-            Value::QuoteDelimitedStringLiteral(q1, s, q2) => write!(f, "Q'{q1}{s}{q2}'"),
-            Value::NationalQuoteDelimitedStringLiteral(q1, s, q2) => write!(f, "NQ'{q1}{s}{q2}'"),
+            Value::QuoteDelimitedStringLiteral(v) => v.fmt(f),
+            Value::NationalQuoteDelimitedStringLiteral(v) => write!(f, "N{v}"),
             Value::HexStringLiteral(v) => write!(f, "X'{v}'"),
             Value::Boolean(v) => write!(f, "{v}"),
             Value::SingleQuotedByteStringLiteral(v) => write!(f, "B'{v}'"),
@@ -286,6 +287,32 @@ impl fmt::Display for DollarQuotedString {
                 write!(f, "$${}$$", self.value)
             }
         }
+    }
+}
+
+/// A quote delimited string literal, e.g. `Q'_abc_'`.
+///
+/// See [Token::QuoteDelimitedStringLiteral] and/or
+/// [Token::NationalQuoteDelimitedStringLiteral].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct QuoteDelimitedString {
+    /// the quote start character; i.e. the character _after_ the opening `Q'`
+    pub start_quote: char,
+    /// the string literal value itself
+    pub value: String,
+    /// the quote end character; i.e. the character _before_ the closing `'`
+    pub end_quote: char,
+}
+
+impl fmt::Display for QuoteDelimitedString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Q'")?;
+        f.write_char(self.start_quote)?;
+        f.write_str(&self.value)?;
+        f.write_char(self.end_quote)?;
+        f.write_char('\'')
     }
 }
 

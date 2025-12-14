@@ -21,7 +21,7 @@
 use pretty_assertions::assert_eq;
 
 use sqlparser::{
-    ast::{BinaryOperator, Expr, Ident, Value, ValueWithSpan},
+    ast::{BinaryOperator, Expr, Ident, QuoteDelimitedString, Value, ValueWithSpan},
     dialect::OracleDialect,
     tokenizer::Span,
 };
@@ -31,6 +31,15 @@ mod test_utils;
 
 fn oracle() -> TestedDialects {
     TestedDialects::new(vec![Box::new(OracleDialect)])
+}
+
+/// Convenience constructor for [QuoteDelimitedstring].
+fn qds(start_quote: char, value: &'static str, end_quote: char) -> QuoteDelimitedString {
+    QuoteDelimitedString {
+        start_quote,
+        value: value.into(),
+        end_quote,
+    }
 }
 
 /// Oracle: `||` has a lower precedence than `*` and `/`
@@ -120,60 +129,56 @@ fn parse_quote_delimited_string() {
     let select = oracle().verified_only_select(sql);
     assert_eq!(10, select.projection.len());
     assert_eq!(
-        &Expr::Value(Value::QuoteDelimitedStringLiteral('.', "abc".into(), '.').with_empty_span()),
+        &Expr::Value(Value::QuoteDelimitedStringLiteral(qds('.', "abc", '.')).with_empty_span()),
         expr_from_projection(&select.projection[0])
     );
     assert_eq!(
-        &Expr::Value(
-            (Value::QuoteDelimitedStringLiteral('X', "ab'c".into(), 'X')).with_empty_span()
-        ),
+        &Expr::Value((Value::QuoteDelimitedStringLiteral(qds('X', "ab'c", 'X'))).with_empty_span()),
         expr_from_projection(&select.projection[1])
     );
     assert_eq!(
         &Expr::Value(
-            (Value::QuoteDelimitedStringLiteral('|', "abc'''".into(), '|')).with_empty_span()
+            (Value::QuoteDelimitedStringLiteral(qds('|', "abc'''", '|'))).with_empty_span()
         ),
         expr_from_projection(&select.projection[2])
     );
     assert_eq!(
         &Expr::Value(
-            (Value::QuoteDelimitedStringLiteral('{', "abc}d".into(), '}')).with_empty_span()
+            (Value::QuoteDelimitedStringLiteral(qds('{', "abc}d", '}'))).with_empty_span()
         ),
         expr_from_projection(&select.projection[3])
     );
     assert_eq!(
         &Expr::Value(
-            (Value::QuoteDelimitedStringLiteral('[', "]abc[".into(), ']')).with_empty_span()
+            (Value::QuoteDelimitedStringLiteral(qds('[', "]abc[", ']'))).with_empty_span()
         ),
         expr_from_projection(&select.projection[4])
     );
     assert_eq!(
-        &Expr::Value(
-            (Value::QuoteDelimitedStringLiteral('<', "a'bc".into(), '>')).with_empty_span()
-        ),
+        &Expr::Value((Value::QuoteDelimitedStringLiteral(qds('<', "a'bc", '>'))).with_empty_span()),
         expr_from_projection(&select.projection[5])
     );
     assert_eq!(
         &Expr::Value(
-            (Value::QuoteDelimitedStringLiteral('<', "<<a'bc".into(), '>')).with_empty_span()
+            (Value::QuoteDelimitedStringLiteral(qds('<', "<<a'bc", '>'))).with_empty_span()
         ),
         expr_from_projection(&select.projection[6])
     );
     assert_eq!(
         &Expr::Value(
-            (Value::QuoteDelimitedStringLiteral('(', "'abc'('abc".into(), ')')).with_empty_span()
+            (Value::QuoteDelimitedStringLiteral(qds('(', "'abc'('abc", ')'))).with_empty_span()
         ),
         expr_from_projection(&select.projection[7])
     );
     assert_eq!(
         &Expr::Value(
-            (Value::QuoteDelimitedStringLiteral('(', "abc'def)".into(), ')')).with_empty_span()
+            (Value::QuoteDelimitedStringLiteral(qds('(', "abc'def)", ')'))).with_empty_span()
         ),
         expr_from_projection(&select.projection[8])
     );
     assert_eq!(
         &Expr::Value(
-            (Value::QuoteDelimitedStringLiteral('(', "abc'def))".into(), ')')).with_empty_span()
+            (Value::QuoteDelimitedStringLiteral(qds('(', "abc'def))", ')'))).with_empty_span()
         ),
         expr_from_projection(&select.projection[9])
     );
@@ -186,7 +191,7 @@ fn parse_quote_delimited_string_lowercase() {
     assert_eq!(1, select.projection.len());
     assert_eq!(
         &Expr::Value(
-            Value::QuoteDelimitedStringLiteral('!', "a'b'c!d".into(), '!').with_empty_span()
+            Value::QuoteDelimitedStringLiteral(qds('!', "a'b'c!d", '!')).with_empty_span()
         ),
         expr_from_projection(&select.projection[0])
     );
@@ -221,7 +226,7 @@ fn parse_national_quote_delimited_string() {
     assert_eq!(1, select.projection.len());
     assert_eq!(
         &Expr::Value(
-            Value::NationalQuoteDelimitedStringLiteral('.', "abc".into(), '.').with_empty_span()
+            Value::NationalQuoteDelimitedStringLiteral(qds('.', "abc", '.')).with_empty_span()
         ),
         expr_from_projection(&select.projection[0])
     );
@@ -237,7 +242,7 @@ fn parse_national_quote_delimited_string_lowercase() {
         assert_eq!(1, select.projection.len());
         assert_eq!(
             &Expr::Value(
-                Value::NationalQuoteDelimitedStringLiteral('!', "a'b'c!d".into(), '!')
+                Value::NationalQuoteDelimitedStringLiteral(qds('!', "a'b'c!d", '!'))
                     .with_empty_span()
             ),
             expr_from_projection(&select.projection[0])

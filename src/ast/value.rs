@@ -19,7 +19,6 @@
 use alloc::string::String;
 
 use core::fmt;
-use std::fmt::Write;
 
 #[cfg(feature = "bigdecimal")]
 use bigdecimal::BigDecimal;
@@ -307,12 +306,8 @@ pub struct QuoteDelimitedString {
 }
 
 impl fmt::Display for QuoteDelimitedString {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Q'")?;
-        f.write_char(self.start_quote)?;
-        f.write_str(&self.value)?;
-        f.write_char(self.end_quote)?;
-        f.write_char('\'')
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Q'{}{}{}'", self.start_quote, self.value, self.end_quote)
     }
 }
 

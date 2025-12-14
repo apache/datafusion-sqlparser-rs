@@ -2047,7 +2047,7 @@ impl<'a> Tokenizer<'a> {
                 return self.tokenizer_error(
                     start_quote_loc,
                     format!(
-                        "Invalid space, tab, newline, or EOF after '{}''.",
+                        "Invalid space, tab, newline, or EOF after '{}''",
                         String::from_iter(literal_prefix)
                     ),
                 );

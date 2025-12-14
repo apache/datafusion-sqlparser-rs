@@ -292,8 +292,8 @@ impl fmt::Display for DollarQuotedString {
 
 /// A quote delimited string literal, e.g. `Q'_abc_'`.
 ///
-/// See [Token::QuoteDelimitedStringLiteral] and/or
-/// [Token::NationalQuoteDelimitedStringLiteral].
+/// See [Value::QuoteDelimitedStringLiteral] and/or
+/// [Value::NationalQuoteDelimitedStringLiteral].
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

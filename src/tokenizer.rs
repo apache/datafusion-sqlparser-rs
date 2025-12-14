@@ -2042,8 +2042,6 @@ impl<'a> Tokenizer<'a> {
 
         let start_quote_loc = chars.location();
         let (start_quote, end_quote) = match chars.next() {
-            // ~ "newline" is not allowed by Oracle's SQL Reference,
-            // but works with sql*plus nevertheless
             None | Some(' ') | Some('\t') | Some('\r') | Some('\n') => {
                 return self.tokenizer_error(
                     start_quote_loc,

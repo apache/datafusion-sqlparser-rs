@@ -1046,12 +1046,13 @@ impl<'a> Tokenizer<'a> {
                         Some(&q @ 'q') | Some(&q @ 'Q') if dialect_of!(self is OracleDialect | GenericDialect) =>
                         {
                             chars.next(); // consume and check the next char
-                            self.tokenize_word_or_quote_delimited_string(
-                                chars,
-                                &[n, q],
-                                Token::NationalQuoteDelimitedStringLiteral,
-                            )
-                            .map(Some)
+                            if let Some('\'') = chars.peek() {
+                                self.tokenize_quote_delimited_string(chars, &[n, q])
+                                    .map(|s| Some(Token::NationalQuoteDelimitedStringLiteral(s)))
+                            } else {
+                                let s = self.tokenize_word(String::from_iter([n, q]), chars);
+                                Ok(Some(Token::make_word(&s, None)))
+                            }
                         }
                         _ => {
                             // regular identifier starting with an "N"
@@ -1062,12 +1063,13 @@ impl<'a> Tokenizer<'a> {
                 }
                 q @ 'Q' | q @ 'q' if dialect_of!(self is OracleDialect | GenericDialect) => {
                     chars.next(); // consume and check the next char
-                    self.tokenize_word_or_quote_delimited_string(
-                        chars,
-                        &[q],
-                        Token::QuoteDelimitedStringLiteral,
-                    )
-                    .map(Some)
+                    if let Some('\'') = chars.peek() {
+                        self.tokenize_quote_delimited_string(chars, &[q])
+                            .map(|s| Some(Token::QuoteDelimitedStringLiteral(s)))
+                    } else {
+                        let s = self.tokenize_word(q, chars);
+                        Ok(Some(Token::make_word(&s, None)))
+                    }
                 }
                 // PostgreSQL accepts "escape" string constants, which are an extension to the SQL standard.
                 x @ 'e' | x @ 'E' if self.dialect.supports_string_escape_constant() => {
@@ -2024,72 +2026,61 @@ impl<'a> Tokenizer<'a> {
         )
     }
 
-    /// Reads a quote delimited string without "backslash escaping" or a word
-    /// depending on `chars.next()` delivering a `'`.
+    /// Reads a quote delimited string expecting `chars.next()` to deliver a quote.
     ///
     /// See <https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Literals.html#GUID-1824CBAA-6E16-4921-B2A6-112FB02248DA>
-    fn tokenize_word_or_quote_delimited_string(
+    fn tokenize_quote_delimited_string(
         &self,
         chars: &mut State,
         // the prefix that introduced the possible literal or word,
         // e.g. "Q" or "nq"
-        word_prefix: &[char],
-        // turns an identified quote string literal,
-        // ie. `(start-quote-char, string-literal, end-quote-char)`
-        // into a token
-        as_literal: fn(QuoteDelimitedString) -> Token,
-    ) -> Result<Token, TokenizerError> {
-        match chars.peek() {
-            Some('\'') => {
-                chars.next();
-                // ~ determine the "quote character(s)"
-                let error_loc = chars.location();
-                let (start_quote, end_quote) = match chars.next() {
-                    // ~ "newline" is not allowed by Oracle's SQL Reference,
-                    // but works with sql*plus nevertheless
-                    None | Some(' ') | Some('\t') | Some('\r') | Some('\n') => {
-                        return self.tokenizer_error(
-                            error_loc,
-                            format!(
-                                "Invalid space, tab, newline, or EOF after '{}''.",
-                                String::from_iter(word_prefix)
-                            ),
-                        );
-                    }
-                    Some(c) => (
-                        c,
-                        match c {
-                            '[' => ']',
-                            '{' => '}',
-                            '<' => '>',
-                            '(' => ')',
-                            c => c,
-                        },
+        literal_prefix: &[char],
+    ) -> Result<QuoteDelimitedString, TokenizerError> {
+        let literal_start_loc = chars.location();
+        chars.next();
+
+        let start_quote_loc = chars.location();
+        let (start_quote, end_quote) = match chars.next() {
+            // ~ "newline" is not allowed by Oracle's SQL Reference,
+            // but works with sql*plus nevertheless
+            None | Some(' ') | Some('\t') | Some('\r') | Some('\n') => {
+                return self.tokenizer_error(
+                    start_quote_loc,
+                    format!(
+                        "Invalid space, tab, newline, or EOF after '{}''.",
+                        String::from_iter(literal_prefix)
                     ),
-                };
-                // read the string literal until the "quote character" following a by literal quote
-                let mut value = String::new();
-                while let Some(ch) = chars.next() {
-                    if ch == end_quote {
-                        if let Some('\'') = chars.peek() {
-                            chars.next(); // ~ consume the quote
-                            return Ok(as_literal(QuoteDelimitedString {
-                                start_quote,
-                                value,
-                                end_quote,
-                            }));
-                        }
-                    }
-                    value.push(ch);
+                );
+            }
+            Some(c) => (
+                c,
+                match c {
+                    '[' => ']',
+                    '{' => '}',
+                    '<' => '>',
+                    '(' => ')',
+                    c => c,
+                },
+            ),
+        };
+
+        // read the string literal until the "quote character" following a by literal quote
+        let mut value = String::new();
+        while let Some(ch) = chars.next() {
+            if ch == end_quote {
+                if let Some('\'') = chars.peek() {
+                    chars.next(); // ~ consume the quote
+                    return Ok(QuoteDelimitedString {
+                        start_quote,
+                        value,
+                        end_quote,
+                    });
                 }
-                self.tokenizer_error(error_loc, "Unterminated string literal")
             }
-            // ~ not a literal introduced with _token_prefix_, assm
-            _ => {
-                let s = self.tokenize_word(String::from_iter(word_prefix), chars);
-                Ok(Token::make_word(&s, None))
-            }
+            value.push(ch);
         }
+
+        self.tokenizer_error(literal_start_loc, "Unterminated string literal")
     }
 
     /// Read a quoted string.

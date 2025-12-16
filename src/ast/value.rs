@@ -167,6 +167,12 @@ pub enum Value {
     TripleDoubleQuotedRawStringLiteral(String),
     /// N'string value'
     NationalStringLiteral(String),
+    /// Quote delimited literal. Examples `Q'{ab'c}'`, `Q'|ab'c|'`, `Q'|ab|c|'`
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Literals.html#GUID-1824CBAA-6E16-4921-B2A6-112FB02248DA)
+    QuoteDelimitedStringLiteral(QuoteDelimitedString),
+    /// "National" quote delimited literal. Examples `Q'{ab'c}'`, `Q'|ab'c|'`, `Q'|ab|c|'`
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Literals.html#GUID-1824CBAA-6E16-4921-B2A6-112FB02248DA)
+    NationalQuoteDelimitedStringLiteral(QuoteDelimitedString),
     /// X'hex value'
     HexStringLiteral(String),
 
@@ -207,6 +213,8 @@ impl Value {
             | Value::NationalStringLiteral(s)
             | Value::HexStringLiteral(s) => Some(s),
             Value::DollarQuotedString(s) => Some(s.value),
+            Value::QuoteDelimitedStringLiteral(s) => Some(s.value),
+            Value::NationalQuoteDelimitedStringLiteral(s) => Some(s.value),
             _ => None,
         }
     }
@@ -242,6 +250,8 @@ impl fmt::Display for Value {
             Value::EscapedStringLiteral(v) => write!(f, "E'{}'", escape_escaped_string(v)),
             Value::UnicodeStringLiteral(v) => write!(f, "U&'{}'", escape_unicode_string(v)),
             Value::NationalStringLiteral(v) => write!(f, "N'{v}'"),
+            Value::QuoteDelimitedStringLiteral(v) => v.fmt(f),
+            Value::NationalQuoteDelimitedStringLiteral(v) => write!(f, "N{v}"),
             Value::HexStringLiteral(v) => write!(f, "X'{v}'"),
             Value::Boolean(v) => write!(f, "{v}"),
             Value::SingleQuotedByteStringLiteral(v) => write!(f, "B'{v}'"),
@@ -276,6 +286,28 @@ impl fmt::Display for DollarQuotedString {
                 write!(f, "$${}$$", self.value)
             }
         }
+    }
+}
+
+/// A quote delimited string literal, e.g. `Q'_abc_'`.
+///
+/// See [Value::QuoteDelimitedStringLiteral] and/or
+/// [Value::NationalQuoteDelimitedStringLiteral].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct QuoteDelimitedString {
+    /// the quote start character; i.e. the character _after_ the opening `Q'`
+    pub start_quote: char,
+    /// the string literal value itself
+    pub value: String,
+    /// the quote end character; i.e. the character _before_ the closing `'`
+    pub end_quote: char,
+}
+
+impl fmt::Display for QuoteDelimitedString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Q'{}{}{}'", self.start_quote, self.value, self.end_quote)
     }
 }
 

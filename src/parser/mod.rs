@@ -8063,7 +8063,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse PostgreSQL partition bound specification for PARTITION OF.
+    /// Parse [ForValues] of a `PARTITION OF` clause.
     ///
     /// Parses: `FOR VALUES partition_bound_spec | DEFAULT`
     ///
@@ -8106,7 +8106,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a single partition bound value (MINVALUE, MAXVALUE, or expression).
+    /// Parse a single [PartitionBoundValue].
     fn parse_partition_bound_value(&mut self) -> Result<PartitionBoundValue, ParserError> {
         if self.parse_keyword(Keyword::MINVALUE) {
             Ok(PartitionBoundValue::MinValue)

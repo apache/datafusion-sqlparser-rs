@@ -26,7 +26,7 @@ use sqlparser::{
     parser::ParserError,
     tokenizer::Span,
 };
-use test_utils::{expr_from_projection, number, TestedDialects};
+use test_utils::{all_dialects_where, expr_from_projection, number, TestedDialects};
 
 mod test_utils;
 
@@ -120,6 +120,7 @@ fn plusminus_have_same_precedence_as_strconcat() {
 
 #[test]
 fn parse_quote_delimited_string() {
+    let dialect = all_dialects_where(|d| d.supports_quote_delimited_string());
     let sql = "SELECT Q'.abc.', \
                       Q'Xab'cX', \
                       Q'|abc'''|', \
@@ -131,7 +132,7 @@ fn parse_quote_delimited_string() {
                       Q'(abc'def))', \
                       Q'(abc'def)))' \
                  FROM dual";
-    let select = oracle().verified_only_select(sql);
+    let select = dialect.verified_only_select(sql);
     assert_eq!(10, select.projection.len());
     assert_eq!(
         &Expr::Value(
@@ -207,10 +208,11 @@ fn parse_quote_delimited_string() {
 
 #[test]
 fn parse_invalid_quote_delimited_strings() {
+    let dialect = all_dialects_where(|d| d.supports_quote_delimited_string());
     // ~ invalid quote delimiter
     for q in [' ', '\t', '\r', '\n'] {
         assert_eq!(
-            oracle().parse_sql_statements(&format!("SELECT Q'{q}abc{q}' FROM dual")),
+            dialect.parse_sql_statements(&format!("SELECT Q'{q}abc{q}' FROM dual")),
             Err(ParserError::TokenizerError(
                 "Invalid space, tab, newline, or EOF after 'Q'' at Line: 1, Column: 10".into()
             )),
@@ -219,7 +221,7 @@ fn parse_invalid_quote_delimited_strings() {
     }
     // ~ invalid eof after quote
     assert_eq!(
-        oracle().parse_sql_statements("SELECT Q'"),
+        dialect.parse_sql_statements("SELECT Q'"),
         Err(ParserError::TokenizerError(
             "Invalid space, tab, newline, or EOF after 'Q'' at Line: 1, Column: 10".into()
         )),
@@ -227,7 +229,7 @@ fn parse_invalid_quote_delimited_strings() {
     );
     // ~ unterminated string
     assert_eq!(
-        oracle().parse_sql_statements("SELECT Q'|asdfa...."),
+        dialect.parse_sql_statements("SELECT Q'|asdfa...."),
         Err(ParserError::TokenizerError(
             "Unterminated string literal at Line: 1, Column: 9".into()
         )),
@@ -237,8 +239,9 @@ fn parse_invalid_quote_delimited_strings() {
 
 #[test]
 fn parse_quote_delimited_string_lowercase() {
+    let dialect = all_dialects_where(|d| d.supports_quote_delimited_string());
     let sql = "select q'!a'b'c!d!' from dual";
-    let select = oracle().verified_only_select_with_canonical(sql, "SELECT Q'!a'b'c!d!' FROM dual");
+    let select = dialect.verified_only_select_with_canonical(sql, "SELECT Q'!a'b'c!d!' FROM dual");
     assert_eq!(1, select.projection.len());
     assert_eq!(
         &Expr::Value(
@@ -251,8 +254,9 @@ fn parse_quote_delimited_string_lowercase() {
 
 #[test]
 fn parse_quote_delimited_string_but_is_a_word() {
+    let dialect = all_dialects_where(|d| d.supports_quote_delimited_string());
     let sql = "SELECT q, quux, q.abc FROM dual q";
-    let select = oracle().verified_only_select(sql);
+    let select = dialect.verified_only_select(sql);
     assert_eq!(3, select.projection.len());
     assert_eq!(
         &Expr::Identifier(Ident::with_span(Span::empty(), "q")),
@@ -273,8 +277,9 @@ fn parse_quote_delimited_string_but_is_a_word() {
 
 #[test]
 fn parse_national_quote_delimited_string() {
+    let dialect = all_dialects_where(|d| d.supports_quote_delimited_string());
     let sql = "SELECT NQ'.abc.' FROM dual";
-    let select = oracle().verified_only_select(sql);
+    let select = dialect.verified_only_select(sql);
     assert_eq!(1, select.projection.len());
     assert_eq!(
         &Expr::Value(
@@ -287,8 +292,9 @@ fn parse_national_quote_delimited_string() {
 
 #[test]
 fn parse_national_quote_delimited_string_lowercase() {
+    let dialect = all_dialects_where(|d| d.supports_quote_delimited_string());
     for prefix in ["nq", "Nq", "nQ", "NQ"] {
-        let select = oracle().verified_only_select_with_canonical(
+        let select = dialect.verified_only_select_with_canonical(
             &format!("select {prefix}'!a'b'c!d!' from dual"),
             "SELECT NQ'!a'b'c!d!' FROM dual",
         );
@@ -307,8 +313,9 @@ fn parse_national_quote_delimited_string_lowercase() {
 
 #[test]
 fn parse_national_quote_delimited_string_but_is_a_word() {
+    let dialect = all_dialects_where(|d| d.supports_quote_delimited_string());
     let sql = "SELECT nq, nqoo, nq.abc FROM dual q";
-    let select = oracle().verified_only_select(sql);
+    let select = dialect.verified_only_select(sql);
     assert_eq!(3, select.projection.len());
     assert_eq!(
         &Expr::Identifier(Ident::with_span(Span::empty(), "nq")),

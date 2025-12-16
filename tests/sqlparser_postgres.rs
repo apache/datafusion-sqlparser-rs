@@ -8112,3 +8112,34 @@ CONSTRAINT check_date CHECK (order_date >= '2023-01-01')\
         _ => panic!("Expected CreateTable"),
     }
 }
+
+#[test]
+fn parse_create_table_partition_of_works_without_dialect_check() {
+    use sqlparser::dialect::{GenericDialect, MySqlDialect, SQLiteDialect};
+    use sqlparser::test_utils::TestedDialects;
+
+    let sql = "CREATE TABLE measurement_y2006m02 PARTITION OF measurement FOR VALUES FROM ('2006-02-01') TO ('2006-03-01')";
+    let dialects = TestedDialects::new(vec![
+        Box::new(GenericDialect {}),
+        Box::new(PostgreSqlDialect {}),
+        Box::new(MySqlDialect {}),
+        Box::new(SQLiteDialect {}),
+    ]);
+    match dialects.verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!("measurement_y2006m02", create_table.name.to_string());
+            assert_eq!(
+                Some(ObjectName::from(vec![Ident::new("measurement")])),
+                create_table.partition_of
+            );
+            match create_table.for_values {
+                Some(ForValues::From { from, to }) => {
+                    assert_eq!(1, from.len());
+                    assert_eq!(1, to.len());
+                }
+                _ => panic!("Expected ForValues::From"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}

@@ -7888,9 +7888,7 @@ impl<'a> Parser<'a> {
         let table_name = self.parse_object_name(allow_unquoted_hyphen)?;
 
         // PostgreSQL PARTITION OF for child partition tables
-        let partition_of = if dialect_of!(self is PostgreSqlDialect | GenericDialect)
-            && self.parse_keywords(&[Keyword::PARTITION, Keyword::OF])
-        {
+        let partition_of = if self.parse_keywords(&[Keyword::PARTITION, Keyword::OF]) {
             Some(self.parse_object_name(allow_unquoted_hyphen)?)
         } else {
             None

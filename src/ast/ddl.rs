@@ -3071,7 +3071,7 @@ impl fmt::Display for CreateTable {
     }
 }
 
-/// PostgreSQL partition bound specification for PARTITION OF.
+/// PostgreSQL partition bound specification for `PARTITION OF`.
 ///
 /// Specifies partition bounds for a child partition table.
 ///

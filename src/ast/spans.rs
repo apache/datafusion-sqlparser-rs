@@ -38,15 +38,15 @@ use super::{
     FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
     IfStatement, IlikeSelectItem, IndexColumn, Insert, Interpolate, InterpolateExpr, Join,
     JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
-    MatchRecognizePattern, Measure, MergeAction, MergeClause, MergeInsertExpr, MergeInsertKind,
-    NamedParenthesizedList, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict,
-    OnConflictAction, OnInsert, OpenStatement, OrderBy, OrderByExpr, OrderByKind, OutputClause,
-    Partition, PivotValueSource, ProjectionSelect, Query, RaiseStatement, RaiseStatementValue,
-    ReferentialAction, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
-    SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias,
-    TableAliasColumnDef, TableConstraint, TableFactor, TableObject, TableOptionsClustered,
-    TableWithJoins, Update, UpdateTableFromKind, Use, Value, Values, ViewColumnDef, WhileStatement,
-    WildcardAdditionalOptions, With, WithFill,
+    MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
+    MergeInsertKind, MergeUpdateExpr, NamedParenthesizedList, NamedWindowDefinition, ObjectName,
+    ObjectNamePart, Offset, OnConflict, OnConflictAction, OnInsert, OpenStatement, OrderBy,
+    OrderByExpr, OrderByKind, OutputClause, Partition, PivotValueSource, ProjectionSelect, Query,
+    RaiseStatement, RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
+    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
+    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
+    TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Value, Values,
+    ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -454,20 +454,7 @@ impl Spanned for Statement {
             Statement::Explain { .. } => Span::empty(),
             Statement::Savepoint { .. } => Span::empty(),
             Statement::ReleaseSavepoint { .. } => Span::empty(),
-            Statement::Merge {
-                merge_token,
-                into: _,
-                table: _,
-                source: _,
-                on,
-                clauses,
-                output,
-            } => union_spans(
-                [merge_token.0.span, on.span()]
-                    .into_iter()
-                    .chain(clauses.iter().map(Spanned::span))
-                    .chain(output.iter().map(Spanned::span)),
-            ),
+            Statement::Merge(merge) => merge.span(),
             Statement::Cache { .. } => Span::empty(),
             Statement::UNCache { .. } => Span::empty(),
             Statement::CreateSequence { .. } => Span::empty(),
@@ -928,6 +915,17 @@ impl Spanned for Update {
     }
 }
 
+impl Spanned for Merge {
+    fn span(&self) -> Span {
+        union_spans(
+            [self.merge_token.0.span, self.on.span()]
+                .into_iter()
+                .chain(self.clauses.iter().map(Spanned::span))
+                .chain(self.output.iter().map(Spanned::span)),
+        )
+    }
+}
+
 impl Spanned for FromTable {
     fn span(&self) -> Span {
         match self {
@@ -1148,7 +1146,7 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::DropClusteringKey => Span::empty(),
             AlterTableOperation::SuspendRecluster => Span::empty(),
             AlterTableOperation::ResumeRecluster => Span::empty(),
-            AlterTableOperation::Refresh => Span::empty(),
+            AlterTableOperation::Refresh { .. } => Span::empty(),
             AlterTableOperation::Suspend => Span::empty(),
             AlterTableOperation::Resume => Span::empty(),
             AlterTableOperation::Algorithm { .. } => Span::empty(),
@@ -2422,12 +2420,7 @@ impl Spanned for MergeAction {
     fn span(&self) -> Span {
         match self {
             MergeAction::Insert(expr) => expr.span(),
-            MergeAction::Update {
-                update_token,
-                assignments,
-            } => union_spans(
-                core::iter::once(update_token.0.span).chain(assignments.iter().map(Spanned::span)),
-            ),
+            MergeAction::Update(expr) => expr.span(),
             MergeAction::Delete { delete_token } => delete_token.0.span,
         }
     }
@@ -2445,7 +2438,19 @@ impl Spanned for MergeInsertExpr {
                 },
             ]
             .into_iter()
-            .chain(self.columns.iter().map(|i| i.span)),
+            .chain(self.insert_predicate.iter().map(Spanned::span))
+            .chain(self.columns.iter().map(|i| i.span())),
+        )
+    }
+}
+
+impl Spanned for MergeUpdateExpr {
+    fn span(&self) -> Span {
+        union_spans(
+            core::iter::once(self.update_token.0.span)
+                .chain(self.assignments.iter().map(Spanned::span))
+                .chain(self.update_predicate.iter().map(Spanned::span))
+                .chain(self.delete_predicate.iter().map(Spanned::span)),
         )
     }
 }
@@ -2769,7 +2774,7 @@ WHERE id = 1
         assert_eq!(stmt_span.end, (16, 67).into());
 
         // ~ individual tokens within the statement
-        let Statement::Merge {
+        let Statement::Merge(Merge {
             merge_token,
             into: _,
             table: _,
@@ -2777,7 +2782,7 @@ WHERE id = 1
             on: _,
             clauses,
             output,
-        } = &r[0]
+        }) = &r[0]
         else {
             panic!("not a MERGE statement");
         };
@@ -2815,10 +2820,12 @@ WHERE id = 1
             clauses[1].when_token.0.span,
             Span::new(Location::new(12, 17), Location::new(12, 21))
         );
-        if let MergeAction::Update {
+        if let MergeAction::Update(MergeUpdateExpr {
             update_token,
             assignments: _,
-        } = &clauses[1].action
+            update_predicate: _,
+            delete_predicate: _,
+        }) = &clauses[1].action
         {
             assert_eq!(
                 update_token.0.span,
@@ -2891,7 +2898,7 @@ WHERE id = 1
         );
 
         // ~ individual tokens within the statement
-        if let Statement::Merge { output, .. } = &r[0] {
+        if let Statement::Merge(Merge { output, .. }) = &r[0] {
             if let Some(OutputClause::Returning {
                 returning_token, ..
             }) = output
@@ -2925,7 +2932,7 @@ WHERE id = 1
         );
 
         // ~ individual tokens within the statement
-        if let Statement::Merge { output, .. } = &r[0] {
+        if let Statement::Merge(Merge { output, .. }) = &r[0] {
             if let Some(OutputClause::Output { output_token, .. }) = output {
                 assert_eq!(
                     output_token.0.span,
@@ -2937,5 +2944,45 @@ WHERE id = 1
         } else {
             panic!("not a MERGE statement");
         };
+    }
+
+    #[test]
+    fn test_merge_statement_spans_with_update_predicates() {
+        let sql = r#"
+       MERGE INTO a USING b ON a.id = b.id
+        WHEN MATCHED THEN
+              UPDATE set a.x = a.x + b.x
+               WHERE b.x != 2
+              DELETE WHERE a.x <> 3"#;
+
+        let r = Parser::parse_sql(&crate::dialect::GenericDialect, sql).unwrap();
+        assert_eq!(1, r.len());
+
+        // ~ assert the span of the whole statement
+        let stmt_span = r[0].span();
+        assert_eq!(
+            stmt_span,
+            Span::new(Location::new(2, 8), Location::new(6, 36))
+        );
+    }
+
+    #[test]
+    fn test_merge_statement_spans_with_insert_predicate() {
+        let sql = r#"
+       MERGE INTO a USING b ON a.id = b.id
+        WHEN NOT MATCHED THEN
+            INSERT VALUES (b.x, b.y) WHERE b.x != 2
+-- qed
+"#;
+
+        let r = Parser::parse_sql(&crate::dialect::GenericDialect, sql).unwrap();
+        assert_eq!(1, r.len());
+
+        // ~ assert the span of the whole statement
+        let stmt_span = r[0].span();
+        assert_eq!(
+            stmt_span,
+            Span::new(Location::new(2, 8), Location::new(4, 52))
+        );
     }
 }

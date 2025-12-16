@@ -1806,15 +1806,16 @@ fn parse_merge() {
     );
     let insert_action = MergeAction::Insert(MergeInsertExpr {
         insert_token: AttachedToken::empty(),
-        columns: vec![Ident::new("product"), Ident::new("quantity")],
+        columns: vec![Ident::new("product").into(), Ident::new("quantity").into()],
         kind_token: AttachedToken::empty(),
         kind: MergeInsertKind::Values(Values {
             value_keyword: false,
             explicit_row: false,
             rows: vec![vec![Expr::value(number("1")), Expr::value(number("2"))]],
         }),
+        insert_predicate: None,
     });
-    let update_action = MergeAction::Update {
+    let update_action = MergeAction::Update(MergeUpdateExpr {
         update_token: AttachedToken::empty(),
         assignments: vec![
             Assignment {
@@ -1826,17 +1827,19 @@ fn parse_merge() {
                 value: Expr::value(number("2")),
             },
         ],
-    };
+        update_predicate: None,
+        delete_predicate: None,
+    });
 
     match bigquery_and_generic().verified_stmt(sql) {
-        Statement::Merge {
+        Statement::Merge(Merge {
             into,
             table,
             source,
             on,
             clauses,
             ..
-        } => {
+        }) => {
             assert!(!into);
             assert_eq!(
                 TableFactor::Table {
@@ -1917,9 +1920,13 @@ fn parse_merge() {
                         predicate: Some(Expr::value(number("1"))),
                         action: MergeAction::Insert(MergeInsertExpr {
                             insert_token: AttachedToken::empty(),
-                            columns: vec![Ident::new("product"), Ident::new("quantity"),],
+                            columns: vec![
+                                Ident::new("product").into(),
+                                Ident::new("quantity").into(),
+                            ],
                             kind_token: AttachedToken::empty(),
                             kind: MergeInsertKind::Row,
+                            insert_predicate: None,
                         })
                     },
                     MergeClause {
@@ -1928,9 +1935,13 @@ fn parse_merge() {
                         predicate: None,
                         action: MergeAction::Insert(MergeInsertExpr {
                             insert_token: AttachedToken::empty(),
-                            columns: vec![Ident::new("product"), Ident::new("quantity"),],
+                            columns: vec![
+                                Ident::new("product").into(),
+                                Ident::new("quantity").into(),
+                            ],
                             kind_token: AttachedToken::empty(),
                             kind: MergeInsertKind::Row,
+                            insert_predicate: None,
                         })
                     },
                     MergeClause {
@@ -1941,7 +1952,8 @@ fn parse_merge() {
                             insert_token: AttachedToken::empty(),
                             columns: vec![],
                             kind_token: AttachedToken::empty(),
-                            kind: MergeInsertKind::Row
+                            kind: MergeInsertKind::Row,
+                            insert_predicate: None,
                         })
                     },
                     MergeClause {
@@ -1952,7 +1964,8 @@ fn parse_merge() {
                             insert_token: AttachedToken::empty(),
                             columns: vec![],
                             kind_token: AttachedToken::empty(),
-                            kind: MergeInsertKind::Row
+                            kind: MergeInsertKind::Row,
+                            insert_predicate: None,
                         })
                     },
                     MergeClause {
@@ -1975,7 +1988,7 @@ fn parse_merge() {
                         predicate: None,
                         action: MergeAction::Insert(MergeInsertExpr {
                             insert_token: AttachedToken::empty(),
-                            columns: vec![Ident::new("a"), Ident::new("b"),],
+                            columns: vec![Ident::new("a").into(), Ident::new("b").into(),],
                             kind_token: AttachedToken::empty(),
                             kind: MergeInsertKind::Values(Values {
                                 value_keyword: false,
@@ -1984,7 +1997,8 @@ fn parse_merge() {
                                     Expr::value(number("1")),
                                     Expr::Identifier(Ident::new("DEFAULT")),
                                 ]]
-                            })
+                            }),
+                            insert_predicate: None,
                         })
                     },
                     MergeClause {
@@ -2002,7 +2016,8 @@ fn parse_merge() {
                                     Expr::value(number("1")),
                                     Expr::Identifier(Ident::new("DEFAULT")),
                                 ]]
-                            })
+                            }),
+                            insert_predicate: None,
                         })
                     },
                 ],

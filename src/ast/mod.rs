@@ -6457,7 +6457,7 @@ pub enum MinMaxValue {
     Empty,
     /// NO MINVALUE / NO MAXVALUE.
     None,
-    /// MINVALUE `<expr>` / MAXVALUE `<expr>`.
+    /// `MINVALUE <expr>` / `MAXVALUE <expr>`.
     Some(Expr),
 }
 
@@ -9154,7 +9154,7 @@ pub enum CopyLegacyOption {
     Delimiter(char),
     /// EMPTYASNULL
     EmptyAsNull,
-    /// ENCRYPTED \[ AUTO \]
+    /// `ENCRYPTED \[ AUTO \]`
     Encrypted {
         /// Whether `AUTO` was specified for encryption.
         auto: bool,

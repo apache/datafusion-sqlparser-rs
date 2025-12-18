@@ -124,9 +124,10 @@ pub enum Value {
     #[cfg(not(feature = "bigdecimal"))]
     Number(String, bool),
     #[cfg(feature = "bigdecimal")]
-    // HINT: use `test_utils::number` to make an instance of
-    // Value::Number This might help if you your tests pass locally
-    // but fail on CI with the `--all-features` flag enabled
+    /// HINT: use `test_utils::number` to make an instance of
+    /// Value::Number This might help if you your tests pass locally
+    /// but fail on CI with the `--all-features` flag enabled
+    /// Numeric literal (uses `BigDecimal` when the `bigdecimal` feature is enabled).
     Number(BigDecimal, bool),
     /// 'string value'
     SingleQuotedString(String),

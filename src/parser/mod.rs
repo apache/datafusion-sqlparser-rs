@@ -2925,7 +2925,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a `NOT` expression.
     ///
-    /// See [`Expr::Not`]
+    /// Represented in the AST as `Expr::UnaryOp` with `UnaryOperator::Not`.
     pub fn parse_not(&mut self) -> Result<Expr, ParserError> {
         match self.peek_token().token {
             Token::Word(w) => match w.keyword {
@@ -16678,7 +16678,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parses input format clause used for [ClickHouse].
+    /// Parses input format clause used for ClickHouse.
     ///
     /// <https://clickhouse.com/docs/en/interfaces/formats>
     pub fn parse_input_format_clause(&mut self) -> Result<InputFormatClause, ParserError> {
@@ -17723,7 +17723,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::Rollback { chain, savepoint })
     }
 
-    /// Parse an optional 'AND [NO] CHAIN' clause for `COMMIT` and `ROLLBACK` statements
+    /// Parse an optional `AND [NO] CHAIN` clause for `COMMIT` and `ROLLBACK` statements
     pub fn parse_commit_rollback_chain(&mut self) -> Result<bool, ParserError> {
         let _ = self.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK]);
         if self.parse_keyword(Keyword::AND) {

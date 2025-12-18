@@ -932,7 +932,7 @@ pub enum Expr {
         /// `true` when `NOT` is present.
         negated: bool,
         /// Snowflake supports the ANY keyword to match against a list of patterns
-        /// https://docs.snowflake.com/en/sql-reference/functions/like_any
+        /// <https://docs.snowflake.com/en/sql-reference/functions/like_any>
         any: bool,
         /// Expression to match.
         expr: Box<Expr>,
@@ -946,7 +946,7 @@ pub enum Expr {
         /// `true` when `NOT` is present.
         negated: bool,
         /// Snowflake supports the ANY keyword to match against a list of patterns
-        /// https://docs.snowflake.com/en/sql-reference/functions/like_any
+        /// <https://docs.snowflake.com/en/sql-reference/functions/like_any>
         any: bool,
         /// Expression to match.
         expr: Box<Expr>,
@@ -986,7 +986,7 @@ pub enum Expr {
         compare_op: BinaryOperator,
         /// Right-hand subquery expression.
         right: Box<Expr>,
-        /// ANY and SOME are synonymous: https://docs.cloudera.com/cdw-runtime/cloud/using-hiveql/topics/hive_comparison_predicates.html
+        /// ANY and SOME are synonymous: <https://docs.cloudera.com/cdw-runtime/cloud/using-hiveql/topics/hive_comparison_predicates.html>
         is_some: bool,
     },
     /// `ALL` operation e.g. `foo > ALL(bar)`, comparison operator is one of `[=, >, <, =>, =<, !=]`
@@ -6457,7 +6457,7 @@ pub enum MinMaxValue {
     Empty,
     /// NO MINVALUE / NO MAXVALUE.
     None,
-    /// MINVALUE <expr> / MAXVALUE <expr>.
+    /// MINVALUE `<expr>` / MAXVALUE `<expr>`.
     Some(Expr),
 }
 
@@ -9154,7 +9154,7 @@ pub enum CopyLegacyOption {
     Delimiter(char),
     /// EMPTYASNULL
     EmptyAsNull,
-    /// ENCRYPTED [ AUTO ]
+    /// ENCRYPTED \[ AUTO \]
     Encrypted {
         /// Whether `AUTO` was specified for encryption.
         auto: bool,
@@ -9175,16 +9175,16 @@ pub enum CopyLegacyOption {
     IgnoreHeader(u64),
     /// JSON
     Json,
-    /// MANIFEST [ VERBOSE ]
+    /// `MANIFEST \[ VERBOSE \]`
     Manifest {
         /// Whether the MANIFEST is verbose.
         verbose: bool,
     },
-    /// MAXFILESIZE \[ AS \] max-size \[ MB | GB \]
+    /// `MAXFILESIZE \[ AS \] max-size \[ MB | GB \]`
     MaxFileSize(FileSize),
-    /// NULL \[ AS \] 'null_string'
+    /// `NULL \[ AS \] 'null_string'`
     Null(String),
-    /// PARALLEL [ { ON | TRUE } | { OFF | FALSE } ]
+    /// `PARALLEL [ { ON | TRUE } | { OFF | FALSE } ]`
     Parallel(Option<bool>),
     /// PARQUET
     Parquet,
@@ -11120,7 +11120,7 @@ pub struct AlterUser {
     /// The name of the user to alter.
     pub name: Ident,
     /// Optional new name for the user (Snowflake-specific).
-    /// See: https://docs.snowflake.com/en/sql-reference/sql/alter-user#syntax
+    /// See: <https://docs.snowflake.com/en/sql-reference/sql/alter-user#syntax>
     pub rename_to: Option<Ident>,
     /// Reset the user's password.
     pub reset_password: bool,

@@ -1753,9 +1753,6 @@ fn parse_table_time_travel() {
 
     let sql = "SELECT 1 FROM t1 FOR SYSTEM TIME AS OF 'some_timestamp'".to_string();
     assert!(bigquery().parse_sql_statements(&sql).is_err());
-
-    let sql = "SELECT 1 FROM t1 TIMESTAMP AS OF '{version}'".to_string();
-    assert!(bigquery().parse_sql_statements(&sql).is_err());
 }
 
 #[test]

@@ -4147,4 +4147,23 @@ mod tests {
             panic!("Tokenizer should have failed on {sql}, but it succeeded with {tokens:?}");
         }
     }
+
+    #[test]
+    fn tokenize_question_mark() {
+        let dialect = PostgreSqlDialect {};
+        let sql = "SELECT x ? y";
+        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+        compare(
+            tokens,
+            vec![
+                Token::make_keyword("SELECT"),
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("x", None),
+                Token::Whitespace(Whitespace::Space),
+                Token::Question,
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("y", None),
+            ],
+        )
+    }
 }

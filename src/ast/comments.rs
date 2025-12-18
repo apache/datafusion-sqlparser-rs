@@ -174,7 +174,16 @@ pub enum Comment {
     /// until end-of-line or end-of-file in the source code.
     ///
     /// Note: `content` will include the terminating new-line character, if any.
-    SingleLine { content: String, prefix: String },
+    /// A single-line comment, typically introduced with a prefix and spanning
+    /// until end-of-line or end-of-file in the source code.
+    ///
+    /// Note: `content` will include the terminating new-line character, if any.
+    SingleLine {
+        /// The content of the comment (including trailing newline, if any).
+        content: String,
+        /// The prefix introducing the comment (e.g. `--`, `#`).
+        prefix: String,
+    },
 
     /// A multi-line comment, typically enclosed in `/* .. */` markers. The
     /// string represents the content excluding the markers.

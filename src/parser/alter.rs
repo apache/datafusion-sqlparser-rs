@@ -30,6 +30,7 @@ use crate::{
 };
 
 impl Parser<'_> {
+    /// Parse `ALTER ROLE` statement
     pub fn parse_alter_role(&mut self) -> Result<Statement, ParserError> {
         if dialect_of!(self is PostgreSqlDialect) {
             return self.parse_pg_alter_role();

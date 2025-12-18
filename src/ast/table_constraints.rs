@@ -155,10 +155,13 @@ impl fmt::Display for TableConstraint {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// A `CHECK` constraint (`[ CONSTRAINT <name> ] CHECK (<expr>) [[NOT] ENFORCED]`).
 pub struct CheckConstraint {
+    /// Optional constraint name.
     pub name: Option<Ident>,
+    /// The boolean expression the CHECK constraint enforces.
     pub expr: Box<Expr>,
-    /// MySQL-specific syntax
+    /// MySQL-specific `ENFORCED` / `NOT ENFORCED` flag.
     /// <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
     pub enforced: Option<bool>,
 }
@@ -197,16 +200,24 @@ impl crate::ast::Spanned for CheckConstraint {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ForeignKeyConstraint {
+    /// Optional constraint name.
     pub name: Option<Ident>,
-    /// MySQL-specific field
+    /// MySQL-specific index name associated with the foreign key.
     /// <https://dev.mysql.com/doc/refman/8.4/en/create-table-foreign-keys.html>
     pub index_name: Option<Ident>,
+    /// Columns in the local table that participate in the foreign key.
     pub columns: Vec<Ident>,
+    /// Referenced foreign table name.
     pub foreign_table: ObjectName,
+    /// Columns in the referenced table.
     pub referred_columns: Vec<Ident>,
+    /// Action to perform `ON DELETE`.
     pub on_delete: Option<ReferentialAction>,
+    /// Action to perform `ON UPDATE`.
     pub on_update: Option<ReferentialAction>,
+    /// Optional `MATCH` kind (FULL | PARTIAL | SIMPLE).
     pub match_kind: Option<ConstraintReferenceMatchKind>,
+    /// Optional characteristics (e.g., `DEFERRABLE`).
     pub characteristics: Option<ConstraintCharacteristics>,
 }
 
@@ -344,6 +355,7 @@ pub struct IndexConstraint {
     /// Referred column identifier list.
     pub columns: Vec<IndexColumn>,
     /// Optional index options such as `USING`; see [`IndexOption`].
+    /// Options applied to the index (e.g., `COMMENT`, `WITH` options).
     pub index_options: Vec<IndexOption>,
 }
 
@@ -413,7 +425,9 @@ pub struct PrimaryKeyConstraint {
     pub index_type: Option<IndexType>,
     /// Identifiers of the columns that form the primary key.
     pub columns: Vec<IndexColumn>,
+    /// Optional index options such as `USING`.
     pub index_options: Vec<IndexOption>,
+    /// Optional characteristics like `DEFERRABLE`.
     pub characteristics: Option<ConstraintCharacteristics>,
 }
 
@@ -458,6 +472,7 @@ impl crate::ast::Spanned for PrimaryKeyConstraint {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Unique constraint definition.
 pub struct UniqueConstraint {
     /// Constraint name.
     ///
@@ -473,7 +488,9 @@ pub struct UniqueConstraint {
     pub index_type: Option<IndexType>,
     /// Identifiers of the columns that are unique.
     pub columns: Vec<IndexColumn>,
+    /// Optional index options such as `USING`.
     pub index_options: Vec<IndexOption>,
+    /// Optional characteristics like `DEFERRABLE`.
     pub characteristics: Option<ConstraintCharacteristics>,
     /// Optional Postgres nulls handling: `[ NULLS [ NOT ] DISTINCT ]`
     pub nulls_distinct: NullsDistinctOption,

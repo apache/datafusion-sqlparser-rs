@@ -195,4 +195,8 @@ impl Dialect for GenericDialect {
     fn supports_interval_options(&self) -> bool {
         true
     }
+
+    fn supports_quote_delimited_string(&self) -> bool {
+        true
+    }
 }

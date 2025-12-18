@@ -112,7 +112,7 @@ pub use self::trigger::{
 
 pub use self::value::{
     escape_double_quote_string, escape_quoted_string, DateTimeField, DollarQuotedString,
-    NormalizationForm, TrimWhereField, Value, ValueWithSpan,
+    NormalizationForm, QuoteDelimitedString, TrimWhereField, Value, ValueWithSpan,
 };
 
 use crate::ast::helpers::key_value_options::KeyValueOptions;
@@ -138,6 +138,7 @@ mod query;
 mod spans;
 pub use spans::Spanned;
 
+pub mod comments;
 mod trigger;
 mod value;
 

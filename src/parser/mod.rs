@@ -32,14 +32,17 @@ use recursion::RecursionCounter;
 use IsLateral::*;
 use IsOptional::*;
 
-use crate::ast::helpers::{
-    key_value_options::{
-        KeyValueOption, KeyValueOptionKind, KeyValueOptions, KeyValueOptionsDelimiter,
-    },
-    stmt_create_table::{CreateTableBuilder, CreateTableConfiguration},
-};
 use crate::ast::Statement::CreatePolicy;
 use crate::ast::*;
+use crate::ast::{
+    comments,
+    helpers::{
+        key_value_options::{
+            KeyValueOption, KeyValueOptionKind, KeyValueOptions, KeyValueOptionsDelimiter,
+        },
+        stmt_create_table::{CreateTableBuilder, CreateTableConfiguration},
+    },
+};
 use crate::dialect::*;
 use crate::keywords::{Keyword, ALL_KEYWORDS};
 use crate::tokenizer::*;
@@ -528,6 +531,44 @@ impl<'a> Parser<'a> {
     /// ```
     pub fn parse_sql(dialect: &dyn Dialect, sql: &str) -> Result<Vec<Statement>, ParserError> {
         Parser::new(dialect).try_with_sql(sql)?.parse_statements()
+    }
+
+    /// Parses the given `sql` into an Abstract Syntax Tree (AST), returning
+    /// also encountered source code comments.
+    ///
+    /// See [Parser::parse_sql].
+    pub fn parse_sql_with_comments(
+        dialect: &'a dyn Dialect,
+        sql: &str,
+    ) -> Result<(Vec<Statement>, comments::Comments), ParserError> {
+        let mut p = Parser::new(dialect).try_with_sql(sql)?;
+        p.parse_statements().map(|stmts| (stmts, p.into_comments()))
+    }
+
+    /// Consumes this parser returning comments from the parsed token stream.
+    fn into_comments(self) -> comments::Comments {
+        let mut comments = comments::Comments::default();
+        for t in self.tokens.into_iter() {
+            match t.token {
+                Token::Whitespace(Whitespace::SingleLineComment { comment, prefix }) => {
+                    comments.offer(comments::CommentWithSpan {
+                        comment: comments::Comment::SingleLine {
+                            content: comment,
+                            prefix,
+                        },
+                        span: t.span,
+                    });
+                }
+                Token::Whitespace(Whitespace::MultiLineComment(comment)) => {
+                    comments.offer(comments::CommentWithSpan {
+                        comment: comments::Comment::MultiLine(comment),
+                        span: t.span,
+                    });
+                }
+                _ => {}
+            }
+        }
+        comments
     }
 
     /// Parse a single top-level statement (such as SELECT, INSERT, CREATE, etc.),
@@ -1713,6 +1754,8 @@ impl<'a> Parser<'a> {
             | Token::TripleSingleQuotedRawStringLiteral(_)
             | Token::TripleDoubleQuotedRawStringLiteral(_)
             | Token::NationalStringLiteral(_)
+            | Token::QuoteDelimitedStringLiteral(_)
+            | Token::NationalQuoteDelimitedStringLiteral(_)
             | Token::HexStringLiteral(_) => {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
@@ -2729,6 +2772,8 @@ impl<'a> Parser<'a> {
                     | Token::EscapedStringLiteral(_)
                     | Token::UnicodeStringLiteral(_)
                     | Token::NationalStringLiteral(_)
+                    | Token::QuoteDelimitedStringLiteral(_)
+                    | Token::NationalQuoteDelimitedStringLiteral(_)
                     | Token::HexStringLiteral(_) => Some(Box::new(self.parse_expr()?)),
                     _ => self.expected(
                         "either filler, WITH, or WITHOUT in LISTAGG",
@@ -10826,6 +10871,12 @@ impl<'a> Parser<'a> {
             Token::NationalStringLiteral(ref s) => {
                 ok_value(Value::NationalStringLiteral(s.to_string()))
             }
+            Token::QuoteDelimitedStringLiteral(v) => {
+                ok_value(Value::QuoteDelimitedStringLiteral(v))
+            }
+            Token::NationalQuoteDelimitedStringLiteral(v) => {
+                ok_value(Value::NationalQuoteDelimitedStringLiteral(v))
+            }
             Token::EscapedStringLiteral(ref s) => {
                 ok_value(Value::EscapedStringLiteral(s.to_string()))
             }
@@ -17062,10 +17113,10 @@ impl<'a> Parser<'a> {
     fn parse_order_by_expr_inner(
         &mut self,
         with_operator_class: bool,
-    ) -> Result<(OrderByExpr, Option<Ident>), ParserError> {
+    ) -> Result<(OrderByExpr, Option<ObjectName>), ParserError> {
         let expr = self.parse_expr()?;
 
-        let operator_class: Option<Ident> = if with_operator_class {
+        let operator_class: Option<ObjectName> = if with_operator_class {
             // We check that if non of the following keywords are present, then we parse an
             // identifier as operator class.
             if self
@@ -17074,7 +17125,7 @@ impl<'a> Parser<'a> {
             {
                 None
             } else {
-                self.maybe_parse(|parser| parser.parse_identifier())?
+                self.maybe_parse(|parser| parser.parse_object_name(false))?
             }
         } else {
             None

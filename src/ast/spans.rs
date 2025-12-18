@@ -28,7 +28,7 @@ use core::iter;
 use crate::tokenizer::Span;
 
 use super::{
-    dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation,
+    comments, dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation,
     AlterIndexOperation, AlterTableOperation, Analyze, Array, Assignment, AssignmentTarget,
     AttachedToken, BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef,
     ColumnOption, ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements,
@@ -2475,6 +2475,12 @@ impl Spanned for OutputClause {
                     .chain(select_items.iter().map(Spanned::span)),
             ),
         }
+    }
+}
+
+impl Spanned for comments::CommentWithSpan {
+    fn span(&self) -> Span {
+        self.span
     }
 }
 

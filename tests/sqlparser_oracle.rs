@@ -21,16 +21,30 @@
 use pretty_assertions::assert_eq;
 
 use sqlparser::{
-    ast::{BinaryOperator, Expr, Value, ValueWithSpan},
+    ast::{BinaryOperator, Expr, Ident, QuoteDelimitedString, Value, ValueWithSpan},
     dialect::OracleDialect,
+    parser::ParserError,
     tokenizer::Span,
 };
-use test_utils::{expr_from_projection, number, TestedDialects};
+use test_utils::{all_dialects_where, expr_from_projection, number, TestedDialects};
 
 mod test_utils;
 
 fn oracle() -> TestedDialects {
     TestedDialects::new(vec![Box::new(OracleDialect)])
+}
+
+/// Convenience constructor for [QuoteDelimitedstring].
+fn quote_delimited_string(
+    start_quote: char,
+    value: &'static str,
+    end_quote: char,
+) -> QuoteDelimitedString {
+    QuoteDelimitedString {
+        start_quote,
+        value: value.into(),
+        end_quote,
+    }
 }
 
 /// Oracle: `||` has a lower precedence than `*` and `/`
@@ -101,5 +115,221 @@ fn plusminus_have_same_precedence_as_strconcat() {
             op: BinaryOperator::Minus,
             right: Box::new(Expr::Value(number("9").into()))
         }
+    );
+}
+
+#[test]
+fn parse_quote_delimited_string() {
+    let dialect = all_dialects_where(|d| d.supports_quote_delimited_string());
+    let sql = "SELECT Q'.abc.', \
+                      Q'Xab'cX', \
+                      Q'|abc'''|', \
+                      Q'{abc}d}', \
+                      Q'[]abc[]', \
+                      Q'<a'bc>', \
+                      Q'<<<a'bc>', \
+                      Q'('abc'('abc)', \
+                      Q'(abc'def))', \
+                      Q'(abc'def)))' \
+                 FROM dual";
+    let select = dialect.verified_only_select(sql);
+    assert_eq!(10, select.projection.len());
+    assert_eq!(
+        &Expr::Value(
+            Value::QuoteDelimitedStringLiteral(quote_delimited_string('.', "abc", '.'))
+                .with_empty_span()
+        ),
+        expr_from_projection(&select.projection[0])
+    );
+    assert_eq!(
+        &Expr::Value(
+            (Value::QuoteDelimitedStringLiteral(quote_delimited_string('X', "ab'c", 'X')))
+                .with_empty_span()
+        ),
+        expr_from_projection(&select.projection[1])
+    );
+    assert_eq!(
+        &Expr::Value(
+            (Value::QuoteDelimitedStringLiteral(quote_delimited_string('|', "abc'''", '|')))
+                .with_empty_span()
+        ),
+        expr_from_projection(&select.projection[2])
+    );
+    assert_eq!(
+        &Expr::Value(
+            (Value::QuoteDelimitedStringLiteral(quote_delimited_string('{', "abc}d", '}')))
+                .with_empty_span()
+        ),
+        expr_from_projection(&select.projection[3])
+    );
+    assert_eq!(
+        &Expr::Value(
+            (Value::QuoteDelimitedStringLiteral(quote_delimited_string('[', "]abc[", ']')))
+                .with_empty_span()
+        ),
+        expr_from_projection(&select.projection[4])
+    );
+    assert_eq!(
+        &Expr::Value(
+            (Value::QuoteDelimitedStringLiteral(quote_delimited_string('<', "a'bc", '>')))
+                .with_empty_span()
+        ),
+        expr_from_projection(&select.projection[5])
+    );
+    assert_eq!(
+        &Expr::Value(
+            (Value::QuoteDelimitedStringLiteral(quote_delimited_string('<', "<<a'bc", '>')))
+                .with_empty_span()
+        ),
+        expr_from_projection(&select.projection[6])
+    );
+    assert_eq!(
+        &Expr::Value(
+            (Value::QuoteDelimitedStringLiteral(quote_delimited_string('(', "'abc'('abc", ')')))
+                .with_empty_span()
+        ),
+        expr_from_projection(&select.projection[7])
+    );
+    assert_eq!(
+        &Expr::Value(
+            (Value::QuoteDelimitedStringLiteral(quote_delimited_string('(', "abc'def)", ')')))
+                .with_empty_span()
+        ),
+        expr_from_projection(&select.projection[8])
+    );
+    assert_eq!(
+        &Expr::Value(
+            (Value::QuoteDelimitedStringLiteral(quote_delimited_string('(', "abc'def))", ')')))
+                .with_empty_span()
+        ),
+        expr_from_projection(&select.projection[9])
+    );
+}
+
+#[test]
+fn parse_invalid_quote_delimited_strings() {
+    let dialect = all_dialects_where(|d| d.supports_quote_delimited_string());
+    // ~ invalid quote delimiter
+    for q in [' ', '\t', '\r', '\n'] {
+        assert_eq!(
+            dialect.parse_sql_statements(&format!("SELECT Q'{q}abc{q}' FROM dual")),
+            Err(ParserError::TokenizerError(
+                "Invalid space, tab, newline, or EOF after 'Q'' at Line: 1, Column: 10".into()
+            )),
+            "with quote char {q:?}"
+        );
+    }
+    // ~ invalid eof after quote
+    assert_eq!(
+        dialect.parse_sql_statements("SELECT Q'"),
+        Err(ParserError::TokenizerError(
+            "Invalid space, tab, newline, or EOF after 'Q'' at Line: 1, Column: 10".into()
+        )),
+        "with EOF quote char"
+    );
+    // ~ unterminated string
+    assert_eq!(
+        dialect.parse_sql_statements("SELECT Q'|asdfa...."),
+        Err(ParserError::TokenizerError(
+            "Unterminated string literal at Line: 1, Column: 9".into()
+        )),
+        "with EOF quote char"
+    );
+}
+
+#[test]
+fn parse_quote_delimited_string_lowercase() {
+    let dialect = all_dialects_where(|d| d.supports_quote_delimited_string());
+    let sql = "select q'!a'b'c!d!' from dual";
+    let select = dialect.verified_only_select_with_canonical(sql, "SELECT Q'!a'b'c!d!' FROM dual");
+    assert_eq!(1, select.projection.len());
+    assert_eq!(
+        &Expr::Value(
+            Value::QuoteDelimitedStringLiteral(quote_delimited_string('!', "a'b'c!d", '!'))
+                .with_empty_span()
+        ),
+        expr_from_projection(&select.projection[0])
+    );
+}
+
+#[test]
+fn parse_quote_delimited_string_but_is_a_word() {
+    let dialect = all_dialects_where(|d| d.supports_quote_delimited_string());
+    let sql = "SELECT q, quux, q.abc FROM dual q";
+    let select = dialect.verified_only_select(sql);
+    assert_eq!(3, select.projection.len());
+    assert_eq!(
+        &Expr::Identifier(Ident::with_span(Span::empty(), "q")),
+        expr_from_projection(&select.projection[0])
+    );
+    assert_eq!(
+        &Expr::Identifier(Ident::with_span(Span::empty(), "quux")),
+        expr_from_projection(&select.projection[1])
+    );
+    assert_eq!(
+        &Expr::CompoundIdentifier(vec![
+            Ident::with_span(Span::empty(), "q"),
+            Ident::with_span(Span::empty(), "abc")
+        ]),
+        expr_from_projection(&select.projection[2])
+    );
+}
+
+#[test]
+fn parse_national_quote_delimited_string() {
+    let dialect = all_dialects_where(|d| d.supports_quote_delimited_string());
+    let sql = "SELECT NQ'.abc.' FROM dual";
+    let select = dialect.verified_only_select(sql);
+    assert_eq!(1, select.projection.len());
+    assert_eq!(
+        &Expr::Value(
+            Value::NationalQuoteDelimitedStringLiteral(quote_delimited_string('.', "abc", '.'))
+                .with_empty_span()
+        ),
+        expr_from_projection(&select.projection[0])
+    );
+}
+
+#[test]
+fn parse_national_quote_delimited_string_lowercase() {
+    let dialect = all_dialects_where(|d| d.supports_quote_delimited_string());
+    for prefix in ["nq", "Nq", "nQ", "NQ"] {
+        let select = dialect.verified_only_select_with_canonical(
+            &format!("select {prefix}'!a'b'c!d!' from dual"),
+            "SELECT NQ'!a'b'c!d!' FROM dual",
+        );
+        assert_eq!(1, select.projection.len());
+        assert_eq!(
+            &Expr::Value(
+                Value::NationalQuoteDelimitedStringLiteral(quote_delimited_string(
+                    '!', "a'b'c!d", '!'
+                ))
+                .with_empty_span()
+            ),
+            expr_from_projection(&select.projection[0])
+        );
+    }
+}
+
+#[test]
+fn parse_national_quote_delimited_string_but_is_a_word() {
+    let dialect = all_dialects_where(|d| d.supports_quote_delimited_string());
+    let sql = "SELECT nq, nqoo, nq.abc FROM dual q";
+    let select = dialect.verified_only_select(sql);
+    assert_eq!(3, select.projection.len());
+    assert_eq!(
+        &Expr::Identifier(Ident::with_span(Span::empty(), "nq")),
+        expr_from_projection(&select.projection[0])
+    );
+    assert_eq!(
+        &Expr::Identifier(Ident::with_span(Span::empty(), "nqoo")),
+        expr_from_projection(&select.projection[1])
+    );
+    assert_eq!(
+        &Expr::CompoundIdentifier(vec![
+            Ident::with_span(Span::empty(), "nq"),
+            Ident::with_span(Span::empty(), "abc")
+        ]),
+        expr_from_projection(&select.projection[2])
     );
 }

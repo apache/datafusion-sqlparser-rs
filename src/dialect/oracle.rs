@@ -95,4 +95,8 @@ impl Dialect for OracleDialect {
     fn supports_group_by_expr(&self) -> bool {
         true
     }
+
+    fn supports_quote_delimited_string(&self) -> bool {
+        true
+    }
 }

@@ -440,7 +440,6 @@ fn parse_table_time_travel() {
     let sql = "SELECT 1 FROM t1 FOR TIMESTAMP AS OF 'some_timestamp'".to_string();
     assert!(databricks().parse_sql_statements(&sql).is_err());
 
-    // The following time travel syntax(es) are invalid in Databricks dialect
     let sql = "SELECT 1 FROM t1 FOR TIMESTAMP AS OF '{version}'".to_string();
     assert!(databricks().parse_sql_statements(&sql).is_err());
 

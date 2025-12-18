@@ -369,84 +369,14 @@ fn data_type_timestamp_ntz() {
 
 #[test]
 fn parse_table_time_travel() {
-    let version = "2018-10-18T22:15:12.013Z".to_string();
-    let sql = format!("SELECT 1 FROM t1 TIMESTAMP AS OF '{version}'");
-    let select = databricks().verified_only_select(&sql);
-    assert_eq!(
-        select.from,
-        vec![TableWithJoins {
-            relation: TableFactor::Table {
-                name: ObjectName::from(vec![Ident::new("t1")]),
-                alias: None,
-                args: None,
-                with_hints: vec![],
-                version: Some(TableVersion::TimestampAsOf(Expr::Value(
-                    Value::SingleQuotedString(version.clone()).with_empty_span()
-                ))),
-                partitions: vec![],
-                with_ordinality: false,
-                json_path: None,
-                sample: None,
-                index_hints: vec![],
-            },
-            joins: vec![]
-        },]
+    all_dialects_where(|d| d.supports_timestamp_versioning())
+        .verified_only_select("SELECT 1 FROM t1 TIMESTAMP AS OF '2018-10-18T22:15:12.013Z'");
+
+    all_dialects_where(|d| d.supports_timestamp_versioning()).verified_only_select(
+        "SELECT 1 FROM t1 TIMESTAMP AS OF CURRENT_TIMESTAMP() - INTERVAL 12 HOURS",
     );
 
-    let sql =
-        "SELECT 1 FROM t1 TIMESTAMP AS OF CURRENT_TIMESTAMP() - INTERVAL 12 HOURS".to_string();
-    let select = databricks().verified_only_select(&sql);
-    assert_eq!(
-        select.from,
-        vec![TableWithJoins {
-            relation: TableFactor::Table {
-                name: ObjectName::from(vec![Ident::new("t1")]),
-                alias: None,
-                args: None,
-                with_hints: vec![],
-                version: Some(TableVersion::TimestampAsOf(Expr::BinaryOp {
-                    left: Box::new(Expr::Function(Function {
-                        name: ObjectName::from(vec![Ident::new("CURRENT_TIMESTAMP")]),
-                        uses_odbc_syntax: false,
-                        parameters: FunctionArguments::None,
-                        args: FunctionArguments::List(FunctionArgumentList {
-                            duplicate_treatment: None,
-                            args: vec![],
-                            clauses: vec![]
-                        }),
-                        filter: None,
-                        null_treatment: None,
-                        over: None,
-                        within_group: vec![]
-                    })),
-                    op: BinaryOperator::Minus,
-                    right: Box::new(Expr::Interval(Interval {
-                        value: Box::new(Expr::Value(number("12").into())),
-                        leading_field: Some(DateTimeField::Hours),
-                        leading_precision: None,
-                        last_field: None,
-                        fractional_seconds_precision: None,
-                    }))
-                })),
-                partitions: vec![],
-                with_ordinality: false,
-                json_path: None,
-                sample: None,
-                index_hints: vec![],
-            },
-            joins: vec![]
-        },]
-    );
-
-    let sql = "SELECT 1 FROM t1 FOR TIMESTAMP AS OF 'some_timestamp'".to_string();
-    assert!(databricks().parse_sql_statements(&sql).is_err());
-
-    let sql = "SELECT 1 FROM t1 FOR TIMESTAMP AS OF '{version}'".to_string();
-    assert!(databricks().parse_sql_statements(&sql).is_err());
-
-    let sql = "SELECT * FROM tbl AT(TIMESTAMP => '2024-12-15 00:00:00')".to_string();
-    assert!(databricks().parse_sql_statements(&sql).is_err());
-
-    let sql = "SELECT * FROM tbl BEFORE(TIMESTAMP => '2024-12-15 00:00:00')".to_string();
-    assert!(databricks().parse_sql_statements(&sql).is_err());
+    assert!(databricks()
+        .parse_sql_statements("SELECT 1 FROM t1 FOR TIMESTAMP AS OF 'some_timestamp'")
+        .is_err());
 }

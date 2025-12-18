@@ -6701,7 +6701,7 @@ impl<'a> Parser<'a> {
         let mut items = vec![];
         loop {
             if self.parse_keyword(Keyword::OPERATOR) {
-                let strategy_number = self.parse_literal_uint()? as u32;
+                let strategy_number = self.parse_literal_uint()?;
                 let operator_name = self.parse_operator_name()?;
 
                 // Optional operator argument types
@@ -6736,7 +6736,7 @@ impl<'a> Parser<'a> {
                     purpose,
                 });
             } else if self.parse_keyword(Keyword::FUNCTION) {
-                let support_number = self.parse_literal_uint()? as u32;
+                let support_number = self.parse_literal_uint()?;
 
                 // Optional operator types
                 let op_types =
@@ -9898,7 +9898,13 @@ impl<'a> Parser<'a> {
                     operation,
                 })
             }
-            Keyword::OPERATOR => self.parse_alter_operator(),
+            Keyword::OPERATOR => {
+                if self.parse_keyword(Keyword::FAMILY) {
+                    self.parse_alter_operator_family()
+                } else {
+                    self.parse_alter_operator()
+                }
+            }
             Keyword::ROLE => self.parse_alter_role(),
             Keyword::POLICY => self.parse_alter_policy(),
             Keyword::CONNECTOR => self.parse_alter_connector(),
@@ -10126,6 +10132,170 @@ impl<'a> Parser<'a> {
             name,
             left_type,
             right_type,
+            operation,
+        }))
+    }
+
+    /// Parse an operator item for ALTER OPERATOR FAMILY ADD operations
+    fn parse_operator_family_add_operator(&mut self) -> Result<OperatorFamilyItem, ParserError> {
+        let strategy_number = self.parse_literal_uint()?;
+        let operator_name = self.parse_operator_name()?;
+
+        // Operator argument types (required for ALTER OPERATOR FAMILY)
+        self.expect_token(&Token::LParen)?;
+        let op_types = self.parse_comma_separated(Parser::parse_data_type)?;
+        self.expect_token(&Token::RParen)?;
+
+        // Optional purpose
+        let purpose = if self.parse_keyword(Keyword::FOR) {
+            if self.parse_keyword(Keyword::SEARCH) {
+                Some(OperatorPurpose::ForSearch)
+            } else if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+                let sort_family = self.parse_object_name(false)?;
+                Some(OperatorPurpose::ForOrderBy { sort_family })
+            } else {
+                return self.expected("SEARCH or ORDER BY after FOR", self.peek_token());
+            }
+        } else {
+            None
+        };
+
+        Ok(OperatorFamilyItem::Operator {
+            strategy_number,
+            operator_name,
+            op_types,
+            purpose,
+        })
+    }
+
+    /// Parse a function item for ALTER OPERATOR FAMILY ADD operations
+    fn parse_operator_family_add_function(&mut self) -> Result<OperatorFamilyItem, ParserError> {
+        let support_number = self.parse_literal_uint()?;
+
+        // Optional operator types
+        let op_types = if self.consume_token(&Token::LParen) && self.peek_token() != Token::RParen {
+            let types = self.parse_comma_separated(Parser::parse_data_type)?;
+            self.expect_token(&Token::RParen)?;
+            Some(types)
+        } else if self.consume_token(&Token::LParen) {
+            self.expect_token(&Token::RParen)?;
+            Some(vec![])
+        } else {
+            None
+        };
+
+        let function_name = self.parse_object_name(false)?;
+
+        // Function argument types
+        let argument_types = if self.consume_token(&Token::LParen) {
+            if self.peek_token() == Token::RParen {
+                self.expect_token(&Token::RParen)?;
+                vec![]
+            } else {
+                let types = self.parse_comma_separated(Parser::parse_data_type)?;
+                self.expect_token(&Token::RParen)?;
+                types
+            }
+        } else {
+            vec![]
+        };
+
+        Ok(OperatorFamilyItem::Function {
+            support_number,
+            op_types,
+            function_name,
+            argument_types,
+        })
+    }
+
+    /// Parse an operator item for ALTER OPERATOR FAMILY DROP operations
+    fn parse_operator_family_drop_operator(
+        &mut self,
+    ) -> Result<OperatorFamilyDropItem, ParserError> {
+        let strategy_number = self.parse_literal_uint()?;
+
+        // Operator argument types (required for DROP)
+        self.expect_token(&Token::LParen)?;
+        let op_types = self.parse_comma_separated(Parser::parse_data_type)?;
+        self.expect_token(&Token::RParen)?;
+
+        Ok(OperatorFamilyDropItem::Operator {
+            strategy_number,
+            op_types,
+        })
+    }
+
+    /// Parse a function item for ALTER OPERATOR FAMILY DROP operations
+    fn parse_operator_family_drop_function(
+        &mut self,
+    ) -> Result<OperatorFamilyDropItem, ParserError> {
+        let support_number = self.parse_literal_uint()?;
+
+        // Operator types (required for DROP)
+        self.expect_token(&Token::LParen)?;
+        let op_types = self.parse_comma_separated(Parser::parse_data_type)?;
+        self.expect_token(&Token::RParen)?;
+
+        Ok(OperatorFamilyDropItem::Function {
+            support_number,
+            op_types,
+        })
+    }
+
+    /// Parse an operator family item for ADD operations (dispatches to operator or function parsing)
+    fn parse_operator_family_add_item(&mut self) -> Result<OperatorFamilyItem, ParserError> {
+        if self.parse_keyword(Keyword::OPERATOR) {
+            self.parse_operator_family_add_operator()
+        } else if self.parse_keyword(Keyword::FUNCTION) {
+            self.parse_operator_family_add_function()
+        } else {
+            self.expected("OPERATOR or FUNCTION", self.peek_token())
+        }
+    }
+
+    /// Parse an operator family item for DROP operations (dispatches to operator or function parsing)
+    fn parse_operator_family_drop_item(&mut self) -> Result<OperatorFamilyDropItem, ParserError> {
+        if self.parse_keyword(Keyword::OPERATOR) {
+            self.parse_operator_family_drop_operator()
+        } else if self.parse_keyword(Keyword::FUNCTION) {
+            self.parse_operator_family_drop_function()
+        } else {
+            self.expected("OPERATOR or FUNCTION", self.peek_token())
+        }
+    }
+
+    /// Parse a [Statement::AlterOperatorFamily]
+    /// See <https://www.postgresql.org/docs/current/sql-alteropfamily.html>
+    pub fn parse_alter_operator_family(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name(false)?;
+        self.expect_keyword(Keyword::USING)?;
+        let using = self.parse_identifier()?;
+
+        let operation = if self.parse_keyword(Keyword::ADD) {
+            let items = self.parse_comma_separated(Parser::parse_operator_family_add_item)?;
+            AlterOperatorFamilyOperation::Add { items }
+        } else if self.parse_keyword(Keyword::DROP) {
+            let items = self.parse_comma_separated(Parser::parse_operator_family_drop_item)?;
+            AlterOperatorFamilyOperation::Drop { items }
+        } else if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            let new_name = self.parse_object_name(false)?;
+            AlterOperatorFamilyOperation::RenameTo { new_name }
+        } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            let owner = self.parse_owner()?;
+            AlterOperatorFamilyOperation::OwnerTo(owner)
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+            let schema_name = self.parse_object_name(false)?;
+            AlterOperatorFamilyOperation::SetSchema { schema_name }
+        } else {
+            return self.expected_ref(
+                "ADD, DROP, RENAME TO, OWNER TO, or SET SCHEMA after ALTER OPERATOR FAMILY",
+                self.peek_token_ref(),
+            );
+        };
+
+        Ok(Statement::AlterOperatorFamily(AlterOperatorFamily {
+            name,
+            using,
             operation,
         }))
     }

@@ -2213,7 +2213,7 @@ fn parse_mssql_if_else() {
 #[test]
 fn test_mssql_if_else_span() {
     let sql = "IF 1 = 1 SELECT '1' ELSE SELECT '2'";
-    let mut parser = Parser::new(&MsSqlDialect {}).try_with_sql(sql).unwrap();
+    let parser = Parser::new(&MsSqlDialect {}).try_with_sql(sql).unwrap();
     assert_eq!(
         parser.parse_statement().unwrap().span(),
         Span::new(Location::new(1, 1), Location::new(1, sql.len() as u64 + 1))
@@ -2226,7 +2226,7 @@ fn test_mssql_if_else_multiline_span() {
     let sql_line2 = "SELECT '1'";
     let sql_line3 = "ELSE SELECT '2'";
     let sql = [sql_line1, sql_line2, sql_line3].join("\n");
-    let mut parser = Parser::new(&MsSqlDialect {}).try_with_sql(&sql).unwrap();
+    let parser = Parser::new(&MsSqlDialect {}).try_with_sql(&sql).unwrap();
     assert_eq!(
         parser.parse_statement().unwrap().span(),
         Span::new(

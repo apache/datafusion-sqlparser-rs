@@ -393,7 +393,8 @@ fn parse_table_time_travel() {
         },]
     );
 
-    let sql = "SELECT 1 FROM t1 TIMESTAMP AS OF CURRENT_TIMESTAMP() - INTERVAL 12 HOURS".to_string();
+    let sql =
+        "SELECT 1 FROM t1 TIMESTAMP AS OF CURRENT_TIMESTAMP() - INTERVAL 12 HOURS".to_string();
     let select = databricks().verified_only_select(&sql);
     assert_eq!(
         select.from,
@@ -443,9 +444,9 @@ fn parse_table_time_travel() {
     let sql = "SELECT 1 FROM t1 FOR TIMESTAMP AS OF '{version}'".to_string();
     assert!(databricks().parse_sql_statements(&sql).is_err());
 
-    let sql = "SELECT 1 FROM t1 AT '{version}'".to_string();
+    let sql = "SELECT * FROM tbl AT(TIMESTAMP => '2024-12-15 00:00:00')".to_string();
     assert!(databricks().parse_sql_statements(&sql).is_err());
 
-    let sql = "SELECT 1 FROM t1 BEFORE '{version}'".to_string();
+    let sql = "SELECT * FROM tbl BEFORE(TIMESTAMP => '2024-12-15 00:00:00')".to_string();
     assert!(databricks().parse_sql_statements(&sql).is_err());
 }

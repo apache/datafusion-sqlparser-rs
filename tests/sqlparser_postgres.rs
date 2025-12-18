@@ -7532,6 +7532,156 @@ fn parse_alter_operator_family() {
 }
 
 #[test]
+fn parse_alter_operator_class() {
+    // Test ALTER OPERATOR CLASS ... RENAME TO
+    let sql = "ALTER OPERATOR CLASS int_ops USING btree RENAME TO integer_ops";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorClass(AlterOperatorClass {
+            name: ObjectName::from(vec![Ident::new("int_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorClassOperation::RenameTo {
+                new_name: ObjectName::from(vec![Ident::new("integer_ops")]),
+            },
+        })
+    );
+
+    // Test ALTER OPERATOR CLASS ... OWNER TO
+    let sql = "ALTER OPERATOR CLASS int_ops USING btree OWNER TO joe";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorClass(AlterOperatorClass {
+            name: ObjectName::from(vec![Ident::new("int_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorClassOperation::OwnerTo(Owner::Ident(Ident::new("joe"))),
+        })
+    );
+
+    // Test ALTER OPERATOR CLASS ... OWNER TO CURRENT_USER
+    let sql = "ALTER OPERATOR CLASS int_ops USING btree OWNER TO CURRENT_USER";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorClass(AlterOperatorClass {
+            name: ObjectName::from(vec![Ident::new("int_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorClassOperation::OwnerTo(Owner::CurrentUser),
+        })
+    );
+
+    // Test ALTER OPERATOR CLASS ... SET SCHEMA
+    let sql = "ALTER OPERATOR CLASS int_ops USING btree SET SCHEMA new_schema";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorClass(AlterOperatorClass {
+            name: ObjectName::from(vec![Ident::new("int_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorClassOperation::SetSchema {
+                schema_name: ObjectName::from(vec![Ident::new("new_schema")]),
+            },
+        })
+    );
+
+    // Test with schema-qualified operator class name
+    let sql = "ALTER OPERATOR CLASS myschema.int_ops USING btree RENAME TO integer_ops";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorClass(AlterOperatorClass {
+            name: ObjectName::from(vec![Ident::new("myschema"), Ident::new("int_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorClassOperation::RenameTo {
+                new_name: ObjectName::from(vec![Ident::new("integer_ops")]),
+            },
+        })
+    );
+
+    // Test with different index methods
+    for index_method in &["hash", "gist", "gin", "spgist", "brin"] {
+        let sql = format!(
+            "ALTER OPERATOR CLASS int_ops USING {} RENAME TO integer_ops",
+            index_method
+        );
+        pg_and_generic().verified_stmt(&sql);
+    }
+
+    // Test error cases
+    // Missing USING clause
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR CLASS int_ops RENAME TO integer_ops")
+        .is_err());
+
+    // Invalid operation
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING btree INVALID_OPERATION")
+        .is_err());
+
+    // Missing new name for RENAME TO
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING btree RENAME TO")
+        .is_err());
+
+    // Missing owner for OWNER TO
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING btree OWNER TO")
+        .is_err());
+
+    // Missing schema for SET SCHEMA
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING btree SET SCHEMA")
+        .is_err());
+
+    // Invalid new name
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING btree RENAME TO 123invalid")
+        .is_err());
+
+    // Invalid owner
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING btree OWNER TO 123invalid")
+        .is_err());
+
+    // Invalid schema name
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING btree SET SCHEMA 123invalid")
+        .is_err());
+
+    // Missing operator class name
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR CLASS USING btree RENAME TO integer_ops")
+        .is_err());
+
+    // Extra tokens at end
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR CLASS int_ops USING btree RENAME TO integer_ops EXTRA"
+        )
+        .is_err());
+
+    // Missing index method
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR CLASS int_ops RENAME TO integer_ops")
+        .is_err());
+
+    // Invalid index method
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING 123invalid RENAME TO integer_ops")
+        .is_err());
+
+    // Trying to use ADD operation (only valid for OPERATOR FAMILY)
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR CLASS int_ops USING btree ADD OPERATOR 1 < (INT4, INT2)"
+        )
+        .is_err());
+
+    // Trying to use DROP operation (only valid for OPERATOR FAMILY)
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR CLASS int_ops USING btree DROP OPERATOR 1 (INT4, INT2)"
+        )
+        .is_err());
+}
+
+#[test]
 fn parse_drop_operator_family() {
     for if_exists in [true, false] {
         for drop_behavior in [

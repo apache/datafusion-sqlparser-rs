@@ -60,22 +60,22 @@ pub use self::dcl::{
 };
 pub use self::ddl::{
     Alignment, AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterOperator,
-    AlterOperatorFamily, AlterOperatorFamilyOperation, AlterOperatorOperation,
-    AlterPolicyOperation, AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm,
-    AlterTableLock, AlterTableOperation, AlterTableType, AlterType, AlterTypeAddValue,
-    AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
-    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy,
-    ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain,
-    CreateExtension, CreateFunction, CreateIndex, CreateOperator, CreateOperatorClass,
-    CreateOperatorFamily, CreateTable, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
-    DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily,
-    DropOperatorSignature, DropTrigger, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
-    IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
-    IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption,
-    OperatorArgTypes, OperatorClassItem, OperatorFamilyDropItem, OperatorFamilyItem,
-    OperatorOption, OperatorPurpose, Owner, Partition, ProcedureParam, ReferentialAction,
-    RenameTableNameKind, ReplicaIdentity, TagsColumnOption, TriggerObjectKind, Truncate,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
+    AlterOperatorClass, AlterOperatorClassOperation, AlterOperatorFamily,
+    AlterOperatorFamilyOperation, AlterOperatorOperation, AlterPolicyOperation, AlterSchema,
+    AlterSchemaOperation, AlterTable, AlterTableAlgorithm, AlterTableLock, AlterTableOperation,
+    AlterTableType, AlterType, AlterTypeAddValue, AlterTypeAddValuePosition, AlterTypeOperation,
+    AlterTypeRename, AlterTypeRenameValue, ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef,
+    ColumnOptions, ColumnPolicy, ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector,
+    CreateDomain, CreateExtension, CreateFunction, CreateIndex, CreateOperator,
+    CreateOperatorClass, CreateOperatorFamily, CreateTable, CreateTrigger, CreateView, Deduplicate,
+    DeferrableInitial, DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass,
+    DropOperatorFamily, DropOperatorSignature, DropTrigger, GeneratedAs, GeneratedExpressionMode,
+    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
+    IdentityPropertyOrder, IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck,
+    NullsDistinctOption, OperatorArgTypes, OperatorClassItem, OperatorFamilyDropItem,
+    OperatorFamilyItem, OperatorOption, OperatorPurpose, Owner, Partition, ProcedureParam,
+    ReferentialAction, RenameTableNameKind, ReplicaIdentity, TagsColumnOption, TriggerObjectKind,
+    Truncate, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
     UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
     UserDefinedTypeStorage, ViewColumnDef,
 };
@@ -3418,6 +3418,11 @@ pub enum Statement {
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alteropfamily.html)
     AlterOperatorFamily(AlterOperatorFamily),
     /// ```sql
+    /// ALTER OPERATOR CLASS
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alteropclass.html)
+    AlterOperatorClass(AlterOperatorClass),
+    /// ```sql
     /// ALTER ROLE
     /// ```
     AlterRole {
@@ -4981,6 +4986,9 @@ impl fmt::Display for Statement {
             Statement::AlterOperator(alter_operator) => write!(f, "{alter_operator}"),
             Statement::AlterOperatorFamily(alter_operator_family) => {
                 write!(f, "{alter_operator_family}")
+            }
+            Statement::AlterOperatorClass(alter_operator_class) => {
+                write!(f, "{alter_operator_class}")
             }
             Statement::AlterRole { name, operation } => {
                 write!(f, "ALTER ROLE {name} {operation}")

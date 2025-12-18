@@ -9901,6 +9901,8 @@ impl<'a> Parser<'a> {
             Keyword::OPERATOR => {
                 if self.parse_keyword(Keyword::FAMILY) {
                     self.parse_alter_operator_family()
+                } else if self.parse_keyword(Keyword::CLASS) {
+                    self.parse_alter_operator_class()
                 } else {
                     self.parse_alter_operator()
                 }
@@ -10294,6 +10296,34 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Statement::AlterOperatorFamily(AlterOperatorFamily {
+            name,
+            using,
+            operation,
+        }))
+    }
+
+    pub fn parse_alter_operator_class(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name(false)?;
+        self.expect_keyword(Keyword::USING)?;
+        let using = self.parse_identifier()?;
+
+        let operation = if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            let new_name = self.parse_object_name(false)?;
+            AlterOperatorClassOperation::RenameTo { new_name }
+        } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            let owner = self.parse_owner()?;
+            AlterOperatorClassOperation::OwnerTo(owner)
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+            let schema_name = self.parse_object_name(false)?;
+            AlterOperatorClassOperation::SetSchema { schema_name }
+        } else {
+            return self.expected_ref(
+                "RENAME TO, OWNER TO, or SET SCHEMA after ALTER OPERATOR CLASS",
+                self.peek_token_ref(),
+            );
+        };
+
+        Ok(Statement::AlterOperatorClass(AlterOperatorClass {
             name,
             using,
             operation,

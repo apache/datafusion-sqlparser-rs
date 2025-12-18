@@ -4599,3 +4599,59 @@ impl Spanned for AlterOperatorFamily {
         Span::empty()
     }
 }
+
+/// `ALTER OPERATOR CLASS` statement
+/// See <https://www.postgresql.org/docs/current/sql-alteropclass.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterOperatorClass {
+    /// Operator class name (can be schema-qualified)
+    pub name: ObjectName,
+    /// Index method (btree, hash, gist, gin, etc.)
+    pub using: Ident,
+    /// The operation to perform
+    pub operation: AlterOperatorClassOperation,
+}
+
+/// An [AlterOperatorClass] operation
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterOperatorClassOperation {
+    /// `RENAME TO new_name`
+    RenameTo { new_name: ObjectName },
+    /// `OWNER TO { new_owner | CURRENT_ROLE | CURRENT_USER | SESSION_USER }`
+    OwnerTo(Owner),
+    /// `SET SCHEMA new_schema`
+    SetSchema { schema_name: ObjectName },
+}
+
+impl fmt::Display for AlterOperatorClass {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ALTER OPERATOR CLASS {} USING {}", self.name, self.using)?;
+        write!(f, " {}", self.operation)
+    }
+}
+
+impl fmt::Display for AlterOperatorClassOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterOperatorClassOperation::RenameTo { new_name } => {
+                write!(f, "RENAME TO {new_name}")
+            }
+            AlterOperatorClassOperation::OwnerTo(owner) => {
+                write!(f, "OWNER TO {owner}")
+            }
+            AlterOperatorClassOperation::SetSchema { schema_name } => {
+                write!(f, "SET SCHEMA {schema_name}")
+            }
+        }
+    }
+}
+
+impl Spanned for AlterOperatorClass {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}

@@ -1209,6 +1209,13 @@ pub trait Dialect: Debug + Any {
     fn supports_semantic_view_table_factor(&self) -> bool {
         false
     }
+
+    /// Support quote delimited string literals, e.g. `Q'{...}'`
+    ///
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/19/sqlrf/Literals.html#GUID-1824CBAA-6E16-4921-B2A6-112FB02248DA)
+    fn supports_quote_delimited_string(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

@@ -23,15 +23,11 @@
 mod test_utils;
 
 use helpers::attached_token::AttachedToken;
-use sqlparser::ast::{
-    DataType, DropBehavior, DropOperator, DropOperatorClass, DropOperatorSignature,
-};
-use sqlparser::tokenizer::Span;
-use test_utils::*;
-
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
+use sqlparser::tokenizer::Span;
+use test_utils::*;
 
 #[test]
 fn parse_create_table_generated_always_as_identity() {
@@ -2572,11 +2568,17 @@ fn parse_create_indices_with_operator_classes() {
         IndexType::SPGiST,
         IndexType::Custom("CustomIndexType".into()),
     ];
-    let operator_classes: [Option<Ident>; 4] = [
+    let operator_classes: [Option<ObjectName>; 4] = [
         None,
-        Some("gin_trgm_ops".into()),
-        Some("gist_trgm_ops".into()),
-        Some("totally_not_valid".into()),
+        Some(ObjectName(vec![ObjectNamePart::Identifier(Ident::new(
+            "gin_trgm_ops",
+        ))])),
+        Some(ObjectName(vec![ObjectNamePart::Identifier(Ident::new(
+            "gist_trgm_ops",
+        ))])),
+        Some(ObjectName(vec![ObjectNamePart::Identifier(Ident::new(
+            "totally_not_valid",
+        ))])),
     ];
 
     for expected_index_type in indices {
@@ -2710,6 +2712,36 @@ fn parse_create_indices_with_operator_classes() {
                 _ => unreachable!(),
             }
         }
+    }
+}
+
+#[test]
+fn parse_create_index_with_schema_qualified_operator_class() {
+    let sql = "CREATE INDEX my_index ON my_table USING HNSW (embedding public.vector_cosine_ops)";
+
+    match pg().verified_stmt(sql) {
+        Statement::CreateIndex(CreateIndex { columns, .. }) => {
+            assert_eq!(1, columns.len());
+            let idx_col = &columns[0];
+
+            // Verify the column name
+            match &idx_col.column.expr {
+                Expr::Identifier(ident) => {
+                    assert_eq!("embedding", ident.value);
+                }
+                _ => panic!("Expected identifier expression"),
+            }
+
+            // Verify the schema-qualified operator class
+            assert_eq!(
+                Some(ObjectName(vec![
+                    ObjectNamePart::Identifier(Ident::new("public")),
+                    ObjectNamePart::Identifier(Ident::new("vector_cosine_ops")),
+                ])),
+                idx_col.operator_class
+            );
+        }
+        _ => unreachable!(),
     }
 }
 
@@ -7107,6 +7139,396 @@ fn parse_alter_operator() {
             },
         })
     );
+}
+
+#[test]
+fn parse_alter_operator_family() {
+    // Test ALTER OPERATOR FAMILY ... ADD OPERATOR
+    let sql = "ALTER OPERATOR FAMILY integer_ops USING btree ADD OPERATOR 1 < (INT4, INT2)";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorFamily(AlterOperatorFamily {
+            name: ObjectName::from(vec![Ident::new("integer_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorFamilyOperation::Add {
+                items: vec![OperatorFamilyItem::Operator {
+                    strategy_number: 1,
+                    operator_name: ObjectName::from(vec![Ident::new("<")]),
+                    op_types: vec![DataType::Int4(None), DataType::Int2(None)],
+                    purpose: None,
+                }],
+            },
+        })
+    );
+
+    // Test ALTER OPERATOR FAMILY ... ADD OPERATOR with FOR SEARCH
+    let sql =
+        "ALTER OPERATOR FAMILY text_ops USING btree ADD OPERATOR 1 @@ (TEXT, TEXT) FOR SEARCH";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorFamily(AlterOperatorFamily {
+            name: ObjectName::from(vec![Ident::new("text_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorFamilyOperation::Add {
+                items: vec![OperatorFamilyItem::Operator {
+                    strategy_number: 1,
+                    operator_name: ObjectName::from(vec![Ident::new("@@")]),
+                    op_types: vec![DataType::Text, DataType::Text],
+                    purpose: Some(OperatorPurpose::ForSearch),
+                }],
+            },
+        })
+    );
+
+    // Test ALTER OPERATOR FAMILY ... ADD FUNCTION
+    let sql = "ALTER OPERATOR FAMILY integer_ops USING btree ADD FUNCTION 1 btint42cmp(INT4, INT2)";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorFamily(AlterOperatorFamily {
+            name: ObjectName::from(vec![Ident::new("integer_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorFamilyOperation::Add {
+                items: vec![OperatorFamilyItem::Function {
+                    support_number: 1,
+                    op_types: None,
+                    function_name: ObjectName::from(vec![Ident::new("btint42cmp")]),
+                    argument_types: vec![DataType::Int4(None), DataType::Int2(None)],
+                }],
+            },
+        })
+    );
+
+    // Test ALTER OPERATOR FAMILY ... DROP OPERATOR
+    let sql = "ALTER OPERATOR FAMILY integer_ops USING btree DROP OPERATOR 1 (INT4, INT2)";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorFamily(AlterOperatorFamily {
+            name: ObjectName::from(vec![Ident::new("integer_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorFamilyOperation::Drop {
+                items: vec![OperatorFamilyDropItem::Operator {
+                    strategy_number: 1,
+                    op_types: vec![DataType::Int4(None), DataType::Int2(None)],
+                }],
+            },
+        })
+    );
+
+    // Test ALTER OPERATOR FAMILY ... DROP FUNCTION
+    let sql = "ALTER OPERATOR FAMILY integer_ops USING btree DROP FUNCTION 1 (INT4, INT2)";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorFamily(AlterOperatorFamily {
+            name: ObjectName::from(vec![Ident::new("integer_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorFamilyOperation::Drop {
+                items: vec![OperatorFamilyDropItem::Function {
+                    support_number: 1,
+                    op_types: vec![DataType::Int4(None), DataType::Int2(None)],
+                }],
+            },
+        })
+    );
+
+    // Test ALTER OPERATOR FAMILY ... RENAME TO
+    let sql = "ALTER OPERATOR FAMILY old_ops USING btree RENAME TO new_ops";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorFamily(AlterOperatorFamily {
+            name: ObjectName::from(vec![Ident::new("old_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorFamilyOperation::RenameTo {
+                new_name: ObjectName::from(vec![Ident::new("new_ops")]),
+            },
+        })
+    );
+
+    // Test ALTER OPERATOR FAMILY ... OWNER TO
+    let sql = "ALTER OPERATOR FAMILY my_ops USING btree OWNER TO joe";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorFamily(AlterOperatorFamily {
+            name: ObjectName::from(vec![Ident::new("my_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorFamilyOperation::OwnerTo(Owner::Ident(Ident::new("joe"))),
+        })
+    );
+
+    // Test ALTER OPERATOR FAMILY ... SET SCHEMA
+    let sql = "ALTER OPERATOR FAMILY my_ops USING btree SET SCHEMA new_schema";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorFamily(AlterOperatorFamily {
+            name: ObjectName::from(vec![Ident::new("my_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorFamilyOperation::SetSchema {
+                schema_name: ObjectName::from(vec![Ident::new("new_schema")]),
+            },
+        })
+    );
+
+    // Test error cases
+    // Missing USING clause
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops ADD OPERATOR 1 < (INT4, INT2)")
+        .is_err());
+
+    // Invalid operation
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree INVALID_OPERATION")
+        .is_err());
+
+    // Missing operator name in ADD OPERATOR
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 (INT4, INT2)"
+        )
+        .is_err());
+
+    // Missing function name in ADD FUNCTION
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 (INT4, INT2)"
+        )
+        .is_err());
+
+    // Missing parentheses in DROP OPERATOR
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree DROP OPERATOR 1 INT4, INT2")
+        .is_err());
+
+    // Invalid operator name (empty)
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1  (INT4, INT2)"
+        )
+        .is_err());
+
+    // Invalid operator name (special characters)
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 @#$ (INT4, INT2)"
+        )
+        .is_err());
+
+    // Negative strategy number
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR -1 < (INT4, INT2)"
+        )
+        .is_err());
+
+    // Non-integer strategy number
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1.5 < (INT4, INT2)"
+        )
+        .is_err());
+
+    // Missing closing parenthesis in operator types
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2"
+        )
+        .is_err());
+
+    // Missing opening parenthesis in operator types
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < INT4, INT2)"
+        )
+        .is_err());
+
+    // Empty operator types
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < ()")
+        .is_err());
+
+    // Invalid data type (using punctuation)
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (@#$%, INT2)"
+        )
+        .is_err());
+
+    // Incomplete FOR clause
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR"
+        )
+        .is_err());
+
+    // Invalid FOR clause keyword
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR INVALID"
+        )
+        .is_err());
+
+    // FOR ORDER BY without sort family
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR ORDER BY"
+        )
+        .is_err());
+
+    // Missing function name in ADD FUNCTION
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 (INT4, INT2)"
+        )
+        .is_err());
+
+    // Invalid function name
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 123invalid(INT4, INT2)"
+        )
+        .is_err());
+
+    // Negative support number
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION -1 func(INT4, INT2)"
+        )
+        .is_err());
+
+    // Non-integer support number
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1.5 func(INT4, INT2)"
+        )
+        .is_err());
+
+    // Missing closing parenthesis in function operator types
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 (INT4, INT2 func()"
+        )
+        .is_err());
+
+    // Missing closing parenthesis in function arguments
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 func(INT4, INT2"
+        )
+        .is_err());
+
+    // Invalid data type in function arguments
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 func(@#$%, INT2)"
+        )
+        .is_err());
+
+    // DROP OPERATOR with FOR clause (not allowed)
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree DROP OPERATOR 1 (INT4, INT2) FOR SEARCH"
+        )
+        .is_err());
+
+    // DROP FUNCTION with function arguments (not allowed)
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree DROP FUNCTION 1 (INT4, INT2) func(INT4)"
+        )
+        .is_err());
+
+    // Multiple ADD items with error in middle
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2), INVALID_ITEM"
+        )
+        .is_err());
+
+    // Multiple DROP items with error in middle
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree DROP OPERATOR 1 (INT4, INT2), INVALID_ITEM"
+        )
+        .is_err());
+
+    // RENAME TO with invalid new name
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree RENAME TO 123invalid")
+        .is_err());
+
+    // OWNER TO with invalid owner
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree OWNER TO 123invalid")
+        .is_err());
+
+    // SET SCHEMA with invalid schema name
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree SET SCHEMA 123invalid")
+        .is_err());
+
+    // Schema-qualified operator family name with invalid schema
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY 123invalid.my_ops USING btree ADD OPERATOR 1 < (INT4, INT2)"
+        )
+        .is_err());
+
+    // Missing operator family name
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY USING btree ADD OPERATOR 1 < (INT4, INT2)")
+        .is_err());
+
+    // Extra tokens at end
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) EXTRA"
+        )
+        .is_err());
+
+    // Incomplete statement
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree ADD")
+        .is_err());
+
+    // Very long numbers
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 999999999999999999999 < (INT4, INT2)")
+        .is_err());
+
+    // Multiple FOR clauses
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR SEARCH FOR ORDER BY sort_family")
+        .is_err());
+
+    // FOR SEARCH with extra tokens
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR SEARCH EXTRA")
+        .is_err());
+
+    // FOR ORDER BY with invalid sort family
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR ORDER BY 123invalid")
+        .is_err());
+
+    // Function with empty operator types but missing function args parens
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 () func")
+        .is_err());
+
+    // Function with mismatched parentheses
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 (INT4 func(INT2"
+        )
+        .is_err());
+
+    // DROP with empty types
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree DROP OPERATOR 1 ()")
+        .is_err());
+
+    // DROP FUNCTION with empty types
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree DROP FUNCTION 1 ()")
+        .is_err());
 }
 
 #[test]

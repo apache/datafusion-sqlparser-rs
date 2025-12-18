@@ -29,10 +29,10 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use core::iter::Peekable;
 use core::num::NonZeroU8;
 use core::str::Chars;
 use core::{cmp, fmt};
+use core::{iter::Peekable, str};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -46,7 +46,10 @@ use crate::dialect::{
     SnowflakeDialect,
 };
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
-use crate::{ast::DollarQuotedString, dialect::HiveDialect};
+use crate::{
+    ast::{DollarQuotedString, QuoteDelimitedString},
+    dialect::HiveDialect,
+};
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -98,6 +101,12 @@ pub enum Token {
     TripleDoubleQuotedRawStringLiteral(String),
     /// "National" string literal: i.e: N'string'
     NationalStringLiteral(String),
+    /// Quote delimited literal. Examples `Q'{ab'c}'`, `Q'|ab'c|'`, `Q'|ab|c|'`
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Literals.html#GUID-1824CBAA-6E16-4921-B2A6-112FB02248DA)
+    QuoteDelimitedStringLiteral(QuoteDelimitedString),
+    /// "Nationa" quote delimited literal. Examples `NQ'{ab'c}'`, `NQ'|ab'c|'`, `NQ'|ab|c|'`
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Literals.html#GUID-1824CBAA-6E16-4921-B2A6-112FB02248DA)
+    NationalQuoteDelimitedStringLiteral(QuoteDelimitedString),
     /// "escaped" string literal, which are an extension to the SQL standard: i.e: e'first \n second' or E 'first \n second'
     EscapedStringLiteral(String),
     /// Unicode string literal: i.e: U&'first \000A second'
@@ -292,6 +301,8 @@ impl fmt::Display for Token {
             Token::TripleDoubleQuotedString(ref s) => write!(f, "\"\"\"{s}\"\"\""),
             Token::DollarQuotedString(ref s) => write!(f, "{s}"),
             Token::NationalStringLiteral(ref s) => write!(f, "N'{s}'"),
+            Token::QuoteDelimitedStringLiteral(ref s) => s.fmt(f),
+            Token::NationalQuoteDelimitedStringLiteral(ref s) => write!(f, "N{s}"),
             Token::EscapedStringLiteral(ref s) => write!(f, "E'{s}'"),
             Token::UnicodeStringLiteral(ref s) => write!(f, "U&'{s}'"),
             Token::HexStringLiteral(ref s) => write!(f, "X'{s}'"),
@@ -1032,11 +1043,33 @@ impl<'a> Tokenizer<'a> {
                                 self.tokenize_single_quoted_string(chars, '\'', backslash_escape)?;
                             Ok(Some(Token::NationalStringLiteral(s)))
                         }
+                        Some(&q @ 'q') | Some(&q @ 'Q')
+                            if self.dialect.supports_quote_delimited_string() =>
+                        {
+                            chars.next(); // consume and check the next char
+                            if let Some('\'') = chars.peek() {
+                                self.tokenize_quote_delimited_string(chars, &[n, q])
+                                    .map(|s| Some(Token::NationalQuoteDelimitedStringLiteral(s)))
+                            } else {
+                                let s = self.tokenize_word(String::from_iter([n, q]), chars);
+                                Ok(Some(Token::make_word(&s, None)))
+                            }
+                        }
                         _ => {
                             // regular identifier starting with an "N"
                             let s = self.tokenize_word(n, chars);
                             Ok(Some(Token::make_word(&s, None)))
                         }
+                    }
+                }
+                q @ 'Q' | q @ 'q' if self.dialect.supports_quote_delimited_string() => {
+                    chars.next(); // consume and check the next char
+                    if let Some('\'') = chars.peek() {
+                        self.tokenize_quote_delimited_string(chars, &[q])
+                            .map(|s| Some(Token::QuoteDelimitedStringLiteral(s)))
+                    } else {
+                        let s = self.tokenize_word(q, chars);
+                        Ok(Some(Token::make_word(&s, None)))
                     }
                 }
                 // PostgreSQL accepts "escape" string constants, which are an extension to the SQL standard.
@@ -1684,7 +1717,7 @@ impl<'a> Tokenizer<'a> {
                             }
                         }
                         Some('#') => self.consume_and_return(chars, Token::QuestionMarkSharp),
-                        _ => self.consume_and_return(chars, Token::Question),
+                        _ => Ok(Some(Token::Question)),
                     }
                 }
                 '?' => {
@@ -1992,6 +2025,61 @@ impl<'a> Tokenizer<'a> {
                 backslash_escape,
             },
         )
+    }
+
+    /// Reads a quote delimited string expecting `chars.next()` to deliver a quote.
+    ///
+    /// See <https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Literals.html#GUID-1824CBAA-6E16-4921-B2A6-112FB02248DA>
+    fn tokenize_quote_delimited_string(
+        &self,
+        chars: &mut State,
+        // the prefix that introduced the possible literal or word,
+        // e.g. "Q" or "nq"
+        literal_prefix: &[char],
+    ) -> Result<QuoteDelimitedString, TokenizerError> {
+        let literal_start_loc = chars.location();
+        chars.next();
+
+        let start_quote_loc = chars.location();
+        let (start_quote, end_quote) = match chars.next() {
+            None | Some(' ') | Some('\t') | Some('\r') | Some('\n') => {
+                return self.tokenizer_error(
+                    start_quote_loc,
+                    format!(
+                        "Invalid space, tab, newline, or EOF after '{}''",
+                        String::from_iter(literal_prefix)
+                    ),
+                );
+            }
+            Some(c) => (
+                c,
+                match c {
+                    '[' => ']',
+                    '{' => '}',
+                    '<' => '>',
+                    '(' => ')',
+                    c => c,
+                },
+            ),
+        };
+
+        // read the string literal until the "quote character" following a by literal quote
+        let mut value = String::new();
+        while let Some(ch) = chars.next() {
+            if ch == end_quote {
+                if let Some('\'') = chars.peek() {
+                    chars.next(); // ~ consume the quote
+                    return Ok(QuoteDelimitedString {
+                        start_quote,
+                        value,
+                        end_quote,
+                    });
+                }
+            }
+            value.push(ch);
+        }
+
+        self.tokenizer_error(literal_start_loc, "Unterminated string literal")
     }
 
     /// Read a quoted string.
@@ -4058,5 +4146,24 @@ mod tests {
         if let Ok(tokens) = Tokenizer::new(&dialect, &sql).tokenize() {
             panic!("Tokenizer should have failed on {sql}, but it succeeded with {tokens:?}");
         }
+    }
+
+    #[test]
+    fn tokenize_question_mark() {
+        let dialect = PostgreSqlDialect {};
+        let sql = "SELECT x ? y";
+        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+        compare(
+            tokens,
+            vec![
+                Token::make_keyword("SELECT"),
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("x", None),
+                Token::Whitespace(Whitespace::Space),
+                Token::Question,
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("y", None),
+            ],
+        )
     }
 }

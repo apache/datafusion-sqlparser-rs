@@ -13,7 +13,7 @@
 //! SQL Parser for a `MERGE` statement
 
 #[cfg(not(feature = "std"))]
-use alloc::{boxed::Box, format, string::ToString, vec, vec::Vec};
+use alloc::{boxed::Box, format, vec, vec::Vec};
 
 use crate::{
     ast::{

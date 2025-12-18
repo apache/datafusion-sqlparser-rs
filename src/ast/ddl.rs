@@ -61,7 +61,7 @@ use crate::tokenizer::{Span, Token};
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct IndexColumn {
     pub column: OrderByExpr,
-    pub operator_class: Option<Ident>,
+    pub operator_class: Option<ObjectName>,
 }
 
 impl From<Ident> for IndexColumn {
@@ -4198,25 +4198,25 @@ impl fmt::Display for OperatorArgTypes {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum OperatorClassItem {
-    /// OPERATOR clause
+    /// `OPERATOR` clause
     Operator {
-        strategy_number: u32,
+        strategy_number: u64,
         operator_name: ObjectName,
         /// Optional operator argument types
         op_types: Option<OperatorArgTypes>,
-        /// FOR SEARCH or FOR ORDER BY
+        /// `FOR SEARCH` or `FOR ORDER BY`
         purpose: Option<OperatorPurpose>,
     },
-    /// FUNCTION clause
+    /// `FUNCTION` clause
     Function {
-        support_number: u32,
+        support_number: u64,
         /// Optional function argument types for the operator class
         op_types: Option<Vec<DataType>>,
         function_name: ObjectName,
         /// Function argument types
         argument_types: Vec<DataType>,
     },
-    /// STORAGE clause
+    /// `STORAGE` clause
     Storage { storage_type: DataType },
 }
 
@@ -4409,6 +4409,192 @@ impl fmt::Display for DropOperatorClass {
 }
 
 impl Spanned for DropOperatorClass {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}
+
+/// An item in an ALTER OPERATOR FAMILY ADD statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum OperatorFamilyItem {
+    /// `OPERATOR` clause
+    Operator {
+        strategy_number: u64,
+        operator_name: ObjectName,
+        /// Operator argument types
+        op_types: Vec<DataType>,
+        /// `FOR SEARCH` or `FOR ORDER BY`
+        purpose: Option<OperatorPurpose>,
+    },
+    /// `FUNCTION` clause
+    Function {
+        support_number: u64,
+        /// Optional operator argument types for the function
+        op_types: Option<Vec<DataType>>,
+        function_name: ObjectName,
+        /// Function argument types
+        argument_types: Vec<DataType>,
+    },
+}
+
+/// An item in an ALTER OPERATOR FAMILY DROP statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum OperatorFamilyDropItem {
+    /// `OPERATOR` clause
+    Operator {
+        strategy_number: u64,
+        /// Operator argument types
+        op_types: Vec<DataType>,
+    },
+    /// `FUNCTION` clause
+    Function {
+        support_number: u64,
+        /// Operator argument types for the function
+        op_types: Vec<DataType>,
+    },
+}
+
+impl fmt::Display for OperatorFamilyItem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            OperatorFamilyItem::Operator {
+                strategy_number,
+                operator_name,
+                op_types,
+                purpose,
+            } => {
+                write!(
+                    f,
+                    "OPERATOR {strategy_number} {operator_name} ({})",
+                    display_comma_separated(op_types)
+                )?;
+                if let Some(purpose) = purpose {
+                    write!(f, " {purpose}")?;
+                }
+                Ok(())
+            }
+            OperatorFamilyItem::Function {
+                support_number,
+                op_types,
+                function_name,
+                argument_types,
+            } => {
+                write!(f, "FUNCTION {support_number}")?;
+                if let Some(types) = op_types {
+                    write!(f, " ({})", display_comma_separated(types))?;
+                }
+                write!(f, " {function_name}")?;
+                if !argument_types.is_empty() {
+                    write!(f, "({})", display_comma_separated(argument_types))?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl fmt::Display for OperatorFamilyDropItem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            OperatorFamilyDropItem::Operator {
+                strategy_number,
+                op_types,
+            } => {
+                write!(
+                    f,
+                    "OPERATOR {strategy_number} ({})",
+                    display_comma_separated(op_types)
+                )
+            }
+            OperatorFamilyDropItem::Function {
+                support_number,
+                op_types,
+            } => {
+                write!(
+                    f,
+                    "FUNCTION {support_number} ({})",
+                    display_comma_separated(op_types)
+                )
+            }
+        }
+    }
+}
+
+/// `ALTER OPERATOR FAMILY` statement
+/// See <https://www.postgresql.org/docs/current/sql-alteropfamily.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterOperatorFamily {
+    /// Operator family name (can be schema-qualified)
+    pub name: ObjectName,
+    /// Index method (btree, hash, gist, gin, etc.)
+    pub using: Ident,
+    /// The operation to perform
+    pub operation: AlterOperatorFamilyOperation,
+}
+
+/// An [AlterOperatorFamily] operation
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterOperatorFamilyOperation {
+    /// `ADD { OPERATOR ... | FUNCTION ... } [, ...]`
+    Add {
+        /// List of operator family items to add
+        items: Vec<OperatorFamilyItem>,
+    },
+    /// `DROP { OPERATOR ... | FUNCTION ... } [, ...]`
+    Drop {
+        /// List of operator family items to drop
+        items: Vec<OperatorFamilyDropItem>,
+    },
+    /// `RENAME TO new_name`
+    RenameTo { new_name: ObjectName },
+    /// `OWNER TO { new_owner | CURRENT_ROLE | CURRENT_USER | SESSION_USER }`
+    OwnerTo(Owner),
+    /// `SET SCHEMA new_schema`
+    SetSchema { schema_name: ObjectName },
+}
+
+impl fmt::Display for AlterOperatorFamily {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "ALTER OPERATOR FAMILY {} USING {}",
+            self.name, self.using
+        )?;
+        write!(f, " {}", self.operation)
+    }
+}
+
+impl fmt::Display for AlterOperatorFamilyOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterOperatorFamilyOperation::Add { items } => {
+                write!(f, "ADD {}", display_comma_separated(items))
+            }
+            AlterOperatorFamilyOperation::Drop { items } => {
+                write!(f, "DROP {}", display_comma_separated(items))
+            }
+            AlterOperatorFamilyOperation::RenameTo { new_name } => {
+                write!(f, "RENAME TO {new_name}")
+            }
+            AlterOperatorFamilyOperation::OwnerTo(owner) => {
+                write!(f, "OWNER TO {owner}")
+            }
+            AlterOperatorFamilyOperation::SetSchema { schema_name } => {
+                write!(f, "SET SCHEMA {schema_name}")
+            }
+        }
+    }
+}
+
+impl Spanned for AlterOperatorFamily {
     fn span(&self) -> Span {
         Span::empty()
     }

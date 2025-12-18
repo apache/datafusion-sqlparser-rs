@@ -32,14 +32,17 @@ use recursion::RecursionCounter;
 use IsLateral::*;
 use IsOptional::*;
 
-use crate::ast::helpers::{
-    key_value_options::{
-        KeyValueOption, KeyValueOptionKind, KeyValueOptions, KeyValueOptionsDelimiter,
-    },
-    stmt_create_table::{CreateTableBuilder, CreateTableConfiguration},
-};
 use crate::ast::Statement::CreatePolicy;
 use crate::ast::*;
+use crate::ast::{
+    comments,
+    helpers::{
+        key_value_options::{
+            KeyValueOption, KeyValueOptionKind, KeyValueOptions, KeyValueOptionsDelimiter,
+        },
+        stmt_create_table::{CreateTableBuilder, CreateTableConfiguration},
+    },
+};
 use crate::dialect::*;
 use crate::keywords::{Keyword, ALL_KEYWORDS};
 use crate::tokenizer::*;
@@ -528,6 +531,44 @@ impl<'a> Parser<'a> {
     /// ```
     pub fn parse_sql(dialect: &dyn Dialect, sql: &str) -> Result<Vec<Statement>, ParserError> {
         Parser::new(dialect).try_with_sql(sql)?.parse_statements()
+    }
+
+    /// Parses the given `sql` into an Abstract Syntax Tree (AST), returning
+    /// also encountered source code comments.
+    ///
+    /// See [Parser::parse_sql].
+    pub fn parse_sql_with_comments(
+        dialect: &'a dyn Dialect,
+        sql: &str,
+    ) -> Result<(Vec<Statement>, comments::Comments), ParserError> {
+        let mut p = Parser::new(dialect).try_with_sql(sql)?;
+        p.parse_statements().map(|stmts| (stmts, p.into_comments()))
+    }
+
+    /// Consumes this parser returning comments from the parsed token stream.
+    fn into_comments(self) -> comments::Comments {
+        let mut comments = comments::Comments::default();
+        for t in self.tokens.into_iter() {
+            match t.token {
+                Token::Whitespace(Whitespace::SingleLineComment { comment, prefix }) => {
+                    comments.offer(comments::CommentWithSpan {
+                        comment: comments::Comment::SingleLine {
+                            content: comment,
+                            prefix,
+                        },
+                        span: t.span,
+                    });
+                }
+                Token::Whitespace(Whitespace::MultiLineComment(comment)) => {
+                    comments.offer(comments::CommentWithSpan {
+                        comment: comments::Comment::MultiLine(comment),
+                        span: t.span,
+                    });
+                }
+                _ => {}
+            }
+        }
+        comments
     }
 
     /// Parse a single top-level statement (such as SELECT, INSERT, CREATE, etc.),
@@ -1713,6 +1754,8 @@ impl<'a> Parser<'a> {
             | Token::TripleSingleQuotedRawStringLiteral(_)
             | Token::TripleDoubleQuotedRawStringLiteral(_)
             | Token::NationalStringLiteral(_)
+            | Token::QuoteDelimitedStringLiteral(_)
+            | Token::NationalQuoteDelimitedStringLiteral(_)
             | Token::HexStringLiteral(_) => {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
@@ -2729,6 +2772,8 @@ impl<'a> Parser<'a> {
                     | Token::EscapedStringLiteral(_)
                     | Token::UnicodeStringLiteral(_)
                     | Token::NationalStringLiteral(_)
+                    | Token::QuoteDelimitedStringLiteral(_)
+                    | Token::NationalQuoteDelimitedStringLiteral(_)
                     | Token::HexStringLiteral(_) => Some(Box::new(self.parse_expr()?)),
                     _ => self.expected(
                         "either filler, WITH, or WITHOUT in LISTAGG",
@@ -6656,7 +6701,7 @@ impl<'a> Parser<'a> {
         let mut items = vec![];
         loop {
             if self.parse_keyword(Keyword::OPERATOR) {
-                let strategy_number = self.parse_literal_uint()? as u32;
+                let strategy_number = self.parse_literal_uint()?;
                 let operator_name = self.parse_operator_name()?;
 
                 // Optional operator argument types
@@ -6691,7 +6736,7 @@ impl<'a> Parser<'a> {
                     purpose,
                 });
             } else if self.parse_keyword(Keyword::FUNCTION) {
-                let support_number = self.parse_literal_uint()? as u32;
+                let support_number = self.parse_literal_uint()?;
 
                 // Optional operator types
                 let op_types =
@@ -9853,7 +9898,13 @@ impl<'a> Parser<'a> {
                     operation,
                 })
             }
-            Keyword::OPERATOR => self.parse_alter_operator(),
+            Keyword::OPERATOR => {
+                if self.parse_keyword(Keyword::FAMILY) {
+                    self.parse_alter_operator_family()
+                } else {
+                    self.parse_alter_operator()
+                }
+            }
             Keyword::ROLE => self.parse_alter_role(),
             Keyword::POLICY => self.parse_alter_policy(),
             Keyword::CONNECTOR => self.parse_alter_connector(),
@@ -10081,6 +10132,170 @@ impl<'a> Parser<'a> {
             name,
             left_type,
             right_type,
+            operation,
+        }))
+    }
+
+    /// Parse an operator item for ALTER OPERATOR FAMILY ADD operations
+    fn parse_operator_family_add_operator(&mut self) -> Result<OperatorFamilyItem, ParserError> {
+        let strategy_number = self.parse_literal_uint()?;
+        let operator_name = self.parse_operator_name()?;
+
+        // Operator argument types (required for ALTER OPERATOR FAMILY)
+        self.expect_token(&Token::LParen)?;
+        let op_types = self.parse_comma_separated(Parser::parse_data_type)?;
+        self.expect_token(&Token::RParen)?;
+
+        // Optional purpose
+        let purpose = if self.parse_keyword(Keyword::FOR) {
+            if self.parse_keyword(Keyword::SEARCH) {
+                Some(OperatorPurpose::ForSearch)
+            } else if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+                let sort_family = self.parse_object_name(false)?;
+                Some(OperatorPurpose::ForOrderBy { sort_family })
+            } else {
+                return self.expected("SEARCH or ORDER BY after FOR", self.peek_token());
+            }
+        } else {
+            None
+        };
+
+        Ok(OperatorFamilyItem::Operator {
+            strategy_number,
+            operator_name,
+            op_types,
+            purpose,
+        })
+    }
+
+    /// Parse a function item for ALTER OPERATOR FAMILY ADD operations
+    fn parse_operator_family_add_function(&mut self) -> Result<OperatorFamilyItem, ParserError> {
+        let support_number = self.parse_literal_uint()?;
+
+        // Optional operator types
+        let op_types = if self.consume_token(&Token::LParen) && self.peek_token() != Token::RParen {
+            let types = self.parse_comma_separated(Parser::parse_data_type)?;
+            self.expect_token(&Token::RParen)?;
+            Some(types)
+        } else if self.consume_token(&Token::LParen) {
+            self.expect_token(&Token::RParen)?;
+            Some(vec![])
+        } else {
+            None
+        };
+
+        let function_name = self.parse_object_name(false)?;
+
+        // Function argument types
+        let argument_types = if self.consume_token(&Token::LParen) {
+            if self.peek_token() == Token::RParen {
+                self.expect_token(&Token::RParen)?;
+                vec![]
+            } else {
+                let types = self.parse_comma_separated(Parser::parse_data_type)?;
+                self.expect_token(&Token::RParen)?;
+                types
+            }
+        } else {
+            vec![]
+        };
+
+        Ok(OperatorFamilyItem::Function {
+            support_number,
+            op_types,
+            function_name,
+            argument_types,
+        })
+    }
+
+    /// Parse an operator item for ALTER OPERATOR FAMILY DROP operations
+    fn parse_operator_family_drop_operator(
+        &mut self,
+    ) -> Result<OperatorFamilyDropItem, ParserError> {
+        let strategy_number = self.parse_literal_uint()?;
+
+        // Operator argument types (required for DROP)
+        self.expect_token(&Token::LParen)?;
+        let op_types = self.parse_comma_separated(Parser::parse_data_type)?;
+        self.expect_token(&Token::RParen)?;
+
+        Ok(OperatorFamilyDropItem::Operator {
+            strategy_number,
+            op_types,
+        })
+    }
+
+    /// Parse a function item for ALTER OPERATOR FAMILY DROP operations
+    fn parse_operator_family_drop_function(
+        &mut self,
+    ) -> Result<OperatorFamilyDropItem, ParserError> {
+        let support_number = self.parse_literal_uint()?;
+
+        // Operator types (required for DROP)
+        self.expect_token(&Token::LParen)?;
+        let op_types = self.parse_comma_separated(Parser::parse_data_type)?;
+        self.expect_token(&Token::RParen)?;
+
+        Ok(OperatorFamilyDropItem::Function {
+            support_number,
+            op_types,
+        })
+    }
+
+    /// Parse an operator family item for ADD operations (dispatches to operator or function parsing)
+    fn parse_operator_family_add_item(&mut self) -> Result<OperatorFamilyItem, ParserError> {
+        if self.parse_keyword(Keyword::OPERATOR) {
+            self.parse_operator_family_add_operator()
+        } else if self.parse_keyword(Keyword::FUNCTION) {
+            self.parse_operator_family_add_function()
+        } else {
+            self.expected("OPERATOR or FUNCTION", self.peek_token())
+        }
+    }
+
+    /// Parse an operator family item for DROP operations (dispatches to operator or function parsing)
+    fn parse_operator_family_drop_item(&mut self) -> Result<OperatorFamilyDropItem, ParserError> {
+        if self.parse_keyword(Keyword::OPERATOR) {
+            self.parse_operator_family_drop_operator()
+        } else if self.parse_keyword(Keyword::FUNCTION) {
+            self.parse_operator_family_drop_function()
+        } else {
+            self.expected("OPERATOR or FUNCTION", self.peek_token())
+        }
+    }
+
+    /// Parse a [Statement::AlterOperatorFamily]
+    /// See <https://www.postgresql.org/docs/current/sql-alteropfamily.html>
+    pub fn parse_alter_operator_family(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name(false)?;
+        self.expect_keyword(Keyword::USING)?;
+        let using = self.parse_identifier()?;
+
+        let operation = if self.parse_keyword(Keyword::ADD) {
+            let items = self.parse_comma_separated(Parser::parse_operator_family_add_item)?;
+            AlterOperatorFamilyOperation::Add { items }
+        } else if self.parse_keyword(Keyword::DROP) {
+            let items = self.parse_comma_separated(Parser::parse_operator_family_drop_item)?;
+            AlterOperatorFamilyOperation::Drop { items }
+        } else if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            let new_name = self.parse_object_name(false)?;
+            AlterOperatorFamilyOperation::RenameTo { new_name }
+        } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            let owner = self.parse_owner()?;
+            AlterOperatorFamilyOperation::OwnerTo(owner)
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+            let schema_name = self.parse_object_name(false)?;
+            AlterOperatorFamilyOperation::SetSchema { schema_name }
+        } else {
+            return self.expected_ref(
+                "ADD, DROP, RENAME TO, OWNER TO, or SET SCHEMA after ALTER OPERATOR FAMILY",
+                self.peek_token_ref(),
+            );
+        };
+
+        Ok(Statement::AlterOperatorFamily(AlterOperatorFamily {
+            name,
+            using,
             operation,
         }))
     }
@@ -10655,6 +10870,12 @@ impl<'a> Parser<'a> {
             }
             Token::NationalStringLiteral(ref s) => {
                 ok_value(Value::NationalStringLiteral(s.to_string()))
+            }
+            Token::QuoteDelimitedStringLiteral(v) => {
+                ok_value(Value::QuoteDelimitedStringLiteral(v))
+            }
+            Token::NationalQuoteDelimitedStringLiteral(v) => {
+                ok_value(Value::NationalQuoteDelimitedStringLiteral(v))
             }
             Token::EscapedStringLiteral(ref s) => {
                 ok_value(Value::EscapedStringLiteral(s.to_string()))
@@ -16897,10 +17118,10 @@ impl<'a> Parser<'a> {
     fn parse_order_by_expr_inner(
         &mut self,
         with_operator_class: bool,
-    ) -> Result<(OrderByExpr, Option<Ident>), ParserError> {
+    ) -> Result<(OrderByExpr, Option<ObjectName>), ParserError> {
         let expr = self.parse_expr()?;
 
-        let operator_class: Option<Ident> = if with_operator_class {
+        let operator_class: Option<ObjectName> = if with_operator_class {
             // We check that if non of the following keywords are present, then we parse an
             // identifier as operator class.
             if self
@@ -16909,7 +17130,7 @@ impl<'a> Parser<'a> {
             {
                 None
             } else {
-                self.maybe_parse(|parser| parser.parse_identifier())?
+                self.maybe_parse(|parser| parser.parse_object_name(false))?
             }
         } else {
             None

@@ -15358,9 +15358,7 @@ impl<'a> Parser<'a> {
                 let func_name = self.parse_object_name(true)?;
                 let func = self.parse_function(func_name)?;
                 return Ok(Some(TableVersion::Function(func)));
-            } else if dialect_of!(self is DatabricksDialect)
-                && self.parse_keywords(&[Keyword::TIMESTAMP, Keyword::AS, Keyword::OF])
-            {
+            } else if self.parse_keywords(&[Keyword::TIMESTAMP, Keyword::AS, Keyword::OF]) {
                 let expr = self.parse_expr()?;
                 return Ok(Some(TableVersion::TimestampAsOf(expr)));
             }

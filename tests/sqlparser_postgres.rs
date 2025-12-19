@@ -7914,3 +7914,11 @@ fn parse_create_operator_class() {
         )
         .is_err());
 }
+
+#[test]
+fn parse_identifiers_semicolon_handling() {
+    let statement = "SHOW search_path; SELECT 1";
+    pg_and_generic().statements_parse_to(statement, statement);
+    let statement = "SHOW search_path; SHOW ALL; SHOW ALL";
+    pg_and_generic().statements_parse_to(statement, statement);
+}

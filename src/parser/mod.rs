@@ -1276,8 +1276,6 @@ impl<'a> Parser<'a> {
                     self.next_token(); // consume RParen
                     return Ok(Expr::Wildcard(AttachedToken(mul_token)));
                 }
-                // Not a (*), fall through to reset index and call parse_expr
-                self.prev_token();
             }
             _ => (),
         };

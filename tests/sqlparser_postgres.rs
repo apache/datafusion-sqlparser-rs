@@ -8112,3 +8112,42 @@ CONSTRAINT check_date CHECK (order_date >= '2023-01-01')\
         _ => panic!("Expected CreateTable"),
     }
 }
+
+#[test]
+fn parse_create_table_partition_of_errors() {
+    let sql = "CREATE TABLE p PARTITION OF parent";
+    let result = pg_and_generic().parse_sql_statements(sql);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("FOR VALUES or DEFAULT"),
+        "Expected error about FOR VALUES, got: {err}"
+    );
+
+    let sql = "CREATE TABLE p PARTITION OF parent WITH (fillfactor = 70)";
+    let result = pg_and_generic().parse_sql_statements(sql);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("FOR VALUES or DEFAULT"),
+        "Expected error about FOR VALUES, got: {err}"
+    );
+
+    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES RANGE (1, 10)";
+    let result = pg_and_generic().parse_sql_statements(sql);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("IN, FROM, or WITH"),
+        "Expected error about invalid keyword after FOR VALUES, got: {err}"
+    );
+
+    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES FROM (1)";
+    let result = pg_and_generic().parse_sql_statements(sql);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("TO"),
+        "Expected error about missing TO clause, got: {err}"
+    );
+}

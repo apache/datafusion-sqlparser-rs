@@ -7888,6 +7888,9 @@ impl<'a> Parser<'a> {
         let table_name = self.parse_object_name(allow_unquoted_hyphen)?;
 
         // PostgreSQL PARTITION OF for child partition tables
+        // Note: This is a PostgreSQL-specific feature, but the dialect check was intentionally
+        // removed to allow GenericDialect and other dialects to parse this syntax. This enables
+        // multi-dialect SQL tools to work with PostgreSQL-specific DDL statements.
         let partition_of = if self.parse_keywords(&[Keyword::PARTITION, Keyword::OF]) {
             Some(self.parse_object_name(allow_unquoted_hyphen)?)
         } else {
@@ -7920,7 +7923,14 @@ impl<'a> Parser<'a> {
 
         // PostgreSQL PARTITION OF: partition bound specification
         let for_values = if partition_of.is_some() {
-            Some(self.parse_partition_for_values()?)
+            if self.peek_keyword(Keyword::FOR) || self.peek_keyword(Keyword::DEFAULT) {
+                Some(self.parse_partition_for_values()?)
+            } else {
+                return self.expected(
+                    "FOR VALUES or DEFAULT after PARTITION OF",
+                    self.peek_token(),
+                );
+            }
         } else {
             None
         };

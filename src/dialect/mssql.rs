@@ -23,7 +23,7 @@ use crate::ast::{
 use crate::dialect::Dialect;
 use crate::keywords::{self, Keyword};
 use crate::parser::{Parser, ParserError};
-use crate::tokenizer::Token;
+use crate::tokenizer::BorrowedToken;
 #[cfg(not(feature = "std"))]
 use alloc::{vec, vec::Vec};
 
@@ -167,19 +167,19 @@ impl MsSqlDialect {
             let statements = self.parse_statement_list(parser, Some(Keyword::END))?;
             let end_token = parser.expect_keyword(Keyword::END)?;
             ConditionalStatementBlock {
-                start_token: AttachedToken(if_token),
+                start_token: AttachedToken(if_token.to_static()),
                 condition: Some(condition),
                 then_token: None,
                 conditional_statements: ConditionalStatements::BeginEnd(BeginEndStatements {
-                    begin_token: AttachedToken(begin_token),
+                    begin_token: AttachedToken(begin_token.to_static()),
                     statements,
-                    end_token: AttachedToken(end_token),
+                    end_token: AttachedToken(end_token.to_static()),
                 }),
             }
         } else {
             let stmt = parser.parse_statement()?;
             ConditionalStatementBlock {
-                start_token: AttachedToken(if_token),
+                start_token: AttachedToken(if_token.to_static()),
                 condition: Some(condition),
                 then_token: None,
                 conditional_statements: ConditionalStatements::Sequence {
@@ -189,7 +189,8 @@ impl MsSqlDialect {
         };
 
         let mut prior_statement_ended_with_semi_colon = false;
-        while let Token::SemiColon = parser.peek_token_ref().token {
+
+        while let BorrowedToken::SemiColon = parser.peek_token_ref().token {
             parser.advance_token();
             prior_statement_ended_with_semi_colon = true;
         }
@@ -202,19 +203,19 @@ impl MsSqlDialect {
                 let statements = self.parse_statement_list(parser, Some(Keyword::END))?;
                 let end_token = parser.expect_keyword(Keyword::END)?;
                 else_block = Some(ConditionalStatementBlock {
-                    start_token: AttachedToken(else_token),
+                    start_token: AttachedToken(else_token.to_static()),
                     condition: None,
                     then_token: None,
                     conditional_statements: ConditionalStatements::BeginEnd(BeginEndStatements {
-                        begin_token: AttachedToken(begin_token),
+                        begin_token: AttachedToken(begin_token.to_static()),
                         statements,
-                        end_token: AttachedToken(end_token),
+                        end_token: AttachedToken(end_token.to_static()),
                     }),
                 });
             } else {
                 let stmt = parser.parse_statement()?;
                 else_block = Some(ConditionalStatementBlock {
-                    start_token: AttachedToken(else_token),
+                    start_token: AttachedToken(else_token.to_static()),
                     condition: None,
                     then_token: None,
                     conditional_statements: ConditionalStatements::Sequence {
@@ -284,7 +285,7 @@ impl MsSqlDialect {
     ) -> Result<Vec<Statement>, ParserError> {
         let mut stmts = Vec::new();
         loop {
-            if let Token::EOF = parser.peek_token_ref().token {
+            if let BorrowedToken::EOF = parser.peek_token_ref().token {
                 break;
             }
             if let Some(term) = terminal_keyword {
@@ -293,7 +294,7 @@ impl MsSqlDialect {
                 }
             }
             stmts.push(parser.parse_statement()?);
-            while let Token::SemiColon = parser.peek_token_ref().token {
+            while let BorrowedToken::SemiColon = parser.peek_token_ref().token {
                 parser.advance_token();
             }
         }

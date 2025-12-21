@@ -1581,7 +1581,7 @@ fn test_mssql_while_statement() {
             while_block: ConditionalStatementBlock {
                 start_token: AttachedToken(TokenWithSpan {
                     token: Token::Word(Word {
-                        value: "WHILE".to_string(),
+                        value: "WHILE".to_string().into(),
                         quote_style: None,
                         keyword: Keyword::WHILE
                     }),

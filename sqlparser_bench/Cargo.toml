@@ -31,3 +31,7 @@ criterion = "0.7"
 [[bench]]
 name = "sqlparser_bench"
 harness = false
+
+[[bench]]
+name = "tokenize_bench"
+harness = false

@@ -51,7 +51,7 @@ fn basic_queries(c: &mut Criterion) {
         let tables = (0..1000)
             .map(|n| format!("TABLE_{n}"))
             .collect::<Vec<_>>()
-            .join(" JOIN ");
+            .join(" CROSS JOIN ");
         let where_condition = (0..1000)
             .map(|n| format!("COL_{n} = {n}"))
             .collect::<Vec<_>>()

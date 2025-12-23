@@ -8150,4 +8150,31 @@ fn parse_create_table_partition_of_errors() {
         err.contains("TO"),
         "Expected error about missing TO clause, got: {err}"
     );
+
+    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES IN ()";
+    let result = pg_and_generic().parse_sql_statements(sql);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("at least one value"),
+        "Expected error about empty value list in IN clause, got: {err}"
+    );
+
+    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES FROM () TO (10)";
+    let result = pg_and_generic().parse_sql_statements(sql);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("at least one value"),
+        "Expected error about empty FROM list, got: {err}"
+    );
+
+    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES FROM (1) TO ()";
+    let result = pg_and_generic().parse_sql_statements(sql);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("at least one value"),
+        "Expected error about empty TO list, got: {err}"
+    );
 }

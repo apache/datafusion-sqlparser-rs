@@ -8088,16 +8088,25 @@ impl<'a> Parser<'a> {
         if self.parse_keyword(Keyword::IN) {
             // FOR VALUES IN (expr, ...)
             self.expect_token(&Token::LParen)?;
+            if self.peek_token() == Token::RParen {
+                return self.expected("at least one value", self.peek_token());
+            }
             let values = self.parse_comma_separated(Parser::parse_expr)?;
             self.expect_token(&Token::RParen)?;
             Ok(ForValues::In(values))
         } else if self.parse_keyword(Keyword::FROM) {
             // FOR VALUES FROM (...) TO (...)
             self.expect_token(&Token::LParen)?;
+            if self.peek_token() == Token::RParen {
+                return self.expected("at least one value", self.peek_token());
+            }
             let from = self.parse_comma_separated(Parser::parse_partition_bound_value)?;
             self.expect_token(&Token::RParen)?;
             self.expect_keyword(Keyword::TO)?;
             self.expect_token(&Token::LParen)?;
+            if self.peek_token() == Token::RParen {
+                return self.expected("at least one value", self.peek_token());
+            }
             let to = self.parse_comma_separated(Parser::parse_partition_bound_value)?;
             self.expect_token(&Token::RParen)?;
             Ok(ForValues::From { from, to })

@@ -7891,6 +7891,12 @@ impl<'a> Parser<'a> {
         // Note: This is a PostgreSQL-specific feature, but the dialect check was intentionally
         // removed to allow GenericDialect and other dialects to parse this syntax. This enables
         // multi-dialect SQL tools to work with PostgreSQL-specific DDL statements.
+        //
+        // PARTITION OF can be combined with other table definition clauses in the AST,
+        // though PostgreSQL itself prohibits PARTITION OF with AS SELECT or LIKE clauses.
+        // The parser accepts these combinations for flexibility; semantic validation
+        // is left to downstream tools.
+        // Child partitions can have their own constraints and indexes.
         let partition_of = if self.parse_keywords(&[Keyword::PARTITION, Keyword::OF]) {
             Some(self.parse_object_name(allow_unquoted_hyphen)?)
         } else {

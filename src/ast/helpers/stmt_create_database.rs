@@ -55,29 +55,54 @@ use crate::parser::ParserError;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct CreateDatabaseBuilder {
+    /// The database name to create.
     pub db_name: ObjectName,
+    /// Whether `IF NOT EXISTS` was specified.
     pub if_not_exists: bool,
+    /// Optional storage location for the database.
     pub location: Option<String>,
+    /// Optional managed storage location.
     pub managed_location: Option<String>,
+    /// Whether `OR REPLACE` was specified.
     pub or_replace: bool,
+    /// Whether the database is `TRANSIENT`.
     pub transient: bool,
+    /// Optional `CLONE` source object name.
     pub clone: Option<ObjectName>,
+    /// Optional data retention time in days.
     pub data_retention_time_in_days: Option<u64>,
+    /// Optional max data extension time in days.
     pub max_data_extension_time_in_days: Option<u64>,
+    /// Optional external volume identifier.
     pub external_volume: Option<String>,
+    /// Optional catalog name.
     pub catalog: Option<String>,
+    /// Whether to replace invalid characters.
     pub replace_invalid_characters: Option<bool>,
+    /// Optional default DDL collation.
     pub default_ddl_collation: Option<String>,
+    /// Optional storage serialization policy.
     pub storage_serialization_policy: Option<StorageSerializationPolicy>,
+    /// Optional comment attached to the database.
     pub comment: Option<String>,
+    /// Optional catalog sync configuration.
     pub catalog_sync: Option<String>,
+    /// Optional catalog sync namespace mode.
     pub catalog_sync_namespace_mode: Option<CatalogSyncNamespaceMode>,
+    /// Optional namespace flatten delimiter for catalog sync.
     pub catalog_sync_namespace_flatten_delimiter: Option<String>,
+    /// Optional tags attached to the database.
     pub with_tags: Option<Vec<Tag>>,
+    /// Optional contact entries associated with the database.
     pub with_contacts: Option<Vec<ContactEntry>>,
 }
 
 impl CreateDatabaseBuilder {
+    /// Create a new `CreateDatabaseBuilder` with the given database name.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the database to be created.
     pub fn new(name: ObjectName) -> Self {
         Self {
             db_name: name,
@@ -103,41 +128,49 @@ impl CreateDatabaseBuilder {
         }
     }
 
+    /// Set the location for the database.
     pub fn location(mut self, location: Option<String>) -> Self {
         self.location = location;
         self
     }
 
+    /// Set the managed location for the database.
     pub fn managed_location(mut self, managed_location: Option<String>) -> Self {
         self.managed_location = managed_location;
         self
     }
 
+    /// Set whether this is an `OR REPLACE` operation.
     pub fn or_replace(mut self, or_replace: bool) -> Self {
         self.or_replace = or_replace;
         self
     }
 
+    /// Set whether this is a transient database.
     pub fn transient(mut self, transient: bool) -> Self {
         self.transient = transient;
         self
     }
 
+    /// Set whether to use `IF NOT EXISTS`.
     pub fn if_not_exists(mut self, if_not_exists: bool) -> Self {
         self.if_not_exists = if_not_exists;
         self
     }
 
+    /// Set the clone clause for the database.
     pub fn clone_clause(mut self, clone: Option<ObjectName>) -> Self {
         self.clone = clone;
         self
     }
 
+    /// Set the data retention time in days.
     pub fn data_retention_time_in_days(mut self, data_retention_time_in_days: Option<u64>) -> Self {
         self.data_retention_time_in_days = data_retention_time_in_days;
         self
     }
 
+    /// Set the maximum data extension time in days.
     pub fn max_data_extension_time_in_days(
         mut self,
         max_data_extension_time_in_days: Option<u64>,
@@ -146,26 +179,31 @@ impl CreateDatabaseBuilder {
         self
     }
 
+    /// Set the external volume for the database.
     pub fn external_volume(mut self, external_volume: Option<String>) -> Self {
         self.external_volume = external_volume;
         self
     }
 
+    /// Set the catalog for the database.
     pub fn catalog(mut self, catalog: Option<String>) -> Self {
         self.catalog = catalog;
         self
     }
 
+    /// Set whether to replace invalid characters.
     pub fn replace_invalid_characters(mut self, replace_invalid_characters: Option<bool>) -> Self {
         self.replace_invalid_characters = replace_invalid_characters;
         self
     }
 
+    /// Set the default DDL collation.
     pub fn default_ddl_collation(mut self, default_ddl_collation: Option<String>) -> Self {
         self.default_ddl_collation = default_ddl_collation;
         self
     }
 
+    /// Set the storage serialization policy.
     pub fn storage_serialization_policy(
         mut self,
         storage_serialization_policy: Option<StorageSerializationPolicy>,
@@ -174,16 +212,19 @@ impl CreateDatabaseBuilder {
         self
     }
 
+    /// Set the comment for the database.
     pub fn comment(mut self, comment: Option<String>) -> Self {
         self.comment = comment;
         self
     }
 
+    /// Set the catalog sync for the database.
     pub fn catalog_sync(mut self, catalog_sync: Option<String>) -> Self {
         self.catalog_sync = catalog_sync;
         self
     }
 
+    /// Set the catalog sync namespace mode for the database.
     pub fn catalog_sync_namespace_mode(
         mut self,
         catalog_sync_namespace_mode: Option<CatalogSyncNamespaceMode>,
@@ -192,6 +233,7 @@ impl CreateDatabaseBuilder {
         self
     }
 
+    /// Set the catalog sync namespace flatten delimiter for the database.
     pub fn catalog_sync_namespace_flatten_delimiter(
         mut self,
         catalog_sync_namespace_flatten_delimiter: Option<String>,
@@ -200,16 +242,19 @@ impl CreateDatabaseBuilder {
         self
     }
 
+    /// Set the tags for the database.
     pub fn with_tags(mut self, with_tags: Option<Vec<Tag>>) -> Self {
         self.with_tags = with_tags;
         self
     }
 
+    /// Set the contacts for the database.
     pub fn with_contacts(mut self, with_contacts: Option<Vec<ContactEntry>>) -> Self {
         self.with_contacts = with_contacts;
         self
     }
 
+    /// Build the `CREATE DATABASE` statement.
     pub fn build(self) -> Statement {
         Statement::CreateDatabase {
             db_name: self.db_name,

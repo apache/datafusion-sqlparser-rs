@@ -32,6 +32,10 @@ use core::ops::ControlFlow;
 /// #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// ```
 pub trait Visit {
+    /// Visit this node with the provided [`Visitor`].
+    ///
+    /// Implementations should call the appropriate visitor hooks to traverse
+    /// child nodes and return a `ControlFlow` value to allow early exit.
     fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break>;
 }
 
@@ -47,6 +51,11 @@ pub trait Visit {
 /// #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// ```
 pub trait VisitMut {
+    /// Mutably visit this node with the provided [`VisitorMut`].
+    ///
+    /// Implementations should call the appropriate mutable visitor hooks to
+    /// traverse and allow in-place mutation of child nodes. Returning a
+    /// `ControlFlow` value permits early termination of the traversal.
     fn visit<V: VisitorMut>(&mut self, visitor: &mut V) -> ControlFlow<V::Break>;
 }
 

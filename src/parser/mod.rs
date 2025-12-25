@@ -5260,6 +5260,7 @@ impl<'a> Parser<'a> {
             function_body: Option<CreateFunctionBody>,
             called_on_null: Option<FunctionCalledOnNull>,
             parallel: Option<FunctionParallel>,
+            options: Vec<SqlOption>,
         }
         let mut body = Body::default();
         loop {
@@ -5326,6 +5327,18 @@ impl<'a> Parser<'a> {
                 } else {
                     return self.expected("one of UNSAFE | RESTRICTED | SAFE", self.peek_token());
                 }
+            } else if self.parse_keyword(Keyword::SET) {
+                let name = self.parse_identifier()?;
+                self.expect_token(&Token::Eq)?;
+                let first_value = self.parse_expr()?;
+                let value = if self.consume_token(&Token::Comma) {
+                    let mut values = vec![first_value];
+                    values.extend(self.parse_comma_separated(Parser::parse_expr)?);
+                    Expr::Tuple(values)
+                } else {
+                    first_value
+                };
+                body.options.push(SqlOption::KeyValue { key: name, value });
             } else if self.parse_keyword(Keyword::RETURN) {
                 ensure_not_set(&body.function_body, "RETURN")?;
                 body.function_body = Some(CreateFunctionBody::Return(self.parse_expr()?));
@@ -5349,7 +5362,11 @@ impl<'a> Parser<'a> {
             if_not_exists: false,
             using: None,
             determinism_specifier: None,
-            options: None,
+            options: if body.options.is_empty() {
+                None
+            } else {
+                Some(body.options)
+            },
             remote_connection: None,
         }))
     }

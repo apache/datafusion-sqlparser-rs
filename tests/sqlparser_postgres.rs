@@ -4587,6 +4587,94 @@ fn parse_create_function_c_with_module_pathname() {
 }
 
 #[test]
+fn parse_create_function_with_set_config() {
+    let sql = r#"CREATE FUNCTION auth.hook(event jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+SET search_path = auth, pg_temp, public
+AS $$ BEGIN RETURN event; END; $$"#;
+
+    let statements = pg().parse_sql_statements(sql).unwrap();
+    assert_eq!(statements.len(), 1);
+    match &statements[0] {
+        Statement::CreateFunction(CreateFunction { name, options, .. }) => {
+            assert_eq!(name.to_string(), "auth.hook");
+            let opts = options.as_ref().expect("should have options");
+            assert_eq!(opts.len(), 1, "Should have one SET option");
+
+            // Verify the SET option was captured
+            match &opts[0] {
+                SqlOption::KeyValue { key, value } => {
+                    assert_eq!(key.to_string(), "search_path");
+                    // Value should be a comma-separated list of identifiers
+                    match value {
+                        Expr::Tuple(tuple) => {
+                            assert_eq!(tuple.len(), 3);
+                            // Verify tuple contains expected identifiers
+                            for (i, expected) in ["auth", "pg_temp", "public"].iter().enumerate() {
+                                match &tuple[i] {
+                                    Expr::Identifier(ident) => {
+                                        assert_eq!(ident.to_string(), *expected);
+                                    }
+                                    _ => panic!("Expected identifier in tuple position {}", i),
+                                }
+                            }
+                        }
+                        _ => panic!("Expected Tuple expression for comma-separated values, got: {:?}", value),
+                    }
+                }
+                _ => panic!("Expected KeyValue option"),
+            }
+        }
+        _ => panic!("Expected CreateFunction"),
+    }
+
+    // Test with quoted string value
+    let sql2 = r#"CREATE FUNCTION test_func() RETURNS void LANGUAGE plpgsql SET work_mem = '64MB' AS $$ BEGIN END; $$"#;
+    let statements2 = pg().parse_sql_statements(sql2).unwrap();
+    match &statements2[0] {
+        Statement::CreateFunction(CreateFunction { options, .. }) => {
+            let opts = options.as_ref().expect("should have options");
+            match &opts[0] {
+                SqlOption::KeyValue { key, value } => {
+                    assert_eq!(key.to_string(), "work_mem");
+                    match value {
+                        Expr::Value(ValueWithSpan { value: Value::SingleQuotedString(s), .. }) => {
+                            assert_eq!(s, "64MB");
+                        }
+                        _ => panic!("Expected SingleQuotedString, got: {:?}", value),
+                    }
+                }
+                _ => panic!("Expected KeyValue option"),
+            }
+        }
+        _ => panic!("Expected CreateFunction"),
+    }
+
+    // Test with boolean value
+    let sql3 = r#"CREATE FUNCTION test_func2() RETURNS void LANGUAGE plpgsql SET enable_seqscan = false AS $$ BEGIN END; $$"#;
+    let statements3 = pg().parse_sql_statements(sql3).unwrap();
+    match &statements3[0] {
+        Statement::CreateFunction(CreateFunction { options, .. }) => {
+            let opts = options.as_ref().expect("should have options");
+            match &opts[0] {
+                SqlOption::KeyValue { key, value } => {
+                    assert_eq!(key.to_string(), "enable_seqscan");
+                    match value {
+                        Expr::Value(ValueWithSpan { value: Value::Boolean(b), .. }) => {
+                            assert_eq!(*b, false);
+                        }
+                        _ => panic!("Expected Boolean, got: {:?}", value),
+                    }
+                }
+                _ => panic!("Expected KeyValue option"),
+            }
+        }
+        _ => panic!("Expected CreateFunction"),
+    }
+}
+
+#[test]
 fn parse_drop_function() {
     let sql = "DROP FUNCTION IF EXISTS test_func";
     assert_eq!(

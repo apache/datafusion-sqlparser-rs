@@ -18792,7 +18792,12 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     break;
                 }
-                _ => return self.expected("another option, EOF, SemiColon, Comma or ')'", self.peek_token()),
+                _ => {
+                    return self.expected(
+                        "another option, EOF, SemiColon, Comma or ')'",
+                        self.peek_token(),
+                    )
+                }
             };
         }
 

@@ -4294,6 +4294,7 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
+            security: None,
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF str1 <> str2 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
@@ -4335,6 +4336,7 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
+            security: None,
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF int1 <> 0 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
@@ -4380,6 +4382,7 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
+            security: None,
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF a <> b THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
@@ -4425,6 +4428,7 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
+            security: None,
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF int1 <> int2 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
@@ -4463,6 +4467,7 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
+            security: None,
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::DollarQuotedString(DollarQuotedString {
@@ -4504,6 +4509,7 @@ fn parse_create_function() {
             behavior: Some(FunctionBehavior::Immutable),
             called_on_null: Some(FunctionCalledOnNull::Strict),
             parallel: Some(FunctionParallel::Safe),
+            security: None,
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::SingleQuotedString("select $1 + $2;".into())).with_empty_span()
@@ -4562,6 +4568,7 @@ fn parse_create_function_c_with_module_pathname() {
             behavior: Some(FunctionBehavior::Immutable),
             called_on_null: None,
             parallel: Some(FunctionParallel::Safe),
+            security: None,
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::SingleQuotedString("MODULE_PATHNAME".into())).with_empty_span()
@@ -4584,6 +4591,147 @@ fn parse_create_function_c_with_module_pathname() {
         sql_alt_order,
         "CREATE FUNCTION cas_in(input cstring) RETURNS cas LANGUAGE c IMMUTABLE PARALLEL SAFE AS 'MODULE_PATHNAME', 'cas_in_wrapper'"
     );
+}
+
+#[test]
+fn parse_create_function_with_set_config() {
+    let sql = r#"CREATE FUNCTION auth.hook(event jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+SET search_path = auth, pg_temp, public
+AS $$ BEGIN RETURN event; END; $$"#;
+
+    let statements = pg().parse_sql_statements(sql).unwrap();
+    assert_eq!(statements.len(), 1);
+    match &statements[0] {
+        Statement::CreateFunction(CreateFunction { name, options, .. }) => {
+            assert_eq!(name.to_string(), "auth.hook");
+            let opts = options.as_ref().expect("should have options");
+            assert_eq!(opts.len(), 1, "Should have one SET option");
+
+            // Verify the SET option was captured
+            match &opts[0] {
+                SqlOption::KeyValue { key, value } => {
+                    assert_eq!(key.to_string(), "search_path");
+                    // Value should be a comma-separated list of identifiers
+                    match value {
+                        Expr::Tuple(tuple) => {
+                            assert_eq!(tuple.len(), 3);
+                            // Verify tuple contains expected identifiers
+                            for (i, expected) in ["auth", "pg_temp", "public"].iter().enumerate() {
+                                match &tuple[i] {
+                                    Expr::Identifier(ident) => {
+                                        assert_eq!(ident.to_string(), *expected);
+                                    }
+                                    _ => panic!("Expected identifier in tuple position {}", i),
+                                }
+                            }
+                        }
+                        _ => panic!("Expected Tuple expression for comma-separated values, got: {:?}", value),
+                    }
+                }
+                _ => panic!("Expected KeyValue option"),
+            }
+        }
+        _ => panic!("Expected CreateFunction"),
+    }
+
+    // Test with quoted string value
+    let sql2 = r#"CREATE FUNCTION test_func() RETURNS void LANGUAGE plpgsql SET work_mem = '64MB' AS $$ BEGIN END; $$"#;
+    let statements2 = pg().parse_sql_statements(sql2).unwrap();
+    match &statements2[0] {
+        Statement::CreateFunction(CreateFunction { options, .. }) => {
+            let opts = options.as_ref().expect("should have options");
+            match &opts[0] {
+                SqlOption::KeyValue { key, value } => {
+                    assert_eq!(key.to_string(), "work_mem");
+                    match value {
+                        Expr::Value(ValueWithSpan { value: Value::SingleQuotedString(s), .. }) => {
+                            assert_eq!(s, "64MB");
+                        }
+                        _ => panic!("Expected SingleQuotedString, got: {:?}", value),
+                    }
+                }
+                _ => panic!("Expected KeyValue option"),
+            }
+        }
+        _ => panic!("Expected CreateFunction"),
+    }
+
+    // Test with boolean value
+    let sql3 = r#"CREATE FUNCTION test_func2() RETURNS void LANGUAGE plpgsql SET enable_seqscan = false AS $$ BEGIN END; $$"#;
+    let statements3 = pg().parse_sql_statements(sql3).unwrap();
+    match &statements3[0] {
+        Statement::CreateFunction(CreateFunction { options, .. }) => {
+            let opts = options.as_ref().expect("should have options");
+            match &opts[0] {
+                SqlOption::KeyValue { key, value } => {
+                    assert_eq!(key.to_string(), "enable_seqscan");
+                    match value {
+                        Expr::Value(ValueWithSpan { value: Value::Boolean(b), .. }) => {
+                            assert_eq!(*b, false);
+                        }
+                        _ => panic!("Expected Boolean, got: {:?}", value),
+                    }
+                }
+                _ => panic!("Expected KeyValue option"),
+            }
+        }
+        _ => panic!("Expected CreateFunction"),
+    }
+}
+
+#[test]
+fn parse_create_function_with_security_definer() {
+    let sql = r#"CREATE FUNCTION public.my_func() RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$"#;
+
+    let stmt = pg().verified_stmt(sql);
+    match stmt {
+        Statement::CreateFunction(CreateFunction { name, security, .. }) => {
+            assert_eq!(name.to_string(), "public.my_func");
+            assert_eq!(security, Some(FunctionSecurity::Definer));
+        }
+        _ => panic!("Expected CreateFunction"),
+    }
+}
+
+#[test]
+fn parse_create_function_with_security_invoker() {
+    let sql = r#"CREATE FUNCTION public.my_func() RETURNS void LANGUAGE sql SECURITY INVOKER AS $$ SELECT 1 $$"#;
+
+    let stmt = pg().verified_stmt(sql);
+    match stmt {
+        Statement::CreateFunction(CreateFunction { name, security, .. }) => {
+            assert_eq!(name.to_string(), "public.my_func");
+            assert_eq!(security, Some(FunctionSecurity::Invoker));
+        }
+        _ => panic!("Expected CreateFunction"),
+    }
+}
+
+#[test]
+fn parse_create_function_with_security_and_other_attributes() {
+    pg().one_statement_parses_to(
+        r#"CREATE FUNCTION test_func() RETURNS integer LANGUAGE plpgsql IMMUTABLE SECURITY DEFINER AS $$ BEGIN RETURN 42; END; $$"#,
+        r#"CREATE FUNCTION test_func() RETURNS INTEGER LANGUAGE plpgsql IMMUTABLE SECURITY DEFINER AS $$ BEGIN RETURN 42; END; $$"#,
+    );
+
+    let stmt = pg().verified_stmt(r#"CREATE FUNCTION test_func() RETURNS INTEGER LANGUAGE plpgsql IMMUTABLE SECURITY DEFINER AS $$ BEGIN RETURN 42; END; $$"#);
+    match stmt {
+        Statement::CreateFunction(CreateFunction {
+            name,
+            security,
+            behavior,
+            language,
+            ..
+        }) => {
+            assert_eq!(name.to_string(), "test_func");
+            assert_eq!(security, Some(FunctionSecurity::Definer));
+            assert_eq!(behavior, Some(FunctionBehavior::Immutable));
+            assert_eq!(language.as_ref().map(|i| i.value.as_str()), Some("plpgsql"));
+        }
+        _ => panic!("Expected CreateFunction"),
+    }
 }
 
 #[test]
@@ -6130,6 +6278,8 @@ fn parse_trigger_related_functions() {
             cluster_by: None,
             clustered_by: None,
             inherits: None,
+            partition_of: None,
+            for_values: None,
             strict: false,
             copy_grants: false,
             enable_schema_evolution: None,
@@ -6185,6 +6335,7 @@ fn parse_trigger_related_functions() {
             behavior: None,
             called_on_null: None,
             parallel: None,
+            security: None,
             using: None,
             language: Some(Ident::new("plpgsql")),
             determinism_specifier: None,
@@ -7913,4 +8064,258 @@ fn parse_create_operator_class() {
             "CREATE OPERATOR CLASS test_ops FOR TYPE INT4 USING btree AS FUNCTION 1 cas_cmp(()"
         )
         .is_err());
+}
+
+#[test]
+fn parse_create_table_partition_of_range() {
+    // RANGE partition with FROM ... TO
+    let sql = "CREATE TABLE measurement_y2006m02 PARTITION OF measurement FOR VALUES FROM ('2006-02-01') TO ('2006-03-01')";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!("measurement_y2006m02", create_table.name.to_string());
+            assert_eq!(
+                Some(ObjectName::from(vec![Ident::new("measurement")])),
+                create_table.partition_of
+            );
+            match create_table.for_values {
+                Some(ForValues::From { from, to }) => {
+                    assert_eq!(1, from.len());
+                    assert_eq!(1, to.len());
+                    match &from[0] {
+                        PartitionBoundValue::Expr(Expr::Value(v)) => {
+                            assert_eq!("'2006-02-01'", v.to_string());
+                        }
+                        _ => panic!("Expected Expr value in from"),
+                    }
+                    match &to[0] {
+                        PartitionBoundValue::Expr(Expr::Value(v)) => {
+                            assert_eq!("'2006-03-01'", v.to_string());
+                        }
+                        _ => panic!("Expected Expr value in to"),
+                    }
+                }
+                _ => panic!("Expected ForValues::From"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_create_table_partition_of_range_with_minvalue_maxvalue() {
+    // RANGE partition with MINVALUE/MAXVALUE
+    let sql =
+        "CREATE TABLE orders_old PARTITION OF orders FOR VALUES FROM (MINVALUE) TO ('2020-01-01')";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!("orders_old", create_table.name.to_string());
+            assert_eq!(
+                Some(ObjectName::from(vec![Ident::new("orders")])),
+                create_table.partition_of
+            );
+            match create_table.for_values {
+                Some(ForValues::From { from, to }) => {
+                    assert_eq!(PartitionBoundValue::MinValue, from[0]);
+                    match &to[0] {
+                        PartitionBoundValue::Expr(Expr::Value(v)) => {
+                            assert_eq!("'2020-01-01'", v.to_string());
+                        }
+                        _ => panic!("Expected Expr value in to"),
+                    }
+                }
+                _ => panic!("Expected ForValues::From"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+
+    // With MAXVALUE
+    let sql =
+        "CREATE TABLE orders_new PARTITION OF orders FOR VALUES FROM ('2024-01-01') TO (MAXVALUE)";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => match create_table.for_values {
+            Some(ForValues::From { from, to }) => {
+                match &from[0] {
+                    PartitionBoundValue::Expr(Expr::Value(v)) => {
+                        assert_eq!("'2024-01-01'", v.to_string());
+                    }
+                    _ => panic!("Expected Expr value in from"),
+                }
+                assert_eq!(PartitionBoundValue::MaxValue, to[0]);
+            }
+            _ => panic!("Expected ForValues::From"),
+        },
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_create_table_partition_of_list() {
+    // LIST partition
+    let sql = "CREATE TABLE orders_us PARTITION OF orders FOR VALUES IN ('US', 'CA', 'MX')";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!("orders_us", create_table.name.to_string());
+            assert_eq!(
+                Some(ObjectName::from(vec![Ident::new("orders")])),
+                create_table.partition_of
+            );
+            match create_table.for_values {
+                Some(ForValues::In(values)) => {
+                    assert_eq!(3, values.len());
+                }
+                _ => panic!("Expected ForValues::In"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_create_table_partition_of_hash() {
+    // HASH partition
+    let sql = "CREATE TABLE orders_p0 PARTITION OF orders FOR VALUES WITH (MODULUS 4, REMAINDER 0)";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!("orders_p0", create_table.name.to_string());
+            assert_eq!(
+                Some(ObjectName::from(vec![Ident::new("orders")])),
+                create_table.partition_of
+            );
+            match create_table.for_values {
+                Some(ForValues::With { modulus, remainder }) => {
+                    assert_eq!(4, modulus);
+                    assert_eq!(0, remainder);
+                }
+                _ => panic!("Expected ForValues::With"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_create_table_partition_of_default() {
+    // DEFAULT partition
+    let sql = "CREATE TABLE orders_default PARTITION OF orders DEFAULT";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!("orders_default", create_table.name.to_string());
+            assert_eq!(
+                Some(ObjectName::from(vec![Ident::new("orders")])),
+                create_table.partition_of
+            );
+            assert_eq!(Some(ForValues::Default), create_table.for_values);
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_create_table_partition_of_multicolumn_range() {
+    // Multi-column RANGE partition
+    let sql = "CREATE TABLE sales_2023_q1 PARTITION OF sales FOR VALUES FROM ('2023-01-01', 1) TO ('2023-04-01', 1)";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!("sales_2023_q1", create_table.name.to_string());
+            match create_table.for_values {
+                Some(ForValues::From { from, to }) => {
+                    assert_eq!(2, from.len());
+                    assert_eq!(2, to.len());
+                }
+                _ => panic!("Expected ForValues::From"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_create_table_partition_of_with_constraint() {
+    // With table constraint (not column constraint which has different syntax in PARTITION OF)
+    let sql = "CREATE TABLE orders_2023 PARTITION OF orders (\
+CONSTRAINT check_date CHECK (order_date >= '2023-01-01')\
+) FOR VALUES FROM ('2023-01-01') TO ('2024-01-01')";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!("orders_2023", create_table.name.to_string());
+            assert_eq!(
+                Some(ObjectName::from(vec![Ident::new("orders")])),
+                create_table.partition_of
+            );
+            // Check that table constraint was parsed
+            assert_eq!(1, create_table.constraints.len());
+            match create_table.for_values {
+                Some(ForValues::From { .. }) => {}
+                _ => panic!("Expected ForValues::From"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_create_table_partition_of_errors() {
+    let sql = "CREATE TABLE p PARTITION OF parent";
+    let result = pg_and_generic().parse_sql_statements(sql);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("FOR VALUES or DEFAULT"),
+        "Expected error about FOR VALUES, got: {err}"
+    );
+
+    let sql = "CREATE TABLE p PARTITION OF parent WITH (fillfactor = 70)";
+    let result = pg_and_generic().parse_sql_statements(sql);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("FOR VALUES or DEFAULT"),
+        "Expected error about FOR VALUES, got: {err}"
+    );
+
+    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES RANGE (1, 10)";
+    let result = pg_and_generic().parse_sql_statements(sql);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("IN, FROM, or WITH"),
+        "Expected error about invalid keyword after FOR VALUES, got: {err}"
+    );
+
+    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES FROM (1)";
+    let result = pg_and_generic().parse_sql_statements(sql);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("TO"),
+        "Expected error about missing TO clause, got: {err}"
+    );
+
+    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES IN ()";
+    let result = pg_and_generic().parse_sql_statements(sql);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("at least one value"),
+        "Expected error about empty value list in IN clause, got: {err}"
+    );
+
+    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES FROM () TO (10)";
+    let result = pg_and_generic().parse_sql_statements(sql);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("at least one value"),
+        "Expected error about empty FROM list, got: {err}"
+    );
+
+    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES FROM (1) TO ()";
+    let result = pg_and_generic().parse_sql_statements(sql);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("at least one value"),
+        "Expected error about empty TO list, got: {err}"
+    );
 }

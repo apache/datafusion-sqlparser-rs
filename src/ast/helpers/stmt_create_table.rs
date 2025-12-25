@@ -26,8 +26,8 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::{
     ClusteredBy, ColumnDef, CommentDef, CreateTable, CreateTableLikeKind, CreateTableOptions, Expr,
-    FileFormat, HiveDistributionStyle, HiveFormat, Ident, InitializeKind, ObjectName, OnCommit,
-    OneOrManyWithParens, Query, RefreshModeKind, RowAccessPolicy, Statement,
+    FileFormat, ForValues, HiveDistributionStyle, HiveFormat, Ident, InitializeKind, ObjectName,
+    OnCommit, OneOrManyWithParens, Query, RefreshModeKind, RowAccessPolicy, Statement,
     StorageSerializationPolicy, TableConstraint, TableVersion, Tag, WrappedCollection,
 };
 
@@ -94,6 +94,8 @@ pub struct CreateTableBuilder {
     pub cluster_by: Option<WrappedCollection<Vec<Expr>>>,
     pub clustered_by: Option<ClusteredBy>,
     pub inherits: Option<Vec<ObjectName>>,
+    pub partition_of: Option<ObjectName>,
+    pub for_values: Option<ForValues>,
     pub strict: bool,
     pub copy_grants: bool,
     pub enable_schema_evolution: Option<bool>,
@@ -150,6 +152,8 @@ impl CreateTableBuilder {
             cluster_by: None,
             clustered_by: None,
             inherits: None,
+            partition_of: None,
+            for_values: None,
             strict: false,
             copy_grants: false,
             enable_schema_evolution: None,
@@ -317,6 +321,16 @@ impl CreateTableBuilder {
         self
     }
 
+    pub fn partition_of(mut self, partition_of: Option<ObjectName>) -> Self {
+        self.partition_of = partition_of;
+        self
+    }
+
+    pub fn for_values(mut self, for_values: Option<ForValues>) -> Self {
+        self.for_values = for_values;
+        self
+    }
+
     pub fn strict(mut self, strict: bool) -> Self {
         self.strict = strict;
         self
@@ -463,6 +477,8 @@ impl CreateTableBuilder {
             cluster_by: self.cluster_by,
             clustered_by: self.clustered_by,
             inherits: self.inherits,
+            partition_of: self.partition_of,
+            for_values: self.for_values,
             strict: self.strict,
             copy_grants: self.copy_grants,
             enable_schema_evolution: self.enable_schema_evolution,
@@ -527,6 +543,8 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 cluster_by,
                 clustered_by,
                 inherits,
+                partition_of,
+                for_values,
                 strict,
                 copy_grants,
                 enable_schema_evolution,
@@ -577,6 +595,8 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 cluster_by,
                 clustered_by,
                 inherits,
+                partition_of,
+                for_values,
                 strict,
                 iceberg,
                 copy_grants,

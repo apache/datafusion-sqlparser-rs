@@ -4294,6 +4294,7 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
+            security: None,
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF str1 <> str2 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
@@ -4335,6 +4336,7 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
+            security: None,
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF int1 <> 0 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
@@ -4380,6 +4382,7 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
+            security: None,
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF a <> b THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
@@ -4425,6 +4428,7 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
+            security: None,
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF int1 <> int2 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
@@ -4463,6 +4467,7 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
+            security: None,
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::DollarQuotedString(DollarQuotedString {
@@ -4504,6 +4509,7 @@ fn parse_create_function() {
             behavior: Some(FunctionBehavior::Immutable),
             called_on_null: Some(FunctionCalledOnNull::Strict),
             parallel: Some(FunctionParallel::Safe),
+            security: None,
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::SingleQuotedString("select $1 + $2;".into())).with_empty_span()
@@ -4562,6 +4568,7 @@ fn parse_create_function_c_with_module_pathname() {
             behavior: Some(FunctionBehavior::Immutable),
             called_on_null: None,
             parallel: Some(FunctionParallel::Safe),
+            security: None,
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::SingleQuotedString("MODULE_PATHNAME".into())).with_empty_span()
@@ -4669,6 +4676,59 @@ AS $$ BEGIN RETURN event; END; $$"#;
                 }
                 _ => panic!("Expected KeyValue option"),
             }
+        }
+        _ => panic!("Expected CreateFunction"),
+    }
+}
+
+#[test]
+fn parse_create_function_with_security_definer() {
+    let sql = r#"CREATE FUNCTION public.my_func() RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$"#;
+
+    let stmt = pg().verified_stmt(sql);
+    match stmt {
+        Statement::CreateFunction(CreateFunction { name, security, .. }) => {
+            assert_eq!(name.to_string(), "public.my_func");
+            assert_eq!(security, Some(FunctionSecurity::Definer));
+        }
+        _ => panic!("Expected CreateFunction"),
+    }
+}
+
+#[test]
+fn parse_create_function_with_security_invoker() {
+    let sql = r#"CREATE FUNCTION public.my_func() RETURNS void LANGUAGE sql SECURITY INVOKER AS $$ SELECT 1 $$"#;
+
+    let stmt = pg().verified_stmt(sql);
+    match stmt {
+        Statement::CreateFunction(CreateFunction { name, security, .. }) => {
+            assert_eq!(name.to_string(), "public.my_func");
+            assert_eq!(security, Some(FunctionSecurity::Invoker));
+        }
+        _ => panic!("Expected CreateFunction"),
+    }
+}
+
+#[test]
+fn parse_create_function_with_security_and_other_attributes() {
+    pg().one_statement_parses_to(
+        r#"CREATE FUNCTION test_func() RETURNS integer LANGUAGE plpgsql IMMUTABLE SECURITY DEFINER AS $$ BEGIN RETURN 42; END; $$"#,
+        r#"CREATE FUNCTION test_func() RETURNS INTEGER LANGUAGE plpgsql IMMUTABLE SECURITY DEFINER AS $$ BEGIN RETURN 42; END; $$"#,
+    );
+
+    let stmt = pg().verified_stmt(r#"CREATE FUNCTION test_func() RETURNS INTEGER LANGUAGE plpgsql IMMUTABLE SECURITY DEFINER AS $$ BEGIN RETURN 42; END; $$"#);
+    match stmt {
+        Statement::CreateFunction(CreateFunction {
+            name,
+            security,
+            behavior,
+            language,
+            ..
+        }) => {
+            assert_eq!(name.to_string(), "test_func");
+            assert_eq!(security, Some(FunctionSecurity::Definer));
+            assert_eq!(behavior, Some(FunctionBehavior::Immutable));
+            assert_eq!(language.as_ref().map(|i| i.value.as_str()), Some("plpgsql"));
         }
         _ => panic!("Expected CreateFunction"),
     }
@@ -6275,6 +6335,7 @@ fn parse_trigger_related_functions() {
             behavior: None,
             called_on_null: None,
             parallel: None,
+            security: None,
             using: None,
             language: Some(Ident::new("plpgsql")),
             determinism_specifier: None,

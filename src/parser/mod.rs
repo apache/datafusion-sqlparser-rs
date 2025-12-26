@@ -10621,7 +10621,15 @@ impl<'a> Parser<'a> {
                 let num_rows = self.parse_literal_uint()?;
                 CopyLegacyOption::IgnoreHeader(num_rows)
             }
-            Some(Keyword::JSON) => CopyLegacyOption::Json,
+            Some(Keyword::JSON) => {
+                let _ = self.parse_keyword(Keyword::AS);
+                let fmt = if matches!(self.peek_token().token, Token::SingleQuotedString(_)) {
+                    Some(self.parse_literal_string()?)
+                } else {
+                    None
+                };
+                CopyLegacyOption::Json(fmt)
+            }
             Some(Keyword::MANIFEST) => {
                 let verbose = self.parse_keyword(Keyword::VERBOSE);
                 CopyLegacyOption::Manifest { verbose }

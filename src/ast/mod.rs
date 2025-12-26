@@ -8296,8 +8296,8 @@ pub enum CopyLegacyOption {
     IamRole(IamRoleKind),
     /// IGNOREHEADER \[ AS \] number_rows
     IgnoreHeader(u64),
-    /// JSON
-    Json,
+    /// JSON \[ AS \] 'json_option'
+    Json(Option<String>),
     /// MANIFEST \[ VERBOSE \]
     Manifest { verbose: bool },
     /// MAXFILESIZE \[ AS \] max-size \[ MB | GB \]
@@ -8388,7 +8388,13 @@ impl fmt::Display for CopyLegacyOption {
             Header => write!(f, "HEADER"),
             IamRole(role) => write!(f, "IAM_ROLE {role}"),
             IgnoreHeader(num_rows) => write!(f, "IGNOREHEADER {num_rows}"),
-            Json => write!(f, "JSON"),
+            Json(opt) => {
+                write!(f, "JSON")?;
+                if let Some(opt) = opt {
+                    write!(f, " AS '{}'", value::escape_single_quote_string(opt))?;
+                }
+                Ok(())
+            }
             Manifest { verbose } => write!(f, "MANIFEST{}", if *verbose { " VERBOSE" } else { "" }),
             MaxFileSize(file_size) => write!(f, "MAXFILESIZE {file_size}"),
             Null(string) => write!(f, "NULL '{}'", value::escape_single_quote_string(string)),

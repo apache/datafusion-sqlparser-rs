@@ -3500,6 +3500,9 @@ impl<'a> Parser<'a> {
             Token::Overlap if dialect_is!(dialect is PostgreSqlDialect | GenericDialect) => {
                 Some(BinaryOperator::PGOverlap)
             }
+            Token::Overlap if dialect.supports_overlap_as_and_operator() => {
+                Some(BinaryOperator::And)
+            }
             Token::CaretAt if dialect_is!(dialect is PostgreSqlDialect | GenericDialect) => {
                 Some(BinaryOperator::PGStartsWith)
             }

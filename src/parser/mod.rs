@@ -5975,6 +5975,7 @@ impl<'a> Parser<'a> {
                 Keyword::TEXT => Ok(AnalyzeFormat::TEXT),
                 Keyword::GRAPHVIZ => Ok(AnalyzeFormat::GRAPHVIZ),
                 Keyword::JSON => Ok(AnalyzeFormat::JSON),
+                Keyword::TREE => Ok(AnalyzeFormat::TREE),
                 _ => self.expected("fileformat", next_token),
             },
             _ => self.expected("fileformat", next_token),

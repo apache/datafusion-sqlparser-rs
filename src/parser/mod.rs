@@ -16063,6 +16063,8 @@ impl<'a> Parser<'a> {
             Ok(Action::Ownership)
         } else if self.parse_keyword(Keyword::DROP) {
             Ok(Action::Drop)
+        } else if self.parse_keyword(Keyword::PUBLIC) {
+            Ok(Action::Public)
         } else {
             self.expected("a privilege keyword", self.peek_token())?
         }

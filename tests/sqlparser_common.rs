@@ -9705,6 +9705,9 @@ fn parse_grant() {
     verified_stmt("GRANT ROLE role1 TO ROLE role2");
     verified_stmt("GRANT ROLE role1 TO USER user");
     verified_stmt("GRANT CREATE SCHEMA ON DATABASE db1 TO ROLE role1");
+
+    all_dialects_where(|d| d.supports_user_host_grantee())
+        .verified_stmt("GRANT PUBLIC TO 'AAA'@'AAA'");
 }
 
 #[test]

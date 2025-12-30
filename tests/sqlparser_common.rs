@@ -18061,3 +18061,9 @@ fn test_parse_key_value_options_trailing_semicolon() {
         "CREATE USER u1 option1='value1' option2='value2'",
     );
 }
+
+#[test]
+fn test_binary_kw_as_cast() {
+    all_dialects_where(|d| d.supports_binary_kw_as_cast())
+        .one_statement_parses_to("SELECT BINARY 1+1", "SELECT CAST(1 + 1 AS BINARY)");
+}

@@ -1038,6 +1038,7 @@ define_keywords!(
     TRANSLATE_REGEX,
     TRANSLATION,
     TREAT,
+    TREE,
     TRIGGER,
     TRIM,
     TRIM_ARRAY,

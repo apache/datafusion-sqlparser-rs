@@ -17972,3 +17972,9 @@ fn parse_select_parenthesized_wildcard() {
     assert_eq!(select2.projection.len(), 1);
     assert!(matches!(select2.projection[0], SelectItem::Wildcard(_)));
 }
+
+#[test]
+fn test_binary_kw_as_cast() {
+    all_dialects_where(|d| d.supports_binary_kw_as_cast())
+        .one_statement_parses_to("SELECT BINARY 1+1", "SELECT CAST(1 + 1 AS BINARY)");
+}

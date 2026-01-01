@@ -3847,7 +3847,8 @@ impl<'a> Parser<'a> {
         let lower_bound = if self.consume_token(&Token::Colon) {
             None
         } else {
-            Some(self.parse_expr()?)
+            // parse expr until we hit a colon (or any token with lower precedence)
+            Some(self.parse_subexpr(self.dialect.prec_value(Precedence::Colon))?)
         };
 
         // check for end
@@ -3875,7 +3876,8 @@ impl<'a> Parser<'a> {
                 stride: None,
             });
         } else {
-            Some(self.parse_expr()?)
+            // parse expr until we hit a colon (or any token with lower precedence)
+            Some(self.parse_subexpr(self.dialect.prec_value(Precedence::Colon))?)
         };
 
         // check for end
@@ -3892,7 +3894,8 @@ impl<'a> Parser<'a> {
         let stride = if self.consume_token(&Token::RBracket) {
             None
         } else {
-            Some(self.parse_expr()?)
+            // parse expr until we hit a colon (or any token with lower precedence)
+            Some(self.parse_subexpr(self.dialect.prec_value(Precedence::Colon))?)
         };
 
         if stride.is_some() {

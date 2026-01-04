@@ -18639,7 +18639,7 @@ impl<'a> Parser<'a> {
                         return self.expected(" another option or EOF", self.peek_token());
                     }
                 }
-                Token::EOF => break,
+                Token::EOF | Token::SemiColon => break,
                 Token::Comma => {
                     delimiter = KeyValueOptionsDelimiter::Comma;
                     continue;
@@ -18651,7 +18651,12 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     break;
                 }
-                _ => return self.expected("another option, EOF, Comma or ')'", self.peek_token()),
+                _ => {
+                    return self.expected(
+                        "another option, EOF, SemiColon, Comma or ')'",
+                        self.peek_token(),
+                    )
+                }
             };
         }
 
@@ -19535,5 +19540,12 @@ mod tests {
             let sql = format!("\nSELECT\n  :{w}fooBar");
             assert!(Parser::parse_sql(&GenericDialect, &sql).is_err());
         }
+    }
+
+    #[test]
+    fn test_key_value_options_trailing_semicolon() {
+        let sql = "CREATE USER u1 option1 = 'value1' option2 = 'value2';";
+        let ast = Parser::parse_sql(&GenericDialect, sql);
+        assert!(ast.is_ok());
     }
 }

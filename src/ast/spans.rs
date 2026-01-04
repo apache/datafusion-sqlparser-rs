@@ -1274,6 +1274,10 @@ impl Spanned for Insert {
             assignments,
             settings: _,      // todo, clickhouse specific
             format_clause: _, // todo, clickhouse specific
+            insert_first: _,             // snowflake multi-table insert
+            multi_table_into_clauses: _, // snowflake multi-table insert
+            multi_table_when_clauses: _, // snowflake multi-table insert
+            multi_table_else_clause: _,  // snowflake multi-table insert
         } = self;
 
         union_spans(
@@ -1881,6 +1885,7 @@ impl Spanned for TableFactor {
                 lateral: _,
                 subquery,
                 alias,
+                sample: _,
             } => subquery
                 .span()
                 .union_opt(&alias.as_ref().map(|alias| alias.span())),

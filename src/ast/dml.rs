@@ -90,10 +90,80 @@ pub struct Insert {
     ///
     /// [ClickHouse formats JSON insert](https://clickhouse.com/docs/en/interfaces/formats#json-inserting-data)
     pub format_clause: Option<InputFormatClause>,
+    /// For multi-table insert: `INSERT FIRST` vs `INSERT ALL`
+    ///
+    /// When `true`, this is an `INSERT FIRST` statement (only the first matching WHEN clause is executed).
+    /// When `false` with non-empty `clauses`, this is an `INSERT ALL` statement.
+    ///
+    /// See: <https://docs.snowflake.com/en/sql-reference/sql/insert-multi-table>
+    pub insert_first: bool,
+    /// For multi-table insert: additional INTO clauses (unconditional)
+    ///
+    /// Used for `INSERT ALL INTO t1 INTO t2 ... SELECT ...`
+    ///
+    /// See: <https://docs.snowflake.com/en/sql-reference/sql/insert-multi-table>
+    pub multi_table_into_clauses: Vec<MultiTableInsertIntoClause>,
+    /// For conditional multi-table insert: WHEN clauses
+    ///
+    /// Used for `INSERT ALL/FIRST WHEN cond THEN INTO t1 ... SELECT ...`
+    ///
+    /// See: <https://docs.snowflake.com/en/sql-reference/sql/insert-multi-table>
+    pub multi_table_when_clauses: Vec<MultiTableInsertWhenClause>,
+    /// For conditional multi-table insert: ELSE clause
+    ///
+    /// See: <https://docs.snowflake.com/en/sql-reference/sql/insert-multi-table>
+    pub multi_table_else_clause: Option<Vec<MultiTableInsertIntoClause>>,
 }
 
 impl Display for Insert {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Check if this is a Snowflake multi-table insert
+        let is_multi_table = !self.multi_table_into_clauses.is_empty()
+            || !self.multi_table_when_clauses.is_empty();
+
+        if is_multi_table {
+            // Snowflake multi-table INSERT format
+            write!(f, "INSERT")?;
+            if self.overwrite {
+                write!(f, " OVERWRITE")?;
+            }
+            if self.insert_first {
+                write!(f, " FIRST")?;
+            } else {
+                write!(f, " ALL")?;
+            }
+
+            // Unconditional multi-table insert: INTO clauses directly after ALL
+            for into_clause in &self.multi_table_into_clauses {
+                SpaceOrNewline.fmt(f)?;
+                write!(f, "{}", into_clause)?;
+            }
+
+            // Conditional multi-table insert: WHEN clauses
+            for when_clause in &self.multi_table_when_clauses {
+                SpaceOrNewline.fmt(f)?;
+                write!(f, "{}", when_clause)?;
+            }
+
+            // ELSE clause
+            if let Some(else_clauses) = &self.multi_table_else_clause {
+                SpaceOrNewline.fmt(f)?;
+                write!(f, "ELSE")?;
+                for into_clause in else_clauses {
+                    SpaceOrNewline.fmt(f)?;
+                    write!(f, "{}", into_clause)?;
+                }
+            }
+
+            // Source query
+            if let Some(source) = &self.source {
+                SpaceOrNewline.fmt(f)?;
+                source.fmt(f)?;
+            }
+            return Ok(());
+        }
+
+        // Standard INSERT format
         let table_name = if let Some(alias) = &self.table_alias {
             format!("{0} AS {alias}", self.table)
         } else {
@@ -641,6 +711,95 @@ impl fmt::Display for OutputClause {
                 f.write_str("RETURNING ")?;
                 display_comma_separated(select_items).fmt(f)
             }
+        }
+    }
+}
+
+/// A WHEN clause in a conditional multi-table INSERT.
+///
+/// Syntax:
+/// ```sql
+/// WHEN n1 > 100 THEN
+///   INTO t1
+///   INTO t2 (c1, c2) VALUES (n1, n2)
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct MultiTableInsertWhenClause {
+    /// The condition for this WHEN clause
+    pub condition: Expr,
+    /// The INTO clauses to execute when the condition is true
+    pub into_clauses: Vec<MultiTableInsertIntoClause>,
+}
+
+impl Display for MultiTableInsertWhenClause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "WHEN {} THEN", self.condition)?;
+        for into_clause in &self.into_clauses {
+            SpaceOrNewline.fmt(f)?;
+            write!(f, "{}", into_clause)?;
+        }
+        Ok(())
+    }
+}
+
+/// An INTO clause in a multi-table INSERT.
+///
+/// Syntax:
+/// ```sql
+/// INTO <target_table> [ ( <target_col_name> [ , ... ] ) ] [ VALUES ( { <source_col_name> | DEFAULT | NULL } [ , ... ] ) ]
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct MultiTableInsertIntoClause {
+    /// The target table
+    pub table_name: ObjectName,
+    /// The target columns (optional)
+    pub columns: Vec<Ident>,
+    /// The VALUES clause (optional)
+    pub values: Option<MultiTableInsertValues>,
+}
+
+impl Display for MultiTableInsertIntoClause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "INTO {}", self.table_name)?;
+        if !self.columns.is_empty() {
+            write!(f, " ({})", display_comma_separated(&self.columns))?;
+        }
+        if let Some(values) = &self.values {
+            write!(f, " VALUES ({})", display_comma_separated(&values.values))?;
+        }
+        Ok(())
+    }
+}
+
+/// The VALUES clause in a multi-table INSERT INTO clause.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct MultiTableInsertValues {
+    /// The values to insert (can be column references, DEFAULT, or NULL)
+    pub values: Vec<MultiTableInsertValue>,
+}
+
+/// A value in a multi-table INSERT VALUES clause.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum MultiTableInsertValue {
+    /// A column reference or expression from the source
+    Expr(Expr),
+    /// The DEFAULT keyword
+    Default,
+}
+
+impl Display for MultiTableInsertValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MultiTableInsertValue::Expr(expr) => write!(f, "{}", expr),
+            MultiTableInsertValue::Default => write!(f, "DEFAULT"),
         }
     }
 }

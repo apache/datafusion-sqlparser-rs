@@ -5301,6 +5301,10 @@ fn test_simple_postgres_insert_with_alias() {
             insert_alias: None,
             settings: None,
             format_clause: None,
+            insert_first: false,
+            multi_table_into_clauses: vec![],
+            multi_table_when_clauses: vec![],
+            multi_table_else_clause: None,
         })
     )
 }
@@ -5375,6 +5379,10 @@ fn test_simple_postgres_insert_with_alias() {
             insert_alias: None,
             settings: None,
             format_clause: None,
+            insert_first: false,
+            multi_table_into_clauses: vec![],
+            multi_table_when_clauses: vec![],
+            multi_table_else_clause: None,
         })
     )
 }
@@ -5447,6 +5455,10 @@ fn test_simple_insert_with_quoted_alias() {
             insert_alias: None,
             settings: None,
             format_clause: None,
+            insert_first: false,
+            multi_table_into_clauses: vec![],
+            multi_table_when_clauses: vec![],
+            multi_table_else_clause: None,
         })
     )
 }

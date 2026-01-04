@@ -14,8 +14,14 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+
+/// Helper utilities for attached tokens used by AST helpers.
 pub mod attached_token;
+/// Utilities for parsing key/value style options in helper statements.
 pub mod key_value_options;
+/// Helpers for `CREATE DATABASE` statement construction/parsing.
 pub mod stmt_create_database;
+/// Helpers for `CREATE TABLE` statement construction/parsing.
 pub mod stmt_create_table;
+/// Helpers for data loading/unloading related statements (stages, PUT, COPY INTO).
 pub mod stmt_data_loading;

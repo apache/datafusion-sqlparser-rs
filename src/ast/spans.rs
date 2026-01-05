@@ -548,13 +548,13 @@ impl Spanned for CreateTable {
             clone,
             comment: _, // todo, no span
             on_commit: _,
-            on_cluster: _,                      // todo, clickhouse specific
-            primary_key: _,                     // todo, clickhouse specific
-            order_by: _,                        // todo, clickhouse specific
-            partition_by: _,                    // todo, BigQuery specific
-            cluster_by: _,                      // todo, BigQuery specific
-            clustered_by: _,                    // todo, Hive specific
-            inherits: _,                        // todo, PostgreSQL specific
+            on_cluster: _,   // todo, clickhouse specific
+            primary_key: _,  // todo, clickhouse specific
+            order_by: _,     // todo, clickhouse specific
+            partition_by: _, // todo, BigQuery specific
+            cluster_by: _,   // todo, BigQuery specific
+            clustered_by: _, // todo, Hive specific
+            inherits: _,     // todo, PostgreSQL specific
             partition_of,
             for_values,
             strict: _,                          // bool

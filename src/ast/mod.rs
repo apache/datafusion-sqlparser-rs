@@ -75,10 +75,9 @@ pub use self::ddl::{
     NullsDistinctOption, OperatorArgTypes, OperatorClassItem, OperatorFamilyDropItem,
     OperatorFamilyItem, OperatorOption, OperatorPurpose, Owner, Partition, PartitionBoundValue,
     ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity, TagsColumnOption,
-    TriggerObjectKind, Truncate,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
-    UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
-    UserDefinedTypeStorage, ViewColumnDef,
+    TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
+    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, ViewColumnDef,
 };
 pub use self::dml::{
     Delete, Insert, Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr,
@@ -8778,6 +8777,26 @@ impl fmt::Display for FunctionBehavior {
             FunctionBehavior::Immutable => write!(f, "IMMUTABLE"),
             FunctionBehavior::Stable => write!(f, "STABLE"),
             FunctionBehavior::Volatile => write!(f, "VOLATILE"),
+        }
+    }
+}
+
+/// Security attribute for functions: SECURITY DEFINER or SECURITY INVOKER.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FunctionSecurity {
+    Definer,
+    Invoker,
+}
+
+impl fmt::Display for FunctionSecurity {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FunctionSecurity::Definer => write!(f, "SECURITY DEFINER"),
+            FunctionSecurity::Invoker => write!(f, "SECURITY INVOKER"),
         }
     }
 }

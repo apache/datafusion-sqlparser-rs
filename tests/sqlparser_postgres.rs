@@ -4294,6 +4294,7 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
+            security: None,
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF str1 <> str2 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
@@ -4335,6 +4336,7 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
+            security: None,
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF int1 <> 0 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
@@ -4380,6 +4382,7 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
+            security: None,
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF a <> b THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
@@ -4425,6 +4428,7 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
+            security: None,
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF int1 <> int2 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
@@ -4463,6 +4467,7 @@ $$"#;
             behavior: None,
             called_on_null: None,
             parallel: None,
+            security: None,
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::DollarQuotedString(DollarQuotedString {
@@ -4504,6 +4509,7 @@ fn parse_create_function() {
             behavior: Some(FunctionBehavior::Immutable),
             called_on_null: Some(FunctionCalledOnNull::Strict),
             parallel: Some(FunctionParallel::Safe),
+            security: None,
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::SingleQuotedString("select $1 + $2;".into())).with_empty_span()
@@ -4535,6 +4541,27 @@ fn parse_create_function_detailed() {
 }
 
 #[test]
+fn parse_create_function_with_security() {
+    let sql =
+        "CREATE FUNCTION test_fn() RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateFunction(CreateFunction { security, .. }) => {
+            assert_eq!(security, Some(FunctionSecurity::Definer));
+        }
+        _ => panic!("Expected CreateFunction"),
+    }
+
+    let sql2 =
+        "CREATE FUNCTION test_fn() RETURNS void LANGUAGE sql SECURITY INVOKER AS $$ SELECT 1 $$";
+    match pg_and_generic().verified_stmt(sql2) {
+        Statement::CreateFunction(CreateFunction { security, .. }) => {
+            assert_eq!(security, Some(FunctionSecurity::Invoker));
+        }
+        _ => panic!("Expected CreateFunction"),
+    }
+}
+
+#[test]
 fn parse_incorrect_create_function_parallel() {
     let sql = "CREATE FUNCTION add(INTEGER, INTEGER) RETURNS INTEGER LANGUAGE SQL PARALLEL BLAH AS 'select $1 + $2;'";
     assert!(pg().parse_sql_statements(sql).is_err());
@@ -4562,6 +4589,7 @@ fn parse_create_function_c_with_module_pathname() {
             behavior: Some(FunctionBehavior::Immutable),
             called_on_null: None,
             parallel: Some(FunctionParallel::Safe),
+            security: None,
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::SingleQuotedString("MODULE_PATHNAME".into())).with_empty_span()
@@ -6187,6 +6215,7 @@ fn parse_trigger_related_functions() {
             behavior: None,
             called_on_null: None,
             parallel: None,
+            security: None,
             using: None,
             language: Some(Ident::new("plpgsql")),
             determinism_specifier: None,

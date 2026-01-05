@@ -2294,6 +2294,7 @@ fn test_bigquery_create_function() {
             remote_connection: None,
             called_on_null: None,
             parallel: None,
+            security: None,
         })
     );
 

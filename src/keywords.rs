@@ -547,6 +547,7 @@ define_keywords!(
     KEY_BLOCK_SIZE,
     KILL,
     LAG,
+    LAMBDA,
     LANGUAGE,
     LARGE,
     LAST,

@@ -15619,7 +15619,8 @@ fn test_lambdas() {
                             },
                         ],
                         else_result: Some(Box::new(Expr::value(number("1")))),
-                    })
+                    }),
+                    syntax: LambdaSyntax::Arrow,
                 })
             ]
         )),

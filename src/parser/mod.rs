@@ -5263,6 +5263,7 @@ impl<'a> Parser<'a> {
             security: Option<FunctionSecurity>,
         }
         let mut body = Body::default();
+        let mut set_params: Vec<FunctionDefinitionSetParam> = Vec::new();
         loop {
             fn ensure_not_set<T>(field: &Option<T>, name: &str) -> Result<(), ParserError> {
                 if field.is_some() {
@@ -5336,6 +5337,18 @@ impl<'a> Parser<'a> {
                 } else {
                     return self.expected("DEFINER or INVOKER", self.peek_token());
                 }
+            } else if self.parse_keyword(Keyword::SET) {
+                let name = self.parse_identifier()?;
+                let value = if self.parse_keywords(&[Keyword::FROM, Keyword::CURRENT]) {
+                    FunctionSetValue::FromCurrent
+                } else {
+                    if !self.consume_token(&Token::Eq) && !self.parse_keyword(Keyword::TO) {
+                        return self.expected("= or TO", self.peek_token());
+                    }
+                    let values = self.parse_comma_separated(Parser::parse_expr)?;
+                    FunctionSetValue::Values(values)
+                };
+                set_params.push(FunctionDefinitionSetParam { name, value });
             } else if self.parse_keyword(Keyword::RETURN) {
                 ensure_not_set(&body.function_body, "RETURN")?;
                 body.function_body = Some(CreateFunctionBody::Return(self.parse_expr()?));
@@ -5355,6 +5368,7 @@ impl<'a> Parser<'a> {
             called_on_null: body.called_on_null,
             parallel: body.parallel,
             security: body.security,
+            set_params,
             language: body.language,
             function_body: body.function_body,
             if_not_exists: false,
@@ -5393,6 +5407,7 @@ impl<'a> Parser<'a> {
             called_on_null: None,
             parallel: None,
             security: None,
+            set_params: vec![],
             language: None,
             determinism_specifier: None,
             options: None,
@@ -5476,6 +5491,7 @@ impl<'a> Parser<'a> {
             called_on_null: None,
             parallel: None,
             security: None,
+            set_params: vec![],
         }))
     }
 
@@ -5566,6 +5582,7 @@ impl<'a> Parser<'a> {
             called_on_null: None,
             parallel: None,
             security: None,
+            set_params: vec![],
         }))
     }
 

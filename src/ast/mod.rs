@@ -8801,6 +8801,42 @@ impl fmt::Display for FunctionSecurity {
     }
 }
 
+/// Value for a SET configuration parameter in a CREATE FUNCTION statement.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FunctionSetValue {
+    /// SET param = value1, value2, ...
+    Values(Vec<Expr>),
+    /// SET param FROM CURRENT
+    FromCurrent,
+}
+
+/// A SET configuration_parameter clause in a CREATE FUNCTION statement.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct FunctionDefinitionSetParam {
+    pub name: Ident,
+    pub value: FunctionSetValue,
+}
+
+impl fmt::Display for FunctionDefinitionSetParam {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "SET {} ", self.name)?;
+        match &self.value {
+            FunctionSetValue::Values(values) => {
+                write!(f, "= {}", display_comma_separated(values))
+            }
+            FunctionSetValue::FromCurrent => write!(f, "FROM CURRENT"),
+        }
+    }
+}
+
 /// These attributes describe the behavior of the function when called with a null argument.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

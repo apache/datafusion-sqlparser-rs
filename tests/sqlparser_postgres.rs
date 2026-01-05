@@ -4295,6 +4295,7 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF str1 <> str2 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
@@ -4337,6 +4338,7 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF int1 <> 0 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
@@ -4383,6 +4385,7 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF a <> b THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
@@ -4429,6 +4432,7 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::DollarQuotedString(DollarQuotedString {value: "\nBEGIN\n    IF int1 <> int2 THEN\n        RETURN TRUE;\n    ELSE\n        RETURN FALSE;\n    END IF;\nEND;\n".to_owned(), tag: None})).with_empty_span()
@@ -4468,6 +4472,7 @@ $$"#;
             called_on_null: None,
             parallel: None,
             security: None,
+            set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::DollarQuotedString(DollarQuotedString {
@@ -4510,6 +4515,7 @@ fn parse_create_function() {
             called_on_null: Some(FunctionCalledOnNull::Strict),
             parallel: Some(FunctionParallel::Safe),
             security: None,
+            set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::SingleQuotedString("select $1 + $2;".into())).with_empty_span()
@@ -4562,6 +4568,40 @@ fn parse_create_function_with_security() {
 }
 
 #[test]
+fn parse_create_function_with_set_params() {
+    let sql =
+        "CREATE FUNCTION test_fn() RETURNS void LANGUAGE sql SET search_path = auth, pg_temp, public AS $$ SELECT 1 $$";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateFunction(CreateFunction { set_params, .. }) => {
+            assert_eq!(set_params.len(), 1);
+            assert_eq!(set_params[0].name.to_string(), "search_path");
+        }
+        _ => panic!("Expected CreateFunction"),
+    }
+
+    // Test multiple SET params
+    let sql2 =
+        "CREATE FUNCTION test_fn() RETURNS void LANGUAGE sql SET search_path = public SET statement_timeout = '5s' AS $$ SELECT 1 $$";
+    match pg_and_generic().verified_stmt(sql2) {
+        Statement::CreateFunction(CreateFunction { set_params, .. }) => {
+            assert_eq!(set_params.len(), 2);
+        }
+        _ => panic!("Expected CreateFunction"),
+    }
+
+    // Test FROM CURRENT
+    let sql3 =
+        "CREATE FUNCTION test_fn() RETURNS void LANGUAGE sql SET search_path FROM CURRENT AS $$ SELECT 1 $$";
+    match pg_and_generic().verified_stmt(sql3) {
+        Statement::CreateFunction(CreateFunction { set_params, .. }) => {
+            assert_eq!(set_params.len(), 1);
+            assert!(matches!(set_params[0].value, FunctionSetValue::FromCurrent));
+        }
+        _ => panic!("Expected CreateFunction"),
+    }
+}
+
+#[test]
 fn parse_incorrect_create_function_parallel() {
     let sql = "CREATE FUNCTION add(INTEGER, INTEGER) RETURNS INTEGER LANGUAGE SQL PARALLEL BLAH AS 'select $1 + $2;'";
     assert!(pg().parse_sql_statements(sql).is_err());
@@ -4590,6 +4630,7 @@ fn parse_create_function_c_with_module_pathname() {
             called_on_null: None,
             parallel: Some(FunctionParallel::Safe),
             security: None,
+            set_params: vec![],
             function_body: Some(CreateFunctionBody::AsBeforeOptions {
                 body: Expr::Value(
                     (Value::SingleQuotedString("MODULE_PATHNAME".into())).with_empty_span()
@@ -6216,6 +6257,7 @@ fn parse_trigger_related_functions() {
             called_on_null: None,
             parallel: None,
             security: None,
+            set_params: vec![],
             using: None,
             language: Some(Ident::new("plpgsql")),
             determinism_specifier: None,

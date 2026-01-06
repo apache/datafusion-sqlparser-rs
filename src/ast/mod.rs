@@ -69,15 +69,15 @@ pub use self::ddl::{
     CreateExtension, CreateFunction, CreateIndex, CreateOperator, CreateOperatorClass,
     CreateOperatorFamily, CreateTable, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
     DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily,
-    DropOperatorSignature, DropTrigger, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
-    IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
-    IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption,
-    OperatorArgTypes, OperatorClassItem, OperatorFamilyDropItem, OperatorFamilyItem,
-    OperatorOption, OperatorPurpose, Owner, Partition, ProcedureParam, ReferentialAction,
-    RenameTableNameKind, ReplicaIdentity, TagsColumnOption, TriggerObjectKind, Truncate,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
-    UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
-    UserDefinedTypeStorage, ViewColumnDef,
+    DropOperatorSignature, DropTrigger, ForValues, GeneratedAs, GeneratedExpressionMode,
+    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
+    IdentityPropertyOrder, IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck,
+    NullsDistinctOption, OperatorArgTypes, OperatorClassItem, OperatorFamilyDropItem,
+    OperatorFamilyItem, OperatorOption, OperatorPurpose, Owner, Partition, PartitionBoundValue,
+    ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity, TagsColumnOption,
+    TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
+    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, ViewColumnDef,
 };
 pub use self::dml::{
     Delete, Insert, Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr,
@@ -8777,6 +8777,62 @@ impl fmt::Display for FunctionBehavior {
             FunctionBehavior::Immutable => write!(f, "IMMUTABLE"),
             FunctionBehavior::Stable => write!(f, "STABLE"),
             FunctionBehavior::Volatile => write!(f, "VOLATILE"),
+        }
+    }
+}
+
+/// Security attribute for functions: SECURITY DEFINER or SECURITY INVOKER.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FunctionSecurity {
+    Definer,
+    Invoker,
+}
+
+impl fmt::Display for FunctionSecurity {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FunctionSecurity::Definer => write!(f, "SECURITY DEFINER"),
+            FunctionSecurity::Invoker => write!(f, "SECURITY INVOKER"),
+        }
+    }
+}
+
+/// Value for a SET configuration parameter in a CREATE FUNCTION statement.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FunctionSetValue {
+    /// SET param = value1, value2, ...
+    Values(Vec<Expr>),
+    /// SET param FROM CURRENT
+    FromCurrent,
+}
+
+/// A SET configuration_parameter clause in a CREATE FUNCTION statement.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct FunctionDefinitionSetParam {
+    pub name: Ident,
+    pub value: FunctionSetValue,
+}
+
+impl fmt::Display for FunctionDefinitionSetParam {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "SET {} ", self.name)?;
+        match &self.value {
+            FunctionSetValue::Values(values) => {
+                write!(f, "= {}", display_comma_separated(values))
+            }
+            FunctionSetValue::FromCurrent => write!(f, "FROM CURRENT"),
         }
     }
 }

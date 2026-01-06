@@ -43,13 +43,14 @@ use crate::ast::{
     },
     ArgMode, AttachedToken, CommentDef, ConditionalStatements, CreateFunctionBody,
     CreateFunctionUsing, CreateTableLikeKind, CreateTableOptions, CreateViewParams, DataType, Expr,
-    FileFormat, FunctionBehavior, FunctionCalledOnNull, FunctionDesc, FunctionDeterminismSpecifier,
-    FunctionParallel, HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat,
-    HiveSetLocation, Ident, InitializeKind, MySQLColumnPosition, ObjectName, OnCommit,
-    OneOrManyWithParens, OperateFunctionArg, OrderByExpr, ProjectionSelect, Query, RefreshModeKind,
-    RowAccessPolicy, SequenceOptions, Spanned, SqlOption, StorageSerializationPolicy, TableVersion,
-    Tag, TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value,
-    ValueWithSpan, WrappedCollection,
+    FileFormat, FunctionBehavior, FunctionCalledOnNull, FunctionDefinitionSetParam, FunctionDesc,
+    FunctionDeterminismSpecifier, FunctionParallel, FunctionSecurity, HiveDistributionStyle,
+    HiveFormat, HiveIOFormat, HiveRowFormat, HiveSetLocation, Ident, InitializeKind,
+    MySQLColumnPosition, ObjectName, OnCommit, OneOrManyWithParens, OperateFunctionArg,
+    OrderByExpr, ProjectionSelect, Query, RefreshModeKind, RowAccessPolicy, SequenceOptions,
+    Spanned, SqlOption, StorageSerializationPolicy, TableVersion, Tag, TriggerEvent,
+    TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value, ValueWithSpan,
+    WrappedCollection,
 };
 use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
 use crate::keywords::Keyword;
@@ -2697,6 +2698,14 @@ pub struct CreateTable {
     /// <https://www.postgresql.org/docs/current/ddl-inherit.html>
     /// <https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-PARMS-INHERITS>
     pub inherits: Option<Vec<ObjectName>>,
+    /// PostgreSQL `PARTITION OF` clause to create a partition of a parent table.
+    /// Contains the parent table name.
+    /// <https://www.postgresql.org/docs/current/sql-createtable.html>
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub partition_of: Option<ObjectName>,
+    /// PostgreSQL partition bound specification for PARTITION OF.
+    /// <https://www.postgresql.org/docs/current/sql-createtable.html>
+    pub for_values: Option<ForValues>,
     /// SQLite "STRICT" clause.
     /// if the "STRICT" table-option keyword is added to the end, after the closing ")",
     /// then strict typing rules apply to that table.
@@ -2792,6 +2801,9 @@ impl fmt::Display for CreateTable {
             dynamic = if self.dynamic { "DYNAMIC " } else { "" },
             name = self.name,
         )?;
+        if let Some(partition_of) = &self.partition_of {
+            write!(f, " PARTITION OF {partition_of}")?;
+        }
         if let Some(on_cluster) = &self.on_cluster {
             write!(f, " ON CLUSTER {on_cluster}")?;
         }
@@ -2806,11 +2818,18 @@ impl fmt::Display for CreateTable {
             Indent(DisplayCommaSeparated(&self.constraints)).fmt(f)?;
             NewLine.fmt(f)?;
             f.write_str(")")?;
-        } else if self.query.is_none() && self.like.is_none() && self.clone.is_none() {
+        } else if self.query.is_none()
+            && self.like.is_none()
+            && self.clone.is_none()
+            && self.partition_of.is_none()
+        {
             // PostgreSQL allows `CREATE TABLE t ();`, but requires empty parens
             f.write_str(" ()")?;
         } else if let Some(CreateTableLikeKind::Parenthesized(like_in_columns_list)) = &self.like {
             write!(f, " ({like_in_columns_list})")?;
+        }
+        if let Some(for_values) = &self.for_values {
+            write!(f, " {for_values}")?;
         }
 
         // Hive table comment should be after column definitions, please refer to:
@@ -3053,6 +3072,76 @@ impl fmt::Display for CreateTable {
     }
 }
 
+/// PostgreSQL partition bound specification for `PARTITION OF`.
+///
+/// Specifies partition bounds for a child partition table.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtable.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ForValues {
+    /// `FOR VALUES IN (expr, ...)`
+    In(Vec<Expr>),
+    /// `FOR VALUES FROM (expr|MINVALUE|MAXVALUE, ...) TO (expr|MINVALUE|MAXVALUE, ...)`
+    From {
+        from: Vec<PartitionBoundValue>,
+        to: Vec<PartitionBoundValue>,
+    },
+    /// `FOR VALUES WITH (MODULUS n, REMAINDER r)`
+    With { modulus: u64, remainder: u64 },
+    /// `DEFAULT`
+    Default,
+}
+
+impl fmt::Display for ForValues {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ForValues::In(values) => {
+                write!(f, "FOR VALUES IN ({})", display_comma_separated(values))
+            }
+            ForValues::From { from, to } => {
+                write!(
+                    f,
+                    "FOR VALUES FROM ({}) TO ({})",
+                    display_comma_separated(from),
+                    display_comma_separated(to)
+                )
+            }
+            ForValues::With { modulus, remainder } => {
+                write!(
+                    f,
+                    "FOR VALUES WITH (MODULUS {modulus}, REMAINDER {remainder})"
+                )
+            }
+            ForValues::Default => write!(f, "DEFAULT"),
+        }
+    }
+}
+
+/// A value in a partition bound specification.
+///
+/// Used in RANGE partition bounds where values can be expressions,
+/// MINVALUE (negative infinity), or MAXVALUE (positive infinity).
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum PartitionBoundValue {
+    Expr(Expr),
+    MinValue,
+    MaxValue,
+}
+
+impl fmt::Display for PartitionBoundValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            PartitionBoundValue::Expr(expr) => write!(f, "{expr}"),
+            PartitionBoundValue::MinValue => write!(f, "MINVALUE"),
+            PartitionBoundValue::MaxValue => write!(f, "MAXVALUE"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -3138,6 +3227,14 @@ pub struct CreateFunction {
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
     pub parallel: Option<FunctionParallel>,
+    /// SECURITY { DEFINER | INVOKER }
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    pub security: Option<FunctionSecurity>,
+    /// SET configuration_parameter clauses
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    pub set_params: Vec<FunctionDefinitionSetParam>,
     /// USING ... (Hive only)
     pub using: Option<CreateFunctionUsing>,
     /// Language used in a UDF definition.
@@ -3203,6 +3300,12 @@ impl fmt::Display for CreateFunction {
         }
         if let Some(parallel) = &self.parallel {
             write!(f, " {parallel}")?;
+        }
+        if let Some(security) = &self.security {
+            write!(f, " {security}")?;
+        }
+        for set_param in &self.set_params {
+            write!(f, " {set_param}")?;
         }
         if let Some(remote_connection) = &self.remote_connection {
             write!(f, " REMOTE WITH CONNECTION {remote_connection}")?;

@@ -1101,8 +1101,8 @@ fn parse_create_dynamic_table() {
         " EXTERNAL_VOLUME='my_external_volume'",
         " CATALOG='SNOWFLAKE'",
         " BASE_LOCATION='my_iceberg_table'",
-        " TARGET_LAG='20 minutes'", 
-        " WAREHOUSE=mywh",       
+        " TARGET_LAG='20 minutes'",
+        " WAREHOUSE=mywh",
         " AS SELECT product_id, product_name FROM staging_table"
     ));
 
@@ -1250,6 +1250,7 @@ fn parse_array() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("a"))),
             data_type: DataType::Array(ArrayElemTypeDef::None),
+            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -1349,8 +1350,6 @@ fn parse_semi_structured_data_traversal() {
         Expr::JsonAccess {
             value: Box::new(Expr::Cast {
                 kind: CastKind::DoubleColon,
-                data_type: DataType::Array(ArrayElemTypeDef::None),
-                format: None,
                 expr: Box::new(Expr::JsonAccess {
                     value: Box::new(Expr::Identifier(Ident::new("a"))),
                     path: JsonPath {
@@ -1359,7 +1358,10 @@ fn parse_semi_structured_data_traversal() {
                             quoted: false
                         }]
                     }
-                })
+                }),
+                data_type: DataType::Array(ArrayElemTypeDef::None),
+                array: false,
+                format: None,
             }),
             path: JsonPath {
                 path: vec![JsonPathElem::Bracket {

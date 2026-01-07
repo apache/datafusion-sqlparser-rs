@@ -1706,6 +1706,7 @@ fn parse_execute() {
                             (Value::Number("1337".parse().unwrap(), false)).with_empty_span()
                         )),
                         data_type: DataType::SmallInt(None),
+                        array: false,
                         format: None
                     },
                     alias: None
@@ -1717,6 +1718,7 @@ fn parse_execute() {
                             (Value::Number("7331".parse().unwrap(), false)).with_empty_span()
                         )),
                         data_type: DataType::SmallInt(None),
+                        array: false,
                         format: None
                     },
                     alias: None
@@ -2343,6 +2345,7 @@ fn parse_array_index_expr() {
                     ))),
                     None
                 )),
+                array: false,
                 format: None,
             }))),
             access_chain: vec![
@@ -5573,6 +5576,7 @@ fn parse_at_time_zone() {
                     Value::SingleQuotedString("America/Los_Angeles".to_owned()).with_empty_span(),
                 )),
                 data_type: DataType::Text,
+                array: false,
                 format: None,
             }),
         }),
@@ -6389,6 +6393,7 @@ fn arrow_cast_precedence() {
                     (Value::SingleQuotedString("bar".to_string())).with_empty_span()
                 )),
                 data_type: DataType::Text,
+                array: false,
                 format: None,
             }),
         }

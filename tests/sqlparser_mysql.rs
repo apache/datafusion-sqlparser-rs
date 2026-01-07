@@ -874,6 +874,25 @@ fn test_functional_key_part() {
                 )),
             }),
             data_type: DataType::Unsigned,
+            array: false,
+            format: None,
+        })),
+    );
+    assert_eq!(
+        index_column(mysql_and_generic().verified_stmt(
+            r#"CREATE TABLE t (jsoncol JSON, PRIMARY KEY ((CAST(col ->> '$.fields' AS UNSIGNED ARRAY)) ASC))"#
+        )),
+        Expr::Nested(Box::new(Expr::Cast {
+            kind: CastKind::Cast,
+            expr: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("col"))),
+                op: BinaryOperator::LongArrow,
+                right: Box::new(Expr::Value(
+                    Value::SingleQuotedString("$.fields".to_string()).with_empty_span()
+                )),
+            }),
+            data_type: DataType::Unsigned,
+            array: true,
             format: None,
         })),
     );
@@ -4094,6 +4113,14 @@ fn parse_cast_integers() {
     mysql()
         .run_parser_method("CAST(foo AS UNSIGNED INTEGER(3))", |p| p.parse_expr())
         .expect_err("CAST doesn't allow display width");
+}
+
+#[test]
+fn parse_cast_array() {
+    mysql().verified_expr("CAST(foo AS SIGNED ARRAY)");
+    mysql()
+        .run_parser_method("CAST(foo AS ARRAY)", |p| p.parse_expr())
+        .expect_err("ARRAY alone is not a type");
 }
 
 #[test]

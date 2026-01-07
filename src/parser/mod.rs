@@ -5260,8 +5260,10 @@ impl<'a> Parser<'a> {
             function_body: Option<CreateFunctionBody>,
             called_on_null: Option<FunctionCalledOnNull>,
             parallel: Option<FunctionParallel>,
+            security: Option<FunctionSecurity>,
         }
         let mut body = Body::default();
+        let mut set_params: Vec<FunctionDefinitionSetParam> = Vec::new();
         loop {
             fn ensure_not_set<T>(field: &Option<T>, name: &str) -> Result<(), ParserError> {
                 if field.is_some() {
@@ -5326,6 +5328,27 @@ impl<'a> Parser<'a> {
                 } else {
                     return self.expected("one of UNSAFE | RESTRICTED | SAFE", self.peek_token());
                 }
+            } else if self.parse_keyword(Keyword::SECURITY) {
+                ensure_not_set(&body.security, "SECURITY { DEFINER | INVOKER }")?;
+                if self.parse_keyword(Keyword::DEFINER) {
+                    body.security = Some(FunctionSecurity::Definer);
+                } else if self.parse_keyword(Keyword::INVOKER) {
+                    body.security = Some(FunctionSecurity::Invoker);
+                } else {
+                    return self.expected("DEFINER or INVOKER", self.peek_token());
+                }
+            } else if self.parse_keyword(Keyword::SET) {
+                let name = self.parse_identifier()?;
+                let value = if self.parse_keywords(&[Keyword::FROM, Keyword::CURRENT]) {
+                    FunctionSetValue::FromCurrent
+                } else {
+                    if !self.consume_token(&Token::Eq) && !self.parse_keyword(Keyword::TO) {
+                        return self.expected("= or TO", self.peek_token());
+                    }
+                    let values = self.parse_comma_separated(Parser::parse_expr)?;
+                    FunctionSetValue::Values(values)
+                };
+                set_params.push(FunctionDefinitionSetParam { name, value });
             } else if self.parse_keyword(Keyword::RETURN) {
                 ensure_not_set(&body.function_body, "RETURN")?;
                 body.function_body = Some(CreateFunctionBody::Return(self.parse_expr()?));
@@ -5344,6 +5367,8 @@ impl<'a> Parser<'a> {
             behavior: body.behavior,
             called_on_null: body.called_on_null,
             parallel: body.parallel,
+            security: body.security,
+            set_params,
             language: body.language,
             function_body: body.function_body,
             if_not_exists: false,
@@ -5381,6 +5406,8 @@ impl<'a> Parser<'a> {
             behavior: None,
             called_on_null: None,
             parallel: None,
+            security: None,
+            set_params: vec![],
             language: None,
             determinism_specifier: None,
             options: None,
@@ -5463,6 +5490,8 @@ impl<'a> Parser<'a> {
             behavior: None,
             called_on_null: None,
             parallel: None,
+            security: None,
+            set_params: vec![],
         }))
     }
 
@@ -5552,6 +5581,8 @@ impl<'a> Parser<'a> {
             behavior: None,
             called_on_null: None,
             parallel: None,
+            security: None,
+            set_params: vec![],
         }))
     }
 
@@ -7887,6 +7918,22 @@ impl<'a> Parser<'a> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name(allow_unquoted_hyphen)?;
 
+        // PostgreSQL PARTITION OF for child partition tables
+        // Note: This is a PostgreSQL-specific feature, but the dialect check was intentionally
+        // removed to allow GenericDialect and other dialects to parse this syntax. This enables
+        // multi-dialect SQL tools to work with PostgreSQL-specific DDL statements.
+        //
+        // PARTITION OF can be combined with other table definition clauses in the AST,
+        // though PostgreSQL itself prohibits PARTITION OF with AS SELECT or LIKE clauses.
+        // The parser accepts these combinations for flexibility; semantic validation
+        // is left to downstream tools.
+        // Child partitions can have their own constraints and indexes.
+        let partition_of = if self.parse_keywords(&[Keyword::PARTITION, Keyword::OF]) {
+            Some(self.parse_object_name(allow_unquoted_hyphen)?)
+        } else {
+            None
+        };
+
         // Clickhouse has `ON CLUSTER 'cluster'` syntax for DDLs
         let on_cluster = self.parse_optional_on_cluster()?;
 
@@ -7910,6 +7957,20 @@ impl<'a> Parser<'a> {
             } else {
                 None
             };
+
+        // PostgreSQL PARTITION OF: partition bound specification
+        let for_values = if partition_of.is_some() {
+            if self.peek_keyword(Keyword::FOR) || self.peek_keyword(Keyword::DEFAULT) {
+                Some(self.parse_partition_for_values()?)
+            } else {
+                return self.expected(
+                    "FOR VALUES or DEFAULT after PARTITION OF",
+                    self.peek_token(),
+                );
+            }
+        } else {
+            None
+        };
 
         // SQLite supports `WITHOUT ROWID` at the end of `CREATE TABLE`
         let without_rowid = self.parse_keywords(&[Keyword::WITHOUT, Keyword::ROWID]);
@@ -7988,6 +8049,8 @@ impl<'a> Parser<'a> {
             .partition_by(create_table_config.partition_by)
             .cluster_by(create_table_config.cluster_by)
             .inherits(create_table_config.inherits)
+            .partition_of(partition_of)
+            .for_values(for_values)
             .table_options(create_table_config.table_options)
             .primary_key(primary_key)
             .strict(strict)
@@ -8044,6 +8107,69 @@ impl<'a> Parser<'a> {
                 "Expecting DELETE ROWS, PRESERVE ROWS or DROP",
                 self.peek_token()
             )
+        }
+    }
+
+    /// Parse [ForValues] of a `PARTITION OF` clause.
+    ///
+    /// Parses: `FOR VALUES partition_bound_spec | DEFAULT`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtable.html)
+    fn parse_partition_for_values(&mut self) -> Result<ForValues, ParserError> {
+        if self.parse_keyword(Keyword::DEFAULT) {
+            return Ok(ForValues::Default);
+        }
+
+        self.expect_keywords(&[Keyword::FOR, Keyword::VALUES])?;
+
+        if self.parse_keyword(Keyword::IN) {
+            // FOR VALUES IN (expr, ...)
+            self.expect_token(&Token::LParen)?;
+            if self.peek_token() == Token::RParen {
+                return self.expected("at least one value", self.peek_token());
+            }
+            let values = self.parse_comma_separated(Parser::parse_expr)?;
+            self.expect_token(&Token::RParen)?;
+            Ok(ForValues::In(values))
+        } else if self.parse_keyword(Keyword::FROM) {
+            // FOR VALUES FROM (...) TO (...)
+            self.expect_token(&Token::LParen)?;
+            if self.peek_token() == Token::RParen {
+                return self.expected("at least one value", self.peek_token());
+            }
+            let from = self.parse_comma_separated(Parser::parse_partition_bound_value)?;
+            self.expect_token(&Token::RParen)?;
+            self.expect_keyword(Keyword::TO)?;
+            self.expect_token(&Token::LParen)?;
+            if self.peek_token() == Token::RParen {
+                return self.expected("at least one value", self.peek_token());
+            }
+            let to = self.parse_comma_separated(Parser::parse_partition_bound_value)?;
+            self.expect_token(&Token::RParen)?;
+            Ok(ForValues::From { from, to })
+        } else if self.parse_keyword(Keyword::WITH) {
+            // FOR VALUES WITH (MODULUS n, REMAINDER r)
+            self.expect_token(&Token::LParen)?;
+            self.expect_keyword(Keyword::MODULUS)?;
+            let modulus = self.parse_literal_uint()?;
+            self.expect_token(&Token::Comma)?;
+            self.expect_keyword(Keyword::REMAINDER)?;
+            let remainder = self.parse_literal_uint()?;
+            self.expect_token(&Token::RParen)?;
+            Ok(ForValues::With { modulus, remainder })
+        } else {
+            self.expected("IN, FROM, or WITH after FOR VALUES", self.peek_token())
+        }
+    }
+
+    /// Parse a single [PartitionBoundValue].
+    fn parse_partition_bound_value(&mut self) -> Result<PartitionBoundValue, ParserError> {
+        if self.parse_keyword(Keyword::MINVALUE) {
+            Ok(PartitionBoundValue::MinValue)
+        } else if self.parse_keyword(Keyword::MAXVALUE) {
+            Ok(PartitionBoundValue::MaxValue)
+        } else {
+            Ok(PartitionBoundValue::Expr(self.parse_expr()?))
         }
     }
 

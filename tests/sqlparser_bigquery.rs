@@ -1739,7 +1739,7 @@ fn parse_table_time_travel() {
                 args: None,
                 with_hints: vec![],
                 version: Some(TableVersion::ForSystemTimeAsOf(Expr::Value(
-                    Value::SingleQuotedString(version).with_empty_span()
+                    Value::SingleQuotedString(version.clone()).with_empty_span()
                 ))),
                 partitions: vec![],
                 with_ordinality: false,

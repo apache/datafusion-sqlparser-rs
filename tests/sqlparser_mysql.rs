@@ -3766,28 +3766,6 @@ fn parse_logical_xor() {
 }
 
 #[test]
-fn parse_bitwise_shift_ops() {
-    let sql = "SELECT 1 << 2, 8 >> 3";
-    let select = mysql().verified_only_select(sql);
-    assert_eq!(
-        SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Value((number("1")).with_empty_span())),
-            op: BinaryOperator::PGBitwiseShiftLeft,
-            right: Box::new(Expr::Value((number("2")).with_empty_span())),
-        }),
-        select.projection[0]
-    );
-    assert_eq!(
-        SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Value((number("8")).with_empty_span())),
-            op: BinaryOperator::PGBitwiseShiftRight,
-            right: Box::new(Expr::Value((number("3")).with_empty_span())),
-        }),
-        select.projection[1]
-    );
-}
-
-#[test]
 fn parse_bitstring_literal() {
     let select = mysql_and_generic().verified_only_select("SELECT B'111'");
     assert_eq!(

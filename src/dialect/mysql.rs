@@ -84,6 +84,10 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    fn supports_bitwise_shift_operators(&self) -> bool {
+        true
+    }
+
     fn parse_infix(
         &self,
         parser: &mut crate::parser::Parser,

@@ -1856,6 +1856,21 @@ impl<'a> Parser<'a> {
                         chain.push(AccessExpr::Dot(expr));
                         self.advance_token(); // The consumed string
                     }
+                    // Handle words (including keywords like INTERVAL) as identifiers
+                    // when they appear after a period. This ensures `T.interval` is
+                    // parsed as a compound identifier, not as an interval expression.
+                    // If followed by `(`, parse as a method call (but not for `(+)`
+                    // which is the outer join operator in some dialects).
+                    Token::Word(w) => {
+                        let ident = w.clone().into_ident(next_token.span);
+                        self.advance_token();
+                        if self.peek_token() == Token::LParen && !self.peek_outer_join_operator() {
+                            let expr = self.parse_function(ObjectName::from(vec![ident]))?;
+                            chain.push(AccessExpr::Dot(expr));
+                        } else {
+                            chain.push(AccessExpr::Dot(Expr::Identifier(ident)));
+                        }
+                    }
                     // Fallback to parsing an arbitrary expression.
                     _ => match self.parse_subexpr(self.dialect.prec_value(Precedence::Period))? {
                         // If we get back a compound field access or identifier,

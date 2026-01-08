@@ -15010,6 +15010,51 @@ fn test_reserved_keywords_for_identifiers() {
 }
 
 #[test]
+fn test_keywords_as_column_names_after_dot() {
+    // Test various keywords that have special meaning when standalone
+    // but should be treated as identifiers after a dot.
+    let keywords = [
+        "interval",  // INTERVAL '1' DAY
+        "case",      // CASE WHEN ... END
+        "cast",      // CAST(x AS y)
+        "extract",   // EXTRACT(DAY FROM ...)
+        "trim",      // TRIM(...)
+        "substring", // SUBSTRING(...)
+        "left",      // LEFT(str, n)
+        "right",     // RIGHT(str, n)
+    ];
+
+    for kw in keywords {
+        let sql = format!("SELECT T.{kw} FROM T");
+        verified_stmt(&sql);
+
+        let sql = format!("SELECT SUM(x) OVER (PARTITION BY T.{kw} ORDER BY T.id) FROM T");
+        verified_stmt(&sql);
+
+        let sql = format!("SELECT T.{kw}, S.{kw} FROM T, S WHERE T.{kw} = S.{kw}");
+        verified_stmt(&sql);
+    }
+
+    let select = verified_only_select("SELECT T.interval, T.case FROM T");
+    match &select.projection[0] {
+        SelectItem::UnnamedExpr(Expr::CompoundIdentifier(idents)) => {
+            assert_eq!(idents.len(), 2);
+            assert_eq!(idents[0].value, "T");
+            assert_eq!(idents[1].value, "interval");
+        }
+        _ => panic!("Expected CompoundIdentifier for T.interval"),
+    }
+    match &select.projection[1] {
+        SelectItem::UnnamedExpr(Expr::CompoundIdentifier(idents)) => {
+            assert_eq!(idents.len(), 2);
+            assert_eq!(idents[0].value, "T");
+            assert_eq!(idents[1].value, "case");
+        }
+        _ => panic!("Expected CompoundIdentifier for T.case"),
+    }
+}
+
+#[test]
 fn parse_create_table_with_bit_types() {
     let sql = "CREATE TABLE t (a BIT, b BIT VARYING, c BIT(42), d BIT VARYING(43))";
     match verified_stmt(sql) {

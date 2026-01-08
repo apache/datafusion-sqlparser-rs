@@ -376,7 +376,15 @@ fn parse_table_time_travel() {
         "SELECT 1 FROM t1 TIMESTAMP AS OF CURRENT_TIMESTAMP() - INTERVAL 12 HOURS",
     );
 
+    all_dialects_where(|d| d.supports_timestamp_versioning()).verified_only_select(
+        "SELECT 1 FROM t1 VERSION AS OF 1",
+    );
+
     assert!(databricks()
         .parse_sql_statements("SELECT 1 FROM t1 FOR TIMESTAMP AS OF 'some_timestamp'")
         .is_err());
+
+    assert!(all_dialects_where(|d| d.supports_timestamp_versioning()).parse_sql_statements(
+        "SELECT 1 FROM t1 VERSION AS OF 1 - 2",
+    ).is_err())
 }

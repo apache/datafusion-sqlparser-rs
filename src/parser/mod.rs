@@ -15496,6 +15496,9 @@ impl<'a> Parser<'a> {
             } else if self.parse_keywords(&[Keyword::TIMESTAMP, Keyword::AS, Keyword::OF]) {
                 let expr = self.parse_expr()?;
                 return Ok(Some(TableVersion::TimestampAsOf(expr)));
+            } else if self.parse_keywords(&[Keyword::VERSION, Keyword::AS, Keyword::OF]) {
+                let expr = Expr::Value(self.parse_number_value()?);
+                return Ok(Some(TableVersion::VersionAsOf(expr)));
             }
         }
         Ok(None)

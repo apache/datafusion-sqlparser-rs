@@ -1737,3 +1737,103 @@ fn clickhouse_and_generic() -> TestedDialects {
         Box::new(GenericDialect {}),
     ])
 }
+
+#[test]
+fn test_clickhouse_data_type_to_sql_pascalcase() {
+    // Test that DataType::to_sql() outputs PascalCase for ClickHouse dialect
+    // This is critical because ClickHouse requires PascalCase type names
+    // (e.g., String, Int64) and will error with UNKNOWN_TYPE if given uppercase.
+    use sqlparser::ast::DataType;
+    use sqlparser::dialect::BigQueryDialect;
+
+    let ch = ClickHouseDialect {};
+    let generic = GenericDialect {};
+    let bigquery = BigQueryDialect {};
+
+    // Test Int64 - shared between BigQuery (INT64) and ClickHouse (Int64)
+    let int64 = DataType::Int64;
+    assert_eq!(int64.to_sql(&ch), "Int64");
+    assert_eq!(int64.to_sql(&generic), "INT64");
+    assert_eq!(int64.to_sql(&bigquery), "INT64");
+
+    // Test Float64 - shared between BigQuery (FLOAT64) and ClickHouse (Float64)
+    let float64 = DataType::Float64;
+    assert_eq!(float64.to_sql(&ch), "Float64");
+    assert_eq!(float64.to_sql(&generic), "FLOAT64");
+
+    // Test Int8 - PostgreSQL uses INT8 (8 bytes), ClickHouse uses Int8 (8 bits)
+    let int8 = DataType::Int8(None);
+    assert_eq!(int8.to_sql(&ch), "Int8");
+    assert_eq!(int8.to_sql(&generic), "INT8");
+
+    // Test String - ClickHouse requires String, not STRING
+    let string = DataType::String(None);
+    assert_eq!(string.to_sql(&ch), "String");
+    assert_eq!(string.to_sql(&generic), "STRING");
+
+    // Test Bool/Boolean
+    let bool_type = DataType::Bool;
+    assert_eq!(bool_type.to_sql(&ch), "Bool");
+    assert_eq!(bool_type.to_sql(&generic), "BOOL");
+
+    let boolean_type = DataType::Boolean;
+    assert_eq!(boolean_type.to_sql(&ch), "Boolean");
+    assert_eq!(boolean_type.to_sql(&generic), "BOOLEAN");
+
+    // Test Date
+    let date = DataType::Date;
+    assert_eq!(date.to_sql(&ch), "Date");
+    assert_eq!(date.to_sql(&generic), "DATE");
+
+    // Test DateTime
+    let datetime = DataType::Datetime(None);
+    assert_eq!(datetime.to_sql(&ch), "DateTime");
+    assert_eq!(datetime.to_sql(&generic), "DATETIME");
+
+    // Test Nullable(String) - nested type
+    let nullable_string = DataType::Nullable(Box::new(DataType::String(None)));
+    assert_eq!(nullable_string.to_sql(&ch), "Nullable(String)");
+    assert_eq!(nullable_string.to_sql(&generic), "Nullable(STRING)");
+
+    // Test LowCardinality(String)
+    let lowcard_string = DataType::LowCardinality(Box::new(DataType::String(None)));
+    assert_eq!(lowcard_string.to_sql(&ch), "LowCardinality(String)");
+    assert_eq!(lowcard_string.to_sql(&generic), "LowCardinality(STRING)");
+
+    // Test Array(Int64)
+    let array_int64 = DataType::Array(ArrayElemTypeDef::Parenthesis(Box::new(DataType::Int64)));
+    assert_eq!(array_int64.to_sql(&ch), "Array(Int64)");
+    assert_eq!(array_int64.to_sql(&generic), "Array(INT64)");
+
+    // Test Map(String, Int64)
+    let map_type = DataType::Map(
+        Box::new(DataType::String(None)),
+        Box::new(DataType::Int64),
+    );
+    assert_eq!(map_type.to_sql(&ch), "Map(String, Int64)");
+    assert_eq!(map_type.to_sql(&generic), "Map(STRING, INT64)");
+
+    // Test deeply nested: Nullable(Array(String))
+    let nested = DataType::Nullable(Box::new(DataType::Array(ArrayElemTypeDef::Parenthesis(
+        Box::new(DataType::String(None)),
+    ))));
+    assert_eq!(nested.to_sql(&ch), "Nullable(Array(String))");
+    assert_eq!(nested.to_sql(&generic), "Nullable(Array(STRING))");
+
+    // Types that are already PascalCase in Display should remain unchanged
+    let uint64 = DataType::UInt64;
+    assert_eq!(uint64.to_sql(&ch), "UInt64");
+    assert_eq!(uint64.to_sql(&generic), "UInt64");
+
+    let int32 = DataType::Int32;
+    assert_eq!(int32.to_sql(&ch), "Int32");
+    assert_eq!(int32.to_sql(&generic), "Int32");
+
+    let float32 = DataType::Float32;
+    assert_eq!(float32.to_sql(&ch), "Float32");
+    assert_eq!(float32.to_sql(&generic), "Float32");
+
+    let date32 = DataType::Date32;
+    assert_eq!(date32.to_sql(&ch), "Date32");
+    assert_eq!(date32.to_sql(&generic), "Date32");
+}

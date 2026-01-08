@@ -100,4 +100,12 @@ impl Dialect for ClickHouseDialect {
     fn supports_nested_comments(&self) -> bool {
         true
     }
+
+    /// ClickHouse requires PascalCase for type names (e.g., `String`, `Int64`, `Nullable`).
+    /// Using uppercase like `STRING` or `INT64` results in `UNKNOWN_TYPE` errors.
+    ///
+    /// See <https://clickhouse.com/docs/en/sql-reference/data-types>
+    fn requires_pascalcase_types(&self) -> bool {
+        true
+    }
 }

@@ -1221,6 +1221,18 @@ pub trait Dialect: Debug + Any {
     fn supports_quote_delimited_string(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect requires PascalCase for type names.
+    ///
+    /// ClickHouse requires PascalCase type names (e.g., `String`, `Int64`, `Nullable`).
+    /// Other dialects like BigQuery and PostgreSQL use uppercase (e.g., `STRING`, `INT64`).
+    ///
+    /// This affects how data types are formatted when using dialect-aware SQL generation.
+    ///
+    /// [ClickHouse data types](https://clickhouse.com/docs/en/sql-reference/data-types)
+    fn requires_pascalcase_types(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

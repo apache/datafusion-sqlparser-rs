@@ -26,7 +26,9 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::{display_comma_separated, Expr, ObjectName, StructField, UnionField};
+use crate::dialect::Dialect;
 
+use super::to_sql::ToSql;
 use super::{value::escape_single_quote_string, ColumnDef};
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -494,6 +496,105 @@ pub enum DataType {
     ///
     /// [PostgreSQL]: https://www.postgresql.org/docs/17/datatype-textsearch.html
     TsQuery,
+}
+
+impl ToSql for DataType {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        if dialect.requires_pascalcase_types() {
+            self.write_sql_pascalcase(f, dialect)
+        } else {
+            write!(f, "{}", self)
+        }
+    }
+}
+
+impl DataType {
+    /// Formats the data type with PascalCase type names (for ClickHouse compatibility).
+    fn write_sql_pascalcase(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        match self {
+            // Types that need PascalCase conversion (currently uppercase in Display)
+            DataType::Int8(zerofill) => write_type_pascalcase(f, "Int8", zerofill),
+            DataType::Int64 => write!(f, "Int64"),
+            DataType::Float64 => write!(f, "Float64"),
+            DataType::String(size) => match size {
+                Some(s) => write!(f, "String({s})"),
+                None => write!(f, "String"),
+            },
+            DataType::Bool => write!(f, "Bool"),
+            DataType::Boolean => write!(f, "Boolean"),
+            DataType::Date => write!(f, "Date"),
+            DataType::Datetime(precision) => match precision {
+                Some(p) => write!(f, "DateTime({p})"),
+                None => write!(f, "DateTime"),
+            },
+
+            // Container types that need recursive PascalCase formatting
+            DataType::Nullable(inner) => {
+                write!(f, "Nullable(")?;
+                inner.write_sql(f, dialect)?;
+                write!(f, ")")
+            }
+            DataType::LowCardinality(inner) => {
+                write!(f, "LowCardinality(")?;
+                inner.write_sql(f, dialect)?;
+                write!(f, ")")
+            }
+            DataType::Array(elem) => match elem {
+                ArrayElemTypeDef::None => write!(f, "Array"),
+                ArrayElemTypeDef::SquareBracket(t, None) => {
+                    t.write_sql(f, dialect)?;
+                    write!(f, "[]")
+                }
+                ArrayElemTypeDef::SquareBracket(t, Some(size)) => {
+                    t.write_sql(f, dialect)?;
+                    write!(f, "[{size}]")
+                }
+                ArrayElemTypeDef::AngleBracket(t) => {
+                    write!(f, "Array<")?;
+                    t.write_sql(f, dialect)?;
+                    write!(f, ">")
+                }
+                ArrayElemTypeDef::Parenthesis(t) => {
+                    write!(f, "Array(")?;
+                    t.write_sql(f, dialect)?;
+                    write!(f, ")")
+                }
+            },
+            DataType::Map(key, value) => {
+                write!(f, "Map(")?;
+                key.write_sql(f, dialect)?;
+                write!(f, ", ")?;
+                value.write_sql(f, dialect)?;
+                write!(f, ")")
+            }
+            DataType::Tuple(fields) => {
+                write!(f, "Tuple(")?;
+                let mut first = true;
+                for field in fields {
+                    if !first {
+                        write!(f, ", ")?;
+                    }
+                    first = false;
+                    if let Some(name) = &field.field_name {
+                        write!(f, "{} ", name)?;
+                    }
+                    field.field_type.write_sql(f, dialect)?;
+                }
+                write!(f, ")")
+            }
+
+            // All other types use the default Display implementation
+            _ => write!(f, "{}", self),
+        }
+    }
+}
+
+/// Helper function to write a type name with optional length in PascalCase
+fn write_type_pascalcase(f: &mut dyn fmt::Write, type_name: &str, len: &Option<u64>) -> fmt::Result {
+    match len {
+        Some(l) => write!(f, "{type_name}({l})"),
+        None => write!(f, "{type_name}"),
+    }
 }
 
 impl fmt::Display for DataType {

@@ -47,6 +47,7 @@ use crate::{
     tokenizer::{Span, Token},
 };
 use crate::{
+    dialect::Dialect,
     display_utils::{Indent, NewLine},
     keywords::Keyword,
 };
@@ -139,8 +140,11 @@ mod spans;
 pub use spans::Spanned;
 
 pub mod comments;
+mod to_sql;
 mod trigger;
 mod value;
+
+pub use to_sql::{write_comma_separated_tosql, ToSql};
 
 #[cfg(feature = "visitor")]
 mod visitor;
@@ -525,6 +529,22 @@ impl fmt::Display for StructField {
     }
 }
 
+impl ToSql for StructField {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        if let Some(name) = &self.field_name {
+            write!(f, "{name} ")?;
+            self.field_type.write_sql(f, dialect)?;
+        } else {
+            self.field_type.write_sql(f, dialect)?;
+        }
+        if let Some(options) = &self.options {
+            write!(f, " OPTIONS({})", display_separated(options, ", "))
+        } else {
+            Ok(())
+        }
+    }
+}
+
 /// A field definition within a union
 ///
 /// [DuckDB]: https://duckdb.org/docs/sql/data_types/union.html
@@ -539,6 +559,13 @@ pub struct UnionField {
 impl fmt::Display for UnionField {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} {}", self.field_name, self.field_type)
+    }
+}
+
+impl ToSql for UnionField {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        write!(f, "{} ", self.field_name)?;
+        self.field_type.write_sql(f, dialect)
     }
 }
 
@@ -750,6 +777,15 @@ impl fmt::Display for CaseWhen {
         SpaceOrNewline.fmt(f)?;
         Indent(&self.result).fmt(f)?;
         Ok(())
+    }
+}
+
+impl ToSql for CaseWhen {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        f.write_str("WHEN ")?;
+        self.condition.write_sql(f, dialect)?;
+        f.write_str(" THEN ")?;
+        self.result.write_sql(f, dialect)
     }
 }
 
@@ -1982,6 +2018,644 @@ impl fmt::Display for Expr {
     }
 }
 
+impl ToSql for Expr {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        match self {
+            // Handle expressions that contain DataType
+            Expr::Cast {
+                kind,
+                expr,
+                data_type,
+                format,
+            } => {
+                match kind {
+                    CastKind::Cast => {
+                        write!(f, "CAST(")?;
+                        expr.write_sql(f, dialect)?;
+                        write!(f, " AS ")?;
+                        data_type.write_sql(f, dialect)?;
+                        if let Some(format) = format {
+                            write!(f, " FORMAT {format}")?;
+                        }
+                        write!(f, ")")
+                    }
+                    CastKind::TryCast => {
+                        write!(f, "TRY_CAST(")?;
+                        expr.write_sql(f, dialect)?;
+                        write!(f, " AS ")?;
+                        data_type.write_sql(f, dialect)?;
+                        if let Some(format) = format {
+                            write!(f, " FORMAT {format}")?;
+                        }
+                        write!(f, ")")
+                    }
+                    CastKind::SafeCast => {
+                        write!(f, "SAFE_CAST(")?;
+                        expr.write_sql(f, dialect)?;
+                        write!(f, " AS ")?;
+                        data_type.write_sql(f, dialect)?;
+                        if let Some(format) = format {
+                            write!(f, " FORMAT {format}")?;
+                        }
+                        write!(f, ")")
+                    }
+                    CastKind::DoubleColon => {
+                        expr.write_sql(f, dialect)?;
+                        write!(f, "::")?;
+                        data_type.write_sql(f, dialect)
+                    }
+                }
+            }
+            Expr::Convert {
+                is_try,
+                expr,
+                target_before_value,
+                data_type,
+                charset,
+                styles,
+            } => {
+                write!(f, "{}CONVERT(", if *is_try { "TRY_" } else { "" })?;
+                if let Some(data_type) = data_type {
+                    if let Some(charset) = charset {
+                        expr.write_sql(f, dialect)?;
+                        write!(f, ", ")?;
+                        data_type.write_sql(f, dialect)?;
+                        write!(f, " CHARACTER SET {charset}")
+                    } else if *target_before_value {
+                        data_type.write_sql(f, dialect)?;
+                        write!(f, ", ")?;
+                        expr.write_sql(f, dialect)
+                    } else {
+                        expr.write_sql(f, dialect)?;
+                        write!(f, ", ")?;
+                        data_type.write_sql(f, dialect)
+                    }
+                } else if let Some(charset) = charset {
+                    expr.write_sql(f, dialect)?;
+                    write!(f, " USING {charset}")
+                } else {
+                    expr.write_sql(f, dialect) // This should never happen
+                }?;
+                if !styles.is_empty() {
+                    write!(f, ", ")?;
+                    write_comma_separated_tosql(f, styles, dialect)?;
+                }
+                write!(f, ")")
+            }
+            Expr::TypedString(ts) => ts.write_sql(f, dialect),
+            // Struct can contain StructFields which have DataType
+            Expr::Struct { values, fields } => {
+                if !fields.is_empty() {
+                    write!(f, "STRUCT<")?;
+                    write_comma_separated_tosql(f, fields, dialect)?;
+                    write!(f, ">(")?;
+                    write_comma_separated_tosql(f, values, dialect)?;
+                    write!(f, ")")
+                } else {
+                    write!(f, "STRUCT(")?;
+                    write_comma_separated_tosql(f, values, dialect)?;
+                    write!(f, ")")
+                }
+            }
+            // Binary and unary ops recurse into expressions
+            Expr::BinaryOp { left, op, right } => {
+                left.write_sql(f, dialect)?;
+                write!(f, " {op} ")?;
+                right.write_sql(f, dialect)
+            }
+            Expr::UnaryOp { op, expr } => {
+                if op == &UnaryOperator::PGPostfixFactorial {
+                    expr.write_sql(f, dialect)?;
+                    write!(f, "{op}")
+                } else if matches!(
+                    op,
+                    UnaryOperator::Not
+                        | UnaryOperator::Hash
+                        | UnaryOperator::AtDashAt
+                        | UnaryOperator::DoubleAt
+                        | UnaryOperator::QuestionDash
+                        | UnaryOperator::QuestionPipe
+                ) {
+                    write!(f, "{op} ")?;
+                    expr.write_sql(f, dialect)
+                } else {
+                    write!(f, "{op}")?;
+                    expr.write_sql(f, dialect)
+                }
+            }
+            // Nested expressions recurse
+            Expr::Nested(ast) => {
+                write!(f, "(")?;
+                ast.write_sql(f, dialect)?;
+                write!(f, ")")
+            }
+            // IS operators recurse into expression
+            Expr::IsTrue(ast) => {
+                ast.write_sql(f, dialect)?;
+                write!(f, " IS TRUE")
+            }
+            Expr::IsNotTrue(ast) => {
+                ast.write_sql(f, dialect)?;
+                write!(f, " IS NOT TRUE")
+            }
+            Expr::IsFalse(ast) => {
+                ast.write_sql(f, dialect)?;
+                write!(f, " IS FALSE")
+            }
+            Expr::IsNotFalse(ast) => {
+                ast.write_sql(f, dialect)?;
+                write!(f, " IS NOT FALSE")
+            }
+            Expr::IsNull(ast) => {
+                ast.write_sql(f, dialect)?;
+                write!(f, " IS NULL")
+            }
+            Expr::IsNotNull(ast) => {
+                ast.write_sql(f, dialect)?;
+                write!(f, " IS NOT NULL")
+            }
+            Expr::IsUnknown(ast) => {
+                ast.write_sql(f, dialect)?;
+                write!(f, " IS UNKNOWN")
+            }
+            Expr::IsNotUnknown(ast) => {
+                ast.write_sql(f, dialect)?;
+                write!(f, " IS NOT UNKNOWN")
+            }
+            Expr::IsDistinctFrom(a, b) => {
+                a.write_sql(f, dialect)?;
+                write!(f, " IS DISTINCT FROM ")?;
+                b.write_sql(f, dialect)
+            }
+            Expr::IsNotDistinctFrom(a, b) => {
+                a.write_sql(f, dialect)?;
+                write!(f, " IS NOT DISTINCT FROM ")?;
+                b.write_sql(f, dialect)
+            }
+            // Between recursively handles expressions
+            Expr::Between {
+                expr,
+                negated,
+                low,
+                high,
+            } => {
+                expr.write_sql(f, dialect)?;
+                write!(f, " {}BETWEEN ", if *negated { "NOT " } else { "" })?;
+                low.write_sql(f, dialect)?;
+                write!(f, " AND ")?;
+                high.write_sql(f, dialect)
+            }
+            // IN list recursively handles expressions
+            Expr::InList {
+                expr,
+                list,
+                negated,
+            } => {
+                expr.write_sql(f, dialect)?;
+                write!(f, " {}IN (", if *negated { "NOT " } else { "" })?;
+                write_comma_separated_tosql(f, list, dialect)?;
+                write!(f, ")")
+            }
+            // InSubquery - the subquery will use its own ToSql
+            Expr::InSubquery {
+                expr,
+                subquery,
+                negated,
+            } => {
+                expr.write_sql(f, dialect)?;
+                write!(f, " {}IN (", if *negated { "NOT " } else { "" })?;
+                subquery.write_sql(f, dialect)?;
+                write!(f, ")")
+            }
+            // InUnnest
+            Expr::InUnnest {
+                expr,
+                array_expr,
+                negated,
+            } => {
+                expr.write_sql(f, dialect)?;
+                write!(f, " {}IN UNNEST(", if *negated { "NOT " } else { "" })?;
+                array_expr.write_sql(f, dialect)?;
+                write!(f, ")")
+            }
+            // Like expressions recurse
+            Expr::Like {
+                negated,
+                expr,
+                pattern,
+                escape_char,
+                any,
+            } => {
+                expr.write_sql(f, dialect)?;
+                write!(f, " {}LIKE ", if *negated { "NOT " } else { "" })?;
+                if *any {
+                    write!(f, "ANY ")?;
+                }
+                pattern.write_sql(f, dialect)?;
+                if let Some(ch) = escape_char {
+                    write!(f, " ESCAPE {ch}")?;
+                }
+                Ok(())
+            }
+            Expr::ILike {
+                negated,
+                expr,
+                pattern,
+                escape_char,
+                any,
+            } => {
+                expr.write_sql(f, dialect)?;
+                write!(f, " {}ILIKE ", if *negated { "NOT " } else { "" })?;
+                if *any {
+                    write!(f, "ANY ")?;
+                }
+                pattern.write_sql(f, dialect)?;
+                if let Some(ch) = escape_char {
+                    write!(f, " ESCAPE {ch}")?;
+                }
+                Ok(())
+            }
+            Expr::SimilarTo {
+                negated,
+                expr,
+                pattern,
+                escape_char,
+            } => {
+                expr.write_sql(f, dialect)?;
+                write!(f, " {}SIMILAR TO ", if *negated { "NOT " } else { "" })?;
+                pattern.write_sql(f, dialect)?;
+                if let Some(ch) = escape_char {
+                    write!(f, " ESCAPE {ch}")?;
+                }
+                Ok(())
+            }
+            Expr::RLike {
+                negated,
+                expr,
+                pattern,
+                regexp,
+            } => {
+                expr.write_sql(f, dialect)?;
+                write!(
+                    f,
+                    " {}{} ",
+                    if *negated { "NOT " } else { "" },
+                    if *regexp { "REGEXP" } else { "RLIKE" }
+                )?;
+                pattern.write_sql(f, dialect)
+            }
+            // Case expression
+            Expr::Case {
+                case_token: _,
+                end_token: _,
+                operand,
+                conditions,
+                else_result,
+            } => {
+                f.write_str("CASE")?;
+                if let Some(operand) = operand {
+                    f.write_str(" ")?;
+                    operand.write_sql(f, dialect)?;
+                }
+                for when in conditions {
+                    f.write_str(" ")?;
+                    when.write_sql(f, dialect)?;
+                }
+                if let Some(else_result) = else_result {
+                    f.write_str(" ELSE ")?;
+                    else_result.write_sql(f, dialect)?;
+                }
+                f.write_str(" END")
+            }
+            // Exists with subquery
+            Expr::Exists { subquery, negated } => {
+                write!(f, "{}EXISTS (", if *negated { "NOT " } else { "" })?;
+                subquery.write_sql(f, dialect)?;
+                write!(f, ")")
+            }
+            // Subquery
+            Expr::Subquery(s) => {
+                write!(f, "(")?;
+                s.write_sql(f, dialect)?;
+                write!(f, ")")
+            }
+            // Function calls can contain expressions - delegate to Display for now
+            // as Function has complex structure with many nested types
+            Expr::Function(fun) => write!(f, "{fun}"),
+            // Tuple
+            Expr::Tuple(exprs) => {
+                write!(f, "(")?;
+                write_comma_separated_tosql(f, exprs, dialect)?;
+                write!(f, ")")
+            }
+            // Array - delegate to Display
+            Expr::Array(arr) => write!(f, "{arr}"),
+            // CompoundFieldAccess - delegate to Display for access chain
+            Expr::CompoundFieldAccess { root, access_chain } => {
+                root.write_sql(f, dialect)?;
+                for field in access_chain {
+                    write!(f, "{field}")?;
+                }
+                Ok(())
+            }
+            // AnyOp and AllOp
+            Expr::AnyOp {
+                left,
+                compare_op,
+                right,
+                is_some,
+            } => {
+                let add_parens = !matches!(right.as_ref(), Expr::Subquery(_));
+                left.write_sql(f, dialect)?;
+                write!(
+                    f,
+                    " {compare_op} {}{}",
+                    if *is_some { "SOME" } else { "ANY" },
+                    if add_parens { "(" } else { "" },
+                )?;
+                right.write_sql(f, dialect)?;
+                if add_parens {
+                    write!(f, ")")?;
+                }
+                Ok(())
+            }
+            Expr::AllOp {
+                left,
+                compare_op,
+                right,
+            } => {
+                let add_parens = !matches!(right.as_ref(), Expr::Subquery(_));
+                left.write_sql(f, dialect)?;
+                write!(
+                    f,
+                    " {compare_op} ALL{}",
+                    if add_parens { "(" } else { "" },
+                )?;
+                right.write_sql(f, dialect)?;
+                if add_parens {
+                    write!(f, ")")?;
+                }
+                Ok(())
+            }
+            // Extract
+            Expr::Extract {
+                field,
+                syntax,
+                expr,
+            } => {
+                match syntax {
+                    ExtractSyntax::From => {
+                        write!(f, "EXTRACT({field} FROM ")?;
+                        expr.write_sql(f, dialect)?;
+                        write!(f, ")")
+                    }
+                    ExtractSyntax::Comma => {
+                        write!(f, "EXTRACT({field}, ")?;
+                        expr.write_sql(f, dialect)?;
+                        write!(f, ")")
+                    }
+                }
+            }
+            // Ceil and Floor
+            Expr::Ceil { expr, field } => {
+                match field {
+                    CeilFloorKind::DateTimeField(DateTimeField::NoDateTime) => {
+                        write!(f, "CEIL(")?;
+                        expr.write_sql(f, dialect)?;
+                        write!(f, ")")
+                    }
+                    CeilFloorKind::DateTimeField(dt_field) => {
+                        write!(f, "CEIL(")?;
+                        expr.write_sql(f, dialect)?;
+                        write!(f, " TO {dt_field})")
+                    }
+                    CeilFloorKind::Scale(s) => {
+                        write!(f, "CEIL(")?;
+                        expr.write_sql(f, dialect)?;
+                        write!(f, ", {s})")
+                    }
+                }
+            }
+            Expr::Floor { expr, field } => {
+                match field {
+                    CeilFloorKind::DateTimeField(DateTimeField::NoDateTime) => {
+                        write!(f, "FLOOR(")?;
+                        expr.write_sql(f, dialect)?;
+                        write!(f, ")")
+                    }
+                    CeilFloorKind::DateTimeField(dt_field) => {
+                        write!(f, "FLOOR(")?;
+                        expr.write_sql(f, dialect)?;
+                        write!(f, " TO {dt_field})")
+                    }
+                    CeilFloorKind::Scale(s) => {
+                        write!(f, "FLOOR(")?;
+                        expr.write_sql(f, dialect)?;
+                        write!(f, ", {s})")
+                    }
+                }
+            }
+            // Position
+            Expr::Position { expr, r#in } => {
+                write!(f, "POSITION(")?;
+                expr.write_sql(f, dialect)?;
+                write!(f, " IN ")?;
+                r#in.write_sql(f, dialect)?;
+                write!(f, ")")
+            }
+            // Substring
+            Expr::Substring {
+                expr,
+                substring_from,
+                substring_for,
+                special,
+                shorthand,
+            } => {
+                f.write_str("SUBSTR")?;
+                if !*shorthand {
+                    f.write_str("ING")?;
+                }
+                write!(f, "(")?;
+                expr.write_sql(f, dialect)?;
+                if let Some(from_part) = substring_from {
+                    if *special {
+                        write!(f, ", ")?;
+                    } else {
+                        write!(f, " FROM ")?;
+                    }
+                    from_part.write_sql(f, dialect)?;
+                }
+                if let Some(for_part) = substring_for {
+                    if *special {
+                        write!(f, ", ")?;
+                    } else {
+                        write!(f, " FOR ")?;
+                    }
+                    for_part.write_sql(f, dialect)?;
+                }
+                write!(f, ")")
+            }
+            // Overlay
+            Expr::Overlay {
+                expr,
+                overlay_what,
+                overlay_from,
+                overlay_for,
+            } => {
+                write!(f, "OVERLAY(")?;
+                expr.write_sql(f, dialect)?;
+                write!(f, " PLACING ")?;
+                overlay_what.write_sql(f, dialect)?;
+                write!(f, " FROM ")?;
+                overlay_from.write_sql(f, dialect)?;
+                if let Some(for_part) = overlay_for {
+                    write!(f, " FOR ")?;
+                    for_part.write_sql(f, dialect)?;
+                }
+                write!(f, ")")
+            }
+            // Trim
+            Expr::Trim {
+                expr,
+                trim_where,
+                trim_what,
+                trim_characters,
+            } => {
+                write!(f, "TRIM(")?;
+                if let Some(ident) = trim_where {
+                    write!(f, "{ident} ")?;
+                }
+                if let Some(trim_char) = trim_what {
+                    trim_char.write_sql(f, dialect)?;
+                    write!(f, " FROM ")?;
+                    expr.write_sql(f, dialect)?;
+                } else {
+                    expr.write_sql(f, dialect)?;
+                }
+                if let Some(characters) = trim_characters {
+                    write!(f, ", ")?;
+                    write_comma_separated_tosql(f, characters, dialect)?;
+                }
+                write!(f, ")")
+            }
+            // Collate
+            Expr::Collate { expr, collation } => {
+                expr.write_sql(f, dialect)?;
+                write!(f, " COLLATE {collation}")
+            }
+            // AtTimeZone
+            Expr::AtTimeZone {
+                timestamp,
+                time_zone,
+            } => {
+                timestamp.write_sql(f, dialect)?;
+                write!(f, " AT TIME ZONE ")?;
+                time_zone.write_sql(f, dialect)
+            }
+            // Named expression
+            Expr::Named { expr, name } => {
+                expr.write_sql(f, dialect)?;
+                write!(f, " AS {name}")
+            }
+            // OuterJoin
+            Expr::OuterJoin(expr) => {
+                expr.write_sql(f, dialect)?;
+                write!(f, " (+)")
+            }
+            // Prior
+            Expr::Prior(expr) => {
+                write!(f, "PRIOR ")?;
+                expr.write_sql(f, dialect)
+            }
+            // IsNormalized
+            Expr::IsNormalized {
+                expr,
+                form,
+                negated,
+            } => {
+                expr.write_sql(f, dialect)?;
+                let not_ = if *negated { "NOT " } else { "" };
+                if let Some(form) = form {
+                    write!(f, " IS {not_}{form} NORMALIZED")
+                } else {
+                    write!(f, " IS {not_}NORMALIZED")
+                }
+            }
+            // Prefixed
+            Expr::Prefixed { prefix, value } => {
+                write!(f, "{prefix} ")?;
+                value.write_sql(f, dialect)
+            }
+            // GroupingSets, Cube, Rollup
+            Expr::GroupingSets(sets) => {
+                write!(f, "GROUPING SETS (")?;
+                let mut sep = "";
+                for set in sets {
+                    write!(f, "{sep}(")?;
+                    sep = ", ";
+                    write_comma_separated_tosql(f, set, dialect)?;
+                    write!(f, ")")?;
+                }
+                write!(f, ")")
+            }
+            Expr::Cube(sets) => {
+                write!(f, "CUBE (")?;
+                let mut sep = "";
+                for set in sets {
+                    write!(f, "{sep}")?;
+                    sep = ", ";
+                    if set.len() == 1 {
+                        set[0].write_sql(f, dialect)?;
+                    } else {
+                        write!(f, "(")?;
+                        write_comma_separated_tosql(f, set, dialect)?;
+                        write!(f, ")")?;
+                    }
+                }
+                write!(f, ")")
+            }
+            Expr::Rollup(sets) => {
+                write!(f, "ROLLUP (")?;
+                let mut sep = "";
+                for set in sets {
+                    write!(f, "{sep}")?;
+                    sep = ", ";
+                    if set.len() == 1 {
+                        set[0].write_sql(f, dialect)?;
+                    } else {
+                        write!(f, "(")?;
+                        write_comma_separated_tosql(f, set, dialect)?;
+                        write!(f, ")")?;
+                    }
+                }
+                write!(f, ")")
+            }
+            // All other expression types delegate to Display
+            _ => write!(f, "{}", self),
+        }
+    }
+}
+
+impl ToSql for TypedString {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        match self.uses_odbc_syntax {
+            false => {
+                self.data_type.write_sql(f, dialect)?;
+                write!(f, " {}", self.value)
+            }
+            true => {
+                let prefix = match &self.data_type {
+                    DataType::Date => "d",
+                    DataType::Time(..) => "t",
+                    DataType::Timestamp(..) => "ts",
+                    _ => "?",
+                };
+                write!(f, "{{{prefix} {}}}", self.value)
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -2001,6 +2675,19 @@ impl Display for WindowType {
                 f.write_str(")")
             }
             WindowType::NamedWindow(name) => name.fmt(f),
+        }
+    }
+}
+
+impl ToSql for WindowType {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        match self {
+            WindowType::WindowSpec(spec) => {
+                f.write_str("(")?;
+                spec.write_sql(f, dialect)?;
+                f.write_str(")")
+            }
+            WindowType::NamedWindow(name) => write!(f, "{name}"),
         }
     }
 }
@@ -2072,6 +2759,42 @@ impl fmt::Display for WindowSpec {
     }
 }
 
+impl ToSql for WindowSpec {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        let mut is_first = true;
+        if let Some(window_name) = &self.window_name {
+            if !is_first {
+                write!(f, " ")?;
+            }
+            is_first = false;
+            write!(f, "{window_name}")?;
+        }
+        if !self.partition_by.is_empty() {
+            if !is_first {
+                write!(f, " ")?;
+            }
+            is_first = false;
+            write!(f, "PARTITION BY ")?;
+            write_comma_separated_tosql(f, &self.partition_by, dialect)?;
+        }
+        if !self.order_by.is_empty() {
+            if !is_first {
+                write!(f, " ")?;
+            }
+            is_first = false;
+            write!(f, "ORDER BY ")?;
+            write_comma_separated_tosql(f, &self.order_by, dialect)?;
+        }
+        if let Some(window_frame) = &self.window_frame {
+            if !is_first {
+                write!(f, " ")?;
+            }
+            window_frame.write_sql(f, dialect)?;
+        }
+        Ok(())
+    }
+}
+
 /// Specifies the data processed by a window function, e.g.
 /// `RANGE UNBOUNDED PRECEDING` or `ROWS BETWEEN 5 PRECEDING AND CURRENT ROW`.
 ///
@@ -2099,6 +2822,20 @@ impl Default for WindowFrame {
             units: WindowFrameUnits::Range,
             start_bound: WindowFrameBound::Preceding(None),
             end_bound: None,
+        }
+    }
+}
+
+impl ToSql for WindowFrame {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        if let Some(end_bound) = &self.end_bound {
+            write!(f, "{} BETWEEN ", self.units)?;
+            self.start_bound.write_sql(f, dialect)?;
+            write!(f, " AND ")?;
+            end_bound.write_sql(f, dialect)
+        } else {
+            write!(f, "{} ", self.units)?;
+            self.start_bound.write_sql(f, dialect)
         }
     }
 }
@@ -2163,6 +2900,24 @@ impl fmt::Display for WindowFrameBound {
             WindowFrameBound::Following(None) => f.write_str("UNBOUNDED FOLLOWING"),
             WindowFrameBound::Preceding(Some(n)) => write!(f, "{n} PRECEDING"),
             WindowFrameBound::Following(Some(n)) => write!(f, "{n} FOLLOWING"),
+        }
+    }
+}
+
+impl ToSql for WindowFrameBound {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        match self {
+            WindowFrameBound::CurrentRow => f.write_str("CURRENT ROW"),
+            WindowFrameBound::Preceding(None) => f.write_str("UNBOUNDED PRECEDING"),
+            WindowFrameBound::Following(None) => f.write_str("UNBOUNDED FOLLOWING"),
+            WindowFrameBound::Preceding(Some(n)) => {
+                n.write_sql(f, dialect)?;
+                f.write_str(" PRECEDING")
+            }
+            WindowFrameBound::Following(Some(n)) => {
+                n.write_sql(f, dialect)?;
+                f.write_str(" FOLLOWING")
+            }
         }
     }
 }
@@ -2793,6 +3548,70 @@ impl fmt::Display for Declare {
 
         if let Some(data_type) = data_type {
             write!(f, " {data_type}")?;
+        }
+
+        if let Some(expr) = assignment {
+            write!(f, " {expr}")?;
+        }
+        Ok(())
+    }
+}
+
+impl ToSql for Declare {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        let Declare {
+            names,
+            data_type,
+            assignment,
+            declare_type,
+            binary,
+            sensitive,
+            scroll,
+            hold,
+            for_query,
+        } = self;
+        write!(f, "{}", display_comma_separated(names))?;
+
+        if let Some(true) = binary {
+            write!(f, " BINARY")?;
+        }
+
+        if let Some(sensitive) = sensitive {
+            if *sensitive {
+                write!(f, " INSENSITIVE")?;
+            } else {
+                write!(f, " ASENSITIVE")?;
+            }
+        }
+
+        if let Some(scroll) = scroll {
+            if *scroll {
+                write!(f, " SCROLL")?;
+            } else {
+                write!(f, " NO SCROLL")?;
+            }
+        }
+
+        if let Some(declare_type) = declare_type {
+            write!(f, " {declare_type}")?;
+        }
+
+        if let Some(hold) = hold {
+            if *hold {
+                write!(f, " WITH HOLD")?;
+            } else {
+                write!(f, " WITHOUT HOLD")?;
+            }
+        }
+
+        if let Some(query) = for_query {
+            write!(f, " FOR ")?;
+            query.write_sql(f, dialect)?;
+        }
+
+        if let Some(data_type) = data_type {
+            write!(f, " ")?;
+            data_type.write_sql(f, dialect)?;
         }
 
         if let Some(expr) = assignment {
@@ -5821,6 +6640,55 @@ impl fmt::Display for Statement {
     }
 }
 
+impl ToSql for Statement {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        match self {
+            // Route to custom ToSql implementations for types containing DataType
+            Statement::CreateTable(create_table) => create_table.write_sql(f, dialect),
+            Statement::CreateFunction(create_function) => create_function.write_sql(f, dialect),
+            Statement::CreateDomain(create_domain) => create_domain.write_sql(f, dialect),
+            Statement::CreateView(create_view) => create_view.write_sql(f, dialect),
+            Statement::AlterTable(alter_table) => alter_table.write_sql(f, dialect),
+            Statement::Query(query) => query.write_sql(f, dialect),
+            Statement::Declare { stmts } => {
+                write!(f, "DECLARE ")?;
+                let mut first = true;
+                for stmt in stmts {
+                    if !first {
+                        write!(f, "; ")?;
+                    }
+                    first = false;
+                    stmt.write_sql(f, dialect)?;
+                }
+                Ok(())
+            }
+            Statement::Prepare {
+                name,
+                data_types,
+                statement,
+            } => {
+                write!(f, "PREPARE {name} ")?;
+                if !data_types.is_empty() {
+                    write!(f, "(")?;
+                    let mut first = true;
+                    for dt in data_types {
+                        if !first {
+                            write!(f, ", ")?;
+                        }
+                        first = false;
+                        dt.write_sql(f, dialect)?;
+                    }
+                    write!(f, ") ")?;
+                }
+                write!(f, "AS ")?;
+                statement.write_sql(f, dialect)
+            }
+            // All other statement types delegate to Display
+            _ => write!(f, "{}", self),
+        }
+    }
+}
+
 /// Can use to describe options in create sequence or table column type identity
 /// ```sql
 /// [ INCREMENT [ BY ] increment ]
@@ -6958,6 +7826,16 @@ impl fmt::Display for FunctionArgExpr {
     }
 }
 
+impl ToSql for FunctionArgExpr {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        match self {
+            FunctionArgExpr::Expr(expr) => expr.write_sql(f, dialect),
+            FunctionArgExpr::QualifiedWildcard(prefix) => write!(f, "{prefix}.*"),
+            FunctionArgExpr::Wildcard => f.write_str("*"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -7024,6 +7902,31 @@ impl fmt::Display for FunctionArg {
                 operator,
             } => write!(f, "{name} {operator} {arg}"),
             FunctionArg::Unnamed(unnamed_arg) => write!(f, "{unnamed_arg}"),
+        }
+    }
+}
+
+impl ToSql for FunctionArg {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        match self {
+            FunctionArg::Named {
+                name,
+                arg,
+                operator,
+            } => {
+                write!(f, "{name} {operator} ")?;
+                arg.write_sql(f, dialect)
+            }
+            FunctionArg::ExprNamed {
+                name,
+                arg,
+                operator,
+            } => {
+                name.write_sql(f, dialect)?;
+                write!(f, " {operator} ")?;
+                arg.write_sql(f, dialect)
+            }
+            FunctionArg::Unnamed(unnamed_arg) => unnamed_arg.write_sql(f, dialect),
         }
     }
 }
@@ -7192,6 +8095,45 @@ impl fmt::Display for Function {
     }
 }
 
+impl ToSql for Function {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        if self.uses_odbc_syntax {
+            write!(f, "{{fn ")?;
+        }
+
+        write!(f, "{}", self.name)?;
+        self.parameters.write_sql(f, dialect)?;
+        self.args.write_sql(f, dialect)?;
+
+        if !self.within_group.is_empty() {
+            write!(f, " WITHIN GROUP (ORDER BY ")?;
+            write_comma_separated_tosql(f, &self.within_group, dialect)?;
+            write!(f, ")")?;
+        }
+
+        if let Some(filter_cond) = &self.filter {
+            write!(f, " FILTER (WHERE ")?;
+            filter_cond.write_sql(f, dialect)?;
+            write!(f, ")")?;
+        }
+
+        if let Some(null_treatment) = &self.null_treatment {
+            write!(f, " {null_treatment}")?;
+        }
+
+        if let Some(o) = &self.over {
+            write!(f, " OVER ")?;
+            o.write_sql(f, dialect)?;
+        }
+
+        if self.uses_odbc_syntax {
+            write!(f, "}}")?;
+        }
+
+        Ok(())
+    }
+}
+
 /// The arguments passed to a function call.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -7214,6 +8156,24 @@ impl fmt::Display for FunctionArguments {
             FunctionArguments::None => Ok(()),
             FunctionArguments::Subquery(query) => write!(f, "({query})"),
             FunctionArguments::List(args) => write!(f, "({args})"),
+        }
+    }
+}
+
+impl ToSql for FunctionArguments {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        match self {
+            FunctionArguments::None => Ok(()),
+            FunctionArguments::Subquery(query) => {
+                write!(f, "(")?;
+                query.write_sql(f, dialect)?;
+                write!(f, ")")
+            }
+            FunctionArguments::List(args) => {
+                write!(f, "(")?;
+                args.write_sql(f, dialect)?;
+                write!(f, ")")
+            }
         }
     }
 }
@@ -7242,6 +8202,29 @@ impl fmt::Display for FunctionArgumentList {
                 write!(f, " ")?;
             }
             write!(f, "{}", display_separated(&self.clauses, " "))?;
+        }
+        Ok(())
+    }
+}
+
+impl ToSql for FunctionArgumentList {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        if let Some(duplicate_treatment) = self.duplicate_treatment {
+            write!(f, "{duplicate_treatment} ")?;
+        }
+        write_comma_separated_tosql(f, &self.args, dialect)?;
+        if !self.clauses.is_empty() {
+            if !self.args.is_empty() {
+                write!(f, " ")?;
+            }
+            let mut first = true;
+            for clause in &self.clauses {
+                if !first {
+                    write!(f, " ")?;
+                }
+                first = false;
+                clause.write_sql(f, dialect)?;
+            }
         }
         Ok(())
     }
@@ -7305,6 +8288,31 @@ impl fmt::Display for FunctionArgumentClause {
                 write!(f, "ORDER BY {}", display_comma_separated(order_by))
             }
             FunctionArgumentClause::Limit(limit) => write!(f, "LIMIT {limit}"),
+            FunctionArgumentClause::OnOverflow(on_overflow) => write!(f, "{on_overflow}"),
+            FunctionArgumentClause::Having(bound) => write!(f, "{bound}"),
+            FunctionArgumentClause::Separator(sep) => write!(f, "SEPARATOR {sep}"),
+            FunctionArgumentClause::JsonNullClause(null_clause) => write!(f, "{null_clause}"),
+            FunctionArgumentClause::JsonReturningClause(returning_clause) => {
+                write!(f, "{returning_clause}")
+            }
+        }
+    }
+}
+
+impl ToSql for FunctionArgumentClause {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        match self {
+            FunctionArgumentClause::IgnoreOrRespectNulls(null_treatment) => {
+                write!(f, "{null_treatment}")
+            }
+            FunctionArgumentClause::OrderBy(order_by) => {
+                write!(f, "ORDER BY ")?;
+                write_comma_separated_tosql(f, order_by, dialect)
+            }
+            FunctionArgumentClause::Limit(limit) => {
+                write!(f, "LIMIT ")?;
+                limit.write_sql(f, dialect)
+            }
             FunctionArgumentClause::OnOverflow(on_overflow) => write!(f, "{on_overflow}"),
             FunctionArgumentClause::Having(bound) => write!(f, "{bound}"),
             FunctionArgumentClause::Separator(sep) => write!(f, "SEPARATOR {sep}"),
@@ -8734,6 +9742,22 @@ impl fmt::Display for OperateFunctionArg {
             write!(f, "{name} ")?;
         }
         write!(f, "{}", self.data_type)?;
+        if let Some(default_expr) = &self.default_expr {
+            write!(f, " = {default_expr}")?;
+        }
+        Ok(())
+    }
+}
+
+impl ToSql for OperateFunctionArg {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        if let Some(mode) = &self.mode {
+            write!(f, "{mode} ")?;
+        }
+        if let Some(name) = &self.name {
+            write!(f, "{name} ")?;
+        }
+        self.data_type.write_sql(f, dialect)?;
         if let Some(default_expr) = &self.default_expr {
             write!(f, " = {default_expr}")?;
         }

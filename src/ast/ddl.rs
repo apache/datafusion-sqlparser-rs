@@ -48,10 +48,11 @@ use crate::ast::{
     HiveFormat, HiveIOFormat, HiveRowFormat, HiveSetLocation, Ident, InitializeKind,
     MySQLColumnPosition, ObjectName, OnCommit, OneOrManyWithParens, OperateFunctionArg,
     OrderByExpr, ProjectionSelect, Query, RefreshModeKind, RowAccessPolicy, SequenceOptions,
-    Spanned, SqlOption, StorageSerializationPolicy, TableVersion, Tag, TriggerEvent,
+    Spanned, SqlOption, StorageSerializationPolicy, TableVersion, Tag, ToSql, TriggerEvent,
     TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value, ValueWithSpan,
     WrappedCollection,
 };
+use crate::dialect::Dialect;
 use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
 use crate::keywords::Keyword;
 use crate::tokenizer::{Span, Token};
@@ -916,6 +917,99 @@ impl fmt::Display for AlterIndexOperation {
     }
 }
 
+impl ToSql for AlterTableOperation {
+    fn write_sql(&self, f: &mut dyn Write, dialect: &dyn Dialect) -> fmt::Result {
+        match self {
+            AlterTableOperation::AddColumn {
+                column_keyword,
+                if_not_exists,
+                column_def,
+                column_position,
+            } => {
+                write!(f, "ADD")?;
+                if *column_keyword {
+                    write!(f, " COLUMN")?;
+                }
+                if *if_not_exists {
+                    write!(f, " IF NOT EXISTS")?;
+                }
+                write!(f, " ")?;
+                column_def.write_sql(f, dialect)?;
+
+                if let Some(position) = column_position {
+                    write!(f, " {position}")?;
+                }
+
+                Ok(())
+            }
+            AlterTableOperation::ChangeColumn {
+                old_name,
+                new_name,
+                data_type,
+                options,
+                column_position,
+            } => {
+                write!(f, "CHANGE COLUMN {old_name} {new_name} ")?;
+                data_type.write_sql(f, dialect)?;
+                if !options.is_empty() {
+                    write!(f, " {}", display_separated(options, " "))?;
+                }
+                if let Some(position) = column_position {
+                    write!(f, " {position}")?;
+                }
+                Ok(())
+            }
+            AlterTableOperation::ModifyColumn {
+                col_name,
+                data_type,
+                options,
+                column_position,
+            } => {
+                write!(f, "MODIFY COLUMN {col_name} ")?;
+                data_type.write_sql(f, dialect)?;
+                if !options.is_empty() {
+                    write!(f, " {}", display_separated(options, " "))?;
+                }
+                if let Some(position) = column_position {
+                    write!(f, " {position}")?;
+                }
+                Ok(())
+            }
+            AlterTableOperation::AlterColumn { column_name, op } => {
+                write!(f, "ALTER COLUMN {column_name} ")?;
+                op.write_sql(f, dialect)
+            }
+            // All other operations delegate to Display
+            _ => write!(f, "{}", self),
+        }
+    }
+}
+
+impl ToSql for AlterColumnOperation {
+    fn write_sql(&self, f: &mut dyn Write, dialect: &dyn Dialect) -> fmt::Result {
+        match self {
+            AlterColumnOperation::SetDataType {
+                data_type,
+                using,
+                had_set,
+            } => {
+                if *had_set {
+                    write!(f, "SET DATA TYPE ")?;
+                } else {
+                    write!(f, "TYPE ")?;
+                }
+                data_type.write_sql(f, dialect)?;
+                if let Some(using) = using {
+                    write!(f, " USING {using}")?;
+                }
+                Ok(())
+            }
+            // All other operations delegate to Display
+            _ => write!(f, "{}", self),
+        }
+    }
+}
+
 /// An `ALTER TYPE` statement (`Statement::AlterType`)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -1347,6 +1441,25 @@ impl fmt::Display for ProcedureParam {
     }
 }
 
+impl ToSql for ProcedureParam {
+    fn write_sql(&self, f: &mut dyn Write, dialect: &dyn Dialect) -> fmt::Result {
+        if let Some(mode) = &self.mode {
+            write!(f, "{mode} {} ", self.name)?;
+            self.data_type.write_sql(f, dialect)?;
+            if let Some(default) = &self.default {
+                write!(f, " = {}", default)?;
+            }
+        } else {
+            write!(f, "{} ", self.name)?;
+            self.data_type.write_sql(f, dialect)?;
+            if let Some(default) = &self.default {
+                write!(f, " = {}", default)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 /// SQL column definition
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -1363,6 +1476,21 @@ impl fmt::Display for ColumnDef {
             write!(f, "{}", self.name)?;
         } else {
             write!(f, "{} {}", self.name, self.data_type)?;
+        }
+        for option in &self.options {
+            write!(f, " {option}")?;
+        }
+        Ok(())
+    }
+}
+
+impl ToSql for ColumnDef {
+    fn write_sql(&self, f: &mut dyn Write, dialect: &dyn Dialect) -> fmt::Result {
+        if self.data_type == DataType::Unspecified {
+            write!(f, "{}", self.name)?;
+        } else {
+            write!(f, "{} ", self.name)?;
+            self.data_type.write_sql(f, dialect)?;
         }
         for option in &self.options {
             write!(f, " {option}")?;
@@ -1418,6 +1546,27 @@ impl fmt::Display for ViewColumnDef {
         write!(f, "{}", self.name)?;
         if let Some(data_type) = self.data_type.as_ref() {
             write!(f, " {data_type}")?;
+        }
+        if let Some(options) = self.options.as_ref() {
+            match options {
+                ColumnOptions::CommaSeparated(column_options) => {
+                    write!(f, " {}", display_comma_separated(column_options.as_slice()))?;
+                }
+                ColumnOptions::SpaceSeparated(column_options) => {
+                    write!(f, " {}", display_separated(column_options.as_slice(), " "))?
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl ToSql for ViewColumnDef {
+    fn write_sql(&self, f: &mut dyn Write, dialect: &dyn Dialect) -> fmt::Result {
+        write!(f, "{}", self.name)?;
+        if let Some(data_type) = self.data_type.as_ref() {
+            write!(f, " ")?;
+            data_type.write_sql(f, dialect)?;
         }
         if let Some(options) = self.options.as_ref() {
             match options {
@@ -3072,6 +3221,277 @@ impl fmt::Display for CreateTable {
     }
 }
 
+impl ToSql for CreateTable {
+    fn write_sql(&self, f: &mut dyn Write, dialect: &dyn Dialect) -> fmt::Result {
+        write!(
+            f,
+            "CREATE {or_replace}{external}{global}{temporary}{transient}{volatile}{dynamic}{iceberg}TABLE {if_not_exists}{name}",
+            or_replace = if self.or_replace { "OR REPLACE " } else { "" },
+            external = if self.external { "EXTERNAL " } else { "" },
+            global = self.global
+                .map(|global| {
+                    if global {
+                        "GLOBAL "
+                    } else {
+                        "LOCAL "
+                    }
+                })
+                .unwrap_or(""),
+            if_not_exists = if self.if_not_exists { "IF NOT EXISTS " } else { "" },
+            temporary = if self.temporary { "TEMPORARY " } else { "" },
+            transient = if self.transient { "TRANSIENT " } else { "" },
+            volatile = if self.volatile { "VOLATILE " } else { "" },
+            iceberg = if self.iceberg { "ICEBERG " } else { "" },
+            dynamic = if self.dynamic { "DYNAMIC " } else { "" },
+            name = self.name,
+        )?;
+        if let Some(partition_of) = &self.partition_of {
+            write!(f, " PARTITION OF {partition_of}")?;
+        }
+        if let Some(on_cluster) = &self.on_cluster {
+            write!(f, " ON CLUSTER {on_cluster}")?;
+        }
+        if !self.columns.is_empty() || !self.constraints.is_empty() {
+            write!(f, " (")?;
+            let mut first = true;
+            for col in &self.columns {
+                if !first {
+                    write!(f, ", ")?;
+                }
+                first = false;
+                col.write_sql(f, dialect)?;
+            }
+            if !self.columns.is_empty() && !self.constraints.is_empty() {
+                write!(f, ", ")?;
+            }
+            for (i, constraint) in self.constraints.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{constraint}")?;
+            }
+            write!(f, ")")?;
+        } else if self.query.is_none()
+            && self.like.is_none()
+            && self.clone.is_none()
+            && self.partition_of.is_none()
+        {
+            write!(f, " ()")?;
+        } else if let Some(CreateTableLikeKind::Parenthesized(like_in_columns_list)) = &self.like {
+            write!(f, " ({like_in_columns_list})")?;
+        }
+        if let Some(for_values) = &self.for_values {
+            write!(f, " {for_values}")?;
+        }
+        if let Some(comment) = &self.comment {
+            write!(f, " COMMENT '{comment}'")?;
+        }
+        if self.without_rowid {
+            write!(f, " WITHOUT ROWID")?;
+        }
+        if let Some(CreateTableLikeKind::Plain(like)) = &self.like {
+            write!(f, " {like}")?;
+        }
+        if let Some(c) = &self.clone {
+            write!(f, " CLONE {c}")?;
+        }
+        if let Some(version) = &self.version {
+            write!(f, " {version}")?;
+        }
+        match &self.hive_distribution {
+            HiveDistributionStyle::PARTITIONED { columns } => {
+                write!(f, " PARTITIONED BY ({})", display_comma_separated(columns))?;
+            }
+            HiveDistributionStyle::SKEWED {
+                columns,
+                on,
+                stored_as_directories,
+            } => {
+                write!(
+                    f,
+                    " SKEWED BY ({})) ON ({})",
+                    display_comma_separated(columns),
+                    display_comma_separated(on)
+                )?;
+                if *stored_as_directories {
+                    write!(f, " STORED AS DIRECTORIES")?;
+                }
+            }
+            _ => (),
+        }
+        if let Some(clustered_by) = &self.clustered_by {
+            write!(f, " {clustered_by}")?;
+        }
+        if let Some(HiveFormat {
+            row_format,
+            serde_properties,
+            storage,
+            location,
+        }) = &self.hive_formats
+        {
+            match row_format {
+                Some(HiveRowFormat::SERDE { class }) => write!(f, " ROW FORMAT SERDE '{class}'")?,
+                Some(HiveRowFormat::DELIMITED { delimiters }) => {
+                    write!(f, " ROW FORMAT DELIMITED")?;
+                    if !delimiters.is_empty() {
+                        write!(f, " {}", display_separated(delimiters, " "))?;
+                    }
+                }
+                None => (),
+            }
+            match storage {
+                Some(HiveIOFormat::IOF {
+                    input_format,
+                    output_format,
+                }) => write!(
+                    f,
+                    " STORED AS INPUTFORMAT {input_format} OUTPUTFORMAT {output_format}"
+                )?,
+                Some(HiveIOFormat::FileFormat { format }) if !self.external => {
+                    write!(f, " STORED AS {format}")?
+                }
+                _ => (),
+            }
+            if let Some(serde_properties) = serde_properties.as_ref() {
+                write!(
+                    f,
+                    " WITH SERDEPROPERTIES ({})",
+                    display_comma_separated(serde_properties)
+                )?;
+            }
+            if !self.external {
+                if let Some(loc) = location {
+                    write!(f, " LOCATION '{loc}'")?;
+                }
+            }
+        }
+        if self.external {
+            if let Some(file_format) = self.file_format {
+                write!(f, " STORED AS {file_format}")?;
+            }
+            if let Some(location) = &self.location {
+                write!(f, " LOCATION '{location}'")?;
+            }
+        }
+        match &self.table_options {
+            options @ CreateTableOptions::With(_)
+            | options @ CreateTableOptions::Plain(_)
+            | options @ CreateTableOptions::TableProperties(_) => write!(f, " {options}")?,
+            _ => (),
+        }
+        if let Some(primary_key) = &self.primary_key {
+            write!(f, " PRIMARY KEY {primary_key}")?;
+        }
+        if let Some(order_by) = &self.order_by {
+            write!(f, " ORDER BY {order_by}")?;
+        }
+        if let Some(inherits) = &self.inherits {
+            write!(f, " INHERITS ({})", display_comma_separated(inherits))?;
+        }
+        if let Some(partition_by) = self.partition_by.as_ref() {
+            write!(f, " PARTITION BY {partition_by}")?;
+        }
+        if let Some(cluster_by) = self.cluster_by.as_ref() {
+            write!(f, " CLUSTER BY {cluster_by}")?;
+        }
+        if let options @ CreateTableOptions::Options(_) = &self.table_options {
+            write!(f, " {options}")?;
+        }
+        if let Some(external_volume) = self.external_volume.as_ref() {
+            write!(f, " EXTERNAL_VOLUME='{external_volume}'")?;
+        }
+        if let Some(catalog) = self.catalog.as_ref() {
+            write!(f, " CATALOG='{catalog}'")?;
+        }
+        if self.iceberg {
+            if let Some(base_location) = self.base_location.as_ref() {
+                write!(f, " BASE_LOCATION='{base_location}'")?;
+            }
+        }
+        if let Some(catalog_sync) = self.catalog_sync.as_ref() {
+            write!(f, " CATALOG_SYNC='{catalog_sync}'")?;
+        }
+        if let Some(storage_serialization_policy) = self.storage_serialization_policy.as_ref() {
+            write!(
+                f,
+                " STORAGE_SERIALIZATION_POLICY={storage_serialization_policy}"
+            )?;
+        }
+        if self.copy_grants {
+            write!(f, " COPY GRANTS")?;
+        }
+        if let Some(is_enabled) = self.enable_schema_evolution {
+            write!(
+                f,
+                " ENABLE_SCHEMA_EVOLUTION={}",
+                if is_enabled { "TRUE" } else { "FALSE" }
+            )?;
+        }
+        if let Some(is_enabled) = self.change_tracking {
+            write!(
+                f,
+                " CHANGE_TRACKING={}",
+                if is_enabled { "TRUE" } else { "FALSE" }
+            )?;
+        }
+        if let Some(data_retention_time_in_days) = self.data_retention_time_in_days {
+            write!(
+                f,
+                " DATA_RETENTION_TIME_IN_DAYS={data_retention_time_in_days}",
+            )?;
+        }
+        if let Some(max_data_extension_time_in_days) = self.max_data_extension_time_in_days {
+            write!(
+                f,
+                " MAX_DATA_EXTENSION_TIME_IN_DAYS={max_data_extension_time_in_days}",
+            )?;
+        }
+        if let Some(default_ddl_collation) = &self.default_ddl_collation {
+            write!(f, " DEFAULT_DDL_COLLATION='{default_ddl_collation}'",)?;
+        }
+        if let Some(with_aggregation_policy) = &self.with_aggregation_policy {
+            write!(f, " WITH AGGREGATION POLICY {with_aggregation_policy}",)?;
+        }
+        if let Some(row_access_policy) = &self.with_row_access_policy {
+            write!(f, " {row_access_policy}",)?;
+        }
+        if let Some(tag) = &self.with_tags {
+            write!(f, " WITH TAG ({})", display_comma_separated(tag.as_slice()))?;
+        }
+        if let Some(target_lag) = &self.target_lag {
+            write!(f, " TARGET_LAG='{target_lag}'")?;
+        }
+        if let Some(warehouse) = &self.warehouse {
+            write!(f, " WAREHOUSE={warehouse}")?;
+        }
+        if let Some(refresh_mode) = &self.refresh_mode {
+            write!(f, " REFRESH_MODE={refresh_mode}")?;
+        }
+        if let Some(initialize) = &self.initialize {
+            write!(f, " INITIALIZE={initialize}")?;
+        }
+        if self.require_user {
+            write!(f, " REQUIRE USER")?;
+        }
+        if self.on_commit.is_some() {
+            let on_commit = match self.on_commit {
+                Some(OnCommit::DeleteRows) => "ON COMMIT DELETE ROWS",
+                Some(OnCommit::PreserveRows) => "ON COMMIT PRESERVE ROWS",
+                Some(OnCommit::Drop) => "ON COMMIT DROP",
+                None => "",
+            };
+            write!(f, " {on_commit}")?;
+        }
+        if self.strict {
+            write!(f, " STRICT")?;
+        }
+        if let Some(query) = &self.query {
+            write!(f, " AS {query}")?;
+        }
+        Ok(())
+    }
+}
+
 /// PostgreSQL partition bound specification for `PARTITION OF`.
 ///
 /// Specifies partition bounds for a child partition table.
@@ -3191,6 +3611,23 @@ impl fmt::Display for CreateDomain {
     }
 }
 
+impl ToSql for CreateDomain {
+    fn write_sql(&self, f: &mut dyn Write, dialect: &dyn Dialect) -> fmt::Result {
+        write!(f, "CREATE DOMAIN {} AS ", self.name)?;
+        self.data_type.write_sql(f, dialect)?;
+        if let Some(collation) = &self.collation {
+            write!(f, " COLLATE {collation}")?;
+        }
+        if let Some(default) = &self.default {
+            write!(f, " DEFAULT {default}")?;
+        }
+        if !self.constraints.is_empty() {
+            write!(f, " {}", display_separated(&self.constraints, " "))?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -3285,6 +3722,97 @@ impl fmt::Display for CreateFunction {
         }
         if let Some(return_type) = &self.return_type {
             write!(f, " RETURNS {return_type}")?;
+        }
+        if let Some(determinism_specifier) = &self.determinism_specifier {
+            write!(f, " {determinism_specifier}")?;
+        }
+        if let Some(language) = &self.language {
+            write!(f, " LANGUAGE {language}")?;
+        }
+        if let Some(behavior) = &self.behavior {
+            write!(f, " {behavior}")?;
+        }
+        if let Some(called_on_null) = &self.called_on_null {
+            write!(f, " {called_on_null}")?;
+        }
+        if let Some(parallel) = &self.parallel {
+            write!(f, " {parallel}")?;
+        }
+        if let Some(security) = &self.security {
+            write!(f, " {security}")?;
+        }
+        for set_param in &self.set_params {
+            write!(f, " {set_param}")?;
+        }
+        if let Some(remote_connection) = &self.remote_connection {
+            write!(f, " REMOTE WITH CONNECTION {remote_connection}")?;
+        }
+        if let Some(CreateFunctionBody::AsBeforeOptions { body, link_symbol }) = &self.function_body
+        {
+            write!(f, " AS {body}")?;
+            if let Some(link_symbol) = link_symbol {
+                write!(f, ", {link_symbol}")?;
+            }
+        }
+        if let Some(CreateFunctionBody::Return(function_body)) = &self.function_body {
+            write!(f, " RETURN {function_body}")?;
+        }
+        if let Some(CreateFunctionBody::AsReturnExpr(function_body)) = &self.function_body {
+            write!(f, " AS RETURN {function_body}")?;
+        }
+        if let Some(CreateFunctionBody::AsReturnSelect(function_body)) = &self.function_body {
+            write!(f, " AS RETURN {function_body}")?;
+        }
+        if let Some(using) = &self.using {
+            write!(f, " {using}")?;
+        }
+        if let Some(options) = &self.options {
+            write!(
+                f,
+                " OPTIONS({})",
+                display_comma_separated(options.as_slice())
+            )?;
+        }
+        if let Some(CreateFunctionBody::AsAfterOptions(function_body)) = &self.function_body {
+            write!(f, " AS {function_body}")?;
+        }
+        if let Some(CreateFunctionBody::AsBeginEnd(bes)) = &self.function_body {
+            write!(f, " AS {bes}")?;
+        }
+        Ok(())
+    }
+}
+
+impl ToSql for CreateFunction {
+    fn write_sql(&self, f: &mut dyn Write, dialect: &dyn Dialect) -> fmt::Result {
+        write!(
+            f,
+            "CREATE {or_alter}{or_replace}{temp}FUNCTION {if_not_exists}{name}",
+            name = self.name,
+            temp = if self.temporary { "TEMPORARY " } else { "" },
+            or_alter = if self.or_alter { "OR ALTER " } else { "" },
+            or_replace = if self.or_replace { "OR REPLACE " } else { "" },
+            if_not_exists = if self.if_not_exists {
+                "IF NOT EXISTS "
+            } else {
+                ""
+            },
+        )?;
+        if let Some(args) = &self.args {
+            write!(f, "(")?;
+            let mut first = true;
+            for arg in args {
+                if !first {
+                    write!(f, ", ")?;
+                }
+                first = false;
+                arg.write_sql(f, dialect)?;
+            }
+            write!(f, ")")?;
+        }
+        if let Some(return_type) = &self.return_type {
+            write!(f, " RETURNS ")?;
+            return_type.write_sql(f, dialect)?;
         }
         if let Some(determinism_specifier) = &self.determinism_specifier {
             write!(f, " {determinism_specifier}")?;
@@ -3993,6 +4521,72 @@ impl fmt::Display for CreateView {
     }
 }
 
+impl ToSql for CreateView {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        write!(
+            f,
+            "CREATE {or_alter}{or_replace}",
+            or_alter = if self.or_alter { "OR ALTER " } else { "" },
+            or_replace = if self.or_replace { "OR REPLACE " } else { "" },
+        )?;
+        if let Some(ref params) = self.params {
+            write!(f, "{}", params)?;
+        }
+        write!(
+            f,
+            "{secure}{materialized}{temporary}VIEW {if_not_and_name}{to}",
+            if_not_and_name = if self.if_not_exists {
+                if self.name_before_not_exists {
+                    format!("{} IF NOT EXISTS", self.name)
+                } else {
+                    format!("IF NOT EXISTS {}", self.name)
+                }
+            } else {
+                format!("{}", self.name)
+            },
+            secure = if self.secure { "SECURE " } else { "" },
+            materialized = if self.materialized {
+                "MATERIALIZED "
+            } else {
+                ""
+            },
+            temporary = if self.temporary { "TEMPORARY " } else { "" },
+            to = self
+                .to
+                .as_ref()
+                .map(|to| format!(" TO {to}"))
+                .unwrap_or_default()
+        )?;
+        if !self.columns.is_empty() {
+            write!(f, " (")?;
+            crate::ast::write_comma_separated_tosql(f, &self.columns, dialect)?;
+            write!(f, ")")?;
+        }
+        if matches!(self.options, CreateTableOptions::With(_)) {
+            write!(f, " {}", self.options)?;
+        }
+        if let Some(ref comment) = self.comment {
+            write!(f, " COMMENT = '{}'", escape_single_quote_string(comment))?;
+        }
+        if !self.cluster_by.is_empty() {
+            write!(
+                f,
+                " CLUSTER BY ({})",
+                display_comma_separated(&self.cluster_by)
+            )?;
+        }
+        if matches!(self.options, CreateTableOptions::Options(_)) {
+            write!(f, " {}", self.options)?;
+        }
+        f.write_str(" AS ")?;
+        self.query.write_sql(f, dialect)?;
+        if self.with_no_schema_binding {
+            write!(f, " WITH NO SCHEMA BINDING")?;
+        }
+        Ok(())
+    }
+}
+
 /// CREATE EXTENSION statement
 /// Note: this is a PostgreSQL-specific statement
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -4138,6 +4732,33 @@ impl fmt::Display for AlterTable {
             write!(f, "ON CLUSTER {cluster} ")?;
         }
         write!(f, "{}", display_comma_separated(&self.operations))?;
+        if let Some(loc) = &self.location {
+            write!(f, " {loc}")?
+        }
+        Ok(())
+    }
+}
+
+impl ToSql for AlterTable {
+    fn write_sql(&self, f: &mut dyn Write, dialect: &dyn Dialect) -> fmt::Result {
+        match &self.table_type {
+            Some(AlterTableType::Iceberg) => write!(f, "ALTER ICEBERG TABLE ")?,
+            Some(AlterTableType::Dynamic) => write!(f, "ALTER DYNAMIC TABLE ")?,
+            Some(AlterTableType::External) => write!(f, "ALTER EXTERNAL TABLE ")?,
+            None => write!(f, "ALTER TABLE ")?,
+        }
+
+        if self.if_exists {
+            write!(f, "IF EXISTS ")?;
+        }
+        if self.only {
+            write!(f, "ONLY ")?;
+        }
+        write!(f, "{} ", &self.name)?;
+        if let Some(cluster) = &self.on_cluster {
+            write!(f, "ON CLUSTER {cluster} ")?;
+        }
+        crate::ast::write_comma_separated_tosql(f, &self.operations, dialect)?;
         if let Some(loc) = &self.location {
             write!(f, " {loc}")?
         }

@@ -1837,3 +1837,245 @@ fn test_clickhouse_data_type_to_sql_pascalcase() {
     assert_eq!(date32.to_sql(&ch), "Date32");
     assert_eq!(date32.to_sql(&generic), "Date32");
 }
+
+#[test]
+fn test_clickhouse_create_table_to_sql_pascalcase() {
+    // Test that Statement::to_sql() produces PascalCase types for ClickHouse
+    // This is the main use case: round-tripping CREATE TABLE statements
+    use sqlparser::ast::ToSql;
+    use sqlparser::parser::Parser;
+
+    let dialect = ClickHouseDialect {};
+
+    // Parse a CREATE TABLE with ClickHouse types
+    let sql = "CREATE TABLE t (id Int64, name String, created DateTime)";
+    let statements = Parser::parse_sql(&dialect, sql).unwrap();
+
+    // Using to_sql should preserve PascalCase for ClickHouse
+    let regenerated = statements[0].to_sql(&dialect);
+    assert!(
+        regenerated.contains("Int64"),
+        "Expected Int64, got: {}",
+        regenerated
+    );
+    assert!(
+        regenerated.contains("String"),
+        "Expected String, got: {}",
+        regenerated
+    );
+    assert!(
+        regenerated.contains("DateTime"),
+        "Expected DateTime, got: {}",
+        regenerated
+    );
+
+    // Contrast with to_string() which uses uppercase
+    let display_output = statements[0].to_string();
+    assert!(
+        display_output.contains("INT64"),
+        "Expected INT64 in display output, got: {}",
+        display_output
+    );
+    assert!(
+        display_output.contains("STRING"),
+        "Expected STRING in display output, got: {}",
+        display_output
+    );
+}
+
+#[test]
+fn test_clickhouse_create_table_nested_types_to_sql() {
+    // Test nested ClickHouse types in CREATE TABLE
+    use sqlparser::ast::ToSql;
+    use sqlparser::parser::Parser;
+
+    let dialect = ClickHouseDialect {};
+
+    let sql = "CREATE TABLE t (col Nullable(String), arr Array(Int64), map Map(String, Int64))";
+    let statements = Parser::parse_sql(&dialect, sql).unwrap();
+
+    let regenerated = statements[0].to_sql(&dialect);
+
+    // Should have PascalCase for all types
+    assert!(
+        regenerated.contains("Nullable(String)"),
+        "Expected Nullable(String), got: {}",
+        regenerated
+    );
+    assert!(
+        regenerated.contains("Array(Int64)"),
+        "Expected Array(Int64), got: {}",
+        regenerated
+    );
+    assert!(
+        regenerated.contains("Map(String, Int64)"),
+        "Expected Map(String, Int64), got: {}",
+        regenerated
+    );
+}
+
+#[test]
+fn test_clickhouse_alter_table_to_sql_pascalcase() {
+    // Test that ALTER TABLE with type changes preserves PascalCase
+    use sqlparser::ast::ToSql;
+    use sqlparser::parser::Parser;
+
+    let dialect = ClickHouseDialect {};
+
+    // Test ADD COLUMN
+    let sql = "ALTER TABLE t ADD COLUMN col String";
+    let statements = Parser::parse_sql(&dialect, sql).unwrap();
+    let regenerated = statements[0].to_sql(&dialect);
+    assert!(
+        regenerated.contains("String"),
+        "Expected String in ALTER TABLE ADD COLUMN, got: {}",
+        regenerated
+    );
+
+    // Test MODIFY COLUMN
+    let sql = "ALTER TABLE t MODIFY COLUMN col Nullable(Int64)";
+    let statements = Parser::parse_sql(&dialect, sql).unwrap();
+    let regenerated = statements[0].to_sql(&dialect);
+    assert!(
+        regenerated.contains("Nullable(Int64)"),
+        "Expected Nullable(Int64), got: {}",
+        regenerated
+    );
+}
+
+#[test]
+fn test_clickhouse_select_cast_to_sql_pascalcase() {
+    // Test that SELECT with CAST preserves PascalCase types
+    use sqlparser::ast::ToSql;
+    use sqlparser::parser::Parser;
+
+    let dialect = ClickHouseDialect {};
+
+    // Simple CAST
+    let sql = "SELECT CAST(x AS String) FROM t";
+    let statements = Parser::parse_sql(&dialect, sql).unwrap();
+    let regenerated = statements[0].to_sql(&dialect);
+    assert!(
+        regenerated.contains("AS String"),
+        "Expected 'AS String' in SELECT CAST, got: {}",
+        regenerated
+    );
+
+    // Nested CAST
+    let sql = "SELECT CAST(CAST(x AS Int64) AS String) FROM t";
+    let statements = Parser::parse_sql(&dialect, sql).unwrap();
+    let regenerated = statements[0].to_sql(&dialect);
+    assert!(
+        regenerated.contains("AS Int64"),
+        "Expected 'AS Int64' in nested CAST, got: {}",
+        regenerated
+    );
+    assert!(
+        regenerated.contains("AS String"),
+        "Expected 'AS String' in nested CAST, got: {}",
+        regenerated
+    );
+
+    // CAST in WHERE clause
+    let sql = "SELECT x FROM t WHERE CAST(y AS DateTime) > '2020-01-01'";
+    let statements = Parser::parse_sql(&dialect, sql).unwrap();
+    let regenerated = statements[0].to_sql(&dialect);
+    assert!(
+        regenerated.contains("AS DateTime"),
+        "Expected 'AS DateTime' in WHERE CAST, got: {}",
+        regenerated
+    );
+}
+
+#[test]
+fn test_clickhouse_complex_expressions_to_sql() {
+    // Test complex expressions with types
+    use sqlparser::ast::ToSql;
+    use sqlparser::parser::Parser;
+
+    let dialect = ClickHouseDialect {};
+
+    // CASE expression with CAST
+    let sql = "SELECT CASE WHEN x > 0 THEN CAST(x AS String) ELSE 'default' END FROM t";
+    let statements = Parser::parse_sql(&dialect, sql).unwrap();
+    let regenerated = statements[0].to_sql(&dialect);
+    assert!(
+        regenerated.contains("AS String"),
+        "Expected 'AS String' in CASE expression, got: {}",
+        regenerated
+    );
+
+    // Binary operation with CAST
+    let sql = "SELECT CAST(a AS Int64) + CAST(b AS Int64) FROM t";
+    let statements = Parser::parse_sql(&dialect, sql).unwrap();
+    let regenerated = statements[0].to_sql(&dialect);
+    // Count occurrences of "AS Int64"
+    let count = regenerated.matches("AS Int64").count();
+    assert!(
+        count == 2,
+        "Expected 2 occurrences of 'AS Int64', found {}: {}",
+        count,
+        regenerated
+    );
+}
+
+#[test]
+fn test_clickhouse_create_view_to_sql_pascalcase() {
+    // Test CREATE VIEW with typed columns
+    use sqlparser::ast::ToSql;
+    use sqlparser::parser::Parser;
+
+    let dialect = ClickHouseDialect {};
+
+    let sql = "CREATE VIEW v AS SELECT CAST(x AS String) AS col FROM t";
+    let statements = Parser::parse_sql(&dialect, sql).unwrap();
+    let regenerated = statements[0].to_sql(&dialect);
+    assert!(
+        regenerated.contains("AS String"),
+        "Expected 'AS String' in CREATE VIEW, got: {}",
+        regenerated
+    );
+}
+
+/// Test that AST round-trips correctly: parse -> to_sql -> parse should produce equivalent AST.
+/// This validates:
+/// - Orthogonality: The same information is preserved across transformations
+/// - ETC (Easy to Change): Changes to formatting don't break parsing
+#[test]
+fn test_clickhouse_roundtrip_ast_preservation() {
+    use sqlparser::ast::ToSql;
+    use sqlparser::parser::Parser;
+
+    let dialect = ClickHouseDialect {};
+
+    // Test cases that exercise various code paths
+    let test_cases = [
+        "SELECT CAST(x AS String) FROM t",
+        "SELECT CAST(CAST(x AS Int64) AS String) FROM t",
+        "CREATE TABLE t (id Int64, name Nullable(String))",
+        "ALTER TABLE t ADD COLUMN x Array(Int32)",
+        "SELECT CASE WHEN x > 0 THEN CAST(x AS String) ELSE 'default' END FROM t",
+        "SELECT x FROM t WHERE CAST(y AS DateTime) > '2020-01-01'",
+        // Window function with CAST
+        "SELECT SUM(CAST(x AS Float64)) OVER (PARTITION BY y ORDER BY z) FROM t",
+    ];
+
+    for sql in test_cases {
+        // First round-trip: parse -> to_sql
+        let ast1 = Parser::parse_sql(&dialect, sql).expect(&format!("Failed to parse: {}", sql));
+        let sql2 = ast1[0].to_sql(&dialect);
+
+        // Second round-trip: to_sql -> parse
+        let ast2 = Parser::parse_sql(&dialect, &sql2)
+            .expect(&format!("Failed to parse regenerated SQL: {}", sql2));
+
+        // The AST should be equivalent (modulo formatting differences)
+        // We verify by generating SQL again and ensuring it's identical
+        let sql3 = ast2[0].to_sql(&dialect);
+        assert_eq!(
+            sql2, sql3,
+            "Round-trip failed for: {}\nFirst: {}\nSecond: {}",
+            sql, sql2, sql3
+        );
+    }
+}

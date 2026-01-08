@@ -26,7 +26,9 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::{display_comma_separated, Expr, ObjectName, StructField, UnionField};
+use crate::dialect::Dialect;
 
+use super::to_sql::ToSql;
 use super::{value::escape_single_quote_string, ColumnDef};
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -496,98 +498,102 @@ pub enum DataType {
     TsQuery,
 }
 
-use crate::dialect::Dialect;
-
-impl DataType {
-    /// Formats the data type as a SQL string with dialect-specific formatting.
-    ///
-    /// For dialects that require PascalCase type names (like ClickHouse), this method
-    /// outputs types in PascalCase (e.g., `String`, `Int64`, `Nullable`).
-    /// For other dialects, it uses the standard uppercase formatting (e.g., `STRING`, `INT64`).
-    ///
-    /// # Example
-    /// ```
-    /// use sqlparser::ast::DataType;
-    /// use sqlparser::dialect::{ClickHouseDialect, GenericDialect};
-    ///
-    /// let dt = DataType::Int64;
-    ///
-    /// // ClickHouse requires PascalCase
-    /// assert_eq!(dt.to_sql(&ClickHouseDialect {}), "Int64");
-    ///
-    /// // Other dialects use uppercase
-    /// assert_eq!(dt.to_sql(&GenericDialect {}), "INT64");
-    /// ```
-    pub fn to_sql(&self, dialect: &dyn Dialect) -> String {
+impl ToSql for DataType {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
         if dialect.requires_pascalcase_types() {
-            self.to_sql_pascalcase()
+            self.write_sql_pascalcase(f, dialect)
         } else {
-            self.to_string()
-        }
-    }
-
-    /// Formats the data type with PascalCase type names (for ClickHouse compatibility).
-    fn to_sql_pascalcase(&self) -> String {
-        match self {
-            // Types that need PascalCase conversion (currently uppercase in Display)
-            DataType::Int8(zerofill) => format_type_pascalcase("Int8", zerofill),
-            DataType::Int64 => "Int64".to_string(),
-            DataType::Float64 => "Float64".to_string(),
-            DataType::String(size) => match size {
-                Some(s) => format!("String({s})"),
-                None => "String".to_string(),
-            },
-            DataType::Bool => "Bool".to_string(),
-            DataType::Boolean => "Boolean".to_string(),
-            DataType::Date => "Date".to_string(),
-            DataType::Datetime(precision) => match precision {
-                Some(p) => format!("DateTime({p})"),
-                None => "DateTime".to_string(),
-            },
-
-            // Container types that need recursive PascalCase formatting
-            DataType::Nullable(inner) => format!("Nullable({})", inner.to_sql_pascalcase()),
-            DataType::LowCardinality(inner) => {
-                format!("LowCardinality({})", inner.to_sql_pascalcase())
-            }
-            DataType::Array(elem) => match elem {
-                ArrayElemTypeDef::None => "Array".to_string(),
-                ArrayElemTypeDef::SquareBracket(t, None) => format!("{}[]", t.to_sql_pascalcase()),
-                ArrayElemTypeDef::SquareBracket(t, Some(size)) => {
-                    format!("{}[{size}]", t.to_sql_pascalcase())
-                }
-                ArrayElemTypeDef::AngleBracket(t) => format!("Array<{}>", t.to_sql_pascalcase()),
-                ArrayElemTypeDef::Parenthesis(t) => format!("Array({})", t.to_sql_pascalcase()),
-            },
-            DataType::Map(key, value) => {
-                format!(
-                    "Map({}, {})",
-                    key.to_sql_pascalcase(),
-                    value.to_sql_pascalcase()
-                )
-            }
-            DataType::Tuple(fields) => {
-                let fields_str: Vec<String> = fields
-                    .iter()
-                    .map(|f| match &f.field_name {
-                        Some(name) => format!("{} {}", name, f.field_type.to_sql_pascalcase()),
-                        None => f.field_type.to_sql_pascalcase(),
-                    })
-                    .collect();
-                format!("Tuple({})", fields_str.join(", "))
-            }
-
-            // All other types use the default Display implementation
-            _ => self.to_string(),
+            write!(f, "{}", self)
         }
     }
 }
 
-/// Helper function to format a type name with optional length in PascalCase
-fn format_type_pascalcase(type_name: &str, len: &Option<u64>) -> String {
+impl DataType {
+    /// Formats the data type with PascalCase type names (for ClickHouse compatibility).
+    fn write_sql_pascalcase(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        match self {
+            // Types that need PascalCase conversion (currently uppercase in Display)
+            DataType::Int8(zerofill) => write_type_pascalcase(f, "Int8", zerofill),
+            DataType::Int64 => write!(f, "Int64"),
+            DataType::Float64 => write!(f, "Float64"),
+            DataType::String(size) => match size {
+                Some(s) => write!(f, "String({s})"),
+                None => write!(f, "String"),
+            },
+            DataType::Bool => write!(f, "Bool"),
+            DataType::Boolean => write!(f, "Boolean"),
+            DataType::Date => write!(f, "Date"),
+            DataType::Datetime(precision) => match precision {
+                Some(p) => write!(f, "DateTime({p})"),
+                None => write!(f, "DateTime"),
+            },
+
+            // Container types that need recursive PascalCase formatting
+            DataType::Nullable(inner) => {
+                write!(f, "Nullable(")?;
+                inner.write_sql(f, dialect)?;
+                write!(f, ")")
+            }
+            DataType::LowCardinality(inner) => {
+                write!(f, "LowCardinality(")?;
+                inner.write_sql(f, dialect)?;
+                write!(f, ")")
+            }
+            DataType::Array(elem) => match elem {
+                ArrayElemTypeDef::None => write!(f, "Array"),
+                ArrayElemTypeDef::SquareBracket(t, None) => {
+                    t.write_sql(f, dialect)?;
+                    write!(f, "[]")
+                }
+                ArrayElemTypeDef::SquareBracket(t, Some(size)) => {
+                    t.write_sql(f, dialect)?;
+                    write!(f, "[{size}]")
+                }
+                ArrayElemTypeDef::AngleBracket(t) => {
+                    write!(f, "Array<")?;
+                    t.write_sql(f, dialect)?;
+                    write!(f, ">")
+                }
+                ArrayElemTypeDef::Parenthesis(t) => {
+                    write!(f, "Array(")?;
+                    t.write_sql(f, dialect)?;
+                    write!(f, ")")
+                }
+            },
+            DataType::Map(key, value) => {
+                write!(f, "Map(")?;
+                key.write_sql(f, dialect)?;
+                write!(f, ", ")?;
+                value.write_sql(f, dialect)?;
+                write!(f, ")")
+            }
+            DataType::Tuple(fields) => {
+                write!(f, "Tuple(")?;
+                let mut first = true;
+                for field in fields {
+                    if !first {
+                        write!(f, ", ")?;
+                    }
+                    first = false;
+                    if let Some(name) = &field.field_name {
+                        write!(f, "{} ", name)?;
+                    }
+                    field.field_type.write_sql(f, dialect)?;
+                }
+                write!(f, ")")
+            }
+
+            // All other types use the default Display implementation
+            _ => write!(f, "{}", self),
+        }
+    }
+}
+
+/// Helper function to write a type name with optional length in PascalCase
+fn write_type_pascalcase(f: &mut dyn fmt::Write, type_name: &str, len: &Option<u64>) -> fmt::Result {
     match len {
-        Some(l) => format!("{type_name}({l})"),
-        None => type_name.to_string(),
+        Some(l) => write!(f, "{type_name}({l})"),
+        None => write!(f, "{type_name}"),
     }
 }
 

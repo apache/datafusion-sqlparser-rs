@@ -25,8 +25,11 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
+use core::fmt::Write;
+
 use crate::{
     ast::*,
+    dialect::Dialect,
     display_utils::{indented_list, SpaceOrNewline},
     tokenizer::{Token, TokenWithSpan},
 };
@@ -106,6 +109,40 @@ impl fmt::Display for Query {
         for pipe_operator in &self.pipe_operators {
             f.write_str(" |> ")?;
             pipe_operator.fmt(f)?;
+        }
+        Ok(())
+    }
+}
+
+impl ToSql for Query {
+    fn write_sql(&self, f: &mut dyn Write, dialect: &dyn Dialect) -> fmt::Result {
+        if let Some(ref with) = self.with {
+            write!(f, "{with} ")?;
+        }
+        self.body.write_sql(f, dialect)?;
+        if let Some(ref order_by) = self.order_by {
+            write!(f, " {order_by}")?;
+        }
+        if let Some(ref limit_clause) = self.limit_clause {
+            write!(f, "{limit_clause}")?;
+        }
+        if let Some(ref settings) = self.settings {
+            write!(f, " SETTINGS {}", display_comma_separated(settings))?;
+        }
+        if let Some(ref fetch) = self.fetch {
+            write!(f, " {fetch}")?;
+        }
+        if !self.locks.is_empty() {
+            write!(f, " {}", display_separated(&self.locks, " "))?;
+        }
+        if let Some(ref for_clause) = self.for_clause {
+            write!(f, " {for_clause}")?;
+        }
+        if let Some(ref format) = self.format_clause {
+            write!(f, " {format}")?;
+        }
+        for pipe_operator in &self.pipe_operators {
+            write!(f, " |> {pipe_operator}")?;
         }
         Ok(())
     }
@@ -214,6 +251,46 @@ impl fmt::Display for SetExpr {
                 SpaceOrNewline.fmt(f)?;
                 right.fmt(f)?;
                 Ok(())
+            }
+        }
+    }
+}
+
+impl ToSql for SetExpr {
+    fn write_sql(&self, f: &mut dyn Write, dialect: &dyn Dialect) -> fmt::Result {
+        match self {
+            SetExpr::Select(s) => s.write_sql(f, dialect),
+            SetExpr::Query(q) => {
+                f.write_str("(")?;
+                q.write_sql(f, dialect)?;
+                f.write_str(")")
+            }
+            SetExpr::Values(v) => write!(f, "{v}"),
+            SetExpr::Insert(v) => v.write_sql(f, dialect),
+            SetExpr::Update(v) => v.write_sql(f, dialect),
+            SetExpr::Delete(v) => v.write_sql(f, dialect),
+            SetExpr::Merge(v) => v.write_sql(f, dialect),
+            SetExpr::Table(t) => write!(f, "{t}"),
+            SetExpr::SetOperation {
+                left,
+                right,
+                op,
+                set_quantifier,
+            } => {
+                left.write_sql(f, dialect)?;
+                write!(f, " {op}")?;
+                match set_quantifier {
+                    SetQuantifier::All
+                    | SetQuantifier::Distinct
+                    | SetQuantifier::ByName
+                    | SetQuantifier::AllByName
+                    | SetQuantifier::DistinctByName => {
+                        write!(f, " {set_quantifier}")?;
+                    }
+                    SetQuantifier::None => {}
+                }
+                f.write_str(" ")?;
+                right.write_sql(f, dialect)
             }
         }
     }
@@ -503,6 +580,116 @@ impl fmt::Display for Select {
         if let Some(ref connect_by) = self.connect_by {
             SpaceOrNewline.fmt(f)?;
             connect_by.fmt(f)?;
+        }
+        Ok(())
+    }
+}
+
+impl ToSql for Select {
+    fn write_sql(&self, f: &mut dyn Write, dialect: &dyn Dialect) -> fmt::Result {
+        match self.flavor {
+            SelectFlavor::Standard => {
+                write!(f, "SELECT")?;
+            }
+            SelectFlavor::FromFirst => {
+                write!(f, "FROM {} SELECT", display_comma_separated(&self.from))?;
+            }
+            SelectFlavor::FromFirstNoSelect => {
+                write!(f, "FROM {}", display_comma_separated(&self.from))?;
+            }
+        }
+
+        if let Some(value_table_mode) = self.value_table_mode {
+            write!(f, " {value_table_mode}")?;
+        }
+
+        if let Some(ref top) = self.top {
+            if self.top_before_distinct {
+                write!(f, " {top}")?;
+            }
+        }
+        if let Some(ref distinct) = self.distinct {
+            write!(f, " {distinct}")?;
+        }
+        if let Some(ref top) = self.top {
+            if !self.top_before_distinct {
+                write!(f, " {top}")?;
+            }
+        }
+
+        if !self.projection.is_empty() {
+            f.write_str(" ")?;
+            write_comma_separated_tosql(f, &self.projection, dialect)?;
+        }
+
+        if let Some(exclude) = &self.exclude {
+            write!(f, " {exclude}")?;
+        }
+
+        if let Some(ref into) = self.into {
+            write!(f, " {into}")?;
+        }
+
+        if self.flavor == SelectFlavor::Standard && !self.from.is_empty() {
+            write!(f, " FROM {}", display_comma_separated(&self.from))?;
+        }
+        if !self.lateral_views.is_empty() {
+            for lv in &self.lateral_views {
+                write!(f, "{lv}")?;
+            }
+        }
+        if let Some(ref prewhere) = self.prewhere {
+            write!(f, " PREWHERE ")?;
+            prewhere.write_sql(f, dialect)?;
+        }
+        if let Some(ref selection) = self.selection {
+            write!(f, " WHERE ")?;
+            selection.write_sql(f, dialect)?;
+        }
+        match &self.group_by {
+            GroupByExpr::All(_) => {
+                write!(f, " {}", self.group_by)?;
+            }
+            GroupByExpr::Expressions(exprs, _) => {
+                if !exprs.is_empty() {
+                    write!(f, " {}", self.group_by)?;
+                }
+            }
+        }
+        if !self.cluster_by.is_empty() {
+            write!(f, " CLUSTER BY ")?;
+            write_comma_separated_tosql(f, &self.cluster_by, dialect)?;
+        }
+        if !self.distribute_by.is_empty() {
+            write!(f, " DISTRIBUTE BY ")?;
+            write_comma_separated_tosql(f, &self.distribute_by, dialect)?;
+        }
+        if !self.sort_by.is_empty() {
+            write!(f, " SORT BY {}", display_comma_separated(&self.sort_by))?;
+        }
+        if let Some(ref having) = self.having {
+            write!(f, " HAVING ")?;
+            having.write_sql(f, dialect)?;
+        }
+        if self.window_before_qualify {
+            if !self.named_window.is_empty() {
+                write!(f, " WINDOW {}", display_comma_separated(&self.named_window))?;
+            }
+            if let Some(ref qualify) = self.qualify {
+                write!(f, " QUALIFY ")?;
+                qualify.write_sql(f, dialect)?;
+            }
+        } else {
+            if let Some(ref qualify) = self.qualify {
+                write!(f, " QUALIFY ")?;
+                qualify.write_sql(f, dialect)?;
+            }
+            if !self.named_window.is_empty() {
+                write!(f, " WINDOW {}", display_comma_separated(&self.named_window))?;
+            }
+        }
+        if let Some(ref connect_by) = self.connect_by {
+            write!(f, " {connect_by}")?;
         }
         Ok(())
     }
@@ -1005,6 +1192,29 @@ impl fmt::Display for SelectItem {
             SelectItem::Wildcard(additional_options) => {
                 f.write_char('*')?;
                 additional_options.fmt(f)
+            }
+        }
+    }
+}
+
+impl ToSql for SelectItem {
+    fn write_sql(&self, f: &mut dyn Write, dialect: &dyn Dialect) -> fmt::Result {
+        match &self {
+            SelectItem::UnnamedExpr(expr) => expr.write_sql(f, dialect),
+            SelectItem::ExprWithAlias { expr, alias } => {
+                expr.write_sql(f, dialect)?;
+                write!(f, " AS {alias}")
+            }
+            SelectItem::QualifiedWildcard(kind, additional_options) => {
+                // QualifiedWildcard may contain expressions for Struct
+                match kind {
+                    SelectItemQualifiedWildcardKind::ObjectName(name) => write!(f, "{name}")?,
+                    SelectItemQualifiedWildcardKind::Expr(expr) => expr.write_sql(f, dialect)?,
+                }
+                write!(f, ".* {additional_options}")
+            }
+            SelectItem::Wildcard(additional_options) => {
+                write!(f, "* {additional_options}")
             }
         }
     }
@@ -2535,6 +2745,18 @@ impl fmt::Display for OrderByExpr {
     }
 }
 
+impl ToSql for OrderByExpr {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        self.expr.write_sql(f, dialect)?;
+        write!(f, "{}", self.options)?;
+        if let Some(ref with_fill) = self.with_fill {
+            write!(f, " ")?;
+            with_fill.write_sql(f, dialect)?;
+        }
+        Ok(())
+    }
+}
+
 /// ClickHouse `WITH FILL` modifier for `ORDER BY` clause.
 /// Supported by [ClickHouse syntax]
 ///
@@ -2559,6 +2781,25 @@ impl fmt::Display for WithFill {
         }
         if let Some(ref step) = self.step {
             write!(f, " STEP {step}")?;
+        }
+        Ok(())
+    }
+}
+
+impl ToSql for WithFill {
+    fn write_sql(&self, f: &mut dyn fmt::Write, dialect: &dyn Dialect) -> fmt::Result {
+        write!(f, "WITH FILL")?;
+        if let Some(ref from) = self.from {
+            write!(f, " FROM ")?;
+            from.write_sql(f, dialect)?;
+        }
+        if let Some(ref to) = self.to {
+            write!(f, " TO ")?;
+            to.write_sql(f, dialect)?;
+        }
+        if let Some(ref step) = self.step {
+            write!(f, " STEP ")?;
+            step.write_sql(f, dialect)?;
         }
         Ok(())
     }
@@ -3472,6 +3713,20 @@ impl fmt::Display for JsonTableColumn {
     }
 }
 
+impl ToSql for JsonTableColumn {
+    fn write_sql(&self, f: &mut dyn Write, dialect: &dyn Dialect) -> fmt::Result {
+        match self {
+            JsonTableColumn::Named(json_table_named_column) => {
+                json_table_named_column.write_sql(f, dialect)
+            }
+            JsonTableColumn::ForOrdinality(ident) => write!(f, "{ident} FOR ORDINALITY"),
+            JsonTableColumn::Nested(json_table_nested_column) => {
+                json_table_nested_column.write_sql(f, dialect)
+            }
+        }
+    }
+}
+
 /// A nested column in a JSON_TABLE column list
 ///
 /// See <https://mariadb.com/kb/en/json_table/#nested-paths>
@@ -3491,6 +3746,14 @@ impl fmt::Display for JsonTableNestedColumn {
             self.path,
             display_comma_separated(&self.columns)
         )
+    }
+}
+
+impl ToSql for JsonTableNestedColumn {
+    fn write_sql(&self, f: &mut dyn Write, dialect: &dyn Dialect) -> fmt::Result {
+        write!(f, "NESTED PATH {} COLUMNS (", self.path)?;
+        write_comma_separated_tosql(f, &self.columns, dialect)?;
+        write!(f, ")")
     }
 }
 
@@ -3529,6 +3792,24 @@ impl fmt::Display for JsonTableNamedColumn {
             if self.exists { " EXISTS" } else { "" },
             self.path
         )?;
+        if let Some(on_empty) = &self.on_empty {
+            write!(f, " {on_empty} ON EMPTY")?;
+        }
+        if let Some(on_error) = &self.on_error {
+            write!(f, " {on_error} ON ERROR")?;
+        }
+        Ok(())
+    }
+}
+
+impl ToSql for JsonTableNamedColumn {
+    fn write_sql(&self, f: &mut dyn Write, dialect: &dyn Dialect) -> fmt::Result {
+        write!(f, "{} ", self.name)?;
+        self.r#type.write_sql(f, dialect)?;
+        if self.exists {
+            write!(f, " EXISTS")?;
+        }
+        write!(f, " PATH {}", self.path)?;
         if let Some(on_empty) = &self.on_empty {
             write!(f, " {on_empty} ON EMPTY")?;
         }
@@ -3586,6 +3867,20 @@ pub struct OpenJsonTableColumn {
 impl fmt::Display for OpenJsonTableColumn {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} {}", self.name, self.r#type)?;
+        if let Some(path) = &self.path {
+            write!(f, " '{}'", value::escape_single_quote_string(path))?;
+        }
+        if self.as_json {
+            write!(f, " AS JSON")?;
+        }
+        Ok(())
+    }
+}
+
+impl ToSql for OpenJsonTableColumn {
+    fn write_sql(&self, f: &mut dyn Write, dialect: &dyn Dialect) -> fmt::Result {
+        write!(f, "{} ", self.name)?;
+        self.r#type.write_sql(f, dialect)?;
         if let Some(path) = &self.path {
             write!(f, " '{}'", value::escape_single_quote_string(path))?;
         }

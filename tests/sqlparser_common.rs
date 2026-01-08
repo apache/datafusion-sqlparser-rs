@@ -2370,6 +2370,29 @@ fn parse_bitwise_ops() {
 }
 
 #[test]
+fn parse_bitwise_shift_ops() {
+    let dialects = all_dialects_where(|d| d.supports_bitwise_shift_operators());
+    let sql = "SELECT 1 << 2, 3 >> 4";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(Expr::Value((number("1")).with_empty_span())),
+            op: BinaryOperator::PGBitwiseShiftLeft,
+            right: Box::new(Expr::Value((number("2")).with_empty_span())),
+        }),
+        select.projection[0]
+    );
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(Expr::Value((number("3")).with_empty_span())),
+            op: BinaryOperator::PGBitwiseShiftRight,
+            right: Box::new(Expr::Value((number("4")).with_empty_span())),
+        }),
+        select.projection[1]
+    );
+}
+
+#[test]
 fn parse_binary_any() {
     let select = verified_only_select("SELECT a = ANY(b)");
     assert_eq!(

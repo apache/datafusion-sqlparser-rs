@@ -30,7 +30,7 @@ use crate::parser::{Parser, ParserError};
 /// [`CREATE TABLE`](https://sqlite.org/lang_createtable.html) statement with no
 /// type specified, as in `CREATE TABLE t1 (a)`. In the AST, these columns will
 /// have the data type [`Unspecified`](crate::ast::DataType::Unspecified).
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SQLiteDialect {}
 
 impl Dialect for SQLiteDialect {

@@ -107,7 +107,7 @@ impl Dialect for MsSqlDialect {
     }
 
     /// See: <https://learn.microsoft.com/en-us/sql/relational-databases/tables/querying-data-in-a-system-versioned-temporal-table>
-    fn supports_timestamp_versioning(&self) -> bool {
+    fn supports_table_versioning(&self) -> bool {
         true
     }
 

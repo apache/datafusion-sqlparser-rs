@@ -136,7 +136,7 @@ impl Dialect for BigQueryDialect {
     }
 
     // See <https://cloud.google.com/bigquery/docs/access-historical-data>
-    fn supports_timestamp_versioning(&self) -> bool {
+    fn supports_table_versioning(&self) -> bool {
         true
     }
 

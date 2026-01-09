@@ -173,7 +173,7 @@ impl Dialect for MySqlDialect {
     }
 
     /// See: <https://dev.mysql.com/doc/refman/8.4/en/expressions.html>
-    fn supports_overlap_as_and_operator(&self) -> bool {
+    fn supports_double_ampersand_operator(&self) -> bool {
         true
     }
 }

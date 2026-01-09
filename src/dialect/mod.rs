@@ -1223,7 +1223,7 @@ pub trait Dialect: Debug + Any {
     }
 
     /// Returns true if the dialect considers the `&&` operator as a boolean AND operator.
-    fn supports_overlap_as_and_operator(&self) -> bool {
+    fn supports_double_ampersand_operator(&self) -> bool {
         false
     }
 }

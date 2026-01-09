@@ -18040,6 +18040,6 @@ fn parse_select_parenthesized_wildcard() {
 
 #[test]
 fn parse_overlap_as_bool_and() {
-    let dialects = all_dialects_where(|d| d.supports_overlap_as_and_operator());
+    let dialects = all_dialects_where(|d| d.supports_double_ampersand_operator());
     dialects.one_statement_parses_to("SELECT x && y", "SELECT x AND y");
 }

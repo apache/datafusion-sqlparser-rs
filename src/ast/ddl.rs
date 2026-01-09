@@ -3332,11 +3332,18 @@ pub enum ForValues {
     In(Vec<Expr>),
     /// `FOR VALUES FROM (expr|MINVALUE|MAXVALUE, ...) TO (expr|MINVALUE|MAXVALUE, ...)`
     From {
+        /// The lower bound values for the partition.
         from: Vec<PartitionBoundValue>,
+        /// The upper bound values for the partition.
         to: Vec<PartitionBoundValue>,
     },
     /// `FOR VALUES WITH (MODULUS n, REMAINDER r)`
-    With { modulus: u64, remainder: u64 },
+    With {
+        /// The modulus value for hash partitioning.
+        modulus: u64,
+        /// The remainder value for hash partitioning.
+        remainder: u64,
+    },
     /// `DEFAULT`
     Default,
 }
@@ -3374,8 +3381,11 @@ impl fmt::Display for ForValues {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum PartitionBoundValue {
+    /// An expression representing a partition bound value.
     Expr(Expr),
+    /// Represents negative infinity in partition bounds.
     MinValue,
+    /// Represents positive infinity in partition bounds.
     MaxValue,
 }
 

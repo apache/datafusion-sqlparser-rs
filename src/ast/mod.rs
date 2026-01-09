@@ -11428,7 +11428,9 @@ impl fmt::Display for AlterUser {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct AlterUserPassword {
+    /// Whether the password is encrypted.
     pub encrypted: bool,
+    /// The password string, or `None` for `NULL`.
     pub password: Option<String>,
 }
 

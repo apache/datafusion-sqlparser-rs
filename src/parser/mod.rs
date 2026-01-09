@@ -19682,11 +19682,4 @@ mod tests {
             assert!(Parser::parse_sql(&GenericDialect, &sql).is_err());
         }
     }
-
-    #[test]
-    fn test_key_value_options_trailing_semicolon() {
-        let sql = "CREATE USER u1 option1 = 'value1' option2 = 'value2';";
-        let ast = Parser::parse_sql(&GenericDialect, sql);
-        assert!(ast.is_ok());
-    }
 }

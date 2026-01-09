@@ -18052,3 +18052,11 @@ fn parse_overlap_as_bool_and() {
     let dialects = all_dialects_where(|d| d.supports_double_ampersand_operator());
     dialects.one_statement_parses_to("SELECT x && y", "SELECT x AND y");
 }
+
+#[test]
+fn test_parse_key_value_options_trailing_semicolon() {
+    one_statement_parses_to(
+        "CREATE USER u1 option1='value1' option2='value2';",
+        "CREATE USER u1 option1='value1' option2='value2'",
+    );
+}

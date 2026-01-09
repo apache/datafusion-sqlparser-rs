@@ -1221,6 +1221,11 @@ pub trait Dialect: Debug + Any {
     fn supports_quote_delimited_string(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect considers the `&&` operator as a boolean AND operator.
+    fn supports_double_ampersand_operator(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

@@ -18037,3 +18037,9 @@ fn parse_select_parenthesized_wildcard() {
     assert_eq!(select2.projection.len(), 1);
     assert!(matches!(select2.projection[0], SelectItem::Wildcard(_)));
 }
+
+#[test]
+fn parse_overlap_as_bool_and() {
+    let dialects = all_dialects_where(|d| d.supports_double_ampersand_operator());
+    dialects.one_statement_parses_to("SELECT x && y", "SELECT x AND y");
+}

@@ -3557,6 +3557,9 @@ impl<'a> Parser<'a> {
             Token::Overlap if dialect_is!(dialect is PostgreSqlDialect | GenericDialect) => {
                 Some(BinaryOperator::PGOverlap)
             }
+            Token::Overlap if dialect.supports_double_ampersand_operator() => {
+                Some(BinaryOperator::And)
+            }
             Token::CaretAt if dialect_is!(dialect is PostgreSqlDialect | GenericDialect) => {
                 Some(BinaryOperator::PGStartsWith)
             }
@@ -18995,7 +18998,7 @@ impl<'a> Parser<'a> {
                         return self.expected(" another option or EOF", self.peek_token());
                     }
                 }
-                Token::EOF => break,
+                Token::EOF | Token::SemiColon => break,
                 Token::Comma => {
                     delimiter = KeyValueOptionsDelimiter::Comma;
                     continue;
@@ -19007,7 +19010,12 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     break;
                 }
-                _ => return self.expected("another option, EOF, Comma or ')'", self.peek_token()),
+                _ => {
+                    return self.expected(
+                        "another option, EOF, SemiColon, Comma or ')'",
+                        self.peek_token(),
+                    )
+                }
             };
         }
 

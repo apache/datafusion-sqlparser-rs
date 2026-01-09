@@ -171,6 +171,11 @@ impl Dialect for MySqlDialect {
     fn supports_cross_join_constraint(&self) -> bool {
         true
     }
+
+    /// See: <https://dev.mysql.com/doc/refman/8.4/en/expressions.html>
+    fn supports_double_ampersand_operator(&self) -> bool {
+        true
+    }
 }
 
 /// `LOCK TABLES`

@@ -11171,12 +11171,15 @@ impl fmt::Display for CreateUser {
 
 /// Modifies the properties of a user
 ///
-/// Syntax:
+/// [Snowflake Syntax:](https://docs.snowflake.com/en/sql-reference/sql/alter-user)
 /// ```sql
 /// ALTER USER [ IF EXISTS ] [ <name> ] [ OPTIONS ]
 /// ```
 ///
-/// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/alter-user)
+/// [PostgreSQL Syntax:](https://www.postgresql.org/docs/current/sql-alteruser.html)
+/// ```sql
+/// ALTER USER <role_specification> [ WITH ] option [ ... ]
+/// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -11218,6 +11221,8 @@ pub struct AlterUser {
     pub set_props: KeyValueOptions,
     /// Properties to unset on the user.
     pub unset_props: Vec<String>,
+    /// The following options are PostgreSQL-specific: <https://www.postgresql.org/docs/current/sql-alteruser.html>
+    pub password: Option<AlterUserPassword>,
 }
 
 /// ```sql
@@ -11408,6 +11413,34 @@ impl fmt::Display for AlterUser {
         }
         if !self.unset_props.is_empty() {
             write!(f, " UNSET {}", display_comma_separated(&self.unset_props))?;
+        }
+        if let Some(password) = &self.password {
+            write!(f, " {}", password)?;
+        }
+        Ok(())
+    }
+}
+
+/// ```sql
+/// ALTER USER <role_specification> [ WITH ] PASSWORD { 'password' | NULL }``
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterUserPassword {
+    pub encrypted: bool,
+    pub password: Option<String>,
+}
+
+impl Display for AlterUserPassword {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.encrypted {
+            write!(f, "ENCRYPTED ")?;
+        }
+        write!(f, "PASSWORD")?;
+        match &self.password {
+            None => write!(f, " NULL")?,
+            Some(password) => write!(f, " '{}'", value::escape_single_quote_string(password))?,
         }
         Ok(())
     }

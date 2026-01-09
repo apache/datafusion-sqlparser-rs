@@ -17950,6 +17950,15 @@ fn test_parse_alter_user() {
         _ => unreachable!(),
     }
     verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL'), PASSWORD='secret', WORKLOAD_IDENTITY=(TYPE=AWS, ARN='arn:aws:iam::123456789:r1/')");
+
+    verified_stmt("ALTER USER u1 PASSWORD 'AAA'");
+    verified_stmt("ALTER USER u1 ENCRYPTED PASSWORD 'AAA'");
+    verified_stmt("ALTER USER u1 PASSWORD NULL");
+
+    one_statement_parses_to(
+        "ALTER USER u1 WITH PASSWORD 'AAA'",
+        "ALTER USER u1 PASSWORD 'AAA'",
+    );
 }
 
 #[test]
@@ -18036,4 +18045,18 @@ fn parse_select_parenthesized_wildcard() {
     assert_eq!(select2.distinct, Some(Distinct::Distinct));
     assert_eq!(select2.projection.len(), 1);
     assert!(matches!(select2.projection[0], SelectItem::Wildcard(_)));
+}
+
+#[test]
+fn parse_overlap_as_bool_and() {
+    let dialects = all_dialects_where(|d| d.supports_double_ampersand_operator());
+    dialects.one_statement_parses_to("SELECT x && y", "SELECT x AND y");
+}
+
+#[test]
+fn test_parse_key_value_options_trailing_semicolon() {
+    one_statement_parses_to(
+        "CREATE USER u1 option1='value1' option2='value2';",
+        "CREATE USER u1 option1='value1' option2='value2'",
+    );
 }

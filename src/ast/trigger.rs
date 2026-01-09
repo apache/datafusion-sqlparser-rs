@@ -23,7 +23,9 @@ use super::*;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TriggerObject {
+    /// The trigger fires once for each row affected by the triggering event
     Row,
+    /// The trigger fires once for the triggering SQL statement
     Statement,
 }
 
@@ -36,12 +38,14 @@ impl fmt::Display for TriggerObject {
     }
 }
 
-/// This clause indicates whether the following relation name is for the before-image transition relation or the after-image transition relation
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// This clause indicates whether the following relation name is for the before-image transition relation or the after-image transition relation
 pub enum TriggerReferencingType {
+    /// The transition relation containing the old rows affected by the triggering statement
     OldTable,
+    /// The transition relation containing the new rows affected by the triggering statement
     NewTable,
 }
 
@@ -59,8 +63,11 @@ impl fmt::Display for TriggerReferencingType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TriggerReferencing {
+    /// The referencing type (`OLD TABLE` or `NEW TABLE`).
     pub refer_type: TriggerReferencingType,
+    /// True if the `AS` keyword is present in the referencing clause.
     pub is_as: bool,
+    /// The transition relation name provided by the referencing clause.
     pub transition_relation_name: ObjectName,
 }
 
@@ -81,9 +88,13 @@ impl fmt::Display for TriggerReferencing {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TriggerEvent {
+    /// Trigger on INSERT event
     Insert,
+    /// Trigger on UPDATE event, with optional list of columns
     Update(Vec<Ident>),
+    /// Trigger on DELETE event
     Delete,
+    /// Trigger on TRUNCATE event
     Truncate,
 }
 
@@ -110,9 +121,13 @@ impl fmt::Display for TriggerEvent {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TriggerPeriod {
+    /// The trigger fires once for each row affected by the triggering event
     For,
+    /// The trigger fires once for the triggering SQL statement
     After,
+    /// The trigger fires before the triggering event
     Before,
+    /// The trigger fires instead of the triggering event
     InsteadOf,
 }
 
@@ -132,7 +147,9 @@ impl fmt::Display for TriggerPeriod {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TriggerExecBodyType {
+    /// Execute a function
     Function,
+    /// Execute a procedure
     Procedure,
 }
 
@@ -149,7 +166,9 @@ impl fmt::Display for TriggerExecBodyType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TriggerExecBody {
+    /// Whether the body is a `FUNCTION` or `PROCEDURE` invocation.
     pub exec_type: TriggerExecBodyType,
+    /// Description of the function/procedure to execute.
     pub func_desc: FunctionDesc,
 }
 

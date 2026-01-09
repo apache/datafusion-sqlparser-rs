@@ -34,11 +34,17 @@ use sqlparser_derive::{Visit, VisitMut};
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Parameters for a named stage object used in data loading/unloading.
 pub struct StageParamsObject {
+    /// Optional URL for the stage.
     pub url: Option<String>,
+    /// Encryption-related key/value options.
     pub encryption: KeyValueOptions,
+    /// Optional endpoint string.
     pub endpoint: Option<String>,
+    /// Optional storage integration identifier.
     pub storage_integration: Option<String>,
+    /// Credentials for accessing the stage.
     pub credentials: KeyValueOptions,
 }
 
@@ -48,7 +54,9 @@ pub struct StageParamsObject {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum StageLoadSelectItemKind {
+    /// A standard SQL select item expression.
     SelectItem(SelectItem),
+    /// A Snowflake-specific select item used for stage loading.
     StageLoadSelectItem(StageLoadSelectItem),
 }
 
@@ -64,10 +72,15 @@ impl fmt::Display for StageLoadSelectItemKind {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// A single item in the `SELECT` list for data loading from staged files.
 pub struct StageLoadSelectItem {
+    /// Optional alias for the input source.
     pub alias: Option<Ident>,
+    /// Column number within the staged file (1-based).
     pub file_col_num: i32,
+    /// Optional element identifier following the column reference.
     pub element: Option<Ident>,
+    /// Optional alias for the item (AS clause).
     pub item_as: Option<Ident>,
 }
 
@@ -116,9 +129,12 @@ impl fmt::Display for StageLoadSelectItem {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// A command to stage files to a named stage.
 pub struct FileStagingCommand {
+    /// The stage to which files are being staged.
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     pub stage: ObjectName,
+    /// Optional file matching `PATTERN` expression.
     pub pattern: Option<String>,
 }
 

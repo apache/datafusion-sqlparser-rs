@@ -17950,6 +17950,15 @@ fn test_parse_alter_user() {
         _ => unreachable!(),
     }
     verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL'), PASSWORD='secret', WORKLOAD_IDENTITY=(TYPE=AWS, ARN='arn:aws:iam::123456789:r1/')");
+
+    verified_stmt("ALTER USER u1 PASSWORD 'AAA'");
+    verified_stmt("ALTER USER u1 ENCRYPTED PASSWORD 'AAA'");
+    verified_stmt("ALTER USER u1 PASSWORD NULL");
+
+    one_statement_parses_to(
+        "ALTER USER u1 WITH PASSWORD 'AAA'",
+        "ALTER USER u1 PASSWORD 'AAA'",
+    );
 }
 
 #[test]

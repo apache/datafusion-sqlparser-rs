@@ -120,6 +120,10 @@ impl Dialect for RedshiftSqlDialect {
         true
     }
 
+    fn supports_bitwise_shift_operators(&self) -> bool {
+        true
+    }
+
     fn supports_array_typedef_with_brackets(&self) -> bool {
         true
     }

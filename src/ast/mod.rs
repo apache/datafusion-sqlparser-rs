@@ -60,24 +60,24 @@ pub use self::dcl::{
 };
 pub use self::ddl::{
     Alignment, AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterOperator,
-    AlterOperatorClass, AlterOperatorClassOperation, AlterOperatorFamily,
-    AlterOperatorFamilyOperation, AlterOperatorOperation, AlterPolicyOperation, AlterSchema,
-    AlterSchemaOperation, AlterTable, AlterTableAlgorithm, AlterTableLock, AlterTableOperation,
-    AlterTableType, AlterType, AlterTypeAddValue, AlterTypeAddValuePosition, AlterTypeOperation,
-    AlterTypeRename, AlterTypeRenameValue, ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef,
-    ColumnOptions, ColumnPolicy, ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector,
-    CreateDomain, CreateExtension, CreateFunction, CreateIndex, CreateOperator,
-    CreateOperatorClass, CreateOperatorFamily, CreateTable, CreateTrigger, CreateView, Deduplicate,
-    DeferrableInitial, DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass,
-    DropOperatorFamily, DropOperatorSignature, DropTrigger, GeneratedAs, GeneratedExpressionMode,
+    AlterOperatorClass, AlterOperatorClassOperation, AlterOperatorFamily, AlterOperatorFamilyOperation, AlterOperatorOperation,
+    AlterPolicyOperation, AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm,
+    AlterTableLock, AlterTableOperation, AlterTableType, AlterType, AlterTypeAddValue,
+    AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
+    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy,
+    ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateDomain,
+    CreateExtension, CreateFunction, CreateIndex, CreateOperator, CreateOperatorClass,
+    CreateOperatorFamily, CreateTable, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
+    DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily,
+    DropOperatorSignature, DropTrigger, ForValues, GeneratedAs, GeneratedExpressionMode,
     IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
     IdentityPropertyOrder, IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck,
     NullsDistinctOption, OperatorArgTypes, OperatorClassItem, OperatorFamilyDropItem,
-    OperatorFamilyItem, OperatorOption, OperatorPurpose, Owner, Partition, ProcedureParam,
-    ReferentialAction, RenameTableNameKind, ReplicaIdentity, TagsColumnOption, TriggerObjectKind,
-    Truncate, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
-    UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
-    UserDefinedTypeStorage, ViewColumnDef,
+    OperatorFamilyItem, OperatorOption, OperatorPurpose, Owner, Partition, PartitionBoundValue,
+    ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity, TagsColumnOption,
+    TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
+    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, ViewColumnDef,
 };
 pub use self::dml::{
     Delete, Insert, Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr,
@@ -9173,14 +9173,14 @@ pub enum CopyLegacyOption {
     IamRole(IamRoleKind),
     /// IGNOREHEADER \[ AS \] number_rows
     IgnoreHeader(u64),
-    /// JSON
-    Json,
-    /// `MANIFEST \[ VERBOSE \]`
+    /// JSON \[ AS \] 'json_option'
+    Json(Option<String>),
+    /// MANIFEST \[ VERBOSE \]
     Manifest {
-        /// Whether the MANIFEST is verbose.
-        verbose: bool,
+       /// Whether the MANIFEST is verbose.
+       verbose: bool
     },
-    /// `MAXFILESIZE \[ AS \] max-size \[ MB | GB \]`
+    /// MAXFILESIZE \[ AS \] max-size \[ MB | GB \]
     MaxFileSize(FileSize),
     /// `NULL \[ AS \] 'null_string'`
     Null(String),
@@ -9268,7 +9268,13 @@ impl fmt::Display for CopyLegacyOption {
             Header => write!(f, "HEADER"),
             IamRole(role) => write!(f, "IAM_ROLE {role}"),
             IgnoreHeader(num_rows) => write!(f, "IGNOREHEADER {num_rows}"),
-            Json => write!(f, "JSON"),
+            Json(opt) => {
+                write!(f, "JSON")?;
+                if let Some(opt) = opt {
+                    write!(f, " AS '{}'", value::escape_single_quote_string(opt))?;
+                }
+                Ok(())
+            }
             Manifest { verbose } => write!(f, "MANIFEST{}", if *verbose { " VERBOSE" } else { "" }),
             MaxFileSize(file_size) => write!(f, "MAXFILESIZE {file_size}"),
             Null(string) => write!(f, "NULL '{}'", value::escape_single_quote_string(string)),
@@ -9700,6 +9706,62 @@ impl fmt::Display for FunctionBehavior {
             FunctionBehavior::Immutable => write!(f, "IMMUTABLE"),
             FunctionBehavior::Stable => write!(f, "STABLE"),
             FunctionBehavior::Volatile => write!(f, "VOLATILE"),
+        }
+    }
+}
+
+/// Security attribute for functions: SECURITY DEFINER or SECURITY INVOKER.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FunctionSecurity {
+    Definer,
+    Invoker,
+}
+
+impl fmt::Display for FunctionSecurity {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FunctionSecurity::Definer => write!(f, "SECURITY DEFINER"),
+            FunctionSecurity::Invoker => write!(f, "SECURITY INVOKER"),
+        }
+    }
+}
+
+/// Value for a SET configuration parameter in a CREATE FUNCTION statement.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FunctionSetValue {
+    /// SET param = value1, value2, ...
+    Values(Vec<Expr>),
+    /// SET param FROM CURRENT
+    FromCurrent,
+}
+
+/// A SET configuration_parameter clause in a CREATE FUNCTION statement.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct FunctionDefinitionSetParam {
+    pub name: Ident,
+    pub value: FunctionSetValue,
+}
+
+impl fmt::Display for FunctionDefinitionSetParam {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "SET {} ", self.name)?;
+        match &self.value {
+            FunctionSetValue::Values(values) => {
+                write!(f, "= {}", display_comma_separated(values))
+            }
+            FunctionSetValue::FromCurrent => write!(f, "FROM CURRENT"),
         }
     }
 }

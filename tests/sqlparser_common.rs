@@ -2370,6 +2370,29 @@ fn parse_bitwise_ops() {
 }
 
 #[test]
+fn parse_bitwise_shift_ops() {
+    let dialects = all_dialects_where(|d| d.supports_bitwise_shift_operators());
+    let sql = "SELECT 1 << 2, 3 >> 4";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(Expr::Value((number("1")).with_empty_span())),
+            op: BinaryOperator::PGBitwiseShiftLeft,
+            right: Box::new(Expr::Value((number("2")).with_empty_span())),
+        }),
+        select.projection[0]
+    );
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(Expr::Value((number("3")).with_empty_span())),
+            op: BinaryOperator::PGBitwiseShiftRight,
+            right: Box::new(Expr::Value((number("4")).with_empty_span())),
+        }),
+        select.projection[1]
+    );
+}
+
+#[test]
 fn parse_binary_any() {
     let select = verified_only_select("SELECT a = ANY(b)");
     assert_eq!(
@@ -5417,6 +5440,42 @@ fn parse_explain_analyze_with_simple_select() {
         true,
         false,
         Some(AnalyzeFormatKind::Keyword(AnalyzeFormat::TEXT)),
+        None,
+    );
+
+    run_explain_analyze(
+        all_dialects(),
+        "EXPLAIN FORMAT=TEXT SELECT sqrt(id) FROM foo",
+        false,
+        false,
+        Some(AnalyzeFormatKind::Assignment(AnalyzeFormat::TEXT)),
+        None,
+    );
+
+    run_explain_analyze(
+        all_dialects(),
+        "EXPLAIN FORMAT=GRAPHVIZ SELECT sqrt(id) FROM foo",
+        false,
+        false,
+        Some(AnalyzeFormatKind::Assignment(AnalyzeFormat::GRAPHVIZ)),
+        None,
+    );
+
+    run_explain_analyze(
+        all_dialects(),
+        "EXPLAIN FORMAT=JSON SELECT sqrt(id) FROM foo",
+        false,
+        false,
+        Some(AnalyzeFormatKind::Assignment(AnalyzeFormat::JSON)),
+        None,
+    );
+
+    run_explain_analyze(
+        all_dialects(),
+        "EXPLAIN FORMAT=TREE SELECT sqrt(id) FROM foo",
+        false,
+        false,
+        Some(AnalyzeFormatKind::Assignment(AnalyzeFormat::TREE)),
         None,
     );
 }
@@ -17398,6 +17457,9 @@ fn parse_copy_options() {
             "EMPTYASNULL ",
             "IAM_ROLE DEFAULT ",
             "IGNOREHEADER AS 1 ",
+            "JSON ",
+            "JSON 'auto' ",
+            "JSON AS 'auto' ",
             "TIMEFORMAT AS 'auto' ",
             "TRUNCATECOLUMNS ",
             "REMOVEQUOTES ",
@@ -17423,6 +17485,9 @@ fn parse_copy_options() {
             "EMPTYASNULL ",
             "IAM_ROLE DEFAULT ",
             "IGNOREHEADER 1 ",
+            "JSON ",
+            "JSON AS 'auto' ",
+            "JSON AS 'auto' ",
             "TIMEFORMAT 'auto' ",
             "TRUNCATECOLUMNS ",
             "REMOVEQUOTES ",

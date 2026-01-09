@@ -5442,6 +5442,42 @@ fn parse_explain_analyze_with_simple_select() {
         Some(AnalyzeFormatKind::Keyword(AnalyzeFormat::TEXT)),
         None,
     );
+
+    run_explain_analyze(
+        all_dialects(),
+        "EXPLAIN FORMAT=TEXT SELECT sqrt(id) FROM foo",
+        false,
+        false,
+        Some(AnalyzeFormatKind::Assignment(AnalyzeFormat::TEXT)),
+        None,
+    );
+
+    run_explain_analyze(
+        all_dialects(),
+        "EXPLAIN FORMAT=GRAPHVIZ SELECT sqrt(id) FROM foo",
+        false,
+        false,
+        Some(AnalyzeFormatKind::Assignment(AnalyzeFormat::GRAPHVIZ)),
+        None,
+    );
+
+    run_explain_analyze(
+        all_dialects(),
+        "EXPLAIN FORMAT=JSON SELECT sqrt(id) FROM foo",
+        false,
+        false,
+        Some(AnalyzeFormatKind::Assignment(AnalyzeFormat::JSON)),
+        None,
+    );
+
+    run_explain_analyze(
+        all_dialects(),
+        "EXPLAIN FORMAT=TREE SELECT sqrt(id) FROM foo",
+        false,
+        false,
+        Some(AnalyzeFormatKind::Assignment(AnalyzeFormat::TREE)),
+        None,
+    );
 }
 
 #[test]

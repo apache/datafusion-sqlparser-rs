@@ -10108,12 +10108,12 @@ impl fmt::Display for CreateUser {
 
 /// Modifies the properties of a user
 ///
-/// [Snowflake Syntax]:
+/// [Snowflake Syntax:](https://docs.snowflake.com/en/sql-reference/sql/alter-user)
 /// ```sql
 /// ALTER USER [ IF EXISTS ] [ <name> ] [ OPTIONS ]
 /// ```
 ///
-/// [PostgreSQL Syntax]:(https://www.postgresql.org/docs/current/sql-alteruser.html)
+/// [PostgreSQL Syntax:](https://www.postgresql.org/docs/current/sql-alteruser.html)
 /// ```sql
 /// ALTER USER <role_specification> [ WITH ] option [ ... ]
 /// ```
@@ -10338,10 +10338,10 @@ pub struct AlterUserPassword {
 
 impl Display for AlterUserPassword {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "PASSWORD")?;
         if self.encrypted {
-            write!(f, " ENCRYPTED")?;
+            write!(f, "ENCRYPTED ")?;
         }
+        write!(f, "PASSWORD")?;
         match &self.password {
             None => write!(f, " NULL")?,
             Some(password) => write!(f, " '{}'", value::escape_single_quote_string(password))?,

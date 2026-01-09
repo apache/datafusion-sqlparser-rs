@@ -295,18 +295,15 @@ impl Parser<'_> {
 
         let encrypted = self.parse_keyword(Keyword::ENCRYPTED);
         let password = if self.parse_keyword(Keyword::PASSWORD) {
-            if self.parse_keyword(Keyword::NULL) {
-                Some(AlterUserPassword {
-                    encrypted,
-                    password: None,
-                })
+            let password = if self.parse_keyword(Keyword::NULL) {
+                None
             } else {
-                let password = self.parse_literal_string()?;
-                Some(AlterUserPassword {
-                    encrypted,
-                    password: Some(password),
-                })
-            }
+                Some(self.parse_literal_string()?)
+            };
+            Some(AlterUserPassword {
+                encrypted,
+                password,
+            })
         } else {
             None
         };

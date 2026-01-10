@@ -8526,7 +8526,7 @@ impl fmt::Display for TableOptionsClustered {
 }
 
 /// Specifies which partition the boundary values on table partitioning belongs to.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum PartitionRangeDirection {

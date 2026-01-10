@@ -894,7 +894,7 @@ fn format_clickhouse_datetime_precision_and_timezone(
 }
 
 /// Type of brackets used for `STRUCT` literals.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum StructBracketKind {

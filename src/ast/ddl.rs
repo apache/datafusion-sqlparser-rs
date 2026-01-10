@@ -570,7 +570,7 @@ impl fmt::Display for AlterPolicyOperation {
 /// [MySQL] `ALTER TABLE` algorithm.
 ///
 /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Algorithm option for `ALTER TABLE` operations (MySQL-specific).
@@ -599,7 +599,7 @@ impl fmt::Display for AlterTableAlgorithm {
 /// [MySQL] `ALTER TABLE` lock.
 ///
 /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Locking behavior for `ALTER TABLE` (MySQL-specific).
@@ -1445,7 +1445,7 @@ impl fmt::Display for IndexOption {
 /// [PostgreSQL] unique index nulls handling option: `[ NULLS [ NOT ] DISTINCT ]`
 ///
 /// [PostgreSQL]: https://www.postgresql.org/docs/17/sql-altertable.html
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum NullsDistinctOption {
@@ -1756,7 +1756,7 @@ pub struct IdentityParameters {
 /// ORDER | NOORDER
 /// ```
 /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum IdentityPropertyOrder {
@@ -2128,7 +2128,7 @@ impl fmt::Display for ColumnOption {
 
 /// `GeneratedAs`s are modifiers that follow a column option in a `generated`.
 /// 'ExpStored' is used for a column generated from an expression and stored.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum GeneratedAs {
@@ -2142,7 +2142,7 @@ pub enum GeneratedAs {
 
 /// `GeneratedExpressionMode`s are modifiers that follow an expression in a `generated`.
 /// No modifier is typically the same as Virtual.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum GeneratedExpressionMode {
@@ -3799,7 +3799,7 @@ impl Spanned for RenameTableNameKind {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Whether the syntax used for the trigger object (ROW or STATEMENT) is `FOR` or `FOR EACH`.

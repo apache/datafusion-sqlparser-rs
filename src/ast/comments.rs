@@ -25,7 +25,7 @@ use core::{
 use crate::tokenizer::{Location, Span};
 
 /// An opaque container for comments from a parse SQL source code.
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Comments(Vec<CommentWithSpan>);
 
 impl Comments {
@@ -151,7 +151,7 @@ impl From<Comments> for Vec<CommentWithSpan> {
 }
 
 /// A source code comment with information of its entire span.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CommentWithSpan {
     /// The source code comment iself
     pub comment: Comment,
@@ -168,7 +168,7 @@ impl Deref for CommentWithSpan {
 }
 
 /// A unified type of the different source code comment formats.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Comment {
     /// A single line comment, typically introduced with a prefix and spanning
     /// until end-of-line or end-of-file in the source code.

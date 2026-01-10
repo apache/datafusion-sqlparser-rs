@@ -34,24 +34,33 @@ use crate::ast::{display_comma_separated, display_separated, Value};
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// A collection of key-value options.
 pub struct KeyValueOptions {
+    /// The list of key-value options.
     pub options: Vec<KeyValueOption>,
+    /// The delimiter used between options.
     pub delimiter: KeyValueOptionsDelimiter,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// The delimiter used between key-value options.
 pub enum KeyValueOptionsDelimiter {
+    /// Options are separated by spaces.
     Space,
+    /// Options are separated by commas.
     Comma,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// A single key-value option.
 pub struct KeyValueOption {
+    /// The name of the option.
     pub option_name: String,
+    /// The value of the option.
     pub option_value: KeyValueOptionKind,
 }
 
@@ -63,9 +72,13 @@ pub struct KeyValueOption {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// The kind of value for a key-value option.
 pub enum KeyValueOptionKind {
+    /// A single value.
     Single(Value),
+    /// Multiple values.
     Multi(Vec<Value>),
+    /// A nested list of key-value options.
     KeyValueOptions(Box<KeyValueOptions>),
 }
 

@@ -84,6 +84,10 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    fn supports_bitwise_shift_operators(&self) -> bool {
+        true
+    }
+
     fn parse_infix(
         &self,
         parser: &mut crate::parser::Parser,
@@ -165,6 +169,11 @@ impl Dialect for MySqlDialect {
     }
 
     fn supports_cross_join_constraint(&self) -> bool {
+        true
+    }
+
+    /// See: <https://dev.mysql.com/doc/refman/8.4/en/expressions.html>
+    fn supports_double_ampersand_operator(&self) -> bool {
         true
     }
 }

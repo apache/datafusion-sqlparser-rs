@@ -199,6 +199,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_bitwise_shift_operators(&self) -> bool {
+        true
+    }
+
     /// see <https://www.postgresql.org/docs/current/sql-comment.html>
     fn supports_comment_on(&self) -> bool {
         true

@@ -34,19 +34,20 @@ use super::{
     ColumnOption, ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements,
     ConflictTarget, ConnectBy, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
     CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr,
-    ExprWithAlias, Fetch, FromTable, Function, FunctionArg, FunctionArgExpr,
+    ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr,
     FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
     IfStatement, IlikeSelectItem, IndexColumn, Insert, Interpolate, InterpolateExpr, Join,
     JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
     MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
     MergeInsertKind, MergeUpdateExpr, NamedParenthesizedList, NamedWindowDefinition, ObjectName,
     ObjectNamePart, Offset, OnConflict, OnConflictAction, OnInsert, OpenStatement, OrderBy,
-    OrderByExpr, OrderByKind, OutputClause, Partition, PivotValueSource, ProjectionSelect, Query,
-    RaiseStatement, RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
-    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
-    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
-    TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Value, Values,
-    ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With, WithFill,
+    OrderByExpr, OrderByKind, OutputClause, Partition, PartitionBoundValue, PivotValueSource,
+    ProjectionSelect, Query, RaiseStatement, RaiseStatementValue, ReferentialAction,
+    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
+    SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
+    TableConstraint, TableFactor, TableObject, TableOptionsClustered, TableWithJoins, Update,
+    UpdateTableFromKind, Use, Value, Values, ViewColumnDef, WhileStatement,
+    WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -404,6 +405,7 @@ impl Spanned for Statement {
             Statement::AlterType { .. } => Span::empty(),
             Statement::AlterOperator { .. } => Span::empty(),
             Statement::AlterOperatorFamily { .. } => Span::empty(),
+            Statement::AlterOperatorClass { .. } => Span::empty(),
             Statement::AlterRole { .. } => Span::empty(),
             Statement::AlterSession { .. } => Span::empty(),
             Statement::AttachDatabase { .. } => Span::empty(),
@@ -547,13 +549,15 @@ impl Spanned for CreateTable {
             clone,
             comment: _, // todo, no span
             on_commit: _,
-            on_cluster: _,                      // todo, clickhouse specific
-            primary_key: _,                     // todo, clickhouse specific
-            order_by: _,                        // todo, clickhouse specific
-            partition_by: _,                    // todo, BigQuery specific
-            cluster_by: _,                      // todo, BigQuery specific
-            clustered_by: _,                    // todo, Hive specific
-            inherits: _,                        // todo, PostgreSQL specific
+            on_cluster: _,   // todo, clickhouse specific
+            primary_key: _,  // todo, clickhouse specific
+            order_by: _,     // todo, clickhouse specific
+            partition_by: _, // todo, BigQuery specific
+            cluster_by: _,   // todo, BigQuery specific
+            clustered_by: _, // todo, Hive specific
+            inherits: _,     // todo, PostgreSQL specific
+            partition_of,
+            for_values,
             strict: _,                          // bool
             copy_grants: _,                     // bool
             enable_schema_evolution: _,         // bool
@@ -584,7 +588,9 @@ impl Spanned for CreateTable {
                 .chain(columns.iter().map(|i| i.span()))
                 .chain(constraints.iter().map(|i| i.span()))
                 .chain(query.iter().map(|i| i.span()))
-                .chain(clone.iter().map(|i| i.span())),
+                .chain(clone.iter().map(|i| i.span()))
+                .chain(partition_of.iter().map(|i| i.span()))
+                .chain(for_values.iter().map(|i| i.span())),
         )
     }
 }
@@ -618,6 +624,33 @@ impl Spanned for TableConstraint {
             TableConstraint::Check(constraint) => constraint.span(),
             TableConstraint::Index(constraint) => constraint.span(),
             TableConstraint::FulltextOrSpatial(constraint) => constraint.span(),
+        }
+    }
+}
+
+impl Spanned for PartitionBoundValue {
+    fn span(&self) -> Span {
+        match self {
+            PartitionBoundValue::Expr(expr) => expr.span(),
+            // MINVALUE and MAXVALUE are keywords without tracked spans
+            PartitionBoundValue::MinValue => Span::empty(),
+            PartitionBoundValue::MaxValue => Span::empty(),
+        }
+    }
+}
+
+impl Spanned for ForValues {
+    fn span(&self) -> Span {
+        match self {
+            ForValues::In(exprs) => union_spans(exprs.iter().map(|e| e.span())),
+            ForValues::From { from, to } => union_spans(
+                from.iter()
+                    .map(|v| v.span())
+                    .chain(to.iter().map(|v| v.span())),
+            ),
+            // WITH (MODULUS n, REMAINDER r) - u64 values have no spans
+            ForValues::With { .. } => Span::empty(),
+            ForValues::Default => Span::empty(),
         }
     }
 }

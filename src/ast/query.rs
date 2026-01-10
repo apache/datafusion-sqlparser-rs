@@ -120,8 +120,11 @@ impl fmt::Display for Query {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ProjectionSelect {
+    /// The list of projected select items.
     pub projection: Vec<SelectItem>,
+    /// Optional `ORDER BY` clause for the projection-select.
     pub order_by: Option<OrderBy>,
+    /// Optional `GROUP BY` clause for the projection-select.
     pub group_by: Option<GroupByExpr>,
 }
 
@@ -151,17 +154,28 @@ pub enum SetExpr {
     /// in its body and an optional ORDER BY / LIMIT.
     Query(Box<Query>),
     /// UNION/EXCEPT/INTERSECT of two queries
+    /// A set operation combining two query expressions.
     SetOperation {
+        /// The set operator used (e.g. `UNION`, `EXCEPT`).
         op: SetOperator,
+        /// Optional quantifier (`ALL`, `DISTINCT`, etc.).
         set_quantifier: SetQuantifier,
+        /// Left operand of the set operation.
         left: Box<SetExpr>,
+        /// Right operand of the set operation.
         right: Box<SetExpr>,
     },
+    /// `VALUES (...)`
     Values(Values),
+    /// `INSERT` statement
     Insert(Statement),
+    /// `UPDATE` statement
     Update(Statement),
+    /// `DELETE` statement
     Delete(Statement),
+    /// `MERGE` statement
     Merge(Statement),
+    /// `TABLE` command
     Table(Box<Table>),
 }
 
@@ -222,10 +236,15 @@ impl fmt::Display for SetExpr {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// A set operator for combining two `SetExpr`s.
 pub enum SetOperator {
+    /// `UNION` set operator
     Union,
+    /// `EXCEPT` set operator
     Except,
+    /// `INTERSECT` set operator
     Intersect,
+    /// `MINUS` set operator (non-standard)
     Minus,
 }
 
@@ -247,11 +266,17 @@ impl fmt::Display for SetOperator {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum SetQuantifier {
+    /// `ALL` quantifier
     All,
+    /// `DISTINCT` quantifier
     Distinct,
+    /// `BY NAME` quantifier
     ByName,
+    /// `ALL BY NAME` quantifier
     AllByName,
+    /// `DISTINCT BY NAME` quantifier
     DistinctByName,
+    /// No quantifier specified
     None,
 }
 
@@ -272,8 +297,11 @@ impl fmt::Display for SetQuantifier {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// A [`TABLE` command]( https://www.postgresql.org/docs/current/sql-select.html#SQL-TABLE)
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// A (possibly schema-qualified) table reference used in `FROM` clauses.
 pub struct Table {
+    /// Optional table name (absent for e.g. `TABLE` command without argument).
     pub table_name: Option<String>,
+    /// Optional schema/catalog name qualifying the table.
     pub schema_name: Option<String>,
 }
 
@@ -588,6 +616,7 @@ impl fmt::Display for NamedWindowExpr {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// A named window definition: `<name> AS <window specification>`
 pub struct NamedWindowDefinition(pub Ident, pub NamedWindowExpr);
 
 impl fmt::Display for NamedWindowDefinition {
@@ -599,10 +628,13 @@ impl fmt::Display for NamedWindowDefinition {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// A `WITH` clause, introducing common table expressions (CTEs).
 pub struct With {
-    /// Token for the "WITH" keyword
+    /// Token for the `WITH` keyword
     pub with_token: AttachedToken,
+    /// Whether the `WITH` is recursive (`WITH RECURSIVE`).
     pub recursive: bool,
+    /// The list of CTEs declared by this `WITH` clause.
     pub cte_tables: Vec<Cte>,
 }
 
@@ -620,6 +652,7 @@ impl fmt::Display for With {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Indicates whether a CTE is materialized or not.
 pub enum CteAsMaterialized {
     /// The `WITH` statement specifies `AS MATERIALIZED` behavior
     Materialized,
@@ -649,11 +682,15 @@ impl fmt::Display for CteAsMaterialized {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Cte {
+    /// The CTE alias (name introduced before the `AS` keyword).
     pub alias: TableAlias,
+    /// The query that defines the CTE body.
     pub query: Box<Query>,
+    /// Optional `FROM` identifier for materialized CTEs.
     pub from: Option<Ident>,
+    /// Optional `AS MATERIALIZED` / `AS NOT MATERIALIZED` hint.
     pub materialized: Option<CteAsMaterialized>,
-    /// Token for the closing parenthesis
+    /// Token for the closing parenthesis of the CTE definition.
     pub closing_paren_token: AttachedToken,
 }
 
@@ -708,7 +745,12 @@ pub enum SelectItem {
     /// Any expression, not followed by `[ AS ] alias`
     UnnamedExpr(Expr),
     /// An expression, followed by `[ AS ] alias`
-    ExprWithAlias { expr: Expr, alias: Ident },
+    ExprWithAlias {
+        /// The expression being projected.
+        expr: Expr,
+        /// The alias for the expression.
+        alias: Ident,
+    },
     /// An expression, followed by a wildcard expansion.
     /// e.g. `alias.*`, `STRUCT<STRING>('foo').*`
     QualifiedWildcard(SelectItemQualifiedWildcardKind, WildcardAdditionalOptions),
@@ -737,7 +779,9 @@ impl fmt::Display for SelectItemQualifiedWildcardKind {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct IdentWithAlias {
+    /// The identifier being aliased.
     pub ident: Ident,
+    /// The alias to apply to `ident`.
     pub alias: Ident,
 }
 
@@ -815,6 +859,7 @@ impl fmt::Display for WildcardAdditionalOptions {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct IlikeSelectItem {
+    /// The pattern expression used with `ILIKE`.
     pub pattern: String,
 }
 
@@ -954,6 +999,7 @@ impl fmt::Display for ExceptSelectItem {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ReplaceSelectItem {
+    /// List of replacement elements contained in the `REPLACE(...)` clause.
     pub items: Vec<Box<ReplaceSelectElement>>,
 }
 
@@ -973,8 +1019,11 @@ impl fmt::Display for ReplaceSelectItem {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ReplaceSelectElement {
+    /// Expression producing the replacement value.
     pub expr: Expr,
+    /// The target column name for the replacement.
     pub column_name: Ident,
+    /// Whether the `AS` keyword was present in the original syntax.
     pub as_keyword: bool,
 }
 
@@ -1013,8 +1062,11 @@ impl fmt::Display for SelectItem {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// A left table followed by zero or more joins.
 pub struct TableWithJoins {
+    /// The starting table factor (left side) of the join chain.
     pub relation: TableFactor,
+    /// The sequence of joins applied to the relation.
     pub joins: Vec<Join>,
 }
 
@@ -1056,8 +1108,11 @@ impl fmt::Display for ConnectBy {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// A single setting key-value pair.
 pub struct Setting {
+    /// Setting name/key.
     pub key: Ident,
+    /// The value expression assigned to the setting.
     pub value: Expr,
 }
 
@@ -1077,7 +1132,9 @@ impl fmt::Display for Setting {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ExprWithAlias {
+    /// The expression.
     pub expr: Expr,
+    /// Optional alias for the expression.
     pub alias: Option<Ident>,
 }
 
@@ -1102,7 +1159,9 @@ impl fmt::Display for ExprWithAlias {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ExprWithAliasAndOrderBy {
+    /// Expression with optional alias.
     pub expr: ExprWithAlias,
+    /// Ordering options applied to the expression.
     pub order_by: OrderByOptions,
 }
 
@@ -1117,8 +1176,9 @@ impl fmt::Display for ExprWithAliasAndOrderBy {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TableFunctionArgs {
+    /// The list of arguments passed to the table-valued function.
     pub args: Vec<FunctionArg>,
-    /// ClickHouse-specific SETTINGS clause.
+    /// ClickHouse-specific `SETTINGS` clause.
     /// For example,
     /// `SELECT * FROM executable('generate_random.py', TabSeparated, 'id UInt32, random String', SETTINGS send_chunk_header = false, pool_size = 16)`
     /// [`executable` table function](https://clickhouse.com/docs/en/engines/table-functions/executable)
@@ -1128,9 +1188,13 @@ pub struct TableFunctionArgs {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Type of index hint (e.g., `USE`, `IGNORE`, `FORCE`).
 pub enum TableIndexHintType {
+    /// `USE` hint.
     Use,
+    /// `IGNORE` hint.
     Ignore,
+    /// `FORCE` hint.
     Force,
 }
 
@@ -1147,8 +1211,11 @@ impl fmt::Display for TableIndexHintType {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// The kind of index referenced by an index hint (e.g. `USE INDEX`).
 pub enum TableIndexType {
+    /// The `INDEX` kind.
     Index,
+    /// The `KEY` kind.
     Key,
 }
 
@@ -1164,9 +1231,13 @@ impl fmt::Display for TableIndexType {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Which clause the table index hint applies to.
 pub enum TableIndexHintForClause {
+    /// Apply the hint to JOIN clauses.
     Join,
+    /// Apply the hint to `ORDER BY` clauses.
     OrderBy,
+    /// Apply the hint to `GROUP BY` clauses.
     GroupBy,
 }
 
@@ -1183,10 +1254,15 @@ impl fmt::Display for TableIndexHintForClause {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// MySQL-style index hints attached to a table (e.g., `USE INDEX(...)`).
 pub struct TableIndexHints {
+    /// Type of hint (e.g., `USE`, `FORCE`, or `IGNORE`).
     pub hint_type: TableIndexHintType,
+    /// The index type (e.g., `INDEX`).
     pub index_type: TableIndexType,
+    /// Optional `FOR` clause specifying the scope (JOIN / ORDER BY / GROUP BY).
     pub for_clause: Option<TableIndexHintForClause>,
+    /// List of index names referred to by the hint.
     pub index_names: Vec<Ident>,
 }
 
@@ -1206,9 +1282,12 @@ impl fmt::Display for TableIndexHints {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "visitor", visit(with = "visit_table_factor"))]
 pub enum TableFactor {
+    /// A named table or relation, possibly with arguments, hints, or sampling.
     Table {
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+        /// Table or relation name.
         name: ObjectName,
+        /// Optional alias for the table (e.g. `table AS t`).
         alias: Option<TableAlias>,
         /// Arguments of a table-valued function, as supported by Postgres
         /// and MSSQL. Note that deprecated MSSQL `FROM foo (NOLOCK)` syntax
@@ -1238,21 +1317,31 @@ pub enum TableFactor {
         /// See: <https://dev.mysql.com/doc/refman/8.4/en/index-hints.html>
         index_hints: Vec<TableIndexHints>,
     },
+    /// A derived table (a parenthesized subquery), optionally `LATERAL`.
     Derived {
+        /// Whether the derived table is LATERAL.
         lateral: bool,
+        /// The subquery producing the derived table.
         subquery: Box<Query>,
+        /// Optional alias for the derived table.
         alias: Option<TableAlias>,
     },
     /// `TABLE(<expr>)[ AS <alias> ]`
     TableFunction {
+        /// Expression representing the table function call.
         expr: Expr,
+        /// Optional alias for the table function result.
         alias: Option<TableAlias>,
     },
     /// `e.g. LATERAL FLATTEN(<args>)[ AS <alias> ]`
     Function {
+        /// Whether the function is LATERAL.
         lateral: bool,
+        /// Name of the table function.
         name: ObjectName,
+        /// Arguments passed to the function.
         args: Vec<FunctionArg>,
+        /// Optional alias for the result of the function.
         alias: Option<TableAlias>,
     },
     /// ```sql
@@ -1266,10 +1355,15 @@ pub enum TableFactor {
     /// +---------+--------+
     /// ```
     UNNEST {
+        /// Optional alias for the UNNEST table (e.g. `UNNEST(...) AS t`).
         alias: Option<TableAlias>,
+        /// Expressions producing the arrays to be unnested.
         array_exprs: Vec<Expr>,
+        /// Whether `WITH OFFSET` was specified to include element offsets.
         with_offset: bool,
+        /// Optional alias for the offset column when `WITH OFFSET` is used.
         with_offset_alias: Option<Ident>,
+        /// Whether `WITH ORDINALITY` was specified to include ordinality.
         with_ordinality: bool,
     },
     /// The `JSON_TABLE` table-valued function.
@@ -1327,7 +1421,9 @@ pub enum TableFactor {
     /// The parser may also accept non-standard nesting of bare tables for some
     /// dialects, but the information about such nesting is stripped from AST.
     NestedJoin {
+        /// The nested join expression contained in parentheses.
         table_with_joins: Box<TableWithJoins>,
+        /// Optional alias for the nested join.
         alias: Option<TableAlias>,
     },
     /// Represents PIVOT operation on a table.
@@ -1336,11 +1432,17 @@ pub enum TableFactor {
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#pivot_operator)
     /// [Snowflake](https://docs.snowflake.com/en/sql-reference/constructs/pivot)
     Pivot {
+        /// The input table to pivot.
         table: Box<TableFactor>,
+        /// Aggregate expressions used as pivot values (optionally aliased).
         aggregate_functions: Vec<ExprWithAlias>, // Function expression
+        /// Columns producing the values to be pivoted.
         value_column: Vec<Expr>,
+        /// Source of pivot values (e.g. list of literals or columns).
         value_source: PivotValueSource,
+        /// Optional expression providing a default when a pivot produces NULL.
         default_on_null: Option<Expr>,
+        /// Optional alias for the pivoted table.
         alias: Option<TableAlias>,
     },
     /// An UNPIVOT operation on a table.
@@ -1353,17 +1455,24 @@ pub enum TableFactor {
     /// See <https://docs.snowflake.com/en/sql-reference/constructs/unpivot>.
     /// See <https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-select-unpivot>.
     Unpivot {
+        /// The input table to unpivot.
         table: Box<TableFactor>,
+        /// Expression producing the unpivoted value.
         value: Expr,
+        /// Identifier used for the generated column name.
         name: Ident,
+        /// Columns or expressions to unpivot, optionally aliased.
         columns: Vec<ExprWithAlias>,
+        /// Whether to include or exclude NULLs during unpivot.
         null_inclusion: Option<NullInclusion>,
+        /// Optional alias for the resulting table.
         alias: Option<TableAlias>,
     },
     /// A `MATCH_RECOGNIZE` operation on a table.
     ///
     /// See <https://docs.snowflake.com/en/sql-reference/constructs/match_recognize>.
     MatchRecognize {
+        /// The input table to apply `MATCH_RECOGNIZE` on.
         table: Box<TableFactor>,
         /// `PARTITION BY <expr> [, ... ]`
         partition_by: Vec<Expr>,
@@ -1379,6 +1488,7 @@ pub enum TableFactor {
         pattern: MatchRecognizePattern,
         /// `DEFINE <symbol> AS <expr> [, ... ]`
         symbols: Vec<SymbolDefinition>,
+        /// The alias for the table.
         alias: Option<TableAlias>,
     },
     /// The `XMLTABLE` table-valued function.
@@ -1453,20 +1563,30 @@ pub enum TableSampleKind {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Represents a `TABLESAMPLE` clause and its options.
 pub struct TableSample {
+    /// Modifier (e.g. `SAMPLE` or `TABLESAMPLE`).
     pub modifier: TableSampleModifier,
+    /// Optional sampling method name (e.g. `BERNOULLI`, `SYSTEM`).
     pub name: Option<TableSampleMethod>,
+    /// Optional sampling quantity (value and optional unit).
     pub quantity: Option<TableSampleQuantity>,
+    /// Optional seed clause.
     pub seed: Option<TableSampleSeed>,
+    /// Optional bucket specification for `BUCKET ... OUT OF ...`-style sampling.
     pub bucket: Option<TableSampleBucket>,
+    /// Optional offset expression for sampling.
     pub offset: Option<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Modifier specifying whether `SAMPLE` or `TABLESAMPLE` keyword was used.
 pub enum TableSampleModifier {
+    /// `SAMPLE` modifier.
     Sample,
+    /// `TABLESAMPLE` modifier.
     TableSample,
 }
 
@@ -1483,9 +1603,13 @@ impl fmt::Display for TableSampleModifier {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Quantity for a `TABLESAMPLE` clause (e.g. `10 PERCENT` or `(10)`).
 pub struct TableSampleQuantity {
+    /// Whether the quantity was wrapped in parentheses.
     pub parenthesized: bool,
+    /// The numeric expression specifying the quantity.
     pub value: Expr,
+    /// Optional unit (e.g. `PERCENT`, `ROWS`).
     pub unit: Option<TableSampleUnit>,
 }
 
@@ -1509,10 +1633,15 @@ impl fmt::Display for TableSampleQuantity {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Sampling method used by `TABLESAMPLE`.
 pub enum TableSampleMethod {
+    /// `ROW` sampling method.
     Row,
+    /// `BERNOULLI` sampling method.
     Bernoulli,
+    /// `SYSTEM` sampling method.
     System,
+    /// `BLOCK` sampling method.
     Block,
 }
 
@@ -1530,8 +1659,11 @@ impl fmt::Display for TableSampleMethod {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// `SEED` or `REPEATABLE` clause used with sampling.
 pub struct TableSampleSeed {
+    /// Seed modifier (e.g. `REPEATABLE` or `SEED`).
     pub modifier: TableSampleSeedModifier,
+    /// The seed value expression.
     pub value: Value,
 }
 
@@ -1545,8 +1677,11 @@ impl fmt::Display for TableSampleSeed {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Modifier specifying how the sample seed is applied.
 pub enum TableSampleSeedModifier {
+    /// `REPEATABLE` modifier.
     Repeatable,
+    /// `SEED` modifier.
     Seed,
 }
 
@@ -1562,8 +1697,11 @@ impl fmt::Display for TableSampleSeedModifier {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Unit used with a `TABLESAMPLE` quantity (rows or percent).
 pub enum TableSampleUnit {
+    /// `ROWS` unit.
     Rows,
+    /// `PERCENT` unit.
     Percent,
 }
 
@@ -1579,9 +1717,13 @@ impl fmt::Display for TableSampleUnit {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Bucket-based sampling clause: `BUCKET <bucket> OUT OF <total> [ON <expr>]`.
 pub struct TableSampleBucket {
+    /// The bucket index expression.
     pub bucket: Value,
+    /// The total number of buckets expression.
     pub total: Value,
+    /// Optional `ON <expr>` specification.
     pub on: Option<Expr>,
 }
 
@@ -1657,8 +1799,11 @@ impl fmt::Display for PivotValueSource {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// An item in the `MEASURES` clause of `MATCH_RECOGNIZE`.
 pub struct Measure {
+    /// Expression producing the measure value.
     pub expr: Expr,
+    /// Alias for the measure column.
     pub alias: Ident,
 }
 
@@ -1728,6 +1873,7 @@ impl fmt::Display for AfterMatchSkip {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// The mode for handling empty matches in a `MATCH_RECOGNIZE` operation.
 pub enum EmptyMatchesMode {
     /// `SHOW EMPTY MATCHES`
     Show,
@@ -1753,8 +1899,11 @@ impl fmt::Display for EmptyMatchesMode {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// A symbol defined in a `MATCH_RECOGNIZE` operation.
 pub struct SymbolDefinition {
+    /// The symbol identifier.
     pub symbol: Ident,
+    /// The expression defining the symbol.
     pub definition: Expr,
 }
 
@@ -2180,12 +2329,15 @@ impl fmt::Display for TableFactor {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// An alias for a table reference, optionally including an explicit `AS` and column names.
 pub struct TableAlias {
     /// Tells whether the alias was introduced with an explicit, preceding "AS"
     /// keyword, e.g. `AS name`. Typically, the keyword is preceding the name
     /// (e.g. `.. FROM table AS t ..`).
     pub explicit: bool,
+    /// Alias identifier for the table.
     pub name: Ident,
+    /// Optional column aliases declared in parentheses after the table alias.
     pub columns: Vec<TableAliasColumnDef>,
 }
 
@@ -2237,10 +2389,15 @@ impl fmt::Display for TableAliasColumnDef {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Specifies a table version selection, e.g. `FOR SYSTEM_TIME AS OF` or `AT(...)`.
 pub enum TableVersion {
     /// When the table version is defined using `FOR SYSTEM_TIME AS OF`.
     /// For example: `SELECT * FROM tbl FOR SYSTEM_TIME AS OF TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 HOUR)`
     ForSystemTimeAsOf(Expr),
+    /// When the table version is defined using `TIMESTAMP AS OF`.
+    /// Databricks supports this syntax.
+    /// For example: `SELECT * FROM tbl TIMESTAMP AS OF CURRENT_TIMESTAMP() - INTERVAL 1 HOUR`
+    TimestampAsOf(Expr),
     /// When the table version is defined using a function.
     /// For example: `SELECT * FROM tbl AT(TIMESTAMP => '2020-08-14 09:30:00')`
     Function(Expr),
@@ -2250,6 +2407,7 @@ impl Display for TableVersion {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             TableVersion::ForSystemTimeAsOf(e) => write!(f, "FOR SYSTEM_TIME AS OF {e}")?,
+            TableVersion::TimestampAsOf(e) => write!(f, "TIMESTAMP AS OF {e}")?,
             TableVersion::Function(func) => write!(f, "{func}")?,
         }
         Ok(())
@@ -2259,11 +2417,14 @@ impl Display for TableVersion {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// A single `JOIN` clause including relation and join operator/options.
 pub struct Join {
+    /// The joined table factor (table reference or derived table).
     pub relation: TableFactor,
     /// ClickHouse supports the optional `GLOBAL` keyword before the join operator.
     /// See [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select/join)
     pub global: bool,
+    /// The join operator and its constraint (INNER/LEFT/RIGHT/CROSS/ASOF/etc.).
     pub join_operator: JoinOperator,
 }
 
@@ -2400,41 +2561,50 @@ impl fmt::Display for Join {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// The operator used for joining two tables, e.g. `INNER`, `LEFT`, `CROSS`, `ASOF`, etc.
 pub enum JoinOperator {
+    /// Generic `JOIN` with an optional constraint.
     Join(JoinConstraint),
+    /// `INNER JOIN` with an optional constraint.
     Inner(JoinConstraint),
+    /// `LEFT JOIN` with an optional constraint.
     Left(JoinConstraint),
+    /// `LEFT OUTER JOIN` with an optional constraint.
     LeftOuter(JoinConstraint),
+    /// `RIGHT JOIN` with an optional constraint.
     Right(JoinConstraint),
+    /// `RIGHT OUTER JOIN` with an optional constraint.
     RightOuter(JoinConstraint),
+    /// `FULL OUTER JOIN` with an optional constraint.
     FullOuter(JoinConstraint),
-    /// CROSS (constraint is non-standard)
+    /// `CROSS JOIN` (constraint usage is non-standard).
     CrossJoin(JoinConstraint),
-    /// SEMI (non-standard)
+    /// `SEMI JOIN` (non-standard)
     Semi(JoinConstraint),
-    /// LEFT SEMI (non-standard)
+    /// `LEFT SEMI JOIN` (non-standard)
     LeftSemi(JoinConstraint),
-    /// RIGHT SEMI (non-standard)
+    /// `RIGHT SEMI JOIN` (non-standard)
     RightSemi(JoinConstraint),
-    /// ANTI (non-standard)
+    /// `ANTI JOIN` (non-standard)
     Anti(JoinConstraint),
-    /// LEFT ANTI (non-standard)
+    /// `LEFT ANTI JOIN` (non-standard)
     LeftAnti(JoinConstraint),
-    /// RIGHT ANTI (non-standard)
+    /// `RIGHT ANTI JOIN` (non-standard)
     RightAnti(JoinConstraint),
-    /// CROSS APPLY (non-standard)
+    /// `CROSS APPLY` (non-standard)
     CrossApply,
-    /// OUTER APPLY (non-standard)
+    /// `OUTER APPLY` (non-standard)
     OuterApply,
-    /// `ASOF` joins are used for joining tables containing time-series data
-    /// whose timestamp columns do not match exactly.
+    /// `ASOF` joins are used for joining time-series tables whose timestamp columns do not match exactly.
     ///
     /// See <https://docs.snowflake.com/en/sql-reference/constructs/asof-join>.
     AsOf {
+        /// Condition used to match records in the `ASOF` join.
         match_condition: Expr,
+        /// Additional constraint applied to the `ASOF` join.
         constraint: JoinConstraint,
     },
-    /// STRAIGHT_JOIN (non-standard)
+    /// `STRAIGHT_JOIN` (MySQL non-standard behavior)
     ///
     /// See <https://dev.mysql.com/doc/refman/8.4/en/join.html>.
     StraightJoin(JoinConstraint),
@@ -2443,35 +2613,42 @@ pub enum JoinOperator {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Represents how two tables are constrained in a join: `ON`, `USING`, `NATURAL`, or none.
 pub enum JoinConstraint {
+    /// `ON <expr>` join condition.
     On(Expr),
+    /// `USING(...)` list of column names.
     Using(Vec<ObjectName>),
+    /// `NATURAL` join (columns matched automatically).
     Natural,
+    /// No constraint specified (e.g. `CROSS JOIN`).
     None,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// The kind of `ORDER BY` clause: either `ALL` with modifiers or a list of expressions.
 pub enum OrderByKind {
-    /// ALL syntax of [DuckDB] and [ClickHouse].
+    /// `GROUP BY ALL`/`ORDER BY ALL` syntax with optional modifiers.
     ///
     /// [DuckDB]:  <https://duckdb.org/docs/sql/query_syntax/orderby>
     /// [ClickHouse]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by>
     All(OrderByOptions),
 
-    /// Expressions
+    /// A standard list of ordering expressions.
     Expressions(Vec<OrderByExpr>),
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Represents an `ORDER BY` clause with its kind and optional `INTERPOLATE`.
 pub struct OrderBy {
+    /// The kind of ordering (expressions or `ALL`).
     pub kind: OrderByKind,
 
-    /// Optional: `INTERPOLATE`
-    /// Supported by [ClickHouse syntax]
+    /// Optional `INTERPOLATE` clause (ClickHouse extension).
     pub interpolate: Option<Interpolate>,
 }
 
@@ -2503,10 +2680,11 @@ impl fmt::Display for OrderBy {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct OrderByExpr {
+    /// The expression to order by.
     pub expr: Expr,
+    /// Ordering options such as `ASC`/`DESC` and `NULLS` behavior.
     pub options: OrderByOptions,
-    /// Optional: `WITH FILL`
-    /// Supported by [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
+    /// Optional `WITH FILL` clause (ClickHouse extension) which specifies how to fill gaps.
     pub with_fill: Option<WithFill>,
 }
 
@@ -2537,9 +2715,13 @@ impl fmt::Display for OrderByExpr {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// `WITH FILL` options for ClickHouse `ORDER BY` expressions.
 pub struct WithFill {
+    /// Optional lower bound expression for the fill range (`FROM <expr>`).
     pub from: Option<Expr>,
+    /// Optional upper bound expression for the fill range (`TO <expr>`).
     pub to: Option<Expr>,
+    /// Optional step expression specifying interpolation step (`STEP <expr>`).
     pub step: Option<Expr>,
 }
 
@@ -2566,15 +2748,20 @@ impl fmt::Display for WithFill {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// An expression used by `WITH FILL`/`INTERPOLATE` to specify interpolation for a column.
 pub struct InterpolateExpr {
+    /// The column to interpolate.
     pub column: Ident,
+    /// Optional `AS <expr>` expression specifying how to compute interpolated values.
     pub expr: Option<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// `INTERPOLATE` clause used with ClickHouse `WITH FILL` to compute missing values.
 pub struct Interpolate {
+    /// Optional list of interpolation expressions.
     pub exprs: Option<Vec<InterpolateExpr>>,
 }
 
@@ -2591,10 +2778,11 @@ impl fmt::Display for InterpolateExpr {
 #[derive(Default, Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Options for an `ORDER BY` expression (ASC/DESC and NULLS FIRST/LAST).
 pub struct OrderByOptions {
-    /// Optional `ASC` or `DESC`
+    /// Optional `ASC` (`Some(true)`) or `DESC` (`Some(false)`).
     pub asc: Option<bool>,
-    /// Optional `NULLS FIRST` or `NULLS LAST`
+    /// Optional `NULLS FIRST` (`Some(true)`) or `NULLS LAST` (`Some(false)`).
     pub nulls_first: Option<bool>,
 }
 
@@ -2617,26 +2805,26 @@ impl fmt::Display for OrderByOptions {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Represents the different syntactic forms of `LIMIT` clauses.
 pub enum LimitClause {
-    /// Standard SQL syntax
+    /// Standard SQL `LIMIT` syntax (optionally `BY` and `OFFSET`).
     ///
     /// `LIMIT <limit> [BY <expr>,<expr>,...] [OFFSET <offset>]`
     LimitOffset {
-        /// `LIMIT { <N> | ALL }`
+        /// `LIMIT { <N> | ALL }` expression.
         limit: Option<Expr>,
-        /// `OFFSET <N> [ { ROW | ROWS } ]`
+        /// Optional `OFFSET` expression with optional `ROW(S)` keyword.
         offset: Option<Offset>,
-        /// `BY { <expr>,<expr>,... } }`
-        ///
-        /// [ClickHouse](https://clickhouse.com/docs/sql-reference/statements/select/limit-by)
+        /// Optional `BY { <expr>,... }` list used by some dialects (ClickHouse).
         limit_by: Vec<Expr>,
     },
-    /// [MySQL]-specific syntax; the order of expressions is reversed.
-    ///
-    /// `LIMIT <offset>, <limit>`
-    ///
-    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/select.html
-    OffsetCommaLimit { offset: Expr, limit: Expr },
+    /// MySQL-specific syntax: `LIMIT <offset>, <limit>` (order reversed).
+    OffsetCommaLimit {
+        /// The offset expression.
+        offset: Expr,
+        /// The limit expression.
+        limit: Expr,
+    },
 }
 
 impl fmt::Display for LimitClause {
@@ -2669,8 +2857,11 @@ impl fmt::Display for LimitClause {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// `OFFSET` clause consisting of a value and a rows specifier.
 pub struct Offset {
+    /// The numeric expression following `OFFSET`.
     pub value: Expr,
+    /// Whether the offset uses `ROW`/`ROWS` or omits it.
     pub rows: OffsetRows,
 }
 
@@ -2685,9 +2876,11 @@ impl fmt::Display for Offset {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum OffsetRows {
-    /// Omitting ROW/ROWS is non-standard MySQL quirk.
+    /// Omitting `ROW`/`ROWS` entirely (non-standard MySQL quirk).
     None,
+    /// `ROW` keyword present.
     Row,
+    /// `ROWS` keyword present.
     Rows,
 }
 
@@ -2721,45 +2914,71 @@ pub enum PipeOperator {
     /// Syntax: `|> LIMIT <n> [OFFSET <m>]`
     ///
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#limit_pipe_operator>
-    Limit { expr: Expr, offset: Option<Expr> },
+    Limit {
+        /// The expression specifying the number of rows to return.
+        expr: Expr,
+        /// Optional offset expression provided inline with `LIMIT`.
+        offset: Option<Expr>,
+    },
     /// Filters the results of the input table.
     ///
     /// Syntax: `|> WHERE <condition>`
     ///
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#where_pipe_operator>
-    Where { expr: Expr },
+    Where {
+        /// The filter expression.
+        expr: Expr,
+    },
     /// `ORDER BY <expr> [ASC|DESC], ...`
-    OrderBy { exprs: Vec<OrderByExpr> },
+    OrderBy {
+        /// The ordering expressions.
+        exprs: Vec<OrderByExpr>,
+    },
     /// Produces a new table with the listed columns, similar to the outermost SELECT clause in a table subquery in standard syntax.
     ///
     /// Syntax `|> SELECT <expr> [[AS] alias], ...`
     ///
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#select_pipe_operator>
-    Select { exprs: Vec<SelectItem> },
+    Select {
+        /// The select items to produce.
+        exprs: Vec<SelectItem>,
+    },
     /// Propagates the existing table and adds computed columns, similar to SELECT *, new_column in standard syntax.
     ///
     /// Syntax: `|> EXTEND <expr> [[AS] alias], ...`
     ///
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#extend_pipe_operator>
-    Extend { exprs: Vec<SelectItem> },
+    Extend {
+        /// Expressions defining added columns.
+        exprs: Vec<SelectItem>,
+    },
     /// Replaces the value of a column in the current table, similar to SELECT * REPLACE (expression AS column) in standard syntax.
     ///
     /// Syntax: `|> SET <column> = <expression>, ...`
     ///
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#set_pipe_operator>
-    Set { assignments: Vec<Assignment> },
+    Set {
+        /// Assignments to apply (`column = expr`).
+        assignments: Vec<Assignment>,
+    },
     /// Removes listed columns from the current table, similar to SELECT * EXCEPT (column) in standard syntax.
     ///
     /// Syntax: `|> DROP <column>, ...`
     ///
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#drop_pipe_operator>
-    Drop { columns: Vec<Ident> },
+    Drop {
+        /// Columns to drop.
+        columns: Vec<Ident>,
+    },
     /// Introduces a table alias for the input table, similar to applying the AS alias clause on a table subquery in standard syntax.
     ///
     /// Syntax: `|> AS <alias>`
     ///
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#as_pipe_operator>
-    As { alias: Ident },
+    As {
+        /// Alias to assign to the input table.
+        alias: Ident,
+    },
     /// Performs aggregation on data across grouped rows or an entire table.
     ///
     /// Syntax: `|> AGGREGATE <agg_expr> [[AS] alias], ...`
@@ -2772,26 +2991,36 @@ pub enum PipeOperator {
     ///
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#aggregate_pipe_operator>
     Aggregate {
+        /// Expressions computed for each row prior to grouping.
         full_table_exprs: Vec<ExprWithAliasAndOrderBy>,
+        /// Grouping expressions for aggregation.
         group_by_expr: Vec<ExprWithAliasAndOrderBy>,
     },
     /// Selects a random sample of rows from the input table.
     /// Syntax: `|> TABLESAMPLE SYSTEM (10 PERCENT)
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#tablesample_pipe_operator>
-    TableSample { sample: Box<TableSample> },
+    TableSample {
+        /// Sampling clause describing the sample.
+        sample: Box<TableSample>,
+    },
     /// Renames columns in the input table.
     ///
     /// Syntax: `|> RENAME old_name AS new_name, ...`
     ///
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#rename_pipe_operator>
-    Rename { mappings: Vec<IdentWithAlias> },
+    Rename {
+        /// Mappings of old to new identifiers.
+        mappings: Vec<IdentWithAlias>,
+    },
     /// Combines the input table with one or more tables using UNION.
     ///
     /// Syntax: `|> UNION [ALL|DISTINCT] (<query>), (<query>), ...`
     ///
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#union_pipe_operator>
     Union {
+        /// Set quantifier (`ALL` or `DISTINCT`).
         set_quantifier: SetQuantifier,
+        /// The queries to combine with `UNION`.
         queries: Vec<Query>,
     },
     /// Returns only the rows that are present in both the input table and the specified tables.
@@ -2800,7 +3029,9 @@ pub enum PipeOperator {
     ///
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#intersect_pipe_operator>
     Intersect {
+        /// Set quantifier for the `INTERSECT` operator.
         set_quantifier: SetQuantifier,
+        /// The queries to intersect.
         queries: Vec<Query>,
     },
     /// Returns only the rows that are present in the input table but not in the specified tables.
@@ -2809,7 +3040,9 @@ pub enum PipeOperator {
     ///
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#except_pipe_operator>
     Except {
+        /// Set quantifier for the `EXCEPT` operator.
         set_quantifier: SetQuantifier,
+        /// The queries to exclude from the input set.
         queries: Vec<Query>,
     },
     /// Calls a table function or procedure that returns a table.
@@ -2818,7 +3051,9 @@ pub enum PipeOperator {
     ///
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#call_pipe_operator>
     Call {
+        /// The function or procedure to call which returns a table.
         function: Function,
+        /// Optional alias for the result table.
         alias: Option<Ident>,
     },
     /// Pivots data from rows to columns.
@@ -2827,9 +3062,13 @@ pub enum PipeOperator {
     ///
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#pivot_pipe_operator>
     Pivot {
+        /// Aggregate functions to compute during pivot.
         aggregate_functions: Vec<ExprWithAlias>,
+        /// Column(s) that provide the pivot values.
         value_column: Vec<Ident>,
+        /// The source of pivot values (literal list or subquery).
         value_source: PivotValueSource,
+        /// Optional alias for the output.
         alias: Option<Ident>,
     },
     /// The `UNPIVOT` pipe operator transforms columns into rows.
@@ -2841,9 +3080,13 @@ pub enum PipeOperator {
     ///
     /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#unpivot_pipe_operator>
     Unpivot {
+        /// Output column that will receive the unpivoted value.
         value_column: Ident,
+        /// Column name holding the unpivoted column name.
         name_column: Ident,
+        /// Columns to unpivot.
         unpivot_columns: Vec<Ident>,
+        /// Optional alias for the unpivot result.
         alias: Option<Ident>,
     },
     /// Joins the input table with another table.
@@ -2994,9 +3237,13 @@ impl PipeOperator {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// `FETCH` clause options.
 pub struct Fetch {
+    /// `WITH TIES` option is present.
     pub with_ties: bool,
+    /// `PERCENT` modifier is present.
     pub percent: bool,
+    /// Optional quantity expression (e.g. `FETCH FIRST 10 ROWS`).
     pub quantity: Option<Expr>,
 }
 
@@ -3015,9 +3262,13 @@ impl fmt::Display for Fetch {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// `FOR ...` locking clause.
 pub struct LockClause {
+    /// The kind of lock requested (e.g. `SHARE`, `UPDATE`).
     pub lock_type: LockType,
+    /// Optional object name after `OF` (e.g. `FOR UPDATE OF t1`).
     pub of: Option<ObjectName>,
+    /// Optional non-blocking behavior (`NOWAIT` / `SKIP LOCKED`).
     pub nonblock: Option<NonBlock>,
 }
 
@@ -3037,8 +3288,11 @@ impl fmt::Display for LockClause {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// The lock type used in `FOR <lock>` clauses (e.g. `FOR SHARE`, `FOR UPDATE`).
 pub enum LockType {
+    /// `SHARE` lock (shared lock).
     Share,
+    /// `UPDATE` lock (exclusive/update lock).
     Update,
 }
 
@@ -3055,8 +3309,11 @@ impl fmt::Display for LockType {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Non-blocking lock options for `FOR ...` clauses.
 pub enum NonBlock {
+    /// `NOWAIT` — do not wait for the lock.
     Nowait,
+    /// `SKIP LOCKED` — skip rows that are locked.
     SkipLocked,
 }
 
@@ -3073,11 +3330,12 @@ impl fmt::Display for NonBlock {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// `DISTINCT` or `DISTINCT ON (...)` modifiers for `SELECT` lists.
 pub enum Distinct {
-    /// DISTINCT
+    /// `DISTINCT` (remove duplicate rows)
     Distinct,
 
-    /// DISTINCT ON({column names})
+    /// `DISTINCT ON (...)` (Postgres extension)
     On(Vec<Expr>),
 }
 
@@ -3096,22 +3354,25 @@ impl fmt::Display for Distinct {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// MSSQL `TOP` clause options.
 pub struct Top {
     /// SQL semantic equivalent of LIMIT but with same structure as FETCH.
     /// MSSQL only.
     pub with_ties: bool,
-    /// MSSQL only.
+    /// Apply `PERCENT` extension.
     pub percent: bool,
+    /// The optional quantity (expression or constant) following `TOP`.
     pub quantity: Option<TopQuantity>,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Quantity used in a `TOP` clause: either an expression or a constant.
 pub enum TopQuantity {
-    // A parenthesized expression. MSSQL only.
+    /// A parenthesized expression (MSSQL syntax: `TOP (expr)`).
     Expr(Expr),
-    // An unparenthesized integer constant.
+    /// An unparenthesized integer constant: `TOP 10`.
     Constant(u64),
 }
 
@@ -3135,13 +3396,15 @@ impl fmt::Display for Top {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// An explicit `VALUES` clause and its rows.
 pub struct Values {
-    /// Was there an explicit ROWs keyword (MySQL)?
+    /// Was there an explicit `ROW` keyword (MySQL)?
     /// <https://dev.mysql.com/doc/refman/8.0/en/values.html>
     pub explicit_row: bool,
-    // MySql supports both VALUES and VALUE keywords.
-    // <https://dev.mysql.com/doc/refman/9.2/en/insert.html>
+    /// `true` if `VALUE` (singular) keyword was used instead of `VALUES`.
+    /// <https://dev.mysql.com/doc/refman/9.2/en/insert.html>
     pub value_keyword: bool,
+    /// The list of rows, each row is a list of expressions.
     pub rows: Vec<Vec<Expr>>,
 }
 
@@ -3166,10 +3429,15 @@ impl fmt::Display for Values {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// `SELECT INTO` clause options.
 pub struct SelectInto {
+    /// `TEMPORARY` modifier.
     pub temporary: bool,
+    /// `UNLOGGED` modifier.
     pub unlogged: bool,
+    /// `TABLE` keyword present.
     pub table: bool,
+    /// Name of the target table.
     pub name: ObjectName,
 }
 
@@ -3190,12 +3458,15 @@ impl fmt::Display for SelectInto {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Modifiers used with `GROUP BY` such as `WITH ROLLUP` or `WITH CUBE`.
 pub enum GroupByWithModifier {
+    /// `WITH ROLLUP` modifier.
     Rollup,
+    /// `WITH CUBE` modifier.
     Cube,
+    /// `WITH TOTALS` modifier (ClickHouse).
     Totals,
-    /// Hive supports GROUP BY GROUPING SETS syntax.
-    /// e.g. GROUP BY year , month GROUPING SETS((year,month),(year),(month))
+    /// Hive supports GROUPING SETS syntax, e.g. `GROUP BY GROUPING SETS(...)`.
     ///
     /// [Hive]: <https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=30151323#EnhancedAggregation,Cube,GroupingandRollup-GROUPINGSETSclause>
     GroupingSets(Expr),
@@ -3217,6 +3488,8 @@ impl fmt::Display for GroupByWithModifier {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Represents the two syntactic forms that `GROUP BY` can take, including
+/// `GROUP BY ALL` with optional modifiers and ordinary `GROUP BY <exprs>`.
 pub enum GroupByExpr {
     /// ALL syntax of [Snowflake], [DuckDB] and [ClickHouse].
     ///
@@ -3228,8 +3501,7 @@ pub enum GroupByExpr {
     ///
     /// [ClickHouse]: <https://clickhouse.com/docs/en/sql-reference/statements/select/group-by#rollup-modifier>
     All(Vec<GroupByWithModifier>),
-
-    /// Expressions
+    /// `GROUP BY <expressions>` with optional modifiers.
     Expressions(Vec<Expr>, Vec<GroupByWithModifier>),
 }
 
@@ -3256,14 +3528,16 @@ impl fmt::Display for GroupByExpr {
     }
 }
 
-/// FORMAT identifier or FORMAT NULL clause, specific to ClickHouse.
+/// `FORMAT` identifier or `FORMAT NULL` clause, specific to ClickHouse.
 ///
 /// [ClickHouse]: <https://clickhouse.com/docs/en/sql-reference/statements/select/format>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum FormatClause {
+    /// The format identifier.
     Identifier(Ident),
+    /// `FORMAT NULL` clause.
     Null,
 }
 
@@ -3283,7 +3557,9 @@ impl fmt::Display for FormatClause {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct InputFormatClause {
+    /// The format identifier.
     pub ident: Ident,
+    /// Optional format parameters.
     pub values: Vec<Expr>,
 }
 
@@ -3299,24 +3575,35 @@ impl fmt::Display for InputFormatClause {
     }
 }
 
-/// FOR XML or FOR JSON clause, specific to MSSQL
-/// (formats the output of a query as XML or JSON)
+/// `FOR XML` or `FOR JSON` clause (MSSQL): formats the output of a query as XML or JSON.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ForClause {
+    /// `FOR BROWSE` clause.
     Browse,
+    /// `FOR JSON ...` clause and its options.
     Json {
+        /// JSON mode (`AUTO` or `PATH`).
         for_json: ForJson,
+        /// Optional `ROOT('...')` parameter.
         root: Option<String>,
+        /// `INCLUDE_NULL_VALUES` flag.
         include_null_values: bool,
+        /// `WITHOUT_ARRAY_WRAPPER` flag.
         without_array_wrapper: bool,
     },
+    /// `FOR XML ...` clause and its options.
     Xml {
+        /// XML mode (`RAW`, `AUTO`, `EXPLICIT`, `PATH`).
         for_xml: ForXml,
+        /// `ELEMENTS` flag.
         elements: bool,
+        /// `BINARY BASE64` flag.
         binary_base64: bool,
+        /// Optional `ROOT('...')` parameter.
         root: Option<String>,
+        /// `TYPE` flag.
         r#type: bool,
     },
 }
@@ -3374,10 +3661,15 @@ impl fmt::Display for ForClause {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Modes for `FOR XML` clause.
 pub enum ForXml {
+    /// `RAW` mode with optional root name: `RAW('root')`.
     Raw(Option<String>),
+    /// `AUTO` mode.
     Auto,
+    /// `EXPLICIT` mode.
     Explicit,
+    /// `PATH` mode with optional root: `PATH('root')`.
     Path(Option<String>),
 }
 
@@ -3407,8 +3699,11 @@ impl fmt::Display for ForXml {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Modes for `FOR JSON` clause.
 pub enum ForJson {
+    /// `AUTO` mode.
     Auto,
+    /// `PATH` mode.
     Path,
 }
 
@@ -3473,8 +3768,11 @@ impl fmt::Display for JsonTableColumn {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// A nested column in a `JSON_TABLE` column list.
 pub struct JsonTableNestedColumn {
+    /// JSON path expression (must be a literal `Value`).
     pub path: Value,
+    /// Columns extracted from the matched nested array.
     pub columns: Vec<JsonTableColumn>,
 }
 
@@ -3539,9 +3837,13 @@ impl fmt::Display for JsonTableNamedColumn {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Error/empty-value handling for `JSON_TABLE` columns.
 pub enum JsonTableColumnErrorHandling {
+    /// `NULL` — return NULL when the path does not match.
     Null,
+    /// `DEFAULT <value>` — use the provided `Value` as a default.
     Default(Value),
+    /// `ERROR` — raise an error.
     Error,
 }
 
@@ -3600,10 +3902,15 @@ impl fmt::Display for OpenJsonTableColumn {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Mode of BigQuery value tables, e.g. `AS STRUCT` or `AS VALUE`.
 pub enum ValueTableMode {
+    /// `AS STRUCT`
     AsStruct,
+    /// `AS VALUE`
     AsValue,
+    /// `DISTINCT AS STRUCT`
     DistinctAsStruct,
+    /// `DISTINCT AS VALUE`
     DistinctAsValue,
 }
 
@@ -3706,10 +4013,14 @@ impl fmt::Display for XmlTableColumn {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Argument passed in the `XMLTABLE PASSING` clause.
 pub struct XmlPassingArgument {
+    /// Expression to pass to the XML table.
     pub expr: Expr,
+    /// Optional alias for the argument.
     pub alias: Option<Ident>,
-    pub by_value: bool, // True if BY VALUE is specified
+    /// `true` if `BY VALUE` is specified for the argument.
+    pub by_value: bool,
 }
 
 impl fmt::Display for XmlPassingArgument {
@@ -3729,7 +4040,9 @@ impl fmt::Display for XmlPassingArgument {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// The PASSING clause for `XMLTABLE`.
 pub struct XmlPassingClause {
+    /// The list of passed arguments.
     pub arguments: Vec<XmlPassingArgument>,
 }
 

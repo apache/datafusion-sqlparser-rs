@@ -28,11 +28,11 @@ use crate::ast::helpers::stmt_data_loading::{
 };
 use crate::ast::{
     AlterTable, AlterTableOperation, AlterTableType, CatalogSyncNamespaceMode, ColumnOption,
-    ColumnPolicy, ColumnPolicyProperty, ContactEntry, CopyIntoSnowflakeKind, CreateTableLikeKind,
-    DollarQuotedString, Ident, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
-    IdentityPropertyKind, IdentityPropertyOrder, InitializeKind, ObjectName, ObjectNamePart,
-    RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement,
-    StorageSerializationPolicy, TagsColumnOption, Value, WrappedCollection,
+    ColumnPolicy, ColumnPolicyProperty, ContactEntry, CopyIntoSnowflakeKind, CreateTable,
+    CreateTableLikeKind, DollarQuotedString, Ident, IdentityParameters, IdentityProperty,
+    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, InitializeKind,
+    ObjectName, ObjectNamePart, RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption,
+    Statement, StorageSerializationPolicy, TagsColumnOption, Value, WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
@@ -272,9 +272,13 @@ impl Dialect for SnowflakeDialect {
                 // OK - this is CREATE STAGE statement
                 return Some(parse_create_stage(or_replace, temporary, parser));
             } else if parser.parse_keyword(Keyword::TABLE) {
-                return Some(parse_create_table(
-                    or_replace, global, temporary, volatile, transient, iceberg, dynamic, parser,
-                ));
+                return Some(
+                    parse_create_table(
+                        or_replace, global, temporary, volatile, transient, iceberg, dynamic,
+                        parser,
+                    )
+                    .map(Into::into),
+                );
             } else if parser.parse_keyword(Keyword::DATABASE) {
                 return Some(parse_create_database(or_replace, transient, parser));
             } else {
@@ -719,7 +723,7 @@ pub fn parse_create_table(
     iceberg: bool,
     dynamic: bool,
     parser: &mut Parser,
-) -> Result<Statement, ParserError> {
+) -> Result<CreateTable, ParserError> {
     let if_not_exists = parser.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
     let table_name = parser.parse_object_name(false)?;
 

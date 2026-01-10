@@ -504,8 +504,8 @@ impl CreateTableBuilder {
         self.require_user = require_user;
         self
     }
-    /// Consume the builder and produce a `Statement::CreateTable`.
-    pub fn build(self) -> Statement {
+    /// Consume the builder and produce a `CreateTable`.
+    pub fn build(self) -> CreateTable {
         CreateTable {
             or_replace: self.or_replace,
             temporary: self.temporary,
@@ -561,7 +561,6 @@ impl CreateTableBuilder {
             initialize: self.initialize,
             require_user: self.require_user,
         }
-        .into()
     }
 }
 
@@ -572,118 +571,70 @@ impl TryFrom<Statement> for CreateTableBuilder {
     // ownership.
     fn try_from(stmt: Statement) -> Result<Self, Self::Error> {
         match stmt {
-            Statement::CreateTable(CreateTable {
-                or_replace,
-                temporary,
-                external,
-                global,
-                if_not_exists,
-                transient,
-                volatile,
-                iceberg,
-                dynamic,
-                name,
-                columns,
-                constraints,
-                hive_distribution,
-                hive_formats,
-                file_format,
-                location,
-                query,
-                without_rowid,
-                like,
-                clone,
-                version,
-                comment,
-                on_commit,
-                on_cluster,
-                primary_key,
-                order_by,
-                partition_by,
-                cluster_by,
-                clustered_by,
-                inherits,
-                partition_of,
-                for_values,
-                strict,
-                copy_grants,
-                enable_schema_evolution,
-                change_tracking,
-                data_retention_time_in_days,
-                max_data_extension_time_in_days,
-                default_ddl_collation,
-                with_aggregation_policy,
-                with_row_access_policy,
-                with_tags,
-                base_location,
-                external_volume,
-                catalog,
-                catalog_sync,
-                storage_serialization_policy,
-                table_options,
-                target_lag,
-                warehouse,
-                refresh_mode,
-                initialize,
-                require_user,
-            }) => Ok(Self {
-                or_replace,
-                temporary,
-                external,
-                global,
-                if_not_exists,
-                transient,
-                dynamic,
-                name,
-                columns,
-                constraints,
-                hive_distribution,
-                hive_formats,
-                file_format,
-                location,
-                query,
-                without_rowid,
-                like,
-                clone,
-                version,
-                comment,
-                on_commit,
-                on_cluster,
-                primary_key,
-                order_by,
-                partition_by,
-                cluster_by,
-                clustered_by,
-                inherits,
-                partition_of,
-                for_values,
-                strict,
-                iceberg,
-                copy_grants,
-                enable_schema_evolution,
-                change_tracking,
-                data_retention_time_in_days,
-                max_data_extension_time_in_days,
-                default_ddl_collation,
-                with_aggregation_policy,
-                with_row_access_policy,
-                with_tags,
-                volatile,
-                base_location,
-                external_volume,
-                catalog,
-                catalog_sync,
-                storage_serialization_policy,
-                table_options,
-                target_lag,
-                warehouse,
-                refresh_mode,
-                initialize,
-                require_user,
-            }),
+            Statement::CreateTable(create_table) => Ok(create_table.into()),
             _ => Err(ParserError::ParserError(format!(
                 "Expected create table statement, but received: {stmt}"
             ))),
+        }
+    }
+}
+
+impl From<CreateTable> for CreateTableBuilder {
+    fn from(table: CreateTable) -> Self {
+        Self {
+            or_replace: table.or_replace,
+            temporary: table.temporary,
+            external: table.external,
+            global: table.global,
+            if_not_exists: table.if_not_exists,
+            transient: table.transient,
+            volatile: table.volatile,
+            iceberg: table.iceberg,
+            dynamic: table.dynamic,
+            name: table.name,
+            columns: table.columns,
+            constraints: table.constraints,
+            hive_distribution: table.hive_distribution,
+            hive_formats: table.hive_formats,
+            file_format: table.file_format,
+            location: table.location,
+            query: table.query,
+            without_rowid: table.without_rowid,
+            like: table.like,
+            clone: table.clone,
+            version: table.version,
+            comment: table.comment,
+            on_commit: table.on_commit,
+            on_cluster: table.on_cluster,
+            primary_key: table.primary_key,
+            order_by: table.order_by,
+            partition_by: table.partition_by,
+            cluster_by: table.cluster_by,
+            clustered_by: table.clustered_by,
+            inherits: table.inherits,
+            partition_of: table.partition_of,
+            for_values: table.for_values,
+            strict: table.strict,
+            copy_grants: table.copy_grants,
+            enable_schema_evolution: table.enable_schema_evolution,
+            change_tracking: table.change_tracking,
+            data_retention_time_in_days: table.data_retention_time_in_days,
+            max_data_extension_time_in_days: table.max_data_extension_time_in_days,
+            default_ddl_collation: table.default_ddl_collation,
+            with_aggregation_policy: table.with_aggregation_policy,
+            with_row_access_policy: table.with_row_access_policy,
+            with_tags: table.with_tags,
+            base_location: table.base_location,
+            external_volume: table.external_volume,
+            catalog: table.catalog,
+            catalog_sync: table.catalog_sync,
+            storage_serialization_policy: table.storage_serialization_policy,
+            table_options: table.table_options,
+            target_lag: table.target_lag,
+            warehouse: table.warehouse,
+            refresh_mode: table.refresh_mode,
+            initialize: table.initialize,
+            require_user: table.require_user,
         }
     }
 }
@@ -707,7 +658,8 @@ mod tests {
     pub fn test_from_valid_statement() {
         let builder = CreateTableBuilder::new(ObjectName::from(vec![Ident::new("table_name")]));
 
-        let stmt = builder.clone().build();
+        let create_table = builder.clone().build();
+        let stmt: Statement = create_table.into();
 
         assert_eq!(builder, CreateTableBuilder::try_from(stmt).unwrap());
     }

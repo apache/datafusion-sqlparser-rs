@@ -604,7 +604,7 @@ impl<'a> Parser<'a> {
                 Keyword::DESC => self.parse_explain(DescribeAlias::Desc),
                 Keyword::DESCRIBE => self.parse_explain(DescribeAlias::Describe),
                 Keyword::EXPLAIN => self.parse_explain(DescribeAlias::Explain),
-                Keyword::ANALYZE => self.parse_analyze(),
+                Keyword::ANALYZE => self.parse_analyze().map(Into::into),
                 Keyword::CASE => {
                     self.prev_token();
                     self.parse_case_stmt().map(Into::into)
@@ -623,9 +623,9 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::SELECT | Keyword::WITH | Keyword::VALUES | Keyword::FROM => {
                     self.prev_token();
-                    self.parse_query().map(Statement::Query)
+                    self.parse_query().map(Into::into)
                 }
-                Keyword::TRUNCATE => self.parse_truncate(),
+                Keyword::TRUNCATE => self.parse_truncate().map(Into::into),
                 Keyword::ATTACH => {
                     if dialect_of!(self is DuckDbDialect) {
                         self.parse_attach_duckdb_database()
@@ -636,7 +636,7 @@ impl<'a> Parser<'a> {
                 Keyword::DETACH if dialect_of!(self is DuckDbDialect | GenericDialect) => {
                     self.parse_detach_duckdb_database()
                 }
-                Keyword::MSCK => self.parse_msck(),
+                Keyword::MSCK => self.parse_msck().map(Into::into),
                 Keyword::CREATE => self.parse_create(),
                 Keyword::CACHE => self.parse_cache_table(),
                 Keyword::DROP => self.parse_drop(),
@@ -713,12 +713,12 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     self.parse_vacuum()
                 }
-                Keyword::RESET => self.parse_reset(),
+                Keyword::RESET => self.parse_reset().map(Into::into),
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
                 self.prev_token();
-                self.parse_query().map(Statement::Query)
+                self.parse_query().map(Into::into)
             }
             _ => self.expected("an SQL statement", next_token),
         }
@@ -1024,7 +1024,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse `MSCK` statement.
-    pub fn parse_msck(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_msck(&mut self) -> Result<Msck, ParserError> {
         let repair = self.parse_keyword(Keyword::REPAIR);
         self.expect_keyword_is(Keyword::TABLE)?;
         let table_name = self.parse_object_name(false)?;
@@ -1048,12 +1048,11 @@ impl<'a> Parser<'a> {
             repair,
             table_name,
             partition_action,
-        }
-        .into())
+        })
     }
 
     /// Parse `TRUNCATE` statement.
-    pub fn parse_truncate(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_truncate(&mut self) -> Result<Truncate, ParserError> {
         let table = self.parse_keyword(Keyword::TABLE);
 
         let table_names = self
@@ -1095,8 +1094,7 @@ impl<'a> Parser<'a> {
             identity,
             cascade,
             on_cluster,
-        }
-        .into())
+        })
     }
 
     fn parse_cascade_option(&mut self) -> Option<CascadeOption> {
@@ -1192,7 +1190,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse `ANALYZE` statement.
-    pub fn parse_analyze(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_analyze(&mut self) -> Result<Analyze, ParserError> {
         let has_table_keyword = self.parse_keyword(Keyword::TABLE);
         let table_name = self.parse_object_name(false)?;
         let mut for_columns = false;
@@ -1246,8 +1244,7 @@ impl<'a> Parser<'a> {
             cache_metadata,
             noscan,
             compute_statistics,
-        }
-        .into())
+        })
     }
 
     /// Parse a new expression including wildcard & qualified wildcard.
@@ -4881,6 +4878,7 @@ impl<'a> Parser<'a> {
             || self.peek_keywords(&[Keyword::SECURE, Keyword::VIEW])
         {
             self.parse_create_view(or_alter, or_replace, temporary, create_view_params)
+                .map(Into::into)
         } else if self.parse_keyword(Keyword::POLICY) {
             self.parse_create_policy()
         } else if self.parse_keyword(Keyword::EXTERNAL) {
@@ -4891,8 +4889,10 @@ impl<'a> Parser<'a> {
             self.parse_create_domain()
         } else if self.parse_keyword(Keyword::TRIGGER) {
             self.parse_create_trigger(temporary, or_alter, or_replace, false)
+                .map(Into::into)
         } else if self.parse_keywords(&[Keyword::CONSTRAINT, Keyword::TRIGGER]) {
             self.parse_create_trigger(temporary, or_alter, or_replace, true)
+                .map(Into::into)
         } else if self.parse_keyword(Keyword::MACRO) {
             self.parse_create_macro(or_replace, temporary)
         } else if self.parse_keyword(Keyword::SECRET) {
@@ -4905,7 +4905,7 @@ impl<'a> Parser<'a> {
                 self.peek_token(),
             )
         } else if self.parse_keyword(Keyword::EXTENSION) {
-            self.parse_create_extension()
+            self.parse_create_extension().map(Into::into)
         } else if self.parse_keyword(Keyword::INDEX) {
             self.parse_create_index(false)
         } else if self.parse_keywords(&[Keyword::UNIQUE, Keyword::INDEX]) {
@@ -4917,7 +4917,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::DATABASE) {
             self.parse_create_database()
         } else if self.parse_keyword(Keyword::ROLE) {
-            self.parse_create_role()
+            self.parse_create_role().map(Into::into)
         } else if self.parse_keyword(Keyword::SEQUENCE) {
             self.parse_create_sequence(temporary)
         } else if self.parse_keyword(Keyword::TYPE) {
@@ -5782,7 +5782,7 @@ impl<'a> Parser<'a> {
         or_alter: bool,
         or_replace: bool,
         is_constraint: bool,
-    ) -> Result<Statement, ParserError> {
+    ) -> Result<CreateTrigger, ParserError> {
         if !dialect_of!(self is PostgreSqlDialect | SQLiteDialect | GenericDialect | MySqlDialect | MsSqlDialect)
         {
             self.prev_token();
@@ -5864,8 +5864,7 @@ impl<'a> Parser<'a> {
             statements_as: false,
             statements,
             characteristics,
-        }
-        .into())
+        })
     }
 
     /// Parse the period part of a trigger (`BEFORE`, `AFTER`, etc.).
@@ -6098,7 +6097,7 @@ impl<'a> Parser<'a> {
         or_replace: bool,
         temporary: bool,
         create_view_params: Option<CreateViewParams>,
-    ) -> Result<Statement, ParserError> {
+    ) -> Result<CreateView, ParserError> {
         let secure = self.parse_keyword(Keyword::SECURE);
         let materialized = self.parse_keyword(Keyword::MATERIALIZED);
         self.expect_keyword_is(Keyword::VIEW)?;
@@ -6181,8 +6180,7 @@ impl<'a> Parser<'a> {
             to,
             params: create_view_params,
             name_before_not_exists,
-        }
-        .into())
+        })
     }
 
     /// Parse optional parameters for the `CREATE VIEW` statement supported by [MySQL].
@@ -6244,7 +6242,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a `CREATE ROLE` statement.
-    pub fn parse_create_role(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_create_role(&mut self) -> Result<CreateRole, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let names = self.parse_comma_separated(|p| p.parse_object_name(false))?;
 
@@ -6465,8 +6463,7 @@ impl<'a> Parser<'a> {
             user,
             admin,
             authorization_owner,
-        }
-        .into())
+        })
     }
 
     /// Parse an `OWNER` clause.
@@ -7695,7 +7692,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a `CREATE EXTENSION` statement.
-    pub fn parse_create_extension(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_create_extension(&mut self) -> Result<CreateExtension, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let name = self.parse_identifier()?;
 
@@ -7725,8 +7722,7 @@ impl<'a> Parser<'a> {
             schema,
             version,
             cascade,
-        }
-        .into())
+        })
     }
 
     /// Parse a PostgreSQL-specific [Statement::DropExtension] statement.
@@ -19085,15 +19081,15 @@ impl<'a> Parser<'a> {
     }
 
     /// Parses a RESET statement
-    fn parse_reset(&mut self) -> Result<Statement, ParserError> {
+    fn parse_reset(&mut self) -> Result<ResetStatement, ParserError> {
         if self.parse_keyword(Keyword::ALL) {
-            return Ok(Statement::Reset(ResetStatement { reset: Reset::ALL }));
+            return Ok(ResetStatement { reset: Reset::ALL });
         }
 
         let obj = self.parse_object_name(false)?;
-        Ok(Statement::Reset(ResetStatement {
+        Ok(ResetStatement {
             reset: Reset::ConfigurationParameter(obj),
-        }))
+        })
     }
 }
 

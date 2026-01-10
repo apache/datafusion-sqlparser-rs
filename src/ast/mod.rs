@@ -11876,6 +11876,24 @@ impl From<DropTrigger> for Statement {
     }
 }
 
+impl From<DropOperator> for Statement {
+    fn from(d: DropOperator) -> Self {
+        Self::DropOperator(d)
+    }
+}
+
+impl From<DropOperatorFamily> for Statement {
+    fn from(d: DropOperatorFamily) -> Self {
+        Self::DropOperatorFamily(d)
+    }
+}
+
+impl From<DropOperatorClass> for Statement {
+    fn from(d: DropOperatorClass) -> Self {
+        Self::DropOperatorClass(d)
+    }
+}
+
 impl From<DenyStatement> for Statement {
     fn from(d: DenyStatement) -> Self {
         Self::Deny(d)

@@ -1387,7 +1387,11 @@ impl<'a> Tokenizer<'a> {
                         Some('-') => {
                             let mut is_comment = true;
                             if self.dialect.requires_single_line_comment_whitespace() {
-                                is_comment = Some(' ') == chars.peekable.clone().nth(1);
+                                is_comment = chars
+                                    .peekable
+                                    .clone()
+                                    .nth(1)
+                                    .is_some_and(char::is_whitespace);
                             }
 
                             if is_comment {
@@ -4069,6 +4073,24 @@ mod tests {
                     Token::Minus,
                 ],
             );
+
+        all_dialects_where(|d| d.requires_single_line_comment_whitespace()).tokenizes_to(
+            "--\n-- Table structure for table...\n--\n",
+            vec![
+                Token::Whitespace(Whitespace::SingleLineComment {
+                    prefix: "--".to_string(),
+                    comment: "\n".to_string(),
+                }),
+                Token::Whitespace(Whitespace::SingleLineComment {
+                    prefix: "--".to_string(),
+                    comment: " Table structure for table...\n".to_string(),
+                }),
+                Token::Whitespace(Whitespace::SingleLineComment {
+                    prefix: "--".to_string(),
+                    comment: "\n".to_string(),
+                }),
+            ],
+        );
     }
 
     #[test]

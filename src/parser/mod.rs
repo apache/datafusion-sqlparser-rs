@@ -607,19 +607,19 @@ impl<'a> Parser<'a> {
                 Keyword::ANALYZE => self.parse_analyze(),
                 Keyword::CASE => {
                     self.prev_token();
-                    self.parse_case_stmt()
+                    self.parse_case_stmt().map(Into::into)
                 }
                 Keyword::IF => {
                     self.prev_token();
-                    self.parse_if_stmt()
+                    self.parse_if_stmt().map(Into::into)
                 }
                 Keyword::WHILE => {
                     self.prev_token();
-                    self.parse_while()
+                    self.parse_while().map(Into::into)
                 }
                 Keyword::RAISE => {
                     self.prev_token();
-                    self.parse_raise_stmt()
+                    self.parse_raise_stmt().map(Into::into)
                 }
                 Keyword::SELECT | Keyword::WITH | Keyword::VALUES | Keyword::FROM => {
                     self.prev_token();
@@ -679,7 +679,7 @@ impl<'a> Parser<'a> {
                 Keyword::DEALLOCATE => self.parse_deallocate(),
                 Keyword::EXECUTE | Keyword::EXEC => self.parse_execute(),
                 Keyword::PREPARE => self.parse_prepare(),
-                Keyword::MERGE => self.parse_merge(next_token),
+                Keyword::MERGE => self.parse_merge(next_token).map(Into::into),
                 // `LISTEN`, `UNLISTEN` and `NOTIFY` are Postgres-specific
                 // syntaxes. They are used for Postgres statement.
                 Keyword::LISTEN if self.dialect.supports_listen_notify() => self.parse_listen(),
@@ -727,7 +727,7 @@ impl<'a> Parser<'a> {
     /// Parse a `CASE` statement.
     ///
     /// See [Statement::Case]
-    pub fn parse_case_stmt(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_case_stmt(&mut self) -> Result<CaseStatement, ParserError> {
         let case_token = self.expect_keyword(Keyword::CASE)?;
 
         let match_expr = if self.peek_keyword(Keyword::WHEN) {
@@ -752,19 +752,19 @@ impl<'a> Parser<'a> {
             end_case_token = self.expect_keyword(Keyword::CASE)?;
         }
 
-        Ok(Statement::Case(CaseStatement {
+        Ok(CaseStatement {
             case_token: AttachedToken(case_token),
             match_expr,
             when_blocks,
             else_block,
             end_case_token: AttachedToken(end_case_token),
-        }))
+        })
     }
 
     /// Parse an `IF` statement.
     ///
     /// See [Statement::If]
-    pub fn parse_if_stmt(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_if_stmt(&mut self) -> Result<IfStatement, ParserError> {
         self.expect_keyword_is(Keyword::IF)?;
         let if_block = self.parse_conditional_statement_block(&[
             Keyword::ELSE,
@@ -793,22 +793,22 @@ impl<'a> Parser<'a> {
         self.expect_keyword_is(Keyword::END)?;
         let end_token = self.expect_keyword(Keyword::IF)?;
 
-        Ok(Statement::If(IfStatement {
+        Ok(IfStatement {
             if_block,
             elseif_blocks,
             else_block,
             end_token: Some(AttachedToken(end_token)),
-        }))
+        })
     }
 
     /// Parse a `WHILE` statement.
     ///
     /// See [Statement::While]
-    fn parse_while(&mut self) -> Result<Statement, ParserError> {
+    fn parse_while(&mut self) -> Result<WhileStatement, ParserError> {
         self.expect_keyword_is(Keyword::WHILE)?;
         let while_block = self.parse_conditional_statement_block(&[Keyword::END])?;
 
-        Ok(Statement::While(WhileStatement { while_block }))
+        Ok(WhileStatement { while_block })
     }
 
     /// Parses an expression and associated list of statements
@@ -875,7 +875,7 @@ impl<'a> Parser<'a> {
     /// Parse a `RAISE` statement.
     ///
     /// See [Statement::Raise]
-    pub fn parse_raise_stmt(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_raise_stmt(&mut self) -> Result<RaiseStatement, ParserError> {
         self.expect_keyword_is(Keyword::RAISE)?;
 
         let value = if self.parse_keywords(&[Keyword::USING, Keyword::MESSAGE]) {
@@ -885,7 +885,7 @@ impl<'a> Parser<'a> {
             self.maybe_parse(|parser| parser.parse_expr().map(RaiseStatementValue::Expr))?
         };
 
-        Ok(Statement::Raise(RaiseStatement { value }))
+        Ok(RaiseStatement { value })
     }
     /// Parse a COMMENT statement.
     ///
@@ -1432,7 +1432,7 @@ impl<'a> Parser<'a> {
 
                 Ok(RenameTable { old_name, new_name })
             })?;
-            Ok(Statement::RenameTable(rename_tables))
+            Ok(rename_tables.into())
         } else {
             self.expected("KEYWORD `TABLE` after RENAME", self.peek_token())
         }
@@ -4898,7 +4898,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::SECRET) {
             self.parse_create_secret(or_replace, temporary, persistent)
         } else if self.parse_keyword(Keyword::USER) {
-            self.parse_create_user(or_replace)
+            self.parse_create_user(or_replace).map(Into::into)
         } else if or_replace {
             self.expected(
                 "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION after CREATE OR REPLACE",
@@ -4942,7 +4942,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_create_user(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
+    fn parse_create_user(&mut self, or_replace: bool) -> Result<CreateUser, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let name = self.parse_identifier()?;
         let options = self
@@ -4954,7 +4954,7 @@ impl<'a> Parser<'a> {
         } else {
             vec![]
         };
-        Ok(Statement::CreateUser(CreateUser {
+        Ok(CreateUser {
             or_replace,
             if_not_exists,
             name,
@@ -4967,7 +4967,7 @@ impl<'a> Parser<'a> {
                 options: tags,
                 delimiter: KeyValueOptionsDelimiter::Comma,
             },
-        }))
+        })
     }
 
     /// See [DuckDB Docs](https://duckdb.org/docs/sql/statements/create_secret.html) for more details.
@@ -10158,17 +10158,17 @@ impl<'a> Parser<'a> {
             }
             Keyword::OPERATOR => {
                 if self.parse_keyword(Keyword::FAMILY) {
-                    self.parse_alter_operator_family()
+                    self.parse_alter_operator_family().map(Into::into)
                 } else if self.parse_keyword(Keyword::CLASS) {
-                    self.parse_alter_operator_class()
+                    self.parse_alter_operator_class().map(Into::into)
                 } else {
-                    self.parse_alter_operator()
+                    self.parse_alter_operator().map(Into::into)
                 }
             }
             Keyword::ROLE => self.parse_alter_role(),
             Keyword::POLICY => self.parse_alter_policy(),
             Keyword::CONNECTOR => self.parse_alter_connector(),
-            Keyword::USER => self.parse_alter_user(),
+            Keyword::USER => self.parse_alter_user().map(Into::into),
             // unreachable because expect_one_of_keywords used above
             unexpected_keyword => Err(ParserError::ParserError(
                 format!("Internal parser error: expected any of {{VIEW, TYPE, TABLE, INDEX, ROLE, POLICY, CONNECTOR, ICEBERG, SCHEMA, USER, OPERATOR}}, got {unexpected_keyword:?}"),
@@ -10290,7 +10290,7 @@ impl<'a> Parser<'a> {
     /// Parse a [Statement::AlterOperator]
     ///
     /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-alteroperator.html)
-    pub fn parse_alter_operator(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_alter_operator(&mut self) -> Result<AlterOperator, ParserError> {
         let name = self.parse_operator_name()?;
 
         // Parse (left_type, right_type)
@@ -10389,12 +10389,12 @@ impl<'a> Parser<'a> {
             );
         };
 
-        Ok(Statement::AlterOperator(AlterOperator {
+        Ok(AlterOperator {
             name,
             left_type,
             right_type,
             operation,
-        }))
+        })
     }
 
     /// Parse an operator item for ALTER OPERATOR FAMILY ADD operations
@@ -10527,7 +10527,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a [Statement::AlterOperatorFamily]
     /// See <https://www.postgresql.org/docs/current/sql-alteropfamily.html>
-    pub fn parse_alter_operator_family(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_alter_operator_family(&mut self) -> Result<AlterOperatorFamily, ParserError> {
         let name = self.parse_object_name(false)?;
         self.expect_keyword(Keyword::USING)?;
         let using = self.parse_identifier()?;
@@ -10554,17 +10554,17 @@ impl<'a> Parser<'a> {
             );
         };
 
-        Ok(Statement::AlterOperatorFamily(AlterOperatorFamily {
+        Ok(AlterOperatorFamily {
             name,
             using,
             operation,
-        }))
+        })
     }
 
     /// Parse an `ALTER OPERATOR CLASS` statement.
     ///
     /// Handles operations like `RENAME TO`, `OWNER TO`, and `SET SCHEMA`.
-    pub fn parse_alter_operator_class(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_alter_operator_class(&mut self) -> Result<AlterOperatorClass, ParserError> {
         let name = self.parse_object_name(false)?;
         self.expect_keyword(Keyword::USING)?;
         let using = self.parse_identifier()?;
@@ -10585,11 +10585,11 @@ impl<'a> Parser<'a> {
             );
         };
 
-        Ok(Statement::AlterOperatorClass(AlterOperatorClass {
+        Ok(AlterOperatorClass {
             name,
             using,
             operation,
-        }))
+        })
     }
 
     /// Parse an `ALTER SCHEMA` statement.
@@ -16803,7 +16803,7 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            Ok(Statement::Insert(Insert {
+            Ok(Insert {
                 insert_token: insert_token.into(),
                 or,
                 table: table_object,
@@ -16824,7 +16824,8 @@ impl<'a> Parser<'a> {
                 insert_alias,
                 settings,
                 format_clause,
-            }))
+            }
+            .into())
         }
     }
 

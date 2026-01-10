@@ -48,7 +48,7 @@ impl Dialect for DatabricksDialect {
     }
 
     /// <https://docs.databricks.com/gcp/en/delta/history#delta-time-travel-syntax>
-    fn supports_timestamp_versioning(&self) -> bool {
+    fn supports_table_versioning(&self) -> bool {
         true
     }
 

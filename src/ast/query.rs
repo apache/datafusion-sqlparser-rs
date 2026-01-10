@@ -2398,6 +2398,10 @@ pub enum TableVersion {
     /// Databricks supports this syntax.
     /// For example: `SELECT * FROM tbl TIMESTAMP AS OF CURRENT_TIMESTAMP() - INTERVAL 1 HOUR`
     TimestampAsOf(Expr),
+    /// When the table version is defined using `VERSION AS OF`.
+    /// Databricks supports this syntax.
+    /// For example: `SELECT * FROM tbl VERSION AS OF 2`
+    VersionAsOf(Expr),
     /// When the table version is defined using a function.
     /// For example: `SELECT * FROM tbl AT(TIMESTAMP => '2020-08-14 09:30:00')`
     Function(Expr),
@@ -2408,6 +2412,7 @@ impl Display for TableVersion {
         match self {
             TableVersion::ForSystemTimeAsOf(e) => write!(f, "FOR SYSTEM_TIME AS OF {e}")?,
             TableVersion::TimestampAsOf(e) => write!(f, "TIMESTAMP AS OF {e}")?,
+            TableVersion::VersionAsOf(e) => write!(f, "VERSION AS OF {e}")?,
             TableVersion::Function(func) => write!(f, "{func}")?,
         }
         Ok(())

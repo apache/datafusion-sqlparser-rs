@@ -73,7 +73,8 @@ fn test_databricks_exists() {
                 ),
                 Expr::Lambda(LambdaFunction {
                     params: OneOrManyWithParens::One(Ident::new("x")),
-                    body: Box::new(Expr::IsNull(Box::new(Expr::Identifier(Ident::new("x")))))
+                    body: Box::new(Expr::IsNull(Box::new(Expr::Identifier(Ident::new("x"))))),
+                    syntax: LambdaSyntax::Arrow,
                 })
             ]
         ),
@@ -141,7 +142,8 @@ fn test_databricks_lambdas() {
                             },
                         ],
                         else_result: Some(Box::new(Expr::value(number("1"))))
-                    })
+                    }),
+                    syntax: LambdaSyntax::Arrow,
                 })
             ]
         )),

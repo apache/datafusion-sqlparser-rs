@@ -512,7 +512,8 @@ fn parse_update_set_from() {
                         format_clause: None,
                         pipe_operators: vec![],
                     }),
-                    alias: table_alias(true, "t2")
+                    alias: table_alias(true, "t2"),
+                    sample: None,
                 },
                 joins: vec![]
             }])),
@@ -7851,6 +7852,7 @@ fn parse_derived_tables() {
                     lateral: false,
                     subquery: Box::new(verified_query("(SELECT 1) UNION (SELECT 2)")),
                     alias: table_alias(true, "t1"),
+                    sample: None,
                 },
                 joins: vec![Join {
                     relation: table_from_name(ObjectName::from(vec!["t2".into()])),
@@ -8859,6 +8861,7 @@ fn lateral_derived() {
             lateral,
             ref subquery,
             alias: Some(ref alias),
+            sample: _,
         } = join.relation
         {
             assert_eq!(lateral_in, lateral);
@@ -9937,6 +9940,7 @@ fn parse_merge() {
                         pipe_operators: vec![],
                     }),
                     alias: table_alias(true, "stg"),
+                    sample: None,
                 }
             );
             assert_eq!(source, source_no_into);

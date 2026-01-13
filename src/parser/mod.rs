@@ -1548,6 +1548,9 @@ impl<'a> Parser<'a> {
             Keyword::MAP if *self.peek_token_ref() == Token::LBrace && self.dialect.support_map_literal_syntax() => {
                 Ok(Some(self.parse_duckdb_map_literal()?))
             }
+            Keyword::LAMBDA if self.dialect.supports_lambda_functions() => {
+                Ok(Some(self.parse_lambda_expr()?))
+            }
             _ if self.dialect.supports_geometric_types() => match w.keyword {
                 Keyword::CIRCLE => Ok(Some(self.parse_geometric_type(GeometricTypeKind::Circle)?)),
                 Keyword::BOX => Ok(Some(self.parse_geometric_type(GeometricTypeKind::GeometricBox)?)),
@@ -1600,6 +1603,7 @@ impl<'a> Parser<'a> {
                 Ok(Expr::Lambda(LambdaFunction {
                     params: OneOrManyWithParens::One(w.clone().into_ident(w_span)),
                     body: Box::new(self.parse_expr()?),
+                    syntax: LambdaSyntax::Arrow,
                 }))
             }
             _ => Ok(Expr::Identifier(w.clone().into_ident(w_span))),
@@ -2141,8 +2145,45 @@ impl<'a> Parser<'a> {
             Ok(Expr::Lambda(LambdaFunction {
                 params: OneOrManyWithParens::Many(params),
                 body: Box::new(expr),
+                syntax: LambdaSyntax::Arrow,
             }))
         })
+    }
+
+    /// Parses a lambda expression using the `LAMBDA` keyword syntax.
+    ///
+    /// Syntax: `LAMBDA <params> : <expr>`
+    ///
+    /// Examples:
+    /// - `LAMBDA x : x + 1`
+    /// - `LAMBDA x, i : x > i`
+    ///
+    /// See <https://duckdb.org/docs/stable/sql/functions/lambda>
+    fn parse_lambda_expr(&mut self) -> Result<Expr, ParserError> {
+        // Parse the parameters: either a single identifier or comma-separated identifiers
+        let params = if self.consume_token(&Token::LParen) {
+            // Parenthesized parameters: (x, y)
+            let params = self.parse_comma_separated(|p| p.parse_identifier())?;
+            self.expect_token(&Token::RParen)?;
+            OneOrManyWithParens::Many(params)
+        } else {
+            // Unparenthesized parameters: x or x, y
+            let params = self.parse_comma_separated(|p| p.parse_identifier())?;
+            if params.len() == 1 {
+                OneOrManyWithParens::One(params.into_iter().next().unwrap())
+            } else {
+                OneOrManyWithParens::Many(params)
+            }
+        };
+        // Expect the colon separator
+        self.expect_token(&Token::Colon)?;
+        // Parse the body expression
+        let body = self.parse_expr()?;
+        Ok(Expr::Lambda(LambdaFunction {
+            params,
+            body: Box::new(body),
+            syntax: LambdaSyntax::LambdaKeyword,
+        }))
     }
 
     /// Tries to parse the body of an [ODBC escaping sequence]

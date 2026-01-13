@@ -1415,12 +1415,45 @@ pub struct LambdaFunction {
     pub params: OneOrManyWithParens<Ident>,
     /// The body of the lambda function.
     pub body: Box<Expr>,
+    /// The syntax style used to write the lambda function.
+    pub syntax: LambdaSyntax,
 }
 
 impl fmt::Display for LambdaFunction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} -> {}", self.params, self.body)
+        match self.syntax {
+            LambdaSyntax::Arrow => write!(f, "{} -> {}", self.params, self.body),
+            LambdaSyntax::LambdaKeyword => {
+                // For lambda keyword syntax, display params without parentheses
+                // e.g., `lambda x, y : expr` not `lambda (x, y) : expr`
+                write!(f, "lambda ")?;
+                match &self.params {
+                    OneOrManyWithParens::One(p) => write!(f, "{p}")?,
+                    OneOrManyWithParens::Many(ps) => write!(f, "{}", display_comma_separated(ps))?,
+                };
+                write!(f, " : {}", self.body)
+            }
+        }
     }
+}
+
+/// The syntax style for a lambda function.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Copy)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum LambdaSyntax {
+    /// Arrow syntax: `param -> expr` or `(param1, param2) -> expr`
+    ///
+    /// <https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-lambda-functions>
+    ///
+    /// Supported, but deprecated in DuckDB:
+    /// <https://duckdb.org/docs/stable/sql/functions/lambda>
+    Arrow,
+    /// Lambda keyword syntax: `lambda param : expr` or `lambda param1, param2 : expr`
+    ///
+    /// Recommended in DuckDB:
+    /// <https://duckdb.org/docs/stable/sql/functions/lambda>
+    LambdaKeyword,
 }
 
 /// Encapsulates the common pattern in SQL where either one unparenthesized item

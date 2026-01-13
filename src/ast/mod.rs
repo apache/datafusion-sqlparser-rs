@@ -1322,15 +1322,15 @@ impl fmt::Display for LambdaFunction {
 pub enum LambdaSyntax {
     /// Arrow syntax: `param -> expr` or `(param1, param2) -> expr`
     ///
-    /// https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-lambda-functions
+    /// <https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-lambda-functions>
     ///
     /// Supported, but deprecated in DuckDB:
-    /// https://duckdb.org/docs/stable/sql/functions/lambda
+    /// <https://duckdb.org/docs/stable/sql/functions/lambda>
     Arrow,
     /// Lambda keyword syntax: `lambda param : expr` or `lambda param1, param2 : expr`
     ///
     /// Recommended in DuckDB:
-    /// https://duckdb.org/docs/stable/sql/functions/lambda
+    /// <https://duckdb.org/docs/stable/sql/functions/lambda>
     LambdaKeyword,
 }
 

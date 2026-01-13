@@ -4325,6 +4325,11 @@ impl<'a> Parser<'a> {
             })
     }
 
+    /// Return nth token, possibly whitespace, that has not yet been processed.
+    fn peek_nth_token_no_skip_ref(&self, n: usize) -> &TokenWithSpan {
+        self.tokens.get(self.index + n).unwrap_or(&EOF_TOKEN)
+    }
+
     /// Return true if the next tokens exactly `expected`
     ///
     /// Does not advance the current token.
@@ -13837,6 +13842,7 @@ impl<'a> Parser<'a> {
             if !self.peek_keyword(Keyword::SELECT) {
                 return Ok(Select {
                     select_token: AttachedToken(from_token),
+                    optimizer_hint: None,
                     distinct: None,
                     top: None,
                     top_before_distinct: false,
@@ -13864,6 +13870,7 @@ impl<'a> Parser<'a> {
         }
 
         let select_token = self.expect_keyword(Keyword::SELECT)?;
+        let optimizer_hint = self.parse_optional_optimizer_hint()?;
         let value_table_mode = self.parse_value_table_mode()?;
 
         let mut top_before_distinct = false;
@@ -14018,6 +14025,7 @@ impl<'a> Parser<'a> {
 
         Ok(Select {
             select_token: AttachedToken(select_token),
+            optimizer_hint,
             distinct,
             top,
             top_before_distinct,
@@ -14044,6 +14052,59 @@ impl<'a> Parser<'a> {
                 SelectFlavor::Standard
             },
         })
+    }
+
+    /// Parses an optional optimizer hint at the current token position
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html#optimizer-hints-overview)
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
+    fn parse_optional_optimizer_hint(&mut self) -> Result<Option<OptimizerHint>, ParserError> {
+        let supports_multiline = dialect_of!(self is MySqlDialect | OracleDialect | GenericDialect);
+        let supports_singleline = dialect_of!(self is OracleDialect | GenericDialect);
+        if !supports_multiline && !supports_singleline {
+            return Ok(None);
+        }
+        loop {
+            let t = self.peek_nth_token_no_skip_ref(0);
+            match &t.token {
+                // ~ only the very first comment
+                Token::Whitespace(ws) => {
+                    match ws {
+                        Whitespace::SingleLineComment { comment, prefix } => {
+                            return Ok(if supports_singleline && comment.starts_with("+") {
+                                let text = comment.split_at(1).1.into();
+                                let prefix = prefix.clone();
+                                self.next_token_no_skip(); // ~ consume the token
+                                Some(OptimizerHint {
+                                    text,
+                                    style: OptimizerHintStyle::SingleLine { prefix },
+                                })
+                            } else {
+                                None
+                            });
+                        }
+                        Whitespace::MultiLineComment(comment) => {
+                            return Ok(if supports_multiline && comment.starts_with("+") {
+                                let text = comment.split_at(1).1.into();
+                                self.next_token_no_skip(); // ~ consume the token
+                                Some(OptimizerHint {
+                                    text,
+                                    style: OptimizerHintStyle::MultiLine,
+                                })
+                            } else {
+                                None
+                            });
+                        }
+                        // ~ but skip (pure) whitespace
+                        Whitespace::Space | Whitespace::Tab | Whitespace::Newline => {
+                            // ~ consume the token and try with the next whitespace (if any)
+                            self.next_token_no_skip();
+                        }
+                    }
+                }
+                _ => return Ok(None),
+            }
+        }
     }
 
     fn parse_value_table_mode(&mut self) -> Result<Option<ValueTableMode>, ParserError> {

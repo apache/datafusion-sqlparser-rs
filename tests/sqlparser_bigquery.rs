@@ -2681,6 +2681,7 @@ fn test_export_data() {
                         }),
                         Span::empty()
                     )),
+                    optimizer_hint: None,
                     distinct: None,
                     top: None,
                     top_before_distinct: false,
@@ -2785,6 +2786,7 @@ fn test_export_data() {
                         }),
                         Span::empty()
                     )),
+                    optimizer_hint: None,
                     distinct: None,
                     top: None,
                     top_before_distinct: false,

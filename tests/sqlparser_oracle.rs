@@ -333,3 +333,38 @@ fn parse_national_quote_delimited_string_but_is_a_word() {
         expr_from_projection(&select.projection[2])
     );
 }
+
+#[test]
+fn parse_optimizer_hints() {
+    let oracle_dialect = oracle();
+
+    let select = oracle_dialect.verified_only_select_with_canonical(
+        "SELECT /*+one two three*/ /*+not a hint!*/ 1 FROM dual",
+        "SELECT /*+one two three*/ 1 FROM dual",
+    );
+    assert_eq!(
+        select
+            .optimizer_hint
+            .as_ref()
+            .map(|hint| hint.text.as_str()),
+        Some("one two three")
+    );
+
+    let select = oracle_dialect.verified_only_select_with_canonical(
+        "SELECT /*one two three*/ /*+not a hint!*/ 1 FROM dual",
+        "SELECT 1 FROM dual",
+    );
+    assert_eq!(select.optimizer_hint, None);
+
+    let select = oracle_dialect.verified_only_select_with_canonical(
+        "SELECT --+ one two three /* asdf */\n 1 FROM dual",
+        "SELECT --+ one two three /* asdf */\n 1 FROM dual",
+    );
+    assert_eq!(
+        select
+            .optimizer_hint
+            .as_ref()
+            .map(|hint| hint.text.as_str()),
+        Some(" one two three /* asdf */\n")
+    );
+}

@@ -472,6 +472,7 @@ fn parse_update_set_from() {
                         with: None,
                         body: Box::new(SetExpr::Select(Box::new(Select {
                             select_token: AttachedToken::empty(),
+                            optimizer_hint: None,
                             distinct: None,
                             top: None,
                             top_before_distinct: false,
@@ -5806,6 +5807,7 @@ fn test_parse_named_window() {
     let actual_select_only = dialects.verified_only_select(sql);
     let expected = Select {
         select_token: AttachedToken::empty(),
+        optimizer_hint: None,
         distinct: None,
         top: None,
         top_before_distinct: false,
@@ -6536,6 +6538,7 @@ fn parse_interval_and_or_xor() {
         with: None,
         body: Box::new(SetExpr::Select(Box::new(Select {
             select_token: AttachedToken::empty(),
+            optimizer_hint: None,
             distinct: None,
             top: None,
             top_before_distinct: false,
@@ -8912,6 +8915,7 @@ fn lateral_function() {
     let actual_select_only = verified_only_select(sql);
     let expected = Select {
         select_token: AttachedToken::empty(),
+        optimizer_hint: None,
         distinct: None,
         top: None,
         projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
@@ -9913,6 +9917,7 @@ fn parse_merge() {
                         with: None,
                         body: Box::new(SetExpr::Select(Box::new(Select {
                             select_token: AttachedToken::empty(),
+                            optimizer_hint: None,
                             distinct: None,
                             top: None,
                             top_before_distinct: false,
@@ -12316,6 +12321,7 @@ fn parse_unload() {
             query: Some(Box::new(Query {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
+                    optimizer_hint: None,
                     distinct: None,
                     top: None,
                     top_before_distinct: false,
@@ -12624,6 +12630,7 @@ fn parse_map_access_expr() {
 fn parse_connect_by() {
     let expect_query = Select {
         select_token: AttachedToken::empty(),
+        optimizer_hint: None,
         distinct: None,
         top: None,
         top_before_distinct: false,
@@ -12706,6 +12713,7 @@ fn parse_connect_by() {
         all_dialects_where(|d| d.supports_connect_by()).verified_only_select(connect_by_3),
         Select {
             select_token: AttachedToken::empty(),
+            optimizer_hint: None,
             distinct: None,
             top: None,
             top_before_distinct: false,
@@ -13639,6 +13647,7 @@ fn test_extract_seconds_ok() {
         with: None,
         body: Box::new(SetExpr::Select(Box::new(Select {
             select_token: AttachedToken::empty(),
+            optimizer_hint: None,
             distinct: None,
             top: None,
             top_before_distinct: false,
@@ -15778,6 +15787,7 @@ fn test_select_from_first() {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
+                optimizer_hint: None,
                 distinct: None,
                 top: None,
                 projection,

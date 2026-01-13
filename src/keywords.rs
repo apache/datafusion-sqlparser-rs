@@ -37,6 +37,7 @@ use sqlparser_derive::{Visit, VisitMut};
 /// expands to `pub const SELECT = "SELECT";`
 macro_rules! kw_def {
     ($ident:ident = $string_keyword:expr) => {
+        #[doc = concat!("The `", $string_keyword, "` SQL keyword.")]
         pub const $ident: &'static str = $string_keyword;
     };
     ($ident:ident) => {
@@ -54,16 +55,23 @@ macro_rules! define_keywords {
         #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
         #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
         #[allow(non_camel_case_types)]
+        /// An enumeration of SQL keywords recognized by the parser.
         pub enum Keyword {
+            /// Represents no keyword.
             NoKeyword,
-            $($ident),*
+            $(
+                #[doc = concat!("The `", stringify!($ident), "` SQL keyword.")]
+                $ident
+            ),*
         }
 
+        /// Array of all `Keyword` enum values in declaration order.
         pub const ALL_KEYWORDS_INDEX: &[Keyword] = &[
             $(Keyword::$ident),*
         ];
 
         $(kw_def!($ident $(= $string_keyword)?);)*
+        /// Array of all SQL keywords as string constants.
         pub const ALL_KEYWORDS: &[&str] = &[
             $($ident),*
         ];
@@ -638,6 +646,7 @@ define_keywords!(
     MODIFIES,
     MODIFY,
     MODULE,
+    MODULUS,
     MONITOR,
     MONTH,
     MONTHS,
@@ -838,6 +847,7 @@ define_keywords!(
     RELAY,
     RELEASE,
     RELEASES,
+    REMAINDER,
     REMOTE,
     REMOVE,
     REMOVEQUOTES,
@@ -1039,6 +1049,7 @@ define_keywords!(
     TRANSLATE_REGEX,
     TRANSLATION,
     TREAT,
+    TREE,
     TRIGGER,
     TRIM,
     TRIM_ARRAY,
@@ -1248,9 +1259,9 @@ pub const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
     Keyword::END,
 ];
 
-// Global list of reserved keywords allowed after FROM.
-// Parser should call Dialect::get_reserved_keyword_after_from
-// to allow for each dialect to customize the list.
+/// Global list of reserved keywords allowed after FROM.
+/// Parser should call Dialect::get_reserved_keyword_after_from
+/// to allow for each dialect to customize the list.
 pub const RESERVED_FOR_TABLE_FACTOR: &[Keyword] = &[
     Keyword::INTO,
     Keyword::LIMIT,

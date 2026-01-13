@@ -401,10 +401,17 @@ impl fmt::Display for Token {
 }
 
 impl Token {
+    /// Create a `Token::Word` from an unquoted `keyword`.
+    ///
+    /// The lookup is case-insensitive; unknown values become `Keyword::NoKeyword`.
     pub fn make_keyword(keyword: &str) -> Self {
         Token::make_word(keyword, None)
     }
 
+    /// Create a `Token::Word` from `word` with an optional `quote_style`.
+    ///
+    /// When `quote_style` is `None`, the parser attempts a case-insensitive keyword
+    /// lookup and sets the `Word::keyword` accordingly.
     pub fn make_word(word: &str, quote_style: Option<char>) -> Self {
         let word_uppercase = word.to_uppercase();
         Token::Word(Word {
@@ -460,14 +467,27 @@ impl Word {
     }
 }
 
+/// Represents whitespace in the input: spaces, newlines, tabs and comments.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum Whitespace {
+    /// A single space character.
     Space,
+    /// A newline character.
     Newline,
+    /// A tab character.
     Tab,
-    SingleLineComment { comment: String, prefix: String },
+    /// A single-line comment (e.g. `-- comment` or `# comment`).
+    /// The `comment` field contains the text, and `prefix` contains the comment prefix.
+    SingleLineComment {
+        /// The content of the comment (without the prefix).
+        comment: String,
+        /// The prefix used for the comment (for example `--` or `#`).
+        prefix: String,
+    },
+
+    /// A multi-line comment (without the `/* ... */` delimiters).
     MultiLineComment(String),
 }
 
@@ -569,7 +589,9 @@ impl From<(u64, u64)> for Location {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Span {
+    /// Start `Location` (inclusive).
     pub start: Location,
+    /// End `Location` (inclusive).
     pub end: Location,
 }
 
@@ -691,8 +713,11 @@ pub type TokenWithLocation = TokenWithSpan;
 #[derive(Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// A `Token` together with its `Span` (location in the source).
 pub struct TokenWithSpan {
+    /// The token value.
     pub token: Token,
+    /// The span covering the token in the input.
     pub span: Span,
 }
 
@@ -736,10 +761,12 @@ impl fmt::Display for TokenWithSpan {
     }
 }
 
-/// Tokenizer error
+/// An error reported by the tokenizer, with a human-readable `message` and a `location`.
 #[derive(Debug, PartialEq, Eq)]
 pub struct TokenizerError {
+    /// A descriptive error message.
     pub message: String,
+    /// The `Location` where the error was detected.
     pub location: Location,
 }
 
@@ -754,8 +781,8 @@ impl std::error::Error for TokenizerError {}
 
 struct State<'a> {
     peekable: Peekable<Chars<'a>>,
-    pub line: u64,
-    pub col: u64,
+    line: u64,
+    col: u64,
 }
 
 impl State<'_> {
@@ -780,6 +807,7 @@ impl State<'_> {
         self.peekable.peek()
     }
 
+    /// Return the current `Location` (line and column)
     pub fn location(&self) -> Location {
         Location {
             line: self.line,
@@ -1359,7 +1387,11 @@ impl<'a> Tokenizer<'a> {
                         Some('-') => {
                             let mut is_comment = true;
                             if self.dialect.requires_single_line_comment_whitespace() {
-                                is_comment = Some(' ') == chars.peekable.clone().nth(1);
+                                is_comment = chars
+                                    .peekable
+                                    .clone()
+                                    .nth(1)
+                                    .is_some_and(char::is_whitespace);
                             }
 
                             if is_comment {
@@ -4041,6 +4073,24 @@ mod tests {
                     Token::Minus,
                 ],
             );
+
+        all_dialects_where(|d| d.requires_single_line_comment_whitespace()).tokenizes_to(
+            "--\n-- Table structure for table...\n--\n",
+            vec![
+                Token::Whitespace(Whitespace::SingleLineComment {
+                    prefix: "--".to_string(),
+                    comment: "\n".to_string(),
+                }),
+                Token::Whitespace(Whitespace::SingleLineComment {
+                    prefix: "--".to_string(),
+                    comment: " Table structure for table...\n".to_string(),
+                }),
+                Token::Whitespace(Whitespace::SingleLineComment {
+                    prefix: "--".to_string(),
+                    comment: "\n".to_string(),
+                }),
+            ],
+        );
     }
 
     #[test]

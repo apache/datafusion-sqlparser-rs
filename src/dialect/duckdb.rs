@@ -43,6 +43,10 @@ impl Dialect for DuckDbDialect {
         true
     }
 
+    fn supports_bitwise_shift_operators(&self) -> bool {
+        true
+    }
+
     fn supports_named_fn_args_with_eq_operator(&self) -> bool {
         true
     }

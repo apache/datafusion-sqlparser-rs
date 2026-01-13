@@ -368,3 +368,17 @@ fn data_type_timestamp_ntz() {
         s => panic!("Unexpected statement: {s:?}"),
     }
 }
+
+#[test]
+fn parse_table_time_travel() {
+    all_dialects_where(|d| d.supports_timestamp_versioning())
+        .verified_only_select("SELECT 1 FROM t1 TIMESTAMP AS OF '2018-10-18T22:15:12.013Z'");
+
+    all_dialects_where(|d| d.supports_timestamp_versioning()).verified_only_select(
+        "SELECT 1 FROM t1 TIMESTAMP AS OF CURRENT_TIMESTAMP() - INTERVAL 12 HOURS",
+    );
+
+    assert!(databricks()
+        .parse_sql_statements("SELECT 1 FROM t1 FOR TIMESTAMP AS OF 'some_timestamp'")
+        .is_err());
+}

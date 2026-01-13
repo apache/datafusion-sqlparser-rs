@@ -21,8 +21,8 @@ use crate::{
         helpers::key_value_options::{KeyValueOptions, KeyValueOptionsDelimiter},
         AlterConnectorOwner, AlterPolicyOperation, AlterRoleOperation, AlterUser,
         AlterUserAddMfaMethodOtp, AlterUserAddRoleDelegation, AlterUserModifyMfaMethod,
-        AlterUserRemoveRoleDelegation, AlterUserSetPolicy, Expr, MfaMethodKind, Password,
-        ResetConfig, RoleOption, SetConfigValue, Statement, UserPolicyKind,
+        AlterUserPassword, AlterUserRemoveRoleDelegation, AlterUserSetPolicy, Expr, MfaMethodKind,
+        Password, ResetConfig, RoleOption, SetConfigValue, Statement, UserPolicyKind,
     },
     dialect::{MsSqlDialect, PostgreSqlDialect},
     keywords::Keyword,
@@ -30,6 +30,7 @@ use crate::{
 };
 
 impl Parser<'_> {
+    /// Parse `ALTER ROLE` statement
     pub fn parse_alter_role(&mut self) -> Result<Statement, ParserError> {
         if dialect_of!(self is PostgreSqlDialect) {
             return self.parse_pg_alter_role();
@@ -150,6 +151,7 @@ impl Parser<'_> {
     pub fn parse_alter_user(&mut self) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let name = self.parse_identifier()?;
+        let _ = self.parse_keyword(Keyword::WITH);
         let rename_to = if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
             Some(self.parse_identifier()?)
         } else {
@@ -292,6 +294,21 @@ impl Parser<'_> {
             vec![]
         };
 
+        let encrypted = self.parse_keyword(Keyword::ENCRYPTED);
+        let password = if self.parse_keyword(Keyword::PASSWORD) {
+            let password = if self.parse_keyword(Keyword::NULL) {
+                None
+            } else {
+                Some(self.parse_literal_string()?)
+            };
+            Some(AlterUserPassword {
+                encrypted,
+                password,
+            })
+        } else {
+            None
+        };
+
         Ok(Statement::AlterUser(AlterUser {
             if_exists,
             name,
@@ -311,6 +328,7 @@ impl Parser<'_> {
             unset_tag,
             set_props,
             unset_props,
+            password,
         }))
     }
 

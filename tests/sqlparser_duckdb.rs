@@ -875,7 +875,7 @@ fn parse_extract_single_quotes() {
 fn test_duckdb_lambda_function() {
     // Test basic lambda with list_filter
     let sql = "SELECT [3, 4, 5, 6].list_filter(lambda x : x > 4)";
-    duckdb().verified_stmt(sql);
+    duckdb_and_generic().verified_stmt(sql);
 
     // Test lambda with arrow syntax (also supported by DuckDB)
     let sql_arrow = "SELECT list_filter([1, 2, 3], x -> x > 1)";

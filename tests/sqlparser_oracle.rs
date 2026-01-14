@@ -335,9 +335,10 @@ fn parse_national_quote_delimited_string_but_is_a_word() {
 }
 
 #[test]
-fn parse_optimizer_hints() {
+fn test_optimizer_hints() {
     let oracle_dialect = oracle();
 
+    // ~ selects
     let select = oracle_dialect.verified_only_select_with_canonical(
         "SELECT /*+one two three*/ /*+not a hint!*/ 1 FROM dual",
         "SELECT /*+one two three*/ 1 FROM dual",
@@ -367,4 +368,9 @@ fn parse_optimizer_hints() {
             .map(|hint| hint.text.as_str()),
         Some(" one two three /* asdf */\n")
     );
+
+    // ~ inserts
+    oracle_dialect.verified_stmt(
+        "INSERT /*+ append */ INTO t1 SELECT * FROM all_objects");
+
 }

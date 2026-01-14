@@ -4388,16 +4388,28 @@ fn test_create_index_options() {
 }
 
 #[test]
-fn test_select_optimizer_hints() {
-    mysql_and_generic().verified_stmt(
+fn test_optimizer_hints() {
+    let mysql_dialect = mysql_and_generic();
+
+    // ~ selects
+    mysql_dialect.verified_stmt(
         "\
        SELECT /*+ SET_VAR(optimizer_switch = 'mrr_cost_based=off') \
                   SET_VAR(max_heap_table_size = 1G) */ 1",
     );
 
-    mysql_and_generic().verified_stmt(
+    mysql_dialect.verified_stmt(
         "\
        SELECT /*+ SET_VAR(target_partitions=1) */ * FROM \
            (SELECT /*+ SET_VAR(target_partitions=8) */ * FROM t1 LIMIT 1) AS dt",
     );
+
+    // ~ inserts / replace
+    mysql_dialect.verified_stmt("\
+       INSERT /*+ RESOURCE_GROUP(Batch) */ \
+       INTO t2 VALUES (2)");
+
+    mysql_dialect.verified_stmt("\
+       REPLACE /*+ foobar */ INTO test \
+       VALUES (1, 'Old', '2014-08-20 18:47:00')");
 }

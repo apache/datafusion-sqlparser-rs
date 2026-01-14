@@ -16801,6 +16801,7 @@ impl<'a> Parser<'a> {
 
     /// Parse an INSERT statement
     pub fn parse_insert(&mut self, insert_token: TokenWithSpan) -> Result<Statement, ParserError> {
+        let optimizer_hint = self.parse_optional_optimizer_hint()?;
         let or = self.parse_conflict_clause();
         let priority = if !dialect_of!(self is MySqlDialect | GenericDialect) {
             None
@@ -16970,6 +16971,7 @@ impl<'a> Parser<'a> {
 
             Ok(Insert {
                 insert_token: insert_token.into(),
+                optimizer_hint,
                 or,
                 table: table_object,
                 table_alias,

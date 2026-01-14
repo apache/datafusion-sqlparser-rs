@@ -1290,6 +1290,7 @@ impl Spanned for Insert {
     fn span(&self) -> Span {
         let Insert {
             insert_token,
+            optimizer_hint: _,
             or: _,     // enum, sqlite specific
             ignore: _, // bool
             into: _,   // bool

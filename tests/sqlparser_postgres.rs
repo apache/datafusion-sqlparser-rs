@@ -5387,6 +5387,7 @@ fn test_simple_postgres_insert_with_alias() {
         statement,
         Statement::Insert(Insert {
             insert_token: AttachedToken::empty(),
+            optimizer_hint: None,
             or: None,
             ignore: false,
             into: true,
@@ -5458,6 +5459,7 @@ fn test_simple_postgres_insert_with_alias() {
         statement,
         Statement::Insert(Insert {
             insert_token: AttachedToken::empty(),
+            optimizer_hint: None,
             or: None,
             ignore: false,
             into: true,
@@ -5531,6 +5533,7 @@ fn test_simple_insert_with_quoted_alias() {
         statement,
         Statement::Insert(Insert {
             insert_token: AttachedToken::empty(),
+            optimizer_hint: None,
             or: None,
             ignore: false,
             into: true,

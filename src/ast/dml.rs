@@ -25,15 +25,12 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::{
-    ast::display_separated,
-    display_utils::{indented_list, Indent, SpaceOrNewline},
+    ast::{display_separated},
+    display_utils::{Indent, SpaceOrNewline, indented_list},
 };
 
 use super::{
-    display_comma_separated, helpers::attached_token::AttachedToken, query::InputFormatClause,
-    Assignment, Expr, FromTable, Ident, InsertAliases, MysqlInsertPriority, ObjectName, OnInsert,
-    OrderByExpr, Query, SelectInto, SelectItem, Setting, SqliteOnConflict, TableFactor,
-    TableObject, TableWithJoins, UpdateTableFromKind, Values,
+    Assignment, Expr, FromTable, Ident, InsertAliases, MysqlInsertPriority, ObjectName, OnInsert, OptimizerHint, OrderByExpr, Query, SelectInto, SelectItem, Setting, SqliteOnConflict, TableFactor, TableObject, TableWithJoins, UpdateTableFromKind, Values, display_comma_separated, helpers::attached_token::AttachedToken, query::InputFormatClause
 };
 
 /// INSERT statement.
@@ -43,6 +40,11 @@ use super::{
 pub struct Insert {
     /// Token for the `INSERT` keyword (or its substitutes)
     pub insert_token: AttachedToken,
+    /// A query optimizer hint
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
+    pub optimizer_hint: Option<OptimizerHint>,
     /// Only for Sqlite
     pub or: Option<SqliteOnConflict>,
     /// Only for mysql
@@ -102,7 +104,11 @@ impl Display for Insert {
         };
 
         if let Some(on_conflict) = self.or {
-            write!(f, "INSERT {on_conflict} INTO {table_name} ")?;
+            f.write_str("INSERT")?;
+            if let Some(hint) = self.optimizer_hint.as_ref() {
+                write!(f, " {hint}")?;
+            }
+            write!(f, " {on_conflict} INTO {table_name} ")?;
         } else {
             write!(
                 f,
@@ -111,8 +117,10 @@ impl Display for Insert {
                     "REPLACE"
                 } else {
                     "INSERT"
-                },
-            )?;
+                })?;
+            if let Some(hint) = self.optimizer_hint.as_ref() {
+                write!(f, " {hint}")?;
+            }
             if let Some(priority) = self.priority {
                 write!(f, " {priority}",)?;
             }

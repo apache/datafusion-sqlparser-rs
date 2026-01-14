@@ -4406,21 +4406,29 @@ fn test_optimizer_hints() {
     );
 
     // ~ inserts / replace
-    mysql_dialect.verified_stmt("\
+    mysql_dialect.verified_stmt(
+        "\
        INSERT /*+ RESOURCE_GROUP(Batch) */ \
-       INTO t2 VALUES (2)");
+       INTO t2 VALUES (2)",
+    );
 
-    mysql_dialect.verified_stmt("\
+    mysql_dialect.verified_stmt(
+        "\
        REPLACE /*+ foobar */ INTO test \
-       VALUES (1, 'Old', '2014-08-20 18:47:00')");
+       VALUES (1, 'Old', '2014-08-20 18:47:00')",
+    );
 
     // ~ updates
-    mysql_dialect.verified_stmt("\
+    mysql_dialect.verified_stmt(
+        "\
        UPDATE /*+ quux */ table_name \
        SET column1 = 1 \
-       WHERE 1 = 1");
+       WHERE 1 = 1",
+    );
 
     // ~ deletes
-    mysql_dialect.verified_stmt("\
-       DELETE /*+ foobar */ FROM table_name");
+    mysql_dialect.verified_stmt(
+        "\
+       DELETE /*+ foobar */ FROM table_name",
+    );
 }

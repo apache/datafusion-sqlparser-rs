@@ -25,12 +25,15 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::{
-    ast::{display_separated},
-    display_utils::{Indent, SpaceOrNewline, indented_list},
+    ast::display_separated,
+    display_utils::{indented_list, Indent, SpaceOrNewline},
 };
 
 use super::{
-    Assignment, Expr, FromTable, Ident, InsertAliases, MysqlInsertPriority, ObjectName, OnInsert, OptimizerHint, OrderByExpr, Query, SelectInto, SelectItem, Setting, SqliteOnConflict, TableFactor, TableObject, TableWithJoins, UpdateTableFromKind, Values, display_comma_separated, helpers::attached_token::AttachedToken, query::InputFormatClause
+    display_comma_separated, helpers::attached_token::AttachedToken, query::InputFormatClause,
+    Assignment, Expr, FromTable, Ident, InsertAliases, MysqlInsertPriority, ObjectName, OnInsert,
+    OptimizerHint, OrderByExpr, Query, SelectInto, SelectItem, Setting, SqliteOnConflict,
+    TableFactor, TableObject, TableWithJoins, UpdateTableFromKind, Values,
 };
 
 /// INSERT statement.
@@ -117,7 +120,8 @@ impl Display for Insert {
                     "REPLACE"
                 } else {
                     "INSERT"
-                })?;
+                }
+            )?;
             if let Some(hint) = self.optimizer_hint.as_ref() {
                 write!(f, " {hint}")?;
             }
@@ -375,9 +379,12 @@ impl Display for Merge {
         if self.into {
             write!(f, " INTO")?;
         }
-        write!(f, " {table} USING {source} ",
+        write!(
+            f,
+            " {table} USING {source} ",
             table = self.table,
-            source = self.source)?;
+            source = self.source
+        )?;
         write!(f, "ON {on} ", on = self.on)?;
         write!(f, "{}", display_separated(&self.clauses, " "))?;
         if let Some(ref output) = self.output {

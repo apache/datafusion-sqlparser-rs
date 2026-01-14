@@ -894,6 +894,7 @@ impl Spanned for Delete {
     fn span(&self) -> Span {
         let Delete {
             delete_token,
+            optimizer_hint: _,
             tables,
             from,
             using,

@@ -13029,6 +13029,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a `DELETE` statement and return `Statement::Delete`.
     pub fn parse_delete(&mut self, delete_token: TokenWithSpan) -> Result<Statement, ParserError> {
+        let optimizer_hint = self.parse_optional_optimizer_hint()?;
         let (tables, with_from_keyword) = if !self.parse_keyword(Keyword::FROM) {
             // `FROM` keyword is optional in BigQuery SQL.
             // https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#delete_statement
@@ -13072,6 +13073,7 @@ impl<'a> Parser<'a> {
 
         Ok(Statement::Delete(Delete {
             delete_token: delete_token.into(),
+            optimizer_hint,
             tables,
             from: if with_from_keyword {
                 FromTable::WithFromKeyword(from)

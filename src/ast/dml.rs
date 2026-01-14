@@ -196,6 +196,11 @@ impl Display for Insert {
 pub struct Delete {
     /// Token for the `DELETE` keyword
     pub delete_token: AttachedToken,
+    /// A query optimizer hint
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
+    pub optimizer_hint: Option<OptimizerHint>,
     /// Multi tables delete are supported in mysql
     pub tables: Vec<ObjectName>,
     /// FROM
@@ -215,6 +220,10 @@ pub struct Delete {
 impl Display for Delete {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("DELETE")?;
+        if let Some(hint) = self.optimizer_hint.as_ref() {
+            f.write_str(" ")?;
+            hint.fmt(f)?;
+        }
         if !self.tables.is_empty() {
             indented_list(f, &self.tables)?;
         }

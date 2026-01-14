@@ -4419,4 +4419,8 @@ fn test_optimizer_hints() {
        UPDATE /*+ quux */ table_name \
        SET column1 = 1 \
        WHERE 1 = 1");
+
+    // ~ deletes
+    mysql_dialect.verified_stmt("\
+       DELETE /*+ foobar */ FROM table_name");
 }

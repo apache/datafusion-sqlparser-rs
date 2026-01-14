@@ -376,4 +376,8 @@ fn test_optimizer_hints() {
     // ~ updates
     oracle_dialect.verified_stmt(
         "UPDATE /*+ DISABLE_PARALLEL_DML */ table_name SET column1 = 1");
+
+    // ~ deletes
+    oracle_dialect.verified_stmt(
+        "DELETE --+ ENABLE_PARALLEL_DML\n FROM table_name");
 }

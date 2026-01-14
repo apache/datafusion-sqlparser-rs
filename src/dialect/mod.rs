@@ -1237,6 +1237,12 @@ pub trait Dialect: Debug + Any {
     fn supports_double_ampersand_operator(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect supports casting an expression to a binary type
+    /// using the `BINARY <expr>` syntax.
+    fn supports_binary_kw_as_cast(&self) -> bool {
+        false
+    }
 }
 
 /// Operators for which precedence must be defined.

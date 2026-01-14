@@ -1645,6 +1645,15 @@ impl<'a> Parser<'a> {
                 // an unary negation `NOT ('a' LIKE 'b')`. To solve this, we don't accept the
                 // `type 'string'` syntax for the custom data types at all.
                 DataType::Custom(..) => parser_err!("dummy", loc),
+                // MySQL supports using the `BINARY` keyword as a cast to binary type.
+                DataType::Binary(..) if self.dialect.supports_binary_kw_as_cast() => {
+                    Ok(Expr::Cast {
+                        kind: CastKind::Cast,
+                        expr: Box::new(parser.parse_expr()?),
+                        data_type: DataType::Binary(None),
+                        format: None,
+                    })
+                }
                 data_type => Ok(Expr::TypedString(TypedString {
                     data_type,
                     value: parser.parse_value()?,

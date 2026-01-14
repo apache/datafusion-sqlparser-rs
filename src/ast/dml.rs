@@ -348,6 +348,10 @@ impl Display for Update {
 pub struct Merge {
     /// The `MERGE` token that starts the statement.
     pub merge_token: AttachedToken,
+    /// A query optimizer hint
+    ///
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
+    pub optimizer_hint: Option<OptimizerHint>,
     /// optional INTO keyword
     pub into: bool,
     /// Specifies the table to merge
@@ -364,13 +368,16 @@ pub struct Merge {
 
 impl Display for Merge {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "MERGE{int} {table} USING {source} ",
-            int = if self.into { " INTO" } else { "" },
+        f.write_str("MERGE")?;
+        if let Some(hint) = self.optimizer_hint.as_ref() {
+            write!(f, " {hint}")?;
+        }
+        if self.into {
+            write!(f, " INTO")?;
+        }
+        write!(f, " {table} USING {source} ",
             table = self.table,
-            source = self.source,
-        )?;
+            source = self.source)?;
         write!(f, "ON {on} ", on = self.on)?;
         write!(f, "{}", display_separated(&self.clauses, " "))?;
         if let Some(ref output) = self.output {

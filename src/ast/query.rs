@@ -1242,6 +1242,8 @@ pub enum TableFactor {
         lateral: bool,
         subquery: Box<Query>,
         alias: Option<TableAlias>,
+        /// Optional table sample modifier
+        sample: Option<TableSampleKind>,
     },
     /// `TABLE(<expr>)[ AS <alias> ]`
     TableFunction {
@@ -1922,6 +1924,7 @@ impl fmt::Display for TableFactor {
                 lateral,
                 subquery,
                 alias,
+                sample,
             } => {
                 if *lateral {
                     write!(f, "LATERAL ")?;
@@ -1933,6 +1936,9 @@ impl fmt::Display for TableFactor {
                 f.write_str(")")?;
                 if let Some(alias) = alias {
                     write!(f, " {alias}")?;
+                }
+                if let Some(TableSampleKind::AfterTableAlias(sample)) = sample {
+                    write!(f, " {sample}")?;
                 }
                 Ok(())
             }

@@ -265,6 +265,11 @@ impl Display for Delete {
 pub struct Update {
     /// Token for the `UPDATE` keyword
     pub update_token: AttachedToken,
+    /// A query optimizer hint
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
+    pub optimizer_hint: Option<OptimizerHint>,
     /// TABLE
     pub table: TableWithJoins,
     /// Column assignments
@@ -284,6 +289,10 @@ pub struct Update {
 impl Display for Update {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("UPDATE ")?;
+        if let Some(hint) = self.optimizer_hint.as_ref() {
+            hint.fmt(f)?;
+            f.write_str(" ")?;
+        }
         if let Some(or) = &self.or {
             or.fmt(f)?;
             f.write_str(" ")?;

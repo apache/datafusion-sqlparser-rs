@@ -373,4 +373,7 @@ fn test_optimizer_hints() {
     oracle_dialect.verified_stmt(
         "INSERT /*+ append */ INTO t1 SELECT * FROM all_objects");
 
+    // ~ updates
+    oracle_dialect.verified_stmt(
+        "UPDATE /*+ DISABLE_PARALLEL_DML */ table_name SET column1 = 1");
 }

@@ -17075,6 +17075,7 @@ impl<'a> Parser<'a> {
 
     /// Parse an `UPDATE` statement and return `Statement::Update`.
     pub fn parse_update(&mut self, update_token: TokenWithSpan) -> Result<Statement, ParserError> {
+        let optimizer_hint = self.parse_optional_optimizer_hint()?;
         let or = self.parse_conflict_clause();
         let table = self.parse_table_and_joins()?;
         let from_before_set = if self.parse_keyword(Keyword::FROM) {
@@ -17110,6 +17111,7 @@ impl<'a> Parser<'a> {
         };
         Ok(Update {
             update_token: update_token.into(),
+            optimizer_hint,
             table,
             assignments,
             from,

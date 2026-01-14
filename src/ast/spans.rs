@@ -927,6 +927,7 @@ impl Spanned for Update {
     fn span(&self) -> Span {
         let Update {
             update_token,
+            optimizer_hint: _,
             table,
             assignments,
             from,

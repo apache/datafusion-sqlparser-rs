@@ -5442,6 +5442,42 @@ fn parse_explain_analyze_with_simple_select() {
         Some(AnalyzeFormatKind::Keyword(AnalyzeFormat::TEXT)),
         None,
     );
+
+    run_explain_analyze(
+        all_dialects(),
+        "EXPLAIN FORMAT=TEXT SELECT sqrt(id) FROM foo",
+        false,
+        false,
+        Some(AnalyzeFormatKind::Assignment(AnalyzeFormat::TEXT)),
+        None,
+    );
+
+    run_explain_analyze(
+        all_dialects(),
+        "EXPLAIN FORMAT=GRAPHVIZ SELECT sqrt(id) FROM foo",
+        false,
+        false,
+        Some(AnalyzeFormatKind::Assignment(AnalyzeFormat::GRAPHVIZ)),
+        None,
+    );
+
+    run_explain_analyze(
+        all_dialects(),
+        "EXPLAIN FORMAT=JSON SELECT sqrt(id) FROM foo",
+        false,
+        false,
+        Some(AnalyzeFormatKind::Assignment(AnalyzeFormat::JSON)),
+        None,
+    );
+
+    run_explain_analyze(
+        all_dialects(),
+        "EXPLAIN FORMAT=TREE SELECT sqrt(id) FROM foo",
+        false,
+        false,
+        Some(AnalyzeFormatKind::Assignment(AnalyzeFormat::TREE)),
+        None,
+    );
 }
 
 #[test]
@@ -15642,7 +15678,8 @@ fn test_lambdas() {
                             },
                         ],
                         else_result: Some(Box::new(Expr::value(number("1")))),
-                    })
+                    }),
+                    syntax: LambdaSyntax::Arrow,
                 })
             ]
         )),
@@ -17421,6 +17458,9 @@ fn parse_copy_options() {
             "EMPTYASNULL ",
             "IAM_ROLE DEFAULT ",
             "IGNOREHEADER AS 1 ",
+            "JSON ",
+            "JSON 'auto' ",
+            "JSON AS 'auto' ",
             "TIMEFORMAT AS 'auto' ",
             "TRUNCATECOLUMNS ",
             "REMOVEQUOTES ",
@@ -17446,6 +17486,9 @@ fn parse_copy_options() {
             "EMPTYASNULL ",
             "IAM_ROLE DEFAULT ",
             "IGNOREHEADER 1 ",
+            "JSON ",
+            "JSON AS 'auto' ",
+            "JSON AS 'auto' ",
             "TIMEFORMAT 'auto' ",
             "TRUNCATECOLUMNS ",
             "REMOVEQUOTES ",
@@ -17908,6 +17951,15 @@ fn test_parse_alter_user() {
         _ => unreachable!(),
     }
     verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL'), PASSWORD='secret', WORKLOAD_IDENTITY=(TYPE=AWS, ARN='arn:aws:iam::123456789:r1/')");
+
+    verified_stmt("ALTER USER u1 PASSWORD 'AAA'");
+    verified_stmt("ALTER USER u1 ENCRYPTED PASSWORD 'AAA'");
+    verified_stmt("ALTER USER u1 PASSWORD NULL");
+
+    one_statement_parses_to(
+        "ALTER USER u1 WITH PASSWORD 'AAA'",
+        "ALTER USER u1 PASSWORD 'AAA'",
+    );
 }
 
 #[test]
@@ -17994,4 +18046,24 @@ fn parse_select_parenthesized_wildcard() {
     assert_eq!(select2.distinct, Some(Distinct::Distinct));
     assert_eq!(select2.projection.len(), 1);
     assert!(matches!(select2.projection[0], SelectItem::Wildcard(_)));
+}
+
+#[test]
+fn parse_overlap_as_bool_and() {
+    let dialects = all_dialects_where(|d| d.supports_double_ampersand_operator());
+    dialects.one_statement_parses_to("SELECT x && y", "SELECT x AND y");
+}
+
+#[test]
+fn test_parse_key_value_options_trailing_semicolon() {
+    one_statement_parses_to(
+        "CREATE USER u1 option1='value1' option2='value2';",
+        "CREATE USER u1 option1='value1' option2='value2'",
+    );
+}
+
+#[test]
+fn test_binary_kw_as_cast() {
+    all_dialects_where(|d| d.supports_binary_kw_as_cast())
+        .one_statement_parses_to("SELECT BINARY 1+1", "SELECT CAST(1 + 1 AS BINARY)");
 }

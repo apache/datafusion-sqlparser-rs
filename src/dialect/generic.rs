@@ -203,4 +203,8 @@ impl Dialect for GenericDialect {
     fn supports_quote_delimited_string(&self) -> bool {
         true
     }
+
+    fn supports_lambda_functions(&self) -> bool {
+        true
+    }
 }

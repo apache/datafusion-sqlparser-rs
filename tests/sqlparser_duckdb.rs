@@ -872,3 +872,22 @@ fn parse_extract_single_quotes() {
     let sql = "SELECT EXTRACT('month' FROM my_timestamp) FROM my_table";
     duckdb().verified_stmt(sql);
 }
+
+#[test]
+fn test_duckdb_lambda_function() {
+    // Test basic lambda with list_filter
+    let sql = "SELECT [3, 4, 5, 6].list_filter(lambda x : x > 4)";
+    duckdb_and_generic().verified_stmt(sql);
+
+    // Test lambda with arrow syntax (also supported by DuckDB)
+    let sql_arrow = "SELECT list_filter([1, 2, 3], x -> x > 1)";
+    duckdb_and_generic().verified_stmt(sql_arrow);
+
+    // Test lambda with multiple parameters (with index)
+    let sql_multi = "SELECT list_filter([1, 3, 1, 5], lambda x, i : x > i)";
+    duckdb_and_generic().verified_stmt(sql_multi);
+
+    // Test lambda in list_transform
+    let sql_transform = "SELECT list_transform([1, 2, 3], lambda x : x * 2)";
+    duckdb_and_generic().verified_stmt(sql_transform);
+}

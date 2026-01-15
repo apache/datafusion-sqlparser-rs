@@ -68,6 +68,7 @@ pub struct Insert {
     pub after_columns: Vec<Ident>,
     /// whether the insert has the table keyword (Hive)
     pub has_table_keyword: bool,
+    /// ON INSERT
     pub on: Option<OnInsert>,
     /// RETURNING
     pub returning: Option<Vec<SelectItem>>,
@@ -331,7 +332,7 @@ pub struct Merge {
     pub on: Box<Expr>,
     /// Specifies the actions to perform when values match or do not match.
     pub clauses: Vec<MergeClause>,
-    // Specifies the output to save changes in MSSQL
+    /// Specifies the output to save changes in MSSQL
     pub output: Option<OutputClause>,
 }
 
@@ -367,8 +368,11 @@ impl Display for Merge {
 pub struct MergeClause {
     /// The `WHEN` token that starts the sub-expression.
     pub when_token: AttachedToken,
+    /// The type of `WHEN` clause.
     pub clause_kind: MergeClauseKind,
+    /// An optional predicate to further restrict the clause.
     pub predicate: Option<Expr>,
+    /// The action to perform when the clause is matched.
     pub action: MergeAction,
 }
 
@@ -397,7 +401,7 @@ impl Display for MergeClause {
 /// ```
 /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/merge)
 /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum MergeClauseKind {
@@ -607,13 +611,20 @@ impl Display for MergeUpdateExpr {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum OutputClause {
+    /// `OUTPUT` clause
     Output {
+        /// The `OUTPUT` token that starts the sub-expression.
         output_token: AttachedToken,
+        /// The select items to output
         select_items: Vec<SelectItem>,
+        /// Optional `INTO` table to direct the output
         into_table: Option<SelectInto>,
     },
+    /// `RETURNING` clause
     Returning {
+        /// The `RETURNING` token that starts the sub-expression.
         returning_token: AttachedToken,
+        /// The select items to return
         select_items: Vec<SelectItem>,
     },
 }

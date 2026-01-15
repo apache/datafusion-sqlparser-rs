@@ -881,10 +881,14 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `EXPLAIN` statements with utility options
+    /// e.g. `EXPLAIN (ANALYZE TRUE, BUFFERS TRUE) SELECT * FROM tbl;`
     fn supports_explain_with_utility_options(&self) -> bool {
         false
     }
 
+    /// Returns true if the dialect supports `ASC` and `DESC` in column definitions
+    /// e.g. `CREATE TABLE t (a INT ASC, b INT DESC);`
     fn supports_asc_desc_in_column_definition(&self) -> bool {
         false
     }
@@ -1118,6 +1122,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports space-separated column options
+    /// in a `CREATE TABLE` statement. For example:
+    /// ```sql
+    /// CREATE TABLE tbl (
+    ///     col INT NOT NULL DEFAULT 0
+    /// );
+    /// ```
     fn supports_space_separated_column_options(&self) -> bool {
         false
     }
@@ -1221,33 +1232,63 @@ pub trait Dialect: Debug + Any {
     fn supports_quote_delimited_string(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect considers the `&&` operator as a boolean AND operator.
+    fn supports_double_ampersand_operator(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports casting an expression to a binary type
+    /// using the `BINARY <expr>` syntax.
+    fn supports_binary_kw_as_cast(&self) -> bool {
+        false
+    }
 }
 
-/// This represents the operators for which precedence must be defined
+/// Operators for which precedence must be defined.
 ///
-/// higher number -> higher precedence
+/// Higher number -> higher precedence.
+/// See expression parsing for how these values are used.
 #[derive(Debug, Clone, Copy)]
 pub enum Precedence {
+    /// Member access operator `.` (highest precedence).
     Period,
+    /// Postgres style type cast `::`.
     DoubleColon,
+    /// Timezone operator (e.g. `AT TIME ZONE`).
     AtTz,
+    /// Multiplication / Division / Modulo operators (`*`, `/`, `%`).
     MulDivModOp,
+    /// Addition / Subtraction (`+`, `-`).
     PlusMinus,
+    /// Bitwise `XOR` operator (`^`).
     Xor,
+    /// Bitwise `AND` operator (`&`).
     Ampersand,
+    /// Bitwise `CARET` (^) for some dialects.
     Caret,
+    /// Bitwise `OR` / pipe operator (`|`).
     Pipe,
+    /// `BETWEEN` operator.
     Between,
+    /// Equality operator (`=`).
     Eq,
+    /// Pattern matching (`LIKE`).
     Like,
+    /// `IS` operator (e.g. `IS NULL`).
     Is,
+    /// Other Postgres-specific operators.
     PgOther,
+    /// Unary `NOT`.
     UnaryNot,
+    /// Logical `AND`.
     And,
+    /// Logical `OR` (lowest precedence).
     Or,
 }
 
 impl dyn Dialect {
+    /// Returns true if `self` is the concrete dialect `T`.
     #[inline]
     pub fn is<T: Dialect>(&self) -> bool {
         // borrowed from `Any` implementation

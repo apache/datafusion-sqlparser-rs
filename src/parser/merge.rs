@@ -39,6 +39,7 @@ impl Parser<'_> {
         Ok(Box::new(SetExpr::Merge(self.parse_merge(merge_token)?)))
     }
 
+    /// Parse a `MERGE` statement
     pub fn parse_merge(&mut self, merge_token: TokenWithSpan) -> Result<Statement, ParserError> {
         let into = self.parse_keyword(Keyword::INTO);
 

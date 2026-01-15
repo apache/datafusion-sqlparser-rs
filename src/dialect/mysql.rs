@@ -171,6 +171,17 @@ impl Dialect for MySqlDialect {
     fn supports_cross_join_constraint(&self) -> bool {
         true
     }
+
+    /// See: <https://dev.mysql.com/doc/refman/8.4/en/expressions.html>
+    fn supports_double_ampersand_operator(&self) -> bool {
+        true
+    }
+
+    /// Deprecated functionality by MySQL but still supported
+    /// See: <https://dev.mysql.com/doc/refman/8.4/en/cast-functions.html#operator_binary>
+    fn supports_binary_kw_as_cast(&self) -> bool {
+        true
+    }
 }
 
 /// `LOCK TABLES`

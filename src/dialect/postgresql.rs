@@ -136,6 +136,8 @@ impl Dialect for PostgreSqlDialect {
             | Token::ShiftRight
             | Token::ShiftLeft
             | Token::CustomBinaryOperator(_) => Some(Ok(PG_OTHER_PREC)),
+            // lowest prec to prevent it from turning into a binary op
+            Token::Colon => Some(Ok(self.prec_unknown())),
             _ => None,
         }
     }
@@ -159,6 +161,7 @@ impl Dialect for PostgreSqlDialect {
             Precedence::Ampersand => PG_OTHER_PREC,
             Precedence::Caret => CARET_PREC,
             Precedence::Pipe => PG_OTHER_PREC,
+            Precedence::Colon => PG_OTHER_PREC,
             Precedence::Between => BETWEEN_LIKE_PREC,
             Precedence::Eq => EQ_PREC,
             Precedence::Like => BETWEEN_LIKE_PREC,

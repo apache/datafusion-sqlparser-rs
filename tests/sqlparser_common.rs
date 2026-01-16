@@ -18067,3 +18067,148 @@ fn test_binary_kw_as_cast() {
     all_dialects_where(|d| d.supports_binary_kw_as_cast())
         .one_statement_parses_to("SELECT BINARY 1+1", "SELECT CAST(1 + 1 AS BINARY)");
 }
+
+#[test]
+fn parse_semi_structured_data_traversal() {
+    let dialects = TestedDialects::new(vec![
+        Box::new(GenericDialect {}),
+        Box::new(SnowflakeDialect {}),
+        Box::new(DatabricksDialect {}),
+    ]);
+
+    // most basic case
+    let sql = "SELECT a:b FROM t";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::JsonAccess {
+            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            path: JsonPath {
+                path: vec![JsonPathElem::Dot {
+                    key: "b".to_owned(),
+                    quoted: false
+                }]
+            },
+        }),
+        select.projection[0]
+    );
+
+    // identifier can be quoted
+    let sql = r#"SELECT a:"my long object key name" FROM t"#;
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::JsonAccess {
+            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            path: JsonPath {
+                path: vec![JsonPathElem::Dot {
+                    key: "my long object key name".to_owned(),
+                    quoted: true
+                }]
+            },
+        }),
+        select.projection[0]
+    );
+
+    dialects.verified_stmt("SELECT a:b::INT FROM t");
+
+    // unquoted keywords are permitted in the object key
+    let sql = "SELECT a:select, a:from FROM t";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        vec![
+            SelectItem::UnnamedExpr(Expr::JsonAccess {
+                value: Box::new(Expr::Identifier(Ident::new("a"))),
+                path: JsonPath {
+                    path: vec![JsonPathElem::Dot {
+                        key: "select".to_owned(),
+                        quoted: false
+                    }]
+                },
+            }),
+            SelectItem::UnnamedExpr(Expr::JsonAccess {
+                value: Box::new(Expr::Identifier(Ident::new("a"))),
+                path: JsonPath {
+                    path: vec![JsonPathElem::Dot {
+                        key: "from".to_owned(),
+                        quoted: false
+                    }]
+                },
+            })
+        ],
+        select.projection
+    );
+
+    // multiple levels can be traversed
+    // https://docs.snowflake.com/en/user-guide/querying-semistructured#dot-notation
+    let sql = r#"SELECT a:foo."bar".baz"#;
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        vec![SelectItem::UnnamedExpr(Expr::JsonAccess {
+            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            path: JsonPath {
+                path: vec![
+                    JsonPathElem::Dot {
+                        key: "foo".to_owned(),
+                        quoted: false,
+                    },
+                    JsonPathElem::Dot {
+                        key: "bar".to_owned(),
+                        quoted: true,
+                    },
+                    JsonPathElem::Dot {
+                        key: "baz".to_owned(),
+                        quoted: false,
+                    }
+                ]
+            },
+        })],
+        select.projection
+    );
+
+    // dot and bracket notation can be mixed (starting with : case)
+    // https://docs.snowflake.com/en/user-guide/querying-semistructured#dot-notation
+    let sql = r#"SELECT a:foo[0].bar"#;
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        vec![SelectItem::UnnamedExpr(Expr::JsonAccess {
+            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            path: JsonPath {
+                path: vec![
+                    JsonPathElem::Dot {
+                        key: "foo".to_owned(),
+                        quoted: false,
+                    },
+                    JsonPathElem::Bracket {
+                        key: Expr::value(number("0")),
+                    },
+                    JsonPathElem::Dot {
+                        key: "bar".to_owned(),
+                        quoted: false,
+                    }
+                ]
+            },
+        })],
+        select.projection
+    );
+}
+
+#[test]
+fn parse_array_subscript() {
+    let dialects = all_dialects_except(|d| {
+        d.is::<MsSqlDialect>()
+            || d.is::<SnowflakeDialect>()
+            || d.is::<SQLiteDialect>()
+            || d.is::<RedshiftSqlDialect>()
+    });
+
+    dialects.verified_stmt("SELECT arr[1]");
+    dialects.verified_stmt("SELECT arr[:]");
+    dialects.verified_stmt("SELECT arr[1:2]");
+    dialects.verified_stmt("SELECT arr[1:2:4]");
+    dialects.verified_stmt("SELECT arr[1:array_length(arr)]");
+    dialects.verified_stmt("SELECT arr[array_length(arr) - 1:array_length(arr)]");
+    dialects
+        .verified_stmt("SELECT arr[array_length(arr) - 2:array_length(arr) - 1:array_length(arr)]");
+
+    dialects.verified_stmt("SELECT arr[1][2]");
+    dialects.verified_stmt("SELECT arr[:][:]");
+}

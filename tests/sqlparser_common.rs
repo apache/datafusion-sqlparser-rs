@@ -16773,6 +16773,7 @@ fn parse_truncate_only() {
             table_names,
             partitions: None,
             table: true,
+            if_exists: false,
             identity: None,
             cascade: None,
             on_cluster: None,

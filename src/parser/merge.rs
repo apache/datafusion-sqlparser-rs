@@ -18,7 +18,7 @@ use alloc::{boxed::Box, format, vec, vec::Vec};
 use crate::{
     ast::{
         Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr, MergeInsertKind,
-        MergeUpdateExpr, ObjectName, OutputClause, SetExpr, Statement,
+        MergeUpdateExpr, ObjectName, OutputClause, SetExpr,
     },
     dialect::{BigQueryDialect, GenericDialect, MySqlDialect},
     keywords::Keyword,
@@ -36,11 +36,13 @@ impl Parser<'_> {
         &mut self,
         merge_token: TokenWithSpan,
     ) -> Result<Box<SetExpr>, ParserError> {
-        Ok(Box::new(SetExpr::Merge(self.parse_merge(merge_token)?)))
+        Ok(Box::new(SetExpr::Merge(
+            self.parse_merge(merge_token)?.into(),
+        )))
     }
 
     /// Parse a `MERGE` statement
-    pub fn parse_merge(&mut self, merge_token: TokenWithSpan) -> Result<Statement, ParserError> {
+    pub fn parse_merge(&mut self, merge_token: TokenWithSpan) -> Result<Merge, ParserError> {
         let into = self.parse_keyword(Keyword::INTO);
 
         let table = self.parse_table_factor()?;
@@ -55,7 +57,7 @@ impl Parser<'_> {
             None => None,
         };
 
-        Ok(Statement::Merge(Merge {
+        Ok(Merge {
             merge_token: merge_token.into(),
             into,
             table,
@@ -63,7 +65,7 @@ impl Parser<'_> {
             on: Box::new(on),
             clauses,
             output,
-        }))
+        })
     }
 
     fn parse_merge_clauses(&mut self) -> Result<Vec<MergeClause>, ParserError> {

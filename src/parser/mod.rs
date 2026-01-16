@@ -604,28 +604,28 @@ impl<'a> Parser<'a> {
                 Keyword::DESC => self.parse_explain(DescribeAlias::Desc),
                 Keyword::DESCRIBE => self.parse_explain(DescribeAlias::Describe),
                 Keyword::EXPLAIN => self.parse_explain(DescribeAlias::Explain),
-                Keyword::ANALYZE => self.parse_analyze(),
+                Keyword::ANALYZE => self.parse_analyze().map(Into::into),
                 Keyword::CASE => {
                     self.prev_token();
-                    self.parse_case_stmt()
+                    self.parse_case_stmt().map(Into::into)
                 }
                 Keyword::IF => {
                     self.prev_token();
-                    self.parse_if_stmt()
+                    self.parse_if_stmt().map(Into::into)
                 }
                 Keyword::WHILE => {
                     self.prev_token();
-                    self.parse_while()
+                    self.parse_while().map(Into::into)
                 }
                 Keyword::RAISE => {
                     self.prev_token();
-                    self.parse_raise_stmt()
+                    self.parse_raise_stmt().map(Into::into)
                 }
                 Keyword::SELECT | Keyword::WITH | Keyword::VALUES | Keyword::FROM => {
                     self.prev_token();
-                    self.parse_query().map(Statement::Query)
+                    self.parse_query().map(Into::into)
                 }
-                Keyword::TRUNCATE => self.parse_truncate(),
+                Keyword::TRUNCATE => self.parse_truncate().map(Into::into),
                 Keyword::ATTACH => {
                     if dialect_of!(self is DuckDbDialect) {
                         self.parse_attach_duckdb_database()
@@ -636,7 +636,7 @@ impl<'a> Parser<'a> {
                 Keyword::DETACH if dialect_of!(self is DuckDbDialect | GenericDialect) => {
                     self.parse_detach_duckdb_database()
                 }
-                Keyword::MSCK => self.parse_msck(),
+                Keyword::MSCK => self.parse_msck().map(Into::into),
                 Keyword::CREATE => self.parse_create(),
                 Keyword::CACHE => self.parse_cache_table(),
                 Keyword::DROP => self.parse_drop(),
@@ -679,7 +679,7 @@ impl<'a> Parser<'a> {
                 Keyword::DEALLOCATE => self.parse_deallocate(),
                 Keyword::EXECUTE | Keyword::EXEC => self.parse_execute(),
                 Keyword::PREPARE => self.parse_prepare(),
-                Keyword::MERGE => self.parse_merge(next_token),
+                Keyword::MERGE => self.parse_merge(next_token).map(Into::into),
                 // `LISTEN`, `UNLISTEN` and `NOTIFY` are Postgres-specific
                 // syntaxes. They are used for Postgres statement.
                 Keyword::LISTEN if self.dialect.supports_listen_notify() => self.parse_listen(),
@@ -713,12 +713,12 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     self.parse_vacuum()
                 }
-                Keyword::RESET => self.parse_reset(),
+                Keyword::RESET => self.parse_reset().map(Into::into),
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
                 self.prev_token();
-                self.parse_query().map(Statement::Query)
+                self.parse_query().map(Into::into)
             }
             _ => self.expected("an SQL statement", next_token),
         }
@@ -727,7 +727,7 @@ impl<'a> Parser<'a> {
     /// Parse a `CASE` statement.
     ///
     /// See [Statement::Case]
-    pub fn parse_case_stmt(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_case_stmt(&mut self) -> Result<CaseStatement, ParserError> {
         let case_token = self.expect_keyword(Keyword::CASE)?;
 
         let match_expr = if self.peek_keyword(Keyword::WHEN) {
@@ -752,19 +752,19 @@ impl<'a> Parser<'a> {
             end_case_token = self.expect_keyword(Keyword::CASE)?;
         }
 
-        Ok(Statement::Case(CaseStatement {
+        Ok(CaseStatement {
             case_token: AttachedToken(case_token),
             match_expr,
             when_blocks,
             else_block,
             end_case_token: AttachedToken(end_case_token),
-        }))
+        })
     }
 
     /// Parse an `IF` statement.
     ///
     /// See [Statement::If]
-    pub fn parse_if_stmt(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_if_stmt(&mut self) -> Result<IfStatement, ParserError> {
         self.expect_keyword_is(Keyword::IF)?;
         let if_block = self.parse_conditional_statement_block(&[
             Keyword::ELSE,
@@ -793,22 +793,22 @@ impl<'a> Parser<'a> {
         self.expect_keyword_is(Keyword::END)?;
         let end_token = self.expect_keyword(Keyword::IF)?;
 
-        Ok(Statement::If(IfStatement {
+        Ok(IfStatement {
             if_block,
             elseif_blocks,
             else_block,
             end_token: Some(AttachedToken(end_token)),
-        }))
+        })
     }
 
     /// Parse a `WHILE` statement.
     ///
     /// See [Statement::While]
-    fn parse_while(&mut self) -> Result<Statement, ParserError> {
+    fn parse_while(&mut self) -> Result<WhileStatement, ParserError> {
         self.expect_keyword_is(Keyword::WHILE)?;
         let while_block = self.parse_conditional_statement_block(&[Keyword::END])?;
 
-        Ok(Statement::While(WhileStatement { while_block }))
+        Ok(WhileStatement { while_block })
     }
 
     /// Parses an expression and associated list of statements
@@ -875,7 +875,7 @@ impl<'a> Parser<'a> {
     /// Parse a `RAISE` statement.
     ///
     /// See [Statement::Raise]
-    pub fn parse_raise_stmt(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_raise_stmt(&mut self) -> Result<RaiseStatement, ParserError> {
         self.expect_keyword_is(Keyword::RAISE)?;
 
         let value = if self.parse_keywords(&[Keyword::USING, Keyword::MESSAGE]) {
@@ -885,7 +885,7 @@ impl<'a> Parser<'a> {
             self.maybe_parse(|parser| parser.parse_expr().map(RaiseStatementValue::Expr))?
         };
 
-        Ok(Statement::Raise(RaiseStatement { value }))
+        Ok(RaiseStatement { value })
     }
     /// Parse a COMMENT statement.
     ///
@@ -1024,7 +1024,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse `MSCK` statement.
-    pub fn parse_msck(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_msck(&mut self) -> Result<Msck, ParserError> {
         let repair = self.parse_keyword(Keyword::REPAIR);
         self.expect_keyword_is(Keyword::TABLE)?;
         let table_name = self.parse_object_name(false)?;
@@ -1048,12 +1048,11 @@ impl<'a> Parser<'a> {
             repair,
             table_name,
             partition_action,
-        }
-        .into())
+        })
     }
 
     /// Parse `TRUNCATE` statement.
-    pub fn parse_truncate(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_truncate(&mut self) -> Result<Truncate, ParserError> {
         let table = self.parse_keyword(Keyword::TABLE);
 
         let table_names = self
@@ -1095,8 +1094,7 @@ impl<'a> Parser<'a> {
             identity,
             cascade,
             on_cluster,
-        }
-        .into())
+        })
     }
 
     fn parse_cascade_option(&mut self) -> Option<CascadeOption> {
@@ -1192,7 +1190,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse `ANALYZE` statement.
-    pub fn parse_analyze(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_analyze(&mut self) -> Result<Analyze, ParserError> {
         let has_table_keyword = self.parse_keyword(Keyword::TABLE);
         let table_name = self.parse_object_name(false)?;
         let mut for_columns = false;
@@ -1246,8 +1244,7 @@ impl<'a> Parser<'a> {
             cache_metadata,
             noscan,
             compute_statistics,
-        }
-        .into())
+        })
     }
 
     /// Parse a new expression including wildcard & qualified wildcard.
@@ -1432,7 +1429,7 @@ impl<'a> Parser<'a> {
 
                 Ok(RenameTable { old_name, new_name })
             })?;
-            Ok(Statement::RenameTable(rename_tables))
+            Ok(rename_tables.into())
         } else {
             self.expected("KEYWORD `TABLE` after RENAME", self.peek_token())
         }
@@ -4925,41 +4922,45 @@ impl<'a> Parser<'a> {
         let create_view_params = self.parse_create_view_params()?;
         if self.parse_keyword(Keyword::TABLE) {
             self.parse_create_table(or_replace, temporary, global, transient)
+                .map(Into::into)
         } else if self.peek_keyword(Keyword::MATERIALIZED)
             || self.peek_keyword(Keyword::VIEW)
             || self.peek_keywords(&[Keyword::SECURE, Keyword::MATERIALIZED, Keyword::VIEW])
             || self.peek_keywords(&[Keyword::SECURE, Keyword::VIEW])
         {
             self.parse_create_view(or_alter, or_replace, temporary, create_view_params)
+                .map(Into::into)
         } else if self.parse_keyword(Keyword::POLICY) {
             self.parse_create_policy()
         } else if self.parse_keyword(Keyword::EXTERNAL) {
-            self.parse_create_external_table(or_replace)
+            self.parse_create_external_table(or_replace).map(Into::into)
         } else if self.parse_keyword(Keyword::FUNCTION) {
             self.parse_create_function(or_alter, or_replace, temporary)
         } else if self.parse_keyword(Keyword::DOMAIN) {
-            self.parse_create_domain()
+            self.parse_create_domain().map(Into::into)
         } else if self.parse_keyword(Keyword::TRIGGER) {
             self.parse_create_trigger(temporary, or_alter, or_replace, false)
+                .map(Into::into)
         } else if self.parse_keywords(&[Keyword::CONSTRAINT, Keyword::TRIGGER]) {
             self.parse_create_trigger(temporary, or_alter, or_replace, true)
+                .map(Into::into)
         } else if self.parse_keyword(Keyword::MACRO) {
             self.parse_create_macro(or_replace, temporary)
         } else if self.parse_keyword(Keyword::SECRET) {
             self.parse_create_secret(or_replace, temporary, persistent)
         } else if self.parse_keyword(Keyword::USER) {
-            self.parse_create_user(or_replace)
+            self.parse_create_user(or_replace).map(Into::into)
         } else if or_replace {
             self.expected(
                 "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION after CREATE OR REPLACE",
                 self.peek_token(),
             )
         } else if self.parse_keyword(Keyword::EXTENSION) {
-            self.parse_create_extension()
+            self.parse_create_extension().map(Into::into)
         } else if self.parse_keyword(Keyword::INDEX) {
-            self.parse_create_index(false)
+            self.parse_create_index(false).map(Into::into)
         } else if self.parse_keywords(&[Keyword::UNIQUE, Keyword::INDEX]) {
-            self.parse_create_index(true)
+            self.parse_create_index(true).map(Into::into)
         } else if self.parse_keyword(Keyword::VIRTUAL) {
             self.parse_create_virtual_table()
         } else if self.parse_keyword(Keyword::SCHEMA) {
@@ -4967,7 +4968,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::DATABASE) {
             self.parse_create_database()
         } else if self.parse_keyword(Keyword::ROLE) {
-            self.parse_create_role()
+            self.parse_create_role().map(Into::into)
         } else if self.parse_keyword(Keyword::SEQUENCE) {
             self.parse_create_sequence(temporary)
         } else if self.parse_keyword(Keyword::TYPE) {
@@ -4975,15 +4976,15 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::PROCEDURE) {
             self.parse_create_procedure(or_alter)
         } else if self.parse_keyword(Keyword::CONNECTOR) {
-            self.parse_create_connector()
+            self.parse_create_connector().map(Into::into)
         } else if self.parse_keyword(Keyword::OPERATOR) {
             // Check if this is CREATE OPERATOR FAMILY or CREATE OPERATOR CLASS
             if self.parse_keyword(Keyword::FAMILY) {
-                self.parse_create_operator_family()
+                self.parse_create_operator_family().map(Into::into)
             } else if self.parse_keyword(Keyword::CLASS) {
-                self.parse_create_operator_class()
+                self.parse_create_operator_class().map(Into::into)
             } else {
-                self.parse_create_operator()
+                self.parse_create_operator().map(Into::into)
             }
         } else if self.parse_keyword(Keyword::SERVER) {
             self.parse_pg_create_server()
@@ -4992,7 +4993,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_create_user(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
+    fn parse_create_user(&mut self, or_replace: bool) -> Result<CreateUser, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let name = self.parse_identifier()?;
         let options = self
@@ -5004,7 +5005,7 @@ impl<'a> Parser<'a> {
         } else {
             vec![]
         };
-        Ok(Statement::CreateUser(CreateUser {
+        Ok(CreateUser {
             or_replace,
             if_not_exists,
             name,
@@ -5017,7 +5018,7 @@ impl<'a> Parser<'a> {
                 options: tags,
                 delimiter: KeyValueOptionsDelimiter::Comma,
             },
-        }))
+        })
     }
 
     /// See [DuckDB Docs](https://duckdb.org/docs/sql/statements/create_secret.html) for more details.
@@ -5334,14 +5335,18 @@ impl<'a> Parser<'a> {
     ) -> Result<Statement, ParserError> {
         if dialect_of!(self is HiveDialect) {
             self.parse_hive_create_function(or_replace, temporary)
+                .map(Into::into)
         } else if dialect_of!(self is PostgreSqlDialect | GenericDialect) {
             self.parse_postgres_create_function(or_replace, temporary)
+                .map(Into::into)
         } else if dialect_of!(self is DuckDbDialect) {
             self.parse_create_macro(or_replace, temporary)
         } else if dialect_of!(self is BigQueryDialect) {
             self.parse_bigquery_create_function(or_replace, temporary)
+                .map(Into::into)
         } else if dialect_of!(self is MsSqlDialect) {
             self.parse_mssql_create_function(or_alter, or_replace, temporary)
+                .map(Into::into)
         } else {
             self.prev_token();
             self.expected("an object type after CREATE", self.peek_token())
@@ -5355,7 +5360,7 @@ impl<'a> Parser<'a> {
         &mut self,
         or_replace: bool,
         temporary: bool,
-    ) -> Result<Statement, ParserError> {
+    ) -> Result<CreateFunction, ParserError> {
         let name = self.parse_object_name(false)?;
 
         self.expect_token(&Token::LParen)?;
@@ -5476,7 +5481,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        Ok(Statement::CreateFunction(CreateFunction {
+        Ok(CreateFunction {
             or_alter: false,
             or_replace,
             temporary,
@@ -5495,7 +5500,7 @@ impl<'a> Parser<'a> {
             determinism_specifier: None,
             options: None,
             remote_connection: None,
-        }))
+        })
     }
 
     /// Parse `CREATE FUNCTION` for [Hive]
@@ -5505,14 +5510,14 @@ impl<'a> Parser<'a> {
         &mut self,
         or_replace: bool,
         temporary: bool,
-    ) -> Result<Statement, ParserError> {
+    ) -> Result<CreateFunction, ParserError> {
         let name = self.parse_object_name(false)?;
         self.expect_keyword_is(Keyword::AS)?;
 
         let body = self.parse_create_function_body_string()?;
         let using = self.parse_optional_create_function_using()?;
 
-        Ok(Statement::CreateFunction(CreateFunction {
+        Ok(CreateFunction {
             or_alter: false,
             or_replace,
             temporary,
@@ -5531,7 +5536,7 @@ impl<'a> Parser<'a> {
             determinism_specifier: None,
             options: None,
             remote_connection: None,
-        }))
+        })
     }
 
     /// Parse `CREATE FUNCTION` for [BigQuery]
@@ -5541,7 +5546,7 @@ impl<'a> Parser<'a> {
         &mut self,
         or_replace: bool,
         temporary: bool,
-    ) -> Result<Statement, ParserError> {
+    ) -> Result<CreateFunction, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let (name, args) = self.parse_create_function_name_and_params()?;
 
@@ -5592,7 +5597,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(Statement::CreateFunction(CreateFunction {
+        Ok(CreateFunction {
             or_alter: false,
             or_replace,
             temporary,
@@ -5611,7 +5616,7 @@ impl<'a> Parser<'a> {
             parallel: None,
             security: None,
             set_params: vec![],
-        }))
+        })
     }
 
     /// Parse `CREATE FUNCTION` for [MsSql]
@@ -5622,7 +5627,7 @@ impl<'a> Parser<'a> {
         or_alter: bool,
         or_replace: bool,
         temporary: bool,
-    ) -> Result<Statement, ParserError> {
+    ) -> Result<CreateFunction, ParserError> {
         let (name, args) = self.parse_create_function_name_and_params()?;
 
         self.expect_keyword(Keyword::RETURNS)?;
@@ -5683,7 +5688,7 @@ impl<'a> Parser<'a> {
             parser_err!("Unparsable function body", self.peek_token().span.start)?
         };
 
-        Ok(Statement::CreateFunction(CreateFunction {
+        Ok(CreateFunction {
             or_alter,
             or_replace,
             temporary,
@@ -5702,7 +5707,7 @@ impl<'a> Parser<'a> {
             parallel: None,
             security: None,
             set_params: vec![],
-        }))
+        })
     }
 
     fn parse_create_function_name_and_params(
@@ -5796,7 +5801,7 @@ impl<'a> Parser<'a> {
     /// ```sql
     /// DROP TRIGGER [ IF EXISTS ] name ON table_name [ CASCADE | RESTRICT ]
     /// ```
-    pub fn parse_drop_trigger(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_drop_trigger(&mut self) -> Result<DropTrigger, ParserError> {
         if !dialect_of!(self is PostgreSqlDialect | SQLiteDialect | GenericDialect | MySqlDialect | MsSqlDialect)
         {
             self.prev_token();
@@ -5817,12 +5822,12 @@ impl<'a> Parser<'a> {
             )),
             None => None,
         };
-        Ok(Statement::DropTrigger(DropTrigger {
+        Ok(DropTrigger {
             if_exists,
             trigger_name,
             table_name,
             option,
-        }))
+        })
     }
 
     /// Parse a `CREATE TRIGGER` statement.
@@ -5832,7 +5837,7 @@ impl<'a> Parser<'a> {
         or_alter: bool,
         or_replace: bool,
         is_constraint: bool,
-    ) -> Result<Statement, ParserError> {
+    ) -> Result<CreateTrigger, ParserError> {
         if !dialect_of!(self is PostgreSqlDialect | SQLiteDialect | GenericDialect | MySqlDialect | MsSqlDialect)
         {
             self.prev_token();
@@ -5914,8 +5919,7 @@ impl<'a> Parser<'a> {
             statements_as: false,
             statements,
             characteristics,
-        }
-        .into())
+        })
     }
 
     /// Parse the period part of a trigger (`BEFORE`, `AFTER`, etc.).
@@ -6058,7 +6062,7 @@ impl<'a> Parser<'a> {
     pub fn parse_create_external_table(
         &mut self,
         or_replace: bool,
-    ) -> Result<Statement, ParserError> {
+    ) -> Result<CreateTable, ParserError> {
         self.expect_keyword_is(Keyword::TABLE)?;
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name(false)?;
@@ -6148,7 +6152,7 @@ impl<'a> Parser<'a> {
         or_replace: bool,
         temporary: bool,
         create_view_params: Option<CreateViewParams>,
-    ) -> Result<Statement, ParserError> {
+    ) -> Result<CreateView, ParserError> {
         let secure = self.parse_keyword(Keyword::SECURE);
         let materialized = self.parse_keyword(Keyword::MATERIALIZED);
         self.expect_keyword_is(Keyword::VIEW)?;
@@ -6231,8 +6235,7 @@ impl<'a> Parser<'a> {
             to,
             params: create_view_params,
             name_before_not_exists,
-        }
-        .into())
+        })
     }
 
     /// Parse optional parameters for the `CREATE VIEW` statement supported by [MySQL].
@@ -6294,7 +6297,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a `CREATE ROLE` statement.
-    pub fn parse_create_role(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_create_role(&mut self) -> Result<CreateRole, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let names = self.parse_comma_separated(|p| p.parse_object_name(false))?;
 
@@ -6515,8 +6518,7 @@ impl<'a> Parser<'a> {
             user,
             admin,
             authorization_owner,
-        }
-        .into())
+        })
     }
 
     /// Parse an `OWNER` clause.
@@ -6541,7 +6543,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parses a [Statement::CreateDomain] statement.
-    fn parse_create_domain(&mut self) -> Result<Statement, ParserError> {
+    fn parse_create_domain(&mut self) -> Result<CreateDomain, ParserError> {
         let name = self.parse_object_name(false)?;
         self.expect_keyword_is(Keyword::AS)?;
         let data_type = self.parse_data_type()?;
@@ -6560,13 +6562,13 @@ impl<'a> Parser<'a> {
             constraints.push(constraint);
         }
 
-        Ok(Statement::CreateDomain(CreateDomain {
+        Ok(CreateDomain {
             name,
             data_type,
             collation,
             default,
             constraints,
-        }))
+        })
     }
 
     /// ```sql
@@ -6663,7 +6665,7 @@ impl<'a> Parser<'a> {
     /// ```
     ///
     /// [Hive Documentation](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362034#LanguageManualDDL-CreateDataConnectorCreateConnector)
-    pub fn parse_create_connector(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_create_connector(&mut self) -> Result<CreateConnector, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let name = self.parse_identifier()?;
 
@@ -6687,14 +6689,14 @@ impl<'a> Parser<'a> {
                 _ => None,
             };
 
-        Ok(Statement::CreateConnector(CreateConnector {
+        Ok(CreateConnector {
             name,
             if_not_exists,
             connector_type,
             url,
             comment,
             with_dcproperties,
-        }))
+        })
     }
 
     /// Parse an operator name, which can contain special characters like +, -, <, >, =
@@ -6718,7 +6720,7 @@ impl<'a> Parser<'a> {
     /// Parse a [Statement::CreateOperator]
     ///
     /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createoperator.html)
-    pub fn parse_create_operator(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_create_operator(&mut self) -> Result<CreateOperator, ParserError> {
         let name = self.parse_operator_name()?;
         self.expect_token(&Token::LParen)?;
 
@@ -6827,34 +6829,31 @@ impl<'a> Parser<'a> {
             ParserError::ParserError("CREATE OPERATOR requires FUNCTION parameter".to_string())
         })?;
 
-        Ok(Statement::CreateOperator(CreateOperator {
+        Ok(CreateOperator {
             name,
             function,
             is_procedure,
             left_arg,
             right_arg,
             options,
-        }))
+        })
     }
 
     /// Parse a [Statement::CreateOperatorFamily]
     ///
     /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createopfamily.html)
-    pub fn parse_create_operator_family(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_create_operator_family(&mut self) -> Result<CreateOperatorFamily, ParserError> {
         let name = self.parse_object_name(false)?;
         self.expect_keyword(Keyword::USING)?;
         let using = self.parse_identifier()?;
 
-        Ok(Statement::CreateOperatorFamily(CreateOperatorFamily {
-            name,
-            using,
-        }))
+        Ok(CreateOperatorFamily { name, using })
     }
 
     /// Parse a [Statement::CreateOperatorClass]
     ///
     /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createopclass.html)
-    pub fn parse_create_operator_class(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_create_operator_class(&mut self) -> Result<CreateOperatorClass, ParserError> {
         let name = self.parse_object_name(false)?;
         let default = self.parse_keyword(Keyword::DEFAULT);
         self.expect_keywords(&[Keyword::FOR, Keyword::TYPE])?;
@@ -6968,14 +6967,14 @@ impl<'a> Parser<'a> {
             }
         }
 
-        Ok(Statement::CreateOperatorClass(CreateOperatorClass {
+        Ok(CreateOperatorClass {
             name,
             default,
             for_type,
             using,
             family,
             items,
-        }))
+        })
     }
 
     /// Parse a `DROP` statement.
@@ -7011,19 +7010,19 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::STREAM) {
             ObjectType::Stream
         } else if self.parse_keyword(Keyword::FUNCTION) {
-            return self.parse_drop_function();
+            return self.parse_drop_function().map(Into::into);
         } else if self.parse_keyword(Keyword::POLICY) {
             return self.parse_drop_policy();
         } else if self.parse_keyword(Keyword::CONNECTOR) {
             return self.parse_drop_connector();
         } else if self.parse_keyword(Keyword::DOMAIN) {
-            return self.parse_drop_domain();
+            return self.parse_drop_domain().map(Into::into);
         } else if self.parse_keyword(Keyword::PROCEDURE) {
             return self.parse_drop_procedure();
         } else if self.parse_keyword(Keyword::SECRET) {
             return self.parse_drop_secret(temporary, persistent);
         } else if self.parse_keyword(Keyword::TRIGGER) {
-            return self.parse_drop_trigger();
+            return self.parse_drop_trigger().map(Into::into);
         } else if self.parse_keyword(Keyword::EXTENSION) {
             return self.parse_drop_extension();
         } else if self.parse_keyword(Keyword::OPERATOR) {
@@ -7088,15 +7087,15 @@ impl<'a> Parser<'a> {
     /// DROP FUNCTION [ IF EXISTS ] name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ] [, ...]
     /// [ CASCADE | RESTRICT ]
     /// ```
-    fn parse_drop_function(&mut self) -> Result<Statement, ParserError> {
+    fn parse_drop_function(&mut self) -> Result<DropFunction, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let func_desc = self.parse_comma_separated(Parser::parse_function_desc)?;
         let drop_behavior = self.parse_optional_drop_behavior();
-        Ok(Statement::DropFunction(DropFunction {
+        Ok(DropFunction {
             if_exists,
             func_desc,
             drop_behavior,
-        }))
+        })
     }
 
     /// ```sql
@@ -7131,15 +7130,15 @@ impl<'a> Parser<'a> {
     /// ```sql
     /// DROP DOMAIN [ IF EXISTS ] name [ CASCADE | RESTRICT ]
     /// ```
-    fn parse_drop_domain(&mut self) -> Result<Statement, ParserError> {
+    fn parse_drop_domain(&mut self) -> Result<DropDomain, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let name = self.parse_object_name(false)?;
         let drop_behavior = self.parse_optional_drop_behavior();
-        Ok(Statement::DropDomain(DropDomain {
+        Ok(DropDomain {
             if_exists,
             name,
             drop_behavior,
-        }))
+        })
     }
 
     /// ```sql
@@ -7653,7 +7652,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a `CREATE INDEX` statement.
-    pub fn parse_create_index(&mut self, unique: bool) -> Result<Statement, ParserError> {
+    pub fn parse_create_index(&mut self, unique: bool) -> Result<CreateIndex, ParserError> {
         let concurrently = self.parse_keyword(Keyword::CONCURRENTLY);
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
 
@@ -7727,7 +7726,7 @@ impl<'a> Parser<'a> {
             alter_options.push(self.parse_alter_table_operation()?)
         }
 
-        Ok(Statement::CreateIndex(CreateIndex {
+        Ok(CreateIndex {
             name: index_name,
             table_name,
             using,
@@ -7741,11 +7740,11 @@ impl<'a> Parser<'a> {
             predicate,
             index_options,
             alter_options,
-        }))
+        })
     }
 
     /// Parse a `CREATE EXTENSION` statement.
-    pub fn parse_create_extension(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_create_extension(&mut self) -> Result<CreateExtension, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let name = self.parse_identifier()?;
 
@@ -7775,8 +7774,7 @@ impl<'a> Parser<'a> {
             schema,
             version,
             cascade,
-        }
-        .into())
+        })
     }
 
     /// Parse a PostgreSQL-specific [Statement::DropExtension] statement.
@@ -8054,7 +8052,7 @@ impl<'a> Parser<'a> {
         temporary: bool,
         global: Option<bool>,
         transient: bool,
-    ) -> Result<Statement, ParserError> {
+    ) -> Result<CreateTable, ParserError> {
         let allow_unquoted_hyphen = dialect_of!(self is BigQueryDialect);
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name(allow_unquoted_hyphen)?;
@@ -10208,17 +10206,17 @@ impl<'a> Parser<'a> {
             }
             Keyword::OPERATOR => {
                 if self.parse_keyword(Keyword::FAMILY) {
-                    self.parse_alter_operator_family()
+                    self.parse_alter_operator_family().map(Into::into)
                 } else if self.parse_keyword(Keyword::CLASS) {
-                    self.parse_alter_operator_class()
+                    self.parse_alter_operator_class().map(Into::into)
                 } else {
-                    self.parse_alter_operator()
+                    self.parse_alter_operator().map(Into::into)
                 }
             }
             Keyword::ROLE => self.parse_alter_role(),
             Keyword::POLICY => self.parse_alter_policy(),
             Keyword::CONNECTOR => self.parse_alter_connector(),
-            Keyword::USER => self.parse_alter_user(),
+            Keyword::USER => self.parse_alter_user().map(Into::into),
             // unreachable because expect_one_of_keywords used above
             unexpected_keyword => Err(ParserError::ParserError(
                 format!("Internal parser error: expected any of {{VIEW, TYPE, TABLE, INDEX, ROLE, POLICY, CONNECTOR, ICEBERG, SCHEMA, USER, OPERATOR}}, got {unexpected_keyword:?}"),
@@ -10340,7 +10338,7 @@ impl<'a> Parser<'a> {
     /// Parse a [Statement::AlterOperator]
     ///
     /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-alteroperator.html)
-    pub fn parse_alter_operator(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_alter_operator(&mut self) -> Result<AlterOperator, ParserError> {
         let name = self.parse_operator_name()?;
 
         // Parse (left_type, right_type)
@@ -10439,12 +10437,12 @@ impl<'a> Parser<'a> {
             );
         };
 
-        Ok(Statement::AlterOperator(AlterOperator {
+        Ok(AlterOperator {
             name,
             left_type,
             right_type,
             operation,
-        }))
+        })
     }
 
     /// Parse an operator item for ALTER OPERATOR FAMILY ADD operations
@@ -10577,7 +10575,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a [Statement::AlterOperatorFamily]
     /// See <https://www.postgresql.org/docs/current/sql-alteropfamily.html>
-    pub fn parse_alter_operator_family(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_alter_operator_family(&mut self) -> Result<AlterOperatorFamily, ParserError> {
         let name = self.parse_object_name(false)?;
         self.expect_keyword(Keyword::USING)?;
         let using = self.parse_identifier()?;
@@ -10604,17 +10602,17 @@ impl<'a> Parser<'a> {
             );
         };
 
-        Ok(Statement::AlterOperatorFamily(AlterOperatorFamily {
+        Ok(AlterOperatorFamily {
             name,
             using,
             operation,
-        }))
+        })
     }
 
     /// Parse an `ALTER OPERATOR CLASS` statement.
     ///
     /// Handles operations like `RENAME TO`, `OWNER TO`, and `SET SCHEMA`.
-    pub fn parse_alter_operator_class(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_alter_operator_class(&mut self) -> Result<AlterOperatorClass, ParserError> {
         let name = self.parse_object_name(false)?;
         self.expect_keyword(Keyword::USING)?;
         let using = self.parse_identifier()?;
@@ -10635,11 +10633,11 @@ impl<'a> Parser<'a> {
             );
         };
 
-        Ok(Statement::AlterOperatorClass(AlterOperatorClass {
+        Ok(AlterOperatorClass {
             name,
             using,
             operation,
-        }))
+        })
     }
 
     /// Parse an `ALTER SCHEMA` statement.
@@ -16853,7 +16851,7 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            Ok(Statement::Insert(Insert {
+            Ok(Insert {
                 insert_token: insert_token.into(),
                 or,
                 table: table_object,
@@ -16874,7 +16872,8 @@ impl<'a> Parser<'a> {
                 insert_alias,
                 settings,
                 format_clause,
-            }))
+            }
+            .into())
         }
     }
 
@@ -19134,15 +19133,15 @@ impl<'a> Parser<'a> {
     }
 
     /// Parses a RESET statement
-    fn parse_reset(&mut self) -> Result<Statement, ParserError> {
+    fn parse_reset(&mut self) -> Result<ResetStatement, ParserError> {
         if self.parse_keyword(Keyword::ALL) {
-            return Ok(Statement::Reset(ResetStatement { reset: Reset::ALL }));
+            return Ok(ResetStatement { reset: Reset::ALL });
         }
 
         let obj = self.parse_object_name(false)?;
-        Ok(Statement::Reset(ResetStatement {
+        Ok(ResetStatement {
             reset: Reset::ConfigurationParameter(obj),
-        }))
+        })
     }
 }
 

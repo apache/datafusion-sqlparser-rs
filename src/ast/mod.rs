@@ -11807,6 +11807,24 @@ impl From<CreateConnector> for Statement {
     }
 }
 
+impl From<CreateOperator> for Statement {
+    fn from(c: CreateOperator) -> Self {
+        Self::CreateOperator(c)
+    }
+}
+
+impl From<CreateOperatorFamily> for Statement {
+    fn from(c: CreateOperatorFamily) -> Self {
+        Self::CreateOperatorFamily(c)
+    }
+}
+
+impl From<CreateOperatorClass> for Statement {
+    fn from(c: CreateOperatorClass) -> Self {
+        Self::CreateOperatorClass(c)
+    }
+}
+
 impl From<AlterSchema> for Statement {
     fn from(a: AlterSchema) -> Self {
         Self::AlterSchema(a)
@@ -11816,6 +11834,36 @@ impl From<AlterSchema> for Statement {
 impl From<AlterType> for Statement {
     fn from(a: AlterType) -> Self {
         Self::AlterType(a)
+    }
+}
+
+impl From<AlterOperator> for Statement {
+    fn from(a: AlterOperator) -> Self {
+        Self::AlterOperator(a)
+    }
+}
+
+impl From<AlterOperatorFamily> for Statement {
+    fn from(a: AlterOperatorFamily) -> Self {
+        Self::AlterOperatorFamily(a)
+    }
+}
+
+impl From<AlterOperatorClass> for Statement {
+    fn from(a: AlterOperatorClass) -> Self {
+        Self::AlterOperatorClass(a)
+    }
+}
+
+impl From<Merge> for Statement {
+    fn from(m: Merge) -> Self {
+        Self::Merge(m)
+    }
+}
+
+impl From<AlterUser> for Statement {
+    fn from(a: AlterUser) -> Self {
+        Self::AlterUser(a)
     }
 }
 
@@ -11858,6 +11906,24 @@ impl From<CreateTrigger> for Statement {
 impl From<DropTrigger> for Statement {
     fn from(d: DropTrigger) -> Self {
         Self::DropTrigger(d)
+    }
+}
+
+impl From<DropOperator> for Statement {
+    fn from(d: DropOperator) -> Self {
+        Self::DropOperator(d)
+    }
+}
+
+impl From<DropOperatorFamily> for Statement {
+    fn from(d: DropOperatorFamily) -> Self {
+        Self::DropOperatorFamily(d)
+    }
+}
+
+impl From<DropOperatorClass> for Statement {
+    fn from(d: DropOperatorClass) -> Self {
+        Self::DropOperatorClass(d)
     }
 }
 

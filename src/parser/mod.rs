@@ -5294,6 +5294,8 @@ impl<'a> Parser<'a> {
         let db_name = self.parse_object_name(false)?;
         let mut location = None;
         let mut managed_location = None;
+        let mut default_charset = None;
+        let mut default_collation = None;
         loop {
             match self.parse_one_of_keywords(&[Keyword::LOCATION, Keyword::MANAGEDLOCATION]) {
                 Some(Keyword::LOCATION) => location = Some(self.parse_literal_string()?),
@@ -5308,6 +5310,26 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+
+        // Parse MySQL-style [DEFAULT] CHARACTER SET and [DEFAULT] COLLATE options
+        loop {
+            let has_default = self.parse_keyword(Keyword::DEFAULT);
+            if self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET])
+                || self.parse_keyword(Keyword::CHARSET)
+            {
+                self.expect_token(&Token::Eq).ok();
+                default_charset = Some(self.parse_identifier()?.value);
+            } else if self.parse_keyword(Keyword::COLLATE) {
+                self.expect_token(&Token::Eq).ok();
+                default_collation = Some(self.parse_identifier()?.value);
+            } else if has_default {
+                // DEFAULT keyword not followed by CHARACTER SET, CHARSET, or COLLATE
+                self.prev_token();
+                break;
+            } else {
+                break;
+            }
+        }
 
         Ok(Statement::CreateDatabase {
             db_name,
@@ -5325,6 +5347,8 @@ impl<'a> Parser<'a> {
             default_ddl_collation: None,
             storage_serialization_policy: None,
             comment: None,
+            default_charset,
+            default_collation,
             catalog_sync: None,
             catalog_sync_namespace_mode: None,
             catalog_sync_namespace_flatten_delimiter: None,

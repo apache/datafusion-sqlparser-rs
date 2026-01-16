@@ -16806,10 +16806,12 @@ fn parse_truncate_only() {
         TruncateTableTarget {
             name: ObjectName::from(vec![Ident::new("employee")]),
             only: false,
+            has_asterisk: false,
         },
         TruncateTableTarget {
             name: ObjectName::from(vec![Ident::new("dept")]),
             only: true,
+            has_asterisk: false,
         },
     ];
 

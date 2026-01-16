@@ -5083,6 +5083,7 @@ fn parse_truncate() {
     let table_names = vec![TruncateTableTarget {
         name: table_name.clone(),
         only: false,
+        has_asterisk: false,
     }];
     assert_eq!(
         Statement::Truncate(Truncate {
@@ -5107,6 +5108,7 @@ fn parse_truncate_with_options() {
     let table_names = vec![TruncateTableTarget {
         name: table_name.clone(),
         only: true,
+        has_asterisk: false,
     }];
 
     assert_eq!(
@@ -5136,10 +5138,12 @@ fn parse_truncate_with_table_list() {
         TruncateTableTarget {
             name: table_name_a.clone(),
             only: false,
+            has_asterisk: false,
         },
         TruncateTableTarget {
             name: table_name_b.clone(),
             only: false,
+            has_asterisk: false,
         },
     ];
 
@@ -5151,6 +5155,64 @@ fn parse_truncate_with_table_list() {
             if_exists: false,
             identity: Some(TruncateIdentityOption::Restart),
             cascade: Some(CascadeOption::Cascade),
+            on_cluster: None,
+        }),
+        truncate
+    );
+}
+
+#[test]
+fn parse_truncate_with_descendant() {
+    let truncate = pg_and_generic().verified_stmt("TRUNCATE TABLE t *");
+
+    let table_names = vec![TruncateTableTarget {
+        name: ObjectName::from(vec![Ident::new("t")]),
+        only: false,
+        has_asterisk: true,
+    }];
+
+    assert_eq!(
+        Statement::Truncate(Truncate {
+            table_names,
+            partitions: None,
+            table: true,
+            if_exists: false,
+            identity: None,
+            cascade: None,
+            on_cluster: None,
+        }),
+        truncate
+    );
+
+    let truncate = pg_and_generic()
+        .verified_stmt("TRUNCATE TABLE ONLY parent, child *, grandchild RESTART IDENTITY");
+
+    let table_names = vec![
+        TruncateTableTarget {
+            name: ObjectName::from(vec![Ident::new("parent")]),
+            only: true,
+            has_asterisk: false,
+        },
+        TruncateTableTarget {
+            name: ObjectName::from(vec![Ident::new("child")]),
+            only: false,
+            has_asterisk: true,
+        },
+        TruncateTableTarget {
+            name: ObjectName::from(vec![Ident::new("grandchild")]),
+            only: false,
+            has_asterisk: false,
+        },
+    ];
+
+    assert_eq!(
+        Statement::Truncate(Truncate {
+            table_names,
+            partitions: None,
+            table: true,
+            if_exists: false,
+            identity: Some(TruncateIdentityOption::Restart),
+            cascade: None,
             on_cluster: None,
         }),
         truncate

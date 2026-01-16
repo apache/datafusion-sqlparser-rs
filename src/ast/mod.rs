@@ -6412,10 +6412,18 @@ pub struct TruncateTableTarget {
     /// name of the table being truncated
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     pub name: ObjectName,
-    /// Postgres-specific option
-    /// [ TRUNCATE TABLE ONLY ]
+    /// Postgres-specific option: explicitly exclude descendants (also default without ONLY)
+    /// ```sql
+    /// TRUNCATE TABLE ONLY name
+    /// ```
     /// <https://www.postgresql.org/docs/current/sql-truncate.html>
     pub only: bool,
+    /// Postgres-specific option: asterisk after table name to explicitly indicate descendants
+    /// ```sql
+    /// TRUNCATE TABLE name [ * ]
+    /// ```
+    /// <https://www.postgresql.org/docs/current/sql-truncate.html>
+    pub has_asterisk: bool,
 }
 
 impl fmt::Display for TruncateTableTarget {
@@ -6423,7 +6431,11 @@ impl fmt::Display for TruncateTableTarget {
         if self.only {
             write!(f, "ONLY ")?;
         };
-        write!(f, "{}", self.name)
+        write!(f, "{}", self.name)?;
+        if self.has_asterisk {
+            write!(f, " *")?;
+        };
+        Ok(())
     }
 }
 

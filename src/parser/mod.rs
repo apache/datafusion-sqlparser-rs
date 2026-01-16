@@ -1284,6 +1284,11 @@ impl<'a> Parser<'a> {
                                 // SQLite has single-quoted identifiers
                                 id_parts.push(Ident::with_quote('\'', s))
                             }
+                            Token::Placeholder(s) => {
+                                // Snowflake uses $1, $2, etc. for positional column references
+                                // in staged data queries like: SELECT t.$1 FROM @stage t
+                                id_parts.push(Ident::new(s))
+                            }
                             Token::Mul => {
                                 return Ok(Expr::QualifiedWildcard(
                                     ObjectName::from(id_parts),
@@ -1945,6 +1950,13 @@ impl<'a> Parser<'a> {
                             Expr::Identifier(Ident::with_quote_and_span('\'', next_token.span, s));
                         chain.push(AccessExpr::Dot(expr));
                         self.advance_token(); // The consumed string
+                    }
+                    Token::Placeholder(s) => {
+                        // Snowflake uses $1, $2, etc. for positional column references
+                        // in staged data queries like: SELECT t.$1 FROM @stage t
+                        let expr = Expr::Identifier(Ident::with_span(next_token.span, s));
+                        chain.push(AccessExpr::Dot(expr));
+                        self.advance_token(); // The consumed placeholder
                     }
                     // Fallback to parsing an arbitrary expression, but restrict to expression
                     // types that are valid after the dot operator. This ensures that e.g.
@@ -15435,6 +15447,11 @@ impl<'a> Parser<'a> {
             && self.peek_keyword_with_tokens(Keyword::SEMANTIC_VIEW, &[Token::LParen])
         {
             self.parse_semantic_view_table_factor()
+        } else if dialect_of!(self is SnowflakeDialect)
+            && self.peek_token_ref().token == Token::AtSign
+        {
+            // Snowflake stage reference: @mystage or @namespace.stage
+            self.parse_snowflake_stage_table_factor()
         } else {
             let name = self.parse_object_name(true)?;
 
@@ -15529,6 +15546,35 @@ impl<'a> Parser<'a> {
 
             Ok(table)
         }
+    }
+
+    /// Parse a Snowflake stage reference as a table factor.
+    /// Handles syntax like: `@mystage1 (file_format => 'myformat', pattern => '...')`
+    fn parse_snowflake_stage_table_factor(&mut self) -> Result<TableFactor, ParserError> {
+        // Parse the stage name starting with @
+        let name = crate::dialect::parse_snowflake_stage_name(self)?;
+
+        // Parse optional stage options like (file_format => 'myformat', pattern => '...')
+        let args = if self.consume_token(&Token::LParen) {
+            Some(self.parse_table_function_args()?)
+        } else {
+            None
+        };
+
+        let alias = self.maybe_parse_table_alias()?;
+
+        Ok(TableFactor::Table {
+            name,
+            alias,
+            args,
+            with_hints: vec![],
+            version: None,
+            partitions: vec![],
+            with_ordinality: false,
+            json_path: None,
+            sample: None,
+            index_hints: vec![],
+        })
     }
 
     fn maybe_parse_table_sample(&mut self) -> Result<Option<Box<TableSample>>, ParserError> {

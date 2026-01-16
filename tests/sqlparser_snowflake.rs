@@ -4878,3 +4878,8 @@ fn test_truncate_table_if_exists() {
     snowflake().verified_stmt("TRUNCATE TABLE my_table");
     snowflake().verified_stmt("TRUNCATE IF EXISTS my_table");
 }
+
+#[test]
+fn test_select_dollar_column_from_stage() {
+    snowflake().verified_stmt("SELECT t.$1, t.$2 FROM @mystage1(file_format => 'myformat', pattern => '.*data.*[.]csv.gz') t");
+}

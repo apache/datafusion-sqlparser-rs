@@ -1230,7 +1230,7 @@ pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserE
                 parser.prev_token();
                 break;
             }
-            Token::RParen => {
+            Token::LParen | Token::RParen => {
                 parser.prev_token();
                 break;
             }
@@ -1248,6 +1248,8 @@ pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserE
     Ok(Ident::new(ident))
 }
 
+/// Parses a Snowflake stage name, which may start with `@` for internal stages.
+/// Examples: `@mystage`, `@namespace.stage`, `schema.table`
 pub fn parse_snowflake_stage_name(parser: &mut Parser) -> Result<ObjectName, ParserError> {
     match parser.next_token().token {
         Token::AtSign => {

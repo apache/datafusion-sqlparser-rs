@@ -15844,6 +15844,7 @@ impl<'a> Parser<'a> {
         let subquery = self.parse_query()?;
         self.expect_token(&Token::RParen)?;
         let alias = self.maybe_parse_table_alias()?;
+
         Ok(TableFactor::Derived {
             lateral: match lateral {
                 Lateral => true,
@@ -16874,6 +16875,10 @@ impl<'a> Parser<'a> {
                 insert_alias,
                 settings,
                 format_clause,
+                insert_first: false,
+                multi_table_into_clauses: vec![],
+                multi_table_when_clauses: vec![],
+                multi_table_else_clause: None,
             }))
         }
     }

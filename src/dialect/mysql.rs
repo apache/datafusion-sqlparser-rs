@@ -156,6 +156,10 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    fn supports_select_modifiers(&self) -> bool {
+        true
+    }
+
     fn supports_set_names(&self) -> bool {
         true
     }

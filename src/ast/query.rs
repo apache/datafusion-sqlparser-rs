@@ -334,6 +334,70 @@ pub enum SelectFlavor {
     FromFirstNoSelect,
 }
 
+/// MySQL-specific SELECT modifiers that appear after the SELECT keyword.
+///
+/// These modifiers affect query execution and optimization. They can appear
+/// in any order after SELECT and before the column list, and can be
+/// interleaved with DISTINCT/DISTINCTROW/ALL:
+///
+/// ```sql
+/// SELECT
+///     [ALL | DISTINCT | DISTINCTROW]
+///     [HIGH_PRIORITY]
+///     [STRAIGHT_JOIN]
+///     [SQL_SMALL_RESULT] [SQL_BIG_RESULT] [SQL_BUFFER_RESULT]
+///     [SQL_NO_CACHE] [SQL_CALC_FOUND_ROWS]
+///     select_expr [, select_expr] ...
+/// ```
+///
+/// See [MySQL SELECT](https://dev.mysql.com/doc/refman/8.4/en/select.html).
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SelectModifiers {
+    /// `HIGH_PRIORITY` gives the SELECT higher priority than statements that update a table.
+    pub high_priority: bool,
+    /// `STRAIGHT_JOIN` forces the optimizer to join tables in the order listed in the FROM clause.
+    pub straight_join: bool,
+    /// `SQL_SMALL_RESULT` hints that the result set is small, using in-memory temp tables.
+    pub sql_small_result: bool,
+    /// `SQL_BIG_RESULT` hints that the result set is large, using disk-based temp tables.
+    pub sql_big_result: bool,
+    /// `SQL_BUFFER_RESULT` forces the result to be put into a temporary table to release locks early.
+    pub sql_buffer_result: bool,
+    /// `SQL_NO_CACHE` tells MySQL not to cache the query result.
+    pub sql_no_cache: bool,
+    /// `SQL_CALC_FOUND_ROWS` tells MySQL to calculate the total number of rows.
+    pub sql_calc_found_rows: bool,
+}
+
+impl fmt::Display for SelectModifiers {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.high_priority {
+            f.write_str(" HIGH_PRIORITY")?;
+        }
+        if self.straight_join {
+            f.write_str(" STRAIGHT_JOIN")?;
+        }
+        if self.sql_small_result {
+            f.write_str(" SQL_SMALL_RESULT")?;
+        }
+        if self.sql_big_result {
+            f.write_str(" SQL_BIG_RESULT")?;
+        }
+        if self.sql_buffer_result {
+            f.write_str(" SQL_BUFFER_RESULT")?;
+        }
+        if self.sql_no_cache {
+            f.write_str(" SQL_NO_CACHE")?;
+        }
+        if self.sql_calc_found_rows {
+            f.write_str(" SQL_CALC_FOUND_ROWS")?;
+        }
+        Ok(())
+    }
+}
+
 /// A restricted variant of `SELECT` (without CTEs/`ORDER BY`), which may
 /// appear either as the only body item of a `Query`, or as an operand
 /// to a set operation like `UNION`.
@@ -345,6 +409,10 @@ pub struct Select {
     pub select_token: AttachedToken,
     /// `SELECT [DISTINCT] ...`
     pub distinct: Option<Distinct>,
+    /// MySQL-specific SELECT modifiers.
+    ///
+    /// See [MySQL SELECT](https://dev.mysql.com/doc/refman/8.4/en/select.html).
+    pub select_modifiers: SelectModifiers,
     /// MSSQL syntax: `TOP (<N>) [ PERCENT ] [ WITH TIES ]`
     pub top: Option<Top>,
     /// Whether the top was located before `ALL`/`DISTINCT`
@@ -414,6 +482,8 @@ impl fmt::Display for Select {
             f.write_str(" ")?;
             value_table_mode.fmt(f)?;
         }
+
+        self.select_modifiers.fmt(f)?;
 
         if let Some(ref top) = self.top {
             if self.top_before_distinct {

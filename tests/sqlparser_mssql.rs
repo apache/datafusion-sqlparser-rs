@@ -142,6 +142,7 @@ fn parse_create_procedure() {
                     body: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
                         distinct: None,
+                        select_modifiers: SelectModifiers::default(),
                         top: None,
                         top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Value(
@@ -1349,6 +1350,7 @@ fn parse_substring_in_select() {
                     body: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
                         distinct: Some(Distinct::Distinct),
+                        select_modifiers: SelectModifiers::default(),
                         top: None,
                         top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
@@ -1506,6 +1508,7 @@ fn parse_mssql_declare() {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
                     distinct: None,
+                    select_modifiers: SelectModifiers::default(),
                     top: None,
                     top_before_distinct: false,
                     projection: vec![SelectItem::UnnamedExpr(Expr::BinaryOp {

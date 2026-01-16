@@ -2230,7 +2230,8 @@ impl Spanned for Select {
         let Select {
             select_token,
             distinct: _, // todo
-            top: _,      // todo, mysql specific
+            select_modifiers: _,
+            top: _, // todo, mysql specific
             projection,
             exclude: _,
             into,
@@ -2801,7 +2802,7 @@ WHERE id = 1
             UPDATE SET target_table.description = source_table.description
 
               WHEN MATCHED AND target_table.x != 'X' THEN   DELETE
-        WHEN NOT MATCHED AND 1 THEN INSERT (product, quantity) ROW 
+        WHEN NOT MATCHED AND 1 THEN INSERT (product, quantity) ROW
         "#;
 
         let r = Parser::parse_sql(&crate::dialect::GenericDialect, sql).unwrap();

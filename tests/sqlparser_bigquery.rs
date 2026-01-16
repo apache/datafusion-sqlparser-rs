@@ -2682,6 +2682,7 @@ fn test_export_data() {
                         Span::empty()
                     )),
                     distinct: None,
+                    select_modifiers: SelectModifiers::default(),
                     top: None,
                     top_before_distinct: false,
                     projection: vec![
@@ -2786,6 +2787,7 @@ fn test_export_data() {
                         Span::empty()
                     )),
                     distinct: None,
+                    select_modifiers: SelectModifiers::default(),
                     top: None,
                     top_before_distinct: false,
                     projection: vec![

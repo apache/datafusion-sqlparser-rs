@@ -1417,6 +1417,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
                 distinct: None,
+                select_modifiers: SelectModifiers::default(),
                 top: None,
                 top_before_distinct: false,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
@@ -1472,6 +1473,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
                 distinct: None,
+                select_modifiers: SelectModifiers::default(),
                 top: None,
                 top_before_distinct: false,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
@@ -1520,6 +1522,7 @@ fn parse_escaped_backticks_with_escape() {
                 select_token: AttachedToken::empty(),
 
                 distinct: None,
+                select_modifiers: SelectModifiers::default(),
                 top: None,
                 top_before_distinct: false,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
@@ -1572,6 +1575,7 @@ fn parse_escaped_backticks_with_no_escape() {
                 select_token: AttachedToken::empty(),
 
                 distinct: None,
+                select_modifiers: SelectModifiers::default(),
                 top: None,
                 top_before_distinct: false,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
@@ -2392,6 +2396,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                     select_token: AttachedToken::empty(),
 
                     distinct: None,
+                    select_modifiers: SelectModifiers::default(),
                     top: None,
                     top_before_distinct: false,
                     projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new(
@@ -2566,6 +2571,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                 Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
                     distinct: None,
+                    select_modifiers: SelectModifiers::default(),
                     top: None,
                     top_before_distinct: false,
                     projection: vec![
@@ -3198,6 +3204,7 @@ fn parse_substring_in_select() {
                     body: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
                         distinct: Some(Distinct::Distinct),
+                        select_modifiers: SelectModifiers::default(),
                         top: None,
                         top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
@@ -3521,6 +3528,7 @@ fn parse_hex_string_introducer() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
                 distinct: None,
+                select_modifiers: SelectModifiers::default(),
                 top: None,
                 top_before_distinct: false,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Prefixed {
@@ -4237,6 +4245,189 @@ fn parse_straight_join() {
     // Without table alias
     mysql()
         .verified_stmt("SELECT a.*, b.* FROM table_a STRAIGHT_JOIN table_b AS b ON a.b_id = b.id");
+}
+
+#[test]
+fn parse_select_straight_join() {
+    let select = mysql().verified_only_select(
+        "SELECT STRAIGHT_JOIN * FROM employees e JOIN dept_emp d ON e.emp_no = d.emp_no WHERE d.emp_no = 10001",
+    );
+    assert!(select.select_modifiers.straight_join);
+
+    mysql().verified_stmt(
+        "SELECT STRAIGHT_JOIN e.emp_no, d.dept_no FROM employees e JOIN dept_emp d ON e.emp_no = d.emp_no",
+    );
+    mysql().verified_stmt("SELECT STRAIGHT_JOIN DISTINCT emp_no FROM employees");
+
+    let select = mysql().verified_only_select("SELECT * FROM employees");
+    assert!(!select.select_modifiers.straight_join);
+}
+
+#[test]
+fn parse_select_modifiers() {
+    let select = mysql().verified_only_select("SELECT HIGH_PRIORITY * FROM employees");
+    assert!(select.select_modifiers.high_priority);
+    assert!(!select.select_modifiers.straight_join);
+
+    let select = mysql().verified_only_select("SELECT SQL_SMALL_RESULT * FROM employees");
+    assert!(select.select_modifiers.sql_small_result);
+
+    let select = mysql().verified_only_select("SELECT SQL_BIG_RESULT * FROM employees");
+    assert!(select.select_modifiers.sql_big_result);
+
+    let select = mysql().verified_only_select("SELECT SQL_BUFFER_RESULT * FROM employees");
+    assert!(select.select_modifiers.sql_buffer_result);
+
+    let select = mysql().verified_only_select("SELECT SQL_NO_CACHE * FROM employees");
+    assert!(select.select_modifiers.sql_no_cache);
+
+    let select = mysql().verified_only_select("SELECT SQL_CALC_FOUND_ROWS * FROM employees");
+    assert!(select.select_modifiers.sql_calc_found_rows);
+
+    let select = mysql().verified_only_select(
+        "SELECT HIGH_PRIORITY STRAIGHT_JOIN SQL_SMALL_RESULT SQL_BIG_RESULT SQL_BUFFER_RESULT SQL_NO_CACHE SQL_CALC_FOUND_ROWS * FROM employees",
+    );
+    assert!(select.select_modifiers.high_priority);
+    assert!(select.select_modifiers.straight_join);
+    assert!(select.select_modifiers.sql_small_result);
+    assert!(select.select_modifiers.sql_big_result);
+    assert!(select.select_modifiers.sql_buffer_result);
+    assert!(select.select_modifiers.sql_no_cache);
+    assert!(select.select_modifiers.sql_calc_found_rows);
+
+    mysql().verified_stmt("SELECT HIGH_PRIORITY DISTINCT emp_no FROM employees");
+    mysql().verified_stmt("SELECT SQL_CALC_FOUND_ROWS DISTINCT emp_no FROM employees");
+    mysql().verified_stmt("SELECT HIGH_PRIORITY STRAIGHT_JOIN e.emp_no, d.dept_no FROM employees e JOIN dept_emp d ON e.emp_no = d.emp_no");
+}
+
+#[test]
+fn parse_select_modifiers_any_order() {
+    mysql().one_statement_parses_to(
+        "SELECT DISTINCT HIGH_PRIORITY * FROM employees",
+        "SELECT HIGH_PRIORITY DISTINCT * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT SQL_CALC_FOUND_ROWS DISTINCT HIGH_PRIORITY * FROM employees",
+        "SELECT HIGH_PRIORITY SQL_CALC_FOUND_ROWS DISTINCT * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT HIGH_PRIORITY SQL_SMALL_RESULT DISTINCT * FROM employees",
+        "SELECT HIGH_PRIORITY SQL_SMALL_RESULT DISTINCT * FROM employees",
+    );
+
+    mysql().one_statement_parses_to(
+        "SELECT DISTINCTROW * FROM employees",
+        "SELECT DISTINCT * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT HIGH_PRIORITY DISTINCTROW * FROM employees",
+        "SELECT HIGH_PRIORITY DISTINCT * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT DISTINCTROW HIGH_PRIORITY * FROM employees",
+        "SELECT HIGH_PRIORITY DISTINCT * FROM employees",
+    );
+
+    mysql().one_statement_parses_to("SELECT ALL * FROM employees", "SELECT * FROM employees");
+    mysql().one_statement_parses_to(
+        "SELECT ALL HIGH_PRIORITY * FROM employees",
+        "SELECT HIGH_PRIORITY * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT HIGH_PRIORITY ALL * FROM employees",
+        "SELECT HIGH_PRIORITY * FROM employees",
+    );
+
+    mysql().one_statement_parses_to(
+        "SELECT DISTINCT HIGH_PRIORITY * FROM employees",
+        "SELECT HIGH_PRIORITY DISTINCT * FROM employees",
+    );
+    let select = mysql().verified_only_select("SELECT HIGH_PRIORITY DISTINCT * FROM employees");
+    assert!(select.select_modifiers.high_priority);
+    assert!(matches!(select.distinct, Some(Distinct::Distinct)));
+
+    mysql().one_statement_parses_to(
+        "SELECT SQL_CALC_FOUND_ROWS ALL HIGH_PRIORITY * FROM employees",
+        "SELECT HIGH_PRIORITY SQL_CALC_FOUND_ROWS * FROM employees",
+    );
+    let select =
+        mysql().verified_only_select("SELECT HIGH_PRIORITY SQL_CALC_FOUND_ROWS * FROM employees");
+    assert!(select.select_modifiers.sql_calc_found_rows);
+    assert!(select.select_modifiers.high_priority);
+    assert!(select.distinct.is_none());
+}
+
+#[test]
+fn parse_select_modifiers_duplicate() {
+    mysql().one_statement_parses_to(
+        "SELECT HIGH_PRIORITY HIGH_PRIORITY * FROM employees",
+        "SELECT HIGH_PRIORITY * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT SQL_CALC_FOUND_ROWS SQL_CALC_FOUND_ROWS * FROM employees",
+        "SELECT SQL_CALC_FOUND_ROWS * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT STRAIGHT_JOIN STRAIGHT_JOIN * FROM employees",
+        "SELECT STRAIGHT_JOIN * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT SQL_NO_CACHE SQL_NO_CACHE * FROM employees",
+        "SELECT SQL_NO_CACHE * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT HIGH_PRIORITY DISTINCT HIGH_PRIORITY * FROM employees",
+        "SELECT HIGH_PRIORITY DISTINCT * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT SQL_CALC_FOUND_ROWS DISTINCT SQL_CALC_FOUND_ROWS * FROM employees",
+        "SELECT SQL_CALC_FOUND_ROWS DISTINCT * FROM employees",
+    );
+}
+
+#[test]
+fn parse_select_modifiers_ordering() {
+    mysql().one_statement_parses_to(
+        "SELECT SQL_CALC_FOUND_ROWS SQL_NO_CACHE SQL_BUFFER_RESULT SQL_BIG_RESULT SQL_SMALL_RESULT STRAIGHT_JOIN HIGH_PRIORITY * FROM employees",
+        "SELECT HIGH_PRIORITY STRAIGHT_JOIN SQL_SMALL_RESULT SQL_BIG_RESULT SQL_BUFFER_RESULT SQL_NO_CACHE SQL_CALC_FOUND_ROWS * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT SQL_NO_CACHE DISTINCT SQL_CALC_FOUND_ROWS * FROM employees",
+        "SELECT SQL_NO_CACHE SQL_CALC_FOUND_ROWS DISTINCT * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT HIGH_PRIORITY STRAIGHT_JOIN DISTINCT SQL_SMALL_RESULT * FROM employees",
+        "SELECT HIGH_PRIORITY STRAIGHT_JOIN SQL_SMALL_RESULT DISTINCT * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT HIGH_PRIORITY ALL STRAIGHT_JOIN * FROM employees",
+        "SELECT HIGH_PRIORITY STRAIGHT_JOIN * FROM employees",
+    );
+}
+
+#[test]
+fn parse_select_modifiers_errors() {
+    assert!(mysql()
+        .parse_sql_statements("SELECT DISTINCT DISTINCT * FROM t")
+        .is_err());
+    assert!(mysql()
+        .parse_sql_statements("SELECT DISTINCTROW DISTINCTROW * FROM t")
+        .is_err());
+    assert!(mysql()
+        .parse_sql_statements("SELECT DISTINCT DISTINCTROW * FROM t")
+        .is_err());
+    assert!(mysql()
+        .parse_sql_statements("SELECT ALL DISTINCT * FROM t")
+        .is_err());
+    assert!(mysql()
+        .parse_sql_statements("SELECT DISTINCT ALL * FROM t")
+        .is_err());
+    assert!(mysql()
+        .parse_sql_statements("SELECT ALL DISTINCTROW * FROM t")
+        .is_err());
+    assert!(mysql()
+        .parse_sql_statements("SELECT ALL ALL * FROM t")
+        .is_err());
 }
 
 #[test]

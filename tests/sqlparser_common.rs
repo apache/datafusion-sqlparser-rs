@@ -16835,6 +16835,15 @@ fn check_enforced() {
 }
 
 #[test]
+fn column_check_enforced() {
+    all_dialects().verified_stmt("CREATE TABLE t (x INT CHECK (x > 1) NOT ENFORCED)");
+    all_dialects().verified_stmt("CREATE TABLE t (x INT CHECK (x > 1) ENFORCED)");
+    all_dialects().verified_stmt(
+        "CREATE TABLE t (a INT CHECK (a > 0) NOT ENFORCED, b INT CHECK (b > 0) ENFORCED, c INT CHECK (c > 0))",
+    );
+}
+
+#[test]
 fn join_precedence() {
     all_dialects_except(|d| !d.supports_left_associative_joins_without_parens())
         .verified_query_with_canonical(

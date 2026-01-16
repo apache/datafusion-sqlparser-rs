@@ -5330,6 +5330,34 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // Parse MySQL-style [DEFAULT] CHARACTER SET and [DEFAULT] COLLATE options
+        //
+        // Note: The docs only mention `CHARACTER SET`, but `CHARSET` is also supported.
+        // Furthermore, MySQL will only accept one character set, raising an error if there is more
+        // than one, but will accept multiple collations and use the last one.
+        //
+        // <https://dev.mysql.com/doc/refman/8.4/en/create-database.html>
+        let mut default_charset = None;
+        let mut default_collation = None;
+        loop {
+            let has_default = self.parse_keyword(Keyword::DEFAULT);
+            if default_charset.is_none() && self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET])
+                || self.parse_keyword(Keyword::CHARSET)
+            {
+                let _ = self.consume_token(&Token::Eq);
+                default_charset = Some(self.parse_identifier()?.value);
+            } else if self.parse_keyword(Keyword::COLLATE) {
+                let _ = self.consume_token(&Token::Eq);
+                default_collation = Some(self.parse_identifier()?.value);
+            } else if has_default {
+                // DEFAULT keyword not followed by CHARACTER SET, CHARSET, or COLLATE
+                self.prev_token();
+                break;
+            } else {
+                break;
+            }
+        }
+
         Ok(Statement::CreateDatabase {
             db_name,
             if_not_exists: ine,
@@ -5346,6 +5374,8 @@ impl<'a> Parser<'a> {
             default_ddl_collation: None,
             storage_serialization_policy: None,
             comment: None,
+            default_charset,
+            default_collation,
             catalog_sync: None,
             catalog_sync_namespace_mode: None,
             catalog_sync_namespace_flatten_delimiter: None,

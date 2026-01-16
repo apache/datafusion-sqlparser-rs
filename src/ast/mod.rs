@@ -4226,6 +4226,10 @@ pub enum Statement {
         storage_serialization_policy: Option<StorageSerializationPolicy>,
         /// Optional comment.
         comment: Option<String>,
+        /// Optional default character set (MySQL).
+        default_charset: Option<String>,
+        /// Optional default collation (MySQL).
+        default_collation: Option<String>,
         /// Optional catalog sync identifier.
         catalog_sync: Option<String>,
         /// Catalog sync namespace mode.
@@ -5080,6 +5084,8 @@ impl fmt::Display for Statement {
                 default_ddl_collation,
                 storage_serialization_policy,
                 comment,
+                default_charset,
+                default_collation,
                 catalog_sync,
                 catalog_sync_namespace_mode,
                 catalog_sync_namespace_flatten_delimiter,
@@ -5137,6 +5143,14 @@ impl fmt::Display for Statement {
 
                 if let Some(comment) = comment {
                     write!(f, " COMMENT = '{comment}'")?;
+                }
+
+                if let Some(charset) = default_charset {
+                    write!(f, " DEFAULT CHARACTER SET {charset}")?;
+                }
+
+                if let Some(collation) = default_collation {
+                    write!(f, " DEFAULT COLLATE {collation}")?;
                 }
 
                 if let Some(sync) = catalog_sync {

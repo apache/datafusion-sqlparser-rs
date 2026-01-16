@@ -14793,7 +14793,6 @@ impl<'a> Parser<'a> {
                     pipe_operators: vec![],
                 }),
                 alias,
-                sample: None,
             })
         } else if dialect_of!(self is BigQueryDialect | PostgreSqlDialect | GenericDialect)
             && self.parse_keyword(Keyword::UNNEST)
@@ -15595,13 +15594,6 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::RParen)?;
         let alias = self.maybe_parse_table_alias()?;
 
-        // Parse optional SAMPLE clause after alias
-        let sample = if let Some(parsed_sample) = self.maybe_parse_table_sample()? {
-            Some(TableSampleKind::AfterTableAlias(parsed_sample))
-        } else {
-            None
-        };
-
         Ok(TableFactor::Derived {
             lateral: match lateral {
                 Lateral => true,
@@ -15609,7 +15601,6 @@ impl<'a> Parser<'a> {
             },
             subquery,
             alias,
-            sample,
         })
     }
 

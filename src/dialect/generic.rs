@@ -275,4 +275,8 @@ impl Dialect for GenericDialect {
     fn supports_comment_optimizer_hint(&self) -> bool {
         true
     }
+
+    fn supports_constraint_keyword_without_name(&self) -> bool {
+        true
+    }
 }

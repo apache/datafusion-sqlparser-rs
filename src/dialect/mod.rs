@@ -759,6 +759,13 @@ pub trait Dialect: Debug + Any {
             Token::DoubleColon | Token::ExclamationMark | Token::LBracket | Token::CaretAt => {
                 Ok(p!(DoubleColon))
             }
+            Token::Colon => match parser.peek_nth_token(1).token {
+                // When colon is followed by a string or a number, it's usually in MAP syntax.
+                Token::SingleQuotedString(_) | Token::Number(_, _) => Ok(self.prec_unknown()),
+                // In other cases, it's used in semi-structured data traversal like in variant or JSON
+                // string columns. See `JsonAccess`.
+                _ => Ok(p!(Colon)),
+            },
             Token::Arrow
             | Token::LongArrow
             | Token::HashArrow
@@ -812,6 +819,7 @@ pub trait Dialect: Debug + Any {
             Precedence::Ampersand => 23,
             Precedence::Caret => 22,
             Precedence::Pipe => 21,
+            Precedence::Colon => 21,
             Precedence::Between => 20,
             Precedence::Eq => 20,
             Precedence::Like => 19,
@@ -1269,6 +1277,8 @@ pub enum Precedence {
     Caret,
     /// Bitwise `OR` / pipe operator (`|`).
     Pipe,
+    /// `:` operator for json/variant access.
+    Colon,
     /// `BETWEEN` operator.
     Between,
     /// Equality operator (`=`).

@@ -160,6 +160,15 @@ impl Dialect for MsSqlDialect {
             None
         }
     }
+
+    fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
+        let token = parser.peek_token();
+        match token.token {
+            // lowest prec to prevent it from turning into a binary op
+            Token::Colon => Some(Ok(self.prec_unknown())),
+            _ => None,
+        }
+    }
 }
 
 impl MsSqlDialect {

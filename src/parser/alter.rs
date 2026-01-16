@@ -148,7 +148,7 @@ impl Parser<'_> {
     /// ```sql
     /// ALTER USER [ IF EXISTS ] [ <name> ] [ OPTIONS ]
     /// ```
-    pub fn parse_alter_user(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_alter_user(&mut self) -> Result<AlterUser, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let name = self.parse_identifier()?;
         let _ = self.parse_keyword(Keyword::WITH);
@@ -309,7 +309,7 @@ impl Parser<'_> {
             None
         };
 
-        Ok(Statement::AlterUser(AlterUser {
+        Ok(AlterUser {
             if_exists,
             name,
             rename_to,
@@ -329,7 +329,7 @@ impl Parser<'_> {
             set_props,
             unset_props,
             password,
-        }))
+        })
     }
 
     fn parse_mfa_method(&mut self) -> Result<MfaMethodKind, ParserError> {

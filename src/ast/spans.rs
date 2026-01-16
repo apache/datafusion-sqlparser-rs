@@ -2238,7 +2238,8 @@ impl Spanned for Select {
             select_token,
             optimizer_hint: _,
             distinct: _, // todo
-            top: _,      // todo, mysql specific
+            select_modifiers: _,
+            top: _, // todo, mysql specific
             projection,
             exclude: _,
             into,

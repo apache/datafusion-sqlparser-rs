@@ -271,4 +271,8 @@ impl Dialect for GenericDialect {
     fn supports_select_format(&self) -> bool {
         true
     }
+
+    fn supports_constraint_keyword_without_name(&self) -> bool {
+        true
+    }
 }

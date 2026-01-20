@@ -4533,3 +4533,8 @@ fn test_alter_external_table() {
     snowflake()
         .verified_stmt("ALTER EXTERNAL TABLE IF EXISTS some_table REFRESH 'year=2025/month=12/'");
 }
+
+#[test]
+fn test_select_dollar_column_from_stage() {
+    snowflake().verified_stmt("SELECT t.$1, t.$2 FROM @mystage1(file_format => 'myformat', pattern => '.*data.*[.]csv.gz') t");
+}

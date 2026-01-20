@@ -489,6 +489,19 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports concatenating string literals with a newline.
+    /// For example, the following statement would return `true`:
+    /// ```sql
+    /// SELECT 'abc' in (
+    ///   'a'
+    ///   'b'
+    ///   'c'
+    /// );
+    /// ```
+    fn supports_string_literal_concatenation_with_newline(&self) -> bool {
+        false
+    }
+
     /// Does the dialect support trailing commas in the projection list?
     fn supports_projection_trailing_commas(&self) -> bool {
         self.supports_trailing_commas()

@@ -11273,7 +11273,34 @@ impl<'a> Parser<'a> {
                 str.push_str(s.clone().as_str());
                 self.advance_token();
             }
+        } else if self
+            .dialect
+            .supports_string_literal_concatenation_with_newline()
+        {
+            // We are iterating over tokens including whitespaces, to identify
+            // string literals separated by newlines so we can concatenate them.
+            let mut after_newline = false;
+            loop {
+                match self.peek_token_no_skip().token {
+                    Token::Whitespace(Whitespace::Newline) => {
+                        after_newline = true;
+                        self.next_token_no_skip();
+                    }
+                    Token::Whitespace(_) => {
+                        self.next_token_no_skip();
+                    }
+                    Token::SingleQuotedString(ref s) | Token::DoubleQuotedString(ref s)
+                        if after_newline =>
+                    {
+                        str.push_str(s.clone().as_str());
+                        self.next_token_no_skip();
+                        after_newline = false;
+                    }
+                    _ => break,
+                }
+            }
         }
+
         str
     }
 

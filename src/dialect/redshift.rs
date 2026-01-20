@@ -147,4 +147,8 @@ impl Dialect for RedshiftSqlDialect {
     fn supports_create_table_like_parenthesized(&self) -> bool {
         true
     }
+
+    fn supports_string_literal_concatenation_with_newline(&self) -> bool {
+        true
+    }
 }

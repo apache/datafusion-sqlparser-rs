@@ -80,7 +80,7 @@ use sqlparser_derive::{Visit, VisitMut};
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct AttachedToken(pub TokenWithSpan);
+pub struct AttachedToken(pub TokenWithSpan<'static>);
 
 impl AttachedToken {
     /// Return a new Empty AttachedToken
@@ -123,13 +123,13 @@ impl Hash for AttachedToken {
     }
 }
 
-impl From<TokenWithSpan> for AttachedToken {
-    fn from(value: TokenWithSpan) -> Self {
+impl From<TokenWithSpan<'static>> for AttachedToken {
+    fn from(value: TokenWithSpan<'static>) -> Self {
         AttachedToken(value)
     }
 }
 
-impl From<AttachedToken> for TokenWithSpan {
+impl From<AttachedToken> for TokenWithSpan<'static> {
     fn from(value: AttachedToken) -> Self {
         value.0
     }

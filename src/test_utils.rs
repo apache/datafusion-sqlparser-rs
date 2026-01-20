@@ -126,7 +126,8 @@ impl TestedDialects {
             if let Some(options) = &self.options {
                 tokenizer = tokenizer.with_unescape(options.unescape);
             }
-            let tokens = tokenizer.tokenize()?;
+
+            let tokens = tokenizer.tokenized_owned()?;
             self.new_parser(dialect)
                 .with_tokens(tokens)
                 .parse_statements()

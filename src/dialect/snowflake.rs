@@ -540,7 +540,7 @@ impl Dialect for SnowflakeDialect {
     }
 
     /// See: <https://docs.snowflake.com/en/sql-reference/constructs/at-before>
-    fn supports_timestamp_versioning(&self) -> bool {
+    fn supports_table_versioning(&self) -> bool {
         true
     }
 

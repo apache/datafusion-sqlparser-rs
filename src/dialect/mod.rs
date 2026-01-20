@@ -1072,7 +1072,7 @@ pub trait Dialect: Debug + Any {
 
     /// Returns true if this dialect supports querying historical table data
     /// by specifying which version of the data to query.
-    fn supports_timestamp_versioning(&self) -> bool {
+    fn supports_table_versioning(&self) -> bool {
         false
     }
 

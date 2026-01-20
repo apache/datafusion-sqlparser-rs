@@ -15731,7 +15731,7 @@ impl<'a> Parser<'a> {
 
     /// Parses a the timestamp version specifier (i.e. query historical data)
     pub fn maybe_parse_table_version(&mut self) -> Result<Option<TableVersion>, ParserError> {
-        if self.dialect.supports_timestamp_versioning() {
+        if self.dialect.supports_table_versioning() {
             if self.parse_keywords(&[Keyword::FOR, Keyword::SYSTEM_TIME, Keyword::AS, Keyword::OF])
             {
                 let expr = self.parse_expr()?;
@@ -15743,6 +15743,9 @@ impl<'a> Parser<'a> {
             } else if self.parse_keywords(&[Keyword::TIMESTAMP, Keyword::AS, Keyword::OF]) {
                 let expr = self.parse_expr()?;
                 return Ok(Some(TableVersion::TimestampAsOf(expr)));
+            } else if self.parse_keywords(&[Keyword::VERSION, Keyword::AS, Keyword::OF]) {
+                let expr = Expr::Value(self.parse_number_value()?);
+                return Ok(Some(TableVersion::VersionAsOf(expr)));
             }
         }
         Ok(None)

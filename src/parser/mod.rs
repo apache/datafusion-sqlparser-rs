@@ -9002,7 +9002,15 @@ impl<'a> Parser<'a> {
     /// [ColumnOption::NotNull].
     fn parse_column_option_expr(&mut self) -> Result<Expr, ParserError> {
         if self.peek_token_ref().token == Token::LParen {
-            let expr: Expr = self.with_state(ParserState::Normal, |p| p.parse_prefix())?;
+            let mut expr = self.with_state(ParserState::Normal, |p| p.parse_prefix())?;
+            expr = self.parse_compound_expr(expr, vec![])?;
+            loop {
+                let next_precedence = self.get_next_precedence()?;
+                if next_precedence == 0 || self.peek_token_ref().token == Token::Period {
+                    break;
+                }
+                expr = self.parse_infix(expr, next_precedence)?;
+            }
             Ok(expr)
         } else {
             Ok(self.parse_expr()?)

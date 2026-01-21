@@ -513,6 +513,12 @@ fn parse_create_table_with_defaults() {
 }
 
 #[test]
+fn parse_default_expr_parenthesized_then_cast() {
+    // Infix operators like :: after parenthesized expression in DEFAULT
+    pg().verified_stmt("CREATE TABLE t (c TEXT DEFAULT (foo())::TEXT)");
+}
+
+#[test]
 fn parse_create_table_from_pg_dump() {
     let sql = "CREATE TABLE public.customer (
             customer_id integer DEFAULT nextval('public.customer_customer_id_seq'::regclass) NOT NULL,

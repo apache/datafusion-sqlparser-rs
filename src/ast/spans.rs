@@ -1121,6 +1121,8 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::EnableReplicaRule { name } => name.span,
             AlterTableOperation::EnableReplicaTrigger { name } => name.span,
             AlterTableOperation::EnableRowLevelSecurity => Span::empty(),
+            AlterTableOperation::ForceRowLevelSecurity => Span::empty(),
+            AlterTableOperation::NoForceRowLevelSecurity => Span::empty(),
             AlterTableOperation::EnableRule { name } => name.span,
             AlterTableOperation::EnableTrigger { name } => name.span,
             AlterTableOperation::RenamePartitions {

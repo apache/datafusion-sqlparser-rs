@@ -640,6 +640,8 @@ fn parse_alter_table_enable() {
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE REPLICA TRIGGER trigger_name");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE REPLICA RULE rule_name");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE ROW LEVEL SECURITY");
+    pg_and_generic().verified_stmt("ALTER TABLE tab FORCE ROW LEVEL SECURITY");
+    pg_and_generic().verified_stmt("ALTER TABLE tab NO FORCE ROW LEVEL SECURITY");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE RULE rule_name");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE TRIGGER ALL");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE TRIGGER USER");

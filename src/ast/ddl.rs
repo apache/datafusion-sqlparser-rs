@@ -319,6 +319,14 @@ pub enum AlterTableOperation {
     ///
     /// Note: this is a PostgreSQL-specific operation.
     EnableRowLevelSecurity,
+    /// `FORCE ROW LEVEL SECURITY`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    ForceRowLevelSecurity,
+    /// `NO FORCE ROW LEVEL SECURITY`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    NoForceRowLevelSecurity,
     /// `ENABLE RULE rewrite_rule_name`
     ///
     /// Note: this is a PostgreSQL-specific operation.
@@ -875,6 +883,12 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::EnableRowLevelSecurity => {
                 write!(f, "ENABLE ROW LEVEL SECURITY")
+            }
+            AlterTableOperation::ForceRowLevelSecurity => {
+                write!(f, "FORCE ROW LEVEL SECURITY")
+            }
+            AlterTableOperation::NoForceRowLevelSecurity => {
+                write!(f, "NO FORCE ROW LEVEL SECURITY")
             }
             AlterTableOperation::EnableRule { name } => {
                 write!(f, "ENABLE RULE {name}")

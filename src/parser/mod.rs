@@ -3334,25 +3334,35 @@ impl<'a> Parser<'a> {
     /// Syntax:
     ///
     /// ```sql
+    /// -- BigQuery style
     /// [field_name] field_type
+    /// -- Databricks/Hive style (colon separator)
+    /// field_name: field_type
     /// ```
     ///
     /// [struct]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#declaring_a_struct_type
     /// [tuple]: https://clickhouse.com/docs/en/sql-reference/data-types/tuple
+    /// [databricks]: https://docs.databricks.com/en/sql/language-manual/data-types/struct-type.html
     fn parse_struct_field_def(
         &mut self,
     ) -> Result<(StructField, MatchedTrailingBracket), ParserError> {
         // Look beyond the next item to infer whether both field name
         // and type are specified.
-        let is_anonymous_field = !matches!(
+        // Supports both:
+        //   - `field_name field_type` (BigQuery style)
+        //   - `field_name: field_type` (Databricks/Hive style)
+        let is_named_field = matches!(
             (self.peek_nth_token(0).token, self.peek_nth_token(1).token),
-            (Token::Word(_), Token::Word(_))
+            (Token::Word(_), Token::Word(_)) | (Token::Word(_), Token::Colon)
         );
 
-        let field_name = if is_anonymous_field {
-            None
+        let field_name = if is_named_field {
+            let name = self.parse_identifier()?;
+            // Consume optional colon separator (Databricks/Hive style)
+            let _ = self.consume_token(&Token::Colon);
+            Some(name)
         } else {
-            Some(self.parse_identifier()?)
+            None
         };
 
         let (field_type, trailing_bracket) = self.parse_data_type_helper()?;
@@ -11810,7 +11820,7 @@ impl<'a> Parser<'a> {
                     let field_defs = self.parse_duckdb_struct_type_def()?;
                     Ok(DataType::Struct(field_defs, StructBracketKind::Parentheses))
                 }
-                Keyword::STRUCT if dialect_is!(dialect is BigQueryDialect | GenericDialect) => {
+                Keyword::STRUCT if dialect_is!(dialect is BigQueryDialect | DatabricksDialect | GenericDialect) => {
                     self.prev_token();
                     let (field_defs, _trailing_bracket) =
                         self.parse_struct_type_def(Self::parse_struct_field_def)?;

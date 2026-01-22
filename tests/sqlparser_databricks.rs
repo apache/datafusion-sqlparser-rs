@@ -522,3 +522,70 @@ fn parse_create_table_partitioned_by() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn parse_databricks_struct_type() {
+    // Databricks uses colon-separated struct field syntax (colon is optional)
+    // https://docs.databricks.com/en/sql/language-manual/data-types/struct-type.html
+
+    // Basic struct with colon syntax - parses to canonical form without colons
+    databricks().one_statement_parses_to(
+        "CREATE TABLE t (col1 STRUCT<field1: STRING, field2: INT>)",
+        "CREATE TABLE t (col1 STRUCT<field1 STRING, field2 INT>)",
+    );
+
+    // Nested array of struct (the original issue case)
+    databricks().one_statement_parses_to(
+        "CREATE TABLE t (col1 ARRAY<STRUCT<finish_flag: STRING, survive_flag: STRING, score: INT>>)",
+        "CREATE TABLE t (col1 ARRAY<STRUCT<finish_flag STRING, survive_flag STRING, score INT>>)",
+    );
+
+    // Multiple struct columns
+    databricks().one_statement_parses_to(
+        "CREATE TABLE t (col1 STRUCT<a: INT, b: STRING>, col2 STRUCT<x: DOUBLE>)",
+        "CREATE TABLE t (col1 STRUCT<a INT, b STRING>, col2 STRUCT<x DOUBLE>)",
+    );
+
+    // Deeply nested structs
+    databricks().one_statement_parses_to(
+        "CREATE TABLE t (col1 STRUCT<outer: STRUCT<inner: STRING>>)",
+        "CREATE TABLE t (col1 STRUCT<outer STRUCT<inner STRING>>)",
+    );
+
+    // Struct with array field
+    databricks().one_statement_parses_to(
+        "CREATE TABLE t (col1 STRUCT<items: ARRAY<INT>, name: STRING>)",
+        "CREATE TABLE t (col1 STRUCT<items ARRAY<INT>, name STRING>)",
+    );
+
+    // Syntax without colons should also work (BigQuery compatible)
+    databricks().verified_stmt("CREATE TABLE t (col1 STRUCT<field1 STRING, field2 INT>)");
+
+    // Verify AST structure
+    match databricks().one_statement_parses_to(
+        "CREATE TABLE t (col1 STRUCT<field1: STRING, field2: INT>)",
+        "CREATE TABLE t (col1 STRUCT<field1 STRING, field2 INT>)",
+    ) {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(columns.len(), 1);
+            assert_eq!(columns[0].name.to_string(), "col1");
+            match &columns[0].data_type {
+                DataType::Struct(fields, StructBracketKind::AngleBrackets) => {
+                    assert_eq!(fields.len(), 2);
+                    assert_eq!(
+                        fields[0].field_name.as_ref().map(|i| i.to_string()),
+                        Some("field1".to_string())
+                    );
+                    assert_eq!(fields[0].field_type, DataType::String(None));
+                    assert_eq!(
+                        fields[1].field_name.as_ref().map(|i| i.to_string()),
+                        Some("field2".to_string())
+                    );
+                    assert_eq!(fields[1].field_type, DataType::Int(None));
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    }
+}

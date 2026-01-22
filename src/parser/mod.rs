@@ -7880,12 +7880,39 @@ impl<'a> Parser<'a> {
     pub fn parse_hive_distribution(&mut self) -> Result<HiveDistributionStyle, ParserError> {
         if self.parse_keywords(&[Keyword::PARTITIONED, Keyword::BY]) {
             self.expect_token(&Token::LParen)?;
-            let columns = self.parse_comma_separated(Parser::parse_column_def)?;
+            let columns = self.parse_comma_separated(Parser::parse_column_def_for_partition)?;
             self.expect_token(&Token::RParen)?;
             Ok(HiveDistributionStyle::PARTITIONED { columns })
         } else {
             Ok(HiveDistributionStyle::NONE)
         }
+    }
+
+    /// Parse column definition for PARTITIONED BY clause.
+    ///
+    /// Databricks allows partition columns without types when referencing
+    /// columns already defined in the table specification:
+    /// ```sql
+    /// CREATE TABLE t (col1 STRING, col2 INT) PARTITIONED BY (col1)
+    /// CREATE TABLE t (col1 STRING) PARTITIONED BY (col2 INT)
+    /// ```
+    ///
+    /// See [Databricks](https://docs.databricks.com/en/sql/language-manual/sql-ref-partition.html)
+    fn parse_column_def_for_partition(&mut self) -> Result<ColumnDef, ParserError> {
+        let name = self.parse_identifier()?;
+
+        // Check if the next token indicates there's no type specified
+        // (comma or closing paren means end of this column definition)
+        let data_type = match self.peek_token().token {
+            Token::Comma | Token::RParen => DataType::Unspecified,
+            _ => self.parse_data_type()?,
+        };
+
+        Ok(ColumnDef {
+            name,
+            data_type,
+            options: vec![],
+        })
     }
 
     /// Parse Hive formats.

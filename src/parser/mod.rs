@@ -1856,41 +1856,53 @@ impl<'a> Parser<'a> {
                         chain.push(AccessExpr::Dot(expr));
                         self.advance_token(); // The consumed string
                     }
-                    // Handle words (including keywords like INTERVAL) as identifiers
-                    // when they appear after a period. This ensures `T.interval` is
-                    // parsed as a compound identifier, not as an interval expression.
-                    // If followed by `(`, parse as a method call (but not for `(+)`
-                    // which is the outer join operator in some dialects).
-                    Token::Word(w) => {
-                        let ident = w.clone().into_ident(next_token.span);
-                        self.advance_token();
-                        if self.peek_token() == Token::LParen && !self.peek_outer_join_operator() {
-                            let expr = self.parse_function(ObjectName::from(vec![ident]))?;
-                            chain.push(AccessExpr::Dot(expr));
-                        } else {
-                            chain.push(AccessExpr::Dot(Expr::Identifier(ident)));
+                    // Fallback to parsing an arbitrary expression, but restrict to expression
+                    // types that are valid after the dot operator. This ensures that e.g.
+                    // `T.interval` is parsed as a compound identifier, not as an interval
+                    // expression.
+                    _ => {
+                        let expr = self.maybe_parse(|parser| {
+                            let expr = parser
+                                .parse_subexpr(parser.dialect.prec_value(Precedence::Period))?;
+                            match &expr {
+                                Expr::CompoundFieldAccess { .. }
+                                | Expr::CompoundIdentifier(_)
+                                | Expr::Identifier(_)
+                                | Expr::Value(_)
+                                | Expr::Function(_) => Ok(expr),
+                                _ => parser.expected("an identifier or value", parser.peek_token()),
+                            }
+                        })?;
+
+                        match expr {
+                            // If we get back a compound field access or identifier,
+                            // we flatten the nested expression.
+                            // For example if the current root is `foo`
+                            // and we get back a compound identifier expression `bar.baz`
+                            // The full expression should be `foo.bar.baz` (i.e.
+                            // a root with an access chain with 2 entries) and not
+                            // `foo.(bar.baz)` (i.e. a root with an access chain with
+                            // 1 entry`).
+                            Some(Expr::CompoundFieldAccess { root, access_chain }) => {
+                                chain.push(AccessExpr::Dot(*root));
+                                chain.extend(access_chain);
+                            }
+                            Some(Expr::CompoundIdentifier(parts)) => chain.extend(
+                                parts.into_iter().map(Expr::Identifier).map(AccessExpr::Dot),
+                            ),
+                            Some(expr) => {
+                                chain.push(AccessExpr::Dot(expr));
+                            }
+                            // If the expression is not a valid suffix, fall back to
+                            // parsing as an identifier. This handles cases like `T.interval`
+                            // where `interval` is a keyword but should be treated as an identifier.
+                            None => {
+                                chain.push(AccessExpr::Dot(Expr::Identifier(
+                                    self.parse_identifier()?,
+                                )));
+                            }
                         }
                     }
-                    // Fallback to parsing an arbitrary expression.
-                    _ => match self.parse_subexpr(self.dialect.prec_value(Precedence::Period))? {
-                        // If we get back a compound field access or identifier,
-                        // we flatten the nested expression.
-                        // For example if the current root is `foo`
-                        // and we get back a compound identifier expression `bar.baz`
-                        // The full expression should be `foo.bar.baz` (i.e.
-                        // a root with an access chain with 2 entries) and not
-                        // `foo.(bar.baz)` (i.e. a root with an access chain with
-                        // 1 entry`).
-                        Expr::CompoundFieldAccess { root, access_chain } => {
-                            chain.push(AccessExpr::Dot(*root));
-                            chain.extend(access_chain);
-                        }
-                        Expr::CompoundIdentifier(parts) => chain
-                            .extend(parts.into_iter().map(Expr::Identifier).map(AccessExpr::Dot)),
-                        expr => {
-                            chain.push(AccessExpr::Dot(expr));
-                        }
-                    },
                 }
             } else if !self.dialect.supports_partiql()
                 && self.peek_token_ref().token == Token::LBracket

@@ -4062,7 +4062,7 @@ impl fmt::Display for DropTrigger {
 /// A `TRUNCATE` statement.
 ///
 /// ```sql
-/// TRUNCATE TABLE table_names [PARTITION (partitions)] [RESTART IDENTITY | CONTINUE IDENTITY] [CASCADE | RESTRICT] [ON CLUSTER cluster_name]
+/// TRUNCATE TABLE [IF EXISTS] table_names [PARTITION (partitions)] [RESTART IDENTITY | CONTINUE IDENTITY] [CASCADE | RESTRICT] [ON CLUSTER cluster_name]
 /// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -4074,6 +4074,8 @@ pub struct Truncate {
     pub partitions: Option<Vec<Expr>>,
     /// TABLE - optional keyword
     pub table: bool,
+    /// Snowflake/Redshift-specific option: [ IF EXISTS ]
+    pub if_exists: bool,
     /// Postgres-specific option: [ RESTART IDENTITY | CONTINUE IDENTITY ]
     pub identity: Option<super::TruncateIdentityOption>,
     /// Postgres-specific option: [ CASCADE | RESTRICT ]
@@ -4086,10 +4088,11 @@ pub struct Truncate {
 impl fmt::Display for Truncate {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let table = if self.table { "TABLE " } else { "" };
+        let if_exists = if self.if_exists { "IF EXISTS " } else { "" };
 
         write!(
             f,
-            "TRUNCATE {table}{table_names}",
+            "TRUNCATE {table}{if_exists}{table_names}",
             table_names = display_comma_separated(&self.table_names)
         )?;
 

@@ -4533,3 +4533,10 @@ fn test_alter_external_table() {
     snowflake()
         .verified_stmt("ALTER EXTERNAL TABLE IF EXISTS some_table REFRESH 'year=2025/month=12/'");
 }
+
+#[test]
+fn test_truncate_table_if_exists() {
+    snowflake().verified_stmt("TRUNCATE TABLE IF EXISTS my_table");
+    snowflake().verified_stmt("TRUNCATE TABLE my_table");
+    snowflake().verified_stmt("TRUNCATE IF EXISTS my_table");
+}

@@ -1054,6 +1054,7 @@ impl<'a> Parser<'a> {
     /// Parse `TRUNCATE` statement.
     pub fn parse_truncate(&mut self) -> Result<Truncate, ParserError> {
         let table = self.parse_keyword(Keyword::TABLE);
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
 
         let table_names = self
             .parse_comma_separated(|p| {
@@ -1091,6 +1092,7 @@ impl<'a> Parser<'a> {
             table_names,
             partitions,
             table,
+            if_exists,
             identity,
             cascade,
             on_cluster,

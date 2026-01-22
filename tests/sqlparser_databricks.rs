@@ -399,7 +399,8 @@ fn parse_optimize_table() {
 
     // With WHERE clause
     databricks().verified_stmt("OPTIMIZE my_table WHERE date = '2023-01-01'");
-    databricks().verified_stmt("OPTIMIZE my_table WHERE date >= '2023-01-01' AND date < '2023-02-01'");
+    databricks()
+        .verified_stmt("OPTIMIZE my_table WHERE date >= '2023-01-01' AND date < '2023-02-01'");
 
     // With ZORDER BY clause
     databricks().verified_stmt("OPTIMIZE my_table ZORDER BY (col1)");
@@ -408,7 +409,8 @@ fn parse_optimize_table() {
 
     // Combined WHERE and ZORDER BY
     databricks().verified_stmt("OPTIMIZE my_table WHERE date = '2023-01-01' ZORDER BY (col1)");
-    databricks().verified_stmt("OPTIMIZE my_table WHERE date >= '2023-01-01' ZORDER BY (col1, col2)");
+    databricks()
+        .verified_stmt("OPTIMIZE my_table WHERE date >= '2023-01-01' ZORDER BY (col1, col2)");
 
     // Verify AST structure
     match databricks()
@@ -466,21 +468,19 @@ fn parse_create_table_partitioned_by() {
     databricks().verified_stmt("CREATE TABLE t (col1 STRING, col2 INT) PARTITIONED BY (col1)");
 
     // Multiple partition columns without types
-    databricks()
-        .verified_stmt("CREATE TABLE t (col1 STRING, col2 INT, col3 DATE) PARTITIONED BY (col1, col2)");
+    databricks().verified_stmt(
+        "CREATE TABLE t (col1 STRING, col2 INT, col3 DATE) PARTITIONED BY (col1, col2)",
+    );
 
     // Partition columns with types (new columns not in table spec)
     databricks().verified_stmt("CREATE TABLE t (name STRING) PARTITIONED BY (year INT, month INT)");
 
     // Mixed: some with types, some without
-    databricks().verified_stmt(
-        "CREATE TABLE t (id INT, name STRING) PARTITIONED BY (region, year INT)",
-    );
+    databricks()
+        .verified_stmt("CREATE TABLE t (id INT, name STRING) PARTITIONED BY (region, year INT)");
 
     // Verify AST structure for column without type
-    match databricks()
-        .verified_stmt("CREATE TABLE t (col1 STRING) PARTITIONED BY (col1)")
-    {
+    match databricks().verified_stmt("CREATE TABLE t (col1 STRING) PARTITIONED BY (col1)") {
         Statement::CreateTable(CreateTable {
             name,
             columns,
@@ -491,7 +491,9 @@ fn parse_create_table_partitioned_by() {
             assert_eq!(columns.len(), 1);
             assert_eq!(columns[0].name.to_string(), "col1");
             match hive_distribution {
-                HiveDistributionStyle::PARTITIONED { columns: partition_cols } => {
+                HiveDistributionStyle::PARTITIONED {
+                    columns: partition_cols,
+                } => {
                     assert_eq!(partition_cols.len(), 1);
                     assert_eq!(partition_cols[0].name.to_string(), "col1");
                     assert_eq!(partition_cols[0].data_type, DataType::Unspecified);
@@ -503,21 +505,17 @@ fn parse_create_table_partitioned_by() {
     }
 
     // Verify AST structure for column with type
-    match databricks()
-        .verified_stmt("CREATE TABLE t (name STRING) PARTITIONED BY (year INT)")
-    {
+    match databricks().verified_stmt("CREATE TABLE t (name STRING) PARTITIONED BY (year INT)") {
         Statement::CreateTable(CreateTable {
-            hive_distribution,
+            hive_distribution:
+                HiveDistributionStyle::PARTITIONED {
+                    columns: partition_cols,
+                },
             ..
         }) => {
-            match hive_distribution {
-                HiveDistributionStyle::PARTITIONED { columns: partition_cols } => {
-                    assert_eq!(partition_cols.len(), 1);
-                    assert_eq!(partition_cols[0].name.to_string(), "year");
-                    assert_eq!(partition_cols[0].data_type, DataType::Int(None));
-                }
-                _ => unreachable!(),
-            }
+            assert_eq!(partition_cols.len(), 1);
+            assert_eq!(partition_cols[0].name.to_string(), "year");
+            assert_eq!(partition_cols[0].data_type, DataType::Int(None));
         }
         _ => unreachable!(),
     }

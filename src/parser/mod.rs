@@ -11820,7 +11820,8 @@ impl<'a> Parser<'a> {
                     let field_defs = self.parse_duckdb_struct_type_def()?;
                     Ok(DataType::Struct(field_defs, StructBracketKind::Parentheses))
                 }
-                Keyword::STRUCT if dialect_is!(dialect is BigQueryDialect | DatabricksDialect | GenericDialect) => {
+                Keyword::STRUCT if dialect_is!(dialect is BigQueryDialect | DatabricksDialect | GenericDialect) =>
+                {
                     self.prev_token();
                     let (field_defs, _trailing_bracket) =
                         self.parse_struct_type_def(Self::parse_struct_field_def)?;

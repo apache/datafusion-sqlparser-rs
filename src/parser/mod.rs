@@ -697,8 +697,10 @@ impl<'a> Parser<'a> {
                     self.parse_install()
                 }
                 Keyword::LOAD => self.parse_load(),
-                // `OPTIMIZE` is clickhouse specific https://clickhouse.tech/docs/en/sql-reference/statements/optimize/
-                Keyword::OPTIMIZE if dialect_of!(self is ClickHouseDialect | GenericDialect) => {
+                // `OPTIMIZE` is clickhouse/databricks specific
+                // ClickHouse: https://clickhouse.tech/docs/en/sql-reference/statements/optimize/
+                // Databricks: https://docs.databricks.com/en/sql/language-manual/delta-optimize.html
+                Keyword::OPTIMIZE if dialect_of!(self is ClickHouseDialect | DatabricksDialect | GenericDialect) => {
                     self.parse_optimize_table()
                 }
                 // `COMMENT` is snowflake specific https://docs.snowflake.com/en/sql-reference/sql/comment
@@ -18204,13 +18206,24 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// ClickHouse:
     /// ```sql
     /// OPTIMIZE TABLE [db.]name [ON CLUSTER cluster] [PARTITION partition | PARTITION ID 'partition_id'] [FINAL] [DEDUPLICATE [BY expression]]
     /// ```
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
+    ///
+    /// Databricks:
+    /// ```sql
+    /// OPTIMIZE table_name [WHERE predicate] [ZORDER BY (col_name1 [, ...])]
+    /// ```
+    /// [Databricks](https://docs.databricks.com/en/sql/language-manual/delta-optimize.html)
     pub fn parse_optimize_table(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword_is(Keyword::TABLE)?;
+        // Check for TABLE keyword (ClickHouse uses it, Databricks does not)
+        let has_table_keyword = self.parse_keyword(Keyword::TABLE);
+
         let name = self.parse_object_name(false)?;
+
+        // ClickHouse-specific options
         let on_cluster = self.parse_optional_on_cluster()?;
 
         let partition = if self.parse_keyword(Keyword::PARTITION) {
@@ -18224,6 +18237,7 @@ impl<'a> Parser<'a> {
         };
 
         let include_final = self.parse_keyword(Keyword::FINAL);
+
         let deduplicate = if self.parse_keyword(Keyword::DEDUPLICATE) {
             if self.parse_keyword(Keyword::BY) {
                 Some(Deduplicate::ByExpression(self.parse_expr()?))
@@ -18234,12 +18248,31 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // Databricks-specific options
+        let predicate = if self.parse_keyword(Keyword::WHERE) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
+        let zorder = if self.parse_keywords(&[Keyword::ZORDER, Keyword::BY]) {
+            self.expect_token(&Token::LParen)?;
+            let columns = self.parse_comma_separated(|p| p.parse_expr())?;
+            self.expect_token(&Token::RParen)?;
+            Some(columns)
+        } else {
+            None
+        };
+
         Ok(Statement::OptimizeTable {
             name,
+            has_table_keyword,
             on_cluster,
             partition,
             include_final,
             deduplicate,
+            predicate,
+            zorder,
         })
     }
 

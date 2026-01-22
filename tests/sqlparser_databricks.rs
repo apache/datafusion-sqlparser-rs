@@ -389,3 +389,70 @@ fn parse_table_time_travel() {
         .parse_sql_statements("SELECT 1 FROM t1 VERSION AS OF 1 - 2",)
         .is_err())
 }
+
+#[test]
+fn parse_optimize_table() {
+    // Basic OPTIMIZE (Databricks style - no TABLE keyword)
+    databricks().verified_stmt("OPTIMIZE my_table");
+    databricks().verified_stmt("OPTIMIZE db.my_table");
+    databricks().verified_stmt("OPTIMIZE catalog.db.my_table");
+
+    // With WHERE clause
+    databricks().verified_stmt("OPTIMIZE my_table WHERE date = '2023-01-01'");
+    databricks().verified_stmt("OPTIMIZE my_table WHERE date >= '2023-01-01' AND date < '2023-02-01'");
+
+    // With ZORDER BY clause
+    databricks().verified_stmt("OPTIMIZE my_table ZORDER BY (col1)");
+    databricks().verified_stmt("OPTIMIZE my_table ZORDER BY (col1, col2)");
+    databricks().verified_stmt("OPTIMIZE my_table ZORDER BY (col1, col2, col3)");
+
+    // Combined WHERE and ZORDER BY
+    databricks().verified_stmt("OPTIMIZE my_table WHERE date = '2023-01-01' ZORDER BY (col1)");
+    databricks().verified_stmt("OPTIMIZE my_table WHERE date >= '2023-01-01' ZORDER BY (col1, col2)");
+
+    // Verify AST structure
+    match databricks()
+        .verified_stmt("OPTIMIZE my_table WHERE date = '2023-01-01' ZORDER BY (col1, col2)")
+    {
+        Statement::OptimizeTable {
+            name,
+            has_table_keyword,
+            on_cluster,
+            partition,
+            include_final,
+            deduplicate,
+            predicate,
+            zorder,
+        } => {
+            assert_eq!(name.to_string(), "my_table");
+            assert!(!has_table_keyword);
+            assert!(on_cluster.is_none());
+            assert!(partition.is_none());
+            assert!(!include_final);
+            assert!(deduplicate.is_none());
+            assert!(predicate.is_some());
+            assert_eq!(
+                zorder,
+                Some(vec![
+                    Expr::Identifier(Ident::new("col1")),
+                    Expr::Identifier(Ident::new("col2")),
+                ])
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // Negative cases
+    assert_eq!(
+        databricks()
+            .parse_sql_statements("OPTIMIZE my_table ZORDER BY")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: (, found: EOF".to_string())
+    );
+    assert_eq!(
+        databricks()
+            .parse_sql_statements("OPTIMIZE my_table ZORDER BY ()")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: an expression, found: )".to_string())
+    );
+}

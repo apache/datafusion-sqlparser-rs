@@ -55,7 +55,7 @@ pub use self::sqlite::SQLiteDialect;
 /// Macro for streamlining the creation of derived `Dialect` objects.
 /// The generated struct includes `new()` and `default()` constructors.
 /// Requires the `derive-dialect` feature.
-/// 
+///
 /// # Syntax
 ///
 /// ```text

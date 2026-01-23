@@ -4931,9 +4931,9 @@ impl fmt::Display for Statement {
                     f,
                     "{tables}{read}{export}",
                     tables = if !tables.is_empty() {
-                        " ".to_string() + &display_comma_separated(tables).to_string()
+                        format!(" {}", display_comma_separated(tables))
                     } else {
-                        "".to_string()
+                        String::new()
                     },
                     export = if *export { " FOR EXPORT" } else { "" },
                     read = if *read_lock { " WITH READ LOCK" } else { "" }

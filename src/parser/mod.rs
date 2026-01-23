@@ -11149,16 +11149,14 @@ impl<'a> Parser<'a> {
     /// Parse a single tab-separated value row used by `COPY` payload parsing.
     pub fn parse_tab_value(&mut self) -> Vec<Option<String>> {
         let mut values = vec![];
-        let mut content = String::from("");
+        let mut content = String::new();
         while let Some(t) = self.next_token_no_skip().map(|t| &t.token) {
             match t {
                 Token::Whitespace(Whitespace::Tab) => {
-                    values.push(Some(content.to_string()));
-                    content.clear();
+                    values.push(Some(core::mem::take(&mut content)));
                 }
                 Token::Whitespace(Whitespace::Newline) => {
-                    values.push(Some(content.to_string()));
-                    content.clear();
+                    values.push(Some(core::mem::take(&mut content)));
                 }
                 Token::Backslash => {
                     if self.consume_token(&Token::Period) {
@@ -11283,7 +11281,7 @@ impl<'a> Parser<'a> {
                     Token::Number(w, false) => Ok(Ident::with_span(next_token.span, w)),
                     _ => self.expected("placeholder", next_token),
                 }?;
-                Ok(Value::Placeholder(tok.to_string() + &ident.value)
+                Ok(Value::Placeholder(format!("{tok}{}", ident.value))
                     .with_span(Span::new(span.start, ident.span.end)))
             }
             unexpected => self.expected(

@@ -1746,21 +1746,10 @@ fn parse_multi_table_insert_into_clause(
 ) -> Result<MultiTableInsertIntoClause, ParserError> {
     let table_name = parser.parse_object_name(false)?;
 
-    // Parse optional column list
-    let columns = if parser.peek_token() == Token::LParen && !parser.peek_keyword(Keyword::VALUES) {
-        // Check if this is a column list (not VALUES)
-        let peeked = parser.peek_tokens::<2>();
-        if peeked[0] == Token::LParen {
-            // Could be columns - try to parse
-            parser
-                .maybe_parse(|p| p.parse_parenthesized_column_list(IsOptional::Optional, false))?
-                .unwrap_or_default()
-        } else {
-            vec![]
-        }
-    } else {
-        vec![]
-    };
+    // Parse optional column list: ( <column_name> [, ...] )
+    let columns = parser
+        .maybe_parse(|p| p.parse_parenthesized_column_list(IsOptional::Mandatory, false))?
+        .unwrap_or_default();
 
     // Parse optional VALUES clause
     let values = if parser.parse_keyword(Keyword::VALUES) {

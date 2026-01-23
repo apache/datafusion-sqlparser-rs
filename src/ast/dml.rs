@@ -121,131 +121,143 @@ impl Display for Insert {
         let is_multi_table = !self.multi_table_into_clauses.is_empty()
             || !self.multi_table_when_clauses.is_empty();
 
-        if is_multi_table {
-            // Snowflake multi-table INSERT format
-            write!(f, "INSERT")?;
-            if self.overwrite {
-                write!(f, " OVERWRITE")?;
-            }
-            if self.insert_first {
-                write!(f, " FIRST")?;
-            } else {
-                write!(f, " ALL")?;
-            }
-
-            // Unconditional multi-table insert: INTO clauses directly after ALL
-            for into_clause in &self.multi_table_into_clauses {
-                SpaceOrNewline.fmt(f)?;
-                write!(f, "{}", into_clause)?;
-            }
-
-            // Conditional multi-table insert: WHEN clauses
-            for when_clause in &self.multi_table_when_clauses {
-                SpaceOrNewline.fmt(f)?;
-                write!(f, "{}", when_clause)?;
-            }
-
-            // ELSE clause
-            if let Some(else_clauses) = &self.multi_table_else_clause {
-                SpaceOrNewline.fmt(f)?;
-                write!(f, "ELSE")?;
-                for into_clause in else_clauses {
-                    SpaceOrNewline.fmt(f)?;
-                    write!(f, "{}", into_clause)?;
-                }
-            }
-
-            // Source query
-            if let Some(source) = &self.source {
-                SpaceOrNewline.fmt(f)?;
-                source.fmt(f)?;
-            }
-            return Ok(());
-        }
-
-        // Standard INSERT format
-        let table_name = if let Some(alias) = &self.table_alias {
-            format!("{0} AS {alias}", self.table)
-        } else {
-            self.table.to_string()
-        };
-
+        // SQLite OR conflict has a special format: INSERT OR ... INTO table_name
         if let Some(on_conflict) = self.or {
+            let table_name: String = if let Some(alias) = &self.table_alias {
+                format!("{0} AS {alias}", self.table)
+            } else {
+                self.table.to_string()
+            };
             write!(f, "INSERT {on_conflict} INTO {table_name} ")?;
         } else {
             write!(
                 f,
-                "{start}",
-                start = if self.replace_into {
-                    "REPLACE"
-                } else {
-                    "INSERT"
-                },
+                "{}",
+                if self.replace_into { "REPLACE" } else { "INSERT" }
             )?;
+
             if let Some(priority) = self.priority {
-                write!(f, " {priority}",)?;
+                write!(f, " {priority}")?;
             }
 
-            write!(
-                f,
-                "{ignore}{over}{int}{tbl} {table_name} ",
-                table_name = table_name,
-                ignore = if self.ignore { " IGNORE" } else { "" },
-                over = if self.overwrite { " OVERWRITE" } else { "" },
-                int = if self.into { " INTO" } else { "" },
-                tbl = if self.has_table_keyword { " TABLE" } else { "" },
-            )?;
+            if self.ignore {
+                write!(f, " IGNORE")?;
+            }
+
+            if self.overwrite {
+                write!(f, " OVERWRITE")?;
+            }
+
+            if is_multi_table {
+                write!(f, " {}", if self.insert_first { "FIRST" } else { "ALL" })?;
+            }
+
+            if self.into {
+                write!(f, " INTO")?;
+            }
+
+            if self.has_table_keyword {
+                write!(f, " TABLE")?;
+            }
+
+            if !is_multi_table {
+                let table_name = if let Some(alias) = &self.table_alias {
+                    format!("{0} AS {alias}", self.table)
+                } else {
+                    self.table.to_string()
+                };
+                write!(f, " {table_name} ")?;
+            }
         }
-        if !self.columns.is_empty() {
+
+        if !is_multi_table && !self.columns.is_empty() {
             write!(f, "({})", display_comma_separated(&self.columns))?;
             SpaceOrNewline.fmt(f)?;
         }
-        if let Some(ref parts) = self.partitioned {
-            if !parts.is_empty() {
-                write!(f, "PARTITION ({})", display_comma_separated(parts))?;
-                SpaceOrNewline.fmt(f)?;
-            }
-        }
-        if !self.after_columns.is_empty() {
-            write!(f, "({})", display_comma_separated(&self.after_columns))?;
-            SpaceOrNewline.fmt(f)?;
-        }
-
-        if let Some(settings) = &self.settings {
-            write!(f, "SETTINGS {}", display_comma_separated(settings))?;
-            SpaceOrNewline.fmt(f)?;
-        }
-
-        if let Some(source) = &self.source {
-            source.fmt(f)?;
-        } else if !self.assignments.is_empty() {
-            write!(f, "SET")?;
-            indented_list(f, &self.assignments)?;
-        } else if let Some(format_clause) = &self.format_clause {
-            format_clause.fmt(f)?;
-        } else if self.columns.is_empty() {
-            write!(f, "DEFAULT VALUES")?;
-        }
-
-        if let Some(insert_alias) = &self.insert_alias {
-            write!(f, " AS {0}", insert_alias.row_alias)?;
-
-            if let Some(col_aliases) = &insert_alias.col_aliases {
-                if !col_aliases.is_empty() {
-                    write!(f, " ({})", display_comma_separated(col_aliases))?;
+        if !is_multi_table {
+            if let Some(ref parts) = self.partitioned {
+                if !parts.is_empty() {
+                    write!(f, "PARTITION ({})", display_comma_separated(parts))?;
+                    SpaceOrNewline.fmt(f)?;
                 }
             }
         }
 
-        if let Some(on) = &self.on {
-            write!(f, "{on}")?;
+        if !is_multi_table && !self.after_columns.is_empty() {
+            write!(f, "({})", display_comma_separated(&self.after_columns))?;
+            SpaceOrNewline.fmt(f)?;
         }
 
-        if let Some(returning) = &self.returning {
-            SpaceOrNewline.fmt(f)?;
-            f.write_str("RETURNING")?;
-            indented_list(f, returning)?;
+        if !is_multi_table {
+            if let Some(settings) = &self.settings {
+                write!(f, "SETTINGS {}", display_comma_separated(settings))?;
+                SpaceOrNewline.fmt(f)?;
+            }
         }
+
+        for into_clause in &self.multi_table_into_clauses {
+            SpaceOrNewline.fmt(f)?;
+            write!(f, "{}", into_clause)?;
+        }
+
+        for when_clause in &self.multi_table_when_clauses {
+            SpaceOrNewline.fmt(f)?;
+            write!(f, "{}", when_clause)?;
+        }
+
+        if let Some(else_clauses) = &self.multi_table_else_clause {
+            SpaceOrNewline.fmt(f)?;
+            write!(f, "ELSE")?;
+            for into_clause in else_clauses {
+                SpaceOrNewline.fmt(f)?;
+                write!(f, "{}", into_clause)?;
+            }
+        }
+
+        if is_multi_table {
+            if let Some(source) = &self.source {
+                SpaceOrNewline.fmt(f)?;
+                source.fmt(f)?;
+            }
+        } else {
+            if let Some(source) = &self.source {
+                source.fmt(f)?;
+            } else if !self.assignments.is_empty() {
+                write!(f, "SET")?;
+                indented_list(f, &self.assignments)?;
+            } else if let Some(format_clause) = &self.format_clause {
+                format_clause.fmt(f)?;
+            } else if self.columns.is_empty() {
+                write!(f, "DEFAULT VALUES")?;
+            }
+        }
+
+        if !is_multi_table {
+            if let Some(insert_alias) = &self.insert_alias {
+                write!(f, " AS {0}", insert_alias.row_alias)?;
+
+                if let Some(col_aliases) = &insert_alias.col_aliases {
+                    if !col_aliases.is_empty() {
+                        write!(f, " ({})", display_comma_separated(col_aliases))?;
+                    }
+                }
+            }
+        }
+
+        if !is_multi_table {
+            if let Some(on) = &self.on {
+                write!(f, "{on}")?;
+            }
+        }
+
+        if !is_multi_table {
+            if let Some(returning) = &self.returning {
+                SpaceOrNewline.fmt(f)?;
+                f.write_str("RETURNING")?;
+                indented_list(f, returning)?;
+            }
+        }
+
         Ok(())
     }
 }

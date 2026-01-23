@@ -1755,7 +1755,7 @@ impl<'a> Tokenizer<'a> {
                 '?' => {
                     chars.next();
                     let s = peeking_take_while(chars, |ch| ch.is_numeric());
-                    Ok(Some(Token::Placeholder(String::from("?") + &s)))
+                    Ok(Some(Token::Placeholder(format!("?{s}"))))
                 }
 
                 // identifier or keyword
@@ -1904,7 +1904,7 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
             } else {
-                return Ok(Token::Placeholder(String::from("$") + &value));
+                return Ok(Token::Placeholder(format!("${value}")));
             }
         }
 

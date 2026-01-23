@@ -113,4 +113,19 @@ impl Dialect for DuckDbDialect {
     fn supports_notnull_operator(&self) -> bool {
         true
     }
+
+    /// See <https://duckdb.org/docs/extensions/overview>
+    fn supports_install(&self) -> bool {
+        true
+    }
+
+    /// See <https://duckdb.org/docs/sql/statements/attach#detach-syntax>
+    fn supports_detach(&self) -> bool {
+        true
+    }
+
+    /// See <https://duckdb.org/docs/sql/query_syntax/select#replace-clause>
+    fn supports_select_wildcard_replace(&self) -> bool {
+        true
+    }
 }

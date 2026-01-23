@@ -223,4 +223,52 @@ impl Dialect for GenericDialect {
     fn supports_lambda_functions(&self) -> bool {
         true
     }
+
+    fn supports_select_wildcard_replace(&self) -> bool {
+        true
+    }
+
+    fn supports_select_wildcard_ilike(&self) -> bool {
+        true
+    }
+
+    fn supports_select_wildcard_rename(&self) -> bool {
+        true
+    }
+
+    fn supports_optimize_table(&self) -> bool {
+        true
+    }
+
+    fn supports_install(&self) -> bool {
+        true
+    }
+
+    fn supports_detach(&self) -> bool {
+        true
+    }
+
+    fn supports_prewhere(&self) -> bool {
+        true
+    }
+
+    fn supports_with_fill(&self) -> bool {
+        true
+    }
+
+    fn supports_limit_by(&self) -> bool {
+        true
+    }
+
+    fn supports_interpolate(&self) -> bool {
+        true
+    }
+
+    fn supports_settings(&self) -> bool {
+        true
+    }
+
+    fn supports_select_format(&self) -> bool {
+        true
+    }
 }

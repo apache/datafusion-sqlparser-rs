@@ -616,6 +616,21 @@ impl Dialect for SnowflakeDialect {
     fn supports_semantic_view_table_factor(&self) -> bool {
         true
     }
+
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/select#parameters>
+    fn supports_select_wildcard_replace(&self) -> bool {
+        true
+    }
+
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/select#parameters>
+    fn supports_select_wildcard_ilike(&self) -> bool {
+        true
+    }
+
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/select#parameters>
+    fn supports_select_wildcard_rename(&self) -> bool {
+        true
+    }
 }
 
 // Peeks ahead to identify tokens that are expected after

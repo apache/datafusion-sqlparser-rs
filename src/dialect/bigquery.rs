@@ -156,4 +156,9 @@ impl Dialect for BigQueryDialect {
     fn supports_create_table_multi_schema_info_sources(&self) -> bool {
         true
     }
+
+    /// See <https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#select_replace>
+    fn supports_select_wildcard_replace(&self) -> bool {
+        true
+    }
 }

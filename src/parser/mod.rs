@@ -1460,7 +1460,7 @@ impl<'a> Parser<'a> {
             if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
                 {
                     Ok(Some(Expr::Function(Function {
-                        name: ObjectName::from(vec![w.clone().into_ident(w_span)]),
+                        name: ObjectName::from(vec![w.to_ident(w_span)]),
                         uses_odbc_syntax: false,
                         parameters: FunctionArguments::None,
                         args: FunctionArguments::None,
@@ -1475,7 +1475,7 @@ impl<'a> Parser<'a> {
             | Keyword::CURRENT_DATE
             | Keyword::LOCALTIME
             | Keyword::LOCALTIMESTAMP => {
-                Ok(Some(self.parse_time_functions(ObjectName::from(vec![w.clone().into_ident(w_span)]))?))
+                Ok(Some(self.parse_time_functions(ObjectName::from(vec![w.to_ident(w_span)]))?))
             }
             Keyword::CASE => Ok(Some(self.parse_case_expr()?)),
             Keyword::CONVERT => Ok(Some(self.parse_convert_expr(false)?)),
@@ -1500,7 +1500,7 @@ impl<'a> Parser<'a> {
             Keyword::CEIL => Ok(Some(self.parse_ceil_floor_expr(true)?)),
             Keyword::FLOOR => Ok(Some(self.parse_ceil_floor_expr(false)?)),
             Keyword::POSITION if self.peek_token_ref().token == Token::LParen => {
-                Ok(Some(self.parse_position_expr(w.clone().into_ident(w_span))?))
+                Ok(Some(self.parse_position_expr(w.to_ident(w_span))?))
             }
             Keyword::SUBSTR | Keyword::SUBSTRING => {
                 self.prev_token();
@@ -1522,7 +1522,7 @@ impl<'a> Parser<'a> {
                     let query = self.parse_query()?;
                     self.expect_token(&Token::RParen)?;
                     Ok(Some(Expr::Function(Function {
-                        name: ObjectName::from(vec![w.clone().into_ident(w_span)]),
+                        name: ObjectName::from(vec![w.to_ident(w_span)]),
                         uses_odbc_syntax: false,
                         parameters: FunctionArguments::None,
                         args: FunctionArguments::Subquery(query),
@@ -1572,7 +1572,7 @@ impl<'a> Parser<'a> {
     ) -> Result<Expr, ParserError> {
         match self.peek_token().token {
             Token::LParen if !self.peek_outer_join_operator() => {
-                let id_parts = vec![w.clone().into_ident(w_span)];
+                let id_parts = vec![w.to_ident(w_span)];
                 self.parse_function(ObjectName::from(id_parts))
             }
             // string introducer https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html
@@ -1582,7 +1582,7 @@ impl<'a> Parser<'a> {
                 if w.value.starts_with('_') =>
             {
                 Ok(Expr::Prefixed {
-                    prefix: w.clone().into_ident(w_span),
+                    prefix: w.to_ident(w_span),
                     value: self.parse_introduced_string_expr()?.into(),
                 })
             }
@@ -1593,19 +1593,19 @@ impl<'a> Parser<'a> {
                 if w.value.starts_with('_') =>
             {
                 Ok(Expr::Prefixed {
-                    prefix: w.clone().into_ident(w_span),
+                    prefix: w.to_ident(w_span),
                     value: self.parse_introduced_string_expr()?.into(),
                 })
             }
             Token::Arrow if self.dialect.supports_lambda_functions() => {
                 self.expect_token(&Token::Arrow)?;
                 Ok(Expr::Lambda(LambdaFunction {
-                    params: OneOrManyWithParens::One(w.clone().into_ident(w_span)),
+                    params: OneOrManyWithParens::One(w.to_ident(w_span)),
                     body: Box::new(self.parse_expr()?),
                     syntax: LambdaSyntax::Arrow,
                 }))
             }
-            _ => Ok(Expr::Identifier(w.clone().into_ident(w_span))),
+            _ => Ok(Expr::Identifier(w.to_ident(w_span))),
         }
     }
 
@@ -12401,9 +12401,10 @@ impl<'a> Parser<'a> {
     pub fn parse_identifiers(&mut self) -> Result<Vec<Ident>, ParserError> {
         let mut idents = vec![];
         loop {
-            match &self.peek_token_ref().token {
+            let token = self.peek_token_ref();
+            match &token.token {
                 Token::Word(w) => {
-                    idents.push(w.clone().into_ident(self.peek_token_ref().span));
+                    idents.push(w.to_ident(token.span));
                 }
                 Token::EOF | Token::Eq | Token::SemiColon => break,
                 _ => {}
@@ -19203,8 +19204,11 @@ fn maybe_prefixed_expr(expr: Expr, prefix: Option<Ident>) -> Expr {
 }
 
 impl Word {
-    #[deprecated(since = "0.54.0", note = "please use `into_ident` instead")]
-    /// Convert this word into an [`Ident`] identifier
+    /// Convert a reference to this word into an [`Ident`] by cloning the value.
+    ///
+    /// Use this method when you need to keep the original `Word` around.
+    /// If you can consume the `Word`, prefer [`into_ident`](Self::into_ident) instead
+    /// to avoid cloning.
     pub fn to_ident(&self, span: Span) -> Ident {
         Ident {
             value: self.value.clone(),
@@ -19213,7 +19217,10 @@ impl Word {
         }
     }
 
-    /// Convert this word into an [`Ident`] identifier
+    /// Convert this word into an [`Ident`] identifier, consuming the `Word`.
+    ///
+    /// This avoids cloning the string value. If you need to keep the original
+    /// `Word`, use [`to_ident`](Self::to_ident) instead.
     pub fn into_ident(self, span: Span) -> Ident {
         Ident {
             value: self.value,

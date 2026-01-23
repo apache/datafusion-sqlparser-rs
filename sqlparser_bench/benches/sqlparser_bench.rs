@@ -17,7 +17,9 @@
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use sqlparser::dialect::GenericDialect;
+use sqlparser::keywords::Keyword;
 use sqlparser::parser::Parser;
+use sqlparser::tokenizer::{Span, Word};
 
 fn basic_queries(c: &mut Criterion) {
     let mut group = c.benchmark_group("sqlparser-rs parsing benchmark");
@@ -82,5 +84,73 @@ fn basic_queries(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, basic_queries);
+/// Benchmark comparing `to_ident(&self)` vs `clone().into_ident(self)`.
+///
+/// Both approaches have equivalent performance since the String clone dominates.
+/// `to_ident()` is preferred for clearer code (one method call vs two).
+fn word_to_ident(c: &mut Criterion) {
+    let mut group = c.benchmark_group("word_to_ident");
+
+    // Create Word instances with varying identifier lengths
+    let words: Vec<Word> = (0..100)
+        .map(|i| Word {
+            value: format!("identifier_name_with_number_{i}"),
+            quote_style: None,
+            keyword: Keyword::NoKeyword,
+        })
+        .collect();
+    let span = Span::empty();
+
+    // clone().into_ident(): clones entire Word struct, then moves the String value
+    group.bench_function("clone_into_ident_100x", |b| {
+        b.iter(|| {
+            for w in &words {
+                std::hint::black_box(w.clone().into_ident(span));
+            }
+        });
+    });
+
+    // to_ident(): clones only the String value directly into the Ident
+    group.bench_function("to_ident_100x", |b| {
+        b.iter(|| {
+            for w in &words {
+                std::hint::black_box(w.to_ident(span));
+            }
+        });
+    });
+
+    group.finish();
+}
+
+/// Benchmark parsing queries with many identifiers to show real-world impact
+fn parse_many_identifiers(c: &mut Criterion) {
+    let mut group = c.benchmark_group("parse_identifiers");
+    let dialect = GenericDialect {};
+
+    // Query with many column references (identifiers)
+    let many_columns = (0..100)
+        .map(|n| format!("column_{n}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let query = format!("SELECT {many_columns} FROM my_table");
+
+    group.bench_function("select_100_columns", |b| {
+        b.iter(|| Parser::parse_sql(&dialect, std::hint::black_box(&query)));
+    });
+
+    // Query with many table.column references
+    let qualified_columns = (0..100)
+        .map(|n| format!("t{}.column_{n}", n % 5))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let query_qualified = format!("SELECT {qualified_columns} FROM t0, t1, t2, t3, t4");
+
+    group.bench_function("select_100_qualified_columns", |b| {
+        b.iter(|| Parser::parse_sql(&dialect, std::hint::black_box(&query_qualified)));
+    });
+
+    group.finish();
+}
+
+criterion_group!(benches, basic_queries, word_to_ident, parse_many_identifiers);
 criterion_main!(benches);

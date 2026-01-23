@@ -192,6 +192,7 @@ pub enum AlterTableOperation {
     /// `DISABLE ROW LEVEL SECURITY`
     ///
     /// Note: this is a PostgreSQL-specific operation.
+    /// Please refer to [PostgreSQL documentation](https://www.postgresql.org/docs/current/sql-altertable.html)
     DisableRowLevelSecurity,
     /// `DISABLE RULE rewrite_rule_name`
     ///
@@ -318,14 +319,17 @@ pub enum AlterTableOperation {
     /// `ENABLE ROW LEVEL SECURITY`
     ///
     /// Note: this is a PostgreSQL-specific operation.
+    /// Please refer to [PostgreSQL documentation](https://www.postgresql.org/docs/current/sql-altertable.html)
     EnableRowLevelSecurity,
     /// `FORCE ROW LEVEL SECURITY`
     ///
     /// Note: this is a PostgreSQL-specific operation.
+    /// Please refer to [PostgreSQL documentation](https://www.postgresql.org/docs/current/sql-altertable.html)
     ForceRowLevelSecurity,
     /// `NO FORCE ROW LEVEL SECURITY`
     ///
     /// Note: this is a PostgreSQL-specific operation.
+    /// Please refer to [PostgreSQL documentation](https://www.postgresql.org/docs/current/sql-altertable.html)
     NoForceRowLevelSecurity,
     /// `ENABLE RULE rewrite_rule_name`
     ///

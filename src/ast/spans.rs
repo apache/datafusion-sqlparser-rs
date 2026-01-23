@@ -1915,6 +1915,7 @@ impl Spanned for TableFactor {
                 lateral: _,
                 subquery,
                 alias,
+                sample: _,
             } => subquery
                 .span()
                 .union_opt(&alias.as_ref().map(|alias| alias.span())),

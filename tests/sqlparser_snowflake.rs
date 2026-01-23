@@ -3407,6 +3407,23 @@ fn test_table_sample() {
 }
 
 #[test]
+fn test_subquery_sample() {
+    // Test SAMPLE clause on subqueries (derived tables)
+    snowflake_and_generic().verified_stmt("SELECT * FROM (SELECT * FROM mytable) SAMPLE (10)");
+    snowflake_and_generic()
+        .verified_stmt("SELECT * FROM (SELECT * FROM mytable) SAMPLE (10000 ROWS)");
+    snowflake_and_generic()
+        .verified_stmt("SELECT * FROM (SELECT * FROM mytable) AS t SAMPLE (50 PERCENT)");
+    // Nested subquery with SAMPLE
+    snowflake_and_generic().verified_stmt(
+        "SELECT * FROM (SELECT * FROM (SELECT report_from FROM mytable) SAMPLE (10000 ROWS)) AS anon_1",
+    );
+    // SAMPLE with SEED on subquery
+    snowflake_and_generic()
+        .verified_stmt("SELECT * FROM (SELECT * FROM mytable) SAMPLE (10) SEED (42)");
+}
+
+#[test]
 fn parse_ls_and_rm() {
     snowflake().one_statement_parses_to("LS @~", "LIST @~");
     snowflake().one_statement_parses_to("RM @~", "REMOVE @~");

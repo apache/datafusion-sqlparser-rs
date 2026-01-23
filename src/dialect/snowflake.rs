@@ -320,8 +320,8 @@ impl Dialect for SnowflakeDialect {
             parser.prev_token();
         }
 
-        // Check for multi-table INSERT (Snowflake specific)
-        // INSERT [OVERWRITE] ALL ... or INSERT [OVERWRITE] FIRST ...
+        // Check for multi-table INSERT
+        // `INSERT [OVERWRITE] ALL ... or INSERT [OVERWRITE] FIRST ...`
         if parser.parse_keyword(Keyword::INSERT) {
             let insert_token = parser.get_current_token().clone();
             let overwrite = parser.parse_keyword(Keyword::OVERWRITE);

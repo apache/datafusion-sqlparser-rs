@@ -1332,6 +1332,159 @@ pub trait Dialect: Debug + Any {
     fn supports_binary_kw_as_cast(&self) -> bool {
         false
     }
+
+    /// Returns true if this dialect supports the `REPLACE` option in a
+    /// `SELECT *` wildcard expression.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * REPLACE (col1 AS col1_alias) FROM table;
+    /// ```
+    ///
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#select_replace)
+    /// [ClickHouse](https://clickhouse.com/docs/sql-reference/statements/select#replace)
+    /// [DuckDB](https://duckdb.org/docs/sql/query_syntax/select#replace-clause)
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/select#parameters)
+    fn supports_select_wildcard_replace(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `ILIKE` option in a
+    /// `SELECT *` wildcard expression.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * ILIKE '%pattern%' FROM table;
+    /// ```
+    ///
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/select#parameters)
+    fn supports_select_wildcard_ilike(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `RENAME` option in a
+    /// `SELECT *` wildcard expression.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * RENAME col1 AS col1_alias FROM table;
+    /// ```
+    ///
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/select#parameters)
+    fn supports_select_wildcard_rename(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `OPTIMIZE TABLE` statement.
+    ///
+    /// Example:
+    /// ```sql
+    /// OPTIMIZE TABLE table_name;
+    /// ```
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
+    fn supports_optimize_table(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `INSTALL` statement.
+    ///
+    /// Example:
+    /// ```sql
+    /// INSTALL extension_name;
+    /// ```
+    ///
+    /// [DuckDB](https://duckdb.org/docs/extensions/overview)
+    fn supports_install(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `DETACH` statement.
+    ///
+    /// Example:
+    /// ```sql
+    /// DETACH DATABASE db_name;
+    /// ```
+    ///
+    /// [DuckDB](https://duckdb.org/docs/sql/statements/attach#detach-syntax)
+    fn supports_detach(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `PREWHERE` clause
+    /// in `SELECT` statements.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * FROM table PREWHERE col > 0 WHERE col < 100;
+    /// ```
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select/prewhere)
+    fn supports_prewhere(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `WITH FILL` clause
+    /// in `ORDER BY` expressions.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * FROM table ORDER BY col WITH FILL FROM 1 TO 10 STEP 1;
+    /// ```
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier)
+    fn supports_with_fill(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `LIMIT BY` clause.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * FROM table LIMIT 10 BY col;
+    /// ```
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select/limit-by)
+    fn supports_limit_by(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `INTERPOLATE` clause
+    /// in `ORDER BY` expressions.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * FROM table ORDER BY col WITH FILL INTERPOLATE (col2 AS col2 + 1);
+    /// ```
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier)
+    fn supports_interpolate(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `SETTINGS` clause.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * FROM table SETTINGS max_threads = 4;
+    /// ```
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select#settings-in-select-query)
+    fn supports_settings(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `FORMAT` clause in `SELECT` statements.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * FROM table FORMAT JSON;
+    /// ```
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select/format)
+    fn supports_select_format(&self) -> bool {
+        false
+    }
 }
 
 /// Operators for which precedence must be defined.

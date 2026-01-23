@@ -633,7 +633,7 @@ impl<'a> Parser<'a> {
                         self.parse_attach_database()
                     }
                 }
-                Keyword::DETACH if dialect_of!(self is DuckDbDialect | GenericDialect) => {
+                Keyword::DETACH if self.dialect.supports_detach() => {
                     self.parse_detach_duckdb_database()
                 }
                 Keyword::MSCK => self.parse_msck().map(Into::into),
@@ -693,12 +693,10 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::RENAME => self.parse_rename(),
                 // `INSTALL` is duckdb specific https://duckdb.org/docs/extensions/overview
-                Keyword::INSTALL if dialect_of!(self is DuckDbDialect | GenericDialect) => {
-                    self.parse_install()
-                }
+                Keyword::INSTALL if self.dialect.supports_install() => self.parse_install(),
                 Keyword::LOAD => self.parse_load(),
                 // `OPTIMIZE` is clickhouse specific https://clickhouse.tech/docs/en/sql-reference/statements/optimize/
-                Keyword::OPTIMIZE if dialect_of!(self is ClickHouseDialect | GenericDialect) => {
+                Keyword::OPTIMIZE if self.dialect.supports_optimize_table() => {
                     self.parse_optimize_table()
                 }
                 // `COMMENT` is snowflake specific https://docs.snowflake.com/en/sql-reference/sql/comment
@@ -12203,7 +12201,7 @@ impl<'a> Parser<'a> {
                     }
                 } else {
                     let exprs = self.parse_comma_separated(Parser::parse_order_by_expr)?;
-                    let interpolate = if dialect_of!(self is ClickHouseDialect | GenericDialect) {
+                    let interpolate = if self.dialect.supports_interpolate() {
                         self.parse_interpolations()?
                     } else {
                         None
@@ -12245,9 +12243,7 @@ impl<'a> Parser<'a> {
                 }));
             }
 
-            let limit_by = if dialect_of!(self is ClickHouseDialect | GenericDialect)
-                && self.parse_keyword(Keyword::BY)
-            {
+            let limit_by = if self.dialect.supports_limit_by() && self.parse_keyword(Keyword::BY) {
                 Some(self.parse_comma_separated(Parser::parse_expr)?)
             } else {
                 None
@@ -13258,18 +13254,17 @@ impl<'a> Parser<'a> {
                     locks.push(self.parse_lock()?);
                 }
             }
-            let format_clause = if dialect_of!(self is ClickHouseDialect | GenericDialect)
-                && self.parse_keyword(Keyword::FORMAT)
-            {
-                if self.parse_keyword(Keyword::NULL) {
-                    Some(FormatClause::Null)
+            let format_clause =
+                if self.dialect.supports_select_format() && self.parse_keyword(Keyword::FORMAT) {
+                    if self.parse_keyword(Keyword::NULL) {
+                        Some(FormatClause::Null)
+                    } else {
+                        let ident = self.parse_identifier()?;
+                        Some(FormatClause::Identifier(ident))
+                    }
                 } else {
-                    let ident = self.parse_identifier()?;
-                    Some(FormatClause::Identifier(ident))
-                }
-            } else {
-                None
-            };
+                    None
+                };
 
             let pipe_operators = if self.dialect.supports_pipe_operator() {
                 self.parse_pipe_operators()?
@@ -13513,8 +13508,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_settings(&mut self) -> Result<Option<Vec<Setting>>, ParserError> {
-        let settings = if dialect_of!(self is ClickHouseDialect|GenericDialect)
-            && self.parse_keyword(Keyword::SETTINGS)
+        let settings = if self.dialect.supports_settings() && self.parse_keyword(Keyword::SETTINGS)
         {
             let key_values = self.parse_comma_separated(|p| {
                 let key = p.parse_identifier()?;
@@ -13924,8 +13918,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        let prewhere = if dialect_of!(self is ClickHouseDialect|GenericDialect)
-            && self.parse_keyword(Keyword::PREWHERE)
+        let prewhere = if self.dialect.supports_prewhere() && self.parse_keyword(Keyword::PREWHERE)
         {
             Some(self.parse_expr()?)
         } else {
@@ -17344,7 +17337,7 @@ impl<'a> Parser<'a> {
         &mut self,
         wildcard_token: TokenWithSpan,
     ) -> Result<WildcardAdditionalOptions, ParserError> {
-        let opt_ilike = if dialect_of!(self is GenericDialect | SnowflakeDialect) {
+        let opt_ilike = if self.dialect.supports_select_wildcard_ilike() {
             self.parse_optional_select_item_ilike()?
         } else {
             None
@@ -17360,13 +17353,12 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect | DuckDbDialect | SnowflakeDialect)
-        {
+        let opt_replace = if self.dialect.supports_select_wildcard_replace() {
             self.parse_optional_select_item_replace()?
         } else {
             None
         };
-        let opt_rename = if dialect_of!(self is GenericDialect | SnowflakeDialect) {
+        let opt_rename = if self.dialect.supports_select_wildcard_rename() {
             self.parse_optional_select_item_rename()?
         } else {
             None
@@ -17563,7 +17555,7 @@ impl<'a> Parser<'a> {
 
         let options = self.parse_order_by_options()?;
 
-        let with_fill = if dialect_of!(self is ClickHouseDialect | GenericDialect)
+        let with_fill = if self.dialect.supports_with_fill()
             && self.parse_keywords(&[Keyword::WITH, Keyword::FILL])
         {
             Some(self.parse_with_fill()?)

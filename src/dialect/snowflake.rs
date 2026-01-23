@@ -211,6 +211,36 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/functions/extract)
+    fn supports_extract_comma_syntax(&self) -> bool {
+        true
+    }
+
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/functions/flatten)
+    fn supports_subquery_as_function_arg(&self) -> bool {
+        true
+    }
+
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/sql/create-view#optional-parameters)
+    fn supports_create_view_comment_syntax(&self) -> bool {
+        true
+    }
+
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/data-types-semistructured#array)
+    fn supports_array_typedef_without_element_type(&self) -> bool {
+        true
+    }
+
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/constructs/from)
+    fn supports_parens_around_table_factor(&self) -> bool {
+        true
+    }
+
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/constructs/values)
+    fn supports_values_as_table_factor(&self) -> bool {
+        true
+    }
+
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
         if parser.parse_keyword(Keyword::BEGIN) {
             return Some(parser.parse_begin_exception_end());

@@ -856,6 +856,87 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect supports the `EXTRACT` function
+    /// with a comma separator instead of `FROM`.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT EXTRACT(YEAR, date_column) FROM table;
+    /// ```
+    ///
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/functions/extract)
+    fn supports_extract_comma_syntax(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports a subquery passed to a function
+    /// as the only argument without enclosing parentheses.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT FLATTEN(SELECT * FROM tbl);
+    /// ```
+    ///
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/functions/flatten)
+    fn supports_subquery_as_function_arg(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `COMMENT` clause in
+    /// `CREATE VIEW` statements using the `COMMENT = 'comment'` syntax.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE VIEW v COMMENT = 'my comment' AS SELECT 1;
+    /// ```
+    ///
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-view#optional-parameters)
+    fn supports_create_view_comment_syntax(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `ARRAY` type without
+    /// specifying an element type.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE TABLE t (a ARRAY);
+    /// ```
+    ///
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/data-types-semistructured#array)
+    fn supports_array_typedef_without_element_type(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports extra parentheses around
+    /// lone table names or derived tables in the `FROM` clause.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * FROM (mytable);
+    /// SELECT * FROM ((SELECT 1));
+    /// SELECT * FROM (mytable) AS alias;
+    /// ```
+    ///
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/constructs/from)
+    fn supports_parens_around_table_factor(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports `VALUES` as a table factor
+    /// without requiring parentheses around the entire clause.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * FROM VALUES (1, 'a'), (2, 'b') AS t (col1, col2);
+    /// ```
+    ///
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/constructs/values)
+    /// [Databricks](https://docs.databricks.com/en/sql/language-manual/sql-ref-syntax-qry-select-values.html)
+    fn supports_values_as_table_factor(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect allows dollar placeholders
     /// e.g. `SELECT $var` (SQLite)
     fn supports_dollar_placeholder(&self) -> bool {

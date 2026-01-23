@@ -79,4 +79,9 @@ impl Dialect for DatabricksDialect {
     fn supports_group_by_with_modifier(&self) -> bool {
         true
     }
+
+    /// See <https://docs.databricks.com/en/sql/language-manual/sql-ref-syntax-qry-select-values.html>
+    fn supports_values_as_table_factor(&self) -> bool {
+        true
+    }
 }

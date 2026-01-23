@@ -2293,7 +2293,7 @@ impl<'a> Parser<'a> {
 
         // Snowflake permits a subquery to be passed as an argument without
         // an enclosing set of parens if it's the only argument.
-        if dialect_of!(self is SnowflakeDialect) && self.peek_sub_query() {
+        if self.dialect.supports_subquery_as_function_arg() && self.peek_sub_query() {
             let subquery = self.parse_query()?;
             self.expect_token(&Token::RParen)?;
             return Ok(Function {
@@ -2683,8 +2683,7 @@ impl<'a> Parser<'a> {
 
         let syntax = if self.parse_keyword(Keyword::FROM) {
             ExtractSyntax::From
-        } else if self.consume_token(&Token::Comma)
-            && dialect_of!(self is SnowflakeDialect | GenericDialect)
+        } else if self.dialect.supports_extract_comma_syntax() && self.consume_token(&Token::Comma)
         {
             ExtractSyntax::Comma
         } else {
@@ -6228,7 +6227,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let comment = if dialect_of!(self is SnowflakeDialect | GenericDialect)
+        let comment = if self.dialect.supports_create_view_comment_syntax()
             && self.parse_keyword(Keyword::COMMENT)
         {
             self.expect_token(&Token::Eq)?;
@@ -11790,7 +11789,7 @@ impl<'a> Parser<'a> {
                 Keyword::ENUM16 => Ok(DataType::Enum(self.parse_enum_values()?, Some(16))),
                 Keyword::SET => Ok(DataType::Set(self.parse_string_values()?)),
                 Keyword::ARRAY => {
-                    if dialect_of!(self is SnowflakeDialect) {
+                    if self.dialect.supports_array_typedef_without_element_type() {
                         Ok(DataType::Array(ArrayElemTypeDef::None))
                     } else if dialect_of!(self is ClickHouseDialect) {
                         Ok(self.parse_sub_type(|internal_type| {
@@ -14989,7 +14988,7 @@ impl<'a> Parser<'a> {
                     table_with_joins: Box::new(table_and_joins),
                     alias,
                 })
-            } else if dialect_of!(self is SnowflakeDialect | GenericDialect) {
+            } else if self.dialect.supports_parens_around_table_factor() {
                 // Dialect-specific behavior: Snowflake diverges from the
                 // standard and from most of the other implementations by
                 // allowing extra parentheses not only around a join (B), but
@@ -15035,7 +15034,7 @@ impl<'a> Parser<'a> {
                 // appearing alone in parentheses (e.g. `FROM (mytable)`)
                 self.expected("joined table", self.peek_token())
             }
-        } else if dialect_of!(self is SnowflakeDialect | DatabricksDialect | GenericDialect)
+        } else if self.dialect.supports_values_as_table_factor()
             && matches!(
                 self.peek_tokens(),
                 [

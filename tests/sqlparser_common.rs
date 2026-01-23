@@ -72,9 +72,7 @@ fn parse_numeric_literal_underscore() {
 
     assert_eq!(
         select.projection,
-        vec![UnnamedExpr(Expr::Value(
-            (number("10_000")).with_empty_span()
-        ))]
+        vec![UnnamedExpr(Expr::Value(number("10_000").with_empty_span()))]
     );
 }
 
@@ -16222,45 +16220,44 @@ fn parse_set_names() {
     dialects.verified_stmt("SET NAMES UTF8 COLLATE bogus");
 }
 
-#[test]
-fn parse_pipeline_operator() {
-    // Macro to test pipe operator parsing with explicit input and canonical output.
-    //   test_pipe!(dialect, input = "...", canonical = "...")
-    macro_rules! test_pipe {
-        ($ctx:expr, input = $input:expr, canonical = $canonical:expr $(,)?) => {{
-            let (dialects, from_first) = $ctx;
-            let prefix = if from_first {
-                "FROM tbl"
-            } else {
-                "SELECT * FROM tbl"
-            };
-            dialects.verified_query_with_canonical(
-                &format!("{prefix} |> {}", $input),
-                &format!("{prefix} |> {}", $canonical),
-            );
-        }};
-    }
-
-    // Test pipe operators with two dialect configurations:
-    // 1. Dialects supporting FROM-first syntax (e.g., "FROM users |> ...")
-    // 2. Dialects requiring SELECT-first syntax (e.g., "SELECT * FROM users |> ...")
-    let from_first_dialects =
+/// Returns dialect configurations for pipe operator tests:
+/// 1. Dialects supporting FROM-first syntax (e.g., "FROM users |> ...")
+/// 2. Dialects requiring SELECT-first syntax (e.g., "SELECT * FROM users |> ...")
+fn pipe_dialects() -> [(TestedDialects, bool); 2] {
+    let from_first =
         all_dialects_where(|d| d.supports_pipe_operator() && d.supports_from_first_select());
-    let select_first_dialects =
+    let select_first =
         all_dialects_where(|d| d.supports_pipe_operator() && !d.supports_from_first_select());
+    [(from_first, true), (select_first, false)]
+}
 
-    for dialect in [
-        (&from_first_dialects, true),
-        (&select_first_dialects, false),
-    ] {
-        // ------------------------------------
-        // 'AS' pipe operator
-        // ------------------------------------
+/// Macro to test pipe operator parsing with explicit input and canonical output.
+/// Usage: `test_pipe!(ctx, input = "...", canonical = "...")`
+macro_rules! test_pipe {
+    ($ctx:expr, input = $input:expr, canonical = $canonical:expr $(,)?) => {{
+        let (ref dialects, from_first) = $ctx;
+        let prefix = if from_first {
+            "FROM tbl"
+        } else {
+            "SELECT * FROM tbl"
+        };
+        dialects.verified_query_with_canonical(
+            &format!("{prefix} |> {}", $input),
+            &format!("{prefix} |> {}", $canonical),
+        );
+    }};
+}
+
+#[test]
+fn parse_pipe_operator_as() {
+    for dialect in pipe_dialects() {
         test_pipe!(dialect, input = "AS new_users", canonical = "AS new_users");
+    }
+}
 
-        // ------------------------------------
-        // 'SELECT' pipe operator
-        // ------------------------------------
+#[test]
+fn parse_pipe_operator_select() {
+    for dialect in pipe_dialects() {
         test_pipe!(dialect, input = "SELECT id", canonical = "SELECT id");
         test_pipe!(
             dialect,
@@ -16277,10 +16274,12 @@ fn parse_pipeline_operator() {
             input = "SELECT id AS user_id",
             canonical = "SELECT id AS user_id"
         );
+    }
+}
 
-        // ------------------------------------
-        // 'EXTEND' pipe operator
-        // ------------------------------------
+#[test]
+fn parse_pipe_operator_extend() {
+    for dialect in pipe_dialects() {
         test_pipe!(
             dialect,
             input = "EXTEND id + 1 AS new_id",
@@ -16296,10 +16295,12 @@ fn parse_pipeline_operator() {
             input = "EXTEND id user_id",
             canonical = "EXTEND id AS user_id"
         );
+    }
+}
 
-        // ------------------------------------
-        // 'SET' pipe operator
-        // ------------------------------------
+#[test]
+fn parse_pipe_operator_set() {
+    for dialect in pipe_dialects() {
         test_pipe!(
             dialect,
             input = "SET id = id + 1",
@@ -16310,10 +16311,12 @@ fn parse_pipeline_operator() {
             input = "SET id = id + 1, name = name + ' Doe'",
             canonical = "SET id = id + 1, name = name + ' Doe'"
         );
+    }
+}
 
-        // ------------------------------------
-        // 'DROP' pipe operator
-        // ------------------------------------
+#[test]
+fn parse_pipe_operator_drop() {
+    for dialect in pipe_dialects() {
         test_pipe!(dialect, input = "DROP id", canonical = "DROP id");
         test_pipe!(
             dialect,
@@ -16330,10 +16333,12 @@ fn parse_pipeline_operator() {
             input = "DROP a, b |> SELECT c",
             canonical = "DROP a, b |> SELECT c"
         );
+    }
+}
 
-        // ------------------------------------
-        // 'LIMIT' pipe operator
-        // ------------------------------------
+#[test]
+fn parse_pipe_operator_limit() {
+    for dialect in pipe_dialects() {
         test_pipe!(dialect, input = "LIMIT 10", canonical = "LIMIT 10");
         test_pipe!(
             dialect,
@@ -16350,10 +16355,12 @@ fn parse_pipeline_operator() {
             input = "LIMIT 10 |> WHERE true",
             canonical = "LIMIT 10 |> WHERE true"
         );
+    }
+}
 
-        // ------------------------------------
-        // 'WHERE' pipe operator
-        // ------------------------------------
+#[test]
+fn parse_pipe_operator_where() {
+    for dialect in pipe_dialects() {
         test_pipe!(dialect, input = "WHERE id = 1", canonical = "WHERE id = 1");
         test_pipe!(
             dialect,
@@ -16365,10 +16372,12 @@ fn parse_pipeline_operator() {
             input = "WHERE id = 1 OR name = 'John'",
             canonical = "WHERE id = 1 OR name = 'John'"
         );
+    }
+}
 
-        // ------------------------------------
-        // 'AGGREGATE' pipe operator
-        // ------------------------------------
+#[test]
+fn parse_pipe_operator_aggregate() {
+    for dialect in pipe_dialects() {
         test_pipe!(
             dialect,
             input = "AGGREGATE COUNT(*)",
@@ -16419,10 +16428,12 @@ fn parse_pipeline_operator() {
             input = "AGGREGATE SUM(c) ASC",
             canonical = "AGGREGATE SUM(c) ASC"
         );
+    }
+}
 
-        // ------------------------------------
-        // 'ORDER BY' pipe operator
-        // ------------------------------------
+#[test]
+fn parse_pipe_operator_order_by() {
+    for dialect in pipe_dialects() {
         test_pipe!(
             dialect,
             input = "ORDER BY id ASC",
@@ -16438,10 +16449,12 @@ fn parse_pipeline_operator() {
             input = "ORDER BY id DESC, name ASC",
             canonical = "ORDER BY id DESC, name ASC"
         );
+    }
+}
 
-        // ------------------------------------
-        // 'TABLESAMPLE' pipe operator
-        // ------------------------------------
+#[test]
+fn parse_pipe_operator_tablesample() {
+    for dialect in pipe_dialects() {
         test_pipe!(
             dialect,
             input = "TABLESAMPLE BERNOULLI (50)",
@@ -16457,10 +16470,12 @@ fn parse_pipeline_operator() {
             input = "TABLESAMPLE SYSTEM (50) REPEATABLE (10)",
             canonical = "TABLESAMPLE SYSTEM (50) REPEATABLE (10)"
         );
+    }
+}
 
-        // ------------------------------------
-        // 'RENAME' pipe operator
-        // ------------------------------------
+#[test]
+fn parse_pipe_operator_rename() {
+    for dialect in pipe_dialects() {
         test_pipe!(
             dialect,
             input = "RENAME old_name AS new_name",
@@ -16476,10 +16491,12 @@ fn parse_pipeline_operator() {
             input = "RENAME id user_id",
             canonical = "RENAME id AS user_id"
         );
+    }
+}
 
-        // ------------------------------------
-        // 'UNION' pipe operator
-        // ------------------------------------
+#[test]
+fn parse_pipe_operator_union() {
+    for dialect in pipe_dialects() {
         test_pipe!(
             dialect,
             input = "UNION ALL (SELECT * FROM admins)",
@@ -16530,10 +16547,12 @@ fn parse_pipeline_operator() {
             input = "UNION BY NAME (SELECT * FROM admins), (SELECT * FROM guests)",
             canonical = "UNION BY NAME (SELECT * FROM admins), (SELECT * FROM guests)"
         );
+    }
+}
 
-        // ------------------------------------
-        // 'INTERSECT' pipe operator
-        // ------------------------------------
+#[test]
+fn parse_pipe_operator_intersect() {
+    for dialect in pipe_dialects() {
         test_pipe!(
             dialect,
             input = "INTERSECT DISTINCT (SELECT * FROM admins)",
@@ -16554,10 +16573,12 @@ fn parse_pipeline_operator() {
             input = "INTERSECT DISTINCT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)",
             canonical = "INTERSECT DISTINCT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)"
         );
+    }
+}
 
-        // ------------------------------------
-        // 'EXCEPT' pipe operator
-        // ------------------------------------
+#[test]
+fn parse_pipe_operator_except() {
+    for dialect in pipe_dialects() {
         test_pipe!(
             dialect,
             input = "EXCEPT DISTINCT (SELECT * FROM admins)",
@@ -16578,10 +16599,12 @@ fn parse_pipeline_operator() {
             input = "EXCEPT DISTINCT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)",
             canonical = "EXCEPT DISTINCT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)"
         );
+    }
+}
 
-        // ------------------------------------
-        // 'CALL' pipe operator
-        // ------------------------------------
+#[test]
+fn parse_pipe_operator_call() {
+    for dialect in pipe_dialects() {
         test_pipe!(
             dialect,
             input = "CALL my_function()",
@@ -16652,10 +16675,12 @@ fn parse_pipeline_operator() {
             input = "CALL preprocess() AS clean |> SELECT col1, col2 |> CALL validate()",
             canonical = "CALL preprocess() AS clean |> SELECT col1, col2 |> CALL validate()"
         );
+    }
+}
 
-        // ------------------------------------
-        // 'PIVOT' pipe operator
-        // ------------------------------------
+#[test]
+fn parse_pipe_operator_pivot() {
+    for dialect in pipe_dialects() {
         test_pipe!(
             dialect,
             input = "PIVOT(SUM(amount) FOR quarter IN ('Q1', 'Q2', 'Q3', 'Q4'))",
@@ -16708,10 +16733,12 @@ fn parse_pipeline_operator() {
             input = "PIVOT(AVG(price) FOR category IN ('A', 'B', 'C')) avg_by_category",
             canonical = "PIVOT(AVG(price) FOR category IN ('A', 'B', 'C')) AS avg_by_category"
         );
+    }
+}
 
-        // ------------------------------------
-        // 'UNPIVOT' pipe operator
-        // ------------------------------------
+#[test]
+fn parse_pipe_operator_unpivot() {
+    for dialect in pipe_dialects() {
         test_pipe!(
             dialect,
             input = "UNPIVOT(revenue FOR quarter IN (Q1, Q2, Q3, Q4))",
@@ -16768,10 +16795,12 @@ fn parse_pipeline_operator() {
             input = "UNPIVOT(value FOR category IN (A, B, C)) transformed_data",
             canonical = "UNPIVOT(value FOR category IN (A, B, C)) AS transformed_data"
         );
+    }
+}
 
-        // ------------------------------------
-        // 'JOIN' pipe operator
-        // ------------------------------------
+#[test]
+fn parse_pipe_operator_join() {
+    for dialect in pipe_dialects() {
         test_pipe!(
             dialect,
             input = "JOIN orders ON users.id = orders.user_id",
@@ -16874,10 +16903,13 @@ fn parse_pipeline_operator() {
             canonical =
                 "JOIN orders ON users.id = orders.user_id |> SELECT users.name, orders.amount"
         );
+    }
+}
 
-        // ------------------------------------
-        // Miscellaneous complex/chained pipes
-        // ------------------------------------
+#[test]
+fn parse_pipe_operator_chained() {
+    // Long chain of pipe ops
+    for dialect in pipe_dialects() {
         test_pipe!(
             dialect,
             input = "AGGREGATE SUM(cost) AS total_cost GROUP BY customer_id, state, item_type |> EXTEND COUNT(*) OVER (PARTITION BY customer_id) AS num_orders |> WHERE num_orders > 1 |> AGGREGATE AVG(total_cost) AS average GROUP BY state DESC, item_type ASC",

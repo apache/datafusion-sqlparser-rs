@@ -104,6 +104,22 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_extract_comma_syntax(&self) -> bool {
+        true
+    }
+
+    fn supports_create_view_comment_syntax(&self) -> bool {
+        true
+    }
+
+    fn supports_parens_around_table_factor(&self) -> bool {
+        true
+    }
+
+    fn supports_values_as_table_factor(&self) -> bool {
+        true
+    }
+
     fn supports_create_index_with_clause(&self) -> bool {
         true
     }

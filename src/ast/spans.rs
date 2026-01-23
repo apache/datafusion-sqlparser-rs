@@ -1540,6 +1540,7 @@ impl Spanned for Expr {
                 kind: _,
                 expr,
                 data_type: _,
+                array: _,
                 format: _,
             } => expr.span(),
             Expr::AtTimeZone {
@@ -2801,7 +2802,7 @@ WHERE id = 1
             UPDATE SET target_table.description = source_table.description
 
               WHEN MATCHED AND target_table.x != 'X' THEN   DELETE
-        WHEN NOT MATCHED AND 1 THEN INSERT (product, quantity) ROW 
+        WHEN NOT MATCHED AND 1 THEN INSERT (product, quantity) ROW
         "#;
 
         let r = Parser::parse_sql(&crate::dialect::GenericDialect, sql).unwrap();

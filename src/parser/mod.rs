@@ -11299,7 +11299,7 @@ impl<'a> Parser<'a> {
             while let Token::SingleQuotedString(ref s) | Token::DoubleQuotedString(ref s) =
                 self.peek_token_ref().token
             {
-                str.push_str(s.clone().as_str());
+                str.push_str(s);
                 self.advance_token();
             }
         }

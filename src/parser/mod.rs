@@ -15470,11 +15470,9 @@ impl<'a> Parser<'a> {
         let alias = self.maybe_parse_table_alias()?;
 
         // Parse optional SAMPLE clause after alias
-        let sample = if let Some(parsed_sample) = self.maybe_parse_table_sample()? {
-            Some(TableSampleKind::AfterTableAlias(parsed_sample))
-        } else {
-            None
-        };
+        let sample = self
+            .maybe_parse_table_sample()?
+            .map(TableSampleKind::AfterTableAlias);
 
         Ok(TableFactor::Derived {
             lateral: match lateral {

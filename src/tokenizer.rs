@@ -857,6 +857,26 @@ pub struct Tokenizer<'a> {
     unescape: bool,
 }
 
+/// Passed into [`Tokenizer::next_token`] as in some situations tokenization
+/// is context dependent. The separate enum is used to be able to not clone
+/// the previous token during [`TokenWithLocationIter`] iteration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PrevTokenKind {
+    Word,
+    Period,
+    Other,
+}
+
+impl From<&Token> for PrevTokenKind {
+    fn from(value: &Token) -> Self {
+        match value {
+            Token::Word(_) => Self::Word,
+            Token::Period => Self::Period,
+            _ => Self::Other,
+        }
+    }
+}
+
 impl<'a> Tokenizer<'a> {
     /// Create a new SQL tokenizer for the specified SQL statement
     ///
@@ -917,6 +937,23 @@ impl<'a> Tokenizer<'a> {
         self
     }
 
+    /// Return an iterator over tokens
+    pub fn iter(&mut self) -> TokenWithSpanIter<'a, '_> {
+        let state = State {
+            peekable: self.query.chars().peekable(),
+            line: 1,
+            col: 1,
+        };
+
+        let location = state.location();
+        TokenWithSpanIter {
+            state,
+            location,
+            tokenizer: self,
+            prev_token_kind: None,
+        }
+    }
+
     /// Tokenize the statement and produce a vector of tokens
     pub fn tokenize(&mut self) -> Result<Vec<Token>, TokenizerError> {
         let twl = self.tokenize_with_location()?;
@@ -936,19 +973,8 @@ impl<'a> Tokenizer<'a> {
         &mut self,
         buf: &mut Vec<TokenWithSpan>,
     ) -> Result<(), TokenizerError> {
-        let mut state = State {
-            peekable: self.query.chars().peekable(),
-            line: 1,
-            col: 1,
-        };
-
-        let mut location = state.location();
-        while let Some(token) = self.next_token(&mut state, buf.last().map(|t| &t.token))? {
-            let span = location.span_to(state.location());
-
-            buf.push(TokenWithSpan { token, span });
-
-            location = state.location();
+        for token in self.iter() {
+            buf.push(token?);
         }
         Ok(())
     }
@@ -983,7 +1009,7 @@ impl<'a> Tokenizer<'a> {
     fn next_token(
         &self,
         chars: &mut State,
-        prev_token: Option<&Token>,
+        prev_token_kind: Option<PrevTokenKind>,
     ) -> Result<Option<Token>, TokenizerError> {
         match chars.peek() {
             Some(&ch) => match ch {
@@ -1263,7 +1289,7 @@ impl<'a> Tokenizer<'a> {
                     // if the prev token is not a word, then this is not a valid sql
                     // word or number.
                     if ch == '.' && chars.peekable.clone().nth(1) == Some('_') {
-                        if let Some(Token::Word(_)) = prev_token {
+                        if let Some(PrevTokenKind::Word) = prev_token_kind {
                             chars.next();
                             return Ok(Some(Token::Period));
                         }
@@ -1307,7 +1333,7 @@ impl<'a> Tokenizer<'a> {
                     // we should yield the dot as a dedicated token so compound identifiers
                     // starting with digits can be parsed correctly.
                     if s == "." && self.dialect.supports_numeric_prefix() {
-                        if let Some(Token::Word(_)) = prev_token {
+                        if let Some(PrevTokenKind::Word) = prev_token_kind {
                             return Ok(Some(Token::Period));
                         }
                     }
@@ -1366,7 +1392,7 @@ impl<'a> Tokenizer<'a> {
                                 s += word.as_str();
                                 return Ok(Some(Token::make_word(s.as_str(), None)));
                             }
-                        } else if prev_token == Some(&Token::Period) {
+                        } else if prev_token_kind == Some(PrevTokenKind::Period) {
                             // If the previous token was a period, thus not belonging to a number,
                             // the value we have is part of an identifier.
                             return Ok(Some(Token::make_word(s.as_str(), None)));
@@ -2299,6 +2325,34 @@ impl<'a> Tokenizer<'a> {
     }
 }
 
+/// Iterator over tokens.
+pub struct TokenWithSpanIter<'a, 'b> {
+    state: State<'a>,
+    location: Location,
+    tokenizer: &'b mut Tokenizer<'a>,
+    prev_token_kind: Option<PrevTokenKind>,
+}
+
+impl Iterator for TokenWithSpanIter<'_, '_> {
+    type Item = Result<TokenWithSpan, TokenizerError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let token = match self
+            .tokenizer
+            .next_token(&mut self.state, self.prev_token_kind)
+            .transpose()?
+        {
+            Err(err) => return Some(Err(err)),
+            Ok(token) => token,
+        };
+        self.prev_token_kind = Some(PrevTokenKind::from(&token));
+        let span = self.location.span_to(self.state.location());
+        self.location = self.state.location();
+        let token = TokenWithSpan { token, span };
+        Some(Ok(token))
+    }
+}
+
 /// Read from `chars` until `predicate` returns `false` or EOF is hit.
 /// Return the characters read as String, and keep the first non-matching
 /// char available as `chars.next()`.
@@ -2572,6 +2626,39 @@ mod tests {
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1"), false),
+        ];
+
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_iterator_map() {
+        let sql = String::from("SELECT ?");
+        let dialect = GenericDialect {};
+        let mut param_num = 1;
+
+        let tokens = Tokenizer::new(&dialect, &sql)
+            .iter()
+            .map(|token| {
+                let token = token?;
+                Ok(match token.token {
+                    Token::Placeholder(n) => Token::Placeholder(if n == "?" {
+                        let ret = format!("${}", param_num);
+                        param_num += 1;
+                        ret
+                    } else {
+                        n
+                    }),
+                    _ => token.token,
+                })
+            })
+            .collect::<Result<Vec<_>, TokenizerError>>()
+            .unwrap();
+
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Placeholder("$1".to_string()),
         ];
 
         compare(expected, tokens);

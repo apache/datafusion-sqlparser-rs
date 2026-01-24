@@ -192,6 +192,7 @@ pub enum AlterTableOperation {
     /// `DISABLE ROW LEVEL SECURITY`
     ///
     /// Note: this is a PostgreSQL-specific operation.
+    /// Please refer to [PostgreSQL documentation](https://www.postgresql.org/docs/current/sql-altertable.html)
     DisableRowLevelSecurity,
     /// `DISABLE RULE rewrite_rule_name`
     ///
@@ -318,7 +319,18 @@ pub enum AlterTableOperation {
     /// `ENABLE ROW LEVEL SECURITY`
     ///
     /// Note: this is a PostgreSQL-specific operation.
+    /// Please refer to [PostgreSQL documentation](https://www.postgresql.org/docs/current/sql-altertable.html)
     EnableRowLevelSecurity,
+    /// `FORCE ROW LEVEL SECURITY`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    /// Please refer to [PostgreSQL documentation](https://www.postgresql.org/docs/current/sql-altertable.html)
+    ForceRowLevelSecurity,
+    /// `NO FORCE ROW LEVEL SECURITY`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    /// Please refer to [PostgreSQL documentation](https://www.postgresql.org/docs/current/sql-altertable.html)
+    NoForceRowLevelSecurity,
     /// `ENABLE RULE rewrite_rule_name`
     ///
     /// Note: this is a PostgreSQL-specific operation.
@@ -875,6 +887,12 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::EnableRowLevelSecurity => {
                 write!(f, "ENABLE ROW LEVEL SECURITY")
+            }
+            AlterTableOperation::ForceRowLevelSecurity => {
+                write!(f, "FORCE ROW LEVEL SECURITY")
+            }
+            AlterTableOperation::NoForceRowLevelSecurity => {
+                write!(f, "NO FORCE ROW LEVEL SECURITY")
             }
             AlterTableOperation::EnableRule { name } => {
                 write!(f, "ENABLE RULE {name}")

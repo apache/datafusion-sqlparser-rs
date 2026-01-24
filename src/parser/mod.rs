@@ -9825,6 +9825,21 @@ impl<'a> Parser<'a> {
                     self.peek_token(),
                 );
             }
+        } else if self.parse_keywords(&[
+            Keyword::FORCE,
+            Keyword::ROW,
+            Keyword::LEVEL,
+            Keyword::SECURITY,
+        ]) {
+            AlterTableOperation::ForceRowLevelSecurity
+        } else if self.parse_keywords(&[
+            Keyword::NO,
+            Keyword::FORCE,
+            Keyword::ROW,
+            Keyword::LEVEL,
+            Keyword::SECURITY,
+        ]) {
+            AlterTableOperation::NoForceRowLevelSecurity
         } else if self.parse_keywords(&[Keyword::CLEAR, Keyword::PROJECTION])
             && dialect_of!(self is ClickHouseDialect|GenericDialect)
         {

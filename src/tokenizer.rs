@@ -413,16 +413,22 @@ impl Token {
     /// When `quote_style` is `None`, the parser attempts a case-insensitive keyword
     /// lookup and sets the `Word::keyword` accordingly.
     pub fn make_word(word: &str, quote_style: Option<char>) -> Self {
-        let word_uppercase = word.to_uppercase();
+        // Only perform keyword lookup for unquoted identifiers.
+        // Use to_ascii_uppercase() since SQL keywords are ASCII,
+        // avoiding Unicode case conversion overhead.
+        let keyword = if quote_style.is_none() {
+            let word_uppercase = word.to_ascii_uppercase();
+            ALL_KEYWORDS
+                .binary_search(&word_uppercase.as_str())
+                .map_or(Keyword::NoKeyword, |x| ALL_KEYWORDS_INDEX[x])
+        } else {
+            Keyword::NoKeyword
+        };
+
         Token::Word(Word {
             value: word.to_string(),
             quote_style,
-            keyword: if quote_style.is_none() {
-                let keyword = ALL_KEYWORDS.binary_search(&word_uppercase.as_str());
-                keyword.map_or(Keyword::NoKeyword, |x| ALL_KEYWORDS_INDEX[x])
-            } else {
-                Keyword::NoKeyword
-            },
+            keyword,
         })
     }
 }

@@ -1054,13 +1054,16 @@ impl<'a> Parser<'a> {
         let table = self.parse_keyword(Keyword::TABLE);
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
 
-        let table_names = self
-            .parse_comma_separated(|p| {
-                Ok((p.parse_keyword(Keyword::ONLY), p.parse_object_name(false)?))
-            })?
-            .into_iter()
-            .map(|(only, name)| TruncateTableTarget { name, only })
-            .collect();
+        let table_names = self.parse_comma_separated(|p| {
+            let only = p.parse_keyword(Keyword::ONLY);
+            let name = p.parse_object_name(false)?;
+            let has_asterisk = p.consume_token(&Token::Mul);
+            Ok(TruncateTableTarget {
+                name,
+                only,
+                has_asterisk,
+            })
+        })?;
 
         let mut partitions = None;
         if self.parse_keyword(Keyword::PARTITION) {

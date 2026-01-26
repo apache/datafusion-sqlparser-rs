@@ -14077,11 +14077,16 @@ impl<'a> Parser<'a> {
                                 Some(text) => {
                                     let hint = OptimizerHint {
                                         text: text.into(),
-                                        style: if let Whitespace::SingleLineComment { prefix, .. } = ws {
-                                            OptimizerHintStyle::SingleLine { prefix: prefix.clone() }
+                                        style: if let Whitespace::SingleLineComment {
+                                            prefix, ..
+                                        } = ws
+                                        {
+                                            OptimizerHintStyle::SingleLine {
+                                                prefix: prefix.clone(),
+                                            }
                                         } else {
                                             OptimizerHintStyle::MultiLine
-                                        }
+                                        },
                                     };
                                     // Consume the comment token
                                     self.next_token_no_skip();

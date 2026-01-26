@@ -271,4 +271,8 @@ impl Dialect for GenericDialect {
     fn supports_select_format(&self) -> bool {
         true
     }
+
+    fn supports_comment_optimizer_hint(&self) -> bool {
+        true
+    }
 }

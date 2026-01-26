@@ -14061,9 +14061,8 @@ impl<'a> Parser<'a> {
     /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html#optimizer-hints-overview)
     /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
     fn maybe_parse_optimizer_hint(&mut self) -> Result<Option<OptimizerHint>, ParserError> {
-        let supports_multiline = dialect_of!(self is MySqlDialect | OracleDialect | GenericDialect);
-        let supports_singleline = dialect_of!(self is OracleDialect | GenericDialect);
-        if !supports_multiline && !supports_singleline {
+        let supports_hints = self.dialect.supports_comment_optimizer_hint();
+        if !supports_hints {
             return Ok(None);
         }
         loop {
@@ -14071,29 +14070,23 @@ impl<'a> Parser<'a> {
             match &t.token {
                 Token::Whitespace(ws) => {
                     match ws {
-                        Whitespace::SingleLineComment { comment, prefix } => {
-                            return Ok(if supports_singleline && comment.starts_with("+") {
-                                let text = comment.split_at(1).1.into();
-                                let prefix = prefix.clone();
-                                self.next_token_no_skip(); // Consume the comment token
-                                Some(OptimizerHint {
-                                    text,
-                                    style: OptimizerHintStyle::SingleLine { prefix },
-                                })
-                            } else {
-                                None
-                            });
-                        }
-                        Whitespace::MultiLineComment(comment) => {
-                            return Ok(if supports_multiline && comment.starts_with("+") {
-                                let text = comment.split_at(1).1.into();
-                                self.next_token_no_skip(); // Consume the comment token
-                                Some(OptimizerHint {
-                                    text,
-                                    style: OptimizerHintStyle::MultiLine,
-                                })
-                            } else {
-                                None
+                        Whitespace::SingleLineComment { comment, .. }
+                        | Whitespace::MultiLineComment(comment) => {
+                            return Ok(match comment.strip_prefix("+") {
+                                None => None,
+                                Some(text) => {
+                                    let hint = OptimizerHint {
+                                        text: text.into(),
+                                        style: if let Whitespace::SingleLineComment { prefix, .. } = ws {
+                                            OptimizerHintStyle::SingleLine { prefix: prefix.clone() }
+                                        } else {
+                                            OptimizerHintStyle::MultiLine
+                                        }
+                                    };
+                                    // Consume the comment token
+                                    self.next_token_no_skip();
+                                    Some(hint)
+                                }
                             });
                         }
                         Whitespace::Space | Whitespace::Tab | Whitespace::Newline => {

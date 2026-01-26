@@ -14097,9 +14097,9 @@ impl<'a> Parser<'a> {
                                 None
                             });
                         }
-                        // ~ but skip (pure) whitespace
+                        // but skip (pure) whitespace
                         Whitespace::Space | Whitespace::Tab | Whitespace::Newline => {
-                            // ~ consume the token and try with the next whitespace (if any)
+                            // consume the token and try with the next whitespace (if any)
                             self.next_token_no_skip();
                         }
                     }

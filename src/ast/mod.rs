@@ -81,8 +81,8 @@ pub use self::ddl::{
 };
 pub use self::dml::{
     Delete, Insert, Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr,
-    MergeInsertKind, MergeUpdateExpr, MultiTableInsertIntoClause, MultiTableInsertValue,
-    MultiTableInsertValues, MultiTableInsertWhenClause, OutputClause, Update,
+    MergeInsertKind, MergeUpdateExpr, MultiTableInsertIntoClause, MultiTableInsertType,
+    MultiTableInsertValue, MultiTableInsertValues, MultiTableInsertWhenClause, OutputClause, Update,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{

@@ -31,8 +31,8 @@ use crate::ast::{
     ColumnPolicy, ColumnPolicyProperty, ContactEntry, CopyIntoSnowflakeKind, CreateTableLikeKind,
     DollarQuotedString, Ident, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
     IdentityPropertyKind, IdentityPropertyOrder, InitializeKind, Insert, MultiTableInsertIntoClause,
-    MultiTableInsertValue, MultiTableInsertValues, MultiTableInsertWhenClause, ObjectName,
-    ObjectNamePart, RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement,
+    MultiTableInsertType, MultiTableInsertValue, MultiTableInsertValues, MultiTableInsertWhenClause,
+    ObjectName, ObjectNamePart, RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement,
     StorageSerializationPolicy, TableObject, TagsColumnOption, Value, WrappedCollection,
 };
 use crate::tokenizer::TokenWithSpan;
@@ -328,12 +328,15 @@ impl Dialect for SnowflakeDialect {
 
             // Check for ALL or FIRST keyword
             if let Some(kw) = parser.parse_one_of_keywords(&[Keyword::ALL, Keyword::FIRST]) {
-                let insert_first = kw == Keyword::FIRST;
+                let multi_table_insert_type = match kw {
+                    Keyword::FIRST => MultiTableInsertType::First,
+                    _ => MultiTableInsertType::All,
+                };
                 return Some(parse_multi_table_insert(
                     parser,
                     insert_token,
                     overwrite,
-                    insert_first,
+                    multi_table_insert_type,
                 ));
             }
 
@@ -1677,7 +1680,7 @@ fn parse_multi_table_insert(
     parser: &mut Parser,
     insert_token: TokenWithSpan,
     overwrite: bool,
-    insert_first: bool,
+    multi_table_insert_type: MultiTableInsertType,
 ) -> Result<Statement, ParserError> {
     // Check if this is conditional (has WHEN clauses) or unconditional (direct INTO clauses)
     let is_conditional = parser.peek_keyword(Keyword::WHEN);
@@ -1717,7 +1720,7 @@ fn parse_multi_table_insert(
         insert_alias: None,
         settings: None,
         format_clause: None,
-        insert_first,
+        multi_table_insert_type: Some(multi_table_insert_type),
         multi_table_into_clauses,
         multi_table_when_clauses,
         multi_table_else_clause,

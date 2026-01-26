@@ -3616,7 +3616,7 @@ fn test_multi_table_insert_ast_unconditional() {
 
     match stmt {
         Statement::Insert(Insert {
-            insert_first,
+            multi_table_insert_type,
             overwrite,
             multi_table_into_clauses,
             multi_table_when_clauses,
@@ -3625,7 +3625,7 @@ fn test_multi_table_insert_ast_unconditional() {
             ..
         }) => {
             // Should be INSERT ALL (not FIRST)
-            assert!(!insert_first);
+            assert_eq!(multi_table_insert_type, Some(MultiTableInsertType::All));
             assert!(!overwrite);
 
             // Should have 2 INTO clauses
@@ -3709,14 +3709,14 @@ fn test_multi_table_insert_ast_conditional() {
 
     match stmt {
         Statement::Insert(Insert {
-            insert_first,
+            multi_table_insert_type,
             multi_table_into_clauses,
             multi_table_when_clauses,
             multi_table_else_clause,
             ..
         }) => {
             // Should be INSERT ALL (not FIRST)
-            assert!(!insert_first);
+            assert_eq!(multi_table_insert_type, Some(MultiTableInsertType::All));
 
             // Unconditional INTO clauses should be empty for conditional insert
             assert!(multi_table_into_clauses.is_empty());
@@ -3752,12 +3752,12 @@ fn test_multi_table_insert_ast_first() {
 
     match stmt {
         Statement::Insert(Insert {
-            insert_first,
+            multi_table_insert_type,
             multi_table_when_clauses,
             ..
         }) => {
             // Should be INSERT FIRST
-            assert!(insert_first);
+            assert_eq!(multi_table_insert_type, Some(MultiTableInsertType::First));
             assert_eq!(multi_table_when_clauses.len(), 2);
         }
         _ => panic!("Expected INSERT statement"),
@@ -3773,12 +3773,12 @@ fn test_multi_table_insert_ast_overwrite() {
     match stmt {
         Statement::Insert(Insert {
             overwrite,
-            insert_first,
+            multi_table_insert_type,
             multi_table_into_clauses,
             ..
         }) => {
             assert!(overwrite);
-            assert!(!insert_first);
+            assert_eq!(multi_table_insert_type, Some(MultiTableInsertType::All));
             assert_eq!(multi_table_into_clauses.len(), 2);
         }
         _ => panic!("Expected INSERT statement"),

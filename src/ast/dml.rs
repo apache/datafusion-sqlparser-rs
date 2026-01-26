@@ -90,13 +90,14 @@ pub struct Insert {
     ///
     /// [ClickHouse formats JSON insert](https://clickhouse.com/docs/en/interfaces/formats#json-inserting-data)
     pub format_clause: Option<InputFormatClause>,
-    /// For multi-table insert: `INSERT FIRST` vs `INSERT ALL`
+    /// For Snowflake multi-table insert: specifies the type (`ALL` or `FIRST`)
     ///
-    /// When `true`, this is an `INSERT FIRST` statement (only the first matching WHEN clause is executed).
-    /// When `false` with non-empty `clauses`, this is an `INSERT ALL` statement.
+    /// - `None` means this is a regular single-table INSERT
+    /// - `Some(All)` means `INSERT ALL` (all matching WHEN clauses are executed)
+    /// - `Some(First)` means `INSERT FIRST` (only the first matching WHEN clause is executed)
     ///
     /// See: <https://docs.snowflake.com/en/sql-reference/sql/insert-multi-table>
-    pub insert_first: bool,
+    pub multi_table_insert_type: Option<MultiTableInsertType>,
     /// For multi-table insert: additional INTO clauses (unconditional)
     ///
     /// Used for `INSERT ALL INTO t1 INTO t2 ... SELECT ...`
@@ -117,9 +118,7 @@ pub struct Insert {
 
 impl Display for Insert {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Check if this is a Snowflake multi-table insert
-        let is_multi_table = !self.multi_table_into_clauses.is_empty()
-            || !self.multi_table_when_clauses.is_empty();
+        let is_multi_table = self.multi_table_insert_type.is_some();
 
         // SQLite OR conflict has a special format: INSERT OR ... INTO table_name
         if let Some(on_conflict) = self.or {
@@ -148,8 +147,8 @@ impl Display for Insert {
                 write!(f, " OVERWRITE")?;
             }
 
-            if is_multi_table {
-                write!(f, " {}", if self.insert_first { "FIRST" } else { "ALL" })?;
+            if let Some(insert_type) = &self.multi_table_insert_type {
+                write!(f, " {}", insert_type)?;
             }
 
             if self.into {
@@ -812,6 +811,28 @@ impl Display for MultiTableInsertValue {
         match self {
             MultiTableInsertValue::Expr(expr) => write!(f, "{}", expr),
             MultiTableInsertValue::Default => write!(f, "DEFAULT"),
+        }
+    }
+}
+
+/// The type of multi-table INSERT statement(Snowflake).
+///
+/// See: <https://docs.snowflake.com/en/sql-reference/sql/insert-multi-table>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum MultiTableInsertType {
+    /// `INSERT ALL` - all matching WHEN clauses are executed
+    All,
+    /// `INSERT FIRST` - only the first matching WHEN clause is executed
+    First,
+}
+
+impl Display for MultiTableInsertType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MultiTableInsertType::All => write!(f, "ALL"),
+            MultiTableInsertType::First => write!(f, "FIRST"),
         }
     }
 }

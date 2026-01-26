@@ -4670,17 +4670,23 @@ pub enum Statement {
         name: ObjectName,
         /// Whether the `TABLE` keyword was present (ClickHouse uses `OPTIMIZE TABLE`, Databricks uses `OPTIMIZE`).
         has_table_keyword: bool,
-        /// Optional cluster identifier (ClickHouse).
+        /// Optional cluster identifier.
+        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
         on_cluster: Option<Ident>,
-        /// Optional partition spec (ClickHouse).
+        /// Optional partition spec.
+        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
         partition: Option<Partition>,
-        /// Whether `FINAL` was specified (ClickHouse).
+        /// Whether `FINAL` was specified.
+        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
         include_final: bool,
-        /// Optional deduplication settings (ClickHouse).
+        /// Optional deduplication settings.
+        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
         deduplicate: Option<Deduplicate>,
-        /// Optional WHERE predicate (Databricks).
+        /// Optional WHERE predicate.
+        /// [Databricks](https://docs.databricks.com/en/sql/language-manual/delta-optimize.html)
         predicate: Option<Expr>,
-        /// Optional ZORDER BY columns (Databricks).
+        /// Optional ZORDER BY columns.
+        /// [Databricks](https://docs.databricks.com/en/sql/language-manual/delta-optimize.html)
         zorder: Option<Vec<Expr>>,
     },
     /// ```sql

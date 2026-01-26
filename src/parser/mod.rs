@@ -14069,7 +14069,6 @@ impl<'a> Parser<'a> {
         loop {
             let t = self.peek_nth_token_no_skip_ref(0);
             match &t.token {
-                // ~ only the very first comment
                 Token::Whitespace(ws) => {
                     match ws {
                         Whitespace::SingleLineComment { comment, prefix } => {
@@ -14088,7 +14087,7 @@ impl<'a> Parser<'a> {
                         Whitespace::MultiLineComment(comment) => {
                             return Ok(if supports_multiline && comment.starts_with("+") {
                                 let text = comment.split_at(1).1.into();
-                                self.next_token_no_skip(); // ~ consume the token
+                                self.next_token_no_skip(); // Consume the comment token
                                 Some(OptimizerHint {
                                     text,
                                     style: OptimizerHintStyle::MultiLine,
@@ -14097,9 +14096,8 @@ impl<'a> Parser<'a> {
                                 None
                             });
                         }
-                        // but skip (pure) whitespace
                         Whitespace::Space | Whitespace::Tab | Whitespace::Newline => {
-                            // consume the token and try with the next whitespace (if any)
+                            // Consume the token and try with the next whitespace or comment
                             self.next_token_no_skip();
                         }
                     }

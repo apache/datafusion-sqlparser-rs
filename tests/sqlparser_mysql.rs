@@ -3458,6 +3458,13 @@ fn parse_create_table_unallow_constraint_then_index() {
 }
 
 #[test]
+fn parse_create_table_constraint_check_without_name() {
+    let sql = "CREATE TABLE t (x INT, CONSTRAINT CHECK (x > 1))";
+    let normalized = "CREATE TABLE t (x INT, CHECK (x > 1))";
+    mysql_and_generic().one_statement_parses_to(sql, normalized);
+}
+
+#[test]
 fn parse_create_table_with_fulltext_definition() {
     mysql_and_generic().verified_stmt("CREATE TABLE tb (id INT, FULLTEXT (id))");
 

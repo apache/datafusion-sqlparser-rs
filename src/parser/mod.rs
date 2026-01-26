@@ -14076,7 +14076,7 @@ impl<'a> Parser<'a> {
                             return Ok(if supports_singleline && comment.starts_with("+") {
                                 let text = comment.split_at(1).1.into();
                                 let prefix = prefix.clone();
-                                self.next_token_no_skip(); // ~ consume the token
+                                self.next_token_no_skip(); // Consume the comment token
                                 Some(OptimizerHint {
                                     text,
                                     style: OptimizerHintStyle::SingleLine { prefix },

@@ -13029,7 +13029,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a `DELETE` statement and return `Statement::Delete`.
     pub fn parse_delete(&mut self, delete_token: TokenWithSpan) -> Result<Statement, ParserError> {
-        let optimizer_hint = self.parse_optional_optimizer_hint()?;
+        let optimizer_hint = self.maybe_parse_optimizer_hint()?;
         let (tables, with_from_keyword) = if !self.parse_keyword(Keyword::FROM) {
             // `FROM` keyword is optional in BigQuery SQL.
             // https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#delete_statement
@@ -13872,7 +13872,7 @@ impl<'a> Parser<'a> {
         }
 
         let select_token = self.expect_keyword(Keyword::SELECT)?;
-        let optimizer_hint = self.parse_optional_optimizer_hint()?;
+        let optimizer_hint = self.maybe_parse_optimizer_hint()?;
         let value_table_mode = self.parse_value_table_mode()?;
 
         let mut top_before_distinct = false;
@@ -14060,7 +14060,7 @@ impl<'a> Parser<'a> {
     ///
     /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html#optimizer-hints-overview)
     /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
-    fn parse_optional_optimizer_hint(&mut self) -> Result<Option<OptimizerHint>, ParserError> {
+    fn maybe_parse_optimizer_hint(&mut self) -> Result<Option<OptimizerHint>, ParserError> {
         let supports_multiline = dialect_of!(self is MySqlDialect | OracleDialect | GenericDialect);
         let supports_singleline = dialect_of!(self is OracleDialect | GenericDialect);
         if !supports_multiline && !supports_singleline {
@@ -16801,7 +16801,7 @@ impl<'a> Parser<'a> {
 
     /// Parse an INSERT statement
     pub fn parse_insert(&mut self, insert_token: TokenWithSpan) -> Result<Statement, ParserError> {
-        let optimizer_hint = self.parse_optional_optimizer_hint()?;
+        let optimizer_hint = self.maybe_parse_optimizer_hint()?;
         let or = self.parse_conflict_clause();
         let priority = if !dialect_of!(self is MySqlDialect | GenericDialect) {
             None
@@ -17075,7 +17075,7 @@ impl<'a> Parser<'a> {
 
     /// Parse an `UPDATE` statement and return `Statement::Update`.
     pub fn parse_update(&mut self, update_token: TokenWithSpan) -> Result<Statement, ParserError> {
-        let optimizer_hint = self.parse_optional_optimizer_hint()?;
+        let optimizer_hint = self.maybe_parse_optimizer_hint()?;
         let or = self.parse_conflict_clause();
         let table = self.parse_table_and_joins()?;
         let from_before_set = if self.parse_keyword(Keyword::FROM) {

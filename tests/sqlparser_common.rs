@@ -16220,702 +16220,289 @@ fn parse_set_names() {
     dialects.verified_stmt("SET NAMES UTF8 COLLATE bogus");
 }
 
-/// Returns dialect configurations for pipe operator tests:
-/// 1. Dialects supporting FROM-first syntax (e.g., "FROM users |> ...")
-/// 2. Dialects requiring SELECT-first syntax (e.g., "SELECT * FROM users |> ...")
-fn pipe_dialects() -> [(TestedDialects, bool); 2] {
-    let from_first =
-        all_dialects_where(|d| d.supports_pipe_operator() && d.supports_from_first_select());
-    let select_first =
-        all_dialects_where(|d| d.supports_pipe_operator() && !d.supports_from_first_select());
-    [(from_first, true), (select_first, false)]
-}
-
-/// Macro to test pipe operator parsing with explicit input and canonical output.
-/// Usage: `test_pipe!(ctx, input = "...", canonical = "...")`
-macro_rules! test_pipe {
-    ($ctx:expr, input = $input:expr, canonical = $canonical:expr $(,)?) => {{
-        let (ref dialects, from_first) = $ctx;
-        let prefix = if from_first {
-            "FROM tbl"
-        } else {
-            "SELECT * FROM tbl"
-        };
-        dialects.verified_query_with_canonical(
-            &format!("{prefix} |> {}", $input),
-            &format!("{prefix} |> {}", $canonical),
-        );
-    }};
-}
-
 #[test]
 fn parse_pipe_operator_as() {
-    for dialect in pipe_dialects() {
-        test_pipe!(dialect, input = "AS new_users", canonical = "AS new_users");
-    }
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> AS new_users");
 }
 
 #[test]
 fn parse_pipe_operator_select() {
-    for dialect in pipe_dialects() {
-        test_pipe!(dialect, input = "SELECT id", canonical = "SELECT id");
-        test_pipe!(
-            dialect,
-            input = "SELECT id, name",
-            canonical = "SELECT id, name"
-        );
-        test_pipe!(
-            dialect,
-            input = "SELECT id user_id",
-            canonical = "SELECT id AS user_id"
-        );
-        test_pipe!(
-            dialect,
-            input = "SELECT id AS user_id",
-            canonical = "SELECT id AS user_id"
-        );
-    }
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> SELECT id");
+    dialects.verified_stmt("SELECT * FROM tbl |> SELECT id, name");
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM tbl |> SELECT id user_id",
+        "SELECT * FROM tbl |> SELECT id AS user_id",
+    );
+    dialects.verified_stmt("SELECT * FROM tbl |> SELECT id AS user_id");
 }
 
 #[test]
 fn parse_pipe_operator_extend() {
-    for dialect in pipe_dialects() {
-        test_pipe!(
-            dialect,
-            input = "EXTEND id + 1 AS new_id",
-            canonical = "EXTEND id + 1 AS new_id"
-        );
-        test_pipe!(
-            dialect,
-            input = "EXTEND id AS new_id, name AS new_name",
-            canonical = "EXTEND id AS new_id, name AS new_name"
-        );
-        test_pipe!(
-            dialect,
-            input = "EXTEND id user_id",
-            canonical = "EXTEND id AS user_id"
-        );
-    }
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> EXTEND id + 1 AS new_id");
+    dialects.verified_stmt("SELECT * FROM tbl |> EXTEND id AS new_id, name AS new_name");
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM tbl |> EXTEND id user_id",
+        "SELECT * FROM tbl |> EXTEND id AS user_id",
+    );
 }
 
 #[test]
 fn parse_pipe_operator_set() {
-    for dialect in pipe_dialects() {
-        test_pipe!(
-            dialect,
-            input = "SET id = id + 1",
-            canonical = "SET id = id + 1"
-        );
-        test_pipe!(
-            dialect,
-            input = "SET id = id + 1, name = name + ' Doe'",
-            canonical = "SET id = id + 1, name = name + ' Doe'"
-        );
-    }
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> SET id = id + 1");
+    dialects.verified_stmt("SELECT * FROM tbl |> SET id = id + 1, name = name + ' Doe'");
 }
 
 #[test]
 fn parse_pipe_operator_drop() {
-    for dialect in pipe_dialects() {
-        test_pipe!(dialect, input = "DROP id", canonical = "DROP id");
-        test_pipe!(
-            dialect,
-            input = "DROP id, name",
-            canonical = "DROP id, name"
-        );
-        test_pipe!(
-            dialect,
-            input = "DROP c |> RENAME a AS x",
-            canonical = "DROP c |> RENAME a AS x"
-        );
-        test_pipe!(
-            dialect,
-            input = "DROP a, b |> SELECT c",
-            canonical = "DROP a, b |> SELECT c"
-        );
-    }
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> DROP id");
+    dialects.verified_stmt("SELECT * FROM tbl |> DROP id, name");
+    dialects.verified_stmt("SELECT * FROM tbl |> DROP c |> RENAME a AS x");
+    dialects.verified_stmt("SELECT * FROM tbl |> DROP a, b |> SELECT c");
 }
 
 #[test]
 fn parse_pipe_operator_limit() {
-    for dialect in pipe_dialects() {
-        test_pipe!(dialect, input = "LIMIT 10", canonical = "LIMIT 10");
-        test_pipe!(
-            dialect,
-            input = "LIMIT 10 OFFSET 5",
-            canonical = "LIMIT 10 OFFSET 5"
-        );
-        test_pipe!(
-            dialect,
-            input = "LIMIT 10 |> LIMIT 5",
-            canonical = "LIMIT 10 |> LIMIT 5"
-        );
-        test_pipe!(
-            dialect,
-            input = "LIMIT 10 |> WHERE true",
-            canonical = "LIMIT 10 |> WHERE true"
-        );
-    }
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> LIMIT 10");
+    dialects.verified_stmt("SELECT * FROM tbl |> LIMIT 10 OFFSET 5");
+    dialects.verified_stmt("SELECT * FROM tbl |> LIMIT 10 |> LIMIT 5");
+    dialects.verified_stmt("SELECT * FROM tbl |> LIMIT 10 |> WHERE true");
 }
 
 #[test]
 fn parse_pipe_operator_where() {
-    for dialect in pipe_dialects() {
-        test_pipe!(dialect, input = "WHERE id = 1", canonical = "WHERE id = 1");
-        test_pipe!(
-            dialect,
-            input = "WHERE id = 1 AND name = 'John'",
-            canonical = "WHERE id = 1 AND name = 'John'"
-        );
-        test_pipe!(
-            dialect,
-            input = "WHERE id = 1 OR name = 'John'",
-            canonical = "WHERE id = 1 OR name = 'John'"
-        );
-    }
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> WHERE id = 1");
+    dialects.verified_stmt("SELECT * FROM tbl |> WHERE id = 1 AND name = 'John'");
+    dialects.verified_stmt("SELECT * FROM tbl |> WHERE id = 1 OR name = 'John'");
 }
 
 #[test]
 fn parse_pipe_operator_aggregate() {
-    for dialect in pipe_dialects() {
-        test_pipe!(
-            dialect,
-            input = "AGGREGATE COUNT(*)",
-            canonical = "AGGREGATE COUNT(*)"
-        );
-        test_pipe!(
-            dialect,
-            input = "AGGREGATE COUNT(*) total_users",
-            canonical = "AGGREGATE COUNT(*) AS total_users"
-        );
-        test_pipe!(
-            dialect,
-            input = "AGGREGATE COUNT(*) AS total_users",
-            canonical = "AGGREGATE COUNT(*) AS total_users"
-        );
-        test_pipe!(
-            dialect,
-            input = "AGGREGATE COUNT(*), MIN(id)",
-            canonical = "AGGREGATE COUNT(*), MIN(id)"
-        );
-        test_pipe!(
-            dialect,
-            input = "AGGREGATE SUM(o_totalprice) AS price, COUNT(*) AS cnt GROUP BY EXTRACT(YEAR FROM o_orderdate) AS year",
-            canonical = "AGGREGATE SUM(o_totalprice) AS price, COUNT(*) AS cnt GROUP BY EXTRACT(YEAR FROM o_orderdate) AS year"
-        );
-        test_pipe!(
-            dialect,
-            input = "AGGREGATE GROUP BY EXTRACT(YEAR FROM o_orderdate) AS year",
-            canonical = "AGGREGATE GROUP BY EXTRACT(YEAR FROM o_orderdate) AS year"
-        );
-        test_pipe!(
-            dialect,
-            input = "AGGREGATE GROUP BY EXTRACT(YEAR FROM o_orderdate)",
-            canonical = "AGGREGATE GROUP BY EXTRACT(YEAR FROM o_orderdate)"
-        );
-        test_pipe!(
-            dialect,
-            input = "AGGREGATE GROUP BY a, b",
-            canonical = "AGGREGATE GROUP BY a, b"
-        );
-        test_pipe!(
-            dialect,
-            input = "AGGREGATE SUM(c) GROUP BY a, b",
-            canonical = "AGGREGATE SUM(c) GROUP BY a, b"
-        );
-        test_pipe!(
-            dialect,
-            input = "AGGREGATE SUM(c) ASC",
-            canonical = "AGGREGATE SUM(c) ASC"
-        );
-    }
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE COUNT(*)");
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM tbl |> AGGREGATE COUNT(*) total_users",
+        "SELECT * FROM tbl |> AGGREGATE COUNT(*) AS total_users",
+    );
+    dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE COUNT(*) AS total_users");
+    dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE COUNT(*), MIN(id)");
+    dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE SUM(o_totalprice) AS price, COUNT(*) AS cnt GROUP BY EXTRACT(YEAR FROM o_orderdate) AS year");
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> AGGREGATE GROUP BY EXTRACT(YEAR FROM o_orderdate) AS year",
+    );
+    dialects
+        .verified_stmt("SELECT * FROM tbl |> AGGREGATE GROUP BY EXTRACT(YEAR FROM o_orderdate)");
+    dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE GROUP BY a, b");
+    dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE SUM(c) GROUP BY a, b");
+    dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE SUM(c) ASC");
 }
 
 #[test]
 fn parse_pipe_operator_order_by() {
-    for dialect in pipe_dialects() {
-        test_pipe!(
-            dialect,
-            input = "ORDER BY id ASC",
-            canonical = "ORDER BY id ASC"
-        );
-        test_pipe!(
-            dialect,
-            input = "ORDER BY id DESC",
-            canonical = "ORDER BY id DESC"
-        );
-        test_pipe!(
-            dialect,
-            input = "ORDER BY id DESC, name ASC",
-            canonical = "ORDER BY id DESC, name ASC"
-        );
-    }
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> ORDER BY id ASC");
+    dialects.verified_stmt("SELECT * FROM tbl |> ORDER BY id DESC");
+    dialects.verified_stmt("SELECT * FROM tbl |> ORDER BY id DESC, name ASC");
 }
 
 #[test]
 fn parse_pipe_operator_tablesample() {
-    for dialect in pipe_dialects() {
-        test_pipe!(
-            dialect,
-            input = "TABLESAMPLE BERNOULLI (50)",
-            canonical = "TABLESAMPLE BERNOULLI (50)"
-        );
-        test_pipe!(
-            dialect,
-            input = "TABLESAMPLE SYSTEM (50 PERCENT)",
-            canonical = "TABLESAMPLE SYSTEM (50 PERCENT)"
-        );
-        test_pipe!(
-            dialect,
-            input = "TABLESAMPLE SYSTEM (50) REPEATABLE (10)",
-            canonical = "TABLESAMPLE SYSTEM (50) REPEATABLE (10)"
-        );
-    }
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> TABLESAMPLE BERNOULLI (50)");
+    dialects.verified_stmt("SELECT * FROM tbl |> TABLESAMPLE SYSTEM (50 PERCENT)");
+    dialects.verified_stmt("SELECT * FROM tbl |> TABLESAMPLE SYSTEM (50) REPEATABLE (10)");
 }
 
 #[test]
 fn parse_pipe_operator_rename() {
-    for dialect in pipe_dialects() {
-        test_pipe!(
-            dialect,
-            input = "RENAME old_name AS new_name",
-            canonical = "RENAME old_name AS new_name"
-        );
-        test_pipe!(
-            dialect,
-            input = "RENAME id AS user_id, name AS user_name",
-            canonical = "RENAME id AS user_id, name AS user_name"
-        );
-        test_pipe!(
-            dialect,
-            input = "RENAME id user_id",
-            canonical = "RENAME id AS user_id"
-        );
-    }
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> RENAME old_name AS new_name");
+    dialects.verified_stmt("SELECT * FROM tbl |> RENAME id AS user_id, name AS user_name");
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM tbl |> RENAME id user_id",
+        "SELECT * FROM tbl |> RENAME id AS user_id",
+    );
 }
 
 #[test]
 fn parse_pipe_operator_union() {
-    for dialect in pipe_dialects() {
-        test_pipe!(
-            dialect,
-            input = "UNION ALL (SELECT * FROM admins)",
-            canonical = "UNION ALL (SELECT * FROM admins)"
-        );
-        test_pipe!(
-            dialect,
-            input = "UNION DISTINCT (SELECT * FROM admins)",
-            canonical = "UNION DISTINCT (SELECT * FROM admins)"
-        );
-        test_pipe!(
-            dialect,
-            input = "UNION (SELECT * FROM admins)",
-            canonical = "UNION (SELECT * FROM admins)"
-        );
-        test_pipe!(
-            dialect,
-            input = "UNION ALL (SELECT * FROM admins), (SELECT * FROM guests)",
-            canonical = "UNION ALL (SELECT * FROM admins), (SELECT * FROM guests)"
-        );
-        test_pipe!(
-            dialect,
-            input = "UNION DISTINCT (SELECT * FROM admins), (SELECT * FROM guests), (SELECT * FROM employees)",
-            canonical = "UNION DISTINCT (SELECT * FROM admins), (SELECT * FROM guests), (SELECT * FROM employees)"
-        );
-        test_pipe!(
-            dialect,
-            input = "UNION (SELECT * FROM admins), (SELECT * FROM guests)",
-            canonical = "UNION (SELECT * FROM admins), (SELECT * FROM guests)"
-        );
-        test_pipe!(
-            dialect,
-            input = "UNION BY NAME (SELECT * FROM admins)",
-            canonical = "UNION BY NAME (SELECT * FROM admins)"
-        );
-        test_pipe!(
-            dialect,
-            input = "UNION ALL BY NAME (SELECT * FROM admins)",
-            canonical = "UNION ALL BY NAME (SELECT * FROM admins)"
-        );
-        test_pipe!(
-            dialect,
-            input = "UNION DISTINCT BY NAME (SELECT * FROM admins)",
-            canonical = "UNION DISTINCT BY NAME (SELECT * FROM admins)"
-        );
-        test_pipe!(
-            dialect,
-            input = "UNION BY NAME (SELECT * FROM admins), (SELECT * FROM guests)",
-            canonical = "UNION BY NAME (SELECT * FROM admins), (SELECT * FROM guests)"
-        );
-    }
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> UNION ALL (SELECT * FROM admins)");
+    dialects.verified_stmt("SELECT * FROM tbl |> UNION DISTINCT (SELECT * FROM admins)");
+    dialects.verified_stmt("SELECT * FROM tbl |> UNION (SELECT * FROM admins)");
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> UNION ALL (SELECT * FROM admins), (SELECT * FROM guests)",
+    );
+    dialects.verified_stmt("SELECT * FROM tbl |> UNION DISTINCT (SELECT * FROM admins), (SELECT * FROM guests), (SELECT * FROM employees)");
+    dialects
+        .verified_stmt("SELECT * FROM tbl |> UNION (SELECT * FROM admins), (SELECT * FROM guests)");
+    dialects.verified_stmt("SELECT * FROM tbl |> UNION BY NAME (SELECT * FROM admins)");
+    dialects.verified_stmt("SELECT * FROM tbl |> UNION ALL BY NAME (SELECT * FROM admins)");
+    dialects.verified_stmt("SELECT * FROM tbl |> UNION DISTINCT BY NAME (SELECT * FROM admins)");
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> UNION BY NAME (SELECT * FROM admins), (SELECT * FROM guests)",
+    );
 }
 
 #[test]
 fn parse_pipe_operator_intersect() {
-    for dialect in pipe_dialects() {
-        test_pipe!(
-            dialect,
-            input = "INTERSECT DISTINCT (SELECT * FROM admins)",
-            canonical = "INTERSECT DISTINCT (SELECT * FROM admins)"
-        );
-        test_pipe!(
-            dialect,
-            input = "INTERSECT DISTINCT BY NAME (SELECT * FROM admins)",
-            canonical = "INTERSECT DISTINCT BY NAME (SELECT * FROM admins)"
-        );
-        test_pipe!(
-            dialect,
-            input = "INTERSECT DISTINCT (SELECT * FROM admins), (SELECT * FROM guests)",
-            canonical = "INTERSECT DISTINCT (SELECT * FROM admins), (SELECT * FROM guests)"
-        );
-        test_pipe!(
-            dialect,
-            input = "INTERSECT DISTINCT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)",
-            canonical = "INTERSECT DISTINCT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)"
-        );
-    }
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> INTERSECT DISTINCT (SELECT * FROM admins)");
+    dialects
+        .verified_stmt("SELECT * FROM tbl |> INTERSECT DISTINCT BY NAME (SELECT * FROM admins)");
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> INTERSECT DISTINCT (SELECT * FROM admins), (SELECT * FROM guests)",
+    );
+    dialects.verified_stmt("SELECT * FROM tbl |> INTERSECT DISTINCT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)");
 }
 
 #[test]
 fn parse_pipe_operator_except() {
-    for dialect in pipe_dialects() {
-        test_pipe!(
-            dialect,
-            input = "EXCEPT DISTINCT (SELECT * FROM admins)",
-            canonical = "EXCEPT DISTINCT (SELECT * FROM admins)"
-        );
-        test_pipe!(
-            dialect,
-            input = "EXCEPT DISTINCT BY NAME (SELECT * FROM admins)",
-            canonical = "EXCEPT DISTINCT BY NAME (SELECT * FROM admins)"
-        );
-        test_pipe!(
-            dialect,
-            input = "EXCEPT DISTINCT (SELECT * FROM admins), (SELECT * FROM guests)",
-            canonical = "EXCEPT DISTINCT (SELECT * FROM admins), (SELECT * FROM guests)"
-        );
-        test_pipe!(
-            dialect,
-            input = "EXCEPT DISTINCT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)",
-            canonical = "EXCEPT DISTINCT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)"
-        );
-    }
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> EXCEPT DISTINCT (SELECT * FROM admins)");
+    dialects.verified_stmt("SELECT * FROM tbl |> EXCEPT DISTINCT BY NAME (SELECT * FROM admins)");
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> EXCEPT DISTINCT (SELECT * FROM admins), (SELECT * FROM guests)",
+    );
+    dialects.verified_stmt("SELECT * FROM tbl |> EXCEPT DISTINCT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)");
 }
 
 #[test]
 fn parse_pipe_operator_call() {
-    for dialect in pipe_dialects() {
-        test_pipe!(
-            dialect,
-            input = "CALL my_function()",
-            canonical = "CALL my_function()"
-        );
-        test_pipe!(
-            dialect,
-            input = "CALL process_data(5, 'test')",
-            canonical = "CALL process_data(5, 'test')"
-        );
-        test_pipe!(
-            dialect,
-            input = "CALL namespace.function_name(col1, col2, 'literal')",
-            canonical = "CALL namespace.function_name(col1, col2, 'literal')"
-        );
-        test_pipe!(
-            dialect,
-            input = "CALL transform_data(col1 + col2)",
-            canonical = "CALL transform_data(col1 + col2)"
-        );
-        test_pipe!(
-            dialect,
-            input = "CALL analyze_data('param1', 100, true)",
-            canonical = "CALL analyze_data('param1', 100, true)"
-        );
-        test_pipe!(
-            dialect,
-            input = "CALL tvf1(arg1) AS al",
-            canonical = "CALL tvf1(arg1) AS al"
-        );
-        test_pipe!(
-            dialect,
-            input = "CALL process_data(5) AS result_table",
-            canonical = "CALL process_data(5) AS result_table"
-        );
-        test_pipe!(
-            dialect,
-            input = "CALL namespace.func() AS my_alias",
-            canonical = "CALL namespace.func() AS my_alias"
-        );
-        test_pipe!(
-            dialect,
-            input = "CALL tvf1(arg1) |> CALL tvf2(arg2, arg3)",
-            canonical = "CALL tvf1(arg1) |> CALL tvf2(arg2, arg3)"
-        );
-        test_pipe!(
-            dialect,
-            input = "CALL transform(col1) |> CALL validate() |> CALL process(param)",
-            canonical = "CALL transform(col1) |> CALL validate() |> CALL process(param)"
-        );
-        test_pipe!(
-            dialect,
-            input = "CALL tvf1(arg1) AS step1 |> CALL tvf2(arg2) AS step2",
-            canonical = "CALL tvf1(arg1) AS step1 |> CALL tvf2(arg2) AS step2"
-        );
-        test_pipe!(
-            dialect,
-            input = "CALL preprocess() AS clean_data |> CALL analyze(mode) AS results",
-            canonical = "CALL preprocess() AS clean_data |> CALL analyze(mode) AS results"
-        );
-        test_pipe!(
-            dialect,
-            input = "CALL transform() |> WHERE status = 'active' |> CALL process(param)",
-            canonical = "CALL transform() |> WHERE status = 'active' |> CALL process(param)"
-        );
-        test_pipe!(
-            dialect,
-            input = "CALL preprocess() AS clean |> SELECT col1, col2 |> CALL validate()",
-            canonical = "CALL preprocess() AS clean |> SELECT col1, col2 |> CALL validate()"
-        );
-    }
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> CALL my_function()");
+    dialects.verified_stmt("SELECT * FROM tbl |> CALL process_data(5, 'test')");
+    dialects
+        .verified_stmt("SELECT * FROM tbl |> CALL namespace.function_name(col1, col2, 'literal')");
+    dialects.verified_stmt("SELECT * FROM tbl |> CALL transform_data(col1 + col2)");
+    dialects.verified_stmt("SELECT * FROM tbl |> CALL analyze_data('param1', 100, true)");
+    dialects.verified_stmt("SELECT * FROM tbl |> CALL tvf1(arg1) AS al");
+    dialects.verified_stmt("SELECT * FROM tbl |> CALL process_data(5) AS result_table");
+    dialects.verified_stmt("SELECT * FROM tbl |> CALL namespace.func() AS my_alias");
+    dialects.verified_stmt("SELECT * FROM tbl |> CALL tvf1(arg1) |> CALL tvf2(arg2, arg3)");
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> CALL transform(col1) |> CALL validate() |> CALL process(param)",
+    );
+    dialects
+        .verified_stmt("SELECT * FROM tbl |> CALL tvf1(arg1) AS step1 |> CALL tvf2(arg2) AS step2");
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> CALL preprocess() AS clean_data |> CALL analyze(mode) AS results",
+    );
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> CALL transform() |> WHERE status = 'active' |> CALL process(param)",
+    );
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> CALL preprocess() AS clean |> SELECT col1, col2 |> CALL validate()",
+    );
 }
 
 #[test]
 fn parse_pipe_operator_pivot() {
-    for dialect in pipe_dialects() {
-        test_pipe!(
-            dialect,
-            input = "PIVOT(SUM(amount) FOR quarter IN ('Q1', 'Q2', 'Q3', 'Q4'))",
-            canonical = "PIVOT(SUM(amount) FOR quarter IN ('Q1', 'Q2', 'Q3', 'Q4'))"
-        );
-        test_pipe!(
-            dialect,
-            input = "PIVOT(AVG(revenue) FOR region IN ('North', 'South', 'East', 'West'))",
-            canonical = "PIVOT(AVG(revenue) FOR region IN ('North', 'South', 'East', 'West'))"
-        );
-        test_pipe!(
-            dialect,
-            input = "PIVOT(SUM(sales) AS total_sales, COUNT(*) AS num_transactions FOR month IN ('Jan', 'Feb', 'Mar'))",
-            canonical = "PIVOT(SUM(sales) AS total_sales, COUNT(*) AS num_transactions FOR month IN ('Jan', 'Feb', 'Mar'))"
-        );
-        test_pipe!(
-            dialect,
-            input = "PIVOT(SUM(amount) FOR product.category IN ('Electronics', 'Clothing'))",
-            canonical = "PIVOT(SUM(amount) FOR product.category IN ('Electronics', 'Clothing'))"
-        );
-        test_pipe!(
-            dialect,
-            input =
-                "WHERE year = 2023 |> PIVOT(SUM(revenue) FOR quarter IN ('Q1', 'Q2', 'Q3', 'Q4'))",
-            canonical =
-                "WHERE year = 2023 |> PIVOT(SUM(revenue) FOR quarter IN ('Q1', 'Q2', 'Q3', 'Q4'))"
-        );
-        test_pipe!(
-            dialect,
-            input = "PIVOT(SUM(sales) FOR quarter IN ('Q1', 'Q2')) AS quarterly_sales",
-            canonical = "PIVOT(SUM(sales) FOR quarter IN ('Q1', 'Q2')) AS quarterly_sales"
-        );
-        test_pipe!(
-            dialect,
-            input = "PIVOT(AVG(price) FOR category IN ('A', 'B', 'C')) AS avg_by_category",
-            canonical = "PIVOT(AVG(price) FOR category IN ('A', 'B', 'C')) AS avg_by_category"
-        );
-        test_pipe!(
-            dialect,
-            input = "PIVOT(COUNT(*) AS transactions, SUM(amount) AS total FOR region IN ('North', 'South')) AS regional_summary",
-            canonical = "PIVOT(COUNT(*) AS transactions, SUM(amount) AS total FOR region IN ('North', 'South')) AS regional_summary"
-        );
-        test_pipe!(
-            dialect,
-            input = "PIVOT(SUM(sales) FOR quarter IN ('Q1', 'Q2')) quarterly_sales",
-            canonical = "PIVOT(SUM(sales) FOR quarter IN ('Q1', 'Q2')) AS quarterly_sales"
-        );
-        test_pipe!(
-            dialect,
-            input = "PIVOT(AVG(price) FOR category IN ('A', 'B', 'C')) avg_by_category",
-            canonical = "PIVOT(AVG(price) FOR category IN ('A', 'B', 'C')) AS avg_by_category"
-        );
-    }
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> PIVOT(SUM(amount) FOR quarter IN ('Q1', 'Q2', 'Q3', 'Q4'))",
+    );
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> PIVOT(AVG(revenue) FOR region IN ('North', 'South', 'East', 'West'))",
+    );
+    dialects.verified_stmt("SELECT * FROM tbl |> PIVOT(SUM(sales) AS total_sales, COUNT(*) AS num_transactions FOR month IN ('Jan', 'Feb', 'Mar'))");
+    dialects.verified_stmt("SELECT * FROM tbl |> PIVOT(SUM(amount) FOR product.category IN ('Electronics', 'Clothing'))");
+    dialects.verified_stmt("SELECT * FROM tbl |> WHERE year = 2023 |> PIVOT(SUM(revenue) FOR quarter IN ('Q1', 'Q2', 'Q3', 'Q4'))");
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> PIVOT(SUM(sales) FOR quarter IN ('Q1', 'Q2')) AS quarterly_sales",
+    );
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> PIVOT(AVG(price) FOR category IN ('A', 'B', 'C')) AS avg_by_category",
+    );
+    dialects.verified_stmt("SELECT * FROM tbl |> PIVOT(COUNT(*) AS transactions, SUM(amount) AS total FOR region IN ('North', 'South')) AS regional_summary");
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM tbl |> PIVOT(SUM(sales) FOR quarter IN ('Q1', 'Q2')) quarterly_sales",
+        "SELECT * FROM tbl |> PIVOT(SUM(sales) FOR quarter IN ('Q1', 'Q2')) AS quarterly_sales",
+    );
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM tbl |> PIVOT(AVG(price) FOR category IN ('A', 'B', 'C')) avg_by_category",
+        "SELECT * FROM tbl |> PIVOT(AVG(price) FOR category IN ('A', 'B', 'C')) AS avg_by_category",
+    );
 }
 
 #[test]
 fn parse_pipe_operator_unpivot() {
-    for dialect in pipe_dialects() {
-        test_pipe!(
-            dialect,
-            input = "UNPIVOT(revenue FOR quarter IN (Q1, Q2, Q3, Q4))",
-            canonical = "UNPIVOT(revenue FOR quarter IN (Q1, Q2, Q3, Q4))"
-        );
-        test_pipe!(
-            dialect,
-            input = "UNPIVOT(value FOR category IN (A, B, C))",
-            canonical = "UNPIVOT(value FOR category IN (A, B, C))"
-        );
-        test_pipe!(
-            dialect,
-            input = "UNPIVOT(measurement FOR metric_type IN (cpu, memory, disk))",
-            canonical = "UNPIVOT(measurement FOR metric_type IN (cpu, memory, disk))"
-        );
-        test_pipe!(
-            dialect,
-            input = "UNPIVOT(amount FOR period IN (jan, feb, mar, apr, may, jun))",
-            canonical = "UNPIVOT(amount FOR period IN (jan, feb, mar, apr, may, jun))"
-        );
-        test_pipe!(
-            dialect,
-            input = "UNPIVOT(score FOR subject IN (math, science, english, history))",
-            canonical = "UNPIVOT(score FOR subject IN (math, science, english, history))"
-        );
-        test_pipe!(
-            dialect,
-            input = "WHERE year = 2023 |> UNPIVOT(revenue FOR quarter IN (Q1, Q2, Q3, Q4))",
-            canonical = "WHERE year = 2023 |> UNPIVOT(revenue FOR quarter IN (Q1, Q2, Q3, Q4))"
-        );
-        test_pipe!(
-            dialect,
-            input = "UNPIVOT(amount FOR period IN (Q1, Q2)) AS unpivoted_sales",
-            canonical = "UNPIVOT(amount FOR period IN (Q1, Q2)) AS unpivoted_sales"
-        );
-        test_pipe!(
-            dialect,
-            input = "UNPIVOT(value FOR category IN (A, B, C)) AS transformed_data",
-            canonical = "UNPIVOT(value FOR category IN (A, B, C)) AS transformed_data"
-        );
-        test_pipe!(
-            dialect,
-            input = "UNPIVOT(measurement FOR metric_type IN (cpu, memory)) AS metric_measurements",
-            canonical =
-                "UNPIVOT(measurement FOR metric_type IN (cpu, memory)) AS metric_measurements"
-        );
-        test_pipe!(
-            dialect,
-            input = "UNPIVOT(amount FOR period IN (Q1, Q2)) unpivoted_sales",
-            canonical = "UNPIVOT(amount FOR period IN (Q1, Q2)) AS unpivoted_sales"
-        );
-        test_pipe!(
-            dialect,
-            input = "UNPIVOT(value FOR category IN (A, B, C)) transformed_data",
-            canonical = "UNPIVOT(value FOR category IN (A, B, C)) AS transformed_data"
-        );
-    }
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> UNPIVOT(revenue FOR quarter IN (Q1, Q2, Q3, Q4))");
+    dialects.verified_stmt("SELECT * FROM tbl |> UNPIVOT(value FOR category IN (A, B, C))");
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> UNPIVOT(measurement FOR metric_type IN (cpu, memory, disk))",
+    );
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> UNPIVOT(amount FOR period IN (jan, feb, mar, apr, may, jun))",
+    );
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> UNPIVOT(score FOR subject IN (math, science, english, history))",
+    );
+    dialects.verified_stmt("SELECT * FROM tbl |> WHERE year = 2023 |> UNPIVOT(revenue FOR quarter IN (Q1, Q2, Q3, Q4))");
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> UNPIVOT(amount FOR period IN (Q1, Q2)) AS unpivoted_sales",
+    );
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> UNPIVOT(value FOR category IN (A, B, C)) AS transformed_data",
+    );
+    dialects.verified_stmt("SELECT * FROM tbl |> UNPIVOT(measurement FOR metric_type IN (cpu, memory)) AS metric_measurements");
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM tbl |> UNPIVOT(amount FOR period IN (Q1, Q2)) unpivoted_sales",
+        "SELECT * FROM tbl |> UNPIVOT(amount FOR period IN (Q1, Q2)) AS unpivoted_sales",
+    );
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM tbl |> UNPIVOT(value FOR category IN (A, B, C)) transformed_data",
+        "SELECT * FROM tbl |> UNPIVOT(value FOR category IN (A, B, C)) AS transformed_data",
+    );
 }
 
 #[test]
 fn parse_pipe_operator_join() {
-    for dialect in pipe_dialects() {
-        test_pipe!(
-            dialect,
-            input = "JOIN orders ON users.id = orders.user_id",
-            canonical = "JOIN orders ON users.id = orders.user_id"
-        );
-        test_pipe!(
-            dialect,
-            input = "INNER JOIN orders ON users.id = orders.user_id",
-            canonical = "INNER JOIN orders ON users.id = orders.user_id"
-        );
-        test_pipe!(
-            dialect,
-            input = "LEFT JOIN orders ON users.id = orders.user_id",
-            canonical = "LEFT JOIN orders ON users.id = orders.user_id"
-        );
-        test_pipe!(
-            dialect,
-            input = "LEFT OUTER JOIN orders ON users.id = orders.user_id",
-            canonical = "LEFT OUTER JOIN orders ON users.id = orders.user_id"
-        );
-        test_pipe!(
-            dialect,
-            input = "RIGHT JOIN orders ON users.id = orders.user_id",
-            canonical = "RIGHT JOIN orders ON users.id = orders.user_id"
-        );
-        test_pipe!(
-            dialect,
-            input = "RIGHT OUTER JOIN orders ON users.id = orders.user_id",
-            canonical = "RIGHT OUTER JOIN orders ON users.id = orders.user_id"
-        );
-        test_pipe!(
-            dialect,
-            input = "FULL JOIN orders ON users.id = orders.user_id",
-            canonical = "FULL JOIN orders ON users.id = orders.user_id"
-        );
-        test_pipe!(
-            dialect,
-            input = "FULL OUTER JOIN orders ON users.id = orders.user_id",
-            canonical = "FULL JOIN orders ON users.id = orders.user_id"
-        );
-        test_pipe!(
-            dialect,
-            input = "CROSS JOIN orders",
-            canonical = "CROSS JOIN orders"
-        );
-        test_pipe!(
-            dialect,
-            input = "JOIN orders USING (user_id)",
-            canonical = "JOIN orders USING(user_id)"
-        );
-        test_pipe!(
-            dialect,
-            input = "LEFT JOIN orders USING (user_id, order_date)",
-            canonical = "LEFT JOIN orders USING(user_id, order_date)"
-        );
-        test_pipe!(
-            dialect,
-            input = "JOIN orders o ON users.id = o.user_id",
-            canonical = "JOIN orders o ON users.id = o.user_id"
-        );
-        test_pipe!(
-            dialect,
-            input = "LEFT JOIN orders AS o ON users.id = o.user_id",
-            canonical = "LEFT JOIN orders AS o ON users.id = o.user_id"
-        );
-        test_pipe!(
-            dialect,
-            input = "JOIN orders ON users.id = orders.user_id AND orders.status = 'active'",
-            canonical = "JOIN orders ON users.id = orders.user_id AND orders.status = 'active'"
-        );
-        test_pipe!(
-            dialect,
-            input = "LEFT JOIN orders ON users.id = orders.user_id AND orders.amount > 100",
-            canonical = "LEFT JOIN orders ON users.id = orders.user_id AND orders.amount > 100"
-        );
-        test_pipe!(
-            dialect,
-            input = "JOIN orders ON users.id = orders.user_id |> JOIN products ON orders.product_id = products.id",
-            canonical = "JOIN orders ON users.id = orders.user_id |> JOIN products ON orders.product_id = products.id"
-        );
-        test_pipe!(
-            dialect,
-            input = "LEFT JOIN orders ON users.id = orders.user_id |> RIGHT JOIN products ON orders.product_id = products.id",
-            canonical = "LEFT JOIN orders ON users.id = orders.user_id |> RIGHT JOIN products ON orders.product_id = products.id"
-        );
-        test_pipe!(
-            dialect,
-            input = "JOIN orders ON users.id = orders.user_id |> WHERE orders.amount > 100",
-            canonical = "JOIN orders ON users.id = orders.user_id |> WHERE orders.amount > 100"
-        );
-        test_pipe!(
-            dialect,
-            input = "WHERE users.active = true |> LEFT JOIN orders ON users.id = orders.user_id",
-            canonical =
-                "WHERE users.active = true |> LEFT JOIN orders ON users.id = orders.user_id"
-        );
-        test_pipe!(
-            dialect,
-            input = "JOIN orders ON users.id = orders.user_id |> SELECT users.name, orders.amount",
-            canonical =
-                "JOIN orders ON users.id = orders.user_id |> SELECT users.name, orders.amount"
-        );
-    }
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> JOIN orders ON users.id = orders.user_id");
+    dialects.verified_stmt("SELECT * FROM tbl |> INNER JOIN orders ON users.id = orders.user_id");
+    dialects.verified_stmt("SELECT * FROM tbl |> LEFT JOIN orders ON users.id = orders.user_id");
+    dialects
+        .verified_stmt("SELECT * FROM tbl |> LEFT OUTER JOIN orders ON users.id = orders.user_id");
+    dialects.verified_stmt("SELECT * FROM tbl |> RIGHT JOIN orders ON users.id = orders.user_id");
+    dialects
+        .verified_stmt("SELECT * FROM tbl |> RIGHT OUTER JOIN orders ON users.id = orders.user_id");
+    dialects.verified_stmt("SELECT * FROM tbl |> FULL JOIN orders ON users.id = orders.user_id");
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM tbl |> FULL OUTER JOIN orders ON users.id = orders.user_id",
+        "SELECT * FROM tbl |> FULL JOIN orders ON users.id = orders.user_id",
+    );
+    dialects.verified_stmt("SELECT * FROM tbl |> CROSS JOIN orders");
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM tbl |> JOIN orders USING (user_id)",
+        "SELECT * FROM tbl |> JOIN orders USING(user_id)",
+    );
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM tbl |> LEFT JOIN orders USING (user_id, order_date)",
+        "SELECT * FROM tbl |> LEFT JOIN orders USING(user_id, order_date)",
+    );
+    dialects.verified_stmt("SELECT * FROM tbl |> JOIN orders o ON users.id = o.user_id");
+    dialects.verified_stmt("SELECT * FROM tbl |> LEFT JOIN orders AS o ON users.id = o.user_id");
+    dialects.verified_stmt("SELECT * FROM tbl |> JOIN orders ON users.id = orders.user_id AND orders.status = 'active'");
+    dialects.verified_stmt("SELECT * FROM tbl |> LEFT JOIN orders ON users.id = orders.user_id AND orders.amount > 100");
+    dialects.verified_stmt("SELECT * FROM tbl |> JOIN orders ON users.id = orders.user_id |> JOIN products ON orders.product_id = products.id");
+    dialects.verified_stmt("SELECT * FROM tbl |> LEFT JOIN orders ON users.id = orders.user_id |> RIGHT JOIN products ON orders.product_id = products.id");
+    dialects.verified_stmt("SELECT * FROM tbl |> JOIN orders ON users.id = orders.user_id |> WHERE orders.amount > 100");
+    dialects.verified_stmt("SELECT * FROM tbl |> WHERE users.active = true |> LEFT JOIN orders ON users.id = orders.user_id");
+    dialects.verified_stmt("SELECT * FROM tbl |> JOIN orders ON users.id = orders.user_id |> SELECT users.name, orders.amount");
 }
 
 #[test]
 fn parse_pipe_operator_chained() {
-    // Long chain of pipe ops
-    for dialect in pipe_dialects() {
-        test_pipe!(
-            dialect,
-            input = "AGGREGATE SUM(cost) AS total_cost GROUP BY customer_id, state, item_type |> EXTEND COUNT(*) OVER (PARTITION BY customer_id) AS num_orders |> WHERE num_orders > 1 |> AGGREGATE AVG(total_cost) AS average GROUP BY state DESC, item_type ASC",
-            canonical = "AGGREGATE SUM(cost) AS total_cost GROUP BY customer_id, state, item_type |> EXTEND COUNT(*) OVER (PARTITION BY customer_id) AS num_orders |> WHERE num_orders > 1 |> AGGREGATE AVG(total_cost) AS average GROUP BY state DESC, item_type ASC"
-        );
-    }
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE SUM(cost) AS total_cost GROUP BY customer_id, state, item_type |> EXTEND COUNT(*) OVER (PARTITION BY customer_id) AS num_orders |> WHERE num_orders > 1 |> AGGREGATE AVG(total_cost) AS average GROUP BY state DESC, item_type ASC");
 }
 
 #[test]

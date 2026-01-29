@@ -141,6 +141,7 @@ fn parse_create_procedure() {
                     pipe_operators: vec![],
                     body: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
+                        optimizer_hint: None,
                         distinct: None,
                         top: None,
                         top_before_distinct: false,
@@ -1348,6 +1349,7 @@ fn parse_substring_in_select() {
 
                     body: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
+                        optimizer_hint: None,
                         distinct: Some(Distinct::Distinct),
                         top: None,
                         top_before_distinct: false,
@@ -1505,6 +1507,7 @@ fn parse_mssql_declare() {
 
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
+                    optimizer_hint: None,
                     distinct: None,
                     top: None,
                     top_before_distinct: false,

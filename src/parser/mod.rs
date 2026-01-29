@@ -4325,6 +4325,11 @@ impl<'a> Parser<'a> {
             })
     }
 
+    /// Return nth token, possibly whitespace, that has not yet been processed.
+    fn peek_nth_token_no_skip_ref(&self, n: usize) -> &TokenWithSpan {
+        self.tokens.get(self.index + n).unwrap_or(&EOF_TOKEN)
+    }
+
     /// Return true if the next tokens exactly `expected`
     ///
     /// Does not advance the current token.
@@ -13026,6 +13031,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a `DELETE` statement and return `Statement::Delete`.
     pub fn parse_delete(&mut self, delete_token: TokenWithSpan) -> Result<Statement, ParserError> {
+        let optimizer_hint = self.maybe_parse_optimizer_hint()?;
         let (tables, with_from_keyword) = if !self.parse_keyword(Keyword::FROM) {
             // `FROM` keyword is optional in BigQuery SQL.
             // https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#delete_statement
@@ -13069,6 +13075,7 @@ impl<'a> Parser<'a> {
 
         Ok(Statement::Delete(Delete {
             delete_token: delete_token.into(),
+            optimizer_hint,
             tables,
             from: if with_from_keyword {
                 FromTable::WithFromKeyword(from)
@@ -13839,6 +13846,7 @@ impl<'a> Parser<'a> {
             if !self.peek_keyword(Keyword::SELECT) {
                 return Ok(Select {
                     select_token: AttachedToken(from_token),
+                    optimizer_hint: None,
                     distinct: None,
                     top: None,
                     top_before_distinct: false,
@@ -13866,6 +13874,7 @@ impl<'a> Parser<'a> {
         }
 
         let select_token = self.expect_keyword(Keyword::SELECT)?;
+        let optimizer_hint = self.maybe_parse_optimizer_hint()?;
         let value_table_mode = self.parse_value_table_mode()?;
 
         let mut top_before_distinct = false;
@@ -14020,6 +14029,7 @@ impl<'a> Parser<'a> {
 
         Ok(Select {
             select_token: AttachedToken(select_token),
+            optimizer_hint,
             distinct,
             top,
             top_before_distinct,
@@ -14046,6 +14056,55 @@ impl<'a> Parser<'a> {
                 SelectFlavor::Standard
             },
         })
+    }
+
+    /// Parses an optional optimizer hint at the current token position
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html#optimizer-hints-overview)
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
+    fn maybe_parse_optimizer_hint(&mut self) -> Result<Option<OptimizerHint>, ParserError> {
+        let supports_hints = self.dialect.supports_comment_optimizer_hint();
+        if !supports_hints {
+            return Ok(None);
+        }
+        loop {
+            let t = self.peek_nth_token_no_skip_ref(0);
+            match &t.token {
+                Token::Whitespace(ws) => {
+                    match ws {
+                        Whitespace::SingleLineComment { comment, .. }
+                        | Whitespace::MultiLineComment(comment) => {
+                            return Ok(match comment.strip_prefix("+") {
+                                None => None,
+                                Some(text) => {
+                                    let hint = OptimizerHint {
+                                        text: text.into(),
+                                        style: if let Whitespace::SingleLineComment {
+                                            prefix, ..
+                                        } = ws
+                                        {
+                                            OptimizerHintStyle::SingleLine {
+                                                prefix: prefix.clone(),
+                                            }
+                                        } else {
+                                            OptimizerHintStyle::MultiLine
+                                        },
+                                    };
+                                    // Consume the comment token
+                                    self.next_token_no_skip();
+                                    Some(hint)
+                                }
+                            });
+                        }
+                        Whitespace::Space | Whitespace::Tab | Whitespace::Newline => {
+                            // Consume the token and try with the next whitespace or comment
+                            self.next_token_no_skip();
+                        }
+                    }
+                }
+                _ => return Ok(None),
+            }
+        }
     }
 
     fn parse_value_table_mode(&mut self) -> Result<Option<ValueTableMode>, ParserError> {
@@ -16742,6 +16801,7 @@ impl<'a> Parser<'a> {
 
     /// Parse an INSERT statement
     pub fn parse_insert(&mut self, insert_token: TokenWithSpan) -> Result<Statement, ParserError> {
+        let optimizer_hint = self.maybe_parse_optimizer_hint()?;
         let or = self.parse_conflict_clause();
         let priority = if !dialect_of!(self is MySqlDialect | GenericDialect) {
             None
@@ -16911,6 +16971,7 @@ impl<'a> Parser<'a> {
 
             Ok(Insert {
                 insert_token: insert_token.into(),
+                optimizer_hint,
                 or,
                 table: table_object,
                 table_alias,
@@ -17014,6 +17075,7 @@ impl<'a> Parser<'a> {
 
     /// Parse an `UPDATE` statement and return `Statement::Update`.
     pub fn parse_update(&mut self, update_token: TokenWithSpan) -> Result<Statement, ParserError> {
+        let optimizer_hint = self.maybe_parse_optimizer_hint()?;
         let or = self.parse_conflict_clause();
         let table = self.parse_table_and_joins()?;
         let from_before_set = if self.parse_keyword(Keyword::FROM) {
@@ -17049,6 +17111,7 @@ impl<'a> Parser<'a> {
         };
         Ok(Update {
             update_token: update_token.into(),
+            optimizer_hint,
             table,
             assignments,
             from,

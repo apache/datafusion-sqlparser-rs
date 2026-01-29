@@ -11688,6 +11688,57 @@ pub struct ResetStatement {
     pub reset: Reset,
 }
 
+/// Query optimizer hints are optionally supported comments after the
+/// `SELECT`, `INSERT`, `UPDATE`, `REPLACE`, `MERGE`, and `DELETE` keywords in
+/// the corresponding statements.
+///
+/// See [Select::optimizer_hint]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct OptimizerHint {
+    /// the raw test of the optimizer hint without its markers
+    pub text: String,
+    /// the style of the comment which `text` was extracted from,
+    /// e.g. `/*+...*/` or `--+...`
+    ///
+    /// Not all dialects support all styles, though.
+    pub style: OptimizerHintStyle,
+}
+
+/// The commentary style of an [optimizer hint](OptimizerHint)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum OptimizerHintStyle {
+    /// A hint corresponding to a single line comment,
+    /// e.g. `--+ LEADING(v.e v.d t)`
+    SingleLine {
+        /// the comment prefix, e.g. `--`
+        prefix: String,
+    },
+    /// A hint corresponding to a multi line comment,
+    /// e.g. `/*+ LEADING(v.e v.d t) */`
+    MultiLine,
+}
+
+impl fmt::Display for OptimizerHint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.style {
+            OptimizerHintStyle::SingleLine { prefix } => {
+                f.write_str(prefix)?;
+                f.write_str("+")?;
+                f.write_str(&self.text)
+            }
+            OptimizerHintStyle::MultiLine => {
+                f.write_str("/*+")?;
+                f.write_str(&self.text)?;
+                f.write_str("*/")
+            }
+        }
+    }
+}
+
 impl fmt::Display for ResetStatement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.reset {

@@ -1284,6 +1284,7 @@ fn parse_copy_to() {
                 with: None,
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
+                    optimizer_hint: None,
                     distinct: None,
                     top: None,
                     top_before_distinct: false,
@@ -3064,6 +3065,7 @@ fn parse_array_subquery_expr() {
                     set_quantifier: SetQuantifier::None,
                     left: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
+                        optimizer_hint: None,
                         distinct: None,
                         top: None,
                         top_before_distinct: false,
@@ -3090,6 +3092,7 @@ fn parse_array_subquery_expr() {
                     }))),
                     right: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
+                        optimizer_hint: None,
                         distinct: None,
                         top: None,
                         top_before_distinct: false,
@@ -5384,6 +5387,7 @@ fn test_simple_postgres_insert_with_alias() {
         statement,
         Statement::Insert(Insert {
             insert_token: AttachedToken::empty(),
+            optimizer_hint: None,
             or: None,
             ignore: false,
             into: true,
@@ -5455,6 +5459,7 @@ fn test_simple_postgres_insert_with_alias() {
         statement,
         Statement::Insert(Insert {
             insert_token: AttachedToken::empty(),
+            optimizer_hint: None,
             or: None,
             ignore: false,
             into: true,
@@ -5528,6 +5533,7 @@ fn test_simple_insert_with_quoted_alias() {
         statement,
         Statement::Insert(Insert {
             insert_token: AttachedToken::empty(),
+            optimizer_hint: None,
             or: None,
             ignore: false,
             into: true,

@@ -1322,6 +1322,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns `true` if the dialect supports query optimizer hints in the
+    /// format of single and multi line comments immediately following a
+    /// `SELECT`, `INSERT`, `REPLACE`, `DELETE`, or `MERGE` keyword.
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/19/sqlrf/Comments.html#SQLRF-GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
+    fn supports_comment_optimizer_hint(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect considers the `&&` operator as a boolean AND operator.
     fn supports_double_ampersand_operator(&self) -> bool {
         false

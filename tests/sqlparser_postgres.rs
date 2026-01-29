@@ -1285,6 +1285,7 @@ fn parse_copy_to() {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
                     distinct: None,
+                    select_modifiers: SelectModifiers::default(),
                     top: None,
                     top_before_distinct: false,
                     projection: vec![
@@ -3065,6 +3066,7 @@ fn parse_array_subquery_expr() {
                     left: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
                         distinct: None,
+                        select_modifiers: SelectModifiers::default(),
                         top: None,
                         top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Value(
@@ -3091,6 +3093,7 @@ fn parse_array_subquery_expr() {
                     right: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
                         distinct: None,
+                        select_modifiers: SelectModifiers::default(),
                         top: None,
                         top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Value(

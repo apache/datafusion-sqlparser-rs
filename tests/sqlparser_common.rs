@@ -471,6 +471,7 @@ fn parse_update_set_from() {
                         body: Box::new(SetExpr::Select(Box::new(Select {
                             select_token: AttachedToken::empty(),
                             distinct: None,
+                            select_modifiers: SelectModifiers::default(),
                             top: None,
                             top_before_distinct: false,
                             projection: vec![
@@ -1039,18 +1040,18 @@ fn parse_outer_join_operator() {
 #[test]
 fn parse_select_distinct_on() {
     let sql = "SELECT DISTINCT ON (album_id) name FROM track ORDER BY album_id, milliseconds";
-    let select = verified_only_select(sql);
+    let select = all_dialects_but_mysql().verified_only_select(sql);
     assert_eq!(
         &Some(Distinct::On(vec![Expr::Identifier(Ident::new("album_id"))])),
         &select.distinct
     );
 
     let sql = "SELECT DISTINCT ON () name FROM track ORDER BY milliseconds";
-    let select = verified_only_select(sql);
+    let select = all_dialects_but_mysql().verified_only_select(sql);
     assert_eq!(&Some(Distinct::On(vec![])), &select.distinct);
 
     let sql = "SELECT DISTINCT ON (album_id, milliseconds) name FROM track";
-    let select = verified_only_select(sql);
+    let select = all_dialects_but_mysql().verified_only_select(sql);
     assert_eq!(
         &Some(Distinct::On(vec![
             Expr::Identifier(Ident::new("album_id")),
@@ -1078,7 +1079,9 @@ fn parse_select_all() {
 fn parse_select_all_distinct() {
     let result = parse_sql_statements("SELECT ALL DISTINCT name FROM customer");
     assert_eq!(
-        ParserError::ParserError("Cannot specify both ALL and DISTINCT".to_string()),
+        ParserError::ParserError(
+            "Expected: ALL alone without DISTINCT or DISTINCTROW, found: DISTINCT".to_string()
+        ),
         result.unwrap_err(),
     );
 }
@@ -2343,6 +2346,16 @@ pub fn all_dialects_but_pg() -> TestedDialects {
             .dialects
             .into_iter()
             .filter(|x| !x.is::<PostgreSqlDialect>())
+            .collect(),
+    )
+}
+
+pub fn all_dialects_but_mysql() -> TestedDialects {
+    TestedDialects::new(
+        all_dialects()
+            .dialects
+            .into_iter()
+            .filter(|x| !x.is::<MySqlDialect>())
             .collect(),
     )
 }
@@ -5805,6 +5818,7 @@ fn test_parse_named_window() {
     let expected = Select {
         select_token: AttachedToken::empty(),
         distinct: None,
+        select_modifiers: SelectModifiers::default(),
         top: None,
         top_before_distinct: false,
         projection: vec![
@@ -6535,6 +6549,7 @@ fn parse_interval_and_or_xor() {
         body: Box::new(SetExpr::Select(Box::new(Select {
             select_token: AttachedToken::empty(),
             distinct: None,
+            select_modifiers: SelectModifiers::default(),
             top: None,
             top_before_distinct: false,
             projection: vec![UnnamedExpr(Expr::Identifier(Ident {
@@ -8911,6 +8926,7 @@ fn lateral_function() {
     let expected = Select {
         select_token: AttachedToken::empty(),
         distinct: None,
+        select_modifiers: SelectModifiers::default(),
         top: None,
         projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
         exclude: None,
@@ -9912,6 +9928,7 @@ fn parse_merge() {
                         body: Box::new(SetExpr::Select(Box::new(Select {
                             select_token: AttachedToken::empty(),
                             distinct: None,
+                            select_modifiers: SelectModifiers::default(),
                             top: None,
                             top_before_distinct: false,
                             projection: vec![SelectItem::Wildcard(
@@ -12315,6 +12332,7 @@ fn parse_unload() {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
                     distinct: None,
+                    select_modifiers: SelectModifiers::default(),
                     top: None,
                     top_before_distinct: false,
                     projection: vec![UnnamedExpr(Expr::Identifier(Ident::new("cola"))),],
@@ -12623,6 +12641,7 @@ fn parse_connect_by() {
     let expect_query = Select {
         select_token: AttachedToken::empty(),
         distinct: None,
+        select_modifiers: SelectModifiers::default(),
         top: None,
         top_before_distinct: false,
         projection: vec![
@@ -12705,6 +12724,7 @@ fn parse_connect_by() {
         Select {
             select_token: AttachedToken::empty(),
             distinct: None,
+            select_modifiers: SelectModifiers::default(),
             top: None,
             top_before_distinct: false,
             projection: vec![
@@ -13638,6 +13658,7 @@ fn test_extract_seconds_ok() {
         body: Box::new(SetExpr::Select(Box::new(Select {
             select_token: AttachedToken::empty(),
             distinct: None,
+            select_modifiers: SelectModifiers::default(),
             top: None,
             top_before_distinct: false,
             projection: vec![UnnamedExpr(Expr::Extract {
@@ -15777,6 +15798,7 @@ fn test_select_from_first() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
                 distinct: None,
+                select_modifiers: SelectModifiers::default(),
                 top: None,
                 projection,
                 exclude: None,

@@ -267,6 +267,7 @@ fn test_select_union_by_name() {
             left: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
                 distinct: None,
+                select_modifiers: SelectModifiers::default(),
                 top: None,
                 projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
                 exclude: None,
@@ -298,6 +299,7 @@ fn test_select_union_by_name() {
             right: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
                 distinct: None,
+                select_modifiers: SelectModifiers::default(),
                 top: None,
                 projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
                 exclude: None,

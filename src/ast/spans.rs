@@ -2234,7 +2234,8 @@ impl Spanned for Select {
         let Select {
             select_token,
             distinct: _, // todo
-            top: _,      // todo, mysql specific
+            select_modifiers: _,
+            top: _, // todo, mysql specific
             projection,
             exclude: _,
             into,

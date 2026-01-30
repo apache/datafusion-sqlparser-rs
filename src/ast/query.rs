@@ -1204,23 +1204,34 @@ impl fmt::Display for TableWithJoins {
 /// Joins a table to itself to process hierarchical data in the table.
 ///
 /// See <https://docs.snowflake.com/en/sql-reference/constructs/connect-by>.
+/// See <https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Hierarchical-Queries.html>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ConnectBy {
     /// START WITH
-    pub condition: Expr,
+    pub condition: Option<Expr>,
     /// CONNECT BY
     pub relationships: Vec<Expr>,
+    /// [CONNECT BY] NOCYCLE
+    pub nocycle: bool,
 }
 
 impl fmt::Display for ConnectBy {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let Self {
+            condition,
+            relationships,
+            nocycle
+        } = self;
+        if let Some(condition) = condition {
+            write!(f, "START WITH {condition} ")?;
+        }
         write!(
             f,
-            "START WITH {condition} CONNECT BY {relationships}",
-            condition = self.condition,
-            relationships = display_comma_separated(&self.relationships)
+            "CONNECT BY {nocycle}{relationships}",
+            nocycle = if *nocycle { "NOCYCLE " } else { "" },
+            relationships = display_comma_separated(relationships)
         )
     }
 }

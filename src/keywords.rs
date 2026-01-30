@@ -678,6 +678,7 @@ define_keywords!(
     NOCOMPRESS,
     NOCREATEDB,
     NOCREATEROLE,
+    NOCYCLE,
     NOINHERIT,
     NOLOGIN,
     NONE,

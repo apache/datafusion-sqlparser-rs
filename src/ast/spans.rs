@@ -2286,10 +2286,11 @@ impl Spanned for ConnectBy {
         let ConnectBy {
             condition,
             relationships,
+            nocycle: _
         } = self;
 
         union_spans(
-            core::iter::once(condition.span()).chain(relationships.iter().map(|item| item.span())),
+            condition.iter().map(Spanned::span).chain(relationships.iter().map(|item| item.span())),
         )
     }
 }

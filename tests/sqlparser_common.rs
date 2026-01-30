@@ -12675,13 +12675,13 @@ fn parse_connect_by() {
         window_before_qualify: false,
         value_table_mode: None,
         connect_by: Some(ConnectBy {
-            condition: Expr::BinaryOp {
+            condition: Some(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("title"))),
                 op: BinaryOperator::Eq,
                 right: Box::new(Expr::Value(
                     Value::SingleQuotedString("president".to_owned()).with_empty_span(),
                 )),
-            },
+            }),
             relationships: vec![Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("manager_id"))),
                 op: BinaryOperator::Eq,
@@ -12689,6 +12689,7 @@ fn parse_connect_by() {
                     "employee_id",
                 ))))),
             }],
+            nocycle: false,
         }),
         flavor: SelectFlavor::Standard,
     };
@@ -12763,13 +12764,13 @@ fn parse_connect_by() {
             window_before_qualify: false,
             value_table_mode: None,
             connect_by: Some(ConnectBy {
-                condition: Expr::BinaryOp {
+                condition: Some(Expr::BinaryOp {
                     left: Box::new(Expr::Identifier(Ident::new("title"))),
                     op: BinaryOperator::Eq,
                     right: Box::new(Expr::Value(
                         (Value::SingleQuotedString("president".to_owned(),)).with_empty_span()
                     )),
-                },
+                }),
                 relationships: vec![Expr::BinaryOp {
                     left: Box::new(Expr::Identifier(Ident::new("manager_id"))),
                     op: BinaryOperator::Eq,
@@ -12777,6 +12778,7 @@ fn parse_connect_by() {
                         "employee_id",
                     ))))),
                 }],
+                nocycle: false,
             }),
             flavor: SelectFlavor::Standard,
         }
@@ -12802,6 +12804,51 @@ fn parse_connect_by() {
         vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new(
             "prior"
         )))]
+    );
+
+    // no START WITH and NOCYCLE
+    let connect_by_5 = "SELECT child, parent FROM t CONNECT BY NOCYCLE parent = PRIOR child";
+    assert_eq!(
+        all_dialects_where(|d| d.supports_connect_by()).verified_only_select(connect_by_5),
+        Select {
+            select_token: AttachedToken::empty(),
+            optimizer_hint: None,
+            distinct: None,
+            top: None,
+            top_before_distinct: false,
+            projection: vec![
+                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("child"))),
+                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("parent"))),
+            ],
+            exclude: None,
+            from: vec![TableWithJoins {
+                relation: table_from_name(ObjectName::from(vec![Ident::new("t")])),
+                joins: vec![],
+            }],
+            into: None,
+            lateral_views: vec![],
+            prewhere: None,
+            selection: None,
+            group_by: GroupByExpr::Expressions(vec![], vec![]),
+            cluster_by: vec![],
+            distribute_by: vec![],
+            sort_by: vec![],
+            having: None,
+            named_window: vec![],
+            qualify: None,
+            window_before_qualify: false,
+            value_table_mode: None,
+            connect_by: Some(ConnectBy {
+                condition: None,
+                relationships: vec![Expr::BinaryOp {
+                    left: Expr::Identifier(Ident::new("parent")).into(),
+                    op: BinaryOperator::Eq,
+                    right: Expr::Prior(Expr::Identifier(Ident::new("child")).into()).into(),
+                }],
+                nocycle: true,
+            }),
+            flavor: SelectFlavor::Standard,
+        }
     );
 }
 

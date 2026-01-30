@@ -14034,10 +14034,9 @@ impl<'a> Parser<'a> {
 
         let connect_by = if self.dialect.supports_connect_by()
             && self
-                .parse_one_of_keywords(&[Keyword::START, Keyword::CONNECT])
+                .peek_one_of_keywords(&[Keyword::START, Keyword::CONNECT])
                 .is_some()
         {
-            self.prev_token();
             Some(self.parse_connect_by()?)
         } else {
             None

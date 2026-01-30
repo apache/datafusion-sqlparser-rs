@@ -42,6 +42,7 @@ std = []
 recursive-protection = ["std", "recursive"]
 # Enable JSON output in the `cli` example:
 json_example = ["serde_json", "serde"]
+derive-dialect = ["sqlparser_derive"]
 visitor = ["sqlparser_derive"]
 
 [dependencies]
@@ -61,6 +62,10 @@ simple_logger = "5.0"
 matches = "0.1"
 pretty_assertions = "1"
 
+[[test]]
+name = "sqlparser_derive_dialect"
+required-features = ["derive-dialect"]
+
 [package.metadata.docs.rs]
 # Document these features on docs.rs
-features = ["serde", "visitor"]
+features = ["serde", "visitor", "derive-dialect"]

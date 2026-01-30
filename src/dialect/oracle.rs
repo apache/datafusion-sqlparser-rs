@@ -25,7 +25,7 @@ use crate::{
 use super::{Dialect, Precedence};
 
 /// A [`Dialect`] for [Oracle Databases](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/index.html)
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct OracleDialect;
 
 impl Dialect for OracleDialect {

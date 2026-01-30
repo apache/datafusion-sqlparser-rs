@@ -18,7 +18,7 @@
 use crate::dialect::Dialect;
 
 /// A [`Dialect`] for [ClickHouse](https://clickhouse.com/).
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ClickHouseDialect {}
 
 impl Dialect for ClickHouseDialect {

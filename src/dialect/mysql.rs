@@ -35,7 +35,7 @@ const RESERVED_FOR_TABLE_ALIAS_MYSQL: &[Keyword] = &[
 ];
 
 /// A [`Dialect`] for [MySQL](https://www.mysql.com/)
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct MySqlDialect {}
 
 impl Dialect for MySqlDialect {

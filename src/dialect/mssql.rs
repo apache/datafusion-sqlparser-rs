@@ -159,7 +159,7 @@ impl Dialect for MsSqlDialect {
                 parser.prev_token();
                 return None;
             }
-            return Some(parser.parse_begin_exception_end());
+            Some(parser.parse_begin_exception_end())
         } else if parser.peek_keyword(Keyword::IF) {
             Some(self.parse_if_stmt(parser))
         } else if parser.parse_keywords(&[Keyword::CREATE, Keyword::TRIGGER]) {

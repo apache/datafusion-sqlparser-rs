@@ -520,6 +520,8 @@ fn parse_infix_after_parenthesized_column_option() {
     pg().verified_stmt("CREATE TABLE t (c TEXT DEFAULT (foo())::INT::TEXT)");
     // Other infix operators
     pg().verified_stmt("CREATE TABLE t (c INT DEFAULT (foo()) + 1)");
+    // Cast with NOT NULL constraint
+    pg().verified_stmt("CREATE TABLE t (c TEXT DEFAULT (foo())::TEXT NOT NULL)");
 }
 
 #[test]

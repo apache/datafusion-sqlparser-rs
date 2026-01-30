@@ -1230,15 +1230,20 @@ pub enum ConnectByKind {
 impl fmt::Display for ConnectByKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ConnectByKind::ConnectBy { relationships, nocycle } => {
-                write!(f, "CONNECT BY {nocycle}{relationships}",
+            ConnectByKind::ConnectBy {
+                relationships,
+                nocycle,
+            } => {
+                write!(
+                    f,
+                    "CONNECT BY {nocycle}{relationships}",
                     nocycle = if *nocycle { "NOCYCLE " } else { "" },
                     relationships = display_comma_separated(relationships)
                 )
-            },
+            }
             ConnectByKind::StartWith(condition) => {
                 write!(f, "START WITH {condition}")
-            },
+            }
         }
     }
 }

@@ -12653,56 +12653,63 @@ fn parse_connect_by() {
         "ORDER BY employee_id"
     );
 
-    assert_eq!(dialects.verified_only_select(connect_by_1), Select {
-        select_token: AttachedToken::empty(),
-        optimizer_hint: None,
-        distinct: None,
-        select_modifiers: None,
-        top: None,
-        top_before_distinct: false,
-        projection: vec![
-            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("employee_id"))),
-            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("manager_id"))),
-            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("title"))),
-        ],
-        exclude: None,
-        from: vec![TableWithJoins {
-            relation: table_from_name(ObjectName::from(vec![Ident::new("employees")])),
-            joins: vec![],
-        }],
-        into: None,
-        lateral_views: vec![],
-        prewhere: None,
-        selection: None,
-        group_by: GroupByExpr::Expressions(vec![], vec![]),
-        cluster_by: vec![],
-        distribute_by: vec![],
-        sort_by: vec![],
-        having: None,
-        named_window: vec![],
-        qualify: None,
-        window_before_qualify: false,
-        value_table_mode: None,
-        connect_by: vec![
-            ConnectByKind::StartWith(Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("title"))),
-                op: BinaryOperator::Eq,
-                right: Box::new(Expr::Value(
-                    Value::SingleQuotedString("president".to_owned()).with_empty_span(),
-                )),
-            }.into()),
-            ConnectByKind::ConnectBy {
-                relationships: vec![Expr::BinaryOp {
-                    left: Box::new(Expr::Identifier(Ident::new("manager_id"))),
-                    op: BinaryOperator::Eq,
-                    right: Box::new(Expr::Prior(Box::new(Expr::Identifier(Ident::new(
-                        "employee_id",
-                    ))))),
-                }],
-                nocycle: false,
+    assert_eq!(
+        dialects.verified_only_select(connect_by_1),
+        Select {
+            select_token: AttachedToken::empty(),
+            optimizer_hint: None,
+            distinct: None,
+            select_modifiers: None,
+            top: None,
+            top_before_distinct: false,
+            projection: vec![
+                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("employee_id"))),
+                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("manager_id"))),
+                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("title"))),
+            ],
+            exclude: None,
+            from: vec![TableWithJoins {
+                relation: table_from_name(ObjectName::from(vec![Ident::new("employees")])),
+                joins: vec![],
             }],
-        flavor: SelectFlavor::Standard,
-    });
+            into: None,
+            lateral_views: vec![],
+            prewhere: None,
+            selection: None,
+            group_by: GroupByExpr::Expressions(vec![], vec![]),
+            cluster_by: vec![],
+            distribute_by: vec![],
+            sort_by: vec![],
+            having: None,
+            named_window: vec![],
+            qualify: None,
+            window_before_qualify: false,
+            value_table_mode: None,
+            connect_by: vec![
+                ConnectByKind::StartWith(
+                    Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("title"))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Value(
+                            Value::SingleQuotedString("president".to_owned()).with_empty_span(),
+                        )),
+                    }
+                    .into()
+                ),
+                ConnectByKind::ConnectBy {
+                    relationships: vec![Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("manager_id"))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Prior(Box::new(Expr::Identifier(Ident::new(
+                            "employee_id",
+                        ))))),
+                    }],
+                    nocycle: false,
+                }
+            ],
+            flavor: SelectFlavor::Standard,
+        }
+    );
 
     // CONNECT BY can come before START WITH
     let connect_by_2 = concat!(
@@ -12717,6 +12724,7 @@ fn parse_connect_by() {
             select_token: AttachedToken::empty(),
             optimizer_hint: None,
             distinct: None,
+            select_modifiers: None,
             top: None,
             top_before_distinct: false,
             projection: vec![
@@ -12860,6 +12868,7 @@ fn parse_connect_by() {
             select_token: AttachedToken::empty(),
             optimizer_hint: None,
             distinct: None,
+            select_modifiers: None,
             top: None,
             top_before_distinct: false,
             projection: vec![

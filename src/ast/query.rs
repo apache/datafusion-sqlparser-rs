@@ -1210,10 +1210,17 @@ impl fmt::Display for TableWithJoins {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ConnectBy {
     /// START WITH
+    ///
+    /// Optional on [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Hierarchical-Queries.html#GUID-0118DF1D-B9A9-41EB-8556-C6E7D6A5A84E)
+    /// when comming _after_ the `CONNECT BY`.
     pub condition: Option<Expr>,
+
     /// CONNECT BY
     pub relationships: Vec<Expr>,
+
     /// [CONNECT BY] NOCYCLE
+    ///
+    /// Optional on [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Hierarchical-Queries.html#GUID-0118DF1D-B9A9-41EB-8556-C6E7D6A5A84E__GUID-5377971A-F518-47E4-8781-F06FEB3EF993)
     pub nocycle: bool,
 }
 

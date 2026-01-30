@@ -22,7 +22,9 @@ use crate::{
     tokenizer::Token,
 };
 
-use super::{Dialect, Precedence};
+use super::{Dialect, Precedence, keywords::Keyword};
+
+const RESERVED_KEYWORDS_FOR_SELECT_ITEM_OPERATOR: [Keyword; 1] = [Keyword::CONNECT_BY_ROOT];
 
 /// A [`Dialect`] for [Oracle Databases](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/index.html)
 #[derive(Debug, Default)]
@@ -94,6 +96,10 @@ impl Dialect for OracleDialect {
 
     fn supports_group_by_expr(&self) -> bool {
         true
+    }
+
+    fn get_reserved_keywords_for_select_item_operator(&self) -> &[Keyword] {
+        &RESERVED_KEYWORDS_FOR_SELECT_ITEM_OPERATOR
     }
 
     fn supports_quote_delimited_string(&self) -> bool {

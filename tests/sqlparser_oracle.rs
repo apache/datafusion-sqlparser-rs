@@ -388,3 +388,27 @@ fn test_optimizer_hints() {
                VALUES (ps.person_id, ps.first_name, ps.last_name, ps.title)",
     );
 }
+
+#[test]
+fn test_connect_by() {
+    let oracle_dialect = oracle();
+
+    oracle_dialect.verified_only_select(
+        "SELECT last_name AS \"Employee\", CONNECT_BY_ISCYCLE AS \"Cycle\", \
+                LEVEL, \
+                SYS_CONNECT_BY_PATH(last_name, '/') AS \"Path\" \
+           FROM employees \
+          WHERE level <= 3 AND department_id = 80 \
+          START WITH last_name = 'King' \
+        CONNECT BY NOCYCLE PRIOR employee_id = manager_id AND LEVEL <= 4 \
+          ORDER BY \"Employee\", \"Cycle\", LEVEL, \"Path\"");
+
+    // ~ CONNECT_BY_ROOT
+    oracle_dialect.verified_only_select(
+        "SELECT last_name AS \"Employee\", CONNECT_BY_ROOT last_name AS \"Manager\", \
+                LEVEL - 1 AS \"Pathlen\", SYS_CONNECT_BY_PATH(last_name, '/') AS \"Path\" \
+           FROM employees \
+          WHERE LEVEL > 1 AND department_id = 110 \
+        CONNECT BY PRIOR employee_id = manager_id \
+          ORDER BY \"Employee\", \"Manager\", \"Pathlen\", \"Path\"");
+}

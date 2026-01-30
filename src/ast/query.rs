@@ -374,7 +374,7 @@ pub struct Select {
     pub prewhere: Option<Expr>,
     /// WHERE
     pub selection: Option<Expr>,
-    /// STARTING WITH .. CONNECT BY
+    /// START WITH .. CONNECT BY
     pub connect_by: Option<ConnectBy>,
     /// GROUP BY
     pub group_by: GroupByExpr,

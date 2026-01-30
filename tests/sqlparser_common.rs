@@ -500,7 +500,7 @@ fn parse_update_set_from() {
                             qualify: None,
                             window_before_qualify: false,
                             value_table_mode: None,
-                            connect_by: None,
+                            connect_by: vec![],
                             flavor: SelectFlavor::Standard,
                         }))),
                         order_by: None,
@@ -5947,7 +5947,7 @@ fn test_parse_named_window() {
         qualify: None,
         window_before_qualify: true,
         value_table_mode: None,
-        connect_by: None,
+        connect_by: vec![],
         flavor: SelectFlavor::Standard,
     };
     assert_eq!(actual_select_only, expected);
@@ -6621,7 +6621,7 @@ fn parse_interval_and_or_xor() {
             qualify: None,
             window_before_qualify: false,
             value_table_mode: None,
-            connect_by: None,
+            connect_by: vec![],
             flavor: SelectFlavor::Standard,
         }))),
         order_by: None,
@@ -8958,7 +8958,7 @@ fn lateral_function() {
         qualify: None,
         window_before_qualify: false,
         value_table_mode: None,
-        connect_by: None,
+        connect_by: vec![],
         flavor: SelectFlavor::Standard,
     };
     assert_eq!(actual_select_only, expected);
@@ -9945,7 +9945,7 @@ fn parse_merge() {
                             window_before_qualify: false,
                             qualify: None,
                             value_table_mode: None,
-                            connect_by: None,
+                            connect_by: vec![],
                             flavor: SelectFlavor::Standard,
                         }))),
                         order_by: None,
@@ -12344,7 +12344,7 @@ fn parse_unload() {
                     window_before_qualify: false,
                     qualify: None,
                     value_table_mode: None,
-                    connect_by: None,
+                    connect_by: vec![],
                     flavor: SelectFlavor::Standard,
                 }))),
                 with: None,
@@ -12630,7 +12630,14 @@ fn parse_map_access_expr() {
 fn parse_connect_by() {
     let dialects = all_dialects_where(|d| d.supports_connect_by());
 
-    let expect_query = Select {
+    let connect_by_1 = concat!(
+        "SELECT employee_id, manager_id, title FROM employees ",
+        "START WITH title = 'president' ",
+        "CONNECT BY manager_id = PRIOR employee_id ",
+        "ORDER BY employee_id"
+    );
+
+    assert_eq!(dialects.verified_only_select(connect_by_1), Select {
         select_token: AttachedToken::empty(),
         optimizer_hint: None,
         distinct: None,
@@ -12659,34 +12666,26 @@ fn parse_connect_by() {
         qualify: None,
         window_before_qualify: false,
         value_table_mode: None,
-        connect_by: Some(ConnectBy {
-            condition: Some(Expr::BinaryOp {
+        connect_by: vec![
+            ConnectByKind::StartWith(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("title"))),
                 op: BinaryOperator::Eq,
                 right: Box::new(Expr::Value(
                     Value::SingleQuotedString("president".to_owned()).with_empty_span(),
                 )),
-            }),
-            relationships: vec![Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("manager_id"))),
-                op: BinaryOperator::Eq,
-                right: Box::new(Expr::Prior(Box::new(Expr::Identifier(Ident::new(
-                    "employee_id",
-                ))))),
+            }.into()),
+            ConnectByKind::ConnectBy {
+                relationships: vec![Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("manager_id"))),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Prior(Box::new(Expr::Identifier(Ident::new(
+                        "employee_id",
+                    ))))),
+                }],
+                nocycle: false,
             }],
-            nocycle: false,
-        }),
         flavor: SelectFlavor::Standard,
-    };
-
-    let connect_by_1 = concat!(
-        "SELECT employee_id, manager_id, title FROM employees ",
-        "START WITH title = 'president' ",
-        "CONNECT BY manager_id = PRIOR employee_id ",
-        "ORDER BY employee_id"
-    );
-
-    assert_eq!(dialects.verified_only_select(connect_by_1), expect_query);
+    });
 
     // CONNECT BY can come before START WITH
     let connect_by_2 = concat!(
@@ -12696,8 +12695,56 @@ fn parse_connect_by() {
         "ORDER BY employee_id"
     );
     assert_eq!(
-        dialects.verified_only_select_with_canonical(connect_by_2, connect_by_1),
-        expect_query
+        dialects.verified_only_select(connect_by_2),
+        Select {
+            select_token: AttachedToken::empty(),
+            optimizer_hint: None,
+            distinct: None,
+            top: None,
+            top_before_distinct: false,
+            projection: vec![
+                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("employee_id"))),
+                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("manager_id"))),
+                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("title"))),
+            ],
+            exclude: None,
+            from: vec![TableWithJoins {
+                relation: table_from_name(ObjectName::from(vec![Ident::new("employees")])),
+                joins: vec![],
+            }],
+            into: None,
+            lateral_views: vec![],
+            prewhere: None,
+            selection: None,
+            group_by: GroupByExpr::Expressions(vec![], vec![]),
+            cluster_by: vec![],
+            distribute_by: vec![],
+            sort_by: vec![],
+            having: None,
+            named_window: vec![],
+            qualify: None,
+            window_before_qualify: false,
+            value_table_mode: None,
+            connect_by: vec![
+                ConnectByKind::ConnectBy {
+                    relationships: vec![Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("manager_id"))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Prior(Box::new(Expr::Identifier(Ident::new(
+                            "employee_id",
+                        ))))),
+                    }],
+                    nocycle: false,
+                },
+                ConnectByKind::StartWith(Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("title"))),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(
+                        Value::SingleQuotedString("president".to_owned()).with_empty_span(),
+                    )),
+                }.into())],
+            flavor: SelectFlavor::Standard,
+        }
     );
 
     // WHERE must come before CONNECT BY
@@ -12743,23 +12790,24 @@ fn parse_connect_by() {
             qualify: None,
             window_before_qualify: false,
             value_table_mode: None,
-            connect_by: Some(ConnectBy {
-                condition: Some(Expr::BinaryOp {
-                    left: Box::new(Expr::Identifier(Ident::new("title"))),
-                    op: BinaryOperator::Eq,
-                    right: Box::new(Expr::Value(
-                        (Value::SingleQuotedString("president".to_owned(),)).with_empty_span()
-                    )),
-                }),
-                relationships: vec![Expr::BinaryOp {
-                    left: Box::new(Expr::Identifier(Ident::new("manager_id"))),
-                    op: BinaryOperator::Eq,
-                    right: Box::new(Expr::Prior(Box::new(Expr::Identifier(Ident::new(
-                        "employee_id",
-                    ))))),
+            connect_by: vec![
+                ConnectByKind::StartWith(Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("title"))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Value(
+                            (Value::SingleQuotedString("president".to_owned(),)).with_empty_span()
+                        )),
+                }.into()),
+                ConnectByKind::ConnectBy {
+                    relationships: vec![Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("manager_id"))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Prior(Box::new(Expr::Identifier(Ident::new(
+                            "employee_id",
+                        ))))),
+                    }],
+                    nocycle: false,
                 }],
-                nocycle: false,
-            }),
             flavor: SelectFlavor::Standard,
         }
     );
@@ -12818,15 +12866,15 @@ fn parse_connect_by() {
             qualify: None,
             window_before_qualify: false,
             value_table_mode: None,
-            connect_by: Some(ConnectBy {
-                condition: None,
-                relationships: vec![Expr::BinaryOp {
-                    left: Expr::Identifier(Ident::new("parent")).into(),
-                    op: BinaryOperator::Eq,
-                    right: Expr::Prior(Expr::Identifier(Ident::new("child")).into()).into(),
+            connect_by: vec![
+                ConnectByKind::ConnectBy {
+                    relationships: vec![Expr::BinaryOp {
+                        left: Expr::Identifier(Ident::new("parent")).into(),
+                        op: BinaryOperator::Eq,
+                        right: Expr::Prior(Expr::Identifier(Ident::new("child")).into()).into(),
+                    }],
+                    nocycle: true,
                 }],
-                nocycle: true,
-            }),
             flavor: SelectFlavor::Standard,
         }
     );
@@ -12836,10 +12884,8 @@ fn parse_connect_by() {
     dialects.verified_only_select(
         "SELECT 0 FROM t WHERE 1 = 1 START WITH 'a' = 'a' CONNECT BY 2 = 2 GROUP BY 3",
     );
-    dialects.verified_only_select_with_canonical(
-        "SELECT 0 FROM t WHERE 1 = 1 CONNECT BY 2 = 2 START WITH 'a' = 'a' GROUP BY 3",
-        "SELECT 0 FROM t WHERE 1 = 1 START WITH 'a' = 'a' CONNECT BY 2 = 2 GROUP BY 3",
-    );
+    dialects.verified_only_select(
+        "SELECT 0 FROM t WHERE 1 = 1 CONNECT BY 2 = 2 START WITH 'a' = 'a' GROUP BY 3");
 }
 
 #[test]
@@ -13737,7 +13783,7 @@ fn test_extract_seconds_ok() {
             qualify: None,
             window_before_qualify: false,
             value_table_mode: None,
-            connect_by: None,
+            connect_by: vec![],
             flavor: SelectFlavor::Standard,
         }))),
         order_by: None,
@@ -15869,7 +15915,7 @@ fn test_select_from_first() {
                 window_before_qualify: false,
                 qualify: None,
                 value_table_mode: None,
-                connect_by: None,
+                connect_by: vec![],
                 flavor,
             }))),
             order_by: None,

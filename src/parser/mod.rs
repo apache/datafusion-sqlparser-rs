@@ -8922,11 +8922,20 @@ impl<'a> Parser<'a> {
             // since `CHECK` requires parentheses, we can parse the inner expression in ParserState::Normal
             let expr: Expr = self.with_state(ParserState::Normal, |p| p.parse_expr())?;
             self.expect_token(&Token::RParen)?;
+
+            let enforced = if self.parse_keyword(Keyword::ENFORCED) {
+                Some(true)
+            } else if self.parse_keywords(&[Keyword::NOT, Keyword::ENFORCED]) {
+                Some(false)
+            } else {
+                None
+            };
+
             Ok(Some(
                 CheckConstraint {
                     name: None, // Column-level check constraints don't have names
                     expr: Box::new(expr),
-                    enforced: None, // Could be extended later to support MySQL ENFORCED/NOT ENFORCED
+                    enforced,
                 }
                 .into(),
             ))

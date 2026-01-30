@@ -480,6 +480,8 @@ pub struct Select {
     pub prewhere: Option<Expr>,
     /// WHERE
     pub selection: Option<Expr>,
+    /// STARTING WITH .. CONNECT BY
+    pub connect_by: Option<ConnectBy>,
     /// GROUP BY
     pub group_by: GroupByExpr,
     /// CLUSTER BY (Hive)
@@ -501,8 +503,6 @@ pub struct Select {
     pub window_before_qualify: bool,
     /// BigQuery syntax: `SELECT AS VALUE | SELECT AS STRUCT`
     pub value_table_mode: Option<ValueTableMode>,
-    /// STARTING WITH .. CONNECT BY
-    pub connect_by: Option<ConnectBy>,
     /// Was this a FROM-first query?
     pub flavor: SelectFlavor,
 }
@@ -585,6 +585,10 @@ impl fmt::Display for Select {
             SpaceOrNewline.fmt(f)?;
             Indent(selection).fmt(f)?;
         }
+        if let Some(ref connect_by) = self.connect_by {
+            SpaceOrNewline.fmt(f)?;
+            connect_by.fmt(f)?;
+        }
         match &self.group_by {
             GroupByExpr::All(_) => {
                 SpaceOrNewline.fmt(f)?;
@@ -647,10 +651,6 @@ impl fmt::Display for Select {
                 SpaceOrNewline.fmt(f)?;
                 display_comma_separated(&self.named_window).fmt(f)?;
             }
-        }
-        if let Some(ref connect_by) = self.connect_by {
-            SpaceOrNewline.fmt(f)?;
-            connect_by.fmt(f)?;
         }
         Ok(())
     }

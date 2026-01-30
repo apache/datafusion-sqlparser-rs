@@ -14032,6 +14032,17 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let connect_by = if self.dialect.supports_connect_by()
+            && self
+                .parse_one_of_keywords(&[Keyword::START, Keyword::CONNECT])
+                .is_some()
+        {
+            self.prev_token();
+            Some(self.parse_connect_by()?)
+        } else {
+            None
+        };
+
         let group_by = self
             .parse_optional_group_by()?
             .unwrap_or_else(|| GroupByExpr::Expressions(vec![], vec![]));
@@ -14082,17 +14093,6 @@ impl<'a> Parser<'a> {
             }
         } else {
             Default::default()
-        };
-
-        let connect_by = if self.dialect.supports_connect_by()
-            && self
-                .parse_one_of_keywords(&[Keyword::START, Keyword::CONNECT])
-                .is_some()
-        {
-            self.prev_token();
-            Some(self.parse_connect_by()?)
-        } else {
-            None
         };
 
         Ok(Select {

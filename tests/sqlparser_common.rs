@@ -12644,6 +12644,8 @@ fn parse_map_access_expr() {
 
 #[test]
 fn parse_connect_by() {
+    let dialects = all_dialects_where(|d| d.supports_connect_by());
+
     let expect_query = Select {
         select_token: AttachedToken::empty(),
         optimizer_hint: None,
@@ -12702,7 +12704,7 @@ fn parse_connect_by() {
     );
 
     assert_eq!(
-        all_dialects_where(|d| d.supports_connect_by()).verified_only_select(connect_by_1),
+        dialects.verified_only_select(connect_by_1),
         expect_query
     );
 
@@ -12714,8 +12716,7 @@ fn parse_connect_by() {
         "ORDER BY employee_id"
     );
     assert_eq!(
-        all_dialects_where(|d| d.supports_connect_by())
-            .verified_only_select_with_canonical(connect_by_2, connect_by_1),
+        dialects.verified_only_select_with_canonical(connect_by_2, connect_by_1),
         expect_query
     );
 
@@ -12728,7 +12729,7 @@ fn parse_connect_by() {
         "ORDER BY employee_id"
     );
     assert_eq!(
-        all_dialects_where(|d| d.supports_connect_by()).verified_only_select(connect_by_3),
+        dialects.verified_only_select(connect_by_3),
         Select {
             select_token: AttachedToken::empty(),
             optimizer_hint: None,
@@ -12791,7 +12792,7 @@ fn parse_connect_by() {
         "WHERE employee_id <> 42 ",
         "ORDER BY employee_id"
     );
-    all_dialects_where(|d| d.supports_connect_by())
+    dialects
         .parse_sql_statements(connect_by_4)
         .expect_err("should have failed");
 
@@ -12809,7 +12810,7 @@ fn parse_connect_by() {
     // no START WITH and NOCYCLE
     let connect_by_5 = "SELECT child, parent FROM t CONNECT BY NOCYCLE parent = PRIOR child";
     assert_eq!(
-        all_dialects_where(|d| d.supports_connect_by()).verified_only_select(connect_by_5),
+        dialects.verified_only_select(connect_by_5),
         Select {
             select_token: AttachedToken::empty(),
             optimizer_hint: None,
@@ -12850,6 +12851,13 @@ fn parse_connect_by() {
             flavor: SelectFlavor::Standard,
         }
     );
+
+    // ~ CONNECT BY after WHERE and before GROUP BY
+    dialects.verified_only_select("SELECT 0 FROM t WHERE 1 = 1 CONNECT BY 2 = 2 GROUP BY 3");
+    dialects.verified_only_select("SELECT 0 FROM t WHERE 1 = 1 START WITH 'a' = 'a' CONNECT BY 2 = 2 GROUP BY 3");
+    dialects.verified_only_select_with_canonical(
+        "SELECT 0 FROM t WHERE 1 = 1 CONNECT BY 2 = 2 START WITH 'a' = 'a' GROUP BY 3",
+        "SELECT 0 FROM t WHERE 1 = 1 START WITH 'a' = 'a' CONNECT BY 2 = 2 GROUP BY 3");
 }
 
 #[test]

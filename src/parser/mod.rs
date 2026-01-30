@@ -14185,7 +14185,10 @@ impl<'a> Parser<'a> {
                 let relationships = self.with_state(ParserState::ConnectBy, |parser| {
                     parser.parse_comma_separated(Parser::parse_expr)
                 })?;
-                clauses.push(ConnectByKind::ConnectBy { relationships, nocycle });
+                clauses.push(ConnectByKind::ConnectBy {
+                    relationships,
+                    nocycle,
+                });
             } else {
                 break;
             }

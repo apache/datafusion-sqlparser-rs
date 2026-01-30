@@ -2283,9 +2283,10 @@ impl Spanned for Select {
 impl Spanned for ConnectByKind {
     fn span(&self) -> Span {
         match self {
-            ConnectByKind::ConnectBy { relationships, nocycle: _ } => {
-                union_spans(relationships.iter().map(|item| item.span()))
-            }
+            ConnectByKind::ConnectBy {
+                relationships,
+                nocycle: _,
+            } => union_spans(relationships.iter().map(|item| item.span())),
             ConnectByKind::StartWith(expr) => expr.span(),
         }
     }

@@ -12703,10 +12703,7 @@ fn parse_connect_by() {
         "ORDER BY employee_id"
     );
 
-    assert_eq!(
-        dialects.verified_only_select(connect_by_1),
-        expect_query
-    );
+    assert_eq!(dialects.verified_only_select(connect_by_1), expect_query);
 
     // CONNECT BY can come before START WITH
     let connect_by_2 = concat!(
@@ -12854,10 +12851,13 @@ fn parse_connect_by() {
 
     // ~ CONNECT BY after WHERE and before GROUP BY
     dialects.verified_only_select("SELECT 0 FROM t WHERE 1 = 1 CONNECT BY 2 = 2 GROUP BY 3");
-    dialects.verified_only_select("SELECT 0 FROM t WHERE 1 = 1 START WITH 'a' = 'a' CONNECT BY 2 = 2 GROUP BY 3");
+    dialects.verified_only_select(
+        "SELECT 0 FROM t WHERE 1 = 1 START WITH 'a' = 'a' CONNECT BY 2 = 2 GROUP BY 3",
+    );
     dialects.verified_only_select_with_canonical(
         "SELECT 0 FROM t WHERE 1 = 1 CONNECT BY 2 = 2 START WITH 'a' = 'a' GROUP BY 3",
-        "SELECT 0 FROM t WHERE 1 = 1 START WITH 'a' = 'a' CONNECT BY 2 = 2 GROUP BY 3");
+        "SELECT 0 FROM t WHERE 1 = 1 START WITH 'a' = 'a' CONNECT BY 2 = 2 GROUP BY 3",
+    );
 }
 
 #[test]

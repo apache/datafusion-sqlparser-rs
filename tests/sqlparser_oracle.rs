@@ -401,7 +401,8 @@ fn test_connect_by() {
           WHERE level <= 3 AND department_id = 80 \
           START WITH last_name = 'King' \
         CONNECT BY NOCYCLE PRIOR employee_id = manager_id AND LEVEL <= 4 \
-          ORDER BY \"Employee\", \"Cycle\", LEVEL, \"Path\"");
+          ORDER BY \"Employee\", \"Cycle\", LEVEL, \"Path\"",
+    );
 
     // ~ CONNECT_BY_ROOT
     oracle_dialect.verified_only_select(
@@ -410,5 +411,6 @@ fn test_connect_by() {
            FROM employees \
           WHERE LEVEL > 1 AND department_id = 110 \
         CONNECT BY PRIOR employee_id = manager_id \
-          ORDER BY \"Employee\", \"Manager\", \"Pathlen\", \"Path\"");
+          ORDER BY \"Employee\", \"Manager\", \"Pathlen\", \"Path\"",
+    );
 }

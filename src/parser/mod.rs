@@ -14280,10 +14280,14 @@ impl<'a> Parser<'a> {
 
     /// Parse a `CONNECT BY` clause (Oracle-style hierarchical query support).
     pub fn parse_connect_by(&mut self) -> Result<ConnectBy, ParserError> {
-        let (condition, relationships, nocycle) = if self.parse_keywords(&[Keyword::CONNECT, Keyword::BY]) {
+        let (condition, relationships, nocycle) = if self
+            .parse_keywords(&[Keyword::CONNECT, Keyword::BY])
+        {
             let (relationships, nocycle) = self.with_state(ParserState::ConnectBy, |parser| {
                 let nocycle = parser.parse_keyword(Keyword::NOCYCLE);
-                parser.parse_comma_separated(Parser::parse_expr).map(|exprs| (exprs, nocycle))
+                parser
+                    .parse_comma_separated(Parser::parse_expr)
+                    .map(|exprs| (exprs, nocycle))
             })?;
             let condition = if self.parse_keywords(&[Keyword::START, Keyword::WITH]) {
                 Some(self.parse_expr()?)
@@ -14304,7 +14308,7 @@ impl<'a> Parser<'a> {
         Ok(ConnectBy {
             condition,
             relationships,
-            nocycle
+            nocycle,
         })
     }
 

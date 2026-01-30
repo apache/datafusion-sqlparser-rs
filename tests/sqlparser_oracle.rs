@@ -209,7 +209,7 @@ fn parse_quote_delimited_string() {
 #[test]
 fn parse_invalid_quote_delimited_strings() {
     let dialect = all_dialects_where(|d| d.supports_quote_delimited_string());
-    // ~ invalid quote delimiter
+    // invalid quote delimiter
     for q in [' ', '\t', '\r', '\n'] {
         assert_eq!(
             dialect.parse_sql_statements(&format!("SELECT Q'{q}abc{q}' FROM dual")),
@@ -219,7 +219,7 @@ fn parse_invalid_quote_delimited_strings() {
             "with quote char {q:?}"
         );
     }
-    // ~ invalid eof after quote
+    // invalid eof after quote
     assert_eq!(
         dialect.parse_sql_statements("SELECT Q'"),
         Err(ParserError::TokenizerError(
@@ -227,7 +227,7 @@ fn parse_invalid_quote_delimited_strings() {
         )),
         "with EOF quote char"
     );
-    // ~ unterminated string
+    // unterminated string
     assert_eq!(
         dialect.parse_sql_statements("SELECT Q'|asdfa...."),
         Err(ParserError::TokenizerError(
@@ -338,7 +338,7 @@ fn parse_national_quote_delimited_string_but_is_a_word() {
 fn test_optimizer_hints() {
     let oracle_dialect = oracle();
 
-    // ~ selects
+    // selects
     let select = oracle_dialect.verified_only_select_with_canonical(
         "SELECT /*+one two three*/ /*+not a hint!*/ 1 FROM dual",
         "SELECT /*+one two three*/ 1 FROM dual",
@@ -369,16 +369,16 @@ fn test_optimizer_hints() {
         Some(" one two three /* asdf */\n")
     );
 
-    // ~ inserts
+    // inserts
     oracle_dialect.verified_stmt("INSERT /*+ append */ INTO t1 SELECT * FROM all_objects");
 
-    // ~ updates
+    // updates
     oracle_dialect.verified_stmt("UPDATE /*+ DISABLE_PARALLEL_DML */ table_name SET column1 = 1");
 
-    // ~ deletes
+    // deletes
     oracle_dialect.verified_stmt("DELETE --+ ENABLE_PARALLEL_DML\n FROM table_name");
 
-    // ~ merges
+    // merges
     oracle_dialect.verified_stmt(
         "MERGE /*+ CLUSTERING */ INTO people_target pt \
          USING people_source ps \
@@ -404,7 +404,7 @@ fn test_connect_by() {
           ORDER BY \"Employee\", \"Cycle\", LEVEL, \"Path\"",
     );
 
-    // ~ CONNECT_BY_ROOT
+    // CONNECT_BY_ROOT
     oracle_dialect.verified_only_select(
         "SELECT last_name AS \"Employee\", CONNECT_BY_ROOT last_name AS \"Manager\", \
                 LEVEL - 1 AS \"Pathlen\", SYS_CONNECT_BY_PATH(last_name, '/') AS \"Path\" \

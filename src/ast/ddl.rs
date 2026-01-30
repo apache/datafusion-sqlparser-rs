@@ -99,8 +99,8 @@ impl fmt::Display for IndexColumn {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ReplicaIdentity {
-    /// No replica identity (`REPLICA IDENTITY NONE`).
-    None,
+    /// No replica identity (`REPLICA IDENTITY NOTHING`).
+    Nothing,
     /// Full replica identity (`REPLICA IDENTITY FULL`).
     Full,
     /// Default replica identity (`REPLICA IDENTITY DEFAULT`).
@@ -112,7 +112,7 @@ pub enum ReplicaIdentity {
 impl fmt::Display for ReplicaIdentity {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ReplicaIdentity::None => f.write_str("NONE"),
+            ReplicaIdentity::Nothing => f.write_str("NOTHING"),
             ReplicaIdentity::Full => f.write_str("FULL"),
             ReplicaIdentity::Default => f.write_str("DEFAULT"),
             ReplicaIdentity::Index(idx) => write!(f, "USING INDEX {idx}"),
@@ -1911,7 +1911,7 @@ pub enum ColumnOption {
     /// [ MATCH { FULL | PARTIAL | SIMPLE } ]
     /// { [ON DELETE <referential_action>] [ON UPDATE <referential_action>] |
     ///   [ON UPDATE <referential_action>] [ON DELETE <referential_action>]
-    /// }         
+    /// }
     /// [<constraint_characteristics>]
     /// `).
     ForeignKey(ForeignKeyConstraint),
@@ -4363,7 +4363,7 @@ impl Spanned for CreateExtension {
     }
 }
 
-/// DROP EXTENSION statement  
+/// DROP EXTENSION statement
 /// Note: this is a PostgreSQL-specific statement
 ///
 /// # References

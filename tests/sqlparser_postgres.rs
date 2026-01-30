@@ -6643,6 +6643,30 @@ fn parse_alter_table_replica_identity() {
         }
         _ => unreachable!(),
     }
+
+    match pg_and_generic().verified_stmt("ALTER TABLE foo REPLICA IDENTITY NOTHING") {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::ReplicaIdentity {
+                    identity: ReplicaIdentity::Nothing
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match pg_and_generic().verified_stmt("ALTER TABLE foo REPLICA IDENTITY DEFAULT") {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::ReplicaIdentity {
+                    identity: ReplicaIdentity::Default
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]

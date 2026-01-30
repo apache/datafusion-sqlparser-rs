@@ -12849,7 +12849,7 @@ fn parse_connect_by() {
         }
     );
 
-    // ~ CONNECT BY after WHERE and before GROUP BY
+    // CONNECT BY after WHERE and before GROUP BY
     dialects.verified_only_select("SELECT 0 FROM t WHERE 1 = 1 CONNECT BY 2 = 2 GROUP BY 3");
     dialects.verified_only_select(
         "SELECT 0 FROM t WHERE 1 = 1 START WITH 'a' = 'a' CONNECT BY 2 = 2 GROUP BY 3",

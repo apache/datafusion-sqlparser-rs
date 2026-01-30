@@ -145,7 +145,22 @@ impl Dialect for MsSqlDialect {
     }
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
-        if parser.peek_keyword(Keyword::IF) {
+        if parser.parse_keyword(Keyword::BEGIN) {
+            if parser.peek_keyword(Keyword::TRANSACTION)
+                || parser.peek_keyword(Keyword::WORK)
+                || parser.peek_keyword(Keyword::TRY)
+                || parser.peek_keyword(Keyword::CATCH)
+                || parser.peek_keyword(Keyword::DEFERRED)
+                || parser.peek_keyword(Keyword::IMMEDIATE)
+                || parser.peek_keyword(Keyword::EXCLUSIVE)
+                || parser.peek_token_ref().token == Token::SemiColon
+                || parser.peek_token_ref().token == Token::EOF
+            {
+                parser.prev_token();
+                return None;
+            }
+            return Some(parser.parse_begin_exception_end());
+        } else if parser.peek_keyword(Keyword::IF) {
             Some(self.parse_if_stmt(parser))
         } else if parser.parse_keywords(&[Keyword::CREATE, Keyword::TRIGGER]) {
             Some(self.parse_create_trigger(parser, false))

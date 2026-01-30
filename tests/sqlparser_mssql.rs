@@ -2554,3 +2554,74 @@ fn test_sql_keywords_as_column_aliases() {
         }
     }
 }
+
+#[test]
+fn parse_mssql_begin_end_block() {
+    // Single statement
+    let sql = "BEGIN SELECT 1; END";
+    let stmt = ms().verified_stmt(sql);
+    match &stmt {
+        Statement::StartTransaction {
+            begin,
+            has_end_keyword,
+            statements,
+            transaction,
+            modifier,
+            ..
+        } => {
+            assert!(begin);
+            assert!(has_end_keyword);
+            assert!(transaction.is_none());
+            assert!(modifier.is_none());
+            assert_eq!(statements.len(), 1);
+        }
+        _ => panic!("Expected StartTransaction, got: {stmt:?}"),
+    }
+
+    // Multiple statements
+    let sql = "BEGIN SELECT 1; SELECT 2; END";
+    let stmt = ms().verified_stmt(sql);
+    match &stmt {
+        Statement::StartTransaction {
+            statements,
+            has_end_keyword,
+            ..
+        } => {
+            assert!(has_end_keyword);
+            assert_eq!(statements.len(), 2);
+        }
+        _ => panic!("Expected StartTransaction, got: {stmt:?}"),
+    }
+
+    // DML inside BEGIN/END
+    let sql = "BEGIN INSERT INTO t VALUES (1); UPDATE t SET x = 2; END";
+    let stmt = ms().verified_stmt(sql);
+    match &stmt {
+        Statement::StartTransaction {
+            statements,
+            has_end_keyword,
+            ..
+        } => {
+            assert!(has_end_keyword);
+            assert_eq!(statements.len(), 2);
+        }
+        _ => panic!("Expected StartTransaction, got: {stmt:?}"),
+    }
+
+    // BEGIN TRANSACTION still works
+    let sql = "BEGIN TRANSACTION";
+    let stmt = ms().verified_stmt(sql);
+    match &stmt {
+        Statement::StartTransaction {
+            begin,
+            has_end_keyword,
+            transaction,
+            ..
+        } => {
+            assert!(begin);
+            assert!(!has_end_keyword);
+            assert!(transaction.is_some());
+        }
+        _ => panic!("Expected StartTransaction, got: {stmt:?}"),
+    }
+}

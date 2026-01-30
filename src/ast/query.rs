@@ -481,7 +481,7 @@ pub struct Select {
     /// WHERE
     pub selection: Option<Expr>,
     /// [START WITH ..] CONNECT BY ..
-    pub connect_by: Option<ConnectBy>,
+    pub connect_by: Vec<ConnectByKind>,
     /// GROUP BY
     pub group_by: GroupByExpr,
     /// CLUSTER BY (Hive)
@@ -585,9 +585,9 @@ impl fmt::Display for Select {
             SpaceOrNewline.fmt(f)?;
             Indent(selection).fmt(f)?;
         }
-        if let Some(ref connect_by) = self.connect_by {
+        for clause in &self.connect_by {
             SpaceOrNewline.fmt(f)?;
-            connect_by.fmt(f)?;
+            clause.fmt(f)?;
         }
         match &self.group_by {
             GroupByExpr::All(_) => {
@@ -1208,38 +1208,38 @@ impl fmt::Display for TableWithJoins {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct ConnectBy {
+pub enum ConnectByKind {
+    /// CONNECT BY
+    ConnectBy {
+        /// the join conditions denoting the hierarchical relationship
+        relationships: Vec<Expr>,
+
+        /// [CONNECT BY] NOCYCLE
+        ///
+        /// Optional on [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Hierarchical-Queries.html#GUID-0118DF1D-B9A9-41EB-8556-C6E7D6A5A84E__GUID-5377971A-F518-47E4-8781-F06FEB3EF993)
+        nocycle: bool,
+    },
+
     /// START WITH
     ///
     /// Optional on [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Hierarchical-Queries.html#GUID-0118DF1D-B9A9-41EB-8556-C6E7D6A5A84E)
     /// when comming _after_ the `CONNECT BY`.
-    pub condition: Option<Expr>,
-
-    /// CONNECT BY
-    pub relationships: Vec<Expr>,
-
-    /// [CONNECT BY] NOCYCLE
-    ///
-    /// Optional on [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Hierarchical-Queries.html#GUID-0118DF1D-B9A9-41EB-8556-C6E7D6A5A84E__GUID-5377971A-F518-47E4-8781-F06FEB3EF993)
-    pub nocycle: bool,
+    StartWith(Box<Expr>),
 }
 
-impl fmt::Display for ConnectBy {
+impl fmt::Display for ConnectByKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let Self {
-            condition,
-            relationships,
-            nocycle,
-        } = self;
-        if let Some(condition) = condition {
-            write!(f, "START WITH {condition} ")?;
+        match self {
+            ConnectByKind::ConnectBy { relationships, nocycle } => {
+                write!(f, "CONNECT BY {nocycle}{relationships}",
+                    nocycle = if *nocycle { "NOCYCLE " } else { "" },
+                    relationships = display_comma_separated(relationships)
+                )
+            },
+            ConnectByKind::StartWith(condition) => {
+                write!(f, "START WITH {condition}")
+            },
         }
-        write!(
-            f,
-            "CONNECT BY {nocycle}{relationships}",
-            nocycle = if *nocycle { "NOCYCLE " } else { "" },
-            relationships = display_comma_separated(relationships)
-        )
     }
 }
 

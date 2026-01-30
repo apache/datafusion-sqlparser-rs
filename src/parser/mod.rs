@@ -13921,7 +13921,7 @@ impl<'a> Parser<'a> {
                     window_before_qualify: false,
                     qualify: None,
                     value_table_mode: None,
-                    connect_by: None,
+                    connect_by: vec![],
                     flavor: SelectFlavor::FromFirstNoSelect,
                 });
             }
@@ -14032,15 +14032,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let connect_by = if self.dialect.supports_connect_by()
-            && self
-                .peek_one_of_keywords(&[Keyword::START, Keyword::CONNECT])
-                .is_some()
-        {
-            Some(self.parse_connect_by()?)
-        } else {
-            None
-        };
+        let connect_by = self.maybe_parse_connect_by()?;
 
         let group_by = self
             .parse_optional_group_by()?
@@ -14278,37 +14270,22 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a `CONNECT BY` clause (Oracle-style hierarchical query support).
-    pub fn parse_connect_by(&mut self) -> Result<ConnectBy, ParserError> {
-        let (condition, relationships, nocycle) = if self
-            .parse_keywords(&[Keyword::CONNECT, Keyword::BY])
-        {
-            let (relationships, nocycle) = self.with_state(ParserState::ConnectBy, |parser| {
-                let nocycle = parser.parse_keyword(Keyword::NOCYCLE);
-                parser
-                    .parse_comma_separated(Parser::parse_expr)
-                    .map(|exprs| (exprs, nocycle))
-            })?;
-            let condition = if self.parse_keywords(&[Keyword::START, Keyword::WITH]) {
-                Some(self.parse_expr()?)
+    pub fn maybe_parse_connect_by(&mut self) -> Result<Vec<ConnectByKind>, ParserError> {
+        let mut clauses = Vec::with_capacity(2);
+        loop {
+            if self.parse_keywords(&[Keyword::START, Keyword::WITH]) {
+                clauses.push(ConnectByKind::StartWith(self.parse_expr()?.into()));
+            } else if self.parse_keywords(&[Keyword::CONNECT, Keyword::BY]) {
+                let nocycle = self.parse_keyword(Keyword::NOCYCLE);
+                let relationships = self.with_state(ParserState::ConnectBy, |parser| {
+                    parser.parse_comma_separated(Parser::parse_expr)
+                })?;
+                clauses.push(ConnectByKind::ConnectBy { relationships, nocycle });
             } else {
-                None
-            };
-            (condition, relationships, nocycle)
-        } else {
-            self.expect_keywords(&[Keyword::START, Keyword::WITH])?;
-            let condition = self.parse_expr()?;
-            self.expect_keywords(&[Keyword::CONNECT, Keyword::BY])?;
-            let nocycle = self.parse_keyword(Keyword::NOCYCLE);
-            let relationships = self.with_state(ParserState::ConnectBy, |parser| {
-                parser.parse_comma_separated(Parser::parse_expr)
-            })?;
-            (Some(condition), relationships, nocycle)
-        };
-        Ok(ConnectBy {
-            condition,
-            relationships,
-            nocycle,
-        })
+                break;
+            }
+        }
+        Ok(clauses)
     }
 
     /// Parse `CREATE TABLE x AS TABLE y`

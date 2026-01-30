@@ -87,7 +87,7 @@ pub use self::dml::{
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
-    AfterMatchSkip, ConnectBy, Cte, CteAsMaterialized, Distinct, EmptyMatchesMode,
+    AfterMatchSkip, ConnectByKind, Cte, CteAsMaterialized, Distinct, EmptyMatchesMode,
     ExceptSelectItem, ExcludeSelectItem, ExprWithAlias, ExprWithAliasAndOrderBy, Fetch, ForClause,
     ForJson, ForXml, FormatClause, GroupByExpr, GroupByWithModifier, IdentWithAlias,
     IlikeSelectItem, InputFormatClause, Interpolate, InterpolateExpr, Join, JoinConstraint,

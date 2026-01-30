@@ -32,7 +32,7 @@ use super::{
     AlterIndexOperation, AlterTableOperation, Analyze, Array, Assignment, AssignmentTarget,
     AttachedToken, BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef,
     ColumnOption, ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements,
-    ConflictTarget, ConnectBy, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
+    ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
     CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr,
     ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr,
     FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
@@ -2281,20 +2281,14 @@ impl Spanned for Select {
     }
 }
 
-impl Spanned for ConnectBy {
+impl Spanned for ConnectByKind {
     fn span(&self) -> Span {
-        let ConnectBy {
-            condition,
-            relationships,
-            nocycle: _,
-        } = self;
-
-        union_spans(
-            condition
-                .iter()
-                .map(Spanned::span)
-                .chain(relationships.iter().map(|item| item.span())),
-        )
+        match self {
+            ConnectByKind::ConnectBy { relationships, nocycle: _ } => {
+                union_spans(relationships.iter().map(|item| item.span()))
+            }
+            ConnectByKind::StartWith(expr) => expr.span(),
+        }
     }
 }
 

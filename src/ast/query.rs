@@ -1112,7 +1112,7 @@ impl fmt::Display for ConnectBy {
         let Self {
             condition,
             relationships,
-            nocycle
+            nocycle,
         } = self;
         if let Some(condition) = condition {
             write!(f, "START WITH {condition} ")?;

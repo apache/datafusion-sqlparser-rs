@@ -22,7 +22,7 @@ use crate::{
     tokenizer::Token,
 };
 
-use super::{Dialect, Precedence, keywords::Keyword};
+use super::{keywords::Keyword, Dialect, Precedence};
 
 const RESERVED_KEYWORDS_FOR_SELECT_ITEM_OPERATOR: [Keyword; 1] = [Keyword::CONNECT_BY_ROOT];
 

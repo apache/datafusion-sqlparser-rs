@@ -29,7 +29,10 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use super::{display_comma_separated, Expr, Ident, Password, Spanned};
-use crate::ast::{display_separated, ObjectName};
+use crate::ast::{
+    display_separated, CascadeOption, CurrentGrantsKind, GrantObjects, Grantee, ObjectName,
+    Privileges,
+};
 use crate::tokenizer::Span;
 
 /// An option in `ROLE` statement.
@@ -425,5 +428,101 @@ impl fmt::Display for CreateRole {
 impl Spanned for CreateRole {
     fn span(&self) -> Span {
         Span::empty()
+    }
+}
+
+/// GRANT privileges ON objects TO grantees
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Grant {
+    /// Privileges being granted.
+    pub privileges: Privileges,
+    /// Optional objects the privileges apply to.
+    pub objects: Option<GrantObjects>,
+    /// List of grantees receiving the privileges.
+    pub grantees: Vec<Grantee>,
+    /// Whether `WITH GRANT OPTION` is present.
+    pub with_grant_option: bool,
+    /// Optional `AS GRANTOR` identifier.
+    pub as_grantor: Option<Ident>,
+    /// Optional `GRANTED BY` identifier.
+    ///
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dcl-statements)
+    pub granted_by: Option<Ident>,
+    /// Optional `CURRENT GRANTS` modifier.
+    ///
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/grant-privilege)
+    pub current_grants: Option<CurrentGrantsKind>,
+}
+
+impl fmt::Display for Grant {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "GRANT {privileges}", privileges = self.privileges)?;
+        if let Some(ref objects) = self.objects {
+            write!(f, " ON {objects}")?;
+        }
+        write!(f, " TO {}", display_comma_separated(&self.grantees))?;
+        if let Some(ref current_grants) = self.current_grants {
+            write!(f, " {current_grants}")?;
+        }
+        if self.with_grant_option {
+            write!(f, " WITH GRANT OPTION")?;
+        }
+        if let Some(ref as_grantor) = self.as_grantor {
+            write!(f, " AS {as_grantor}")?;
+        }
+        if let Some(ref granted_by) = self.granted_by {
+            write!(f, " GRANTED BY {granted_by}")?;
+        }
+        Ok(())
+    }
+}
+
+impl From<Grant> for crate::ast::Statement {
+    fn from(v: Grant) -> Self {
+        crate::ast::Statement::Grant(v)
+    }
+}
+
+/// REVOKE privileges ON objects FROM grantees
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Revoke {
+    /// Privileges to revoke.
+    pub privileges: Privileges,
+    /// Optional objects from which to revoke.
+    pub objects: Option<GrantObjects>,
+    /// Grantees affected by the revoke.
+    pub grantees: Vec<Grantee>,
+    /// Optional `GRANTED BY` identifier.
+    ///
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dcl-statements)
+    pub granted_by: Option<Ident>,
+    /// Optional `CASCADE`/`RESTRICT` behavior.
+    pub cascade: Option<CascadeOption>,
+}
+
+impl fmt::Display for Revoke {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "REVOKE {privileges}", privileges = self.privileges)?;
+        if let Some(ref objects) = self.objects {
+            write!(f, " ON {objects}")?;
+        }
+        write!(f, " FROM {}", display_comma_separated(&self.grantees))?;
+        if let Some(ref granted_by) = self.granted_by {
+            write!(f, " GRANTED BY {granted_by}")?;
+        }
+        if let Some(ref cascade) = self.cascade {
+            write!(f, " {cascade}")?;
+        }
+        Ok(())
+    }
+}
+
+impl From<Revoke> for crate::ast::Statement {
+    fn from(v: Revoke) -> Self {
+        crate::ast::Statement::Revoke(v)
     }
 }

@@ -9605,14 +9605,14 @@ fn parse_drop_role() {
 fn parse_grant() {
     let sql = "GRANT SELECT, INSERT, UPDATE (shape, size), USAGE, DELETE, TRUNCATE, REFERENCES, TRIGGER, CONNECT, CREATE, EXECUTE, TEMPORARY, DROP ON abc, def TO xyz, m WITH GRANT OPTION GRANTED BY jj";
     match verified_stmt(sql) {
-        Statement::Grant {
+        Statement::Grant(Grant {
             privileges,
             objects,
             grantees,
             with_grant_option,
             granted_by,
             ..
-        } => match (privileges, objects) {
+        }) => match (privileges, objects) {
             (Privileges::Actions(actions), Some(GrantObjects::Tables(objects))) => {
                 assert_eq!(
                     vec![
@@ -9657,13 +9657,13 @@ fn parse_grant() {
 
     let sql2 = "GRANT INSERT ON ALL TABLES IN SCHEMA public TO browser";
     match verified_stmt(sql2) {
-        Statement::Grant {
+        Statement::Grant(Grant {
             privileges,
             objects,
             grantees,
             with_grant_option,
             ..
-        } => match (privileges, objects) {
+        }) => match (privileges, objects) {
             (Privileges::Actions(actions), Some(GrantObjects::AllTablesInSchema { schemas })) => {
                 assert_eq!(vec![Action::Insert { columns: None }], actions);
                 assert_eq_vec(&["public"], &schemas);
@@ -9677,13 +9677,13 @@ fn parse_grant() {
 
     let sql3 = "GRANT USAGE, SELECT ON SEQUENCE p TO u";
     match verified_stmt(sql3) {
-        Statement::Grant {
+        Statement::Grant(Grant {
             privileges,
             objects,
             grantees,
             granted_by,
             ..
-        } => match (privileges, objects, granted_by) {
+        }) => match (privileges, objects, granted_by) {
             (Privileges::Actions(actions), Some(GrantObjects::Sequences(objects)), None) => {
                 assert_eq!(
                     vec![Action::Usage, Action::Select { columns: None }],
@@ -9699,7 +9699,7 @@ fn parse_grant() {
 
     let sql4 = "GRANT ALL PRIVILEGES ON aa, b TO z";
     match verified_stmt(sql4) {
-        Statement::Grant { privileges, .. } => {
+        Statement::Grant(Grant { privileges, .. }) => {
             assert_eq!(
                 Privileges::All {
                     with_privileges_keyword: true
@@ -9712,11 +9712,11 @@ fn parse_grant() {
 
     let sql5 = "GRANT ALL ON SCHEMA aa, b TO z";
     match verified_stmt(sql5) {
-        Statement::Grant {
+        Statement::Grant(Grant {
             privileges,
             objects,
             ..
-        } => match (privileges, objects) {
+        }) => match (privileges, objects) {
             (
                 Privileges::All {
                     with_privileges_keyword,
@@ -9733,11 +9733,11 @@ fn parse_grant() {
 
     let sql6 = "GRANT USAGE ON ALL SEQUENCES IN SCHEMA bus TO a, beta WITH GRANT OPTION";
     match verified_stmt(sql6) {
-        Statement::Grant {
+        Statement::Grant(Grant {
             privileges,
             objects,
             ..
-        } => match (privileges, objects) {
+        }) => match (privileges, objects) {
             (
                 Privileges::Actions(actions),
                 Some(GrantObjects::AllSequencesInSchema { schemas }),
@@ -9818,13 +9818,13 @@ fn parse_deny() {
 fn test_revoke() {
     let sql = "REVOKE ALL PRIVILEGES ON users, auth FROM analyst";
     match verified_stmt(sql) {
-        Statement::Revoke {
+        Statement::Revoke(Revoke {
             privileges,
             objects: Some(GrantObjects::Tables(tables)),
             grantees,
             granted_by,
             cascade,
-        } => {
+        }) => {
             assert_eq!(
                 Privileges::All {
                     with_privileges_keyword: true
@@ -9844,13 +9844,13 @@ fn test_revoke() {
 fn test_revoke_with_cascade() {
     let sql = "REVOKE ALL PRIVILEGES ON users, auth FROM analyst CASCADE";
     match all_dialects_except(|d| d.is::<MySqlDialect>()).verified_stmt(sql) {
-        Statement::Revoke {
+        Statement::Revoke(Revoke {
             privileges,
             objects: Some(GrantObjects::Tables(tables)),
             grantees,
             granted_by,
             cascade,
-        } => {
+        }) => {
             assert_eq!(
                 Privileges::All {
                     with_privileges_keyword: true
@@ -13906,14 +13906,14 @@ fn test_create_policy() {
                WITH CHECK (1 = 1)";
 
     match all_dialects().verified_stmt(sql) {
-        Statement::CreatePolicy {
+        Statement::CreatePolicy(CreatePolicy {
             name,
             table_name,
             to,
             using,
             with_check,
             ..
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "my_policy");
             assert_eq!(table_name.to_string(), "my_table");
             assert_eq!(
@@ -14014,12 +14014,12 @@ fn test_create_policy() {
 fn test_drop_policy() {
     let sql = "DROP POLICY IF EXISTS my_policy ON my_table RESTRICT";
     match all_dialects().verified_stmt(sql) {
-        Statement::DropPolicy {
+        Statement::DropPolicy(DropPolicy {
             if_exists,
             name,
             table_name,
             drop_behavior,
-        } => {
+        }) => {
             assert_eq!(if_exists, true);
             assert_eq!(name.to_string(), "my_policy");
             assert_eq!(table_name.to_string(), "my_table");
@@ -14054,12 +14054,12 @@ fn test_drop_policy() {
 #[test]
 fn test_alter_policy() {
     match verified_stmt("ALTER POLICY old_policy ON my_table RENAME TO new_policy") {
-        Statement::AlterPolicy {
+        Statement::AlterPolicy(AlterPolicy {
             name,
             table_name,
             operation,
             ..
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "old_policy");
             assert_eq!(table_name.to_string(), "my_table");
             assert_eq!(
@@ -14076,9 +14076,9 @@ fn test_alter_policy() {
         "ALTER POLICY my_policy ON my_table TO CURRENT_USER ",
         "USING ((SELECT c0)) WITH CHECK (c0 > 0)"
     )) {
-        Statement::AlterPolicy {
+        Statement::AlterPolicy(AlterPolicy {
             name, table_name, ..
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "my_policy");
             assert_eq!(table_name.to_string(), "my_table");
         }

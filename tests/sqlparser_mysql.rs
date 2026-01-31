@@ -3805,7 +3805,7 @@ fn parse_bitstring_literal() {
 fn parse_grant() {
     let sql = "GRANT ALL ON *.* TO 'jeffrey'@'%'";
     let stmt = mysql().verified_stmt(sql);
-    if let Statement::Grant {
+    if let Statement::Grant(Grant {
         privileges,
         objects,
         grantees,
@@ -3813,7 +3813,7 @@ fn parse_grant() {
         as_grantor: _,
         granted_by,
         current_grants: _,
-    } = stmt
+    }) = stmt
     {
         assert_eq!(
             privileges,
@@ -3851,13 +3851,13 @@ fn parse_grant() {
 fn parse_revoke() {
     let sql = "REVOKE ALL ON db1.* FROM 'jeffrey'@'%'";
     let stmt = mysql_and_generic().verified_stmt(sql);
-    if let Statement::Revoke {
+    if let Statement::Revoke(Revoke {
         privileges,
         objects,
         grantees,
         granted_by,
         cascade,
-    } = stmt
+    }) = stmt
     {
         assert_eq!(
             privileges,

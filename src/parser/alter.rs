@@ -19,7 +19,7 @@ use super::{Parser, ParserError};
 use crate::{
     ast::{
         helpers::key_value_options::{KeyValueOptions, KeyValueOptionsDelimiter},
-        AlterConnectorOwner, AlterPolicyOperation, AlterRoleOperation, AlterUser,
+        AlterConnectorOwner, AlterPolicy, AlterPolicyOperation, AlterRoleOperation, AlterUser,
         AlterUserAddMfaMethodOtp, AlterUserAddRoleDelegation, AlterUserModifyMfaMethod,
         AlterUserPassword, AlterUserRemoveRoleDelegation, AlterUserSetPolicy, Expr, MfaMethodKind,
         Password, ResetConfig, RoleOption, SetConfigValue, Statement, UserPolicyKind,
@@ -54,7 +54,7 @@ impl Parser<'_> {
     /// ```
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterpolicy.html)
-    pub fn parse_alter_policy(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_alter_policy(&mut self) -> Result<AlterPolicy, ParserError> {
         let name = self.parse_identifier()?;
         self.expect_keyword_is(Keyword::ON)?;
         let table_name = self.parse_object_name(false)?;
@@ -62,7 +62,7 @@ impl Parser<'_> {
         if self.parse_keyword(Keyword::RENAME) {
             self.expect_keyword_is(Keyword::TO)?;
             let new_name = self.parse_identifier()?;
-            Ok(Statement::AlterPolicy {
+            Ok(AlterPolicy {
                 name,
                 table_name,
                 operation: AlterPolicyOperation::Rename { new_name },
@@ -91,7 +91,7 @@ impl Parser<'_> {
             } else {
                 None
             };
-            Ok(Statement::AlterPolicy {
+            Ok(AlterPolicy {
                 name,
                 table_name,
                 operation: AlterPolicyOperation::Apply {

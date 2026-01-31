@@ -5201,7 +5201,7 @@ impl fmt::Display for CreatePolicyType {
 /// FOR [ALL | SELECT | INSERT | UPDATE | DELETE]
 /// ```
 /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CreatePolicyCommand {

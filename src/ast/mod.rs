@@ -3325,19 +3325,24 @@ impl Display for ExceptionWhen {
     }
 }
 
-/// ANALYZE TABLE statement (Hive-specific)
+/// ANALYZE statement
+///
+/// Supported syntax varies by dialect:
+/// - Hive: `ANALYZE TABLE t [PARTITION (...)] COMPUTE STATISTICS [NOSCAN] [FOR COLUMNS [col1, ...]] [CACHE METADATA]`
+/// - PostgreSQL: `ANALYZE [VERBOSE] [t [(col1, ...)]]`
+/// - General: `ANALYZE [TABLE] t`
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Analyze {
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-    /// Name of the table to analyze.
-    pub table_name: ObjectName,
+    /// Name of the table to analyze. `None` for bare `ANALYZE`.
+    pub table_name: Option<ObjectName>,
     /// Optional partition expressions to restrict the analysis.
     pub partitions: Option<Vec<Expr>>,
-    /// `true` when analyzing specific columns.
+    /// `true` when analyzing specific columns (Hive `FOR COLUMNS` syntax).
     pub for_columns: bool,
-    /// Columns to analyze when `for_columns` is `true`.
+    /// Columns to analyze.
     pub columns: Vec<Ident>,
     /// Whether to cache metadata before analyzing.
     pub cache_metadata: bool,
@@ -3351,22 +3356,21 @@ pub struct Analyze {
 
 impl fmt::Display for Analyze {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "ANALYZE{}{table_name}",
+        write!(f, "ANALYZE")?;
+        if let Some(ref table_name) = self.table_name {
             if self.has_table_keyword {
-                " TABLE "
-            } else {
-                " "
-            },
-            table_name = self.table_name
-        )?;
+                write!(f, " TABLE")?;
+            }
+            write!(f, " {table_name}")?;
+        }
+        if !self.for_columns && !self.columns.is_empty() {
+            write!(f, " ({})", display_comma_separated(&self.columns))?;
+        }
         if let Some(ref parts) = self.partitions {
             if !parts.is_empty() {
                 write!(f, " PARTITION ({})", display_comma_separated(parts))?;
             }
         }
-
         if self.compute_statistics {
             write!(f, " COMPUTE STATISTICS")?;
         }

@@ -1193,8 +1193,7 @@ impl<'a> Parser<'a> {
     /// Parse `ANALYZE` statement.
     pub fn parse_analyze(&mut self) -> Result<Analyze, ParserError> {
         let has_table_keyword = self.parse_keyword(Keyword::TABLE);
-        let table_name = self
-            .maybe_parse(|parser| parser.parse_object_name(false))?;
+        let table_name = self.maybe_parse(|parser| parser.parse_object_name(false))?;
         let mut for_columns = false;
         let mut cache_metadata = false;
         let mut noscan = false;

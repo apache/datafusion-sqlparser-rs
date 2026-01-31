@@ -2269,14 +2269,14 @@ impl Spanned for Select {
                 .chain(lateral_views.iter().map(|item| item.span()))
                 .chain(prewhere.iter().map(|item| item.span()))
                 .chain(selection.iter().map(|item| item.span()))
+                .chain(connect_by.iter().map(|item| item.span()))
                 .chain(core::iter::once(group_by.span()))
                 .chain(cluster_by.iter().map(|item| item.span()))
                 .chain(distribute_by.iter().map(|item| item.span()))
                 .chain(sort_by.iter().map(|item| item.span()))
                 .chain(having.iter().map(|item| item.span()))
                 .chain(named_window.iter().map(|item| item.span()))
-                .chain(qualify.iter().map(|item| item.span()))
-                .chain(connect_by.iter().map(|item| item.span())),
+                .chain(qualify.iter().map(|item| item.span())),
         )
     }
 }
@@ -2285,10 +2285,17 @@ impl Spanned for ConnectByKind {
     fn span(&self) -> Span {
         match self {
             ConnectByKind::ConnectBy {
-                relationships,
+                connect_token,
                 nocycle: _,
-            } => union_spans(relationships.iter().map(|item| item.span())),
-            ConnectByKind::StartWith(expr) => expr.span(),
+                relationships,
+            } => union_spans(
+                core::iter::once(connect_token.0.span())
+                    .chain(relationships.last().iter().map(|item| item.span())),
+            ),
+            ConnectByKind::StartWith {
+                start_token,
+                condition,
+            } => union_spans([start_token.0.span(), condition.span()].into_iter()),
         }
     }
 }

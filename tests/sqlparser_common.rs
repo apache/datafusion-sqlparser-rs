@@ -12686,8 +12686,9 @@ fn parse_connect_by() {
             window_before_qualify: false,
             value_table_mode: None,
             connect_by: vec![
-                ConnectByKind::StartWith(
-                    Expr::BinaryOp {
+                ConnectByKind::StartWith {
+                    start_token: AttachedToken::empty(),
+                    condition: Expr::BinaryOp {
                         left: Box::new(Expr::Identifier(Ident::new("title"))),
                         op: BinaryOperator::Eq,
                         right: Box::new(Expr::Value(
@@ -12695,8 +12696,10 @@ fn parse_connect_by() {
                         )),
                     }
                     .into()
-                ),
+                },
                 ConnectByKind::ConnectBy {
+                    connect_token: AttachedToken::empty(),
+                    nocycle: false,
                     relationships: vec![Expr::BinaryOp {
                         left: Box::new(Expr::Identifier(Ident::new("manager_id"))),
                         op: BinaryOperator::Eq,
@@ -12704,7 +12707,6 @@ fn parse_connect_by() {
                             "employee_id",
                         ))))),
                     }],
-                    nocycle: false,
                 }
             ],
             flavor: SelectFlavor::Standard,
@@ -12752,6 +12754,8 @@ fn parse_connect_by() {
             value_table_mode: None,
             connect_by: vec![
                 ConnectByKind::ConnectBy {
+                    connect_token: AttachedToken::empty(),
+                    nocycle: false,
                     relationships: vec![Expr::BinaryOp {
                         left: Box::new(Expr::Identifier(Ident::new("manager_id"))),
                         op: BinaryOperator::Eq,
@@ -12759,15 +12763,19 @@ fn parse_connect_by() {
                             "employee_id",
                         ))))),
                     }],
-                    nocycle: false,
                 },
-                ConnectByKind::StartWith(Expr::BinaryOp {
-                    left: Box::new(Expr::Identifier(Ident::new("title"))),
-                    op: BinaryOperator::Eq,
-                    right: Box::new(Expr::Value(
-                        Value::SingleQuotedString("president".to_owned()).with_empty_span(),
-                    )),
-                }.into())],
+                ConnectByKind::StartWith {
+                    start_token: AttachedToken::empty(),
+                    condition: Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("title"))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Value(
+                            Value::SingleQuotedString("president".to_owned()).with_empty_span(),
+                        )),
+                    }
+                    .into()
+                },
+            ],
             flavor: SelectFlavor::Standard,
         }
     );
@@ -12817,14 +12825,20 @@ fn parse_connect_by() {
             window_before_qualify: false,
             value_table_mode: None,
             connect_by: vec![
-                ConnectByKind::StartWith(Expr::BinaryOp {
+                ConnectByKind::StartWith {
+                    start_token: AttachedToken::empty(),
+                    condition: Expr::BinaryOp {
                         left: Box::new(Expr::Identifier(Ident::new("title"))),
                         op: BinaryOperator::Eq,
                         right: Box::new(Expr::Value(
                             (Value::SingleQuotedString("president".to_owned(),)).with_empty_span()
                         )),
-                }.into()),
+                    }
+                    .into()
+                },
                 ConnectByKind::ConnectBy {
+                    connect_token: AttachedToken::empty(),
+                    nocycle: false,
                     relationships: vec![Expr::BinaryOp {
                         left: Box::new(Expr::Identifier(Ident::new("manager_id"))),
                         op: BinaryOperator::Eq,
@@ -12832,8 +12846,8 @@ fn parse_connect_by() {
                             "employee_id",
                         ))))),
                     }],
-                    nocycle: false,
-                }],
+                }
+            ],
             flavor: SelectFlavor::Standard,
         }
     );
@@ -12893,15 +12907,15 @@ fn parse_connect_by() {
             qualify: None,
             window_before_qualify: false,
             value_table_mode: None,
-            connect_by: vec![
-                ConnectByKind::ConnectBy {
-                    relationships: vec![Expr::BinaryOp {
-                        left: Expr::Identifier(Ident::new("parent")).into(),
-                        op: BinaryOperator::Eq,
-                        right: Expr::Prior(Expr::Identifier(Ident::new("child")).into()).into(),
-                    }],
-                    nocycle: true,
+            connect_by: vec![ConnectByKind::ConnectBy {
+                connect_token: AttachedToken::empty(),
+                nocycle: true,
+                relationships: vec![Expr::BinaryOp {
+                    left: Expr::Identifier(Ident::new("parent")).into(),
+                    op: BinaryOperator::Eq,
+                    right: Expr::Prior(Expr::Identifier(Ident::new("child")).into()).into(),
                 }],
+            }],
             flavor: SelectFlavor::Standard,
         }
     );

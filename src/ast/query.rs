@@ -1211,28 +1211,38 @@ impl fmt::Display for TableWithJoins {
 pub enum ConnectByKind {
     /// CONNECT BY
     ConnectBy {
-        /// the join conditions denoting the hierarchical relationship
-        relationships: Vec<Expr>,
+        /// the `CONNECT` token
+        connect_token: AttachedToken,
 
         /// [CONNECT BY] NOCYCLE
         ///
         /// Optional on [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Hierarchical-Queries.html#GUID-0118DF1D-B9A9-41EB-8556-C6E7D6A5A84E__GUID-5377971A-F518-47E4-8781-F06FEB3EF993)
         nocycle: bool,
+
+        /// join conditions denoting the hierarchical relationship
+        relationships: Vec<Expr>,
     },
 
     /// START WITH
     ///
     /// Optional on [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Hierarchical-Queries.html#GUID-0118DF1D-B9A9-41EB-8556-C6E7D6A5A84E)
     /// when comming _after_ the `CONNECT BY`.
-    StartWith(Box<Expr>),
+    StartWith {
+        /// the `START` token
+        start_token: AttachedToken,
+
+        /// condition selecting the root rows of the hierarchy
+        condition: Box<Expr>,
+    },
 }
 
 impl fmt::Display for ConnectByKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ConnectByKind::ConnectBy {
-                relationships,
+                connect_token: _,
                 nocycle,
+                relationships,
             } => {
                 write!(
                     f,
@@ -1241,7 +1251,10 @@ impl fmt::Display for ConnectByKind {
                     relationships = display_comma_separated(relationships)
                 )
             }
-            ConnectByKind::StartWith(condition) => {
+            ConnectByKind::StartWith {
+                start_token: _,
+                condition,
+            } => {
                 write!(f, "START WITH {condition}")
             }
         }

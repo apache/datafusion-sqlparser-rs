@@ -2710,7 +2710,7 @@ fn test_export_data() {
                     qualify: None,
                     window_before_qualify: false,
                     value_table_mode: None,
-                    connect_by: None,
+                    connect_by: vec![],
                     flavor: SelectFlavor::Standard,
                 }))),
                 order_by: Some(OrderBy {
@@ -2815,7 +2815,7 @@ fn test_export_data() {
                     qualify: None,
                     window_before_qualify: false,
                     value_table_mode: None,
-                    connect_by: None,
+                    connect_by: vec![],
                     flavor: SelectFlavor::Standard,
                 }))),
                 order_by: Some(OrderBy {

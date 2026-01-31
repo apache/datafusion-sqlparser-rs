@@ -102,7 +102,7 @@ fn parse_map_access_expr() {
             window_before_qualify: false,
             qualify: None,
             value_table_mode: None,
-            connect_by: None,
+            connect_by: vec![],
             flavor: SelectFlavor::Standard,
         },
         select

@@ -841,7 +841,9 @@ impl Spanned for ConstraintCharacteristics {
 impl Spanned for Analyze {
     fn span(&self) -> Span {
         union_spans(
-            core::iter::once(self.table_name.span())
+            self.table_name
+                .iter()
+                .map(|t| t.span())
                 .chain(
                     self.partitions
                         .iter()

@@ -513,6 +513,13 @@ fn parse_create_table_with_defaults() {
 }
 
 #[test]
+fn parse_cast_in_default_expr() {
+    pg().verified_stmt("CREATE TABLE t (c TEXT DEFAULT (foo())::TEXT)");
+    pg().verified_stmt("CREATE TABLE t (c TEXT DEFAULT (foo())::INT::TEXT)");
+    pg().verified_stmt("CREATE TABLE t (c TEXT DEFAULT (foo())::TEXT NOT NULL)");
+}
+
+#[test]
 fn parse_create_table_from_pg_dump() {
     let sql = "CREATE TABLE public.customer (
             customer_id integer DEFAULT nextval('public.customer_customer_id_seq'::regclass) NOT NULL,

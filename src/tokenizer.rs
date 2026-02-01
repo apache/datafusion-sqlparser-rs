@@ -782,8 +782,7 @@ impl fmt::Display for TokenizerError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for TokenizerError {}
+impl core::error::Error for TokenizerError {}
 
 struct State<'a> {
     peekable: Peekable<Chars<'a>>,

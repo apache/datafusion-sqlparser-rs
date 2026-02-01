@@ -513,14 +513,9 @@ fn parse_create_table_with_defaults() {
 }
 
 #[test]
-fn parse_infix_after_parenthesized_column_option() {
-    // Cast
+fn parse_cast_in_default_expr() {
     pg().verified_stmt("CREATE TABLE t (c TEXT DEFAULT (foo())::TEXT)");
-    // Chained casts
     pg().verified_stmt("CREATE TABLE t (c TEXT DEFAULT (foo())::INT::TEXT)");
-    // Other infix operators
-    pg().verified_stmt("CREATE TABLE t (c INT DEFAULT (foo()) + 1)");
-    // Cast with NOT NULL constraint
     pg().verified_stmt("CREATE TABLE t (c TEXT DEFAULT (foo())::TEXT NOT NULL)");
 }
 

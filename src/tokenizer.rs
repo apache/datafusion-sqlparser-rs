@@ -782,8 +782,7 @@ impl fmt::Display for TokenizerError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for TokenizerError {}
+impl core::error::Error for TokenizerError {}
 
 struct State<'a> {
     peekable: Peekable<Chars<'a>>,
@@ -2554,9 +2553,8 @@ mod tests {
             message: "test".into(),
             location: Location { line: 1, column: 1 },
         };
-        #[cfg(feature = "std")]
         {
-            use std::error::Error;
+            use core::error::Error;
             assert!(err.source().is_none());
         }
         assert_eq!(err.to_string(), "test at Line: 1, Column: 1");

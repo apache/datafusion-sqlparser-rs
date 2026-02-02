@@ -204,8 +204,7 @@ impl fmt::Display for ParserError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for ParserError {}
+impl core::error::Error for ParserError {}
 
 // By default, allow expressions up to this deep before erroring
 const DEFAULT_REMAINING_DEPTH: usize = 50;

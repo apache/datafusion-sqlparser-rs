@@ -18,7 +18,8 @@
 use crate::dialect::Dialect;
 
 /// A [`Dialect`] for [ClickHouse](https://clickhouse.com/).
-#[derive(Debug)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ClickHouseDialect {}
 
 impl Dialect for ClickHouseDialect {

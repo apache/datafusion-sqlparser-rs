@@ -34,7 +34,8 @@ use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
 
 /// A [`Dialect`] for [PostgreSQL](https://www.postgresql.org/)
-#[derive(Debug)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PostgreSqlDialect {}
 
 const PERIOD_PREC: u8 = 200;

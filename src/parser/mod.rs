@@ -17925,9 +17925,9 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse a 'BEGIN' statement
-    pub fn parse_begin(&mut self) -> Result<Statement, ParserError> {
-        let modifier = if !self.dialect.supports_start_transaction_modifier() {
+    /// Parse a transaction modifier keyword that can follow a BEGIN statement.
+    pub fn parse_transaction_modifier(&mut self) -> Option<TransactionModifier> {
+        if !self.dialect.supports_start_transaction_modifier() {
             None
         } else if self.parse_keyword(Keyword::DEFERRED) {
             Some(TransactionModifier::Deferred)
@@ -17941,7 +17941,12 @@ impl<'a> Parser<'a> {
             Some(TransactionModifier::Catch)
         } else {
             None
-        };
+        }
+    }
+
+    /// Parse a 'BEGIN' statement
+    pub fn parse_begin(&mut self) -> Result<Statement, ParserError> {
+        let modifier = self.parse_transaction_modifier();
         let transaction = match self.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK]) {
             Some(Keyword::TRANSACTION) => Some(BeginTransactionKind::Transaction),
             Some(Keyword::WORK) => Some(BeginTransactionKind::Work),

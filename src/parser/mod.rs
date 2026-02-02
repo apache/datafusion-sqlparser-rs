@@ -1818,11 +1818,16 @@ impl<'a> Parser<'a> {
                     } else if let Some(lambda) = self.try_parse_lambda()? {
                         return Ok(lambda);
                     } else {
-                        // Parentheses create a normal expression context.
-                        // This ensures that e.g. `NOT NULL` inside parens is parsed
-                        // as `IS NOT NULL` (for dialects that support it), while
-                        // `NOT NULL` outside parens in a column definition context
-                        // remains a column constraint.
+                        // Parentheses in expressions switch to "normal" parsing state.
+                        // This matters for dialects (SQLite, DuckDB) where `NOT NULL` can
+                        // be an alias for `IS NOT NULL`. In column definitions like:
+                        //
+                        //   CREATE TABLE t (c INT DEFAULT (42 NOT NULL) NOT NULL)
+                        //
+                        // The `(42 NOT NULL)` is an expression with parens, so it parses
+                        // as `IsNotNull(42)`. The trailing `NOT NULL` is outside those
+                        // expression parens (the outer parens are CREATE TABLE syntax),
+                        // so it remains a column constraint.
                         let exprs = self.with_state(ParserState::Normal, |p| {
                             p.parse_comma_separated(Parser::parse_expr)
                         })?;

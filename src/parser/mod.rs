@@ -32,7 +32,6 @@ use recursion::RecursionCounter;
 use IsLateral::*;
 use IsOptional::*;
 
-use crate::ast::Statement::CreatePolicy;
 use crate::ast::*;
 use crate::ast::{
     comments,
@@ -658,12 +657,12 @@ impl<'a> Parser<'a> {
                 Keyword::SET => self.parse_set(),
                 Keyword::SHOW => self.parse_show(),
                 Keyword::USE => self.parse_use(),
-                Keyword::GRANT => self.parse_grant(),
+                Keyword::GRANT => self.parse_grant().map(Into::into),
                 Keyword::DENY => {
                     self.prev_token();
                     self.parse_deny()
                 }
-                Keyword::REVOKE => self.parse_revoke(),
+                Keyword::REVOKE => self.parse_revoke().map(Into::into),
                 Keyword::START => self.parse_start_transaction(),
                 Keyword::BEGIN => self.parse_begin(),
                 Keyword::END => self.parse_end(),
@@ -4971,7 +4970,7 @@ impl<'a> Parser<'a> {
             self.parse_create_view(or_alter, or_replace, temporary, create_view_params)
                 .map(Into::into)
         } else if self.parse_keyword(Keyword::POLICY) {
-            self.parse_create_policy()
+            self.parse_create_policy().map(Into::into)
         } else if self.parse_keyword(Keyword::EXTERNAL) {
             self.parse_create_external_table(or_replace).map(Into::into)
         } else if self.parse_keyword(Keyword::FUNCTION) {
@@ -6620,7 +6619,7 @@ impl<'a> Parser<'a> {
     /// ```
     ///
     /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createpolicy.html)
-    pub fn parse_create_policy(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_create_policy(&mut self) -> Result<CreatePolicy, ParserError> {
         let name = self.parse_identifier()?;
         self.expect_keyword_is(Keyword::ON)?;
         let table_name = self.parse_object_name(false)?;
@@ -7052,7 +7051,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::FUNCTION) {
             return self.parse_drop_function().map(Into::into);
         } else if self.parse_keyword(Keyword::POLICY) {
-            return self.parse_drop_policy();
+            return self.parse_drop_policy().map(Into::into);
         } else if self.parse_keyword(Keyword::CONNECTOR) {
             return self.parse_drop_connector();
         } else if self.parse_keyword(Keyword::DOMAIN) {
@@ -7143,13 +7142,13 @@ impl<'a> Parser<'a> {
     /// ```
     ///
     /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-droppolicy.html)
-    fn parse_drop_policy(&mut self) -> Result<Statement, ParserError> {
+    fn parse_drop_policy(&mut self) -> Result<DropPolicy, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let name = self.parse_identifier()?;
         self.expect_keyword_is(Keyword::ON)?;
         let table_name = self.parse_object_name(false)?;
         let drop_behavior = self.parse_optional_drop_behavior();
-        Ok(Statement::DropPolicy {
+        Ok(DropPolicy {
             if_exists,
             name,
             table_name,
@@ -10278,7 +10277,7 @@ impl<'a> Parser<'a> {
                 }
             }
             Keyword::ROLE => self.parse_alter_role(),
-            Keyword::POLICY => self.parse_alter_policy(),
+            Keyword::POLICY => self.parse_alter_policy().map(Into::into),
             Keyword::CONNECTOR => self.parse_alter_connector(),
             Keyword::USER => self.parse_alter_user().map(Into::into),
             // unreachable because expect_one_of_keywords used above
@@ -16156,7 +16155,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a GRANT statement.
-    pub fn parse_grant(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_grant(&mut self) -> Result<Grant, ParserError> {
         let (privileges, objects) = self.parse_grant_deny_revoke_privileges_objects()?;
 
         self.expect_keyword_is(Keyword::TO)?;
@@ -16186,7 +16185,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(Statement::Grant {
+        Ok(Grant {
             privileges,
             objects,
             grantees,
@@ -16781,7 +16780,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a REVOKE statement
-    pub fn parse_revoke(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_revoke(&mut self) -> Result<Revoke, ParserError> {
         let (privileges, objects) = self.parse_grant_deny_revoke_privileges_objects()?;
 
         self.expect_keyword_is(Keyword::FROM)?;
@@ -16795,7 +16794,7 @@ impl<'a> Parser<'a> {
 
         let cascade = self.parse_cascade_option();
 
-        Ok(Statement::Revoke {
+        Ok(Revoke {
             privileges,
             objects,
             grantees,

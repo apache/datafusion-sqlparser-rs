@@ -17377,6 +17377,12 @@ fn test_parse_not_null_in_column_options() {
 }
 
 #[test]
+fn test_parse_default_expr_with_operators() {
+    all_dialects().verified_stmt("CREATE TABLE t (c INT DEFAULT (1 + 2) + 3)");
+    all_dialects().verified_stmt("CREATE TABLE t (c INT DEFAULT (1 + 2) + 3 NOT NULL)");
+}
+
+#[test]
 fn test_parse_default_with_collate_column_option() {
     let sql = "CREATE TABLE foo (abc TEXT DEFAULT 'foo' COLLATE 'en_US')";
     let stmt = all_dialects().verified_stmt(sql);

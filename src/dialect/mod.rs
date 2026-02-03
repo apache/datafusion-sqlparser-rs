@@ -51,6 +51,82 @@ pub use self::postgresql::PostgreSqlDialect;
 pub use self::redshift::RedshiftSqlDialect;
 pub use self::snowflake::SnowflakeDialect;
 pub use self::sqlite::SQLiteDialect;
+
+/// Macro for streamlining the creation of derived `Dialect` objects.
+/// The generated struct includes `new()` and `default()` constructors.
+/// Requires the `derive-dialect` feature.
+///
+/// # Syntax
+///
+/// ```text
+/// derive_dialect!(NewDialect, BaseDialect);
+/// derive_dialect!(NewDialect, BaseDialect, overrides = { method = value, ... });
+/// derive_dialect!(NewDialect, BaseDialect, preserve_type_id = true);
+/// derive_dialect!(NewDialect, BaseDialect, preserve_type_id = true, overrides = { ... });
+/// ```
+///
+/// # Example
+///
+/// ```
+/// use sqlparser::derive_dialect;
+/// use sqlparser::dialect::{Dialect, GenericDialect};
+///
+/// // Override boolean methods (supports_*, allow_*, etc.)
+/// derive_dialect!(CustomDialect, GenericDialect, overrides = {
+///     supports_order_by_all = true,
+///     supports_nested_comments = true,
+/// });
+///
+/// let dialect = CustomDialect::new();
+/// assert!(dialect.supports_order_by_all());
+/// assert!(dialect.supports_nested_comments());
+/// ```
+///
+/// # Overriding `identifier_quote_style`
+///
+/// Use a char literal or `None`:
+/// ```
+/// use sqlparser::derive_dialect;
+/// use sqlparser::dialect::{Dialect, PostgreSqlDialect};
+///
+/// derive_dialect!(BacktickPostgreSqlDialect, PostgreSqlDialect,
+///     preserve_type_id = true,
+///     overrides = { identifier_quote_style = '`' }
+/// );
+/// let d: &dyn Dialect = &BacktickPostgreSqlDialect::new();
+/// assert_eq!(d.identifier_quote_style("foo"), Some('`'));
+///
+/// derive_dialect!(QuotelessPostgreSqlDialect, PostgreSqlDialect,
+///     preserve_type_id = true,
+///     overrides = { identifier_quote_style = None }
+/// );
+/// let d: &dyn Dialect = &QuotelessPostgreSqlDialect::new();
+/// assert_eq!(d.identifier_quote_style("foo"), None);
+/// ```
+///
+/// # Type Identity
+///
+/// By default, derived dialects have their own `TypeId`. Set `preserve_type_id = true` to
+/// retain the base dialect's identity with respect to the parser's `dialect.is::<T>()` checks:
+/// ```
+/// use sqlparser::derive_dialect;
+/// use sqlparser::dialect::{Dialect, GenericDialect};
+///
+/// derive_dialect!(EnhancedGenericDialect, GenericDialect,
+///     preserve_type_id = true,
+///     overrides = {
+///         supports_order_by_all = true,
+///         supports_nested_comments = true,
+///     }
+/// );
+/// let d: &dyn Dialect = &EnhancedGenericDialect::new();
+/// assert!(d.is::<GenericDialect>());  // still recognized as a GenericDialect
+/// assert!(d.supports_nested_comments());
+/// assert!(d.supports_order_by_all());
+/// ```
+#[cfg(feature = "derive-dialect")]
+pub use sqlparser_derive::derive_dialect;
+
 use crate::ast::{ColumnOption, Expr, GranteesType, Ident, ObjectNamePart, Statement};
 pub use crate::keywords;
 use crate::keywords::Keyword;
@@ -62,14 +138,14 @@ use alloc::boxed::Box;
 
 /// Convenience check if a [`Parser`] uses a certain dialect.
 ///
-/// Note: when possible please the new style, adding a method to the [`Dialect`]
-/// trait rather than using this macro.
+/// Note: when possible, please use the new style, adding a method to
+/// the [`Dialect`] trait rather than using this macro.
 ///
 /// The benefits of adding a method on `Dialect` over this macro are:
 /// 1. user defined [`Dialect`]s can customize the parsing behavior
 /// 2. The differences between dialects can be clearly documented in the trait
 ///
-/// `dialect_of!(parser is SQLiteDialect |  GenericDialect)` evaluates
+/// `dialect_of!(parser is SQLiteDialect | GenericDialect)` evaluates
 /// to `true` if `parser.dialect` is one of the [`Dialect`]s specified.
 macro_rules! dialect_of {
     ( $parsed_dialect: ident is $($dialect_type: ty)|+ ) => {
@@ -123,9 +199,8 @@ macro_rules! dialect_is {
 pub trait Dialect: Debug + Any {
     /// Determine the [`TypeId`] of this dialect.
     ///
-    /// By default, return the same [`TypeId`] as [`Any::type_id`]. Can be overridden
-    /// by dialects that behave like other dialects
-    /// (for example when wrapping a dialect).
+    /// By default, return the same [`TypeId`] as [`Any::type_id`]. Can be overridden by
+    /// dialects that behave like other dialects (for example, when wrapping a dialect).
     fn dialect(&self) -> TypeId {
         self.type_id()
     }
@@ -1644,6 +1719,27 @@ mod tests {
 
     fn parse_dialect(v: &str) -> Box<dyn Dialect> {
         dialect_from_str(v).unwrap()
+    }
+
+    #[test]
+    #[cfg(feature = "derive-dialect")]
+    fn test_dialect_override() {
+        derive_dialect!(EnhancedGenericDialect, GenericDialect,
+            preserve_type_id = true,
+            overrides = {
+                supports_order_by_all = true,
+                supports_nested_comments = true,
+                supports_triple_quoted_string = true,
+            },
+        );
+        let dialect = EnhancedGenericDialect::new();
+
+        assert!(dialect.supports_order_by_all());
+        assert!(dialect.supports_nested_comments());
+        assert!(dialect.supports_triple_quoted_string());
+
+        let d: &dyn Dialect = &dialect;
+        assert!(d.is::<GenericDialect>());
     }
 
     #[test]

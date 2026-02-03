@@ -4530,18 +4530,14 @@ impl<'a> Parser<'a> {
     fn parse_keywords_indexed(&mut self, keywords: &[Keyword]) -> Option<usize> {
         let start_index = self.index;
         let mut first_keyword_index = None;
-        match keywords {
-            [keyword, keywords @ ..] if self.parse_keyword(*keyword) => {
-                first_keyword_index = Some(self.index.saturating_sub(1));
-                for &keyword in keywords {
-                    if !self.parse_keyword(keyword) {
-                        self.index = start_index;
-                        first_keyword_index = None;
-                        break;
-                    }
-                }
+        for &keyword in keywords {
+            if !self.parse_keyword(keyword) {
+                self.index = start_index;
+                return None;
             }
-            _ => {}
+            if first_keyword_index.is_none() {
+                first_keyword_index = Some(self.index.saturating_sub(1));
+            }
         }
         first_keyword_index
     }

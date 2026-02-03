@@ -22,7 +22,7 @@ use core::str::Chars;
 use super::PostgreSqlDialect;
 
 /// A [`Dialect`] for [RedShift](https://aws.amazon.com/redshift/)
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct RedshiftSqlDialect {}
 
 // In most cases the redshift dialect is identical to [`PostgresSqlDialect`].

@@ -28,7 +28,7 @@ use crate::tokenizer::Token;
 use alloc::{vec, vec::Vec};
 
 /// A [`Dialect`] for [Microsoft SQL Server](https://www.microsoft.com/en-us/sql-server/)
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct MsSqlDialect {}
 
 impl Dialect for MsSqlDialect {

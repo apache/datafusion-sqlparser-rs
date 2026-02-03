@@ -17925,8 +17925,8 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse a transaction modifier keyword that can follow a BEGIN statement.
-    pub fn parse_transaction_modifier(&mut self) -> Option<TransactionModifier> {
+    /// Parse a transaction modifier keyword that can follow a `BEGIN` statement.
+    pub(crate) fn parse_transaction_modifier(&mut self) -> Option<TransactionModifier> {
         if !self.dialect.supports_start_transaction_modifier() {
             None
         } else if self.parse_keyword(Keyword::DEFERRED) {

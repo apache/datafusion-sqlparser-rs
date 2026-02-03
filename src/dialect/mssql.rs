@@ -145,7 +145,29 @@ impl Dialect for MsSqlDialect {
     }
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
-        if parser.peek_keyword(Keyword::IF) {
+        if parser.parse_keyword(Keyword::BEGIN) {
+            // Check if this is a BEGIN...END block rather than BEGIN TRANSACTION
+            let is_block = parser
+                .maybe_parse(|p| {
+                    if p.parse_transaction_modifier().is_some()
+                        || p.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK])
+                            .is_some()
+                        || matches!(p.peek_token_ref().token, Token::SemiColon | Token::EOF)
+                    {
+                        p.expected("statement", p.peek_token())
+                    } else {
+                        Ok(())
+                    }
+                })
+                .unwrap_or(None)
+                .is_some();
+            if is_block {
+                Some(parser.parse_begin_exception_end())
+            } else {
+                parser.prev_token();
+                None
+            }
+        } else if parser.peek_keyword(Keyword::IF) {
             Some(self.parse_if_stmt(parser))
         } else if parser.parse_keywords(&[Keyword::CREATE, Keyword::TRIGGER]) {
             Some(self.parse_create_trigger(parser, false))

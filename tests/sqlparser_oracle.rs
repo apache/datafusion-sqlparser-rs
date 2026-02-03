@@ -333,3 +333,58 @@ fn parse_national_quote_delimited_string_but_is_a_word() {
         expr_from_projection(&select.projection[2])
     );
 }
+
+#[test]
+fn test_optimizer_hints() {
+    let oracle_dialect = oracle();
+
+    // ~ selects
+    let select = oracle_dialect.verified_only_select_with_canonical(
+        "SELECT /*+one two three*/ /*+not a hint!*/ 1 FROM dual",
+        "SELECT /*+one two three*/ 1 FROM dual",
+    );
+    assert_eq!(
+        select
+            .optimizer_hint
+            .as_ref()
+            .map(|hint| hint.text.as_str()),
+        Some("one two three")
+    );
+
+    let select = oracle_dialect.verified_only_select_with_canonical(
+        "SELECT /*one two three*/ /*+not a hint!*/ 1 FROM dual",
+        "SELECT 1 FROM dual",
+    );
+    assert_eq!(select.optimizer_hint, None);
+
+    let select = oracle_dialect.verified_only_select_with_canonical(
+        "SELECT --+ one two three /* asdf */\n 1 FROM dual",
+        "SELECT --+ one two three /* asdf */\n 1 FROM dual",
+    );
+    assert_eq!(
+        select
+            .optimizer_hint
+            .as_ref()
+            .map(|hint| hint.text.as_str()),
+        Some(" one two three /* asdf */\n")
+    );
+
+    // ~ inserts
+    oracle_dialect.verified_stmt("INSERT /*+ append */ INTO t1 SELECT * FROM all_objects");
+
+    // ~ updates
+    oracle_dialect.verified_stmt("UPDATE /*+ DISABLE_PARALLEL_DML */ table_name SET column1 = 1");
+
+    // ~ deletes
+    oracle_dialect.verified_stmt("DELETE --+ ENABLE_PARALLEL_DML\n FROM table_name");
+
+    // ~ merges
+    oracle_dialect.verified_stmt(
+        "MERGE /*+ CLUSTERING */ INTO people_target pt \
+         USING people_source ps \
+            ON (pt.person_id = ps.person_id) \
+          WHEN NOT MATCHED THEN INSERT \
+               (pt.person_id, pt.first_name, pt.last_name, pt.title) \
+               VALUES (ps.person_id, ps.first_name, ps.last_name, ps.title)",
+    );
+}

@@ -32,7 +32,6 @@ use recursion::RecursionCounter;
 use IsLateral::*;
 use IsOptional::*;
 
-use crate::ast::Statement::CreatePolicy;
 use crate::ast::*;
 use crate::ast::{
     comments,
@@ -204,8 +203,7 @@ impl fmt::Display for ParserError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for ParserError {}
+impl core::error::Error for ParserError {}
 
 // By default, allow expressions up to this deep before erroring
 const DEFAULT_REMAINING_DEPTH: usize = 50;
@@ -659,12 +657,12 @@ impl<'a> Parser<'a> {
                 Keyword::SET => self.parse_set(),
                 Keyword::SHOW => self.parse_show(),
                 Keyword::USE => self.parse_use(),
-                Keyword::GRANT => self.parse_grant(),
+                Keyword::GRANT => self.parse_grant().map(Into::into),
                 Keyword::DENY => {
                     self.prev_token();
                     self.parse_deny()
                 }
-                Keyword::REVOKE => self.parse_revoke(),
+                Keyword::REVOKE => self.parse_revoke().map(Into::into),
                 Keyword::START => self.parse_start_transaction(),
                 Keyword::BEGIN => self.parse_begin(),
                 Keyword::END => self.parse_end(),
@@ -1822,7 +1820,19 @@ impl<'a> Parser<'a> {
                     } else if let Some(lambda) = self.try_parse_lambda()? {
                         return Ok(lambda);
                     } else {
-                        let exprs = self.parse_comma_separated(Parser::parse_expr)?;
+                        // Parentheses in expressions switch to "normal" parsing state.
+                        // This matters for dialects (SQLite, DuckDB) where `NOT NULL` can
+                        // be an alias for `IS NOT NULL`. In column definitions like:
+                        //
+                        //   CREATE TABLE t (c INT DEFAULT (42 NOT NULL) NOT NULL)
+                        //
+                        // The `(42 NOT NULL)` is an expression with parens, so it parses
+                        // as `IsNotNull(42)`. The trailing `NOT NULL` is outside those
+                        // expression parens (the outer parens are CREATE TABLE syntax),
+                        // so it remains a column constraint.
+                        let exprs = self.with_state(ParserState::Normal, |p| {
+                            p.parse_comma_separated(Parser::parse_expr)
+                        })?;
                         match exprs.len() {
                             0 => return Err(ParserError::ParserError(
                                 "Internal parser error: parse_comma_separated returned empty list"
@@ -4325,6 +4335,11 @@ impl<'a> Parser<'a> {
             })
     }
 
+    /// Return nth token, possibly whitespace, that has not yet been processed.
+    fn peek_nth_token_no_skip_ref(&self, n: usize) -> &TokenWithSpan {
+        self.tokens.get(self.index + n).unwrap_or(&EOF_TOKEN)
+    }
+
     /// Return true if the next tokens exactly `expected`
     ///
     /// Does not advance the current token.
@@ -4967,7 +4982,7 @@ impl<'a> Parser<'a> {
             self.parse_create_view(or_alter, or_replace, temporary, create_view_params)
                 .map(Into::into)
         } else if self.parse_keyword(Keyword::POLICY) {
-            self.parse_create_policy()
+            self.parse_create_policy().map(Into::into)
         } else if self.parse_keyword(Keyword::EXTERNAL) {
             self.parse_create_external_table(or_replace).map(Into::into)
         } else if self.parse_keyword(Keyword::FUNCTION) {
@@ -6616,7 +6631,7 @@ impl<'a> Parser<'a> {
     /// ```
     ///
     /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createpolicy.html)
-    pub fn parse_create_policy(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_create_policy(&mut self) -> Result<CreatePolicy, ParserError> {
         let name = self.parse_identifier()?;
         self.expect_keyword_is(Keyword::ON)?;
         let table_name = self.parse_object_name(false)?;
@@ -7048,7 +7063,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::FUNCTION) {
             return self.parse_drop_function().map(Into::into);
         } else if self.parse_keyword(Keyword::POLICY) {
-            return self.parse_drop_policy();
+            return self.parse_drop_policy().map(Into::into);
         } else if self.parse_keyword(Keyword::CONNECTOR) {
             return self.parse_drop_connector();
         } else if self.parse_keyword(Keyword::DOMAIN) {
@@ -7139,13 +7154,13 @@ impl<'a> Parser<'a> {
     /// ```
     ///
     /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-droppolicy.html)
-    fn parse_drop_policy(&mut self) -> Result<Statement, ParserError> {
+    fn parse_drop_policy(&mut self) -> Result<DropPolicy, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let name = self.parse_identifier()?;
         self.expect_keyword_is(Keyword::ON)?;
         let table_name = self.parse_object_name(false)?;
         let drop_behavior = self.parse_optional_drop_behavior();
-        Ok(Statement::DropPolicy {
+        Ok(DropPolicy {
             if_exists,
             name,
             table_name,
@@ -8820,19 +8835,15 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::NULL) {
             Ok(Some(ColumnOption::Null))
         } else if self.parse_keyword(Keyword::DEFAULT) {
-            Ok(Some(ColumnOption::Default(
-                self.parse_column_option_expr()?,
-            )))
+            Ok(Some(ColumnOption::Default(self.parse_expr()?)))
         } else if dialect_of!(self is ClickHouseDialect| GenericDialect)
             && self.parse_keyword(Keyword::MATERIALIZED)
         {
-            Ok(Some(ColumnOption::Materialized(
-                self.parse_column_option_expr()?,
-            )))
+            Ok(Some(ColumnOption::Materialized(self.parse_expr()?)))
         } else if dialect_of!(self is ClickHouseDialect| GenericDialect)
             && self.parse_keyword(Keyword::ALIAS)
         {
-            Ok(Some(ColumnOption::Alias(self.parse_column_option_expr()?)))
+            Ok(Some(ColumnOption::Alias(self.parse_expr()?)))
         } else if dialect_of!(self is ClickHouseDialect| GenericDialect)
             && self.parse_keyword(Keyword::EPHEMERAL)
         {
@@ -8841,9 +8852,7 @@ impl<'a> Parser<'a> {
             if matches!(self.peek_token().token, Token::Comma | Token::RParen) {
                 Ok(Some(ColumnOption::Ephemeral(None)))
             } else {
-                Ok(Some(ColumnOption::Ephemeral(Some(
-                    self.parse_column_option_expr()?,
-                ))))
+                Ok(Some(ColumnOption::Ephemeral(Some(self.parse_expr()?))))
             }
         } else if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY]) {
             let characteristics = self.parse_constraint_characteristics()?;
@@ -8917,11 +8926,20 @@ impl<'a> Parser<'a> {
             // since `CHECK` requires parentheses, we can parse the inner expression in ParserState::Normal
             let expr: Expr = self.with_state(ParserState::Normal, |p| p.parse_expr())?;
             self.expect_token(&Token::RParen)?;
+
+            let enforced = if self.parse_keyword(Keyword::ENFORCED) {
+                Some(true)
+            } else if self.parse_keywords(&[Keyword::NOT, Keyword::ENFORCED]) {
+                Some(false)
+            } else {
+                None
+            };
+
             Ok(Some(
                 CheckConstraint {
                     name: None, // Column-level check constraints don't have names
                     expr: Box::new(expr),
-                    enforced: None, // Could be extended later to support MySQL ENFORCED/NOT ENFORCED
+                    enforced,
                 }
                 .into(),
             ))
@@ -8956,7 +8974,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keywords(&[Keyword::ON, Keyword::UPDATE])
             && dialect_of!(self is MySqlDialect | GenericDialect)
         {
-            let expr = self.parse_column_option_expr()?;
+            let expr = self.parse_expr()?;
             Ok(Some(ColumnOption::OnUpdate(expr)))
         } else if self.parse_keyword(Keyword::GENERATED) {
             self.parse_optional_column_option_generated()
@@ -8974,9 +8992,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::SRID)
             && dialect_of!(self is MySqlDialect | GenericDialect)
         {
-            Ok(Some(ColumnOption::Srid(Box::new(
-                self.parse_column_option_expr()?,
-            ))))
+            Ok(Some(ColumnOption::Srid(Box::new(self.parse_expr()?))))
         } else if self.parse_keyword(Keyword::IDENTITY)
             && dialect_of!(self is MsSqlDialect | GenericDialect)
         {
@@ -9015,31 +9031,6 @@ impl<'a> Parser<'a> {
             Ok(Some(ColumnOption::Invisible))
         } else {
             Ok(None)
-        }
-    }
-
-    /// When parsing some column option expressions we need to revert to [ParserState::Normal] since
-    /// `NOT NULL` is allowed as an alias for `IS NOT NULL`.
-    /// In those cases we use this helper instead of calling [Parser::parse_expr] directly.
-    ///
-    /// For example, consider these `CREATE TABLE` statements:
-    /// ```sql
-    /// CREATE TABLE foo (abc BOOL DEFAULT (42 NOT NULL) NOT NULL);
-    /// ```
-    /// vs
-    /// ```sql
-    /// CREATE TABLE foo (abc BOOL NOT NULL);
-    /// ```
-    ///
-    /// In the first we should parse the inner portion of `(42 NOT NULL)` as [Expr::IsNotNull],
-    /// whereas is both statements that trailing `NOT NULL` should only be parsed as a
-    /// [ColumnOption::NotNull].
-    fn parse_column_option_expr(&mut self) -> Result<Expr, ParserError> {
-        if self.peek_token_ref().token == Token::LParen {
-            let expr: Expr = self.with_state(ParserState::Normal, |p| p.parse_prefix())?;
-            Ok(expr)
-        } else {
-            Ok(self.parse_expr()?)
         }
     }
 
@@ -10140,8 +10131,8 @@ impl<'a> Parser<'a> {
             let value = self.parse_number_value()?;
             AlterTableOperation::AutoIncrement { equals, value }
         } else if self.parse_keywords(&[Keyword::REPLICA, Keyword::IDENTITY]) {
-            let identity = if self.parse_keyword(Keyword::NONE) {
-                ReplicaIdentity::None
+            let identity = if self.parse_keyword(Keyword::NOTHING) {
+                ReplicaIdentity::Nothing
             } else if self.parse_keyword(Keyword::FULL) {
                 ReplicaIdentity::Full
             } else if self.parse_keyword(Keyword::DEFAULT) {
@@ -10150,7 +10141,7 @@ impl<'a> Parser<'a> {
                 ReplicaIdentity::Index(self.parse_identifier()?)
             } else {
                 return self.expected(
-                    "NONE, FULL, DEFAULT, or USING INDEX index_name after REPLICA IDENTITY",
+                    "NOTHING, FULL, DEFAULT, or USING INDEX index_name after REPLICA IDENTITY",
                     self.peek_token(),
                 );
             };
@@ -10265,7 +10256,7 @@ impl<'a> Parser<'a> {
                 }
             }
             Keyword::ROLE => self.parse_alter_role(),
-            Keyword::POLICY => self.parse_alter_policy(),
+            Keyword::POLICY => self.parse_alter_policy().map(Into::into),
             Keyword::CONNECTOR => self.parse_alter_connector(),
             Keyword::USER => self.parse_alter_user().map(Into::into),
             // unreachable because expect_one_of_keywords used above
@@ -11320,7 +11311,34 @@ impl<'a> Parser<'a> {
                 str.push_str(s);
                 self.advance_token();
             }
+        } else if self
+            .dialect
+            .supports_string_literal_concatenation_with_newline()
+        {
+            // We are iterating over tokens including whitespaces, to identify
+            // string literals separated by newlines so we can concatenate them.
+            let mut after_newline = false;
+            loop {
+                match self.peek_token_no_skip().token {
+                    Token::Whitespace(Whitespace::Newline) => {
+                        after_newline = true;
+                        self.next_token_no_skip();
+                    }
+                    Token::Whitespace(_) => {
+                        self.next_token_no_skip();
+                    }
+                    Token::SingleQuotedString(ref s) | Token::DoubleQuotedString(ref s)
+                        if after_newline =>
+                    {
+                        str.push_str(s.clone().as_str());
+                        self.next_token_no_skip();
+                        after_newline = false;
+                    }
+                    _ => break,
+                }
+            }
         }
+
         str
     }
 
@@ -12418,7 +12436,9 @@ impl<'a> Parser<'a> {
                 Token::Word(w) => {
                     idents.push(w.to_ident(token.span));
                 }
-                Token::EOF | Token::Eq | Token::SemiColon => break,
+                Token::EOF | Token::Eq | Token::SemiColon | Token::VerticalBarRightAngleBracket => {
+                    break
+                }
                 _ => {}
             }
             self.advance_token();
@@ -13024,6 +13044,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a `DELETE` statement and return `Statement::Delete`.
     pub fn parse_delete(&mut self, delete_token: TokenWithSpan) -> Result<Statement, ParserError> {
+        let optimizer_hint = self.maybe_parse_optimizer_hint()?;
         let (tables, with_from_keyword) = if !self.parse_keyword(Keyword::FROM) {
             // `FROM` keyword is optional in BigQuery SQL.
             // https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#delete_statement
@@ -13067,6 +13088,7 @@ impl<'a> Parser<'a> {
 
         Ok(Statement::Delete(Delete {
             delete_token: delete_token.into(),
+            optimizer_hint,
             tables,
             from: if with_from_keyword {
                 FromTable::WithFromKeyword(from)
@@ -13837,6 +13859,7 @@ impl<'a> Parser<'a> {
             if !self.peek_keyword(Keyword::SELECT) {
                 return Ok(Select {
                     select_token: AttachedToken(from_token),
+                    optimizer_hint: None,
                     distinct: None,
                     top: None,
                     top_before_distinct: false,
@@ -13864,6 +13887,7 @@ impl<'a> Parser<'a> {
         }
 
         let select_token = self.expect_keyword(Keyword::SELECT)?;
+        let optimizer_hint = self.maybe_parse_optimizer_hint()?;
         let value_table_mode = self.parse_value_table_mode()?;
 
         let mut top_before_distinct = false;
@@ -14018,6 +14042,7 @@ impl<'a> Parser<'a> {
 
         Ok(Select {
             select_token: AttachedToken(select_token),
+            optimizer_hint,
             distinct,
             top,
             top_before_distinct,
@@ -14044,6 +14069,55 @@ impl<'a> Parser<'a> {
                 SelectFlavor::Standard
             },
         })
+    }
+
+    /// Parses an optional optimizer hint at the current token position
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html#optimizer-hints-overview)
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
+    fn maybe_parse_optimizer_hint(&mut self) -> Result<Option<OptimizerHint>, ParserError> {
+        let supports_hints = self.dialect.supports_comment_optimizer_hint();
+        if !supports_hints {
+            return Ok(None);
+        }
+        loop {
+            let t = self.peek_nth_token_no_skip_ref(0);
+            match &t.token {
+                Token::Whitespace(ws) => {
+                    match ws {
+                        Whitespace::SingleLineComment { comment, .. }
+                        | Whitespace::MultiLineComment(comment) => {
+                            return Ok(match comment.strip_prefix("+") {
+                                None => None,
+                                Some(text) => {
+                                    let hint = OptimizerHint {
+                                        text: text.into(),
+                                        style: if let Whitespace::SingleLineComment {
+                                            prefix, ..
+                                        } = ws
+                                        {
+                                            OptimizerHintStyle::SingleLine {
+                                                prefix: prefix.clone(),
+                                            }
+                                        } else {
+                                            OptimizerHintStyle::MultiLine
+                                        },
+                                    };
+                                    // Consume the comment token
+                                    self.next_token_no_skip();
+                                    Some(hint)
+                                }
+                            });
+                        }
+                        Whitespace::Space | Whitespace::Tab | Whitespace::Newline => {
+                            // Consume the token and try with the next whitespace or comment
+                            self.next_token_no_skip();
+                        }
+                    }
+                }
+                _ => return Ok(None),
+            }
+        }
     }
 
     fn parse_value_table_mode(&mut self) -> Result<Option<ValueTableMode>, ParserError> {
@@ -16060,7 +16134,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a GRANT statement.
-    pub fn parse_grant(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_grant(&mut self) -> Result<Grant, ParserError> {
         let (privileges, objects) = self.parse_grant_deny_revoke_privileges_objects()?;
 
         self.expect_keyword_is(Keyword::TO)?;
@@ -16090,7 +16164,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(Statement::Grant {
+        Ok(Grant {
             privileges,
             objects,
             grantees,
@@ -16685,7 +16759,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a REVOKE statement
-    pub fn parse_revoke(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_revoke(&mut self) -> Result<Revoke, ParserError> {
         let (privileges, objects) = self.parse_grant_deny_revoke_privileges_objects()?;
 
         self.expect_keyword_is(Keyword::FROM)?;
@@ -16699,7 +16773,7 @@ impl<'a> Parser<'a> {
 
         let cascade = self.parse_cascade_option();
 
-        Ok(Statement::Revoke {
+        Ok(Revoke {
             privileges,
             objects,
             grantees,
@@ -16740,6 +16814,7 @@ impl<'a> Parser<'a> {
 
     /// Parse an INSERT statement
     pub fn parse_insert(&mut self, insert_token: TokenWithSpan) -> Result<Statement, ParserError> {
+        let optimizer_hint = self.maybe_parse_optimizer_hint()?;
         let or = self.parse_conflict_clause();
         let priority = if !dialect_of!(self is MySqlDialect | GenericDialect) {
             None
@@ -16909,6 +16984,7 @@ impl<'a> Parser<'a> {
 
             Ok(Insert {
                 insert_token: insert_token.into(),
+                optimizer_hint,
                 or,
                 table: table_object,
                 table_alias,
@@ -17012,6 +17088,7 @@ impl<'a> Parser<'a> {
 
     /// Parse an `UPDATE` statement and return `Statement::Update`.
     pub fn parse_update(&mut self, update_token: TokenWithSpan) -> Result<Statement, ParserError> {
+        let optimizer_hint = self.maybe_parse_optimizer_hint()?;
         let or = self.parse_conflict_clause();
         let table = self.parse_table_and_joins()?;
         let from_before_set = if self.parse_keyword(Keyword::FROM) {
@@ -17047,6 +17124,7 @@ impl<'a> Parser<'a> {
         };
         Ok(Update {
             update_token: update_token.into(),
+            optimizer_hint,
             table,
             assignments,
             from,

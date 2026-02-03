@@ -343,6 +343,11 @@ pub enum SelectFlavor {
 pub struct Select {
     /// Token for the `SELECT` keyword
     pub select_token: AttachedToken,
+    /// A query optimizer hint
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
+    pub optimizer_hint: Option<OptimizerHint>,
     /// `SELECT [DISTINCT] ...`
     pub distinct: Option<Distinct>,
     /// MSSQL syntax: `TOP (<N>) [ PERCENT ] [ WITH TIES ]`
@@ -408,6 +413,11 @@ impl fmt::Display for Select {
             SelectFlavor::FromFirstNoSelect => {
                 write!(f, "FROM {}", display_comma_separated(&self.from))?;
             }
+        }
+
+        if let Some(hint) = self.optimizer_hint.as_ref() {
+            f.write_str(" ")?;
+            hint.fmt(f)?;
         }
 
         if let Some(value_table_mode) = self.value_table_mode {

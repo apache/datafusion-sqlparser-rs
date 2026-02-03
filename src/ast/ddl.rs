@@ -99,8 +99,8 @@ impl fmt::Display for IndexColumn {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ReplicaIdentity {
-    /// No replica identity (`REPLICA IDENTITY NONE`).
-    None,
+    /// No replica identity (`REPLICA IDENTITY NOTHING`).
+    Nothing,
     /// Full replica identity (`REPLICA IDENTITY FULL`).
     Full,
     /// Default replica identity (`REPLICA IDENTITY DEFAULT`).
@@ -112,7 +112,7 @@ pub enum ReplicaIdentity {
 impl fmt::Display for ReplicaIdentity {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ReplicaIdentity::None => f.write_str("NONE"),
+            ReplicaIdentity::Nothing => f.write_str("NOTHING"),
             ReplicaIdentity::Full => f.write_str("FULL"),
             ReplicaIdentity::Default => f.write_str("DEFAULT"),
             ReplicaIdentity::Index(idx) => write!(f, "USING INDEX {idx}"),
@@ -1911,7 +1911,7 @@ pub enum ColumnOption {
     /// [ MATCH { FULL | PARTIAL | SIMPLE } ]
     /// { [ON DELETE <referential_action>] [ON UPDATE <referential_action>] |
     ///   [ON UPDATE <referential_action>] [ON DELETE <referential_action>]
-    /// }         
+    /// }
     /// [<constraint_characteristics>]
     /// `).
     ForeignKey(ForeignKeyConstraint),
@@ -4363,7 +4363,7 @@ impl Spanned for CreateExtension {
     }
 }
 
-/// DROP EXTENSION statement  
+/// DROP EXTENSION statement
 /// Note: this is a PostgreSQL-specific statement
 ///
 /// # References
@@ -5118,5 +5118,196 @@ impl fmt::Display for AlterOperatorClassOperation {
 impl Spanned for AlterOperatorClass {
     fn span(&self) -> Span {
         Span::empty()
+    }
+}
+
+/// CREATE POLICY statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreatePolicy {
+    /// Name of the policy.
+    pub name: Ident,
+    /// Table the policy is defined on.
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub table_name: ObjectName,
+    /// Optional policy type (e.g., `PERMISSIVE` / `RESTRICTIVE`).
+    pub policy_type: Option<CreatePolicyType>,
+    /// Optional command the policy applies to (e.g., `SELECT`).
+    pub command: Option<CreatePolicyCommand>,
+    /// Optional list of grantee owners.
+    pub to: Option<Vec<Owner>>,
+    /// Optional expression for the `USING` clause.
+    pub using: Option<Expr>,
+    /// Optional expression for the `WITH CHECK` clause.
+    pub with_check: Option<Expr>,
+}
+
+impl fmt::Display for CreatePolicy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CREATE POLICY {name} ON {table_name}",
+            name = self.name,
+            table_name = self.table_name,
+        )?;
+        if let Some(ref policy_type) = self.policy_type {
+            write!(f, " AS {policy_type}")?;
+        }
+        if let Some(ref command) = self.command {
+            write!(f, " FOR {command}")?;
+        }
+        if let Some(ref to) = self.to {
+            write!(f, " TO {}", display_comma_separated(to))?;
+        }
+        if let Some(ref using) = self.using {
+            write!(f, " USING ({using})")?;
+        }
+        if let Some(ref with_check) = self.with_check {
+            write!(f, " WITH CHECK ({with_check})")?;
+        }
+        Ok(())
+    }
+}
+
+/// Policy type for a `CREATE POLICY` statement.
+/// ```sql
+/// AS [ PERMISSIVE | RESTRICTIVE ]
+/// ```
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreatePolicyType {
+    /// Policy allows operations unless explicitly denied.
+    Permissive,
+    /// Policy denies operations unless explicitly allowed.
+    Restrictive,
+}
+
+impl fmt::Display for CreatePolicyType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CreatePolicyType::Permissive => write!(f, "PERMISSIVE"),
+            CreatePolicyType::Restrictive => write!(f, "RESTRICTIVE"),
+        }
+    }
+}
+
+/// Command that a policy can apply to (FOR clause).
+/// ```sql
+/// FOR [ALL | SELECT | INSERT | UPDATE | DELETE]
+/// ```
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreatePolicyCommand {
+    /// Applies to all commands.
+    All,
+    /// Applies to SELECT.
+    Select,
+    /// Applies to INSERT.
+    Insert,
+    /// Applies to UPDATE.
+    Update,
+    /// Applies to DELETE.
+    Delete,
+}
+
+impl fmt::Display for CreatePolicyCommand {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CreatePolicyCommand::All => write!(f, "ALL"),
+            CreatePolicyCommand::Select => write!(f, "SELECT"),
+            CreatePolicyCommand::Insert => write!(f, "INSERT"),
+            CreatePolicyCommand::Update => write!(f, "UPDATE"),
+            CreatePolicyCommand::Delete => write!(f, "DELETE"),
+        }
+    }
+}
+
+/// DROP POLICY statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-droppolicy.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DropPolicy {
+    /// `true` when `IF EXISTS` was present.
+    pub if_exists: bool,
+    /// Name of the policy to drop.
+    pub name: Ident,
+    /// Name of the table the policy applies to.
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub table_name: ObjectName,
+    /// Optional drop behavior (`CASCADE` or `RESTRICT`).
+    pub drop_behavior: Option<DropBehavior>,
+}
+
+impl fmt::Display for DropPolicy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "DROP POLICY {if_exists}{name} ON {table_name}",
+            if_exists = if self.if_exists { "IF EXISTS " } else { "" },
+            name = self.name,
+            table_name = self.table_name
+        )?;
+        if let Some(ref behavior) = self.drop_behavior {
+            write!(f, " {behavior}")?;
+        }
+        Ok(())
+    }
+}
+
+impl From<CreatePolicy> for crate::ast::Statement {
+    fn from(v: CreatePolicy) -> Self {
+        crate::ast::Statement::CreatePolicy(v)
+    }
+}
+
+impl From<DropPolicy> for crate::ast::Statement {
+    fn from(v: DropPolicy) -> Self {
+        crate::ast::Statement::DropPolicy(v)
+    }
+}
+
+/// ALTER POLICY statement.
+///
+/// ```sql
+/// ALTER POLICY <NAME> ON <TABLE NAME> [<OPERATION>]
+/// ```
+/// (Postgresql-specific)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterPolicy {
+    /// Policy name to alter.
+    pub name: Ident,
+    /// Target table name the policy is defined on.
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub table_name: ObjectName,
+    /// Optional operation specific to the policy alteration.
+    pub operation: AlterPolicyOperation,
+}
+
+impl fmt::Display for AlterPolicy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "ALTER POLICY {name} ON {table_name}{operation}",
+            name = self.name,
+            table_name = self.table_name,
+            operation = self.operation
+        )
+    }
+}
+
+impl From<AlterPolicy> for crate::ast::Statement {
+    fn from(v: AlterPolicy) -> Self {
+        crate::ast::Statement::AlterPolicy(v)
     }
 }

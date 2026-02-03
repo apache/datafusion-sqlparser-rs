@@ -564,6 +564,19 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports concatenating string literals with a newline.
+    /// For example, the following statement would return `true`:
+    /// ```sql
+    /// SELECT 'abc' in (
+    ///   'a'
+    ///   'b'
+    ///   'c'
+    /// );
+    /// ```
+    fn supports_string_literal_concatenation_with_newline(&self) -> bool {
+        false
+    }
+
     /// Does the dialect support trailing commas in the projection list?
     fn supports_projection_trailing_commas(&self) -> bool {
         self.supports_trailing_commas()
@@ -1394,6 +1407,16 @@ pub trait Dialect: Debug + Any {
     ///
     /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/19/sqlrf/Literals.html#GUID-1824CBAA-6E16-4921-B2A6-112FB02248DA)
     fn supports_quote_delimited_string(&self) -> bool {
+        false
+    }
+
+    /// Returns `true` if the dialect supports query optimizer hints in the
+    /// format of single and multi line comments immediately following a
+    /// `SELECT`, `INSERT`, `REPLACE`, `DELETE`, or `MERGE` keyword.
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/19/sqlrf/Comments.html#SQLRF-GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
+    fn supports_comment_optimizer_hint(&self) -> bool {
         false
     }
 

@@ -56,20 +56,22 @@ pub use self::data_type::{
     ExactNumberInfo, IntervalFields, StructBracketKind, TimezoneInfo,
 };
 pub use self::dcl::{
-    AlterRoleOperation, CreateRole, ResetConfig, RoleOption, SecondaryRoles, SetConfigValue, Use,
+    AlterRoleOperation, CreateRole, Grant, ResetConfig, Revoke, RoleOption, SecondaryRoles,
+    SetConfigValue, Use,
 };
 pub use self::ddl::{
     Alignment, AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterOperator,
     AlterOperatorClass, AlterOperatorClassOperation, AlterOperatorFamily,
-    AlterOperatorFamilyOperation, AlterOperatorOperation, AlterPolicyOperation, AlterSchema,
-    AlterSchemaOperation, AlterTable, AlterTableAlgorithm, AlterTableLock, AlterTableOperation,
-    AlterTableType, AlterType, AlterTypeAddValue, AlterTypeAddValuePosition, AlterTypeOperation,
-    AlterTypeRename, AlterTypeRenameValue, ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef,
-    ColumnOptions, ColumnPolicy, ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector,
-    CreateDomain, CreateExtension, CreateFunction, CreateIndex, CreateOperator,
-    CreateOperatorClass, CreateOperatorFamily, CreateTable, CreateTrigger, CreateView, Deduplicate,
+    AlterOperatorFamilyOperation, AlterOperatorOperation, AlterPolicy, AlterPolicyOperation,
+    AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm, AlterTableLock,
+    AlterTableOperation, AlterTableType, AlterType, AlterTypeAddValue, AlterTypeAddValuePosition,
+    AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue, ClusteredBy, ColumnDef,
+    ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy, ColumnPolicyProperty,
+    ConstraintCharacteristics, CreateConnector, CreateDomain, CreateExtension, CreateFunction,
+    CreateIndex, CreateOperator, CreateOperatorClass, CreateOperatorFamily, CreatePolicy,
+    CreatePolicyCommand, CreatePolicyType, CreateTable, CreateTrigger, CreateView, Deduplicate,
     DeferrableInitial, DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass,
-    DropOperatorFamily, DropOperatorSignature, DropTrigger, ForValues, GeneratedAs,
+    DropOperatorFamily, DropOperatorSignature, DropPolicy, DropTrigger, ForValues, GeneratedAs,
     GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
     IdentityPropertyKind, IdentityPropertyOrder, IndexColumn, IndexOption, IndexType,
     KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes, OperatorClassItem,
@@ -3098,44 +3100,6 @@ impl Display for FromTable {
     }
 }
 
-/// Policy type for a `CREATE POLICY` statement.
-/// ```sql
-/// AS [ PERMISSIVE | RESTRICTIVE ]
-/// ```
-/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-/// Type of `CREATE POLICY` (permissive or restrictive).
-pub enum CreatePolicyType {
-    /// Policy allows operations unless explicitly denied.
-    Permissive,
-    /// Policy denies operations unless explicitly allowed.
-    Restrictive,
-}
-
-/// Policy command for a `CREATE POLICY` statement.
-/// ```sql
-/// FOR [ALL | SELECT | INSERT | UPDATE | DELETE]
-/// ```
-/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-/// Commands that a policy can apply to (FOR clause).
-pub enum CreatePolicyCommand {
-    /// Applies to all commands.
-    All,
-    /// Applies to SELECT.
-    Select,
-    /// Applies to INSERT.
-    Insert,
-    /// Applies to UPDATE.
-    Update,
-    /// Applies to DELETE.
-    Delete,
-}
-
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -3634,23 +3598,7 @@ pub enum Statement {
     /// CREATE POLICY
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)
-    CreatePolicy {
-        /// Name of the policy.
-        name: Ident,
-        /// Table the policy is defined on.
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_name: ObjectName,
-        /// Optional policy type (e.g., `PERMISSIVE` / `RESTRICTIVE`).
-        policy_type: Option<CreatePolicyType>,
-        /// Optional command the policy applies to (e.g., `SELECT`).
-        command: Option<CreatePolicyCommand>,
-        /// Optional list of grantee owners.
-        to: Option<Vec<Owner>>,
-        /// Optional expression for the `USING` clause.
-        using: Option<Expr>,
-        /// Optional expression for the `WITH CHECK` clause.
-        with_check: Option<Expr>,
-    },
+    CreatePolicy(CreatePolicy),
     /// ```sql
     /// CREATE CONNECTOR
     /// ```
@@ -3736,15 +3684,7 @@ pub enum Statement {
     /// ALTER POLICY <NAME> ON <TABLE NAME> [<OPERATION>]
     /// ```
     /// (Postgresql-specific)
-    AlterPolicy {
-        /// Policy name to alter.
-        name: Ident,
-        /// Target table name the policy is defined on.
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_name: ObjectName,
-        /// Optional operation specific to the policy alteration.
-        operation: AlterPolicyOperation,
-    },
+    AlterPolicy(AlterPolicy),
     /// ```sql
     /// ALTER CONNECTOR connector_name SET DCPROPERTIES(property_name=property_value, ...);
     /// or
@@ -3881,16 +3821,7 @@ pub enum Statement {
     /// DROP POLICY
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-droppolicy.html)
-    DropPolicy {
-        /// `true` when `IF EXISTS` was present.
-        if_exists: bool,
-        /// Name of the policy to drop.
-        name: Ident,
-        /// Name of the table the policy applies to.
-        table_name: ObjectName,
-        /// Optional drop behavior (`CASCADE` or `RESTRICT`).
-        drop_behavior: Option<DropBehavior>,
-    },
+    DropPolicy(DropPolicy),
     /// ```sql
     /// DROP CONNECTOR
     /// ```
@@ -4389,22 +4320,7 @@ pub enum Statement {
     /// ```sql
     /// GRANT privileges ON objects TO grantees
     /// ```
-    Grant {
-        /// Privileges being granted.
-        privileges: Privileges,
-        /// Optional objects the privileges apply to.
-        objects: Option<GrantObjects>,
-        /// List of grantees receiving the privileges.
-        grantees: Vec<Grantee>,
-        /// Whether `WITH GRANT OPTION` is present.
-        with_grant_option: bool,
-        /// Optional `AS GRANTOR` identifier.
-        as_grantor: Option<Ident>,
-        /// Optional `GRANTED BY` identifier.
-        granted_by: Option<Ident>,
-        /// Optional `CURRENT GRANTS` modifier.
-        current_grants: Option<CurrentGrantsKind>,
-    },
+    Grant(Grant),
     /// ```sql
     /// DENY privileges ON object TO grantees
     /// ```
@@ -4412,18 +4328,7 @@ pub enum Statement {
     /// ```sql
     /// REVOKE privileges ON objects FROM grantees
     /// ```
-    Revoke {
-        /// Privileges to revoke.
-        privileges: Privileges,
-        /// Optional objects from which to revoke.
-        objects: Option<GrantObjects>,
-        /// Grantees affected by the revoke.
-        grantees: Vec<Grantee>,
-        /// Optional `GRANTED BY` identifier.
-        granted_by: Option<Ident>,
-        /// Optional `CASCADE`/`RESTRICT` behavior.
-        cascade: Option<CascadeOption>,
-    },
+    Revoke(Revoke),
     /// ```sql
     /// DEALLOCATE [ PREPARE ] { name | ALL }
     /// ```
@@ -5406,48 +5311,7 @@ impl fmt::Display for Statement {
             Statement::CreateServer(stmt) => {
                 write!(f, "{stmt}")
             }
-            Statement::CreatePolicy {
-                name,
-                table_name,
-                policy_type,
-                command,
-                to,
-                using,
-                with_check,
-            } => {
-                write!(f, "CREATE POLICY {name} ON {table_name}")?;
-
-                if let Some(policy_type) = policy_type {
-                    match policy_type {
-                        CreatePolicyType::Permissive => write!(f, " AS PERMISSIVE")?,
-                        CreatePolicyType::Restrictive => write!(f, " AS RESTRICTIVE")?,
-                    }
-                }
-
-                if let Some(command) = command {
-                    match command {
-                        CreatePolicyCommand::All => write!(f, " FOR ALL")?,
-                        CreatePolicyCommand::Select => write!(f, " FOR SELECT")?,
-                        CreatePolicyCommand::Insert => write!(f, " FOR INSERT")?,
-                        CreatePolicyCommand::Update => write!(f, " FOR UPDATE")?,
-                        CreatePolicyCommand::Delete => write!(f, " FOR DELETE")?,
-                    }
-                }
-
-                if let Some(to) = to {
-                    write!(f, " TO {}", display_comma_separated(to))?;
-                }
-
-                if let Some(using) = using {
-                    write!(f, " USING ({using})")?;
-                }
-
-                if let Some(with_check) = with_check {
-                    write!(f, " WITH CHECK ({with_check})")?;
-                }
-
-                Ok(())
-            }
+            Statement::CreatePolicy(policy) => write!(f, "{policy}"),
             Statement::CreateConnector(create_connector) => create_connector.fmt(f),
             Statement::CreateOperator(create_operator) => create_operator.fmt(f),
             Statement::CreateOperatorFamily(create_operator_family) => {
@@ -5486,13 +5350,7 @@ impl fmt::Display for Statement {
             Statement::AlterRole { name, operation } => {
                 write!(f, "ALTER ROLE {name} {operation}")
             }
-            Statement::AlterPolicy {
-                name,
-                table_name,
-                operation,
-            } => {
-                write!(f, "ALTER POLICY {name} ON {table_name}{operation}")
-            }
+            Statement::AlterPolicy(alter_policy) => write!(f, "{alter_policy}"),
             Statement::AlterConnector {
                 name,
                 properties,
@@ -5616,22 +5474,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::DropPolicy {
-                if_exists,
-                name,
-                table_name,
-                drop_behavior,
-            } => {
-                write!(f, "DROP POLICY")?;
-                if *if_exists {
-                    write!(f, " IF EXISTS")?;
-                }
-                write!(f, " {name} ON {table_name}")?;
-                if let Some(drop_behavior) = drop_behavior {
-                    write!(f, " {drop_behavior}")?;
-                }
-                Ok(())
-            }
+            Statement::DropPolicy(policy) => write!(f, "{policy}"),
             Statement::DropConnector { if_exists, name } => {
                 write!(
                     f,
@@ -5899,55 +5742,9 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Grant {
-                privileges,
-                objects,
-                grantees,
-                with_grant_option,
-                as_grantor,
-                granted_by,
-                current_grants,
-            } => {
-                write!(f, "GRANT {privileges} ")?;
-                if let Some(objects) = objects {
-                    write!(f, "ON {objects} ")?;
-                }
-                write!(f, "TO {}", display_comma_separated(grantees))?;
-                if *with_grant_option {
-                    write!(f, " WITH GRANT OPTION")?;
-                }
-                if let Some(current_grants) = current_grants {
-                    write!(f, " {current_grants}")?;
-                }
-                if let Some(grantor) = as_grantor {
-                    write!(f, " AS {grantor}")?;
-                }
-                if let Some(grantor) = granted_by {
-                    write!(f, " GRANTED BY {grantor}")?;
-                }
-                Ok(())
-            }
+            Statement::Grant(grant) => write!(f, "{grant}"),
             Statement::Deny(s) => write!(f, "{s}"),
-            Statement::Revoke {
-                privileges,
-                objects,
-                grantees,
-                granted_by,
-                cascade,
-            } => {
-                write!(f, "REVOKE {privileges} ")?;
-                if let Some(objects) = objects {
-                    write!(f, "ON {objects} ")?;
-                }
-                write!(f, "FROM {}", display_comma_separated(grantees))?;
-                if let Some(grantor) = granted_by {
-                    write!(f, " GRANTED BY {grantor}")?;
-                }
-                if let Some(cascade) = cascade {
-                    write!(f, " {cascade}")?;
-                }
-                Ok(())
-            }
+            Statement::Revoke(revoke) => write!(f, "{revoke}"),
             Statement::Deallocate { name, prepare } => write!(
                 f,
                 "DEALLOCATE {prepare}{name}",
@@ -11686,6 +11483,57 @@ pub enum Reset {
 pub struct ResetStatement {
     /// The reset action to perform (either `ALL` or a specific configuration parameter).
     pub reset: Reset,
+}
+
+/// Query optimizer hints are optionally supported comments after the
+/// `SELECT`, `INSERT`, `UPDATE`, `REPLACE`, `MERGE`, and `DELETE` keywords in
+/// the corresponding statements.
+///
+/// See [Select::optimizer_hint]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct OptimizerHint {
+    /// the raw test of the optimizer hint without its markers
+    pub text: String,
+    /// the style of the comment which `text` was extracted from,
+    /// e.g. `/*+...*/` or `--+...`
+    ///
+    /// Not all dialects support all styles, though.
+    pub style: OptimizerHintStyle,
+}
+
+/// The commentary style of an [optimizer hint](OptimizerHint)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum OptimizerHintStyle {
+    /// A hint corresponding to a single line comment,
+    /// e.g. `--+ LEADING(v.e v.d t)`
+    SingleLine {
+        /// the comment prefix, e.g. `--`
+        prefix: String,
+    },
+    /// A hint corresponding to a multi line comment,
+    /// e.g. `/*+ LEADING(v.e v.d t) */`
+    MultiLine,
+}
+
+impl fmt::Display for OptimizerHint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.style {
+            OptimizerHintStyle::SingleLine { prefix } => {
+                f.write_str(prefix)?;
+                f.write_str("+")?;
+                f.write_str(&self.text)
+            }
+            OptimizerHintStyle::MultiLine => {
+                f.write_str("/*+")?;
+                f.write_str(&self.text)?;
+                f.write_str("*/")
+            }
+        }
+    }
 }
 
 impl fmt::Display for ResetStatement {

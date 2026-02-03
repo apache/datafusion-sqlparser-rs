@@ -182,6 +182,10 @@ impl Dialect for MySqlDialect {
     fn supports_binary_kw_as_cast(&self) -> bool {
         true
     }
+
+    fn supports_comment_optimizer_hint(&self) -> bool {
+        true
+    }
 }
 
 /// `LOCK TABLES`

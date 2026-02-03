@@ -1435,6 +1435,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
+                optimizer_hint: None,
                 distinct: None,
                 top: None,
                 top_before_distinct: false,
@@ -1490,6 +1491,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
+                optimizer_hint: None,
                 distinct: None,
                 top: None,
                 top_before_distinct: false,
@@ -1537,7 +1539,7 @@ fn parse_escaped_backticks_with_escape() {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
-
+                optimizer_hint: None,
                 distinct: None,
                 top: None,
                 top_before_distinct: false,
@@ -1589,7 +1591,7 @@ fn parse_escaped_backticks_with_no_escape() {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
-
+                optimizer_hint: None,
                 distinct: None,
                 top: None,
                 top_before_distinct: false,
@@ -2409,7 +2411,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                 q.body,
                 Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
-
+                    optimizer_hint: None,
                     distinct: None,
                     top: None,
                     top_before_distinct: false,
@@ -2584,6 +2586,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                 q.body,
                 Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
+                    optimizer_hint: None,
                     distinct: None,
                     top: None,
                     top_before_distinct: false,
@@ -2651,6 +2654,7 @@ fn parse_update_with_joins() {
             returning,
             or: None,
             limit: None,
+            optimizer_hint: None,
             update_token: _,
         }) => {
             assert_eq!(
@@ -3216,6 +3220,7 @@ fn parse_substring_in_select() {
                     with: None,
                     body: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
+                        optimizer_hint: None,
                         distinct: Some(Distinct::Distinct),
                         top: None,
                         top_before_distinct: false,
@@ -3539,6 +3544,7 @@ fn parse_hex_string_introducer() {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
+                optimizer_hint: None,
                 distinct: None,
                 top: None,
                 top_before_distinct: false,
@@ -3799,7 +3805,7 @@ fn parse_bitstring_literal() {
 fn parse_grant() {
     let sql = "GRANT ALL ON *.* TO 'jeffrey'@'%'";
     let stmt = mysql().verified_stmt(sql);
-    if let Statement::Grant {
+    if let Statement::Grant(Grant {
         privileges,
         objects,
         grantees,
@@ -3807,7 +3813,7 @@ fn parse_grant() {
         as_grantor: _,
         granted_by,
         current_grants: _,
-    } = stmt
+    }) = stmt
     {
         assert_eq!(
             privileges,
@@ -3845,13 +3851,13 @@ fn parse_grant() {
 fn parse_revoke() {
     let sql = "REVOKE ALL ON db1.* FROM 'jeffrey'@'%'";
     let stmt = mysql_and_generic().verified_stmt(sql);
-    if let Statement::Revoke {
+    if let Statement::Revoke(Revoke {
         privileges,
         objects,
         grantees,
         granted_by,
         cascade,
-    } = stmt
+    }) = stmt
     {
         assert_eq!(
             privileges,
@@ -4379,5 +4385,50 @@ fn test_create_index_options() {
         .verified_stmt("CREATE INDEX idx_name ON t(c1, c2) USING BTREE ALGORITHM = INPLACE");
     mysql_and_generic().verified_stmt(
         "CREATE INDEX idx_name ON t(c1, c2) USING BTREE LOCK = EXCLUSIVE ALGORITHM = DEFAULT",
+    );
+}
+
+#[test]
+fn test_optimizer_hints() {
+    let mysql_dialect = mysql_and_generic();
+
+    // ~ selects
+    mysql_dialect.verified_stmt(
+        "\
+       SELECT /*+ SET_VAR(optimizer_switch = 'mrr_cost_based=off') \
+                  SET_VAR(max_heap_table_size = 1G) */ 1",
+    );
+
+    mysql_dialect.verified_stmt(
+        "\
+       SELECT /*+ SET_VAR(target_partitions=1) */ * FROM \
+           (SELECT /*+ SET_VAR(target_partitions=8) */ * FROM t1 LIMIT 1) AS dt",
+    );
+
+    // ~ inserts / replace
+    mysql_dialect.verified_stmt(
+        "\
+       INSERT /*+ RESOURCE_GROUP(Batch) */ \
+       INTO t2 VALUES (2)",
+    );
+
+    mysql_dialect.verified_stmt(
+        "\
+       REPLACE /*+ foobar */ INTO test \
+       VALUES (1, 'Old', '2014-08-20 18:47:00')",
+    );
+
+    // ~ updates
+    mysql_dialect.verified_stmt(
+        "\
+       UPDATE /*+ quux */ table_name \
+       SET column1 = 1 \
+       WHERE 1 = 1",
+    );
+
+    // ~ deletes
+    mysql_dialect.verified_stmt(
+        "\
+       DELETE /*+ foobar */ FROM table_name",
     );
 }

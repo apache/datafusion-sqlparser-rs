@@ -99,4 +99,8 @@ impl Dialect for OracleDialect {
     fn supports_quote_delimited_string(&self) -> bool {
         true
     }
+
+    fn supports_comment_optimizer_hint(&self) -> bool {
+        true
+    }
 }

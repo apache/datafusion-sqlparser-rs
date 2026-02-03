@@ -513,6 +513,13 @@ fn parse_create_table_with_defaults() {
 }
 
 #[test]
+fn parse_cast_in_default_expr() {
+    pg().verified_stmt("CREATE TABLE t (c TEXT DEFAULT (foo())::TEXT)");
+    pg().verified_stmt("CREATE TABLE t (c TEXT DEFAULT (foo())::INT::TEXT)");
+    pg().verified_stmt("CREATE TABLE t (c TEXT DEFAULT (foo())::TEXT NOT NULL)");
+}
+
+#[test]
 fn parse_create_table_from_pg_dump() {
     let sql = "CREATE TABLE public.customer (
             customer_id integer DEFAULT nextval('public.customer_customer_id_seq'::regclass) NOT NULL,
@@ -1284,6 +1291,7 @@ fn parse_copy_to() {
                 with: None,
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
+                    optimizer_hint: None,
                     distinct: None,
                     top: None,
                     top_before_distinct: false,
@@ -3064,6 +3072,7 @@ fn parse_array_subquery_expr() {
                     set_quantifier: SetQuantifier::None,
                     left: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
+                        optimizer_hint: None,
                         distinct: None,
                         top: None,
                         top_before_distinct: false,
@@ -3090,6 +3099,7 @@ fn parse_array_subquery_expr() {
                     }))),
                     right: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
+                        optimizer_hint: None,
                         distinct: None,
                         top: None,
                         top_before_distinct: false,
@@ -5384,6 +5394,7 @@ fn test_simple_postgres_insert_with_alias() {
         statement,
         Statement::Insert(Insert {
             insert_token: AttachedToken::empty(),
+            optimizer_hint: None,
             or: None,
             ignore: false,
             into: true,
@@ -5455,6 +5466,7 @@ fn test_simple_postgres_insert_with_alias() {
         statement,
         Statement::Insert(Insert {
             insert_token: AttachedToken::empty(),
+            optimizer_hint: None,
             or: None,
             ignore: false,
             into: true,
@@ -5528,6 +5540,7 @@ fn test_simple_insert_with_quoted_alias() {
         statement,
         Statement::Insert(Insert {
             insert_token: AttachedToken::empty(),
+            optimizer_hint: None,
             or: None,
             ignore: false,
             into: true,
@@ -6632,6 +6645,30 @@ fn parse_alter_table_replica_identity() {
                 operations,
                 vec![AlterTableOperation::ReplicaIdentity {
                     identity: ReplicaIdentity::Index("foo_idx".into())
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match pg_and_generic().verified_stmt("ALTER TABLE foo REPLICA IDENTITY NOTHING") {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::ReplicaIdentity {
+                    identity: ReplicaIdentity::Nothing
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match pg_and_generic().verified_stmt("ALTER TABLE foo REPLICA IDENTITY DEFAULT") {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::ReplicaIdentity {
+                    identity: ReplicaIdentity::Default
                 }]
             );
         }

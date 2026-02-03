@@ -72,9 +72,7 @@ fn parse_numeric_literal_underscore() {
 
     assert_eq!(
         select.projection,
-        vec![UnnamedExpr(Expr::Value(
-            (number("10_000")).with_empty_span()
-        ))]
+        vec![UnnamedExpr(Expr::Value(number("10_000").with_empty_span()))]
     );
 }
 
@@ -457,6 +455,7 @@ fn parse_update_set_from() {
         stmt,
         Statement::Update(Update {
             update_token: AttachedToken::empty(),
+            optimizer_hint: None,
             table: TableWithJoins {
                 relation: table_from_name(ObjectName::from(vec![Ident::new("t1")])),
                 joins: vec![],
@@ -472,6 +471,7 @@ fn parse_update_set_from() {
                         with: None,
                         body: Box::new(SetExpr::Select(Box::new(Select {
                             select_token: AttachedToken::empty(),
+                            optimizer_hint: None,
                             distinct: None,
                             top: None,
                             top_before_distinct: false,
@@ -550,6 +550,7 @@ fn parse_update_with_table_alias() {
             returning,
             or: None,
             limit: None,
+            optimizer_hint: None,
             update_token: _,
         }) => {
             assert_eq!(
@@ -5806,6 +5807,7 @@ fn test_parse_named_window() {
     let actual_select_only = dialects.verified_only_select(sql);
     let expected = Select {
         select_token: AttachedToken::empty(),
+        optimizer_hint: None,
         distinct: None,
         top: None,
         top_before_distinct: false,
@@ -6536,6 +6538,7 @@ fn parse_interval_and_or_xor() {
         with: None,
         body: Box::new(SetExpr::Select(Box::new(Select {
             select_token: AttachedToken::empty(),
+            optimizer_hint: None,
             distinct: None,
             top: None,
             top_before_distinct: false,
@@ -8912,6 +8915,7 @@ fn lateral_function() {
     let actual_select_only = verified_only_select(sql);
     let expected = Select {
         select_token: AttachedToken::empty(),
+        optimizer_hint: None,
         distinct: None,
         top: None,
         projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
@@ -9601,14 +9605,14 @@ fn parse_drop_role() {
 fn parse_grant() {
     let sql = "GRANT SELECT, INSERT, UPDATE (shape, size), USAGE, DELETE, TRUNCATE, REFERENCES, TRIGGER, CONNECT, CREATE, EXECUTE, TEMPORARY, DROP ON abc, def TO xyz, m WITH GRANT OPTION GRANTED BY jj";
     match verified_stmt(sql) {
-        Statement::Grant {
+        Statement::Grant(Grant {
             privileges,
             objects,
             grantees,
             with_grant_option,
             granted_by,
             ..
-        } => match (privileges, objects) {
+        }) => match (privileges, objects) {
             (Privileges::Actions(actions), Some(GrantObjects::Tables(objects))) => {
                 assert_eq!(
                     vec![
@@ -9653,13 +9657,13 @@ fn parse_grant() {
 
     let sql2 = "GRANT INSERT ON ALL TABLES IN SCHEMA public TO browser";
     match verified_stmt(sql2) {
-        Statement::Grant {
+        Statement::Grant(Grant {
             privileges,
             objects,
             grantees,
             with_grant_option,
             ..
-        } => match (privileges, objects) {
+        }) => match (privileges, objects) {
             (Privileges::Actions(actions), Some(GrantObjects::AllTablesInSchema { schemas })) => {
                 assert_eq!(vec![Action::Insert { columns: None }], actions);
                 assert_eq_vec(&["public"], &schemas);
@@ -9673,13 +9677,13 @@ fn parse_grant() {
 
     let sql3 = "GRANT USAGE, SELECT ON SEQUENCE p TO u";
     match verified_stmt(sql3) {
-        Statement::Grant {
+        Statement::Grant(Grant {
             privileges,
             objects,
             grantees,
             granted_by,
             ..
-        } => match (privileges, objects, granted_by) {
+        }) => match (privileges, objects, granted_by) {
             (Privileges::Actions(actions), Some(GrantObjects::Sequences(objects)), None) => {
                 assert_eq!(
                     vec![Action::Usage, Action::Select { columns: None }],
@@ -9695,7 +9699,7 @@ fn parse_grant() {
 
     let sql4 = "GRANT ALL PRIVILEGES ON aa, b TO z";
     match verified_stmt(sql4) {
-        Statement::Grant { privileges, .. } => {
+        Statement::Grant(Grant { privileges, .. }) => {
             assert_eq!(
                 Privileges::All {
                     with_privileges_keyword: true
@@ -9708,11 +9712,11 @@ fn parse_grant() {
 
     let sql5 = "GRANT ALL ON SCHEMA aa, b TO z";
     match verified_stmt(sql5) {
-        Statement::Grant {
+        Statement::Grant(Grant {
             privileges,
             objects,
             ..
-        } => match (privileges, objects) {
+        }) => match (privileges, objects) {
             (
                 Privileges::All {
                     with_privileges_keyword,
@@ -9729,11 +9733,11 @@ fn parse_grant() {
 
     let sql6 = "GRANT USAGE ON ALL SEQUENCES IN SCHEMA bus TO a, beta WITH GRANT OPTION";
     match verified_stmt(sql6) {
-        Statement::Grant {
+        Statement::Grant(Grant {
             privileges,
             objects,
             ..
-        } => match (privileges, objects) {
+        }) => match (privileges, objects) {
             (
                 Privileges::Actions(actions),
                 Some(GrantObjects::AllSequencesInSchema { schemas }),
@@ -9814,13 +9818,13 @@ fn parse_deny() {
 fn test_revoke() {
     let sql = "REVOKE ALL PRIVILEGES ON users, auth FROM analyst";
     match verified_stmt(sql) {
-        Statement::Revoke {
+        Statement::Revoke(Revoke {
             privileges,
             objects: Some(GrantObjects::Tables(tables)),
             grantees,
             granted_by,
             cascade,
-        } => {
+        }) => {
             assert_eq!(
                 Privileges::All {
                     with_privileges_keyword: true
@@ -9840,13 +9844,13 @@ fn test_revoke() {
 fn test_revoke_with_cascade() {
     let sql = "REVOKE ALL PRIVILEGES ON users, auth FROM analyst CASCADE";
     match all_dialects_except(|d| d.is::<MySqlDialect>()).verified_stmt(sql) {
-        Statement::Revoke {
+        Statement::Revoke(Revoke {
             privileges,
             objects: Some(GrantObjects::Tables(tables)),
             grantees,
             granted_by,
             cascade,
-        } => {
+        }) => {
             assert_eq!(
                 Privileges::All {
                     with_privileges_keyword: true
@@ -9913,6 +9917,7 @@ fn parse_merge() {
                         with: None,
                         body: Box::new(SetExpr::Select(Box::new(Select {
                             select_token: AttachedToken::empty(),
+                            optimizer_hint: None,
                             distinct: None,
                             top: None,
                             top_before_distinct: false,
@@ -12316,6 +12321,7 @@ fn parse_unload() {
             query: Some(Box::new(Query {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
+                    optimizer_hint: None,
                     distinct: None,
                     top: None,
                     top_before_distinct: false,
@@ -12624,6 +12630,7 @@ fn parse_map_access_expr() {
 fn parse_connect_by() {
     let expect_query = Select {
         select_token: AttachedToken::empty(),
+        optimizer_hint: None,
         distinct: None,
         top: None,
         top_before_distinct: false,
@@ -12706,6 +12713,7 @@ fn parse_connect_by() {
         all_dialects_where(|d| d.supports_connect_by()).verified_only_select(connect_by_3),
         Select {
             select_token: AttachedToken::empty(),
+            optimizer_hint: None,
             distinct: None,
             top: None,
             top_before_distinct: false,
@@ -13639,6 +13647,7 @@ fn test_extract_seconds_ok() {
         with: None,
         body: Box::new(SetExpr::Select(Box::new(Select {
             select_token: AttachedToken::empty(),
+            optimizer_hint: None,
             distinct: None,
             top: None,
             top_before_distinct: false,
@@ -13897,14 +13906,14 @@ fn test_create_policy() {
                WITH CHECK (1 = 1)";
 
     match all_dialects().verified_stmt(sql) {
-        Statement::CreatePolicy {
+        Statement::CreatePolicy(CreatePolicy {
             name,
             table_name,
             to,
             using,
             with_check,
             ..
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "my_policy");
             assert_eq!(table_name.to_string(), "my_table");
             assert_eq!(
@@ -14005,12 +14014,12 @@ fn test_create_policy() {
 fn test_drop_policy() {
     let sql = "DROP POLICY IF EXISTS my_policy ON my_table RESTRICT";
     match all_dialects().verified_stmt(sql) {
-        Statement::DropPolicy {
+        Statement::DropPolicy(DropPolicy {
             if_exists,
             name,
             table_name,
             drop_behavior,
-        } => {
+        }) => {
             assert_eq!(if_exists, true);
             assert_eq!(name.to_string(), "my_policy");
             assert_eq!(table_name.to_string(), "my_table");
@@ -14045,12 +14054,12 @@ fn test_drop_policy() {
 #[test]
 fn test_alter_policy() {
     match verified_stmt("ALTER POLICY old_policy ON my_table RENAME TO new_policy") {
-        Statement::AlterPolicy {
+        Statement::AlterPolicy(AlterPolicy {
             name,
             table_name,
             operation,
             ..
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "old_policy");
             assert_eq!(table_name.to_string(), "my_table");
             assert_eq!(
@@ -14067,9 +14076,9 @@ fn test_alter_policy() {
         "ALTER POLICY my_policy ON my_table TO CURRENT_USER ",
         "USING ((SELECT c0)) WITH CHECK (c0 > 0)"
     )) {
-        Statement::AlterPolicy {
+        Statement::AlterPolicy(AlterPolicy {
             name, table_name, ..
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "my_policy");
             assert_eq!(table_name.to_string(), "my_table");
         }
@@ -15778,6 +15787,7 @@ fn test_select_from_first() {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
+                optimizer_hint: None,
                 distinct: None,
                 top: None,
                 projection,
@@ -16223,303 +16233,288 @@ fn parse_set_names() {
 }
 
 #[test]
-fn parse_pipeline_operator() {
+fn parse_pipe_operator_as() {
     let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> AS new_users");
+}
 
-    // select pipe operator
-    dialects.verified_stmt("SELECT * FROM users |> SELECT id");
-    dialects.verified_stmt("SELECT * FROM users |> SELECT id, name");
+#[test]
+fn parse_pipe_operator_select() {
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> SELECT id");
+    dialects.verified_stmt("SELECT * FROM tbl |> SELECT id, name");
     dialects.verified_query_with_canonical(
-        "SELECT * FROM users |> SELECT id user_id",
-        "SELECT * FROM users |> SELECT id AS user_id",
+        "SELECT * FROM tbl |> SELECT id user_id",
+        "SELECT * FROM tbl |> SELECT id AS user_id",
     );
-    dialects.verified_stmt("SELECT * FROM users |> SELECT id AS user_id");
+    dialects.verified_stmt("SELECT * FROM tbl |> SELECT id AS user_id");
+}
 
-    // extend pipe operator
-    dialects.verified_stmt("SELECT * FROM users |> EXTEND id + 1 AS new_id");
-    dialects.verified_stmt("SELECT * FROM users |> EXTEND id AS new_id, name AS new_name");
+#[test]
+fn parse_pipe_operator_extend() {
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> EXTEND id + 1 AS new_id");
+    dialects.verified_stmt("SELECT * FROM tbl |> EXTEND id AS new_id, name AS new_name");
     dialects.verified_query_with_canonical(
-        "SELECT * FROM users |> EXTEND id user_id",
-        "SELECT * FROM users |> EXTEND id AS user_id",
+        "SELECT * FROM tbl |> EXTEND id user_id",
+        "SELECT * FROM tbl |> EXTEND id AS user_id",
     );
+}
 
-    // set pipe operator
-    dialects.verified_stmt("SELECT * FROM users |> SET id = id + 1");
-    dialects.verified_stmt("SELECT * FROM users |> SET id = id + 1, name = name + ' Doe'");
+#[test]
+fn parse_pipe_operator_set() {
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> SET id = id + 1");
+    dialects.verified_stmt("SELECT * FROM tbl |> SET id = id + 1, name = name + ' Doe'");
+}
 
-    // drop pipe operator
-    dialects.verified_stmt("SELECT * FROM users |> DROP id");
-    dialects.verified_stmt("SELECT * FROM users |> DROP id, name");
+#[test]
+fn parse_pipe_operator_drop() {
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> DROP id");
+    dialects.verified_stmt("SELECT * FROM tbl |> DROP id, name");
+    dialects.verified_stmt("SELECT * FROM tbl |> DROP c |> RENAME a AS x");
+    dialects.verified_stmt("SELECT * FROM tbl |> DROP a, b |> SELECT c");
+}
 
-    // as pipe operator
-    dialects.verified_stmt("SELECT * FROM users |> AS new_users");
+#[test]
+fn parse_pipe_operator_limit() {
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> LIMIT 10");
+    dialects.verified_stmt("SELECT * FROM tbl |> LIMIT 10 OFFSET 5");
+    dialects.verified_stmt("SELECT * FROM tbl |> LIMIT 10 |> LIMIT 5");
+    dialects.verified_stmt("SELECT * FROM tbl |> LIMIT 10 |> WHERE true");
+}
 
-    // limit pipe operator
-    dialects.verified_stmt("SELECT * FROM users |> LIMIT 10");
-    dialects.verified_stmt("SELECT * FROM users |> LIMIT 10 OFFSET 5");
-    dialects.verified_stmt("SELECT * FROM users |> LIMIT 10 |> LIMIT 5");
-    dialects.verified_stmt("SELECT * FROM users |> LIMIT 10 |> WHERE true");
+#[test]
+fn parse_pipe_operator_where() {
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> WHERE id = 1");
+    dialects.verified_stmt("SELECT * FROM tbl |> WHERE id = 1 AND name = 'John'");
+    dialects.verified_stmt("SELECT * FROM tbl |> WHERE id = 1 OR name = 'John'");
+}
 
-    // where pipe operator
-    dialects.verified_stmt("SELECT * FROM users |> WHERE id = 1");
-    dialects.verified_stmt("SELECT * FROM users |> WHERE id = 1 AND name = 'John'");
-    dialects.verified_stmt("SELECT * FROM users |> WHERE id = 1 OR name = 'John'");
-
-    // aggregate pipe operator full table
-    dialects.verified_stmt("SELECT * FROM users |> AGGREGATE COUNT(*)");
+#[test]
+fn parse_pipe_operator_aggregate() {
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE COUNT(*)");
     dialects.verified_query_with_canonical(
-        "SELECT * FROM users |> AGGREGATE COUNT(*) total_users",
-        "SELECT * FROM users |> AGGREGATE COUNT(*) AS total_users",
+        "SELECT * FROM tbl |> AGGREGATE COUNT(*) total_users",
+        "SELECT * FROM tbl |> AGGREGATE COUNT(*) AS total_users",
     );
-    dialects.verified_stmt("SELECT * FROM users |> AGGREGATE COUNT(*) AS total_users");
-    dialects.verified_stmt("SELECT * FROM users |> AGGREGATE COUNT(*), MIN(id)");
-
-    // aggregate pipe opeprator with grouping
+    dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE COUNT(*) AS total_users");
+    dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE COUNT(*), MIN(id)");
+    dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE SUM(o_totalprice) AS price, COUNT(*) AS cnt GROUP BY EXTRACT(YEAR FROM o_orderdate) AS year");
     dialects.verified_stmt(
-        "SELECT * FROM users |> AGGREGATE SUM(o_totalprice) AS price, COUNT(*) AS cnt GROUP BY EXTRACT(YEAR FROM o_orderdate) AS year",
-    );
-    dialects.verified_stmt(
-        "SELECT * FROM users |> AGGREGATE GROUP BY EXTRACT(YEAR FROM o_orderdate) AS year",
+        "SELECT * FROM tbl |> AGGREGATE GROUP BY EXTRACT(YEAR FROM o_orderdate) AS year",
     );
     dialects
-        .verified_stmt("SELECT * FROM users |> AGGREGATE GROUP BY EXTRACT(YEAR FROM o_orderdate)");
-    dialects.verified_stmt("SELECT * FROM users |> AGGREGATE GROUP BY a, b");
-    dialects.verified_stmt("SELECT * FROM users |> AGGREGATE SUM(c) GROUP BY a, b");
-    dialects.verified_stmt("SELECT * FROM users |> AGGREGATE SUM(c) ASC");
+        .verified_stmt("SELECT * FROM tbl |> AGGREGATE GROUP BY EXTRACT(YEAR FROM o_orderdate)");
+    dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE GROUP BY a, b");
+    dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE SUM(c) GROUP BY a, b");
+    dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE SUM(c) ASC");
+}
 
-    // order by pipe operator
-    dialects.verified_stmt("SELECT * FROM users |> ORDER BY id ASC");
-    dialects.verified_stmt("SELECT * FROM users |> ORDER BY id DESC");
-    dialects.verified_stmt("SELECT * FROM users |> ORDER BY id DESC, name ASC");
+#[test]
+fn parse_pipe_operator_order_by() {
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> ORDER BY id ASC");
+    dialects.verified_stmt("SELECT * FROM tbl |> ORDER BY id DESC");
+    dialects.verified_stmt("SELECT * FROM tbl |> ORDER BY id DESC, name ASC");
+}
 
-    // tablesample pipe operator
+#[test]
+fn parse_pipe_operator_tablesample() {
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
     dialects.verified_stmt("SELECT * FROM tbl |> TABLESAMPLE BERNOULLI (50)");
     dialects.verified_stmt("SELECT * FROM tbl |> TABLESAMPLE SYSTEM (50 PERCENT)");
     dialects.verified_stmt("SELECT * FROM tbl |> TABLESAMPLE SYSTEM (50) REPEATABLE (10)");
+}
 
-    // rename pipe operator
-    dialects.verified_stmt("SELECT * FROM users |> RENAME old_name AS new_name");
-    dialects.verified_stmt("SELECT * FROM users |> RENAME id AS user_id, name AS user_name");
+#[test]
+fn parse_pipe_operator_rename() {
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> RENAME old_name AS new_name");
+    dialects.verified_stmt("SELECT * FROM tbl |> RENAME id AS user_id, name AS user_name");
     dialects.verified_query_with_canonical(
-        "SELECT * FROM users |> RENAME id user_id",
-        "SELECT * FROM users |> RENAME id AS user_id",
+        "SELECT * FROM tbl |> RENAME id user_id",
+        "SELECT * FROM tbl |> RENAME id AS user_id",
     );
+}
 
-    // union pipe operator
-    dialects.verified_stmt("SELECT * FROM users |> UNION ALL (SELECT * FROM admins)");
-    dialects.verified_stmt("SELECT * FROM users |> UNION DISTINCT (SELECT * FROM admins)");
-    dialects.verified_stmt("SELECT * FROM users |> UNION (SELECT * FROM admins)");
-
-    // union pipe operator with multiple queries
+#[test]
+fn parse_pipe_operator_union() {
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> UNION ALL (SELECT * FROM admins)");
+    dialects.verified_stmt("SELECT * FROM tbl |> UNION DISTINCT (SELECT * FROM admins)");
+    dialects.verified_stmt("SELECT * FROM tbl |> UNION (SELECT * FROM admins)");
     dialects.verified_stmt(
-        "SELECT * FROM users |> UNION ALL (SELECT * FROM admins), (SELECT * FROM guests)",
+        "SELECT * FROM tbl |> UNION ALL (SELECT * FROM admins), (SELECT * FROM guests)",
     );
-    dialects.verified_stmt("SELECT * FROM users |> UNION DISTINCT (SELECT * FROM admins), (SELECT * FROM guests), (SELECT * FROM employees)");
-    dialects.verified_stmt(
-        "SELECT * FROM users |> UNION (SELECT * FROM admins), (SELECT * FROM guests)",
-    );
-
-    // union pipe operator with BY NAME modifier
-    dialects.verified_stmt("SELECT * FROM users |> UNION BY NAME (SELECT * FROM admins)");
-    dialects.verified_stmt("SELECT * FROM users |> UNION ALL BY NAME (SELECT * FROM admins)");
-    dialects.verified_stmt("SELECT * FROM users |> UNION DISTINCT BY NAME (SELECT * FROM admins)");
-
-    // union pipe operator with BY NAME and multiple queries
-    dialects.verified_stmt(
-        "SELECT * FROM users |> UNION BY NAME (SELECT * FROM admins), (SELECT * FROM guests)",
-    );
-
-    // intersect pipe operator (BigQuery requires DISTINCT modifier for INTERSECT)
-    dialects.verified_stmt("SELECT * FROM users |> INTERSECT DISTINCT (SELECT * FROM admins)");
-
-    // intersect pipe operator with BY NAME modifier
+    dialects.verified_stmt("SELECT * FROM tbl |> UNION DISTINCT (SELECT * FROM admins), (SELECT * FROM guests), (SELECT * FROM employees)");
     dialects
-        .verified_stmt("SELECT * FROM users |> INTERSECT DISTINCT BY NAME (SELECT * FROM admins)");
-
-    // intersect pipe operator with multiple queries
+        .verified_stmt("SELECT * FROM tbl |> UNION (SELECT * FROM admins), (SELECT * FROM guests)");
+    dialects.verified_stmt("SELECT * FROM tbl |> UNION BY NAME (SELECT * FROM admins)");
+    dialects.verified_stmt("SELECT * FROM tbl |> UNION ALL BY NAME (SELECT * FROM admins)");
+    dialects.verified_stmt("SELECT * FROM tbl |> UNION DISTINCT BY NAME (SELECT * FROM admins)");
     dialects.verified_stmt(
-        "SELECT * FROM users |> INTERSECT DISTINCT (SELECT * FROM admins), (SELECT * FROM guests)",
+        "SELECT * FROM tbl |> UNION BY NAME (SELECT * FROM admins), (SELECT * FROM guests)",
     );
+}
 
-    // intersect pipe operator with BY NAME and multiple queries
-    dialects.verified_stmt("SELECT * FROM users |> INTERSECT DISTINCT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)");
-
-    // except pipe operator (BigQuery requires DISTINCT modifier for EXCEPT)
-    dialects.verified_stmt("SELECT * FROM users |> EXCEPT DISTINCT (SELECT * FROM admins)");
-
-    // except pipe operator with BY NAME modifier
-    dialects.verified_stmt("SELECT * FROM users |> EXCEPT DISTINCT BY NAME (SELECT * FROM admins)");
-
-    // except pipe operator with multiple queries
-    dialects.verified_stmt(
-        "SELECT * FROM users |> EXCEPT DISTINCT (SELECT * FROM admins), (SELECT * FROM guests)",
-    );
-
-    // except pipe operator with BY NAME and multiple queries
-    dialects.verified_stmt("SELECT * FROM users |> EXCEPT DISTINCT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)");
-
-    // call pipe operator
-    dialects.verified_stmt("SELECT * FROM users |> CALL my_function()");
-    dialects.verified_stmt("SELECT * FROM users |> CALL process_data(5, 'test')");
-    dialects.verified_stmt(
-        "SELECT * FROM users |> CALL namespace.function_name(col1, col2, 'literal')",
-    );
-
-    // call pipe operator with complex arguments
-    dialects.verified_stmt("SELECT * FROM users |> CALL transform_data(col1 + col2)");
-    dialects.verified_stmt("SELECT * FROM users |> CALL analyze_data('param1', 100, true)");
-
-    // call pipe operator with aliases
-    dialects.verified_stmt("SELECT * FROM input_table |> CALL tvf1(arg1) AS al");
-    dialects.verified_stmt("SELECT * FROM users |> CALL process_data(5) AS result_table");
-    dialects.verified_stmt("SELECT * FROM users |> CALL namespace.func() AS my_alias");
-
-    // multiple call pipe operators in sequence
-    dialects.verified_stmt("SELECT * FROM input_table |> CALL tvf1(arg1) |> CALL tvf2(arg2, arg3)");
-    dialects.verified_stmt(
-        "SELECT * FROM data |> CALL transform(col1) |> CALL validate() |> CALL process(param)",
-    );
-
-    // multiple call pipe operators with aliases
-    dialects.verified_stmt(
-        "SELECT * FROM input_table |> CALL tvf1(arg1) AS step1 |> CALL tvf2(arg2) AS step2",
-    );
-    dialects.verified_stmt(
-        "SELECT * FROM data |> CALL preprocess() AS clean_data |> CALL analyze(mode) AS results",
-    );
-
-    // call pipe operators mixed with other pipe operators
-    dialects.verified_stmt(
-        "SELECT * FROM users |> CALL transform() |> WHERE status = 'active' |> CALL process(param)",
-    );
-    dialects.verified_stmt(
-        "SELECT * FROM data |> CALL preprocess() AS clean |> SELECT col1, col2 |> CALL validate()",
-    );
-
-    // pivot pipe operator
-    dialects.verified_stmt(
-        "SELECT * FROM monthly_sales |> PIVOT(SUM(amount) FOR quarter IN ('Q1', 'Q2', 'Q3', 'Q4'))",
-    );
-    dialects.verified_stmt("SELECT * FROM sales_data |> PIVOT(AVG(revenue) FOR region IN ('North', 'South', 'East', 'West'))");
-
-    // pivot pipe operator with multiple aggregate functions
-    dialects.verified_stmt("SELECT * FROM data |> PIVOT(SUM(sales) AS total_sales, COUNT(*) AS num_transactions FOR month IN ('Jan', 'Feb', 'Mar'))");
-
-    // pivot pipe operator with compound column names
-    dialects.verified_stmt("SELECT * FROM sales |> PIVOT(SUM(amount) FOR product.category IN ('Electronics', 'Clothing'))");
-
-    // pivot pipe operator mixed with other pipe operators
-    dialects.verified_stmt("SELECT * FROM sales_data |> WHERE year = 2023 |> PIVOT(SUM(revenue) FOR quarter IN ('Q1', 'Q2', 'Q3', 'Q4'))");
-
-    // pivot pipe operator with aliases
-    dialects.verified_stmt("SELECT * FROM monthly_sales |> PIVOT(SUM(sales) FOR quarter IN ('Q1', 'Q2')) AS quarterly_sales");
-    dialects.verified_stmt("SELECT * FROM data |> PIVOT(AVG(price) FOR category IN ('A', 'B', 'C')) AS avg_by_category");
-    dialects.verified_stmt("SELECT * FROM sales |> PIVOT(COUNT(*) AS transactions, SUM(amount) AS total FOR region IN ('North', 'South')) AS regional_summary");
-
-    // pivot pipe operator with implicit aliases (without AS keyword)
-    dialects.verified_query_with_canonical(
-        "SELECT * FROM monthly_sales |> PIVOT(SUM(sales) FOR quarter IN ('Q1', 'Q2')) quarterly_sales",
-        "SELECT * FROM monthly_sales |> PIVOT(SUM(sales) FOR quarter IN ('Q1', 'Q2')) AS quarterly_sales",
-    );
-    dialects.verified_query_with_canonical(
-        "SELECT * FROM data |> PIVOT(AVG(price) FOR category IN ('A', 'B', 'C')) avg_by_category",
-        "SELECT * FROM data |> PIVOT(AVG(price) FOR category IN ('A', 'B', 'C')) AS avg_by_category",
-    );
-
-    // unpivot pipe operator basic usage
+#[test]
+fn parse_pipe_operator_intersect() {
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> INTERSECT DISTINCT (SELECT * FROM admins)");
     dialects
-        .verified_stmt("SELECT * FROM sales |> UNPIVOT(revenue FOR quarter IN (Q1, Q2, Q3, Q4))");
-    dialects.verified_stmt("SELECT * FROM data |> UNPIVOT(value FOR category IN (A, B, C))");
+        .verified_stmt("SELECT * FROM tbl |> INTERSECT DISTINCT BY NAME (SELECT * FROM admins)");
     dialects.verified_stmt(
-        "SELECT * FROM metrics |> UNPIVOT(measurement FOR metric_type IN (cpu, memory, disk))",
+        "SELECT * FROM tbl |> INTERSECT DISTINCT (SELECT * FROM admins), (SELECT * FROM guests)",
     );
+    dialects.verified_stmt("SELECT * FROM tbl |> INTERSECT DISTINCT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)");
+}
 
-    // unpivot pipe operator with multiple columns
-    dialects.verified_stmt("SELECT * FROM quarterly_sales |> UNPIVOT(amount FOR period IN (jan, feb, mar, apr, may, jun))");
+#[test]
+fn parse_pipe_operator_except() {
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> EXCEPT DISTINCT (SELECT * FROM admins)");
+    dialects.verified_stmt("SELECT * FROM tbl |> EXCEPT DISTINCT BY NAME (SELECT * FROM admins)");
     dialects.verified_stmt(
-        "SELECT * FROM report |> UNPIVOT(score FOR subject IN (math, science, english, history))",
+        "SELECT * FROM tbl |> EXCEPT DISTINCT (SELECT * FROM admins), (SELECT * FROM guests)",
     );
+    dialects.verified_stmt("SELECT * FROM tbl |> EXCEPT DISTINCT BY NAME (SELECT * FROM admins), (SELECT * FROM guests)");
+}
 
-    // unpivot pipe operator mixed with other pipe operators
-    dialects.verified_stmt("SELECT * FROM sales_data |> WHERE year = 2023 |> UNPIVOT(revenue FOR quarter IN (Q1, Q2, Q3, Q4))");
-
-    // unpivot pipe operator with aliases
-    dialects.verified_stmt("SELECT * FROM quarterly_sales |> UNPIVOT(amount FOR period IN (Q1, Q2)) AS unpivoted_sales");
+#[test]
+fn parse_pipe_operator_call() {
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> CALL my_function()");
+    dialects.verified_stmt("SELECT * FROM tbl |> CALL process_data(5, 'test')");
+    dialects
+        .verified_stmt("SELECT * FROM tbl |> CALL namespace.function_name(col1, col2, 'literal')");
+    dialects.verified_stmt("SELECT * FROM tbl |> CALL transform_data(col1 + col2)");
+    dialects.verified_stmt("SELECT * FROM tbl |> CALL analyze_data('param1', 100, true)");
+    dialects.verified_stmt("SELECT * FROM tbl |> CALL tvf1(arg1) AS al");
+    dialects.verified_stmt("SELECT * FROM tbl |> CALL process_data(5) AS result_table");
+    dialects.verified_stmt("SELECT * FROM tbl |> CALL namespace.func() AS my_alias");
+    dialects.verified_stmt("SELECT * FROM tbl |> CALL tvf1(arg1) |> CALL tvf2(arg2, arg3)");
     dialects.verified_stmt(
-        "SELECT * FROM data |> UNPIVOT(value FOR category IN (A, B, C)) AS transformed_data",
+        "SELECT * FROM tbl |> CALL transform(col1) |> CALL validate() |> CALL process(param)",
     );
-    dialects.verified_stmt("SELECT * FROM metrics |> UNPIVOT(measurement FOR metric_type IN (cpu, memory)) AS metric_measurements");
-
-    // unpivot pipe operator with implicit aliases (without AS keyword)
-    dialects.verified_query_with_canonical(
-        "SELECT * FROM quarterly_sales |> UNPIVOT(amount FOR period IN (Q1, Q2)) unpivoted_sales",
-        "SELECT * FROM quarterly_sales |> UNPIVOT(amount FOR period IN (Q1, Q2)) AS unpivoted_sales",
-    );
-    dialects.verified_query_with_canonical(
-        "SELECT * FROM data |> UNPIVOT(value FOR category IN (A, B, C)) transformed_data",
-        "SELECT * FROM data |> UNPIVOT(value FOR category IN (A, B, C)) AS transformed_data",
-    );
-
-    // many pipes
+    dialects
+        .verified_stmt("SELECT * FROM tbl |> CALL tvf1(arg1) AS step1 |> CALL tvf2(arg2) AS step2");
     dialects.verified_stmt(
-        "SELECT * FROM CustomerOrders |> AGGREGATE SUM(cost) AS total_cost GROUP BY customer_id, state, item_type |> EXTEND COUNT(*) OVER (PARTITION BY customer_id) AS num_orders |> WHERE num_orders > 1 |> AGGREGATE AVG(total_cost) AS average GROUP BY state DESC, item_type ASC",
+        "SELECT * FROM tbl |> CALL preprocess() AS clean_data |> CALL analyze(mode) AS results",
     );
-
-    // join pipe operator - INNER JOIN
-    dialects.verified_stmt("SELECT * FROM users |> JOIN orders ON users.id = orders.user_id");
-    dialects.verified_stmt("SELECT * FROM users |> INNER JOIN orders ON users.id = orders.user_id");
-
-    // join pipe operator - LEFT JOIN
-    dialects.verified_stmt("SELECT * FROM users |> LEFT JOIN orders ON users.id = orders.user_id");
     dialects.verified_stmt(
-        "SELECT * FROM users |> LEFT OUTER JOIN orders ON users.id = orders.user_id",
+        "SELECT * FROM tbl |> CALL transform() |> WHERE status = 'active' |> CALL process(param)",
     );
-
-    // join pipe operator - RIGHT JOIN
-    dialects.verified_stmt("SELECT * FROM users |> RIGHT JOIN orders ON users.id = orders.user_id");
     dialects.verified_stmt(
-        "SELECT * FROM users |> RIGHT OUTER JOIN orders ON users.id = orders.user_id",
+        "SELECT * FROM tbl |> CALL preprocess() AS clean |> SELECT col1, col2 |> CALL validate()",
     );
+}
 
-    // join pipe operator - FULL JOIN
-    dialects.verified_stmt("SELECT * FROM users |> FULL JOIN orders ON users.id = orders.user_id");
+#[test]
+fn parse_pipe_operator_pivot() {
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> PIVOT(SUM(amount) FOR quarter IN ('Q1', 'Q2', 'Q3', 'Q4'))",
+    );
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> PIVOT(AVG(revenue) FOR region IN ('North', 'South', 'East', 'West'))",
+    );
+    dialects.verified_stmt("SELECT * FROM tbl |> PIVOT(SUM(sales) AS total_sales, COUNT(*) AS num_transactions FOR month IN ('Jan', 'Feb', 'Mar'))");
+    dialects.verified_stmt("SELECT * FROM tbl |> PIVOT(SUM(amount) FOR product.category IN ('Electronics', 'Clothing'))");
+    dialects.verified_stmt("SELECT * FROM tbl |> WHERE year = 2023 |> PIVOT(SUM(revenue) FOR quarter IN ('Q1', 'Q2', 'Q3', 'Q4'))");
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> PIVOT(SUM(sales) FOR quarter IN ('Q1', 'Q2')) AS quarterly_sales",
+    );
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> PIVOT(AVG(price) FOR category IN ('A', 'B', 'C')) AS avg_by_category",
+    );
+    dialects.verified_stmt("SELECT * FROM tbl |> PIVOT(COUNT(*) AS transactions, SUM(amount) AS total FOR region IN ('North', 'South')) AS regional_summary");
     dialects.verified_query_with_canonical(
-        "SELECT * FROM users |> FULL OUTER JOIN orders ON users.id = orders.user_id",
-        "SELECT * FROM users |> FULL JOIN orders ON users.id = orders.user_id",
-    );
-
-    // join pipe operator - CROSS JOIN
-    dialects.verified_stmt("SELECT * FROM users |> CROSS JOIN orders");
-
-    // join pipe operator with USING
-    dialects.verified_query_with_canonical(
-        "SELECT * FROM users |> JOIN orders USING (user_id)",
-        "SELECT * FROM users |> JOIN orders USING(user_id)",
+        "SELECT * FROM tbl |> PIVOT(SUM(sales) FOR quarter IN ('Q1', 'Q2')) quarterly_sales",
+        "SELECT * FROM tbl |> PIVOT(SUM(sales) FOR quarter IN ('Q1', 'Q2')) AS quarterly_sales",
     );
     dialects.verified_query_with_canonical(
-        "SELECT * FROM users |> LEFT JOIN orders USING (user_id, order_date)",
-        "SELECT * FROM users |> LEFT JOIN orders USING(user_id, order_date)",
+        "SELECT * FROM tbl |> PIVOT(AVG(price) FOR category IN ('A', 'B', 'C')) avg_by_category",
+        "SELECT * FROM tbl |> PIVOT(AVG(price) FOR category IN ('A', 'B', 'C')) AS avg_by_category",
     );
+}
 
-    // join pipe operator with alias (with an omitted "AS" keyword)
+#[test]
+fn parse_pipe_operator_unpivot() {
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> UNPIVOT(revenue FOR quarter IN (Q1, Q2, Q3, Q4))");
+    dialects.verified_stmt("SELECT * FROM tbl |> UNPIVOT(value FOR category IN (A, B, C))");
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> UNPIVOT(measurement FOR metric_type IN (cpu, memory, disk))",
+    );
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> UNPIVOT(amount FOR period IN (jan, feb, mar, apr, may, jun))",
+    );
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> UNPIVOT(score FOR subject IN (math, science, english, history))",
+    );
+    dialects.verified_stmt("SELECT * FROM tbl |> WHERE year = 2023 |> UNPIVOT(revenue FOR quarter IN (Q1, Q2, Q3, Q4))");
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> UNPIVOT(amount FOR period IN (Q1, Q2)) AS unpivoted_sales",
+    );
+    dialects.verified_stmt(
+        "SELECT * FROM tbl |> UNPIVOT(value FOR category IN (A, B, C)) AS transformed_data",
+    );
+    dialects.verified_stmt("SELECT * FROM tbl |> UNPIVOT(measurement FOR metric_type IN (cpu, memory)) AS metric_measurements");
     dialects.verified_query_with_canonical(
-        "SELECT * FROM users |> JOIN orders o ON users.id = o.user_id",
-        "SELECT * FROM users |> JOIN orders o ON users.id = o.user_id",
+        "SELECT * FROM tbl |> UNPIVOT(amount FOR period IN (Q1, Q2)) unpivoted_sales",
+        "SELECT * FROM tbl |> UNPIVOT(amount FOR period IN (Q1, Q2)) AS unpivoted_sales",
     );
-    dialects.verified_stmt("SELECT * FROM users |> LEFT JOIN orders AS o ON users.id = o.user_id");
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM tbl |> UNPIVOT(value FOR category IN (A, B, C)) transformed_data",
+        "SELECT * FROM tbl |> UNPIVOT(value FOR category IN (A, B, C)) AS transformed_data",
+    );
+}
 
-    // join pipe operator with complex ON condition
-    dialects.verified_stmt("SELECT * FROM users |> JOIN orders ON users.id = orders.user_id AND orders.status = 'active'");
-    dialects.verified_stmt("SELECT * FROM users |> LEFT JOIN orders ON users.id = orders.user_id AND orders.amount > 100");
+#[test]
+fn parse_pipe_operator_join() {
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> JOIN orders ON users.id = orders.user_id");
+    dialects.verified_stmt("SELECT * FROM tbl |> INNER JOIN orders ON users.id = orders.user_id");
+    dialects.verified_stmt("SELECT * FROM tbl |> LEFT JOIN orders ON users.id = orders.user_id");
+    dialects
+        .verified_stmt("SELECT * FROM tbl |> LEFT OUTER JOIN orders ON users.id = orders.user_id");
+    dialects.verified_stmt("SELECT * FROM tbl |> RIGHT JOIN orders ON users.id = orders.user_id");
+    dialects
+        .verified_stmt("SELECT * FROM tbl |> RIGHT OUTER JOIN orders ON users.id = orders.user_id");
+    dialects.verified_stmt("SELECT * FROM tbl |> FULL JOIN orders ON users.id = orders.user_id");
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM tbl |> FULL OUTER JOIN orders ON users.id = orders.user_id",
+        "SELECT * FROM tbl |> FULL JOIN orders ON users.id = orders.user_id",
+    );
+    dialects.verified_stmt("SELECT * FROM tbl |> CROSS JOIN orders");
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM tbl |> JOIN orders USING (user_id)",
+        "SELECT * FROM tbl |> JOIN orders USING(user_id)",
+    );
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM tbl |> LEFT JOIN orders USING (user_id, order_date)",
+        "SELECT * FROM tbl |> LEFT JOIN orders USING(user_id, order_date)",
+    );
+    dialects.verified_stmt("SELECT * FROM tbl |> JOIN orders o ON users.id = o.user_id");
+    dialects.verified_stmt("SELECT * FROM tbl |> LEFT JOIN orders AS o ON users.id = o.user_id");
+    dialects.verified_stmt("SELECT * FROM tbl |> JOIN orders ON users.id = orders.user_id AND orders.status = 'active'");
+    dialects.verified_stmt("SELECT * FROM tbl |> LEFT JOIN orders ON users.id = orders.user_id AND orders.amount > 100");
+    dialects.verified_stmt("SELECT * FROM tbl |> JOIN orders ON users.id = orders.user_id |> JOIN products ON orders.product_id = products.id");
+    dialects.verified_stmt("SELECT * FROM tbl |> LEFT JOIN orders ON users.id = orders.user_id |> RIGHT JOIN products ON orders.product_id = products.id");
+    dialects.verified_stmt("SELECT * FROM tbl |> JOIN orders ON users.id = orders.user_id |> WHERE orders.amount > 100");
+    dialects.verified_stmt("SELECT * FROM tbl |> WHERE users.active = true |> LEFT JOIN orders ON users.id = orders.user_id");
+    dialects.verified_stmt("SELECT * FROM tbl |> JOIN orders ON users.id = orders.user_id |> SELECT users.name, orders.amount");
+}
 
-    // multiple join pipe operators
-    dialects.verified_stmt("SELECT * FROM users |> JOIN orders ON users.id = orders.user_id |> JOIN products ON orders.product_id = products.id");
-    dialects.verified_stmt("SELECT * FROM users |> LEFT JOIN orders ON users.id = orders.user_id |> RIGHT JOIN products ON orders.product_id = products.id");
-
-    // join pipe operator with other pipe operators
-    dialects.verified_stmt("SELECT * FROM users |> JOIN orders ON users.id = orders.user_id |> WHERE orders.amount > 100");
-    dialects.verified_stmt("SELECT * FROM users |> WHERE users.active = true |> LEFT JOIN orders ON users.id = orders.user_id");
-    dialects.verified_stmt("SELECT * FROM users |> JOIN orders ON users.id = orders.user_id |> SELECT users.name, orders.amount");
+#[test]
+fn parse_pipe_operator_chained() {
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+    dialects.verified_stmt("SELECT * FROM tbl |> AGGREGATE SUM(cost) AS total_cost GROUP BY customer_id, state, item_type |> EXTEND COUNT(*) OVER (PARTITION BY customer_id) AS num_orders |> WHERE num_orders > 1 |> AGGREGATE AVG(total_cost) AS average GROUP BY state DESC, item_type ASC");
 }
 
 #[test]
@@ -16855,6 +16850,15 @@ fn parse_truncate_only() {
 fn check_enforced() {
     all_dialects().verified_stmt(
         "CREATE TABLE t (a INT, b INT, c INT, CHECK (a > 0) NOT ENFORCED, CHECK (b > 0) ENFORCED, CHECK (c > 0))",
+    );
+}
+
+#[test]
+fn column_check_enforced() {
+    all_dialects().verified_stmt("CREATE TABLE t (x INT CHECK (x > 1) NOT ENFORCED)");
+    all_dialects().verified_stmt("CREATE TABLE t (x INT CHECK (x > 1) ENFORCED)");
+    all_dialects().verified_stmt(
+        "CREATE TABLE t (a INT CHECK (a > 0) NOT ENFORCED, b INT CHECK (b > 0) ENFORCED, c INT CHECK (c > 0))",
     );
 }
 
@@ -17373,6 +17377,12 @@ fn test_parse_not_null_in_column_options() {
 }
 
 #[test]
+fn test_parse_default_expr_with_operators() {
+    all_dialects().verified_stmt("CREATE TABLE t (c INT DEFAULT (1 + 2) + 3)");
+    all_dialects().verified_stmt("CREATE TABLE t (c INT DEFAULT (1 + 2) + 3 NOT NULL)");
+}
+
+#[test]
 fn test_parse_default_with_collate_column_option() {
     let sql = "CREATE TABLE foo (abc TEXT DEFAULT 'foo' COLLATE 'en_US')";
     let stmt = all_dialects().verified_stmt(sql);
@@ -17717,6 +17727,25 @@ fn parse_adjacent_string_literal_concatenation() {
 
     let sql = "SELECT * FROM t WHERE col = 'Hello' \n ' ' \t 'World!'";
     dialects.one_statement_parses_to(sql, r"SELECT * FROM t WHERE col = 'Hello World!'");
+
+    let dialects = all_dialects_where(|d| d.supports_string_literal_concatenation_with_newline());
+    let sql = r#"
+    SELECT 'abc' in ('a'
+        'b'
+        'c',
+        'd'
+    )"#;
+    dialects.one_statement_parses_to(sql, "SELECT 'abc' IN ('abc', 'd')");
+
+    let sql = r#"
+    SELECT 'abc' in ('a'
+        'b'
+        -- COMMENT
+        'c',
+        -- COMMENT
+        'd'
+    )"#;
+    dialects.one_statement_parses_to(sql, "SELECT 'abc' IN ('abc', 'd')");
 }
 
 #[test]

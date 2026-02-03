@@ -32,8 +32,8 @@ use crate::{
 use super::{
     display_comma_separated, helpers::attached_token::AttachedToken, query::InputFormatClause,
     Assignment, Expr, FromTable, Ident, InsertAliases, MysqlInsertPriority, ObjectName, OnInsert,
-    OrderByExpr, Query, SelectInto, SelectItem, Setting, SqliteOnConflict, TableFactor,
-    TableObject, TableWithJoins, UpdateTableFromKind, Values,
+    OptimizerHint, OrderByExpr, Query, SelectInto, SelectItem, Setting, SqliteOnConflict,
+    TableFactor, TableObject, TableWithJoins, UpdateTableFromKind, Values,
 };
 
 /// INSERT statement.
@@ -43,6 +43,11 @@ use super::{
 pub struct Insert {
     /// Token for the `INSERT` keyword (or its substitutes)
     pub insert_token: AttachedToken,
+    /// A query optimizer hint
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
+    pub optimizer_hint: Option<OptimizerHint>,
     /// Only for Sqlite
     pub or: Option<SqliteOnConflict>,
     /// Only for mysql
@@ -102,7 +107,11 @@ impl Display for Insert {
         };
 
         if let Some(on_conflict) = self.or {
-            write!(f, "INSERT {on_conflict} INTO {table_name} ")?;
+            f.write_str("INSERT")?;
+            if let Some(hint) = self.optimizer_hint.as_ref() {
+                write!(f, " {hint}")?;
+            }
+            write!(f, " {on_conflict} INTO {table_name} ")?;
         } else {
             write!(
                 f,
@@ -111,8 +120,11 @@ impl Display for Insert {
                     "REPLACE"
                 } else {
                     "INSERT"
-                },
+                }
             )?;
+            if let Some(hint) = self.optimizer_hint.as_ref() {
+                write!(f, " {hint}")?;
+            }
             if let Some(priority) = self.priority {
                 write!(f, " {priority}",)?;
             }
@@ -188,6 +200,11 @@ impl Display for Insert {
 pub struct Delete {
     /// Token for the `DELETE` keyword
     pub delete_token: AttachedToken,
+    /// A query optimizer hint
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
+    pub optimizer_hint: Option<OptimizerHint>,
     /// Multi tables delete are supported in mysql
     pub tables: Vec<ObjectName>,
     /// FROM
@@ -207,6 +224,10 @@ pub struct Delete {
 impl Display for Delete {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("DELETE")?;
+        if let Some(hint) = self.optimizer_hint.as_ref() {
+            f.write_str(" ")?;
+            hint.fmt(f)?;
+        }
         if !self.tables.is_empty() {
             indented_list(f, &self.tables)?;
         }
@@ -257,6 +278,11 @@ impl Display for Delete {
 pub struct Update {
     /// Token for the `UPDATE` keyword
     pub update_token: AttachedToken,
+    /// A query optimizer hint
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
+    pub optimizer_hint: Option<OptimizerHint>,
     /// TABLE
     pub table: TableWithJoins,
     /// Column assignments
@@ -276,6 +302,10 @@ pub struct Update {
 impl Display for Update {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("UPDATE ")?;
+        if let Some(hint) = self.optimizer_hint.as_ref() {
+            hint.fmt(f)?;
+            f.write_str(" ")?;
+        }
         if let Some(or) = &self.or {
             or.fmt(f)?;
             f.write_str(" ")?;
@@ -322,6 +352,10 @@ impl Display for Update {
 pub struct Merge {
     /// The `MERGE` token that starts the statement.
     pub merge_token: AttachedToken,
+    /// A query optimizer hint
+    ///
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
+    pub optimizer_hint: Option<OptimizerHint>,
     /// optional INTO keyword
     pub into: bool,
     /// Specifies the table to merge
@@ -338,12 +372,18 @@ pub struct Merge {
 
 impl Display for Merge {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("MERGE")?;
+        if let Some(hint) = self.optimizer_hint.as_ref() {
+            write!(f, " {hint}")?;
+        }
+        if self.into {
+            write!(f, " INTO")?;
+        }
         write!(
             f,
-            "MERGE{int} {table} USING {source} ",
-            int = if self.into { " INTO" } else { "" },
+            " {table} USING {source} ",
             table = self.table,
-            source = self.source,
+            source = self.source
         )?;
         write!(f, "ON {on} ", on = self.on)?;
         write!(f, "{}", display_separated(&self.clauses, " "))?;

@@ -4521,13 +4521,13 @@ impl<'a> Parser<'a> {
     /// consumed and returns false
     #[must_use]
     pub fn parse_keywords(&mut self, keywords: &[Keyword]) -> bool {
-        self.parse_keywords_(keywords).is_some()
+        self.parse_keywords_indexed(keywords).is_some()
     }
 
     /// Just like [Self::parse_keywords], but - upon success - returns the
     /// token index of the first keyword.
     #[must_use]
-    fn parse_keywords_(&mut self, keywords: &[Keyword]) -> Option<usize> {
+    fn parse_keywords_indexed(&mut self, keywords: &[Keyword]) -> Option<usize> {
         let start_index = self.index;
         let mut first_keyword_index = None;
         match keywords {
@@ -14286,12 +14286,13 @@ impl<'a> Parser<'a> {
     pub fn maybe_parse_connect_by(&mut self) -> Result<Vec<ConnectByKind>, ParserError> {
         let mut clauses = Vec::with_capacity(2);
         loop {
-            if let Some(idx) = self.parse_keywords_(&[Keyword::START, Keyword::WITH]) {
+            if let Some(idx) = self.parse_keywords_indexed(&[Keyword::START, Keyword::WITH]) {
                 clauses.push(ConnectByKind::StartWith {
                     start_token: self.token_at(idx).clone().into(),
                     condition: self.parse_expr()?.into(),
                 });
-            } else if let Some(idx) = self.parse_keywords_(&[Keyword::CONNECT, Keyword::BY]) {
+            } else if let Some(idx) = self.parse_keywords_indexed(&[Keyword::CONNECT, Keyword::BY])
+            {
                 clauses.push(ConnectByKind::ConnectBy {
                     connect_token: self.token_at(idx).clone().into(),
                     nocycle: self.parse_keyword(Keyword::NOCYCLE),

@@ -35,6 +35,7 @@ use crate::ast::{display_comma_separated, display_separated, Value};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// A collection of key-value options.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct KeyValueOptions {
     /// The list of key-value options.
     pub options: Vec<KeyValueOption>,
@@ -46,6 +47,7 @@ pub struct KeyValueOptions {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// The delimiter used between key-value options.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum KeyValueOptionsDelimiter {
     /// Options are separated by spaces.
     Space,
@@ -57,6 +59,7 @@ pub enum KeyValueOptionsDelimiter {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// A single key-value option.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct KeyValueOption {
     /// The name of the option.
     pub option_name: String,
@@ -73,6 +76,7 @@ pub struct KeyValueOption {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// The kind of value for a key-value option.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum KeyValueOptionKind {
     /// A single value.
     Single(Value),

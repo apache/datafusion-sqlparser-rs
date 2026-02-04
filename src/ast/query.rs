@@ -37,6 +37,7 @@ use crate::{
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "visitor", visit(with = "visit_query"))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Query {
     /// WITH (common table expressions, or CTEs)
     pub with: Option<With>,
@@ -119,6 +120,7 @@ impl fmt::Display for Query {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ProjectionSelect {
     /// The list of projected select items.
     pub projection: Vec<SelectItem>,
@@ -147,6 +149,7 @@ impl fmt::Display for ProjectionSelect {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum SetExpr {
     /// Restricted SELECT .. FROM .. HAVING (no ORDER BY or set operations)
     Select(Box<Select>),
@@ -237,6 +240,7 @@ impl fmt::Display for SetExpr {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// A set operator for combining two `SetExpr`s.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum SetOperator {
     /// `UNION` set operator
     Union,
@@ -265,6 +269,7 @@ impl fmt::Display for SetOperator {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum SetQuantifier {
     /// `ALL` quantifier
     All,
@@ -298,6 +303,7 @@ impl fmt::Display for SetQuantifier {
 /// A [`TABLE` command]( https://www.postgresql.org/docs/current/sql-select.html#SQL-TABLE)
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// A (possibly schema-qualified) table reference used in `FROM` clauses.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Table {
     /// Optional table name (absent for e.g. `TABLE` command without argument).
     pub table_name: Option<String>,
@@ -325,6 +331,7 @@ impl fmt::Display for Table {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum SelectFlavor {
     /// `SELECT *`
     Standard,
@@ -340,6 +347,7 @@ pub enum SelectFlavor {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Select {
     /// Token for the `SELECT` keyword
     pub select_token: AttachedToken,
@@ -550,6 +558,7 @@ impl fmt::Display for Select {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct LateralView {
     /// LATERAL VIEW
     pub lateral_view: Expr,
@@ -589,6 +598,7 @@ impl fmt::Display for LateralView {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum NamedWindowExpr {
     /// A direct reference to another named window definition.
     /// [BigQuery]
@@ -627,6 +637,7 @@ impl fmt::Display for NamedWindowExpr {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// A named window definition: `<name> AS <window specification>`
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct NamedWindowDefinition(pub Ident, pub NamedWindowExpr);
 
 impl fmt::Display for NamedWindowDefinition {
@@ -639,6 +650,7 @@ impl fmt::Display for NamedWindowDefinition {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// A `WITH` clause, introducing common table expressions (CTEs).
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct With {
     /// Token for the `WITH` keyword
     pub with_token: AttachedToken,
@@ -663,6 +675,7 @@ impl fmt::Display for With {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Indicates whether a CTE is materialized or not.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CteAsMaterialized {
     /// The `WITH` statement specifies `AS MATERIALIZED` behavior
     Materialized,
@@ -691,6 +704,7 @@ impl fmt::Display for CteAsMaterialized {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Cte {
     /// The CTE alias (name introduced before the `AS` keyword).
     pub alias: TableAlias,
@@ -738,6 +752,7 @@ impl fmt::Display for Cte {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum SelectItemQualifiedWildcardKind {
     /// Expression is an object name.
     /// e.g. `alias.*` or even `schema.table.*`
@@ -751,6 +766,7 @@ pub enum SelectItemQualifiedWildcardKind {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum SelectItem {
     /// Any expression, not followed by `[ AS ] alias`
     UnnamedExpr(Expr),
@@ -788,6 +804,7 @@ impl fmt::Display for SelectItemQualifiedWildcardKind {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct IdentWithAlias {
     /// The identifier being aliased.
     pub ident: Ident,
@@ -805,6 +822,7 @@ impl fmt::Display for IdentWithAlias {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct WildcardAdditionalOptions {
     /// The wildcard token `*`
     pub wildcard_token: AttachedToken,
@@ -868,6 +886,7 @@ impl fmt::Display for WildcardAdditionalOptions {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct IlikeSelectItem {
     /// The pattern expression used with `ILIKE`.
     pub pattern: String,
@@ -893,6 +912,7 @@ impl fmt::Display for IlikeSelectItem {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ExcludeSelectItem {
     /// Single column name without parenthesis.
     ///
@@ -934,6 +954,7 @@ impl fmt::Display for ExcludeSelectItem {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum RenameSelectItem {
     /// Single column name with alias without parenthesis.
     ///
@@ -974,6 +995,7 @@ impl fmt::Display for RenameSelectItem {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ExceptSelectItem {
     /// First guaranteed column.
     pub first_element: Ident,
@@ -1008,6 +1030,7 @@ impl fmt::Display for ExceptSelectItem {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ReplaceSelectItem {
     /// List of replacement elements contained in the `REPLACE(...)` clause.
     pub items: Vec<Box<ReplaceSelectElement>>,
@@ -1028,6 +1051,7 @@ impl fmt::Display for ReplaceSelectItem {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ReplaceSelectElement {
     /// Expression producing the replacement value.
     pub expr: Expr,
@@ -1073,6 +1097,7 @@ impl fmt::Display for SelectItem {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// A left table followed by zero or more joins.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct TableWithJoins {
     /// The starting table factor (left side) of the join chain.
     pub relation: TableFactor,
@@ -1097,6 +1122,7 @@ impl fmt::Display for TableWithJoins {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ConnectBy {
     /// START WITH
     pub condition: Expr,
@@ -1119,6 +1145,7 @@ impl fmt::Display for ConnectBy {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// A single setting key-value pair.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Setting {
     /// Setting name/key.
     pub key: Ident,
@@ -1141,6 +1168,7 @@ impl fmt::Display for Setting {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ExprWithAlias {
     /// The expression.
     pub expr: Expr,
@@ -1168,6 +1196,7 @@ impl fmt::Display for ExprWithAlias {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ExprWithAliasAndOrderBy {
     /// Expression with optional alias.
     pub expr: ExprWithAlias,
@@ -1185,6 +1214,7 @@ impl fmt::Display for ExprWithAliasAndOrderBy {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct TableFunctionArgs {
     /// The list of arguments passed to the table-valued function.
     pub args: Vec<FunctionArg>,
@@ -1199,6 +1229,7 @@ pub struct TableFunctionArgs {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Type of index hint (e.g., `USE`, `IGNORE`, `FORCE`).
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TableIndexHintType {
     /// `USE` hint.
     Use,
@@ -1222,6 +1253,7 @@ impl fmt::Display for TableIndexHintType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// The kind of index referenced by an index hint (e.g. `USE INDEX`).
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TableIndexType {
     /// The `INDEX` kind.
     Index,
@@ -1242,6 +1274,7 @@ impl fmt::Display for TableIndexType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Which clause the table index hint applies to.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TableIndexHintForClause {
     /// Apply the hint to JOIN clauses.
     Join,
@@ -1265,6 +1298,7 @@ impl fmt::Display for TableIndexHintForClause {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// MySQL-style index hints attached to a table (e.g., `USE INDEX(...)`).
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct TableIndexHints {
     /// Type of hint (e.g., `USE`, `FORCE`, or `IGNORE`).
     pub hint_type: TableIndexHintType,
@@ -1291,6 +1325,7 @@ impl fmt::Display for TableIndexHints {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "visitor", visit(with = "visit_table_factor"))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TableFactor {
     /// A named table or relation, possibly with arguments, hints, or sampling.
     Table {
@@ -1565,6 +1600,7 @@ pub enum TableFactor {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TableSampleKind {
     /// Table sample located before the table alias option
     BeforeTableAlias(Box<TableSample>),
@@ -1576,6 +1612,7 @@ pub enum TableSampleKind {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Represents a `TABLESAMPLE` clause and its options.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct TableSample {
     /// Modifier (e.g. `SAMPLE` or `TABLESAMPLE`).
     pub modifier: TableSampleModifier,
@@ -1595,6 +1632,7 @@ pub struct TableSample {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Modifier specifying whether `SAMPLE` or `TABLESAMPLE` keyword was used.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TableSampleModifier {
     /// `SAMPLE` modifier.
     Sample,
@@ -1616,6 +1654,7 @@ impl fmt::Display for TableSampleModifier {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Quantity for a `TABLESAMPLE` clause (e.g. `10 PERCENT` or `(10)`).
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct TableSampleQuantity {
     /// Whether the quantity was wrapped in parentheses.
     pub parenthesized: bool,
@@ -1646,6 +1685,7 @@ impl fmt::Display for TableSampleQuantity {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Sampling method used by `TABLESAMPLE`.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TableSampleMethod {
     /// `ROW` sampling method.
     Row,
@@ -1672,6 +1712,7 @@ impl fmt::Display for TableSampleMethod {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// `SEED` or `REPEATABLE` clause used with sampling.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct TableSampleSeed {
     /// Seed modifier (e.g. `REPEATABLE` or `SEED`).
     pub modifier: TableSampleSeedModifier,
@@ -1690,6 +1731,7 @@ impl fmt::Display for TableSampleSeed {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Modifier specifying how the sample seed is applied.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TableSampleSeedModifier {
     /// `REPEATABLE` modifier.
     Repeatable,
@@ -1710,6 +1752,7 @@ impl fmt::Display for TableSampleSeedModifier {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Unit used with a `TABLESAMPLE` quantity (rows or percent).
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TableSampleUnit {
     /// `ROWS` unit.
     Rows,
@@ -1730,6 +1773,7 @@ impl fmt::Display for TableSampleUnit {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Bucket-based sampling clause: `BUCKET <bucket> OUT OF <total> [ON <expr>]`.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct TableSampleBucket {
     /// The bucket index expression.
     pub bucket: Value,
@@ -1774,6 +1818,7 @@ impl fmt::Display for TableSample {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum PivotValueSource {
     /// Pivot on a static list of values.
     ///
@@ -1812,6 +1857,7 @@ impl fmt::Display for PivotValueSource {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// An item in the `MEASURES` clause of `MATCH_RECOGNIZE`.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Measure {
     /// Expression producing the measure value.
     pub expr: Expr,
@@ -1831,6 +1877,7 @@ impl fmt::Display for Measure {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum RowsPerMatch {
     /// `ONE ROW PER MATCH`
     OneRow,
@@ -1859,6 +1906,7 @@ impl fmt::Display for RowsPerMatch {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AfterMatchSkip {
     /// `PAST LAST ROW`
     PastLastRow,
@@ -1886,6 +1934,7 @@ impl fmt::Display for AfterMatchSkip {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// The mode for handling empty matches in a `MATCH_RECOGNIZE` operation.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum EmptyMatchesMode {
     /// `SHOW EMPTY MATCHES`
     Show,
@@ -1912,6 +1961,7 @@ impl fmt::Display for EmptyMatchesMode {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// A symbol defined in a `MATCH_RECOGNIZE` operation.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct SymbolDefinition {
     /// The symbol identifier.
     pub symbol: Ident,
@@ -1929,6 +1979,7 @@ impl fmt::Display for SymbolDefinition {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum MatchRecognizeSymbol {
     /// A named symbol, e.g. `S1`.
     Named(Ident),
@@ -1954,6 +2005,7 @@ impl fmt::Display for MatchRecognizeSymbol {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum MatchRecognizePattern {
     /// A named symbol such as `S1` or a virtual symbol such as `^`.
     Symbol(MatchRecognizeSymbol),
@@ -1991,6 +2043,7 @@ impl fmt::Display for MatchRecognizePattern {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum RepetitionQuantifier {
     /// `*`
     ZeroOrMore,
@@ -2346,6 +2399,7 @@ impl fmt::Display for TableFactor {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// An alias for a table reference, optionally including an explicit `AS` and column names.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct TableAlias {
     /// Tells whether the alias was introduced with an explicit, preceding "AS"
     /// keyword, e.g. `AS name`. Typically, the keyword is preceding the name
@@ -2375,6 +2429,7 @@ impl fmt::Display for TableAlias {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct TableAliasColumnDef {
     /// Column name alias
     pub name: Ident,
@@ -2406,6 +2461,7 @@ impl fmt::Display for TableAliasColumnDef {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Specifies a table version selection, e.g. `FOR SYSTEM_TIME AS OF` or `AT(...)`.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TableVersion {
     /// When the table version is defined using `FOR SYSTEM_TIME AS OF`.
     /// For example: `SELECT * FROM tbl FOR SYSTEM_TIME AS OF TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 HOUR)`
@@ -2439,6 +2495,7 @@ impl Display for TableVersion {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// A single `JOIN` clause including relation and join operator/options.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Join {
     /// The joined table factor (table reference or derived table).
     pub relation: TableFactor,
@@ -2583,6 +2640,7 @@ impl fmt::Display for Join {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// The operator used for joining two tables, e.g. `INNER`, `LEFT`, `CROSS`, `ASOF`, etc.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum JoinOperator {
     /// Generic `JOIN` with an optional constraint.
     Join(JoinConstraint),
@@ -2635,6 +2693,7 @@ pub enum JoinOperator {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Represents how two tables are constrained in a join: `ON`, `USING`, `NATURAL`, or none.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum JoinConstraint {
     /// `ON <expr>` join condition.
     On(Expr),
@@ -2650,6 +2709,7 @@ pub enum JoinConstraint {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// The kind of `ORDER BY` clause: either `ALL` with modifiers or a list of expressions.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum OrderByKind {
     /// `GROUP BY ALL`/`ORDER BY ALL` syntax with optional modifiers.
     ///
@@ -2665,6 +2725,7 @@ pub enum OrderByKind {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Represents an `ORDER BY` clause with its kind and optional `INTERPOLATE`.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct OrderBy {
     /// The kind of ordering (expressions or `ALL`).
     pub kind: OrderByKind,
@@ -2700,6 +2761,7 @@ impl fmt::Display for OrderBy {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct OrderByExpr {
     /// The expression to order by.
     pub expr: Expr,
@@ -2737,6 +2799,7 @@ impl fmt::Display for OrderByExpr {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// `WITH FILL` options for ClickHouse `ORDER BY` expressions.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct WithFill {
     /// Optional lower bound expression for the fill range (`FROM <expr>`).
     pub from: Option<Expr>,
@@ -2770,6 +2833,7 @@ impl fmt::Display for WithFill {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// An expression used by `WITH FILL`/`INTERPOLATE` to specify interpolation for a column.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct InterpolateExpr {
     /// The column to interpolate.
     pub column: Ident,
@@ -2781,6 +2845,7 @@ pub struct InterpolateExpr {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// `INTERPOLATE` clause used with ClickHouse `WITH FILL` to compute missing values.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Interpolate {
     /// Optional list of interpolation expressions.
     pub exprs: Option<Vec<InterpolateExpr>>,
@@ -2800,6 +2865,7 @@ impl fmt::Display for InterpolateExpr {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Options for an `ORDER BY` expression (ASC/DESC and NULLS FIRST/LAST).
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct OrderByOptions {
     /// Optional `ASC` (`Some(true)`) or `DESC` (`Some(false)`).
     pub asc: Option<bool>,
@@ -2827,6 +2893,7 @@ impl fmt::Display for OrderByOptions {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Represents the different syntactic forms of `LIMIT` clauses.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum LimitClause {
     /// Standard SQL `LIMIT` syntax (optionally `BY` and `OFFSET`).
     ///
@@ -2879,6 +2946,7 @@ impl fmt::Display for LimitClause {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// `OFFSET` clause consisting of a value and a rows specifier.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Offset {
     /// The numeric expression following `OFFSET`.
     pub value: Expr,
@@ -2896,6 +2964,7 @@ impl fmt::Display for Offset {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum OffsetRows {
     /// Omitting `ROW`/`ROWS` entirely (non-standard MySQL quirk).
     None,
@@ -2929,6 +2998,7 @@ impl fmt::Display for OffsetRows {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum PipeOperator {
     /// Limits the number of rows to return in a query, with an optional OFFSET clause to skip over rows.
     ///
@@ -3259,6 +3329,7 @@ impl PipeOperator {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// `FETCH` clause options.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Fetch {
     /// `WITH TIES` option is present.
     pub with_ties: bool,
@@ -3284,6 +3355,7 @@ impl fmt::Display for Fetch {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// `FOR ...` locking clause.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct LockClause {
     /// The kind of lock requested (e.g. `SHARE`, `UPDATE`).
     pub lock_type: LockType,
@@ -3310,6 +3382,7 @@ impl fmt::Display for LockClause {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// The lock type used in `FOR <lock>` clauses (e.g. `FOR SHARE`, `FOR UPDATE`).
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum LockType {
     /// `SHARE` lock (shared lock).
     Share,
@@ -3331,6 +3404,7 @@ impl fmt::Display for LockType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Non-blocking lock options for `FOR ...` clauses.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum NonBlock {
     /// `NOWAIT` — do not wait for the lock.
     Nowait,
@@ -3352,6 +3426,7 @@ impl fmt::Display for NonBlock {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// `DISTINCT` or `DISTINCT ON (...)` modifiers for `SELECT` lists.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Distinct {
     /// `DISTINCT` (remove duplicate rows)
     Distinct,
@@ -3376,6 +3451,7 @@ impl fmt::Display for Distinct {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// MSSQL `TOP` clause options.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Top {
     /// SQL semantic equivalent of LIMIT but with same structure as FETCH.
     /// MSSQL only.
@@ -3390,6 +3466,7 @@ pub struct Top {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Quantity used in a `TOP` clause: either an expression or a constant.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TopQuantity {
     /// A parenthesized expression (MSSQL syntax: `TOP (expr)`).
     Expr(Expr),
@@ -3418,6 +3495,7 @@ impl fmt::Display for Top {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// An explicit `VALUES` clause and its rows.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Values {
     /// Was there an explicit `ROW` keyword (MySQL)?
     /// <https://dev.mysql.com/doc/refman/8.0/en/values.html>
@@ -3451,6 +3529,7 @@ impl fmt::Display for Values {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// `SELECT INTO` clause options.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct SelectInto {
     /// `TEMPORARY` modifier.
     pub temporary: bool,
@@ -3480,6 +3559,7 @@ impl fmt::Display for SelectInto {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Modifiers used with `GROUP BY` such as `WITH ROLLUP` or `WITH CUBE`.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum GroupByWithModifier {
     /// `WITH ROLLUP` modifier.
     Rollup,
@@ -3511,6 +3591,7 @@ impl fmt::Display for GroupByWithModifier {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Represents the two syntactic forms that `GROUP BY` can take, including
 /// `GROUP BY ALL` with optional modifiers and ordinary `GROUP BY <exprs>`.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum GroupByExpr {
     /// ALL syntax of [Snowflake], [DuckDB] and [ClickHouse].
     ///
@@ -3555,6 +3636,7 @@ impl fmt::Display for GroupByExpr {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum FormatClause {
     /// The format identifier.
     Identifier(Ident),
@@ -3577,6 +3659,7 @@ impl fmt::Display for FormatClause {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct InputFormatClause {
     /// The format identifier.
     pub ident: Ident,
@@ -3600,6 +3683,7 @@ impl fmt::Display for InputFormatClause {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ForClause {
     /// `FOR BROWSE` clause.
     Browse,
@@ -3683,6 +3767,7 @@ impl fmt::Display for ForClause {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Modes for `FOR XML` clause.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ForXml {
     /// `RAW` mode with optional root name: `RAW('root')`.
     Raw(Option<String>),
@@ -3721,6 +3806,7 @@ impl fmt::Display for ForXml {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Modes for `FOR JSON` clause.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ForJson {
     /// `AUTO` mode.
     Auto,
@@ -3760,6 +3846,7 @@ impl fmt::Display for ForJson {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum JsonTableColumn {
     /// A named column with a JSON path
     Named(JsonTableNamedColumn),
@@ -3790,6 +3877,7 @@ impl fmt::Display for JsonTableColumn {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// A nested column in a `JSON_TABLE` column list.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct JsonTableNestedColumn {
     /// JSON path expression (must be a literal `Value`).
     pub path: Value,
@@ -3818,6 +3906,7 @@ impl fmt::Display for JsonTableNestedColumn {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct JsonTableNamedColumn {
     /// The name of the column to be extracted.
     pub name: Ident,
@@ -3859,6 +3948,7 @@ impl fmt::Display for JsonTableNamedColumn {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Error/empty-value handling for `JSON_TABLE` columns.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum JsonTableColumnErrorHandling {
     /// `NULL` — return NULL when the path does not match.
     Null,
@@ -3890,6 +3980,7 @@ impl fmt::Display for JsonTableColumnErrorHandling {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct OpenJsonTableColumn {
     /// The name of the column to be extracted.
     pub name: Ident,
@@ -3924,6 +4015,7 @@ impl fmt::Display for OpenJsonTableColumn {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Mode of BigQuery value tables, e.g. `AS STRUCT` or `AS VALUE`.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ValueTableMode {
     /// `AS STRUCT`
     AsStruct,
@@ -3950,6 +4042,7 @@ impl fmt::Display for ValueTableMode {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum UpdateTableFromKind {
     /// Update Statement where the 'FROM' clause is before the 'SET' keyword (Supported by Snowflake)
     /// For Example: `UPDATE FROM t1 SET t1.name='aaa'`
@@ -3963,6 +4056,7 @@ pub enum UpdateTableFromKind {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum XmlTableColumnOption {
     /// A named column with a type, optional path, and default value.
     NamedInfo {
@@ -3994,6 +4088,7 @@ pub enum XmlTableColumnOption {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct XmlTableColumn {
     /// The name of the column.
     pub name: Ident,
@@ -4035,6 +4130,7 @@ impl fmt::Display for XmlTableColumn {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Argument passed in the `XMLTABLE PASSING` clause.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct XmlPassingArgument {
     /// Expression to pass to the XML table.
     pub expr: Expr,
@@ -4062,6 +4158,7 @@ impl fmt::Display for XmlPassingArgument {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// The PASSING clause for `XMLTABLE`.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct XmlPassingClause {
     /// The list of passed arguments.
     pub arguments: Vec<XmlPassingArgument>,
@@ -4082,6 +4179,7 @@ impl fmt::Display for XmlPassingClause {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct XmlNamespaceDefinition {
     /// The namespace URI (a text expression).
     pub uri: Expr,

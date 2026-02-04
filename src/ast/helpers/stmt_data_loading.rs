@@ -35,6 +35,7 @@ use sqlparser_derive::{Visit, VisitMut};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Parameters for a named stage object used in data loading/unloading.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct StageParamsObject {
     /// Optional URL for the stage.
     pub url: Option<String>,
@@ -53,6 +54,7 @@ pub struct StageParamsObject {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum StageLoadSelectItemKind {
     /// A standard SQL select item expression.
     SelectItem(SelectItem),
@@ -73,6 +75,7 @@ impl fmt::Display for StageLoadSelectItemKind {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// A single item in the `SELECT` list for data loading from staged files.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct StageLoadSelectItem {
     /// Optional alias for the input source.
     pub alias: Option<Ident>,
@@ -130,6 +133,7 @@ impl fmt::Display for StageLoadSelectItem {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// A command to stage files to a named stage.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct FileStagingCommand {
     /// The stage to which files are being staged.
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]

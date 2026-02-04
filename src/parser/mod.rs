@@ -7884,35 +7884,13 @@ impl<'a> Parser<'a> {
     pub fn parse_hive_distribution(&mut self) -> Result<HiveDistributionStyle, ParserError> {
         if self.parse_keywords(&[Keyword::PARTITIONED, Keyword::BY]) {
             self.expect_token(&Token::LParen)?;
-            let columns = self.parse_comma_separated(Parser::parse_partitioned_by_column_def)?;
+            let columns =
+                self.parse_comma_separated(|parser| parser.parse_column_def_inner(true))?;
             self.expect_token(&Token::RParen)?;
             Ok(HiveDistributionStyle::PARTITIONED { columns })
         } else {
             Ok(HiveDistributionStyle::NONE)
         }
-    }
-
-    /// Parse column definition for `PARTITIONED BY` clause.
-    ///
-    /// Allows partition columns without types when referencing
-    /// columns already defined in the table specification:
-    /// ```sql
-    /// CREATE TABLE t (col1 STRING, col2 INT) PARTITIONED BY (col1)
-    /// CREATE TABLE t (col1 STRING) PARTITIONED BY (col2 INT)
-    /// ```
-    ///
-    /// [Databricks](https://docs.databricks.com/en/sql/language-manual/sql-ref-partition.html)
-    fn parse_partitioned_by_column_def(&mut self) -> Result<ColumnDef, ParserError> {
-        let name = self.parse_identifier()?;
-        let data_type = self
-            .maybe_parse(|parser| parser.parse_data_type())?
-            .unwrap_or(DataType::Unspecified);
-
-        Ok(ColumnDef {
-            name,
-            data_type,
-            options: vec![],
-        })
     }
 
     /// Parse Hive formats.
@@ -8731,9 +8709,19 @@ impl<'a> Parser<'a> {
 
     /// Parse column definition.
     pub fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
+        self.parse_column_def_inner(false)
+    }
+
+    fn parse_column_def_inner(
+        &mut self,
+        optional_data_type: bool,
+    ) -> Result<ColumnDef, ParserError> {
         let col_name = self.parse_identifier()?;
         let data_type = if self.is_column_type_sqlite_unspecified() {
             DataType::Unspecified
+        } else if optional_data_type {
+            self.maybe_parse(|parser| parser.parse_data_type())?
+                .unwrap_or(DataType::Unspecified)
         } else {
             self.parse_data_type()?
         };

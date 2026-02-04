@@ -199,6 +199,7 @@ fn format_statement_list(f: &mut fmt::Formatter, statements: &[Statement]) -> fm
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Ident {
     /// The value of the identifier without quotes.
     pub value: String,
@@ -348,6 +349,7 @@ impl fmt::Display for Ident {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ObjectName(pub Vec<ObjectNamePart>);
 
 impl From<Vec<Ident>> for ObjectName {
@@ -372,6 +374,7 @@ impl fmt::Display for ObjectName {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ObjectNamePart {
     /// A single identifier part, e.g. `schema` or `table`.
     Identifier(Ident),
@@ -405,6 +408,7 @@ impl fmt::Display for ObjectNamePart {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ObjectNamePartFunction {
     /// The function name that produces the object name part.
     pub name: Ident,
@@ -424,6 +428,7 @@ impl fmt::Display for ObjectNamePartFunction {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Array {
     /// The list of expressions between brackets
     pub elem: Vec<Expr>,
@@ -454,6 +459,7 @@ impl fmt::Display for Array {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Interval {
     /// The interval value expression (commonly a string literal).
     pub value: Box<Expr>,
@@ -516,6 +522,7 @@ impl fmt::Display for Interval {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct StructField {
     /// Optional name of the struct field.
     pub field_name: Option<Ident>,
@@ -547,6 +554,7 @@ impl fmt::Display for StructField {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct UnionField {
     /// Name of the union field.
     pub field_name: Ident,
@@ -566,6 +574,7 @@ impl fmt::Display for UnionField {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct DictionaryField {
     /// Dictionary key identifier.
     pub key: Ident,
@@ -583,6 +592,7 @@ impl fmt::Display for DictionaryField {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Map {
     /// Entries of the map as key/value pairs.
     pub entries: Vec<MapEntry>,
@@ -600,6 +610,7 @@ impl Display for Map {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct MapEntry {
     /// Key expression of the map entry.
     pub key: Box<Expr>,
@@ -618,6 +629,7 @@ impl fmt::Display for MapEntry {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CastFormat {
     /// A simple cast format specified by a `Value`.
     Value(Value),
@@ -629,6 +641,7 @@ pub enum CastFormat {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum JsonPathElem {
     /// Accesses an object field using dot notation, e.g. `obj:foo.bar.baz`.
     ///
@@ -656,6 +669,7 @@ pub enum JsonPathElem {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct JsonPath {
     /// Sequence of path elements that form the JSON path.
     pub path: Vec<JsonPathElem>,
@@ -691,6 +705,7 @@ impl fmt::Display for JsonPath {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CastKind {
     /// The standard SQL cast syntax, e.g. `CAST(<expr> as <datatype>)`
     Cast,
@@ -713,6 +728,7 @@ pub enum CastKind {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ConstraintReferenceMatchKind {
     /// `MATCH FULL`
     Full,
@@ -741,6 +757,7 @@ impl fmt::Display for ConstraintReferenceMatchKind {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ExtractSyntax {
     /// `EXTRACT( <date_or_time_part> FROM <date_or_time_expr> )`
     From,
@@ -759,6 +776,7 @@ pub enum ExtractSyntax {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CeilFloorKind {
     /// `CEIL( <expr> TO <DateTimeField>)`
     DateTimeField(DateTimeField),
@@ -771,6 +789,7 @@ pub enum CeilFloorKind {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CaseWhen {
     /// The `WHEN` condition expression.
     pub condition: Expr,
@@ -813,6 +832,7 @@ impl fmt::Display for CaseWhen {
     derive(Visit, VisitMut),
     visit(with = "visit_expr")
 )]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Expr {
     /// Identifier e.g. table name or column name
     Identifier(Ident),
@@ -1329,6 +1349,7 @@ impl Expr {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Subscript {
     /// Accesses the element of the array at the given index.
     Index {
@@ -1398,6 +1419,7 @@ impl fmt::Display for Subscript {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AccessExpr {
     /// Accesses a field using dot notation, e.g. `foo.bar.baz`.
     Dot(Expr),
@@ -1418,6 +1440,7 @@ impl fmt::Display for AccessExpr {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct LambdaFunction {
     /// The parameters to the lambda function.
     pub params: OneOrManyWithParens<Ident>,
@@ -1449,6 +1472,7 @@ impl fmt::Display for LambdaFunction {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Copy)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum LambdaSyntax {
     /// Arrow syntax: `param -> expr` or `(param1, param2) -> expr`
     ///
@@ -1489,6 +1513,7 @@ pub enum LambdaSyntax {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum OneOrManyWithParens<T> {
     /// A single `T`, unparenthesized.
     One(T),
@@ -2160,6 +2185,7 @@ impl fmt::Display for Expr {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum WindowType {
     /// An inline window specification.
     WindowSpec(WindowSpec),
@@ -2186,6 +2212,7 @@ impl Display for WindowType {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct WindowSpec {
     /// Optional window name.
     ///
@@ -2257,6 +2284,7 @@ impl fmt::Display for WindowSpec {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct WindowFrame {
     /// Units for the frame (e.g. `ROWS`, `RANGE`, `GROUPS`).
     pub units: WindowFrameUnits,
@@ -2286,6 +2314,7 @@ impl Default for WindowFrame {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Units used to describe the window frame scope.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum WindowFrameUnits {
     /// `ROWS` unit.
     Rows,
@@ -2312,6 +2341,7 @@ impl fmt::Display for WindowFrameUnits {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// How NULL values are treated in certain window functions.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum NullTreatment {
     /// Ignore NULL values (e.g. `IGNORE NULLS`).
     IgnoreNulls,
@@ -2332,6 +2362,7 @@ impl fmt::Display for NullTreatment {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum WindowFrameBound {
     /// `CURRENT ROW`
     CurrentRow,
@@ -2357,6 +2388,7 @@ impl fmt::Display for WindowFrameBound {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Indicates partition operation type for partition management statements.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AddDropSync {
     /// Add partitions.
     ADD,
@@ -2380,6 +2412,7 @@ impl fmt::Display for AddDropSync {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Object kinds supported by `SHOW CREATE` statements.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ShowCreateObject {
     /// An event object for `SHOW CREATE EVENT`.
     Event,
@@ -2412,6 +2445,7 @@ impl fmt::Display for ShowCreateObject {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Objects that can be targeted by a `COMMENT` statement.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CommentObject {
     /// A table column.
     Column,
@@ -2447,6 +2481,7 @@ impl fmt::Display for CommentObject {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Password specification variants used in user-related statements.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Password {
     /// A concrete password expression.
     Password(Expr),
@@ -2473,6 +2508,7 @@ pub enum Password {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CaseStatement {
     /// The `CASE` token that starts the statement.
     pub case_token: AttachedToken,
@@ -2546,6 +2582,7 @@ impl fmt::Display for CaseStatement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct IfStatement {
     /// The initial `IF` block containing the condition and statements.
     pub if_block: ConditionalStatementBlock,
@@ -2598,6 +2635,7 @@ impl fmt::Display for IfStatement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct WhileStatement {
     /// Block executed while the condition holds.
     pub while_block: ConditionalStatementBlock,
@@ -2638,6 +2676,7 @@ impl fmt::Display for WhileStatement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ConditionalStatementBlock {
     /// Token representing the start of the block (e.g., WHEN/IF/WHILE).
     pub start_token: AttachedToken,
@@ -2688,6 +2727,7 @@ impl fmt::Display for ConditionalStatementBlock {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Statements used inside conditional blocks (`IF`, `WHEN`, `WHILE`).
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ConditionalStatements {
     /// Simple sequence of statements (no `BEGIN`/`END`).
     Sequence {
@@ -2733,6 +2773,7 @@ impl fmt::Display for ConditionalStatements {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct BeginEndStatements {
     /// Token representing the `BEGIN` keyword (may include span info).
     pub begin_token: AttachedToken,
@@ -2777,6 +2818,7 @@ impl fmt::Display for BeginEndStatements {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct RaiseStatement {
     /// Optional value provided to the RAISE statement.
     pub value: Option<RaiseStatementValue>,
@@ -2799,6 +2841,7 @@ impl fmt::Display for RaiseStatement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum RaiseStatementValue {
     /// `RAISE USING MESSAGE = 'error'`
     UsingMessage(Expr),
@@ -2825,6 +2868,7 @@ impl fmt::Display for RaiseStatementValue {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum DeclareAssignment {
     /// Plain expression specified.
     Expr(Box<Expr>),
@@ -2883,6 +2927,7 @@ impl fmt::Display for DeclareAssignment {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum DeclareType {
     /// Cursor variable type. e.g. [Snowflake] [PostgreSQL] [MsSql]
     ///
@@ -2941,6 +2986,7 @@ impl fmt::Display for DeclareType {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Declare {
     /// The name(s) being declared.
     /// Example: `DECLARE a, b, c DEFAULT 42;
@@ -3037,6 +3083,7 @@ impl fmt::Display for Declare {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Options allowed within a `CREATE TABLE` statement.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CreateTableOptions {
     /// No options specified.
     #[default]
@@ -3080,6 +3127,7 @@ impl fmt::Display for CreateTableOptions {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum FromTable {
     /// An explicit `FROM` keyword was specified.
     WithFromKeyword(Vec<TableWithJoins>),
@@ -3104,6 +3152,7 @@ impl Display for FromTable {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Variants for the `SET` family of statements.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Set {
     /// SQL Standard-style
     /// SET a = 1;
@@ -3301,6 +3350,7 @@ impl Display for Set {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ExceptionWhen {
     /// Identifiers that trigger this branch (error conditions).
     pub idents: Vec<Ident>,
@@ -3329,6 +3379,7 @@ impl Display for ExceptionWhen {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Analyze {
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     /// Name of the table to analyze.
@@ -3395,6 +3446,7 @@ impl fmt::Display for Analyze {
     derive(Visit, VisitMut),
     visit(with = "visit_statement")
 )]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Statement {
     /// ```sql
     /// ANALYZE
@@ -4745,6 +4797,7 @@ impl From<ddl::Msck> for Statement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CurrentGrantsKind {
     /// `COPY CURRENT GRANTS` (copy current grants to target).
     CopyCurrentGrants,
@@ -4766,6 +4819,7 @@ impl fmt::Display for CurrentGrantsKind {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// `RAISERROR` options
 /// See <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/raiserror-transact-sql?view=sql-server-ver16#options>
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum RaisErrorOption {
     /// Log the error.
     Log,
@@ -6128,6 +6182,7 @@ impl fmt::Display for Statement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum SequenceOptions {
     /// `INCREMENT [BY] <expr>` option; second value indicates presence of `BY` keyword.
     IncrementBy(Expr, bool),
@@ -6188,6 +6243,7 @@ impl fmt::Display for SequenceOptions {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct SetAssignment {
     /// Optional context scope (e.g., SESSION or LOCAL).
     pub scope: Option<ContextModifier>,
@@ -6215,6 +6271,7 @@ impl fmt::Display for SetAssignment {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct TruncateTableTarget {
     /// name of the table being truncated
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
@@ -6251,6 +6308,7 @@ impl fmt::Display for TruncateTableTarget {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TruncateIdentityOption {
     /// Restart identity values (RESTART IDENTITY).
     Restart,
@@ -6263,6 +6321,7 @@ pub enum TruncateIdentityOption {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CascadeOption {
     /// Apply cascading action (e.g., CASCADE).
     Cascade,
@@ -6283,6 +6342,7 @@ impl Display for CascadeOption {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum BeginTransactionKind {
     /// Standard `TRANSACTION` keyword.
     Transaction,
@@ -6304,6 +6364,7 @@ impl Display for BeginTransactionKind {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum MinMaxValue {
     /// Clause is not specified.
     Empty,
@@ -6318,6 +6379,7 @@ pub enum MinMaxValue {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[non_exhaustive]
 /// Behavior to apply for `INSERT` when a conflict occurs.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum OnInsert {
     /// ON DUPLICATE KEY UPDATE (MySQL when the key already exists, then execute an update instead)
     DuplicateKeyUpdate(Vec<Assignment>),
@@ -6329,6 +6391,7 @@ pub enum OnInsert {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Optional aliases for `INSERT` targets: row alias and optional column aliases.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct InsertAliases {
     /// Row alias (table-style alias) for the inserted values.
     pub row_alias: ObjectName,
@@ -6340,6 +6403,7 @@ pub struct InsertAliases {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// `ON CONFLICT` clause representation.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct OnConflict {
     /// Optional conflict target specifying columns or constraint.
     pub conflict_target: Option<ConflictTarget>,
@@ -6350,6 +6414,7 @@ pub struct OnConflict {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Target specification for an `ON CONFLICT` clause.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ConflictTarget {
     /// Target specified as a list of columns.
     Columns(Vec<Ident>),
@@ -6360,6 +6425,7 @@ pub enum ConflictTarget {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Action to perform when an `ON CONFLICT` target is matched.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum OnConflictAction {
     /// Do nothing on conflict.
     DoNothing,
@@ -6371,6 +6437,7 @@ pub enum OnConflictAction {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Details for `DO UPDATE` action of an `ON CONFLICT` clause.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct DoUpdate {
     /// Column assignments to perform on update.
     pub assignments: Vec<Assignment>,
@@ -6433,6 +6500,7 @@ impl fmt::Display for OnConflictAction {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Privileges {
     /// All privileges applicable to the object type
     All {
@@ -6470,6 +6538,7 @@ impl fmt::Display for Privileges {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum FetchDirection {
     /// Fetch a specific count of rows.
     Count {
@@ -6563,6 +6632,7 @@ impl fmt::Display for FetchDirection {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum FetchPosition {
     /// Use `FROM <pos>` position specifier.
     From,
@@ -6585,6 +6655,7 @@ impl fmt::Display for FetchPosition {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Action {
     /// Add a search optimization.
     AddSearchOptimization,
@@ -6797,6 +6868,7 @@ impl fmt::Display for Action {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// See <https://docs.snowflake.com/en/sql-reference/sql/grant-privilege>
 /// under `globalPrivileges` in the `CREATE` privilege.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ActionCreateObjectType {
     /// An account-level object.
     Account,
@@ -6863,6 +6935,7 @@ impl fmt::Display for ActionCreateObjectType {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// See <https://docs.snowflake.com/en/sql-reference/sql/grant-privilege>
 /// under `globalPrivileges` in the `APPLY` privilege.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ActionApplyType {
     /// Apply an aggregation policy.
     AggregationPolicy,
@@ -6908,6 +6981,7 @@ impl fmt::Display for ActionApplyType {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// See <https://docs.snowflake.com/en/sql-reference/sql/grant-privilege>
 /// under `globalPrivileges` in the `EXECUTE` privilege.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ActionExecuteObjectType {
     /// Alert object.
     Alert,
@@ -6938,6 +7012,7 @@ impl fmt::Display for ActionExecuteObjectType {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// See <https://docs.snowflake.com/en/sql-reference/sql/grant-privilege>
 /// under `globalPrivileges` in the `MANAGE` privilege.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ActionManageType {
     /// Account support cases management.
     AccountSupportCases,
@@ -6974,6 +7049,7 @@ impl fmt::Display for ActionManageType {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// See <https://docs.snowflake.com/en/sql-reference/sql/grant-privilege>
 /// under `globalPrivileges` in the `MODIFY` privilege.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ActionModifyType {
     /// Modify log level.
     LogLevel,
@@ -7001,6 +7077,7 @@ impl fmt::Display for ActionModifyType {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// See <https://docs.snowflake.com/en/sql-reference/sql/grant-privilege>
 /// under `globalPrivileges` in the `MONITOR` privilege.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ActionMonitorType {
     /// Monitor execution.
     Execution,
@@ -7024,6 +7101,7 @@ impl fmt::Display for ActionMonitorType {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Grantee {
     /// The category/type of grantee (role, user, share, etc.).
     pub grantee_type: GranteesType,
@@ -7071,6 +7149,7 @@ impl fmt::Display for Grantee {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// The kind of principal receiving privileges.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum GranteesType {
     /// A role principal.
     Role,
@@ -7096,6 +7175,7 @@ pub enum GranteesType {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum GranteeName {
     /// A bare identifier
     ObjectName(ObjectName),
@@ -7123,6 +7203,7 @@ impl fmt::Display for GranteeName {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum GrantObjects {
     /// Grant privileges on `ALL SEQUENCES IN SCHEMA <schema_name> [, ...]`
     AllSequencesInSchema {
@@ -7390,6 +7471,7 @@ impl fmt::Display for GrantObjects {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct DenyStatement {
     /// The privileges to deny.
     pub privileges: Privileges,
@@ -7424,6 +7506,7 @@ impl fmt::Display for DenyStatement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Assignment {
     /// The left-hand side of the assignment.
     pub target: AssignmentTarget,
@@ -7443,6 +7526,7 @@ impl fmt::Display for Assignment {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AssignmentTarget {
     /// A single column
     ColumnName(ObjectName),
@@ -7463,6 +7547,7 @@ impl fmt::Display for AssignmentTarget {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Expression forms allowed as a function argument.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum FunctionArgExpr {
     /// A normal expression argument.
     Expr(Expr),
@@ -7496,6 +7581,7 @@ impl fmt::Display for FunctionArgExpr {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Operator used to separate function arguments
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum FunctionArgOperator {
     /// function(arg1 = value1)
     Equals,
@@ -7525,6 +7611,7 @@ impl fmt::Display for FunctionArgOperator {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Forms of function arguments (named, expression-named, or positional).
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum FunctionArg {
     /// `name` is identifier
     ///
@@ -7574,6 +7661,7 @@ impl fmt::Display for FunctionArg {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Which cursor(s) to close.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CloseCursor {
     /// Close all cursors.
     All,
@@ -7597,6 +7685,7 @@ impl fmt::Display for CloseCursor {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct DropDomain {
     /// Whether to drop the domain if it exists
     pub if_exists: bool,
@@ -7612,6 +7701,7 @@ pub struct DropDomain {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct TypedString {
     /// The data type of the typed string (e.g. DATE, TIME, TIMESTAMP).
     pub data_type: DataType,
@@ -7657,6 +7747,7 @@ impl fmt::Display for TypedString {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Function {
     /// The function name (may be qualified).
     pub name: ObjectName,
@@ -7746,6 +7837,7 @@ impl fmt::Display for Function {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum FunctionArguments {
     /// Used for special functions like `CURRENT_TIMESTAMP` that are invoked
     /// without parentheses.
@@ -7772,6 +7864,7 @@ impl fmt::Display for FunctionArguments {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct FunctionArgumentList {
     /// `[ ALL | DISTINCT ]`
     pub duplicate_treatment: Option<DuplicateTreatment>,
@@ -7801,6 +7894,7 @@ impl fmt::Display for FunctionArgumentList {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Clauses that can appear inside a function argument list.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum FunctionArgumentClause {
     /// Indicates how `NULL`s should be handled in the calculation, e.g. in `FIRST_VALUE` on [BigQuery].
     ///
@@ -7871,6 +7965,7 @@ impl fmt::Display for FunctionArgumentClause {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Method {
     /// The expression on which the method is invoked.
     pub expr: Box<Expr>,
@@ -7894,6 +7989,7 @@ impl fmt::Display for Method {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// How duplicate values are treated inside function argument lists.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum DuplicateTreatment {
     /// Consider only unique values.
     Distinct,
@@ -7914,6 +8010,7 @@ impl fmt::Display for DuplicateTreatment {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// How the `ANALYZE`/`EXPLAIN ANALYZE` format is specified.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AnalyzeFormatKind {
     /// Format provided as a keyword, e.g. `FORMAT JSON`.
     Keyword(AnalyzeFormat),
@@ -7934,6 +8031,7 @@ impl fmt::Display for AnalyzeFormatKind {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Output formats supported for `ANALYZE`/`EXPLAIN ANALYZE`.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AnalyzeFormat {
     /// Plain text format.
     TEXT,
@@ -7963,6 +8061,7 @@ impl fmt::Display for AnalyzeFormat {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum FileFormat {
     /// Text file format.
     TEXTFILE,
@@ -7999,6 +8098,7 @@ impl fmt::Display for FileFormat {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ListAggOnOverflow {
     /// `ON OVERFLOW ERROR`
     Error,
@@ -8037,6 +8137,7 @@ impl fmt::Display for ListAggOnOverflow {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct HavingBound(pub HavingBoundKind, pub Expr);
 
 impl fmt::Display for HavingBound {
@@ -8049,6 +8150,7 @@ impl fmt::Display for HavingBound {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Which bound is used in a HAVING clause for ANY_VALUE on BigQuery.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum HavingBoundKind {
     /// The minimum bound.
     Min,
@@ -8069,6 +8171,7 @@ impl fmt::Display for HavingBoundKind {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Types of database objects referenced by DDL statements.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ObjectType {
     /// A table.
     Table,
@@ -8119,6 +8222,7 @@ impl fmt::Display for ObjectType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Types supported by `KILL` statements.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum KillType {
     /// Kill a connection.
     Connection,
@@ -8144,6 +8248,7 @@ impl fmt::Display for KillType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Distribution style options for Hive tables.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum HiveDistributionStyle {
     /// Partitioned distribution with the given columns.
     PARTITIONED {
@@ -8167,6 +8272,7 @@ pub enum HiveDistributionStyle {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Row format specification for Hive tables (SERDE or DELIMITED).
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum HiveRowFormat {
     /// SerDe class specification with the implementing class name.
     SERDE {
@@ -8184,6 +8290,7 @@ pub enum HiveRowFormat {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Format specification for `LOAD DATA` Hive operations.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct HiveLoadDataFormat {
     /// SerDe expression used for the table.
     pub serde: Expr,
@@ -8195,6 +8302,7 @@ pub struct HiveLoadDataFormat {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// A single row delimiter specification for Hive `ROW FORMAT`.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct HiveRowDelimiter {
     /// The delimiter kind (fields/lines/etc.).
     pub delimiter: HiveDelimiter,
@@ -8213,6 +8321,7 @@ impl fmt::Display for HiveRowDelimiter {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Kind of delimiter used in Hive `ROW FORMAT` definitions.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum HiveDelimiter {
     /// Fields terminated by a delimiter.
     FieldsTerminatedBy,
@@ -8246,6 +8355,7 @@ impl fmt::Display for HiveDelimiter {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Describe output format options for Hive `DESCRIBE`/`EXPLAIN`.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum HiveDescribeFormat {
     /// Extended describe output.
     Extended,
@@ -8267,6 +8377,7 @@ impl fmt::Display for HiveDescribeFormat {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Aliases accepted for describe-style commands.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum DescribeAlias {
     /// `DESCRIBE` alias.
     Describe,
@@ -8292,6 +8403,7 @@ impl fmt::Display for DescribeAlias {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[allow(clippy::large_enum_variant)]
 /// Hive input/output format specification used in `CREATE TABLE`.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum HiveIOFormat {
     /// Generic IO format with separate input and output expressions.
     IOF {
@@ -8311,6 +8423,7 @@ pub enum HiveIOFormat {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Hive table format and storage-related options.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct HiveFormat {
     /// Optional row format specification.
     pub row_format: Option<HiveRowFormat>,
@@ -8326,6 +8439,7 @@ pub struct HiveFormat {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// A clustered index column specification.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ClusteredIndex {
     /// Column identifier for the clustered index entry.
     pub name: Ident,
@@ -8348,6 +8462,7 @@ impl fmt::Display for ClusteredIndex {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Clustered options used for `CREATE TABLE` clustered/indexed storage.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TableOptionsClustered {
     /// Use a columnstore index.
     ColumnstoreIndex,
@@ -8381,6 +8496,7 @@ impl fmt::Display for TableOptionsClustered {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum PartitionRangeDirection {
     /// LEFT range direction.
     Left,
@@ -8392,6 +8508,7 @@ pub enum PartitionRangeDirection {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// SQL option syntax used in table and server definitions.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum SqlOption {
     /// Clustered represents the clustered version of table storage for MSSQL.
     ///
@@ -8501,6 +8618,7 @@ impl fmt::Display for SqlOption {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Storage type options for a tablespace.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum StorageType {
     /// Store on disk.
     Disk,
@@ -8513,6 +8631,7 @@ pub enum StorageType {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// MySql TableSpace option
 /// <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct TablespaceOption {
     /// Name of the tablespace.
     pub name: String,
@@ -8524,6 +8643,7 @@ pub struct TablespaceOption {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// A key/value identifier pair used for secret or key-based options.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct SecretOption {
     /// The option key identifier.
     pub key: Ident,
@@ -8543,6 +8663,7 @@ impl fmt::Display for SecretOption {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateServerStatement {
     /// The server name.
     pub name: ObjectName,
@@ -8597,6 +8718,7 @@ impl fmt::Display for CreateServerStatement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateServerOption {
     /// Option key identifier.
     pub key: Ident,
@@ -8614,6 +8736,7 @@ impl fmt::Display for CreateServerOption {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Options supported by DuckDB for `ATTACH DATABASE`.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AttachDuckDBDatabaseOption {
     /// READ_ONLY option, optional boolean value.
     ReadOnly(Option<bool>),
@@ -8636,6 +8759,7 @@ impl fmt::Display for AttachDuckDBDatabaseOption {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Mode for transactions: access mode or isolation level.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TransactionMode {
     /// Access mode for a transaction (e.g. `READ ONLY` / `READ WRITE`).
     AccessMode(TransactionAccessMode),
@@ -8657,6 +8781,7 @@ impl fmt::Display for TransactionMode {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Transaction access mode (READ ONLY / READ WRITE).
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TransactionAccessMode {
     /// READ ONLY access mode.
     ReadOnly,
@@ -8678,6 +8803,7 @@ impl fmt::Display for TransactionAccessMode {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Transaction isolation levels.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TransactionIsolationLevel {
     /// READ UNCOMMITTED isolation level.
     ReadUncommitted,
@@ -8711,6 +8837,7 @@ impl fmt::Display for TransactionIsolationLevel {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TransactionModifier {
     /// DEFERRED transaction modifier.
     Deferred,
@@ -8741,6 +8868,7 @@ impl fmt::Display for TransactionModifier {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Filter forms usable in SHOW statements.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ShowStatementFilter {
     /// Filter using LIKE pattern.
     Like(String),
@@ -8768,6 +8896,7 @@ impl fmt::Display for ShowStatementFilter {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Clause types used with SHOW ... IN/FROM.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ShowStatementInClause {
     /// Use the `IN` clause.
     IN,
@@ -8792,6 +8921,7 @@ impl fmt::Display for ShowStatementInClause {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum SqliteOnConflict {
     /// Use ROLLBACK on conflict.
     Rollback,
@@ -8826,6 +8956,7 @@ impl fmt::Display for SqliteOnConflict {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum MysqlInsertPriority {
     /// LOW_PRIORITY modifier for INSERT/REPLACE.
     LowPriority,
@@ -8850,6 +8981,7 @@ impl fmt::Display for crate::ast::MysqlInsertPriority {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Source for the `COPY` command: a table or a query.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CopySource {
     /// Copy from a table with optional column list.
     Table {
@@ -8867,6 +8999,7 @@ pub enum CopySource {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Target for the `COPY` command: STDIN, STDOUT, a file, or a program.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CopyTarget {
     /// Use standard input as the source.
     Stdin,
@@ -8904,6 +9037,7 @@ impl fmt::Display for CopyTarget {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Action to take `ON COMMIT` for temporary tables.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum OnCommit {
     /// Delete rows on commit.
     DeleteRows,
@@ -8919,6 +9053,7 @@ pub enum OnCommit {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CopyOption {
     /// FORMAT format_name
     Format(Ident),
@@ -8974,6 +9109,7 @@ impl fmt::Display for CopyOption {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CopyLegacyOption {
     /// ACCEPTANYDATE
     AcceptAnyDate,
@@ -9176,6 +9312,7 @@ impl fmt::Display for CopyLegacyOption {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct FileSize {
     /// Numeric size value.
     pub size: Value,
@@ -9197,6 +9334,7 @@ impl fmt::Display for FileSize {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum FileSizeUnit {
     /// Megabytes.
     MB,
@@ -9221,6 +9359,7 @@ impl fmt::Display for FileSizeUnit {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct UnloadPartitionBy {
     /// Columns used to partition the unload output.
     pub columns: Vec<Ident>,
@@ -9245,6 +9384,7 @@ impl fmt::Display for UnloadPartitionBy {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum IamRoleKind {
     /// Default role
     Default,
@@ -9267,6 +9407,7 @@ impl fmt::Display for IamRoleKind {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CopyLegacyCsvOption {
     /// HEADER
     Header,
@@ -9299,6 +9440,7 @@ impl fmt::Display for CopyLegacyCsvOption {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum DiscardObject {
     /// Discard all session state.
     ALL,
@@ -9325,6 +9467,7 @@ impl fmt::Display for DiscardObject {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum FlushType {
     /// Flush binary logs.
     BinaryLogs,
@@ -9378,6 +9521,7 @@ impl fmt::Display for FlushType {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum FlushLocation {
     /// Do not write changes to the binary log.
     NoWriteToBinlog,
@@ -9398,6 +9542,7 @@ impl fmt::Display for FlushLocation {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ContextModifier {
     /// `LOCAL` identifier, usually related to transactional states.
     Local,
@@ -9426,6 +9571,7 @@ impl fmt::Display for ContextModifier {
 /// Function describe in DROP FUNCTION.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum DropFunctionOption {
     /// `RESTRICT` option for DROP FUNCTION.
     Restrict,
@@ -9446,6 +9592,7 @@ impl fmt::Display for DropFunctionOption {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct FunctionDesc {
     /// The function name.
     pub name: ObjectName,
@@ -9467,6 +9614,7 @@ impl fmt::Display for FunctionDesc {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct OperateFunctionArg {
     /// Optional argument mode (`IN`, `OUT`, `INOUT`).
     pub mode: Option<ArgMode>,
@@ -9520,6 +9668,7 @@ impl fmt::Display for OperateFunctionArg {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ArgMode {
     /// `IN` mode.
     In,
@@ -9543,6 +9692,7 @@ impl fmt::Display for ArgMode {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum FunctionBehavior {
     /// Function is immutable.
     Immutable,
@@ -9568,6 +9718,7 @@ impl fmt::Display for FunctionBehavior {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum FunctionSecurity {
     /// Execute the function with the privileges of the user who defined it.
     Definer,
@@ -9590,6 +9741,7 @@ impl fmt::Display for FunctionSecurity {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum FunctionSetValue {
     /// SET param = value1, value2, ...
     Values(Vec<Expr>),
@@ -9603,6 +9755,7 @@ pub enum FunctionSetValue {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct FunctionDefinitionSetParam {
     /// The name of the configuration parameter.
     pub name: Ident,
@@ -9626,6 +9779,7 @@ impl fmt::Display for FunctionDefinitionSetParam {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum FunctionCalledOnNull {
     /// Function is called even when inputs are null.
     CalledOnNullInput,
@@ -9649,6 +9803,7 @@ impl fmt::Display for FunctionCalledOnNull {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum FunctionParallel {
     /// The function is not safe to run in parallel.
     Unsafe,
@@ -9674,6 +9829,7 @@ impl fmt::Display for FunctionParallel {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum FunctionDeterminismSpecifier {
     /// Function is deterministic.
     Deterministic,
@@ -9703,6 +9859,7 @@ impl fmt::Display for FunctionDeterminismSpecifier {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CreateFunctionBody {
     /// A function body expression using the 'AS' keyword and shows up
     /// before any `OPTIONS` clause.
@@ -9798,6 +9955,7 @@ pub enum CreateFunctionBody {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// `USING` clause options for `CREATE FUNCTION` (e.g., JAR, FILE, ARCHIVE).
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CreateFunctionUsing {
     /// Use a JAR file located at the given URI.
     Jar(String),
@@ -9825,6 +9983,7 @@ impl fmt::Display for CreateFunctionUsing {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct MacroArg {
     /// The argument name.
     pub name: Ident,
@@ -9856,6 +10015,7 @@ impl fmt::Display for MacroArg {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Definition for a DuckDB macro: either an expression or a table-producing query.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum MacroDefinition {
     /// The macro is defined as an expression.
     Expr(Expr),
@@ -9879,6 +10039,7 @@ impl fmt::Display for MacroDefinition {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum SchemaName {
     /// Only schema name specified: `<schema name>`.
     Simple(ObjectName),
@@ -9910,6 +10071,7 @@ impl fmt::Display for SchemaName {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum SearchModifier {
     /// `IN NATURAL LANGUAGE MODE`.
     InNaturalLanguageMode,
@@ -9946,6 +10108,7 @@ impl fmt::Display for SearchModifier {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct LockTable {
     /// The table identifier to lock.
     pub table: Ident,
@@ -9976,6 +10139,7 @@ impl fmt::Display for LockTable {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// The type of lock used in `LOCK TABLE` statements.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum LockTableType {
     /// Shared/read lock. If `local` is true, it's a local read lock.
     Read {
@@ -10014,6 +10178,7 @@ impl fmt::Display for LockTableType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Hive-specific `SET LOCATION` helper used in some `LOAD DATA` statements.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct HiveSetLocation {
     /// Whether the `SET` keyword was present.
     pub has_set: bool,
@@ -10036,6 +10201,7 @@ impl fmt::Display for HiveSetLocation {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// MySQL `ALTER TABLE` column position specifier: `FIRST` or `AFTER <column>`.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum MySQLColumnPosition {
     /// Place the column first in the table.
     First,
@@ -10060,6 +10226,7 @@ impl Display for MySQLColumnPosition {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// MySQL `CREATE VIEW` algorithm options.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CreateViewAlgorithm {
     /// `UNDEFINED` algorithm.
     Undefined,
@@ -10083,6 +10250,7 @@ impl Display for CreateViewAlgorithm {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// MySQL `CREATE VIEW` SQL SECURITY options.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CreateViewSecurity {
     /// The view runs with the privileges of the definer.
     Definer,
@@ -10105,6 +10273,7 @@ impl Display for CreateViewSecurity {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateViewParams {
     /// Optional view algorithm (e.g., MERGE, TEMPTABLE).
     pub algorithm: Option<CreateViewAlgorithm>,
@@ -10144,6 +10313,7 @@ impl Display for CreateViewParams {
 /// ENGINE = ReplicatedMergeTree('/table_name','{replica}', ver)
 /// ENGINE = SummingMergeTree([columns])
 /// ```
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct NamedParenthesizedList {
     /// The option key (identifier) for this named list.
     pub key: Ident,
@@ -10160,6 +10330,7 @@ pub struct NamedParenthesizedList {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct RowAccessPolicy {
     /// The fully-qualified policy object name.
     pub policy: ObjectName,
@@ -10191,6 +10362,7 @@ impl Display for RowAccessPolicy {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Tag {
     /// The tag key (can be qualified).
     pub key: ObjectName,
@@ -10217,6 +10389,7 @@ impl Display for Tag {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ContactEntry {
     /// The purpose label for the contact entry.
     pub purpose: String,
@@ -10234,6 +10407,7 @@ impl Display for ContactEntry {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CommentDef {
     /// Includes `=` when printing the comment, as `COMMENT = 'comment'`
     /// Does not include `=` when printing the comment, as `COMMENT 'comment'`
@@ -10267,6 +10441,7 @@ impl Display for CommentDef {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum WrappedCollection<T> {
     /// Print the collection without wrapping symbols, as `item, item, item`
     NoWrapping(T),
@@ -10316,6 +10491,7 @@ where
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct UtilityOption {
     /// The option name (identifier).
     pub name: Ident,
@@ -10339,6 +10515,7 @@ impl Display for UtilityOption {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ShowStatementOptions {
     /// Optional scope to show in (for example: TABLE, SCHEMA).
     pub show_in: Option<ShowStatementIn>,
@@ -10391,6 +10568,7 @@ impl Display for ShowStatementOptions {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Where a `SHOW` filter appears relative to the main clause.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ShowStatementFilterPosition {
     /// Put the filter in an infix position (e.g. `SHOW COLUMNS LIKE '%name%' IN TABLE tbl`).
     Infix(ShowStatementFilter), // For example: SHOW COLUMNS LIKE '%name%' IN TABLE tbl
@@ -10402,6 +10580,7 @@ pub enum ShowStatementFilterPosition {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Parent object types usable with `SHOW ... IN <parent>` clauses.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ShowStatementInParentType {
     /// ACCOUNT parent type for SHOW statements.
     Account,
@@ -10431,6 +10610,7 @@ impl fmt::Display for ShowStatementInParentType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Represents a `SHOW ... IN` clause with optional parent qualifier and name.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ShowStatementIn {
     /// The clause that specifies what to show (e.g. COLUMNS, TABLES).
     pub clause: ShowStatementInClause,
@@ -10458,6 +10638,7 @@ impl fmt::Display for ShowStatementIn {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ShowCharset {
     /// The statement can be written as `SHOW CHARSET` or `SHOW CHARACTER SET`
     /// true means CHARSET was used and false means CHARACTER SET was used
@@ -10485,6 +10666,7 @@ impl fmt::Display for ShowCharset {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Options for a `SHOW OBJECTS` statement.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ShowObjects {
     /// Whether to show terse output.
     pub terse: bool,
@@ -10504,6 +10686,7 @@ pub struct ShowObjects {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum JsonNullClause {
     /// `NULL ON NULL` behavior for JSON functions.
     NullOnNull,
@@ -10529,6 +10712,7 @@ impl Display for JsonNullClause {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct JsonReturningClause {
     /// The data type to return from the JSON function (e.g. JSON/JSONB).
     pub data_type: DataType,
@@ -10544,6 +10728,7 @@ impl Display for JsonReturningClause {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct RenameTable {
     /// The current name of the object to rename.
     pub old_name: ObjectName,
@@ -10562,6 +10747,7 @@ impl fmt::Display for RenameTable {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TableObject {
     /// Table specified by name.
     /// Example:
@@ -10592,6 +10778,7 @@ impl fmt::Display for TableObject {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct SetSessionAuthorizationParam {
     /// The scope for the `SET SESSION AUTHORIZATION` (e.g., GLOBAL/SESSION).
     pub scope: ContextModifier,
@@ -10609,6 +10796,7 @@ impl fmt::Display for SetSessionAuthorizationParam {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum SetSessionAuthorizationParamKind {
     /// Default authorization
     Default,
@@ -10630,6 +10818,7 @@ impl fmt::Display for SetSessionAuthorizationParamKind {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Kind of session parameter being set by `SET SESSION`.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum SetSessionParamKind {
     /// Generic session parameter (name/value pair).
     Generic(SetSessionParamGeneric),
@@ -10656,6 +10845,7 @@ impl fmt::Display for SetSessionParamKind {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Generic `SET SESSION` parameter represented as name(s) and value.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct SetSessionParamGeneric {
     /// Names of the session parameters being set.
     pub names: Vec<String>,
@@ -10673,6 +10863,7 @@ impl fmt::Display for SetSessionParamGeneric {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// `IDENTITY_INSERT` session parameter for a specific object.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct SetSessionParamIdentityInsert {
     /// Object name targeted by `IDENTITY_INSERT`.
     pub obj: ObjectName,
@@ -10690,6 +10881,7 @@ impl fmt::Display for SetSessionParamIdentityInsert {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Offsets-related session parameter with keywords and a value.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct SetSessionParamOffsets {
     /// Keywords specifying which offsets to modify.
     pub keywords: Vec<String>,
@@ -10712,6 +10904,7 @@ impl fmt::Display for SetSessionParamOffsets {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Statistics-related session parameter specifying topic and value.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct SetSessionParamStatistics {
     /// Statistics topic to set (IO/PROFILE/TIME/XML).
     pub topic: SessionParamStatsTopic,
@@ -10729,6 +10922,7 @@ impl fmt::Display for SetSessionParamStatistics {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Topics available for session statistics configuration.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum SessionParamStatsTopic {
     /// Input/output statistics.
     IO,
@@ -10755,6 +10949,7 @@ impl fmt::Display for SessionParamStatsTopic {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Value for a session boolean-like parameter (ON/OFF).
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum SessionParamValue {
     /// Session parameter enabled.
     On,
@@ -10780,6 +10975,7 @@ impl fmt::Display for SessionParamValue {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum StorageSerializationPolicy {
     /// Use compatible serialization mode.
     Compatible,
@@ -10805,6 +11001,7 @@ impl Display for StorageSerializationPolicy {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CatalogSyncNamespaceMode {
     /// Nest namespaces when syncing catalog.
     Nest,
@@ -10825,6 +11022,7 @@ impl Display for CatalogSyncNamespaceMode {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CopyIntoSnowflakeKind {
     /// Loads data from files to a table
     /// See: <https://docs.snowflake.com/en/sql-reference/sql/copy-into-table>
@@ -10838,6 +11036,7 @@ pub enum CopyIntoSnowflakeKind {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// `PRINT` statement for producing debug/output messages.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct PrintStatement {
     /// The expression producing the message to print.
     pub message: Box<Expr>,
@@ -10856,6 +11055,7 @@ impl fmt::Display for PrintStatement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ReturnStatement {
     /// Optional return value expression.
     pub value: Option<ReturnStatementValue>,
@@ -10874,6 +11074,7 @@ impl fmt::Display for ReturnStatement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ReturnStatementValue {
     /// Return an expression from a function or trigger.
     Expr(Expr),
@@ -10883,6 +11084,7 @@ pub enum ReturnStatementValue {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct OpenStatement {
     /// Cursor name
     pub cursor_name: Ident,
@@ -10900,6 +11102,7 @@ impl fmt::Display for OpenStatement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum NullInclusion {
     /// Include NULL values in the UNPIVOT output.
     IncludeNulls,
@@ -10926,6 +11129,7 @@ impl fmt::Display for NullInclusion {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct MemberOf {
     /// The value to check for membership.
     pub value: Box<Expr>,
@@ -10943,6 +11147,7 @@ impl fmt::Display for MemberOf {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Represents an `EXPORT DATA` statement.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ExportData {
     /// Options for the export operation.
     pub options: Vec<SqlOption>,
@@ -10982,6 +11187,7 @@ impl fmt::Display for ExportData {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateUser {
     /// Replace existing user if present.
     pub or_replace: bool,
@@ -11035,6 +11241,7 @@ impl fmt::Display for CreateUser {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AlterUser {
     /// Whether to only alter the user if it exists.
     pub if_exists: bool,
@@ -11083,6 +11290,7 @@ pub struct AlterUser {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AlterUserAddRoleDelegation {
     /// Role name to delegate.
     pub role: Ident,
@@ -11096,6 +11304,7 @@ pub struct AlterUserAddRoleDelegation {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AlterUserRemoveRoleDelegation {
     /// Optional role name to remove delegation for.
     pub role: Option<Ident>,
@@ -11109,6 +11318,7 @@ pub struct AlterUserRemoveRoleDelegation {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AlterUserAddMfaMethodOtp {
     /// Optional OTP count parameter.
     pub count: Option<Value>,
@@ -11120,6 +11330,7 @@ pub struct AlterUserAddMfaMethodOtp {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AlterUserModifyMfaMethod {
     /// The MFA method being modified.
     pub method: MfaMethodKind,
@@ -11131,6 +11342,7 @@ pub struct AlterUserModifyMfaMethod {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum MfaMethodKind {
     /// PassKey (hardware or platform passkey) MFA method.
     PassKey,
@@ -11156,6 +11368,7 @@ impl fmt::Display for MfaMethodKind {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AlterUserSetPolicy {
     /// The kind of user policy being set (authentication/password/session).
     pub policy_kind: UserPolicyKind,
@@ -11167,6 +11380,7 @@ pub struct AlterUserSetPolicy {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum UserPolicyKind {
     /// Authentication policy.
     Authentication,
@@ -11279,6 +11493,7 @@ impl fmt::Display for AlterUser {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AlterUserPassword {
     /// Whether the password is encrypted.
     pub encrypted: bool,
@@ -11307,6 +11522,7 @@ impl Display for AlterUserPassword {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CreateTableLikeKind {
     /// '''sql
     /// CREATE TABLE new (LIKE old ...)
@@ -11325,6 +11541,7 @@ pub enum CreateTableLikeKind {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Controls whether defaults are included when creating a table FROM/LILE another.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CreateTableLikeDefaults {
     /// Include default values from the source table.
     Including,
@@ -11345,6 +11562,7 @@ impl fmt::Display for CreateTableLikeDefaults {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Represents the `LIKE` clause of a `CREATE TABLE` statement.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateTableLike {
     /// The source table name to copy the schema from.
     pub name: ObjectName,
@@ -11368,6 +11586,7 @@ impl fmt::Display for CreateTableLike {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum RefreshModeKind {
     /// Automatic refresh mode (`AUTO`).
     Auto,
@@ -11393,6 +11612,7 @@ impl fmt::Display for RefreshModeKind {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum InitializeKind {
     /// Initialize on creation (`ON CREATE`).
     OnCreate,
@@ -11418,6 +11638,7 @@ impl fmt::Display for InitializeKind {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct VacuumStatement {
     /// Whether `FULL` was specified.
     pub full: bool,
@@ -11465,6 +11686,7 @@ impl fmt::Display for VacuumStatement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Reset {
     /// Resets all session parameters to their default values.
     ALL,
@@ -11480,6 +11702,7 @@ pub enum Reset {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ResetStatement {
     /// The reset action to perform (either `ALL` or a specific configuration parameter).
     pub reset: Reset,
@@ -11493,6 +11716,7 @@ pub struct ResetStatement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct OptimizerHint {
     /// the raw test of the optimizer hint without its markers
     pub text: String,
@@ -11507,6 +11731,7 @@ pub struct OptimizerHint {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum OptimizerHintStyle {
     /// A hint corresponding to a single line comment,
     /// e.g. `--+ LEADING(v.e v.d t)`

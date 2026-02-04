@@ -63,6 +63,7 @@ use crate::parser::ParserError;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateTableBuilder {
     /// Whether the statement uses `OR REPLACE`.
     pub or_replace: bool,

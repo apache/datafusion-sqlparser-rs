@@ -1609,7 +1609,25 @@ impl<'a> Parser<'a> {
             Token::Arrow if self.dialect.supports_lambda_functions() => {
                 self.expect_token(&Token::Arrow)?;
                 Ok(Expr::Lambda(LambdaFunction {
-                    params: OneOrManyWithParens::One(w.to_ident(w_span)),
+                    params: OneOrManyWithParens::One(LambdaFunctionParameter {
+                        name: w.to_ident(w_span),
+                        data_type: None,
+                    }),
+                    body: Box::new(self.parse_expr()?),
+                    syntax: LambdaSyntax::Arrow,
+                }))
+            }
+            Token::Word(_)
+                if self.peek_nth_token(1).token == Token::Arrow
+                    && self.dialect.supports_lambda_functions() =>
+            {
+                let first_param = LambdaFunctionParameter {
+                    name: w.to_ident(self.peek_nth_token_ref(1).span),
+                    data_type: self.maybe_parse(|parser| parser.parse_data_type())?,
+                };
+                self.expect_token(&Token::Arrow)?;
+                Ok(Expr::Lambda(LambdaFunction {
+                    params: OneOrManyWithParens::One(first_param),
                     body: Box::new(self.parse_expr()?),
                     syntax: LambdaSyntax::Arrow,
                 }))
@@ -2195,7 +2213,12 @@ impl<'a> Parser<'a> {
             return Ok(None);
         }
         self.maybe_parse(|p| {
-            let params = p.parse_comma_separated(|p| p.parse_identifier())?;
+            let params = p.parse_comma_separated(|p| {
+                Ok(LambdaFunctionParameter {
+                    name: p.parse_identifier()?,
+                    data_type: None,
+                })
+            })?;
             p.expect_token(&Token::RParen)?;
             p.expect_token(&Token::Arrow)?;
             let expr = p.parse_expr()?;
@@ -2220,12 +2243,22 @@ impl<'a> Parser<'a> {
         // Parse the parameters: either a single identifier or comma-separated identifiers
         let params = if self.consume_token(&Token::LParen) {
             // Parenthesized parameters: (x, y)
-            let params = self.parse_comma_separated(|p| p.parse_identifier())?;
+            let params = self.parse_comma_separated(|p| {
+                Ok(LambdaFunctionParameter {
+                    name: p.parse_identifier()?,
+                    data_type: None,
+                })
+            })?;
             self.expect_token(&Token::RParen)?;
             OneOrManyWithParens::Many(params)
         } else {
             // Unparenthesized parameters: x or x, y
-            let params = self.parse_comma_separated(|p| p.parse_identifier())?;
+            let params = self.parse_comma_separated(|p| {
+                Ok(LambdaFunctionParameter {
+                    name: p.parse_identifier()?,
+                    data_type: None,
+                })
+            })?;
             if params.len() == 1 {
                 OneOrManyWithParens::One(params.into_iter().next().unwrap())
             } else {

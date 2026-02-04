@@ -4878,3 +4878,9 @@ fn test_truncate_table_if_exists() {
     snowflake().verified_stmt("TRUNCATE TABLE my_table");
     snowflake().verified_stmt("TRUNCATE IF EXISTS my_table");
 }
+
+#[test]
+fn test_snowflake_lambda() {
+    snowflake().verified_expr("TRANSFORM([1, 2, 3], a -> a * 2)");
+    snowflake().verified_expr("TRANSFORM([1, 2, 3], a INT -> a * 2)");
+}

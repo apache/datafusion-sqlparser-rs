@@ -4883,4 +4883,6 @@ fn test_truncate_table_if_exists() {
 fn test_snowflake_lambda() {
     snowflake().verified_expr("TRANSFORM([1, 2, 3], a -> a * 2)");
     snowflake().verified_expr("TRANSFORM([1, 2, 3], a INT -> a * 2)");
+    snowflake().verified_expr("TRANSFORM([1, 2, 3], (x INT, y INT) -> (x + y))");
+    snowflake().verified_expr("REDUCE([1, 2, 3], 0, (acc, val) -> acc + val)");
 }

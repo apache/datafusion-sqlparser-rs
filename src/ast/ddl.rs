@@ -60,6 +60,7 @@ use crate::tokenizer::{Span, Token};
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct IndexColumn {
     /// The indexed column expression.
     pub column: OrderByExpr,
@@ -98,6 +99,7 @@ impl fmt::Display for IndexColumn {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ReplicaIdentity {
     /// No replica identity (`REPLICA IDENTITY NOTHING`).
     Nothing,
@@ -124,6 +126,7 @@ impl fmt::Display for ReplicaIdentity {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AlterTableOperation {
     /// `ADD <table_constraint> [NOT VALID]`
     AddConstraint {
@@ -550,6 +553,7 @@ pub enum AlterTableOperation {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AlterPolicyOperation {
     /// Rename the policy to `new_name`.
     Rename {
@@ -600,6 +604,7 @@ impl fmt::Display for AlterPolicyOperation {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Algorithm option for `ALTER TABLE` operations (MySQL-specific).
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AlterTableAlgorithm {
     /// Default algorithm selection.
     Default,
@@ -629,6 +634,7 @@ impl fmt::Display for AlterTableAlgorithm {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Locking behavior for `ALTER TABLE` (MySQL-specific).
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AlterTableLock {
     /// `DEFAULT` lock behavior.
     Default,
@@ -655,6 +661,7 @@ impl fmt::Display for AlterTableLock {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// New owner specification for `ALTER TABLE ... OWNER TO ...`
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Owner {
     /// A specific user/role identifier.
     Ident(Ident),
@@ -681,6 +688,7 @@ impl fmt::Display for Owner {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// New connector owner specification for `ALTER CONNECTOR ... OWNER TO ...`
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AlterConnectorOwner {
     /// `USER <ident>` connector owner.
     User(Ident),
@@ -701,6 +709,7 @@ impl fmt::Display for AlterConnectorOwner {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Alterations that can be applied to an index.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AlterIndexOperation {
     /// Rename the index to `index_name`.
     RenameIndex {
@@ -1076,6 +1085,7 @@ impl fmt::Display for AlterIndexOperation {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AlterType {
     /// Name of the type being altered (may be schema-qualified).
     pub name: ObjectName,
@@ -1087,6 +1097,7 @@ pub struct AlterType {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AlterTypeOperation {
     /// Rename the type.
     Rename(AlterTypeRename),
@@ -1100,6 +1111,7 @@ pub enum AlterTypeOperation {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AlterTypeRename {
     /// The new name for the type.
     pub new_name: Ident,
@@ -1109,6 +1121,7 @@ pub struct AlterTypeRename {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AlterTypeAddValue {
     /// If true, do not error when the value already exists (`IF NOT EXISTS`).
     pub if_not_exists: bool,
@@ -1122,6 +1135,7 @@ pub struct AlterTypeAddValue {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AlterTypeAddValuePosition {
     /// Place the new value before the given neighbor value.
     Before(Ident),
@@ -1133,6 +1147,7 @@ pub enum AlterTypeAddValuePosition {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AlterTypeRenameValue {
     /// Existing value identifier to rename.
     pub from: Ident,
@@ -1179,6 +1194,7 @@ impl fmt::Display for AlterTypeOperation {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AlterOperator {
     /// Operator name (can be schema-qualified)
     pub name: ObjectName,
@@ -1194,6 +1210,7 @@ pub struct AlterOperator {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AlterOperatorOperation {
     /// `OWNER TO { new_owner | CURRENT_ROLE | CURRENT_USER | SESSION_USER }`
     OwnerTo(Owner),
@@ -1214,6 +1231,7 @@ pub enum AlterOperatorOperation {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum OperatorOption {
     /// `RESTRICT = { res_proc | NONE }`
     Restrict(Option<ObjectName>),
@@ -1279,6 +1297,7 @@ impl fmt::Display for OperatorOption {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AlterColumnOperation {
     /// `SET NOT NULL`
     SetNotNull,
@@ -1374,6 +1393,7 @@ impl fmt::Display for AlterColumnOperation {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum KeyOrIndexDisplay {
     /// Nothing to display
     None,
@@ -1423,6 +1443,7 @@ impl fmt::Display for KeyOrIndexDisplay {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum IndexType {
     /// B-Tree index (commonly default for many databases).
     BTree,
@@ -1466,6 +1487,7 @@ impl fmt::Display for IndexType {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum IndexOption {
     /// `USING { BTREE | HASH }`: Index type to use for the index.
     ///
@@ -1490,6 +1512,7 @@ impl fmt::Display for IndexOption {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum NullsDistinctOption {
     /// Not specified
     None,
@@ -1513,6 +1536,7 @@ impl fmt::Display for NullsDistinctOption {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// A parameter of a stored procedure or function declaration.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ProcedureParam {
     /// Parameter name.
     pub name: Ident,
@@ -1544,6 +1568,7 @@ impl fmt::Display for ProcedureParam {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ColumnDef {
     /// Column name.
     pub name: Ident,
@@ -1586,6 +1611,7 @@ impl fmt::Display for ColumnDef {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ViewColumnDef {
     /// Column identifier.
     pub name: Ident,
@@ -1599,6 +1625,7 @@ pub struct ViewColumnDef {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Representation of how multiple `ColumnOption`s are grouped for a column.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ColumnOptions {
     /// Options separated by comma: `OPTIONS(a, b, c)`.
     CommaSeparated(Vec<ColumnOption>),
@@ -1655,6 +1682,7 @@ impl fmt::Display for ViewColumnDef {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ColumnOptionDef {
     /// Optional name of the constraint.
     pub name: Option<Ident>,
@@ -1678,6 +1706,7 @@ impl fmt::Display for ColumnOptionDef {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum IdentityPropertyKind {
     /// An identity property declared via the `AUTOINCREMENT` key word
     /// Example:
@@ -1723,6 +1752,7 @@ impl fmt::Display for IdentityPropertyKind {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct IdentityProperty {
     /// Optional parameters specifying seed/increment for the identity column.
     pub parameters: Option<IdentityPropertyFormatKind>,
@@ -1747,6 +1777,7 @@ pub struct IdentityProperty {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum IdentityPropertyFormatKind {
     /// A parameters of identity column declared like parameters of function call
     /// Example:
@@ -1785,6 +1816,7 @@ impl fmt::Display for IdentityPropertyFormatKind {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct IdentityParameters {
     /// The initial seed expression for the identity column.
     pub seed: Expr,
@@ -1801,6 +1833,7 @@ pub struct IdentityParameters {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum IdentityPropertyOrder {
     /// `ORDER` - preserve ordering for generated values (where supported).
     Order,
@@ -1827,6 +1860,7 @@ impl fmt::Display for IdentityPropertyOrder {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ColumnPolicy {
     /// `MASKING POLICY (<property>)`
     MaskingPolicy(ColumnPolicyProperty),
@@ -1855,6 +1889,7 @@ impl fmt::Display for ColumnPolicy {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Properties describing a column policy (masking or projection).
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ColumnPolicyProperty {
     /// This flag indicates that the column policy option is declared using the `WITH` prefix.
     /// Example
@@ -1878,6 +1913,7 @@ pub struct ColumnPolicyProperty {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct TagsColumnOption {
     /// This flag indicates that the tags option is declared using the `WITH` prefix.
     /// Example:
@@ -1905,6 +1941,7 @@ impl fmt::Display for TagsColumnOption {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ColumnOption {
     /// `NULL`
     Null,
@@ -2172,6 +2209,7 @@ impl fmt::Display for ColumnOption {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum GeneratedAs {
     /// `GENERATED ALWAYS`
     Always,
@@ -2186,6 +2224,7 @@ pub enum GeneratedAs {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum GeneratedExpressionMode {
     /// `VIRTUAL` generated expression
     Virtual,
@@ -2243,6 +2282,7 @@ pub(crate) fn display_option_spaced<T: fmt::Display>(option: &Option<T>) -> impl
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Default, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ConstraintCharacteristics {
     /// `[ DEFERRABLE | NOT DEFERRABLE ]`
     pub deferrable: Option<bool>,
@@ -2256,6 +2296,7 @@ pub struct ConstraintCharacteristics {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum DeferrableInitial {
     /// `INITIALLY IMMEDIATE`
     Immediate,
@@ -2323,6 +2364,7 @@ impl fmt::Display for ConstraintCharacteristics {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ReferentialAction {
     /// `RESTRICT` - disallow action if it would break referential integrity.
     Restrict,
@@ -2354,6 +2396,7 @@ impl fmt::Display for ReferentialAction {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum DropBehavior {
     /// `RESTRICT` - refuse to drop if there are any dependent objects.
     Restrict,
@@ -2374,6 +2417,7 @@ impl fmt::Display for DropBehavior {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum UserDefinedTypeRepresentation {
     /// Composite type: `CREATE TYPE name AS (attributes)`
     Composite {
@@ -2429,6 +2473,7 @@ impl fmt::Display for UserDefinedTypeRepresentation {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct UserDefinedTypeCompositeAttributeDef {
     /// Attribute name.
     pub name: Ident,
@@ -2473,6 +2518,7 @@ impl fmt::Display for UserDefinedTypeCompositeAttributeDef {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum UserDefinedTypeInternalLength {
     /// Fixed internal length: `INTERNALLENGTH = <number>`
     Fixed(u64),
@@ -2510,6 +2556,7 @@ impl fmt::Display for UserDefinedTypeInternalLength {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Alignment {
     /// Single-byte alignment: `ALIGNMENT = char`
     Char,
@@ -2554,6 +2601,7 @@ impl fmt::Display for Alignment {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum UserDefinedTypeStorage {
     /// No compression or out-of-line storage: `STORAGE = plain`
     Plain,
@@ -2596,6 +2644,7 @@ impl fmt::Display for UserDefinedTypeStorage {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum UserDefinedTypeRangeOption {
     /// The element type that the range type will represent: `SUBTYPE = subtype`
     Subtype(DataType),
@@ -2651,6 +2700,7 @@ impl fmt::Display for UserDefinedTypeRangeOption {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum UserDefinedTypeSqlDefinitionOption {
     /// Function to convert from external text representation to internal: `INPUT = input_function`
     Input(ObjectName),
@@ -2736,6 +2786,7 @@ impl fmt::Display for UserDefinedTypeSqlDefinitionOption {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Partition {
     /// ClickHouse supports PARTITION ID 'partition_id' syntax.
     Identifier(Ident),
@@ -2766,6 +2817,7 @@ impl fmt::Display for Partition {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Deduplicate {
     /// DEDUPLICATE ALL
     All,
@@ -2789,6 +2841,7 @@ impl fmt::Display for Deduplicate {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ClusteredBy {
     /// columns used for clustering
     pub columns: Vec<Ident>,
@@ -2816,6 +2869,7 @@ impl fmt::Display for ClusteredBy {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateIndex {
     /// index name
     pub name: Option<ObjectName>,
@@ -2912,6 +2966,7 @@ impl fmt::Display for CreateIndex {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateTable {
     /// `OR REPLACE` clause
     pub or_replace: bool,
@@ -3439,6 +3494,7 @@ impl fmt::Display for CreateTable {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct WithData {
     /// `true` for `WITH DATA`, `false` for `WITH NO DATA`.
     pub data: bool,
@@ -3473,6 +3529,7 @@ impl fmt::Display for WithData {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ForValues {
     /// `FOR VALUES IN (expr, ...)`
     In(Vec<Expr>),
@@ -3526,6 +3583,7 @@ impl fmt::Display for ForValues {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum PartitionBoundValue {
     /// An expression representing a partition bound value.
     Expr(Expr),
@@ -3551,6 +3609,7 @@ impl fmt::Display for PartitionBoundValue {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum DistStyle {
     /// `DISTSTYLE AUTO`
     Auto,
@@ -3588,6 +3647,7 @@ impl fmt::Display for DistStyle {
 ///     { NOT NULL | NULL | CHECK (expression) }
 /// ```
 /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createdomain.html)
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateDomain {
     /// The name of the domain to be created.
     pub name: ObjectName,
@@ -3626,6 +3686,7 @@ impl fmt::Display for CreateDomain {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum FunctionReturnType {
     /// `RETURNS <type>`
     DataType(DataType),
@@ -3648,6 +3709,7 @@ impl fmt::Display for FunctionReturnType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// CREATE FUNCTION statement
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateFunction {
     /// True if this is a `CREATE OR ALTER FUNCTION` statement
     ///
@@ -3818,6 +3880,7 @@ impl fmt::Display for CreateFunction {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateConnector {
     /// The name of the connector to be created.
     pub name: Ident,
@@ -3877,6 +3940,7 @@ impl fmt::Display for CreateConnector {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AlterSchemaOperation {
     /// Set the default collation for the schema.
     SetDefaultCollate {
@@ -3942,6 +4006,7 @@ impl fmt::Display for AlterSchemaOperation {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum RenameTableNameKind {
     /// `AS new_table_name`
     As(ObjectName),
@@ -3962,6 +4027,7 @@ impl fmt::Display for RenameTableNameKind {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// An `ALTER SCHEMA` (`Statement::AlterSchema`) statement.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AlterSchema {
     /// The schema name to alter.
     pub name: ObjectName,
@@ -3999,6 +4065,7 @@ impl Spanned for RenameTableNameKind {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Whether the syntax used for the trigger object (ROW or STATEMENT) is `FOR` or `FOR EACH`.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TriggerObjectKind {
     /// The `FOR` syntax is used.
     For(TriggerObject),
@@ -4031,6 +4098,7 @@ impl Display for TriggerObjectKind {
 ///
 /// Postgres: <https://www.postgresql.org/docs/current/sql-createtrigger.html>
 /// SQL Server: <https://learn.microsoft.com/en-us/sql/t-sql/statements/create-trigger-transact-sql>
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateTrigger {
     /// True if this is a `CREATE OR ALTER TRIGGER` statement
     ///
@@ -4221,6 +4289,7 @@ impl Display for CreateTrigger {
 /// DROP TRIGGER [ IF EXISTS ] name ON table_name [ CASCADE | RESTRICT ]
 /// ```
 ///
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct DropTrigger {
     /// Whether to include the `IF EXISTS` clause.
     pub if_exists: bool,
@@ -4263,6 +4332,7 @@ impl fmt::Display for DropTrigger {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Truncate {
     /// Table names to truncate
     pub table_names: Vec<super::TruncateTableTarget>,
@@ -4338,6 +4408,7 @@ impl Spanned for Truncate {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Msck {
     /// Table name to check
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
@@ -4373,6 +4444,7 @@ impl Spanned for Msck {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateView {
     /// True if this is a `CREATE OR ALTER VIEW` statement
     ///
@@ -4499,6 +4571,7 @@ impl fmt::Display for CreateView {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateExtension {
     /// Extension name
     pub name: Ident,
@@ -4558,6 +4631,7 @@ impl Spanned for CreateExtension {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct DropExtension {
     /// One or more extension names to drop
     pub names: Vec<Ident>,
@@ -4592,6 +4666,7 @@ impl Spanned for DropExtension {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateCollation {
     /// Whether `IF NOT EXISTS` was specified.
     pub if_not_exists: bool,
@@ -4605,6 +4680,7 @@ pub struct CreateCollation {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CreateCollationDefinition {
     /// Create from an existing collation.
     ///
@@ -4654,6 +4730,7 @@ impl Spanned for CreateCollation {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AlterCollation {
     /// Name of the collation being altered.
     pub name: ObjectName,
@@ -4665,6 +4742,7 @@ pub struct AlterCollation {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AlterCollationOperation {
     /// Rename the collation.
     ///
@@ -4728,6 +4806,7 @@ impl Spanned for AlterCollation {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AlterTableType {
     /// Iceberg table type
     /// <https://docs.snowflake.com/en/sql-reference/sql/alter-iceberg-table>
@@ -4744,6 +4823,7 @@ pub enum AlterTableType {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AlterTable {
     /// Table name
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
@@ -4797,6 +4877,7 @@ impl fmt::Display for AlterTable {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct DropFunction {
     /// Whether to include the `IF EXISTS` clause.
     pub if_exists: bool,
@@ -4832,6 +4913,7 @@ impl Spanned for DropFunction {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateOperator {
     /// Operator name (can be schema-qualified)
     pub name: ObjectName,
@@ -4852,6 +4934,7 @@ pub struct CreateOperator {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateOperatorFamily {
     /// Operator family name (can be schema-qualified)
     pub name: ObjectName,
@@ -4864,6 +4947,7 @@ pub struct CreateOperatorFamily {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateOperatorClass {
     /// Operator class name (can be schema-qualified)
     pub name: ObjectName,
@@ -4934,6 +5018,7 @@ impl fmt::Display for CreateOperatorClass {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct OperatorArgTypes {
     /// Left-hand operand data type for the operator.
     pub left: DataType,
@@ -4951,6 +5036,7 @@ impl fmt::Display for OperatorArgTypes {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum OperatorClassItem {
     /// `OPERATOR` clause describing a specific operator implementation.
     Operator {
@@ -4985,6 +5071,7 @@ pub enum OperatorClassItem {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum OperatorPurpose {
     /// Purpose: used for index/search operations.
     ForSearch,
@@ -5052,6 +5139,7 @@ impl fmt::Display for OperatorPurpose {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct DropOperator {
     /// `IF EXISTS` clause
     pub if_exists: bool,
@@ -5065,6 +5153,7 @@ pub struct DropOperator {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct DropOperatorSignature {
     /// Operator name
     pub name: ObjectName,
@@ -5111,6 +5200,7 @@ impl Spanned for DropOperator {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct DropOperatorFamily {
     /// `IF EXISTS` clause
     pub if_exists: bool,
@@ -5148,6 +5238,7 @@ impl Spanned for DropOperatorFamily {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct DropOperatorClass {
     /// `IF EXISTS` clause
     pub if_exists: bool,
@@ -5184,6 +5275,7 @@ impl Spanned for DropOperatorClass {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum OperatorFamilyItem {
     /// `OPERATOR` clause in an operator family modification.
     Operator {
@@ -5213,6 +5305,7 @@ pub enum OperatorFamilyItem {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum OperatorFamilyDropItem {
     /// `OPERATOR` clause for DROP within an operator family.
     Operator {
@@ -5301,6 +5394,7 @@ impl fmt::Display for OperatorFamilyDropItem {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AlterOperatorFamily {
     /// Operator family name (can be schema-qualified)
     pub name: ObjectName,
@@ -5314,6 +5408,7 @@ pub struct AlterOperatorFamily {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AlterOperatorFamilyOperation {
     /// `ADD { OPERATOR ... | FUNCTION ... } [, ...]`
     Add {
@@ -5383,6 +5478,7 @@ impl Spanned for AlterOperatorFamily {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AlterOperatorClass {
     /// Operator class name (can be schema-qualified)
     pub name: ObjectName,
@@ -5396,6 +5492,7 @@ pub struct AlterOperatorClass {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AlterOperatorClassOperation {
     /// `RENAME TO new_name`
     /// Rename the operator class to a new name.
@@ -5446,6 +5543,7 @@ impl Spanned for AlterOperatorClass {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AlterFunction {
     /// Object type being altered.
     pub kind: AlterFunctionKind,
@@ -5467,6 +5565,7 @@ pub struct AlterFunction {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AlterFunctionKind {
     /// `FUNCTION`
     Function,
@@ -5487,6 +5586,7 @@ impl fmt::Display for AlterFunctionKind {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AlterFunctionOperation {
     /// `RENAME TO new_name`
     RenameTo {
@@ -5520,6 +5620,7 @@ pub enum AlterFunctionOperation {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AlterFunctionAction {
     /// `CALLED ON NULL INPUT` / `RETURNS NULL ON NULL INPUT` / `STRICT`
     CalledOnNull(FunctionCalledOnNull),
@@ -5656,6 +5757,7 @@ impl Spanned for AlterFunction {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum TextSearchObjectType {
     /// `DICTIONARY`
     Dictionary,
@@ -5684,6 +5786,7 @@ impl fmt::Display for TextSearchObjectType {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateTextSearch {
     /// The specific text search object type.
     pub object_type: TextSearchObjectType,
@@ -5717,6 +5820,7 @@ impl Spanned for CreateTextSearch {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AlterTextSearchOption {
     /// Option name.
     pub key: Ident,
@@ -5739,6 +5843,7 @@ impl fmt::Display for AlterTextSearchOption {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AlterTextSearchOperation {
     /// `RENAME TO new_name`
     RenameTo {
@@ -5780,6 +5885,7 @@ impl fmt::Display for AlterTextSearchOperation {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AlterTextSearch {
     /// The specific text search object type.
     pub object_type: TextSearchObjectType,
@@ -5811,6 +5917,7 @@ impl Spanned for AlterTextSearch {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreatePolicy {
     /// Name of the policy.
     pub name: Ident,
@@ -5864,6 +5971,7 @@ impl fmt::Display for CreatePolicy {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CreatePolicyType {
     /// Policy allows operations unless explicitly denied.
     Permissive,
@@ -5888,6 +5996,7 @@ impl fmt::Display for CreatePolicyType {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum CreatePolicyCommand {
     /// Applies to all commands.
     All,
@@ -5919,6 +6028,7 @@ impl fmt::Display for CreatePolicyCommand {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct DropPolicy {
     /// `true` when `IF EXISTS` was present.
     pub if_exists: bool,
@@ -5968,6 +6078,7 @@ impl From<DropPolicy> for crate::ast::Statement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct AlterPolicy {
     /// Policy name to alter.
     pub name: Ident,

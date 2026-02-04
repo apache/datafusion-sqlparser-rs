@@ -54,6 +54,7 @@ use crate::parser::ParserError;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CreateDatabaseBuilder {
     /// The database name to create.
     pub db_name: ObjectName,

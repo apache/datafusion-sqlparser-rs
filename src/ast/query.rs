@@ -3351,8 +3351,14 @@ impl fmt::Display for NonBlock {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-/// `DISTINCT` or `DISTINCT ON (...)` modifiers for `SELECT` lists.
+/// `ALL`, `DISTINCT`, or `DISTINCT ON (...)` modifiers for `SELECT` lists.
 pub enum Distinct {
+    /// `ALL` (keep duplicate rows)
+    ///
+    /// Generally this is the default if omitted, but omission should be represented as
+    /// `None::<Option<Distinct>>`
+    All,
+
     /// `DISTINCT` (remove duplicate rows)
     Distinct,
 
@@ -3363,6 +3369,7 @@ pub enum Distinct {
 impl fmt::Display for Distinct {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Distinct::All => write!(f, "ALL"),
             Distinct::Distinct => write!(f, "DISTINCT"),
             Distinct::On(col_names) => {
                 let col_names = display_comma_separated(col_names);

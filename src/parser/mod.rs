@@ -4927,16 +4927,27 @@ impl<'a> Parser<'a> {
     /// and results in a [`ParserError`] if both `ALL` and `DISTINCT` are found.
     pub fn parse_all_or_distinct(&mut self) -> Result<Option<Distinct>, ParserError> {
         let loc = self.peek_token().span.start;
-        let all = self.parse_keyword(Keyword::ALL);
-        let distinct = self.parse_keyword(Keyword::DISTINCT);
-        if !distinct {
-            return Ok(None);
-        }
-        if all {
-            return parser_err!("Cannot specify both ALL and DISTINCT".to_string(), loc);
-        }
-        let on = self.parse_keyword(Keyword::ON);
-        if !on {
+        let distinct = match self.parse_one_of_keywords(&[Keyword::ALL, Keyword::DISTINCT]) {
+            Some(Keyword::ALL) => {
+                if self.peek_keyword(Keyword::DISTINCT) {
+                    return parser_err!("Cannot specify ALL then DISTINCT".to_string(), loc);
+                }
+                Some(Distinct::All)
+            }
+            Some(Keyword::DISTINCT) => {
+                if self.peek_keyword(Keyword::ALL) {
+                    return parser_err!("Cannot specify DISTINCT then ALL".to_string(), loc);
+                }
+                Some(Distinct::Distinct)
+            }
+            None => return Ok(None),
+            _ => return parser_err!("ALL or DISTINCT", loc),
+        };
+
+        let Some(Distinct::Distinct) = distinct else {
+            return Ok(distinct);
+        };
+        if !self.parse_keyword(Keyword::ON) {
             return Ok(Some(Distinct::Distinct));
         }
 

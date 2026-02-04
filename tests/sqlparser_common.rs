@@ -1074,14 +1074,24 @@ fn parse_select_distinct_missing_paren() {
 
 #[test]
 fn parse_select_all() {
-    one_statement_parses_to("SELECT ALL name FROM customer", "SELECT name FROM customer");
+    verified_stmt("SELECT ALL name FROM customer");
 }
 
 #[test]
 fn parse_select_all_distinct() {
     let result = parse_sql_statements("SELECT ALL DISTINCT name FROM customer");
     assert_eq!(
-        ParserError::ParserError("Cannot specify both ALL and DISTINCT".to_string()),
+        ParserError::ParserError("Cannot specify ALL then DISTINCT".to_string()),
+        result.unwrap_err(),
+    );
+    let result = parse_sql_statements("SELECT DISTINCT ALL name FROM customer");
+    assert_eq!(
+        ParserError::ParserError("Cannot specify DISTINCT then ALL".to_string()),
+        result.unwrap_err(),
+    );
+    let result = parse_sql_statements("SELECT ALL DISTINCT ON(name) name FROM customer");
+    assert_eq!(
+        ParserError::ParserError("Cannot specify ALL then DISTINCT".to_string()),
         result.unwrap_err(),
     );
 }
@@ -14830,9 +14840,9 @@ fn test_load_extension() {
 #[test]
 fn test_select_top() {
     let dialects = all_dialects_where(|d| d.supports_top_before_distinct());
-    dialects.one_statement_parses_to("SELECT ALL * FROM tbl", "SELECT * FROM tbl");
+    dialects.verified_stmt("SELECT ALL * FROM tbl");
     dialects.verified_stmt("SELECT TOP 3 * FROM tbl");
-    dialects.one_statement_parses_to("SELECT TOP 3 ALL * FROM tbl", "SELECT TOP 3 * FROM tbl");
+    dialects.verified_stmt("SELECT TOP 3 ALL * FROM tbl");
     dialects.verified_stmt("SELECT TOP 3 DISTINCT * FROM tbl");
     dialects.verified_stmt("SELECT TOP 3 DISTINCT a, b, c FROM tbl");
 }

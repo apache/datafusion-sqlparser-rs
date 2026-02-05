@@ -85,6 +85,14 @@ pub struct CreateDatabaseBuilder {
     pub storage_serialization_policy: Option<StorageSerializationPolicy>,
     /// Optional comment attached to the database.
     pub comment: Option<String>,
+    /// Optional default character set (MySQL).
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/create-database.html>
+    pub default_charset: Option<String>,
+    /// Optional default collation (MySQL).
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/create-database.html>
+    pub default_collation: Option<String>,
     /// Optional catalog sync configuration.
     pub catalog_sync: Option<String>,
     /// Optional catalog sync namespace mode.
@@ -120,6 +128,8 @@ impl CreateDatabaseBuilder {
             default_ddl_collation: None,
             storage_serialization_policy: None,
             comment: None,
+            default_charset: None,
+            default_collation: None,
             catalog_sync: None,
             catalog_sync_namespace_mode: None,
             catalog_sync_namespace_flatten_delimiter: None,
@@ -218,6 +228,18 @@ impl CreateDatabaseBuilder {
         self
     }
 
+    /// Set the default character set for the database.
+    pub fn default_charset(mut self, default_charset: Option<String>) -> Self {
+        self.default_charset = default_charset;
+        self
+    }
+
+    /// Set the default collation for the database.
+    pub fn default_collation(mut self, default_collation: Option<String>) -> Self {
+        self.default_collation = default_collation;
+        self
+    }
+
     /// Set the catalog sync for the database.
     pub fn catalog_sync(mut self, catalog_sync: Option<String>) -> Self {
         self.catalog_sync = catalog_sync;
@@ -272,6 +294,8 @@ impl CreateDatabaseBuilder {
             default_ddl_collation: self.default_ddl_collation,
             storage_serialization_policy: self.storage_serialization_policy,
             comment: self.comment,
+            default_charset: self.default_charset,
+            default_collation: self.default_collation,
             catalog_sync: self.catalog_sync,
             catalog_sync_namespace_mode: self.catalog_sync_namespace_mode,
             catalog_sync_namespace_flatten_delimiter: self.catalog_sync_namespace_flatten_delimiter,
@@ -302,6 +326,8 @@ impl TryFrom<Statement> for CreateDatabaseBuilder {
                 default_ddl_collation,
                 storage_serialization_policy,
                 comment,
+                default_charset,
+                default_collation,
                 catalog_sync,
                 catalog_sync_namespace_mode,
                 catalog_sync_namespace_flatten_delimiter,
@@ -323,6 +349,8 @@ impl TryFrom<Statement> for CreateDatabaseBuilder {
                 default_ddl_collation,
                 storage_serialization_policy,
                 comment,
+                default_charset,
+                default_collation,
                 catalog_sync,
                 catalog_sync_namespace_mode,
                 catalog_sync_namespace_flatten_delimiter,

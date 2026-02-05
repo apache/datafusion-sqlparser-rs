@@ -602,6 +602,10 @@ fn test_regexp_operator() {
         }
     );
     sqlite().verified_only_select(r#"SELECT count(*) FROM messages WHERE msg_text REGEXP '\d+'"#);
+
+    // Should return an error, not panic
+    assert!(sqlite().parse_sql_statements("SELECT 1 REGEXP").is_err());
+    assert!(sqlite().parse_sql_statements("SELECT 1 MATCH").is_err());
 }
 
 #[test]

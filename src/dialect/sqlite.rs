@@ -88,7 +88,10 @@ impl Dialect for SQLiteDialect {
         ] {
             if parser.parse_keyword(keyword) {
                 let left = Box::new(expr.clone());
-                let right = Box::new(parser.parse_expr().unwrap());
+                let right = Box::new(match parser.parse_expr() {
+                    Ok(expr) => expr,
+                    Err(e) => return Some(Err(e)),
+                });
                 return Some(Ok(Expr::BinaryOp { left, op, right }));
             }
         }

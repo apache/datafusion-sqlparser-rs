@@ -4927,16 +4927,27 @@ impl<'a> Parser<'a> {
     /// and results in a [`ParserError`] if both `ALL` and `DISTINCT` are found.
     pub fn parse_all_or_distinct(&mut self) -> Result<Option<Distinct>, ParserError> {
         let loc = self.peek_token().span.start;
-        let all = self.parse_keyword(Keyword::ALL);
-        let distinct = self.parse_keyword(Keyword::DISTINCT);
-        if !distinct {
-            return Ok(None);
-        }
-        if all {
-            return parser_err!("Cannot specify both ALL and DISTINCT".to_string(), loc);
-        }
-        let on = self.parse_keyword(Keyword::ON);
-        if !on {
+        let distinct = match self.parse_one_of_keywords(&[Keyword::ALL, Keyword::DISTINCT]) {
+            Some(Keyword::ALL) => {
+                if self.peek_keyword(Keyword::DISTINCT) {
+                    return parser_err!("Cannot specify ALL then DISTINCT".to_string(), loc);
+                }
+                Some(Distinct::All)
+            }
+            Some(Keyword::DISTINCT) => {
+                if self.peek_keyword(Keyword::ALL) {
+                    return parser_err!("Cannot specify DISTINCT then ALL".to_string(), loc);
+                }
+                Some(Distinct::Distinct)
+            }
+            None => return Ok(None),
+            _ => return parser_err!("ALL or DISTINCT", loc),
+        };
+
+        let Some(Distinct::Distinct) = distinct else {
+            return Ok(distinct);
+        };
+        if !self.parse_keyword(Keyword::ON) {
             return Ok(Some(Distinct::Distinct));
         }
 
@@ -13861,6 +13872,7 @@ impl<'a> Parser<'a> {
                     select_token: AttachedToken(from_token),
                     optimizer_hint: None,
                     distinct: None,
+                    select_modifiers: None,
                     top: None,
                     top_before_distinct: false,
                     projection: vec![],
@@ -13890,13 +13902,26 @@ impl<'a> Parser<'a> {
         let optimizer_hint = self.maybe_parse_optimizer_hint()?;
         let value_table_mode = self.parse_value_table_mode()?;
 
+        let (select_modifiers, distinct_select_modifier) =
+            if self.dialect.supports_select_modifiers() {
+                self.parse_select_modifiers()?
+            } else {
+                (None, None)
+            };
+
         let mut top_before_distinct = false;
         let mut top = None;
         if self.dialect.supports_top_before_distinct() && self.parse_keyword(Keyword::TOP) {
             top = Some(self.parse_top()?);
             top_before_distinct = true;
         }
-        let distinct = self.parse_all_or_distinct()?;
+
+        let distinct = if distinct_select_modifier.is_some() {
+            distinct_select_modifier
+        } else {
+            self.parse_all_or_distinct()?
+        };
+
         if !self.dialect.supports_top_before_distinct() && self.parse_keyword(Keyword::TOP) {
             top = Some(self.parse_top()?);
         }
@@ -14044,6 +14069,7 @@ impl<'a> Parser<'a> {
             select_token: AttachedToken(select_token),
             optimizer_hint,
             distinct,
+            select_modifiers,
             top,
             top_before_distinct,
             projection,
@@ -14118,6 +14144,68 @@ impl<'a> Parser<'a> {
                 _ => return Ok(None),
             }
         }
+    }
+
+    /// Parses MySQL SELECT modifiers and DISTINCT/ALL in any order.
+    ///
+    /// Manual testing shows odifiers can appear in any order, and modifiers other than DISTINCT/ALL
+    /// can be repeated.
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/select.html>
+    fn parse_select_modifiers(
+        &mut self,
+    ) -> Result<(Option<SelectModifiers>, Option<Distinct>), ParserError> {
+        let mut modifiers = SelectModifiers::default();
+        let mut distinct = None;
+
+        let keywords = &[
+            Keyword::ALL,
+            Keyword::DISTINCT,
+            Keyword::DISTINCTROW,
+            Keyword::HIGH_PRIORITY,
+            Keyword::STRAIGHT_JOIN,
+            Keyword::SQL_SMALL_RESULT,
+            Keyword::SQL_BIG_RESULT,
+            Keyword::SQL_BUFFER_RESULT,
+            Keyword::SQL_NO_CACHE,
+            Keyword::SQL_CALC_FOUND_ROWS,
+        ];
+
+        while let Some(keyword) = self.parse_one_of_keywords(keywords) {
+            match keyword {
+                Keyword::ALL | Keyword::DISTINCT if distinct.is_none() => {
+                    self.prev_token();
+                    distinct = self.parse_all_or_distinct()?;
+                }
+                // DISTINCTROW is a MySQL-specific legacy (but not deprecated) alias for DISTINCT
+                Keyword::DISTINCTROW if distinct.is_none() => {
+                    distinct = Some(Distinct::Distinct);
+                }
+                Keyword::HIGH_PRIORITY => modifiers.high_priority = true,
+                Keyword::STRAIGHT_JOIN => modifiers.straight_join = true,
+                Keyword::SQL_SMALL_RESULT => modifiers.sql_small_result = true,
+                Keyword::SQL_BIG_RESULT => modifiers.sql_big_result = true,
+                Keyword::SQL_BUFFER_RESULT => modifiers.sql_buffer_result = true,
+                Keyword::SQL_NO_CACHE => modifiers.sql_no_cache = true,
+                Keyword::SQL_CALC_FOUND_ROWS => modifiers.sql_calc_found_rows = true,
+                _ => {
+                    self.prev_token();
+                    return self.expected(
+                        "HIGH_PRIORITY, STRAIGHT_JOIN, or other MySQL select modifier",
+                        self.peek_token(),
+                    );
+                }
+            }
+        }
+
+        // Avoid polluting the AST with `Some(SelectModifiers::default())` empty value unless there
+        // actually were some modifiers set.
+        let select_modifiers = if modifiers.is_any_set() {
+            Some(modifiers)
+        } else {
+            None
+        };
+        Ok((select_modifiers, distinct))
     }
 
     fn parse_value_table_mode(&mut self) -> Result<Option<ValueTableMode>, ParserError> {

@@ -1293,6 +1293,7 @@ fn parse_copy_to() {
                     select_token: AttachedToken::empty(),
                     optimizer_hint: None,
                     distinct: None,
+                    select_modifiers: None,
                     top: None,
                     top_before_distinct: false,
                     projection: vec![
@@ -3074,6 +3075,7 @@ fn parse_array_subquery_expr() {
                         select_token: AttachedToken::empty(),
                         optimizer_hint: None,
                         distinct: None,
+                        select_modifiers: None,
                         top: None,
                         top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Value(
@@ -3101,6 +3103,7 @@ fn parse_array_subquery_expr() {
                         select_token: AttachedToken::empty(),
                         optimizer_hint: None,
                         distinct: None,
+                        select_modifiers: None,
                         top: None,
                         top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Value(

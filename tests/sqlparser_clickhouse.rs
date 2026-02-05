@@ -40,9 +40,10 @@ fn parse_map_access_expr() {
     let select = clickhouse().verified_only_select(sql);
     assert_eq!(
         Select {
-            distinct: None,
-            optimizer_hint: None,
             select_token: AttachedToken::empty(),
+            optimizer_hint: None,
+            distinct: None,
+            select_modifiers: None,
             top: None,
             top_before_distinct: false,
             projection: vec![UnnamedExpr(Expr::CompoundFieldAccess {

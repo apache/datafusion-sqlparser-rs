@@ -2683,6 +2683,7 @@ fn test_export_data() {
                     )),
                     optimizer_hint: None,
                     distinct: None,
+                    select_modifiers: None,
                     top: None,
                     top_before_distinct: false,
                     projection: vec![
@@ -2788,6 +2789,7 @@ fn test_export_data() {
                     )),
                     optimizer_hint: None,
                     distinct: None,
+                    select_modifiers: None,
                     top: None,
                     top_before_distinct: false,
                     projection: vec![

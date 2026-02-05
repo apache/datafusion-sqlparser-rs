@@ -334,6 +334,108 @@ pub enum SelectFlavor {
     FromFirstNoSelect,
 }
 
+/// MySQL-specific SELECT modifiers that appear after the SELECT keyword.
+///
+/// These modifiers affect query execution and optimization. They can appear in any order after
+/// SELECT and before the column list, can be repeated, and can be interleaved with
+/// DISTINCT/DISTINCTROW/ALL:
+///
+/// ```sql
+/// SELECT
+///     [ALL | DISTINCT | DISTINCTROW]
+///     [HIGH_PRIORITY]
+///     [STRAIGHT_JOIN]
+///     [SQL_SMALL_RESULT] [SQL_BIG_RESULT] [SQL_BUFFER_RESULT]
+///     [SQL_NO_CACHE] [SQL_CALC_FOUND_ROWS]
+///     select_expr [, select_expr] ...
+/// ```
+///
+/// See [MySQL SELECT](https://dev.mysql.com/doc/refman/8.4/en/select.html).
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SelectModifiers {
+    /// `HIGH_PRIORITY` gives the SELECT higher priority than statements that update a table.
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/select.html>
+    pub high_priority: bool,
+    /// `STRAIGHT_JOIN` forces the optimizer to join tables in the order listed in the FROM clause.
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/select.html>
+    pub straight_join: bool,
+    /// `SQL_SMALL_RESULT` hints that the result set is small, using in-memory temp tables.
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/select.html>
+    pub sql_small_result: bool,
+    /// `SQL_BIG_RESULT` hints that the result set is large, using disk-based temp tables.
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/select.html>
+    pub sql_big_result: bool,
+    /// `SQL_BUFFER_RESULT` forces the result to be put into a temporary table to release locks early.
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/select.html>
+    pub sql_buffer_result: bool,
+    /// `SQL_NO_CACHE` tells MySQL not to cache the query result. (Deprecated in 8.4+.)
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/select.html>
+    pub sql_no_cache: bool,
+    /// `SQL_CALC_FOUND_ROWS` tells MySQL to calculate the total number of rows. (Deprecated in 8.0.17+.)
+    ///
+    /// - [MySQL SELECT modifiers](https://dev.mysql.com/doc/refman/8.4/en/select.html)
+    /// - [`FOUND_ROWS()`](https://dev.mysql.com/doc/refman/8.4/en/information-functions.html#function_found-rows)
+    pub sql_calc_found_rows: bool,
+}
+
+impl fmt::Display for SelectModifiers {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.high_priority {
+            f.write_str(" HIGH_PRIORITY")?;
+        }
+        if self.straight_join {
+            f.write_str(" STRAIGHT_JOIN")?;
+        }
+        if self.sql_small_result {
+            f.write_str(" SQL_SMALL_RESULT")?;
+        }
+        if self.sql_big_result {
+            f.write_str(" SQL_BIG_RESULT")?;
+        }
+        if self.sql_buffer_result {
+            f.write_str(" SQL_BUFFER_RESULT")?;
+        }
+        if self.sql_no_cache {
+            f.write_str(" SQL_NO_CACHE")?;
+        }
+        if self.sql_calc_found_rows {
+            f.write_str(" SQL_CALC_FOUND_ROWS")?;
+        }
+        Ok(())
+    }
+}
+
+impl SelectModifiers {
+    /// Returns true if any of the modifiers are set.
+    pub fn is_any_set(&self) -> bool {
+        // Using irrefutable destructuring to catch fields added in the future
+        let Self {
+            high_priority,
+            straight_join,
+            sql_small_result,
+            sql_big_result,
+            sql_buffer_result,
+            sql_no_cache,
+            sql_calc_found_rows,
+        } = self;
+        *high_priority
+            || *straight_join
+            || *sql_small_result
+            || *sql_big_result
+            || *sql_buffer_result
+            || *sql_no_cache
+            || *sql_calc_found_rows
+    }
+}
+
 /// A restricted variant of `SELECT` (without CTEs/`ORDER BY`), which may
 /// appear either as the only body item of a `Query`, or as an operand
 /// to a set operation like `UNION`.
@@ -350,6 +452,10 @@ pub struct Select {
     pub optimizer_hint: Option<OptimizerHint>,
     /// `SELECT [DISTINCT] ...`
     pub distinct: Option<Distinct>,
+    /// MySQL-specific SELECT modifiers.
+    ///
+    /// See [MySQL SELECT](https://dev.mysql.com/doc/refman/8.4/en/select.html).
+    pub select_modifiers: Option<SelectModifiers>,
     /// MSSQL syntax: `TOP (<N>) [ PERCENT ] [ WITH TIES ]`
     pub top: Option<Top>,
     /// Whether the top was located before `ALL`/`DISTINCT`
@@ -440,6 +546,10 @@ impl fmt::Display for Select {
                 f.write_str(" ")?;
                 top.fmt(f)?;
             }
+        }
+
+        if let Some(ref select_modifiers) = self.select_modifiers {
+            select_modifiers.fmt(f)?;
         }
 
         if !self.projection.is_empty() {
@@ -3351,8 +3461,14 @@ impl fmt::Display for NonBlock {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-/// `DISTINCT` or `DISTINCT ON (...)` modifiers for `SELECT` lists.
+/// `ALL`, `DISTINCT`, or `DISTINCT ON (...)` modifiers for `SELECT` lists.
 pub enum Distinct {
+    /// `ALL` (keep duplicate rows)
+    ///
+    /// Generally this is the default if omitted, but omission should be represented as
+    /// `None::<Option<Distinct>>`
+    All,
+
     /// `DISTINCT` (remove duplicate rows)
     Distinct,
 
@@ -3363,6 +3479,7 @@ pub enum Distinct {
 impl fmt::Display for Distinct {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Distinct::All => write!(f, "ALL"),
             Distinct::Distinct => write!(f, "DISTINCT"),
             Distinct::On(col_names) => {
                 let col_names = display_comma_separated(col_names);

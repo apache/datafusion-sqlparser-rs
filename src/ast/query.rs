@@ -480,6 +480,8 @@ pub struct Select {
     pub prewhere: Option<Expr>,
     /// WHERE
     pub selection: Option<Expr>,
+    /// [START WITH ..] CONNECT BY ..
+    pub connect_by: Vec<ConnectByKind>,
     /// GROUP BY
     pub group_by: GroupByExpr,
     /// CLUSTER BY (Hive)
@@ -501,8 +503,6 @@ pub struct Select {
     pub window_before_qualify: bool,
     /// BigQuery syntax: `SELECT AS VALUE | SELECT AS STRUCT`
     pub value_table_mode: Option<ValueTableMode>,
-    /// STARTING WITH .. CONNECT BY
-    pub connect_by: Option<ConnectBy>,
     /// Was this a FROM-first query?
     pub flavor: SelectFlavor,
 }
@@ -585,6 +585,10 @@ impl fmt::Display for Select {
             SpaceOrNewline.fmt(f)?;
             Indent(selection).fmt(f)?;
         }
+        for clause in &self.connect_by {
+            SpaceOrNewline.fmt(f)?;
+            clause.fmt(f)?;
+        }
         match &self.group_by {
             GroupByExpr::All(_) => {
                 SpaceOrNewline.fmt(f)?;
@@ -647,10 +651,6 @@ impl fmt::Display for Select {
                 SpaceOrNewline.fmt(f)?;
                 display_comma_separated(&self.named_window).fmt(f)?;
             }
-        }
-        if let Some(ref connect_by) = self.connect_by {
-            SpaceOrNewline.fmt(f)?;
-            connect_by.fmt(f)?;
         }
         Ok(())
     }
@@ -1204,24 +1204,60 @@ impl fmt::Display for TableWithJoins {
 /// Joins a table to itself to process hierarchical data in the table.
 ///
 /// See <https://docs.snowflake.com/en/sql-reference/constructs/connect-by>.
+/// See <https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Hierarchical-Queries.html>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct ConnectBy {
-    /// START WITH
-    pub condition: Expr,
+pub enum ConnectByKind {
     /// CONNECT BY
-    pub relationships: Vec<Expr>,
+    ConnectBy {
+        /// the `CONNECT` token
+        connect_token: AttachedToken,
+
+        /// [CONNECT BY] NOCYCLE
+        ///
+        /// Optional on [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Hierarchical-Queries.html#GUID-0118DF1D-B9A9-41EB-8556-C6E7D6A5A84E__GUID-5377971A-F518-47E4-8781-F06FEB3EF993)
+        nocycle: bool,
+
+        /// join conditions denoting the hierarchical relationship
+        relationships: Vec<Expr>,
+    },
+
+    /// START WITH
+    ///
+    /// Optional on [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Hierarchical-Queries.html#GUID-0118DF1D-B9A9-41EB-8556-C6E7D6A5A84E)
+    /// when comming _after_ the `CONNECT BY`.
+    StartWith {
+        /// the `START` token
+        start_token: AttachedToken,
+
+        /// condition selecting the root rows of the hierarchy
+        condition: Box<Expr>,
+    },
 }
 
-impl fmt::Display for ConnectBy {
+impl fmt::Display for ConnectByKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "START WITH {condition} CONNECT BY {relationships}",
-            condition = self.condition,
-            relationships = display_comma_separated(&self.relationships)
-        )
+        match self {
+            ConnectByKind::ConnectBy {
+                connect_token: _,
+                nocycle,
+                relationships,
+            } => {
+                write!(
+                    f,
+                    "CONNECT BY {nocycle}{relationships}",
+                    nocycle = if *nocycle { "NOCYCLE " } else { "" },
+                    relationships = display_comma_separated(relationships)
+                )
+            }
+            ConnectByKind::StartWith {
+                start_token: _,
+                condition,
+            } => {
+                write!(f, "START WITH {condition}")
+            }
+        }
     }
 }
 

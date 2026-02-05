@@ -294,7 +294,7 @@ fn test_select_union_by_name() {
                 window_before_qualify: false,
                 qualify: None,
                 value_table_mode: None,
-                connect_by: None,
+                connect_by: vec![],
                 flavor: SelectFlavor::Standard,
             }))),
             right: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
@@ -327,7 +327,7 @@ fn test_select_union_by_name() {
                 window_before_qualify: false,
                 qualify: None,
                 value_table_mode: None,
-                connect_by: None,
+                connect_by: vec![],
                 flavor: SelectFlavor::Standard,
             }))),
         });

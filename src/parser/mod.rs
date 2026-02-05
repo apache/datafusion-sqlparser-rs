@@ -4521,16 +4521,25 @@ impl<'a> Parser<'a> {
     /// consumed and returns false
     #[must_use]
     pub fn parse_keywords(&mut self, keywords: &[Keyword]) -> bool {
-        let index = self.index;
+        self.parse_keywords_indexed(keywords).is_some()
+    }
+
+    /// Just like [Self::parse_keywords], but - upon success - returns the
+    /// token index of the first keyword.
+    #[must_use]
+    fn parse_keywords_indexed(&mut self, keywords: &[Keyword]) -> Option<usize> {
+        let start_index = self.index;
+        let mut first_keyword_index = None;
         for &keyword in keywords {
             if !self.parse_keyword(keyword) {
-                // println!("parse_keywords aborting .. did not find {:?}", keyword);
-                // reset index and return immediately
-                self.index = index;
-                return false;
+                self.index = start_index;
+                return None;
+            }
+            if first_keyword_index.is_none() {
+                first_keyword_index = Some(self.index.saturating_sub(1));
             }
         }
-        true
+        first_keyword_index
     }
 
     /// If the current token is one of the given `keywords`, returns the keyword
@@ -13921,7 +13930,7 @@ impl<'a> Parser<'a> {
                     window_before_qualify: false,
                     qualify: None,
                     value_table_mode: None,
-                    connect_by: None,
+                    connect_by: vec![],
                     flavor: SelectFlavor::FromFirstNoSelect,
                 });
             }
@@ -14032,6 +14041,8 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let connect_by = self.maybe_parse_connect_by()?;
+
         let group_by = self
             .parse_optional_group_by()?
             .unwrap_or_else(|| GroupByExpr::Expressions(vec![], vec![]));
@@ -14082,17 +14093,6 @@ impl<'a> Parser<'a> {
             }
         } else {
             Default::default()
-        };
-
-        let connect_by = if self.dialect.supports_connect_by()
-            && self
-                .parse_one_of_keywords(&[Keyword::START, Keyword::CONNECT])
-                .is_some()
-        {
-            self.prev_token();
-            Some(self.parse_connect_by()?)
-        } else {
-            None
         };
 
         Ok(Select {
@@ -14279,27 +14279,28 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a `CONNECT BY` clause (Oracle-style hierarchical query support).
-    pub fn parse_connect_by(&mut self) -> Result<ConnectBy, ParserError> {
-        let (condition, relationships) = if self.parse_keywords(&[Keyword::CONNECT, Keyword::BY]) {
-            let relationships = self.with_state(ParserState::ConnectBy, |parser| {
-                parser.parse_comma_separated(Parser::parse_expr)
-            })?;
-            self.expect_keywords(&[Keyword::START, Keyword::WITH])?;
-            let condition = self.parse_expr()?;
-            (condition, relationships)
-        } else {
-            self.expect_keywords(&[Keyword::START, Keyword::WITH])?;
-            let condition = self.parse_expr()?;
-            self.expect_keywords(&[Keyword::CONNECT, Keyword::BY])?;
-            let relationships = self.with_state(ParserState::ConnectBy, |parser| {
-                parser.parse_comma_separated(Parser::parse_expr)
-            })?;
-            (condition, relationships)
-        };
-        Ok(ConnectBy {
-            condition,
-            relationships,
-        })
+    pub fn maybe_parse_connect_by(&mut self) -> Result<Vec<ConnectByKind>, ParserError> {
+        let mut clauses = Vec::with_capacity(2);
+        loop {
+            if let Some(idx) = self.parse_keywords_indexed(&[Keyword::START, Keyword::WITH]) {
+                clauses.push(ConnectByKind::StartWith {
+                    start_token: self.token_at(idx).clone().into(),
+                    condition: self.parse_expr()?.into(),
+                });
+            } else if let Some(idx) = self.parse_keywords_indexed(&[Keyword::CONNECT, Keyword::BY])
+            {
+                clauses.push(ConnectByKind::ConnectBy {
+                    connect_token: self.token_at(idx).clone().into(),
+                    nocycle: self.parse_keyword(Keyword::NOCYCLE),
+                    relationships: self.with_state(ParserState::ConnectBy, |parser| {
+                        parser.parse_comma_separated(Parser::parse_expr)
+                    })?,
+                });
+            } else {
+                break;
+            }
+        }
+        Ok(clauses)
     }
 
     /// Parse `CREATE TABLE x AS TABLE y`

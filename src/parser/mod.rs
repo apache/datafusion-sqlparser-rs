@@ -3503,7 +3503,8 @@ impl<'a> Parser<'a> {
     ///
     /// [map]: https://duckdb.org/docs/sql/data_types/map.html#creating-maps
     fn parse_duckdb_map_field(&mut self) -> Result<MapEntry, ParserError> {
-        let key = self.parse_expr()?;
+        // Stop before `:` so it can act as a key/value separator
+        let key = self.parse_subexpr(self.dialect.prec_value(Precedence::Colon))?;
 
         self.expect_token(&Token::Colon)?;
 

@@ -3202,12 +3202,10 @@ fn parse_view_column_descriptions() {
 
 #[test]
 fn test_parentheses_overflow() {
-    // TODO: increase / improve after we fix the recursion limit
-    // for real (see https://github.com/apache/datafusion-sqlparser-rs/issues/984)
     let max_nesting_level: usize = 25;
 
-    // Verify the recursion check is not too wasteful... (num of parentheses - 2 is acceptable)
-    let slack = 2;
+    // Verify the recursion check is not too wasteful (num of parentheses within budget)
+    let slack = 3;
     let l_parens = "(".repeat(max_nesting_level - slack);
     let r_parens = ")".repeat(max_nesting_level - slack);
     let sql = format!("SELECT * FROM {l_parens}a.b.c{r_parens}");
@@ -3215,8 +3213,8 @@ fn test_parentheses_overflow() {
         snowflake_with_recursion_limit(max_nesting_level).parse_sql_statements(sql.as_str());
     assert_eq!(parsed.err(), None);
 
-    // Verify the recursion check triggers... (num of parentheses - 1 is acceptable)
-    let slack = 1;
+    // Verify the recursion check triggers (one more paren exceeds the budget)
+    let slack = 2;
     let l_parens = "(".repeat(max_nesting_level - slack);
     let r_parens = ")".repeat(max_nesting_level - slack);
     let sql = format!("SELECT * FROM {l_parens}a.b.c{r_parens}");

@@ -3329,7 +3329,7 @@ impl Display for ExceptionWhen {
 ///
 /// Supported syntax varies by dialect:
 /// - Hive: `ANALYZE TABLE t [PARTITION (...)] COMPUTE STATISTICS [NOSCAN] [FOR COLUMNS [col1, ...]] [CACHE METADATA]`
-/// - PostgreSQL: `ANALYZE [VERBOSE] [t [(col1, ...)]]`
+/// - PostgreSQL: `ANALYZE [VERBOSE] [t [(col1, ...)]]` See <https://www.postgresql.org/docs/current/sql-analyze.html>
 /// - General: `ANALYZE [TABLE] t`
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

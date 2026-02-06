@@ -177,6 +177,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_multiline_comment_hints(&self) -> bool {
+        true
+    }
+
     fn supports_user_host_grantee(&self) -> bool {
         true
     }

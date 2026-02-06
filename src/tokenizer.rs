@@ -945,10 +945,65 @@ impl<'a> Tokenizer<'a> {
         while let Some(token) = self.next_token(&mut state, buf.last().map(|t| &t.token))? {
             let span = location.span_to(state.location());
 
-            buf.push(TokenWithSpan { token, span });
+            // Check if this is a multiline comment hint that should be expanded
+            match &token {
+                Token::Whitespace(Whitespace::MultiLineComment(comment))
+                    if self.dialect.supports_multiline_comment_hints()
+                        && comment.starts_with('!') =>
+                {
+                    // Re-tokenize the hints and add them to the buffer
+                    self.tokenize_comment_hints(comment, span, buf)?;
+                }
+                _ => {
+                    buf.push(TokenWithSpan { token, span });
+                }
+            }
 
             location = state.location();
         }
+        Ok(())
+    }
+
+    /// Re-tokenize optimizer hints from a multiline comment and add them to the buffer.
+    /// For example, `/*!50110 KEY_BLOCK_SIZE = 1024*/` becomes tokens for `KEY_BLOCK_SIZE = 1024`
+    fn tokenize_comment_hints(
+        &self,
+        comment: &str,
+        span: Span,
+        buf: &mut Vec<TokenWithSpan>,
+    ) -> Result<(), TokenizerError> {
+        // Strip the leading '!' and any version digits (e.g., "50110")
+        let hint_content = comment
+            .strip_prefix('!')
+            .unwrap_or(comment)
+            .trim_start_matches(|c: char| c.is_ascii_digit());
+
+        // If there's no content after stripping, nothing to tokenize
+        if hint_content.is_empty() {
+            return Ok(());
+        }
+
+        // Create a new tokenizer for the hint content
+        let inner = Tokenizer::new(self.dialect, hint_content).with_unescape(self.unescape);
+
+        // Create a state for tracking position within the hint
+        let mut state = State {
+            peekable: hint_content.chars().peekable(),
+            line: span.start.line,
+            col: span.start.column,
+        };
+
+        // Tokenize the hint content and add tokens to the buffer
+        let mut location = state.location();
+        while let Some(token) = inner.next_token(&mut state, buf.last().map(|t| &t.token))? {
+            let token_span = location.span_to(state.location());
+            buf.push(TokenWithSpan {
+                token,
+                span: token_span,
+            });
+            location = state.location();
+        }
+
         Ok(())
     }
 
@@ -2233,7 +2288,6 @@ impl<'a> Tokenizer<'a> {
         let mut s = String::new();
         let mut nested = 1;
         let supports_nested_comments = self.dialect.supports_nested_comments();
-
         loop {
             match chars.next() {
                 Some('/') if matches!(chars.peek(), Some('*')) && supports_nested_comments => {
@@ -4218,6 +4272,88 @@ mod tests {
                 Token::Whitespace(Whitespace::Space),
                 Token::make_word("y", None),
             ],
-        )
+        );
+    }
+
+    #[test]
+    fn tokenize_multiline_comment_with_comment_hint() {
+        let sql = String::from("0/*! word */1");
+
+        let dialect = MySqlDialect {};
+        let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
+        let expected = vec![
+            Token::Number("0".to_string(), false),
+            Token::Whitespace(Whitespace::Space),
+            Token::Word(Word {
+                value: "word".to_string(),
+                quote_style: None,
+                keyword: Keyword::NoKeyword,
+            }),
+            Token::Whitespace(Whitespace::Space),
+            Token::Number("1".to_string(), false),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_multiline_comment_with_comment_hint_and_version() {
+        let sql_multi = String::from("0 /*!50110 KEY_BLOCK_SIZE = 1024*/ 1");
+        let dialect = MySqlDialect {};
+        let tokens = Tokenizer::new(&dialect, &sql_multi).tokenize().unwrap();
+        let expected = vec![
+            Token::Number("0".to_string(), false),
+            Token::Whitespace(Whitespace::Space),
+            Token::Whitespace(Whitespace::Space),
+            Token::Word(Word {
+                value: "KEY_BLOCK_SIZE".to_string(),
+                quote_style: None,
+                keyword: Keyword::KEY_BLOCK_SIZE,
+            }),
+            Token::Whitespace(Whitespace::Space),
+            Token::Eq,
+            Token::Whitespace(Whitespace::Space),
+            Token::Number("1024".to_string(), false),
+            Token::Whitespace(Whitespace::Space),
+            Token::Number("1".to_string(), false),
+        ];
+        compare(expected, tokens);
+
+        let tokens = Tokenizer::new(&dialect, "0 /*!50110 */ 1")
+            .tokenize()
+            .unwrap();
+        compare(
+            vec![
+                Token::Number("0".to_string(), false),
+                Token::Whitespace(Whitespace::Space),
+                Token::Whitespace(Whitespace::Space),
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("1".to_string(), false),
+            ],
+            tokens,
+        );
+
+        let tokens = Tokenizer::new(&dialect, "0 /*!*/ 1").tokenize().unwrap();
+        compare(
+            vec![
+                Token::Number("0".to_string(), false),
+                Token::Whitespace(Whitespace::Space),
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("1".to_string(), false),
+            ],
+            tokens,
+        );
+        let tokens = Tokenizer::new(&dialect, "0 /*!   */ 1").tokenize().unwrap();
+        compare(
+            vec![
+                Token::Number("0".to_string(), false),
+                Token::Whitespace(Whitespace::Space),
+                Token::Whitespace(Whitespace::Space),
+                Token::Whitespace(Whitespace::Space),
+                Token::Whitespace(Whitespace::Space),
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("1".to_string(), false),
+            ],
+            tokens,
+        );
     }
 }

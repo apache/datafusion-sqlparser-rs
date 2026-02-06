@@ -1169,6 +1169,23 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports the `CONSTRAINT` keyword without a name
+    /// in table constraint definitions.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE TABLE t (a INT, CONSTRAINT CHECK (a > 0))
+    /// ```
+    ///
+    /// This is a MySQL extension; the SQL standard requires a name after `CONSTRAINT`.
+    /// When the name is omitted, the output normalizes to just the constraint type
+    /// without the `CONSTRAINT` keyword (e.g., `CHECK (a > 0)`).
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
+    fn supports_constraint_keyword_without_name(&self) -> bool {
+        false
+    }
+
     /// Returns true if the specified keyword is reserved and cannot be
     /// used as an identifier without special handling like quoting.
     fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {

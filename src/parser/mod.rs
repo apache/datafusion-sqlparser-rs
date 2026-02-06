@@ -9293,7 +9293,20 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<Option<TableConstraint>, ParserError> {
         let name = if self.parse_keyword(Keyword::CONSTRAINT) {
-            Some(self.parse_identifier()?)
+            if self.dialect.supports_constraint_keyword_without_name()
+                && self
+                    .peek_one_of_keywords(&[
+                        Keyword::CHECK,
+                        Keyword::PRIMARY,
+                        Keyword::UNIQUE,
+                        Keyword::FOREIGN,
+                    ])
+                    .is_some()
+            {
+                None
+            } else {
+                Some(self.parse_identifier()?)
+            }
         } else {
             None
         };

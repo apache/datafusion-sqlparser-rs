@@ -14396,8 +14396,13 @@ impl<'a> Parser<'a> {
                 let value = self.parse_identifier()?;
                 SetSessionAuthorizationParamKind::User(value)
             };
+            let scope = scope.ok_or_else(|| {
+                ParserError::ParserError(
+                    "Expected a scope modifier (e.g. SESSION) before AUTHORIZATION".to_string(),
+                )
+            })?;
             return Ok(Set::SetSessionAuthorization(SetSessionAuthorizationParam {
-                scope: scope.expect("SET ... AUTHORIZATION must have a scope"),
+                scope,
                 kind: auth_value,
             })
             .into());

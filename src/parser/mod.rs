@@ -670,6 +670,7 @@ impl<'a> Parser<'a> {
                 Keyword::RELEASE => self.parse_release(),
                 Keyword::COMMIT => self.parse_commit(),
                 Keyword::RAISERROR => Ok(self.parse_raiserror()?),
+                Keyword::THROW => Ok(self.parse_throw()?),
                 Keyword::ROLLBACK => self.parse_rollback(),
                 Keyword::ASSERT => self.parse_assert(),
                 // `PREPARE`, `EXECUTE` and `DEALLOCATE` are Postgres-specific
@@ -18258,6 +18259,31 @@ impl<'a> Parser<'a> {
                 self.peek_token(),
             ),
         }
+    }
+
+    /// Parse a MSSQL `THROW` statement
+    /// See <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/throw-transact-sql>
+    pub fn parse_throw(&mut self) -> Result<Statement, ParserError> {
+        // THROW with no arguments is a re-throw inside a CATCH block
+        if self.peek_token_ref().token == Token::SemiColon
+            || self.peek_token_ref().token == Token::EOF
+        {
+            return Ok(Statement::Throw {
+                error_number: None,
+                message: None,
+                state: None,
+            });
+        }
+        let error_number = Box::new(self.parse_expr()?);
+        self.expect_token(&Token::Comma)?;
+        let message = Box::new(self.parse_expr()?);
+        self.expect_token(&Token::Comma)?;
+        let state = Box::new(self.parse_expr()?);
+        Ok(Statement::Throw {
+            error_number: Some(error_number),
+            message: Some(message),
+            state: Some(state),
+        })
     }
 
     /// Parse a SQL `DEALLOCATE` statement

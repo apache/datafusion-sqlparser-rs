@@ -4676,6 +4676,19 @@ pub enum Statement {
         /// Additional `WITH` options for RAISERROR.
         options: Vec<RaisErrorOption>,
     },
+    /// Throw (MSSQL)
+    /// ```sql
+    /// THROW [ error_number, message, state ]
+    /// ```
+    /// See <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/throw-transact-sql>
+    Throw {
+        /// Error number expression.
+        error_number: Option<Box<Expr>>,
+        /// Error message expression.
+        message: Option<Box<Expr>>,
+        /// State expression.
+        state: Option<Box<Expr>>,
+    },
     /// ```sql
     /// PRINT msg_str | @local_variable | string_expr
     /// ```
@@ -6117,6 +6130,19 @@ impl fmt::Display for Statement {
                 write!(f, ")")?;
                 if !options.is_empty() {
                     write!(f, " WITH {}", display_comma_separated(options))?;
+                }
+                Ok(())
+            }
+            Statement::Throw {
+                error_number,
+                message,
+                state,
+            } => {
+                write!(f, "THROW")?;
+                if let (Some(error_number), Some(message), Some(state)) =
+                    (error_number, message, state)
+                {
+                    write!(f, " {error_number}, {message}, {state}")?;
                 }
                 Ok(())
             }

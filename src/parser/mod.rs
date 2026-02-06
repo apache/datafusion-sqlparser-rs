@@ -1193,13 +1193,20 @@ impl<'a> Parser<'a> {
     /// Parse `ANALYZE` statement.
     pub fn parse_analyze(&mut self) -> Result<Analyze, ParserError> {
         let has_table_keyword = self.parse_keyword(Keyword::TABLE);
-        let table_name = self.parse_object_name(false)?;
+        let table_name = self.maybe_parse(|parser| parser.parse_object_name(false))?;
         let mut for_columns = false;
         let mut cache_metadata = false;
         let mut noscan = false;
         let mut partitions = None;
         let mut compute_statistics = false;
         let mut columns = vec![];
+
+        // PostgreSQL syntax: ANALYZE t (col1, col2)
+        if table_name.is_some() && self.consume_token(&Token::LParen) {
+            columns = self.parse_comma_separated(|p| p.parse_identifier())?;
+            self.expect_token(&Token::RParen)?;
+        }
+
         loop {
             match self.parse_one_of_keywords(&[
                 Keyword::PARTITION,

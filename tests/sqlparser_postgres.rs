@@ -8511,3 +8511,28 @@ fn parse_create_table_partition_of_errors() {
         "Expected error about empty TO list, got: {err}"
     );
 }
+
+#[test]
+fn parse_pg_analyze() {
+    // Bare ANALYZE
+    pg_and_generic().verified_stmt("ANALYZE");
+
+    // ANALYZE with table name
+    pg_and_generic().verified_stmt("ANALYZE t");
+
+    // ANALYZE with column specification
+    pg_and_generic().verified_stmt("ANALYZE t (col1, col2)");
+
+    // Verify AST for column specification
+    let stmt = pg().verified_stmt("ANALYZE t (col1, col2)");
+    match &stmt {
+        Statement::Analyze(analyze) => {
+            assert_eq!(analyze.table_name.as_ref().unwrap().to_string(), "t");
+            assert_eq!(analyze.columns.len(), 2);
+            assert_eq!(analyze.columns[0].to_string(), "col1");
+            assert_eq!(analyze.columns[1].to_string(), "col2");
+            assert!(!analyze.for_columns);
+        }
+        _ => panic!("Expected Analyze, got: {stmt:?}"),
+    }
+}

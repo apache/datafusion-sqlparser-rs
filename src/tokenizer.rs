@@ -935,6 +935,16 @@ impl<'a> Tokenizer<'a> {
         &mut self,
         buf: &mut Vec<TokenWithSpan>,
     ) -> Result<(), TokenizerError> {
+        self.tokenize_with_location_into_buf_with_mapper(buf, |token| token)
+    }
+
+    /// Tokenize the statement and produce a vector of tokens, mapping each token
+    /// with provided `mapper`
+    pub fn tokenize_with_location_into_buf_with_mapper(
+        &mut self,
+        buf: &mut Vec<TokenWithSpan>,
+        mut mapper: impl FnMut(TokenWithSpan) -> TokenWithSpan,
+    ) -> Result<(), TokenizerError> {
         let mut state = State {
             peekable: self.query.chars().peekable(),
             line: 1,
@@ -952,10 +962,10 @@ impl<'a> Tokenizer<'a> {
                         && comment.starts_with('!') =>
                 {
                     // Re-tokenize the hints and add them to the buffer
-                    self.tokenize_comment_hints(comment, span, buf)?;
+                    self.tokenize_comment_hints(comment, span, buf, &mut mapper)?;
                 }
                 _ => {
-                    buf.push(TokenWithSpan { token, span });
+                    buf.push(mapper(TokenWithSpan { token, span }));
                 }
             }
 
@@ -971,6 +981,7 @@ impl<'a> Tokenizer<'a> {
         comment: &str,
         span: Span,
         buf: &mut Vec<TokenWithSpan>,
+        mut mapper: impl FnMut(TokenWithSpan) -> TokenWithSpan,
     ) -> Result<(), TokenizerError> {
         // Strip the leading '!' and any version digits (e.g., "50110")
         let hint_content = comment
@@ -997,10 +1008,10 @@ impl<'a> Tokenizer<'a> {
         let mut location = state.location();
         while let Some(token) = inner.next_token(&mut state, buf.last().map(|t| &t.token))? {
             let token_span = location.span_to(state.location());
-            buf.push(TokenWithSpan {
+            buf.push(mapper(TokenWithSpan {
                 token,
                 span: token_span,
-            });
+            }));
             location = state.location();
         }
 
@@ -2642,6 +2653,38 @@ mod tests {
         ];
 
         compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_with_mapper() {
+        let sql = String::from("SELECT ?");
+        let dialect = GenericDialect {};
+        let mut param_num = 1;
+
+        let mut tokens = vec![];
+        Tokenizer::new(&dialect, &sql)
+            .tokenize_with_location_into_buf_with_mapper(&mut tokens, |mut token_span| {
+                token_span.token = match token_span.token {
+                    Token::Placeholder(n) => Token::Placeholder(if n == "?" {
+                        let ret = format!("${}", param_num);
+                        param_num += 1;
+                        ret
+                    } else {
+                        n
+                    }),
+                    token => token,
+                };
+                token_span
+            })
+            .unwrap();
+        let actual = tokens.into_iter().map(|t| t.token).collect();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Placeholder("$1".to_string()),
+        ];
+
+        compare(expected, actual);
     }
 
     #[test]

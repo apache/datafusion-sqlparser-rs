@@ -4521,16 +4521,25 @@ impl<'a> Parser<'a> {
     /// consumed and returns false
     #[must_use]
     pub fn parse_keywords(&mut self, keywords: &[Keyword]) -> bool {
-        let index = self.index;
+        self.parse_keywords_indexed(keywords).is_some()
+    }
+
+    /// Just like [Self::parse_keywords], but - upon success - returns the
+    /// token index of the first keyword.
+    #[must_use]
+    fn parse_keywords_indexed(&mut self, keywords: &[Keyword]) -> Option<usize> {
+        let start_index = self.index;
+        let mut first_keyword_index = None;
         for &keyword in keywords {
             if !self.parse_keyword(keyword) {
-                // println!("parse_keywords aborting .. did not find {:?}", keyword);
-                // reset index and return immediately
-                self.index = index;
-                return false;
+                self.index = start_index;
+                return None;
+            }
+            if first_keyword_index.is_none() {
+                first_keyword_index = Some(self.index.saturating_sub(1));
             }
         }
-        true
+        first_keyword_index
     }
 
     /// If the current token is one of the given `keywords`, returns the keyword
@@ -4927,16 +4936,27 @@ impl<'a> Parser<'a> {
     /// and results in a [`ParserError`] if both `ALL` and `DISTINCT` are found.
     pub fn parse_all_or_distinct(&mut self) -> Result<Option<Distinct>, ParserError> {
         let loc = self.peek_token().span.start;
-        let all = self.parse_keyword(Keyword::ALL);
-        let distinct = self.parse_keyword(Keyword::DISTINCT);
-        if !distinct {
-            return Ok(None);
-        }
-        if all {
-            return parser_err!("Cannot specify both ALL and DISTINCT".to_string(), loc);
-        }
-        let on = self.parse_keyword(Keyword::ON);
-        if !on {
+        let distinct = match self.parse_one_of_keywords(&[Keyword::ALL, Keyword::DISTINCT]) {
+            Some(Keyword::ALL) => {
+                if self.peek_keyword(Keyword::DISTINCT) {
+                    return parser_err!("Cannot specify ALL then DISTINCT".to_string(), loc);
+                }
+                Some(Distinct::All)
+            }
+            Some(Keyword::DISTINCT) => {
+                if self.peek_keyword(Keyword::ALL) {
+                    return parser_err!("Cannot specify DISTINCT then ALL".to_string(), loc);
+                }
+                Some(Distinct::Distinct)
+            }
+            None => return Ok(None),
+            _ => return parser_err!("ALL or DISTINCT", loc),
+        };
+
+        let Some(Distinct::Distinct) = distinct else {
+            return Ok(distinct);
+        };
+        if !self.parse_keyword(Keyword::ON) {
             return Ok(Some(Distinct::Distinct));
         }
 
@@ -5330,6 +5350,34 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // Parse MySQL-style [DEFAULT] CHARACTER SET and [DEFAULT] COLLATE options
+        //
+        // Note: The docs only mention `CHARACTER SET`, but `CHARSET` is also supported.
+        // Furthermore, MySQL will only accept one character set, raising an error if there is more
+        // than one, but will accept multiple collations and use the last one.
+        //
+        // <https://dev.mysql.com/doc/refman/8.4/en/create-database.html>
+        let mut default_charset = None;
+        let mut default_collation = None;
+        loop {
+            let has_default = self.parse_keyword(Keyword::DEFAULT);
+            if default_charset.is_none() && self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET])
+                || self.parse_keyword(Keyword::CHARSET)
+            {
+                let _ = self.consume_token(&Token::Eq);
+                default_charset = Some(self.parse_identifier()?.value);
+            } else if self.parse_keyword(Keyword::COLLATE) {
+                let _ = self.consume_token(&Token::Eq);
+                default_collation = Some(self.parse_identifier()?.value);
+            } else if has_default {
+                // DEFAULT keyword not followed by CHARACTER SET, CHARSET, or COLLATE
+                self.prev_token();
+                break;
+            } else {
+                break;
+            }
+        }
+
         Ok(Statement::CreateDatabase {
             db_name,
             if_not_exists: ine,
@@ -5346,6 +5394,8 @@ impl<'a> Parser<'a> {
             default_ddl_collation: None,
             storage_serialization_policy: None,
             comment: None,
+            default_charset,
+            default_collation,
             catalog_sync: None,
             catalog_sync_namespace_mode: None,
             catalog_sync_namespace_flatten_delimiter: None,
@@ -13861,6 +13911,7 @@ impl<'a> Parser<'a> {
                     select_token: AttachedToken(from_token),
                     optimizer_hint: None,
                     distinct: None,
+                    select_modifiers: None,
                     top: None,
                     top_before_distinct: false,
                     projection: vec![],
@@ -13879,7 +13930,7 @@ impl<'a> Parser<'a> {
                     window_before_qualify: false,
                     qualify: None,
                     value_table_mode: None,
-                    connect_by: None,
+                    connect_by: vec![],
                     flavor: SelectFlavor::FromFirstNoSelect,
                 });
             }
@@ -13890,13 +13941,26 @@ impl<'a> Parser<'a> {
         let optimizer_hint = self.maybe_parse_optimizer_hint()?;
         let value_table_mode = self.parse_value_table_mode()?;
 
+        let (select_modifiers, distinct_select_modifier) =
+            if self.dialect.supports_select_modifiers() {
+                self.parse_select_modifiers()?
+            } else {
+                (None, None)
+            };
+
         let mut top_before_distinct = false;
         let mut top = None;
         if self.dialect.supports_top_before_distinct() && self.parse_keyword(Keyword::TOP) {
             top = Some(self.parse_top()?);
             top_before_distinct = true;
         }
-        let distinct = self.parse_all_or_distinct()?;
+
+        let distinct = if distinct_select_modifier.is_some() {
+            distinct_select_modifier
+        } else {
+            self.parse_all_or_distinct()?
+        };
+
         if !self.dialect.supports_top_before_distinct() && self.parse_keyword(Keyword::TOP) {
             top = Some(self.parse_top()?);
         }
@@ -13977,6 +14041,8 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let connect_by = self.maybe_parse_connect_by()?;
+
         let group_by = self
             .parse_optional_group_by()?
             .unwrap_or_else(|| GroupByExpr::Expressions(vec![], vec![]));
@@ -14029,21 +14095,11 @@ impl<'a> Parser<'a> {
             Default::default()
         };
 
-        let connect_by = if self.dialect.supports_connect_by()
-            && self
-                .parse_one_of_keywords(&[Keyword::START, Keyword::CONNECT])
-                .is_some()
-        {
-            self.prev_token();
-            Some(self.parse_connect_by()?)
-        } else {
-            None
-        };
-
         Ok(Select {
             select_token: AttachedToken(select_token),
             optimizer_hint,
             distinct,
+            select_modifiers,
             top,
             top_before_distinct,
             projection,
@@ -14120,6 +14176,68 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parses MySQL SELECT modifiers and DISTINCT/ALL in any order.
+    ///
+    /// Manual testing shows odifiers can appear in any order, and modifiers other than DISTINCT/ALL
+    /// can be repeated.
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/select.html>
+    fn parse_select_modifiers(
+        &mut self,
+    ) -> Result<(Option<SelectModifiers>, Option<Distinct>), ParserError> {
+        let mut modifiers = SelectModifiers::default();
+        let mut distinct = None;
+
+        let keywords = &[
+            Keyword::ALL,
+            Keyword::DISTINCT,
+            Keyword::DISTINCTROW,
+            Keyword::HIGH_PRIORITY,
+            Keyword::STRAIGHT_JOIN,
+            Keyword::SQL_SMALL_RESULT,
+            Keyword::SQL_BIG_RESULT,
+            Keyword::SQL_BUFFER_RESULT,
+            Keyword::SQL_NO_CACHE,
+            Keyword::SQL_CALC_FOUND_ROWS,
+        ];
+
+        while let Some(keyword) = self.parse_one_of_keywords(keywords) {
+            match keyword {
+                Keyword::ALL | Keyword::DISTINCT if distinct.is_none() => {
+                    self.prev_token();
+                    distinct = self.parse_all_or_distinct()?;
+                }
+                // DISTINCTROW is a MySQL-specific legacy (but not deprecated) alias for DISTINCT
+                Keyword::DISTINCTROW if distinct.is_none() => {
+                    distinct = Some(Distinct::Distinct);
+                }
+                Keyword::HIGH_PRIORITY => modifiers.high_priority = true,
+                Keyword::STRAIGHT_JOIN => modifiers.straight_join = true,
+                Keyword::SQL_SMALL_RESULT => modifiers.sql_small_result = true,
+                Keyword::SQL_BIG_RESULT => modifiers.sql_big_result = true,
+                Keyword::SQL_BUFFER_RESULT => modifiers.sql_buffer_result = true,
+                Keyword::SQL_NO_CACHE => modifiers.sql_no_cache = true,
+                Keyword::SQL_CALC_FOUND_ROWS => modifiers.sql_calc_found_rows = true,
+                _ => {
+                    self.prev_token();
+                    return self.expected(
+                        "HIGH_PRIORITY, STRAIGHT_JOIN, or other MySQL select modifier",
+                        self.peek_token(),
+                    );
+                }
+            }
+        }
+
+        // Avoid polluting the AST with `Some(SelectModifiers::default())` empty value unless there
+        // actually were some modifiers set.
+        let select_modifiers = if modifiers.is_any_set() {
+            Some(modifiers)
+        } else {
+            None
+        };
+        Ok((select_modifiers, distinct))
+    }
+
     fn parse_value_table_mode(&mut self) -> Result<Option<ValueTableMode>, ParserError> {
         if !dialect_of!(self is BigQueryDialect) {
             return Ok(None);
@@ -14161,27 +14279,28 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a `CONNECT BY` clause (Oracle-style hierarchical query support).
-    pub fn parse_connect_by(&mut self) -> Result<ConnectBy, ParserError> {
-        let (condition, relationships) = if self.parse_keywords(&[Keyword::CONNECT, Keyword::BY]) {
-            let relationships = self.with_state(ParserState::ConnectBy, |parser| {
-                parser.parse_comma_separated(Parser::parse_expr)
-            })?;
-            self.expect_keywords(&[Keyword::START, Keyword::WITH])?;
-            let condition = self.parse_expr()?;
-            (condition, relationships)
-        } else {
-            self.expect_keywords(&[Keyword::START, Keyword::WITH])?;
-            let condition = self.parse_expr()?;
-            self.expect_keywords(&[Keyword::CONNECT, Keyword::BY])?;
-            let relationships = self.with_state(ParserState::ConnectBy, |parser| {
-                parser.parse_comma_separated(Parser::parse_expr)
-            })?;
-            (condition, relationships)
-        };
-        Ok(ConnectBy {
-            condition,
-            relationships,
-        })
+    pub fn maybe_parse_connect_by(&mut self) -> Result<Vec<ConnectByKind>, ParserError> {
+        let mut clauses = Vec::with_capacity(2);
+        loop {
+            if let Some(idx) = self.parse_keywords_indexed(&[Keyword::START, Keyword::WITH]) {
+                clauses.push(ConnectByKind::StartWith {
+                    start_token: self.token_at(idx).clone().into(),
+                    condition: self.parse_expr()?.into(),
+                });
+            } else if let Some(idx) = self.parse_keywords_indexed(&[Keyword::CONNECT, Keyword::BY])
+            {
+                clauses.push(ConnectByKind::ConnectBy {
+                    connect_token: self.token_at(idx).clone().into(),
+                    nocycle: self.parse_keyword(Keyword::NOCYCLE),
+                    relationships: self.with_state(ParserState::ConnectBy, |parser| {
+                        parser.parse_comma_separated(Parser::parse_expr)
+                    })?,
+                });
+            } else {
+                break;
+            }
+        }
+        Ok(clauses)
     }
 
     /// Parse `CREATE TABLE x AS TABLE y`

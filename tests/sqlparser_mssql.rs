@@ -143,6 +143,7 @@ fn parse_create_procedure() {
                         select_token: AttachedToken::empty(),
                         optimizer_hint: None,
                         distinct: None,
+                        select_modifiers: None,
                         top: None,
                         top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Value(
@@ -163,7 +164,7 @@ fn parse_create_procedure() {
                         window_before_qualify: false,
                         qualify: None,
                         value_table_mode: None,
-                        connect_by: None,
+                        connect_by: vec![],
                         flavor: SelectFlavor::Standard,
                     })))
                 }))],
@@ -1351,6 +1352,7 @@ fn parse_substring_in_select() {
                         select_token: AttachedToken::empty(),
                         optimizer_hint: None,
                         distinct: Some(Distinct::Distinct),
+                        select_modifiers: None,
                         top: None,
                         top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
@@ -1390,7 +1392,7 @@ fn parse_substring_in_select() {
                         qualify: None,
                         window_before_qualify: false,
                         value_table_mode: None,
-                        connect_by: None,
+                        connect_by: vec![],
                         flavor: SelectFlavor::Standard,
                     }))),
                     order_by: None,
@@ -1509,6 +1511,7 @@ fn parse_mssql_declare() {
                     select_token: AttachedToken::empty(),
                     optimizer_hint: None,
                     distinct: None,
+                    select_modifiers: None,
                     top: None,
                     top_before_distinct: false,
                     projection: vec![SelectItem::UnnamedExpr(Expr::BinaryOp {
@@ -1533,7 +1536,7 @@ fn parse_mssql_declare() {
                     window_before_qualify: false,
                     qualify: None,
                     value_table_mode: None,
-                    connect_by: None,
+                    connect_by: vec![],
                     flavor: SelectFlavor::Standard,
                 })))
             }))

@@ -87,7 +87,7 @@ pub use self::dml::{
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
-    AfterMatchSkip, ConnectBy, Cte, CteAsMaterialized, Distinct, EmptyMatchesMode,
+    AfterMatchSkip, ConnectByKind, Cte, CteAsMaterialized, Distinct, EmptyMatchesMode,
     ExceptSelectItem, ExcludeSelectItem, ExprWithAlias, ExprWithAliasAndOrderBy, Fetch, ForClause,
     ForJson, ForXml, FormatClause, GroupByExpr, GroupByWithModifier, IdentWithAlias,
     IlikeSelectItem, InputFormatClause, Interpolate, InterpolateExpr, Join, JoinConstraint,
@@ -97,14 +97,15 @@ pub use self::query::{
     OffsetRows, OpenJsonTableColumn, OrderBy, OrderByExpr, OrderByKind, OrderByOptions,
     PipeOperator, PivotValueSource, ProjectionSelect, Query, RenameSelectItem,
     RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select,
-    SelectFlavor, SelectInto, SelectItem, SelectItemQualifiedWildcardKind, SetExpr, SetOperator,
-    SetQuantifier, Setting, SymbolDefinition, Table, TableAlias, TableAliasColumnDef, TableFactor,
-    TableFunctionArgs, TableIndexHintForClause, TableIndexHintType, TableIndexHints,
-    TableIndexType, TableSample, TableSampleBucket, TableSampleKind, TableSampleMethod,
-    TableSampleModifier, TableSampleQuantity, TableSampleSeed, TableSampleSeedModifier,
-    TableSampleUnit, TableVersion, TableWithJoins, Top, TopQuantity, UpdateTableFromKind,
-    ValueTableMode, Values, WildcardAdditionalOptions, With, WithFill, XmlNamespaceDefinition,
-    XmlPassingArgument, XmlPassingClause, XmlTableColumn, XmlTableColumnOption,
+    SelectFlavor, SelectInto, SelectItem, SelectItemQualifiedWildcardKind, SelectModifiers,
+    SetExpr, SetOperator, SetQuantifier, Setting, SymbolDefinition, Table, TableAlias,
+    TableAliasColumnDef, TableFactor, TableFunctionArgs, TableIndexHintForClause,
+    TableIndexHintType, TableIndexHints, TableIndexType, TableSample, TableSampleBucket,
+    TableSampleKind, TableSampleMethod, TableSampleModifier, TableSampleQuantity, TableSampleSeed,
+    TableSampleSeedModifier, TableSampleUnit, TableVersion, TableWithJoins, Top, TopQuantity,
+    UpdateTableFromKind, ValueTableMode, Values, WildcardAdditionalOptions, With, WithFill,
+    XmlNamespaceDefinition, XmlPassingArgument, XmlPassingClause, XmlTableColumn,
+    XmlTableColumnOption,
 };
 
 pub use self::trigger::{
@@ -4226,6 +4227,10 @@ pub enum Statement {
         storage_serialization_policy: Option<StorageSerializationPolicy>,
         /// Optional comment.
         comment: Option<String>,
+        /// Optional default character set (MySQL).
+        default_charset: Option<String>,
+        /// Optional default collation (MySQL).
+        default_collation: Option<String>,
         /// Optional catalog sync identifier.
         catalog_sync: Option<String>,
         /// Catalog sync namespace mode.
@@ -5080,6 +5085,8 @@ impl fmt::Display for Statement {
                 default_ddl_collation,
                 storage_serialization_policy,
                 comment,
+                default_charset,
+                default_collation,
                 catalog_sync,
                 catalog_sync_namespace_mode,
                 catalog_sync_namespace_flatten_delimiter,
@@ -5137,6 +5144,14 @@ impl fmt::Display for Statement {
 
                 if let Some(comment) = comment {
                     write!(f, " COMMENT = '{comment}'")?;
+                }
+
+                if let Some(charset) = default_charset {
+                    write!(f, " DEFAULT CHARACTER SET {charset}")?;
+                }
+
+                if let Some(collation) = default_collation {
+                    write!(f, " DEFAULT COLLATE {collation}")?;
                 }
 
                 if let Some(sync) = catalog_sync {

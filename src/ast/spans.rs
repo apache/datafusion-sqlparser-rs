@@ -32,7 +32,7 @@ use super::{
     AlterIndexOperation, AlterTableOperation, Analyze, Array, Assignment, AssignmentTarget,
     AttachedToken, BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef,
     ColumnOption, ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements,
-    ConflictTarget, ConnectBy, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
+    ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
     CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr,
     ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr,
     FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
@@ -2238,7 +2238,8 @@ impl Spanned for Select {
             select_token,
             optimizer_hint: _,
             distinct: _, // todo
-            top: _,      // todo, mysql specific
+            select_modifiers: _,
+            top: _, // todo, mysql specific
             projection,
             exclude: _,
             into,
@@ -2268,28 +2269,34 @@ impl Spanned for Select {
                 .chain(lateral_views.iter().map(|item| item.span()))
                 .chain(prewhere.iter().map(|item| item.span()))
                 .chain(selection.iter().map(|item| item.span()))
+                .chain(connect_by.iter().map(|item| item.span()))
                 .chain(core::iter::once(group_by.span()))
                 .chain(cluster_by.iter().map(|item| item.span()))
                 .chain(distribute_by.iter().map(|item| item.span()))
                 .chain(sort_by.iter().map(|item| item.span()))
                 .chain(having.iter().map(|item| item.span()))
                 .chain(named_window.iter().map(|item| item.span()))
-                .chain(qualify.iter().map(|item| item.span()))
-                .chain(connect_by.iter().map(|item| item.span())),
+                .chain(qualify.iter().map(|item| item.span())),
         )
     }
 }
 
-impl Spanned for ConnectBy {
+impl Spanned for ConnectByKind {
     fn span(&self) -> Span {
-        let ConnectBy {
-            condition,
-            relationships,
-        } = self;
-
-        union_spans(
-            core::iter::once(condition.span()).chain(relationships.iter().map(|item| item.span())),
-        )
+        match self {
+            ConnectByKind::ConnectBy {
+                connect_token,
+                nocycle: _,
+                relationships,
+            } => union_spans(
+                core::iter::once(connect_token.0.span())
+                    .chain(relationships.last().iter().map(|item| item.span())),
+            ),
+            ConnectByKind::StartWith {
+                start_token,
+                condition,
+            } => union_spans([start_token.0.span(), condition.span()].into_iter()),
+        }
     }
 }
 

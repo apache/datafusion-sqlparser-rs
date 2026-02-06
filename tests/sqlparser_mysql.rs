@@ -1437,6 +1437,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
                 select_token: AttachedToken::empty(),
                 optimizer_hint: None,
                 distinct: None,
+                select_modifiers: None,
                 top: None,
                 top_before_distinct: false,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
@@ -1459,7 +1460,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
                 qualify: None,
                 window_before_qualify: false,
                 value_table_mode: None,
-                connect_by: None,
+                connect_by: vec![],
                 flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
@@ -1493,6 +1494,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
                 select_token: AttachedToken::empty(),
                 optimizer_hint: None,
                 distinct: None,
+                select_modifiers: None,
                 top: None,
                 top_before_distinct: false,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
@@ -1515,7 +1517,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
                 qualify: None,
                 window_before_qualify: false,
                 value_table_mode: None,
-                connect_by: None,
+                connect_by: vec![],
                 flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
@@ -1541,6 +1543,7 @@ fn parse_escaped_backticks_with_escape() {
                 select_token: AttachedToken::empty(),
                 optimizer_hint: None,
                 distinct: None,
+                select_modifiers: None,
                 top: None,
                 top_before_distinct: false,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
@@ -1563,7 +1566,7 @@ fn parse_escaped_backticks_with_escape() {
                 qualify: None,
                 window_before_qualify: false,
                 value_table_mode: None,
-                connect_by: None,
+                connect_by: vec![],
                 flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
@@ -1593,6 +1596,7 @@ fn parse_escaped_backticks_with_no_escape() {
                 select_token: AttachedToken::empty(),
                 optimizer_hint: None,
                 distinct: None,
+                select_modifiers: None,
                 top: None,
                 top_before_distinct: false,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
@@ -1615,7 +1619,7 @@ fn parse_escaped_backticks_with_no_escape() {
                 qualify: None,
                 window_before_qualify: false,
                 value_table_mode: None,
-                connect_by: None,
+                connect_by: vec![],
                 flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
@@ -2413,6 +2417,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                     select_token: AttachedToken::empty(),
                     optimizer_hint: None,
                     distinct: None,
+                    select_modifiers: None,
                     top: None,
                     top_before_distinct: false,
                     projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new(
@@ -2438,7 +2443,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                     qualify: None,
                     window_before_qualify: false,
                     value_table_mode: None,
-                    connect_by: None,
+                    connect_by: vec![],
                     flavor: SelectFlavor::Standard,
                 })))
             );
@@ -2588,6 +2593,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     select_token: AttachedToken::empty(),
                     optimizer_hint: None,
                     distinct: None,
+                    select_modifiers: None,
                     top: None,
                     top_before_distinct: false,
                     projection: vec![
@@ -2614,7 +2620,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     qualify: None,
                     window_before_qualify: false,
                     value_table_mode: None,
-                    connect_by: None,
+                    connect_by: vec![],
                     flavor: SelectFlavor::Standard,
                 })))
             );
@@ -3222,6 +3228,7 @@ fn parse_substring_in_select() {
                         select_token: AttachedToken::empty(),
                         optimizer_hint: None,
                         distinct: Some(Distinct::Distinct),
+                        select_modifiers: None,
                         top: None,
                         top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
@@ -3261,7 +3268,7 @@ fn parse_substring_in_select() {
                         window_before_qualify: false,
                         qualify: None,
                         value_table_mode: None,
-                        connect_by: None,
+                        connect_by: vec![],
                         flavor: SelectFlavor::Standard,
                     }))),
                     order_by: None,
@@ -3546,6 +3553,7 @@ fn parse_hex_string_introducer() {
                 select_token: AttachedToken::empty(),
                 optimizer_hint: None,
                 distinct: None,
+                select_modifiers: None,
                 top: None,
                 top_before_distinct: false,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Prefixed {
@@ -3570,7 +3578,7 @@ fn parse_hex_string_introducer() {
                 qualify: None,
                 value_table_mode: None,
                 into: None,
-                connect_by: None,
+                connect_by: vec![],
                 flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
@@ -4273,6 +4281,187 @@ fn parse_straight_join() {
 }
 
 #[test]
+fn parse_distinctrow_to_distinct() {
+    mysql().one_statement_parses_to(
+        "SELECT DISTINCTROW * FROM employees",
+        "SELECT DISTINCT * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT HIGH_PRIORITY DISTINCTROW * FROM employees",
+        "SELECT DISTINCT HIGH_PRIORITY * FROM employees",
+    );
+}
+
+#[test]
+fn parse_select_straight_join() {
+    let select = mysql().verified_only_select(
+        "SELECT STRAIGHT_JOIN * FROM employees e JOIN dept_emp d ON e.emp_no = d.emp_no WHERE d.emp_no = 10001",
+    );
+    assert!(select.select_modifiers.unwrap().straight_join);
+
+    mysql().verified_stmt(
+        "SELECT STRAIGHT_JOIN e.emp_no, d.dept_no FROM employees e JOIN dept_emp d ON e.emp_no = d.emp_no",
+    );
+    mysql().verified_stmt("SELECT DISTINCT STRAIGHT_JOIN emp_no FROM employees");
+
+    let select = mysql().verified_only_select("SELECT * FROM employees");
+    assert!(select.select_modifiers.is_none());
+}
+
+#[test]
+fn parse_select_modifiers() {
+    let select = mysql().verified_only_select("SELECT HIGH_PRIORITY * FROM employees");
+    assert!(select.select_modifiers.as_ref().unwrap().high_priority);
+    assert!(!select.select_modifiers.unwrap().straight_join);
+
+    let select = mysql().verified_only_select("SELECT SQL_SMALL_RESULT * FROM employees");
+    assert!(select.select_modifiers.unwrap().sql_small_result);
+
+    let select = mysql().verified_only_select("SELECT SQL_BIG_RESULT * FROM employees");
+    assert!(select.select_modifiers.unwrap().sql_big_result);
+
+    let select = mysql().verified_only_select("SELECT SQL_BUFFER_RESULT * FROM employees");
+    assert!(select.select_modifiers.unwrap().sql_buffer_result);
+
+    let select = mysql().verified_only_select("SELECT SQL_NO_CACHE * FROM employees");
+    assert!(select.select_modifiers.unwrap().sql_no_cache);
+
+    let select = mysql().verified_only_select("SELECT SQL_CALC_FOUND_ROWS * FROM employees");
+    assert!(select.select_modifiers.unwrap().sql_calc_found_rows);
+
+    let select = mysql().verified_only_select(
+        "SELECT HIGH_PRIORITY STRAIGHT_JOIN SQL_SMALL_RESULT SQL_BIG_RESULT SQL_BUFFER_RESULT SQL_NO_CACHE SQL_CALC_FOUND_ROWS * FROM employees",
+    );
+    assert!(select.select_modifiers.as_ref().unwrap().high_priority);
+    assert!(select.select_modifiers.as_ref().unwrap().straight_join);
+    assert!(select.select_modifiers.as_ref().unwrap().sql_small_result);
+    assert!(select.select_modifiers.as_ref().unwrap().sql_big_result);
+    assert!(select.select_modifiers.as_ref().unwrap().sql_buffer_result);
+    assert!(select.select_modifiers.as_ref().unwrap().sql_no_cache);
+    assert!(select.select_modifiers.unwrap().sql_calc_found_rows);
+
+    mysql().verified_stmt("SELECT DISTINCT HIGH_PRIORITY emp_no FROM employees");
+    mysql().verified_stmt("SELECT DISTINCT SQL_CALC_FOUND_ROWS emp_no FROM employees");
+    mysql().verified_stmt("SELECT HIGH_PRIORITY STRAIGHT_JOIN e.emp_no, d.dept_no FROM employees e JOIN dept_emp d ON e.emp_no = d.emp_no");
+}
+
+#[test]
+fn parse_select_modifiers_any_order() {
+    mysql().one_statement_parses_to(
+        "SELECT HIGH_PRIORITY DISTINCT * FROM employees",
+        "SELECT DISTINCT HIGH_PRIORITY * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT SQL_CALC_FOUND_ROWS DISTINCT HIGH_PRIORITY * FROM employees",
+        "SELECT DISTINCT HIGH_PRIORITY SQL_CALC_FOUND_ROWS * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT HIGH_PRIORITY DISTINCT SQL_SMALL_RESULT * FROM employees",
+        "SELECT DISTINCT HIGH_PRIORITY SQL_SMALL_RESULT * FROM employees",
+    );
+
+    mysql().one_statement_parses_to(
+        "SELECT HIGH_PRIORITY DISTINCTROW * FROM employees",
+        "SELECT DISTINCT HIGH_PRIORITY * FROM employees",
+    );
+
+    mysql().verified_stmt("SELECT ALL * FROM employees");
+    mysql().verified_stmt("SELECT ALL HIGH_PRIORITY * FROM employees");
+    mysql().one_statement_parses_to(
+        "SELECT HIGH_PRIORITY ALL * FROM employees",
+        "SELECT ALL HIGH_PRIORITY * FROM employees",
+    );
+
+    let select = mysql().verified_only_select_with_canonical(
+        "SELECT HIGH_PRIORITY DISTINCT * FROM employees",
+        "SELECT DISTINCT HIGH_PRIORITY * FROM employees",
+    );
+    assert!(select.select_modifiers.unwrap().high_priority);
+    assert!(matches!(select.distinct, Some(Distinct::Distinct)));
+
+    let select = mysql().verified_only_select_with_canonical(
+        "SELECT SQL_CALC_FOUND_ROWS ALL HIGH_PRIORITY * FROM employees",
+        "SELECT ALL HIGH_PRIORITY SQL_CALC_FOUND_ROWS * FROM employees",
+    );
+    assert!(select.select_modifiers.as_ref().unwrap().high_priority);
+    assert!(select.select_modifiers.unwrap().sql_calc_found_rows);
+    assert_eq!(select.distinct, Some(Distinct::All))
+}
+
+#[test]
+fn parse_select_modifiers_can_be_repeated() {
+    mysql().one_statement_parses_to(
+        "SELECT HIGH_PRIORITY HIGH_PRIORITY * FROM employees",
+        "SELECT HIGH_PRIORITY * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT SQL_CALC_FOUND_ROWS SQL_CALC_FOUND_ROWS * FROM employees",
+        "SELECT SQL_CALC_FOUND_ROWS * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT STRAIGHT_JOIN STRAIGHT_JOIN * FROM employees",
+        "SELECT STRAIGHT_JOIN * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT SQL_NO_CACHE SQL_NO_CACHE * FROM employees",
+        "SELECT SQL_NO_CACHE * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT HIGH_PRIORITY DISTINCT HIGH_PRIORITY * FROM employees",
+        "SELECT DISTINCT HIGH_PRIORITY * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT SQL_CALC_FOUND_ROWS DISTINCT SQL_CALC_FOUND_ROWS * FROM employees",
+        "SELECT DISTINCT SQL_CALC_FOUND_ROWS * FROM employees",
+    );
+}
+
+#[test]
+fn parse_select_modifiers_canonical_ordering() {
+    mysql().one_statement_parses_to(
+        "SELECT SQL_CALC_FOUND_ROWS SQL_NO_CACHE SQL_BUFFER_RESULT SQL_BIG_RESULT SQL_SMALL_RESULT STRAIGHT_JOIN HIGH_PRIORITY * FROM employees",
+        "SELECT HIGH_PRIORITY STRAIGHT_JOIN SQL_SMALL_RESULT SQL_BIG_RESULT SQL_BUFFER_RESULT SQL_NO_CACHE SQL_CALC_FOUND_ROWS * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT SQL_NO_CACHE DISTINCT SQL_CALC_FOUND_ROWS * FROM employees",
+        "SELECT DISTINCT SQL_NO_CACHE SQL_CALC_FOUND_ROWS * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT HIGH_PRIORITY STRAIGHT_JOIN DISTINCT SQL_SMALL_RESULT * FROM employees",
+        "SELECT DISTINCT HIGH_PRIORITY STRAIGHT_JOIN SQL_SMALL_RESULT * FROM employees",
+    );
+    mysql().one_statement_parses_to(
+        "SELECT HIGH_PRIORITY ALL STRAIGHT_JOIN * FROM employees",
+        "SELECT ALL HIGH_PRIORITY STRAIGHT_JOIN * FROM employees",
+    );
+}
+
+#[test]
+fn parse_select_modifiers_errors() {
+    assert!(mysql()
+        .parse_sql_statements("SELECT DISTINCT DISTINCT * FROM t")
+        .is_err());
+    assert!(mysql()
+        .parse_sql_statements("SELECT DISTINCTROW DISTINCTROW * FROM t")
+        .is_err());
+    assert!(mysql()
+        .parse_sql_statements("SELECT DISTINCT DISTINCTROW * FROM t")
+        .is_err());
+    assert!(mysql()
+        .parse_sql_statements("SELECT ALL DISTINCT * FROM t")
+        .is_err());
+    assert!(mysql()
+        .parse_sql_statements("SELECT DISTINCT ALL * FROM t")
+        .is_err());
+    assert!(mysql()
+        .parse_sql_statements("SELECT ALL DISTINCTROW * FROM t")
+        .is_err());
+    assert!(mysql()
+        .parse_sql_statements("SELECT ALL ALL * FROM t")
+        .is_err());
+}
+
+#[test]
 fn mysql_foreign_key_with_index_name() {
     mysql().verified_stmt(
         "CREATE TABLE orders (customer_id INT, INDEX idx_customer (customer_id), CONSTRAINT fk_customer FOREIGN KEY idx_customer (customer_id) REFERENCES customers(id))",
@@ -4430,5 +4619,98 @@ fn test_optimizer_hints() {
     mysql_dialect.verified_stmt(
         "\
        DELETE /*+ foobar */ FROM table_name",
+    );
+}
+
+#[test]
+fn parse_create_database_with_charset() {
+    // Test DEFAULT CHARACTER SET with = sign
+    mysql_and_generic().verified_stmt("CREATE DATABASE mydb DEFAULT CHARACTER SET utf8mb4");
+
+    // Test DEFAULT CHARACTER SET without = sign (normalized form)
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE DATABASE mydb DEFAULT CHARACTER SET = utf8mb4",
+        "CREATE DATABASE mydb DEFAULT CHARACTER SET utf8mb4",
+    );
+
+    // Test CHARACTER SET without DEFAULT
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE DATABASE mydb CHARACTER SET utf8mb4",
+        "CREATE DATABASE mydb DEFAULT CHARACTER SET utf8mb4",
+    );
+
+    // Test CHARSET shorthand
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE DATABASE mydb CHARSET utf8mb4",
+        "CREATE DATABASE mydb DEFAULT CHARACTER SET utf8mb4",
+    );
+
+    // Test DEFAULT CHARSET shorthand
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE DATABASE mydb DEFAULT CHARSET utf8mb4",
+        "CREATE DATABASE mydb DEFAULT CHARACTER SET utf8mb4",
+    );
+
+    // Test DEFAULT COLLATE
+    mysql_and_generic().verified_stmt("CREATE DATABASE mydb DEFAULT COLLATE utf8mb4_unicode_ci");
+
+    // Test COLLATE without DEFAULT
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE DATABASE mydb COLLATE utf8mb4_unicode_ci",
+        "CREATE DATABASE mydb DEFAULT COLLATE utf8mb4_unicode_ci",
+    );
+
+    // Test both CHARACTER SET and COLLATE together
+    mysql_and_generic().verified_stmt(
+        "CREATE DATABASE mydb DEFAULT CHARACTER SET utf8mb4 DEFAULT COLLATE utf8mb4_unicode_ci",
+    );
+
+    // Test IF NOT EXISTS with CHARACTER SET
+    mysql_and_generic()
+        .verified_stmt("CREATE DATABASE IF NOT EXISTS mydb DEFAULT CHARACTER SET utf16");
+
+    // Test the exact syntax from the issue
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE DATABASE IF NOT EXISTS noria DEFAULT CHARACTER SET = utf16",
+        "CREATE DATABASE IF NOT EXISTS noria DEFAULT CHARACTER SET utf16",
+    );
+}
+
+#[test]
+fn parse_create_database_with_charset_errors() {
+    // Missing charset name after CHARACTER SET
+    assert!(mysql_and_generic()
+        .parse_sql_statements("CREATE DATABASE mydb DEFAULT CHARACTER SET")
+        .is_err());
+
+    // Missing charset name after CHARSET
+    assert!(mysql_and_generic()
+        .parse_sql_statements("CREATE DATABASE mydb CHARSET")
+        .is_err());
+
+    // Missing collation name after COLLATE
+    assert!(mysql_and_generic()
+        .parse_sql_statements("CREATE DATABASE mydb DEFAULT COLLATE")
+        .is_err());
+
+    // Equals sign but no value
+    assert!(mysql_and_generic()
+        .parse_sql_statements("CREATE DATABASE mydb CHARACTER SET =")
+        .is_err());
+}
+
+#[test]
+fn parse_create_database_with_charset_option_ordering() {
+    // MySQL allows COLLATE before CHARACTER SET - output is normalized to CHARACTER SET first
+    // (matches MySQL's own SHOW CREATE DATABASE output order)
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE DATABASE mydb DEFAULT COLLATE utf8mb4_unicode_ci DEFAULT CHARACTER SET utf8mb4",
+        "CREATE DATABASE mydb DEFAULT CHARACTER SET utf8mb4 DEFAULT COLLATE utf8mb4_unicode_ci",
+    );
+
+    // COLLATE first without DEFAULT keywords
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE DATABASE mydb COLLATE utf8mb4_unicode_ci CHARACTER SET utf8mb4",
+        "CREATE DATABASE mydb DEFAULT CHARACTER SET utf8mb4 DEFAULT COLLATE utf8mb4_unicode_ci",
     );
 }

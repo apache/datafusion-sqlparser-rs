@@ -698,6 +698,19 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports MySQL-specific SELECT modifiers
+    /// like `HIGH_PRIORITY`, `STRAIGHT_JOIN`, `SQL_SMALL_RESULT`, etc.
+    ///
+    /// For example:
+    /// ```sql
+    /// SELECT HIGH_PRIORITY STRAIGHT_JOIN SQL_SMALL_RESULT * FROM t1 JOIN t2 ON ...
+    /// ```
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/select.html)
+    fn supports_select_modifiers(&self) -> bool {
+        false
+    }
+
     /// Dialect-specific infix parser override
     ///
     /// This method is called to parse the next infix expression.

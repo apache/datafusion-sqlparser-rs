@@ -1456,6 +1456,7 @@ pub struct LambdaFunctionParameter {
     /// The name of the parameter
     pub name: Ident,
     /// The optional data type of the parameter
+    /// [Snowflake Syntax](https://docs.snowflake.com/en/sql-reference/functions/filter#arguments)
     pub data_type: Option<DataType>,
 }
 

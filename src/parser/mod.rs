@@ -1559,43 +1559,6 @@ impl<'a> Parser<'a> {
             Keyword::LAMBDA if self.dialect.supports_lambda_functions() => {
                 Ok(Some(self.parse_lambda_expr()?))
             }
-            Keyword::FILTER
-            | Keyword::TRANSFORM
-            | Keyword::REDUCE if self.dialect.supports_lambda_functions() => {
-                self.expect_token(&Token::LParen)?;
-                let array = self.parse_expr()?;
-                self.expect_token(&Token::Comma)?;
-                let initial_value = if w.keyword == Keyword::REDUCE {
-                    let initial_value = self.parse_expr()?;
-                    self.expect_token(&Token::Comma)?;
-                    Some(initial_value)
-                } else {
-                    None
-                };
-                let lambda = self.parse_lambda_expr_with_typed_args()?;
-                let mut args = vec![
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(array)),
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(lambda)),
-                ];
-                if let Some(initial_value) = initial_value {
-                    args.insert(1, FunctionArg::Unnamed(FunctionArgExpr::Expr(initial_value)));
-                }
-                self.expect_token(&Token::RParen)?;
-                Ok(Some(Expr::Function(Function {
-                    name: ObjectName::from(vec![w.to_ident(w_span)]),
-                    uses_odbc_syntax: false,
-                    parameters: FunctionArguments::None,
-                    args: FunctionArguments::List(FunctionArgumentList {
-                        duplicate_treatment: None,
-                        clauses: vec![],
-                        args,
-                    }),
-                    filter: None,
-                    null_treatment: None,
-                    over: None,
-                    within_group: vec![],
-                })))
-            }
             _ if self.dialect.supports_geometric_types() => match w.keyword {
                 Keyword::CIRCLE => Ok(Some(self.parse_geometric_type(GeometricTypeKind::Circle)?)),
                 Keyword::BOX => Ok(Some(self.parse_geometric_type(GeometricTypeKind::GeometricBox)?)),
@@ -1643,12 +1606,33 @@ impl<'a> Parser<'a> {
                     value: self.parse_introduced_string_expr()?.into(),
                 })
             }
+            // An unreserved word (likely an identifier) is followed by an arrow,
+            // which indicates a lambda function with a single, untyped parameter.
+            // For example: `a -> a * 2`.
             Token::Arrow if self.dialect.supports_lambda_functions() => {
                 self.expect_token(&Token::Arrow)?;
                 Ok(Expr::Lambda(LambdaFunction {
                     params: OneOrManyWithParens::One(LambdaFunctionParameter {
                         name: w.to_ident(w_span),
                         data_type: None,
+                    }),
+                    body: Box::new(self.parse_expr()?),
+                    syntax: LambdaSyntax::Arrow,
+                }))
+            }
+            // An unreserved word (likely an identifier) that is followed by another word (likley a data type)
+            // which is then followed by an arrow, which indicates a lambda function with a single, typed parameter.
+            // For example: `a INT -> a * 2`.
+            Token::Word(_)
+                if self.peek_nth_token_ref(1).token == Token::Arrow
+                    && self.dialect.supports_lambda_functions() =>
+            {
+                let data_type = self.parse_data_type()?;
+                self.expect_token(&Token::Arrow)?;
+                Ok(Expr::Lambda(LambdaFunction {
+                    params: OneOrManyWithParens::One(LambdaFunctionParameter {
+                        name: w.to_ident(w_span),
+                        data_type: Some(data_type),
                     }),
                     body: Box::new(self.parse_expr()?),
                     syntax: LambdaSyntax::Arrow,
@@ -2235,7 +2219,7 @@ impl<'a> Parser<'a> {
             return Ok(None);
         }
         self.maybe_parse(|p| {
-            let params = p.parse_comma_separated(|p| p.parse_lambda_function_parameter(false))?;
+            let params = p.parse_comma_separated(|p| p.parse_lambda_function_parameter())?;
             p.expect_token(&Token::RParen)?;
             p.expect_token(&Token::Arrow)?;
             let expr = p.parse_expr()?;
@@ -2247,19 +2231,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parses a lambda expression using the arrow syntax with optionally typed arguments.
-    fn parse_lambda_expr_with_typed_args(&mut self) -> Result<Expr, ParserError> {
-        let params = self.parse_lambda_function_parameters(true)?;
-        self.expect_token(&Token::Arrow)?;
-        let body = self.parse_expr()?;
-        Ok(Expr::Lambda(LambdaFunction {
-            params,
-            body: Box::new(body),
-            syntax: LambdaSyntax::Arrow,
-        }))
-    }
-
-    /// Parses a lambda expression using the `LAMBDA` keyword syntax.
+    /// Parses a lambda expression following the `LAMBDA` keyword syntax.
     ///
     /// Syntax: `LAMBDA <params> : <expr>`
     ///
@@ -2270,7 +2242,7 @@ impl<'a> Parser<'a> {
     /// See <https://duckdb.org/docs/stable/sql/functions/lambda>
     fn parse_lambda_expr(&mut self) -> Result<Expr, ParserError> {
         // Parse the parameters: either a single identifier or comma-separated identifiers
-        let params = self.parse_lambda_function_parameters(false)?;
+        let params = self.parse_lambda_function_parameters()?;
         // Expect the colon separator
         self.expect_token(&Token::Colon)?;
         // Parse the body expression
@@ -2285,19 +2257,16 @@ impl<'a> Parser<'a> {
     /// Parses the parameters of a lambda function with optional typing.
     fn parse_lambda_function_parameters(
         &mut self,
-        typed: bool,
     ) -> Result<OneOrManyWithParens<LambdaFunctionParameter>, ParserError> {
         // Parse the parameters: either a single identifier or comma-separated identifiers
         let params = if self.consume_token(&Token::LParen) {
             // Parenthesized parameters: (x, y)
-            let params =
-                self.parse_comma_separated(|p| p.parse_lambda_function_parameter(typed))?;
+            let params = self.parse_comma_separated(|p| p.parse_lambda_function_parameter())?;
             self.expect_token(&Token::RParen)?;
             OneOrManyWithParens::Many(params)
         } else {
             // Unparenthesized parameters: x or x, y
-            let params =
-                self.parse_comma_separated(|p| p.parse_lambda_function_parameter(typed))?;
+            let params = self.parse_comma_separated(|p| p.parse_lambda_function_parameter())?;
             if params.len() == 1 {
                 OneOrManyWithParens::One(params.into_iter().next().unwrap())
             } else {
@@ -2308,13 +2277,10 @@ impl<'a> Parser<'a> {
     }
 
     /// Parses a single parameter of a lambda function, with optional typing.
-    fn parse_lambda_function_parameter(
-        &mut self,
-        typed: bool,
-    ) -> Result<LambdaFunctionParameter, ParserError> {
+    fn parse_lambda_function_parameter(&mut self) -> Result<LambdaFunctionParameter, ParserError> {
         let name = self.parse_identifier()?;
         let data_type = match self.peek_token().token {
-            Token::Word(_) if typed => self.maybe_parse(|p| p.parse_data_type())?,
+            Token::Word(_) => self.maybe_parse(|p| p.parse_data_type())?,
             _ => None,
         };
         Ok(LambdaFunctionParameter { name, data_type })

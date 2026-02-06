@@ -15979,6 +15979,12 @@ fn test_lambdas() {
         "map_zip_with(map(1, 'a', 2, 'b'), map(1, 'x', 2, 'y'), (k, v1, v2) -> concat(v1, v2))",
     );
     dialects.verified_expr("transform(array(1, 2, 3), x -> x + 1)");
+
+    // Ensure all lambda variants are parsed correctly
+    dialects.verified_expr("a -> a * 2"); // Single parameter without type
+    dialects.verified_expr("a INT -> a * 2"); // Single parameter with type
+    dialects.verified_expr("(a, b) -> a * b"); // Multiple parameters without types
+    dialects.verified_expr("(a INT, b FLOAT) -> a * b"); // Multiple parameters with types
 }
 
 #[test]

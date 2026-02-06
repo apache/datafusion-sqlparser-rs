@@ -11021,6 +11021,13 @@ fn parse_deeply_nested_parens_hits_recursion_limits() {
 }
 
 #[test]
+fn parse_update_deeply_nested_parens_hits_recursion_limits() {
+    let sql = format!("\nUPDATE\n\n\n\n\n\n\n\n\n\n{}", "(".repeat(1000));
+    let res = parse_sql_statements(&sql);
+    assert_eq!(ParserError::RecursionLimitExceeded, res.unwrap_err());
+}
+
+#[test]
 fn parse_deeply_nested_unary_op_hits_recursion_limits() {
     let sql = format!("SELECT {}", "+".repeat(1000));
     let res = parse_sql_statements(&sql);

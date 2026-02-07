@@ -35,7 +35,8 @@ const RESERVED_FOR_TABLE_ALIAS_MYSQL: &[Keyword] = &[
 ];
 
 /// A [`Dialect`] for [MySQL](https://www.mysql.com/)
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MySqlDialect {}
 
 impl Dialect for MySqlDialect {
@@ -85,6 +86,11 @@ impl Dialect for MySqlDialect {
     }
 
     fn supports_bitwise_shift_operators(&self) -> bool {
+        true
+    }
+
+    /// see <https://dev.mysql.com/doc/refman/8.4/en/comments.html>
+    fn supports_multiline_comment_hints(&self) -> bool {
         true
     }
 
@@ -160,6 +166,10 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    fn supports_select_modifiers(&self) -> bool {
+        true
+    }
+
     fn supports_set_names(&self) -> bool {
         true
     }
@@ -188,6 +198,11 @@ impl Dialect for MySqlDialect {
     }
 
     fn supports_comment_optimizer_hint(&self) -> bool {
+        true
+    }
+
+    /// See: <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
+    fn supports_constraint_keyword_without_name(&self) -> bool {
         true
     }
 }

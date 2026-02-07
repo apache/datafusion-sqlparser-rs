@@ -72,7 +72,10 @@ fn test_databricks_exists() {
                     ]
                 ),
                 Expr::Lambda(LambdaFunction {
-                    params: OneOrManyWithParens::One(Ident::new("x")),
+                    params: OneOrManyWithParens::One(LambdaFunctionParameter {
+                        name: Ident::new("x"),
+                        data_type: None
+                    }),
                     body: Box::new(Expr::IsNull(Box::new(Expr::Identifier(Ident::new("x"))))),
                     syntax: LambdaSyntax::Arrow,
                 })
@@ -109,7 +112,16 @@ fn test_databricks_lambdas() {
                     ]
                 ),
                 Expr::Lambda(LambdaFunction {
-                    params: OneOrManyWithParens::Many(vec![Ident::new("p1"), Ident::new("p2")]),
+                    params: OneOrManyWithParens::Many(vec![
+                        LambdaFunctionParameter {
+                            name: Ident::new("p1"),
+                            data_type: None
+                        },
+                        LambdaFunctionParameter {
+                            name: Ident::new("p2"),
+                            data_type: None
+                        }
+                    ]),
                     body: Box::new(Expr::Case {
                         case_token: AttachedToken::empty(),
                         end_token: AttachedToken::empty(),

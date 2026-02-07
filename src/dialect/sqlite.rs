@@ -30,8 +30,7 @@ use crate::parser::{Parser, ParserError};
 /// [`CREATE TABLE`](https://sqlite.org/lang_createtable.html) statement with no
 /// type specified, as in `CREATE TABLE t1 (a)`. In the AST, these columns will
 /// have the data type [`Unspecified`](crate::ast::DataType::Unspecified).
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Default)]
 pub struct SQLiteDialect {}
 
 impl Dialect for SQLiteDialect {
@@ -89,11 +88,15 @@ impl Dialect for SQLiteDialect {
         ] {
             if parser.parse_keyword(keyword) {
                 let left = Box::new(expr.clone());
-                let right = Box::new(match parser.parse_expr() {
-                    Ok(expr) => expr,
+                let right = match parser.parse_expr() {
+                    Ok(val) => val,
                     Err(e) => return Some(Err(e)),
-                });
-                return Some(Ok(Expr::BinaryOp { left, op, right }));
+                };
+                return Some(Ok(Expr::BinaryOp {
+                    left,
+                    op,
+                    right: Box::new(right),
+                }));
             }
         }
         None

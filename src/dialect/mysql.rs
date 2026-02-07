@@ -35,8 +35,7 @@ const RESERVED_FOR_TABLE_ALIAS_MYSQL: &[Keyword] = &[
 ];
 
 /// A [`Dialect`] for [MySQL](https://www.mysql.com/)
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Default)]
 pub struct MySqlDialect {}
 
 impl Dialect for MySqlDialect {
@@ -89,11 +88,6 @@ impl Dialect for MySqlDialect {
         true
     }
 
-    /// see <https://dev.mysql.com/doc/refman/8.4/en/comments.html>
-    fn supports_multiline_comment_hints(&self) -> bool {
-        true
-    }
-
     fn parse_infix(
         &self,
         parser: &mut crate::parser::Parser,
@@ -102,10 +96,14 @@ impl Dialect for MySqlDialect {
     ) -> Option<Result<crate::ast::Expr, ParserError>> {
         // Parse DIV as an operator
         if parser.parse_keyword(Keyword::DIV) {
+            let right = match parser.parse_expr() {
+                Ok(val) => val,
+                Err(e) => return Some(Err(e)),
+            };
             Some(Ok(Expr::BinaryOp {
                 left: Box::new(expr.clone()),
                 op: BinaryOperator::MyIntegerDivide,
-                right: Box::new(parser.parse_expr().unwrap()),
+                right: Box::new(right),
             }))
         } else {
             None
@@ -162,10 +160,6 @@ impl Dialect for MySqlDialect {
         true
     }
 
-    fn supports_select_modifiers(&self) -> bool {
-        true
-    }
-
     fn supports_set_names(&self) -> bool {
         true
     }
@@ -194,11 +188,6 @@ impl Dialect for MySqlDialect {
     }
 
     fn supports_comment_optimizer_hint(&self) -> bool {
-        true
-    }
-
-    /// See: <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
-    fn supports_constraint_keyword_without_name(&self) -> bool {
         true
     }
 }

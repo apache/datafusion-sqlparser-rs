@@ -3628,6 +3628,15 @@ fn parse_div_infix() {
 }
 
 #[test]
+fn parse_div_infix_propagates_parse_error() {
+    let err = mysql()
+        .parse_sql_statements("SELECT 5 DIV")
+        .expect_err("expected an error");
+    dbg!(&err);
+    assert_matches!(err, ParserError::ParserError(_));
+}
+
+#[test]
 fn parse_drop_temporary_table() {
     let sql = "DROP TEMPORARY TABLE foo";
     match mysql().verified_stmt(sql) {

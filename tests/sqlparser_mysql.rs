@@ -3632,7 +3632,6 @@ fn parse_div_infix_propagates_parse_error() {
     let err = mysql()
         .parse_sql_statements("SELECT 5 DIV")
         .expect_err("expected an error");
-    dbg!(&err);
     assert_matches!(err, ParserError::ParserError(_));
 }
 

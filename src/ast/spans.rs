@@ -482,6 +482,7 @@ impl Spanned for Statement {
             Statement::RenameTable { .. } => Span::empty(),
             Statement::RaisError { .. } => Span::empty(),
             Statement::Print { .. } => Span::empty(),
+            Statement::WaitFor { .. } => Span::empty(),
             Statement::Return { .. } => Span::empty(),
             Statement::List(..) | Statement::Remove(..) => Span::empty(),
             Statement::ExportData(ExportData {

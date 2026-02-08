@@ -16200,6 +16200,15 @@ impl<'a> Parser<'a> {
         Ok(ExprWithAlias { expr, alias })
     }
 
+    /// Parse an expression followed by an optional alias; Unlike
+    /// [Self::parse_expr_with_alias] the "AS" keyword between the expression
+    /// and the alias is optional.
+    fn parse_expr_with_alias_optional_as_keyword(&mut self) -> Result<ExprWithAlias, ParserError> {
+        let expr = self.parse_expr()?;
+        let alias = self.parse_identifier_optional_alias()?;
+        Ok(ExprWithAlias { expr, alias })
+    }
+
     /// Parse a PIVOT table factor (ClickHouse/Oracle style pivot), returning a TableFactor.
     pub fn parse_pivot_table_factor(
         &mut self,
@@ -16228,7 +16237,9 @@ impl<'a> Parser<'a> {
         } else if self.peek_sub_query() {
             PivotValueSource::Subquery(self.parse_query()?)
         } else {
-            PivotValueSource::List(self.parse_comma_separated(Self::parse_expr_with_alias)?)
+            PivotValueSource::List(
+                self.parse_comma_separated(Self::parse_expr_with_alias_optional_as_keyword)?,
+            )
         };
         self.expect_token(&Token::RParen)?;
 

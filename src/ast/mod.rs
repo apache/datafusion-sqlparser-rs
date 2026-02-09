@@ -2816,6 +2816,41 @@ impl fmt::Display for RaiseStatementValue {
     }
 }
 
+/// A MSSQL `THROW` statement.
+///
+/// ```sql
+/// THROW [ error_number, message, state ]
+/// ```
+///
+/// [MSSQL](https://learn.microsoft.com/en-us/sql/t-sql/language-elements/throw-transact-sql)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ThrowStatement {
+    /// Error number expression.
+    pub error_number: Option<Box<Expr>>,
+    /// Error message expression.
+    pub message: Option<Box<Expr>>,
+    /// State expression.
+    pub state: Option<Box<Expr>>,
+}
+
+impl fmt::Display for ThrowStatement {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let ThrowStatement {
+            error_number,
+            message,
+            state,
+        } = self;
+
+        write!(f, "THROW")?;
+        if let (Some(error_number), Some(message), Some(state)) = (error_number, message, state) {
+            write!(f, " {error_number}, {message}, {state}")?;
+        }
+        Ok(())
+    }
+}
+
 /// Represents an expression assignment within a variable `DECLARE` statement.
 ///
 /// Examples:
@@ -4676,19 +4711,8 @@ pub enum Statement {
         /// Additional `WITH` options for RAISERROR.
         options: Vec<RaisErrorOption>,
     },
-    /// Throw (MSSQL)
-    /// ```sql
-    /// THROW [ error_number, message, state ]
-    /// ```
-    /// See <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/throw-transact-sql>
-    Throw {
-        /// Error number expression.
-        error_number: Option<Box<Expr>>,
-        /// Error message expression.
-        message: Option<Box<Expr>>,
-        /// State expression.
-        state: Option<Box<Expr>>,
-    },
+    /// A MSSQL `THROW` statement.
+    Throw(ThrowStatement),
     /// ```sql
     /// PRINT msg_str | @local_variable | string_expr
     /// ```
@@ -6133,19 +6157,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Throw {
-                error_number,
-                message,
-                state,
-            } => {
-                write!(f, "THROW")?;
-                if let (Some(error_number), Some(message), Some(state)) =
-                    (error_number, message, state)
-                {
-                    write!(f, " {error_number}, {message}, {state}")?;
-                }
-                Ok(())
-            }
+            Statement::Throw(s) => write!(f, "{s}"),
             Statement::Print(s) => write!(f, "{s}"),
             Statement::Return(r) => write!(f, "{r}"),
             Statement::List(command) => write!(f, "LIST {command}"),
@@ -11673,6 +11685,12 @@ impl From<WhileStatement> for Statement {
 impl From<RaiseStatement> for Statement {
     fn from(r: RaiseStatement) -> Self {
         Self::Raise(r)
+    }
+}
+
+impl From<ThrowStatement> for Statement {
+    fn from(t: ThrowStatement) -> Self {
+        Self::Throw(t)
     }
 }
 

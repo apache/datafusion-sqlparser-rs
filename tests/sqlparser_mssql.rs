@@ -1672,7 +1672,7 @@ fn test_parse_throw() {
     let s = ms().verified_stmt(sql);
     assert_eq!(
         s,
-        Statement::Throw {
+        Statement::Throw(ThrowStatement {
             error_number: Some(Box::new(Expr::Value(
                 (Value::Number("51000".parse().unwrap(), false)).with_empty_span()
             ))),
@@ -1682,7 +1682,7 @@ fn test_parse_throw() {
             state: Some(Box::new(Expr::Value(
                 (Value::Number("1".parse().unwrap(), false)).with_empty_span()
             ))),
-        }
+        })
     );
 
     // THROW with variable references
@@ -1694,11 +1694,11 @@ fn test_parse_throw() {
     let s = ms().verified_stmt(sql);
     assert_eq!(
         s,
-        Statement::Throw {
+        Statement::Throw(ThrowStatement {
             error_number: None,
             message: None,
             state: None,
-        }
+        })
     );
 }
 

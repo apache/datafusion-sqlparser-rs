@@ -625,6 +625,7 @@ impl Spanned for TableConstraint {
             TableConstraint::Check(constraint) => constraint.span(),
             TableConstraint::Index(constraint) => constraint.span(),
             TableConstraint::FulltextOrSpatial(constraint) => constraint.span(),
+            TableConstraint::ConstraintUsingIndex(constraint) => constraint.span(),
         }
     }
 }

@@ -9340,6 +9340,22 @@ impl<'a> Parser<'a> {
         let next_token = self.next_token();
         match next_token.token {
             Token::Word(w) if w.keyword == Keyword::UNIQUE => {
+                // PostgreSQL: UNIQUE USING INDEX index_name
+                // https://www.postgresql.org/docs/current/sql-altertable.html
+                if self.parse_keywords(&[Keyword::USING, Keyword::INDEX]) {
+                    let index_name = self.parse_identifier()?;
+                    let characteristics = self.parse_constraint_characteristics()?;
+                    return Ok(Some(
+                        ConstraintUsingIndex {
+                            name,
+                            is_primary_key: false,
+                            index_name,
+                            characteristics,
+                        }
+                        .into(),
+                    ));
+                }
+
                 let index_type_display = self.parse_index_type_display();
                 if !dialect_of!(self is GenericDialect | MySqlDialect)
                     && !index_type_display.is_none()
@@ -9374,6 +9390,22 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::PRIMARY => {
                 // after `PRIMARY` always stay `KEY`
                 self.expect_keyword_is(Keyword::KEY)?;
+
+                // PostgreSQL: PRIMARY KEY USING INDEX index_name
+                // https://www.postgresql.org/docs/current/sql-altertable.html
+                if self.parse_keywords(&[Keyword::USING, Keyword::INDEX]) {
+                    let index_name = self.parse_identifier()?;
+                    let characteristics = self.parse_constraint_characteristics()?;
+                    return Ok(Some(
+                        ConstraintUsingIndex {
+                            name,
+                            is_primary_key: true,
+                            index_name,
+                            characteristics,
+                        }
+                        .into(),
+                    ));
+                }
 
                 // optional index name
                 let index_name = self.parse_optional_ident()?;

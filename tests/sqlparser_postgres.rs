@@ -628,6 +628,46 @@ fn parse_alter_table_constraints_unique_nulls_distinct() {
 }
 
 #[test]
+fn parse_alter_table_constraint_using_index() {
+    // PRIMARY KEY USING INDEX
+    // https://www.postgresql.org/docs/current/sql-altertable.html
+    let sql = "ALTER TABLE tab ADD CONSTRAINT c PRIMARY KEY USING INDEX my_index";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::AlterTable(alter_table) => match &alter_table.operations[0] {
+            AlterTableOperation::AddConstraint {
+                constraint: TableConstraint::ConstraintUsingIndex(c),
+                ..
+            } => {
+                assert_eq!(c.name.as_ref().unwrap().to_string(), "c");
+                assert!(c.is_primary_key);
+                assert_eq!(c.index_name.to_string(), "my_index");
+                assert!(c.characteristics.is_none());
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+
+    // UNIQUE USING INDEX
+    pg_and_generic().verified_stmt("ALTER TABLE tab ADD CONSTRAINT c UNIQUE USING INDEX my_index");
+
+    // Without constraint name
+    pg_and_generic().verified_stmt("ALTER TABLE tab ADD PRIMARY KEY USING INDEX my_index");
+    pg_and_generic().verified_stmt("ALTER TABLE tab ADD UNIQUE USING INDEX my_index");
+
+    // With DEFERRABLE
+    pg_and_generic().verified_stmt(
+        "ALTER TABLE tab ADD CONSTRAINT c PRIMARY KEY USING INDEX my_index DEFERRABLE",
+    );
+    pg_and_generic().verified_stmt(
+        "ALTER TABLE tab ADD CONSTRAINT c UNIQUE USING INDEX my_index NOT DEFERRABLE INITIALLY IMMEDIATE",
+    );
+    pg_and_generic().verified_stmt(
+        "ALTER TABLE tab ADD CONSTRAINT c PRIMARY KEY USING INDEX my_index DEFERRABLE INITIALLY DEFERRED",
+    );
+}
+
+#[test]
 fn parse_alter_table_disable() {
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE ROW LEVEL SECURITY");
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE RULE rule_name");

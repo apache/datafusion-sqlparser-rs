@@ -18099,11 +18099,14 @@ impl<'a> Parser<'a> {
     /// Parse a 'BEGIN' statement
     pub fn parse_begin(&mut self) -> Result<Statement, ParserError> {
         let modifier = self.parse_transaction_modifier();
-        let transaction = match self.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK]) {
-            Some(Keyword::TRANSACTION) => Some(BeginTransactionKind::Transaction),
-            Some(Keyword::WORK) => Some(BeginTransactionKind::Work),
-            _ => None,
-        };
+        let transaction =
+            match self.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK, Keyword::TRAN])
+            {
+                Some(Keyword::TRANSACTION) => Some(BeginTransactionKind::Transaction),
+                Some(Keyword::WORK) => Some(BeginTransactionKind::Work),
+                Some(Keyword::TRAN) => Some(BeginTransactionKind::Tran),
+                _ => None,
+            };
         Ok(Statement::StartTransaction {
             modes: self.parse_transaction_modes()?,
             begin: true,
@@ -18237,7 +18240,7 @@ impl<'a> Parser<'a> {
 
     /// Parse an optional `AND [NO] CHAIN` clause for `COMMIT` and `ROLLBACK` statements
     pub fn parse_commit_rollback_chain(&mut self) -> Result<bool, ParserError> {
-        let _ = self.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK]);
+        let _ = self.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK, Keyword::TRAN]);
         if self.parse_keyword(Keyword::AND) {
             let chain = !self.parse_keyword(Keyword::NO);
             self.expect_keyword_is(Keyword::CHAIN)?;

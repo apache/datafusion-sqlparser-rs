@@ -18,7 +18,8 @@
 use crate::dialect::Dialect;
 
 /// A [`Dialect`] for [ClickHouse](https://clickhouse.com/).
-#[derive(Debug)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ClickHouseDialect {}
 
 impl Dialect for ClickHouseDialect {
@@ -98,6 +99,46 @@ impl Dialect for ClickHouseDialect {
     /// Supported since 2020.
     /// See <https://clickhouse.com/docs/whats-new/changelog/2020#backward-incompatible-change-2>
     fn supports_nested_comments(&self) -> bool {
+        true
+    }
+
+    /// See <https://clickhouse.com/docs/en/sql-reference/statements/optimize>
+    fn supports_optimize_table(&self) -> bool {
+        true
+    }
+
+    /// See <https://clickhouse.com/docs/en/sql-reference/statements/select/prewhere>
+    fn supports_prewhere(&self) -> bool {
+        true
+    }
+
+    /// See <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
+    fn supports_with_fill(&self) -> bool {
+        true
+    }
+
+    /// See <https://clickhouse.com/docs/en/sql-reference/statements/select/limit-by>
+    fn supports_limit_by(&self) -> bool {
+        true
+    }
+
+    /// See <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
+    fn supports_interpolate(&self) -> bool {
+        true
+    }
+
+    /// See <https://clickhouse.com/docs/en/sql-reference/statements/select#settings-in-select-query>
+    fn supports_settings(&self) -> bool {
+        true
+    }
+
+    /// See <https://clickhouse.com/docs/en/sql-reference/statements/select/format>
+    fn supports_select_format(&self) -> bool {
+        true
+    }
+
+    /// See <https://clickhouse.com/docs/sql-reference/statements/select#replace>
+    fn supports_select_wildcard_replace(&self) -> bool {
         true
     }
 }

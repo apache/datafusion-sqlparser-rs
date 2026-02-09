@@ -209,7 +209,7 @@ fn parse_quote_delimited_string() {
 #[test]
 fn parse_invalid_quote_delimited_strings() {
     let dialect = all_dialects_where(|d| d.supports_quote_delimited_string());
-    // ~ invalid quote delimiter
+    // invalid quote delimiter
     for q in [' ', '\t', '\r', '\n'] {
         assert_eq!(
             dialect.parse_sql_statements(&format!("SELECT Q'{q}abc{q}' FROM dual")),
@@ -219,7 +219,7 @@ fn parse_invalid_quote_delimited_strings() {
             "with quote char {q:?}"
         );
     }
-    // ~ invalid eof after quote
+    // invalid eof after quote
     assert_eq!(
         dialect.parse_sql_statements("SELECT Q'"),
         Err(ParserError::TokenizerError(
@@ -227,7 +227,7 @@ fn parse_invalid_quote_delimited_strings() {
         )),
         "with EOF quote char"
     );
-    // ~ unterminated string
+    // unterminated string
     assert_eq!(
         dialect.parse_sql_statements("SELECT Q'|asdfa...."),
         Err(ParserError::TokenizerError(
@@ -331,5 +331,86 @@ fn parse_national_quote_delimited_string_but_is_a_word() {
             Ident::with_span(Span::empty(), "abc")
         ]),
         expr_from_projection(&select.projection[2])
+    );
+}
+
+#[test]
+fn test_optimizer_hints() {
+    let oracle_dialect = oracle();
+
+    // selects
+    let select = oracle_dialect.verified_only_select_with_canonical(
+        "SELECT /*+one two three*/ /*+not a hint!*/ 1 FROM dual",
+        "SELECT /*+one two three*/ 1 FROM dual",
+    );
+    assert_eq!(
+        select
+            .optimizer_hint
+            .as_ref()
+            .map(|hint| hint.text.as_str()),
+        Some("one two three")
+    );
+
+    let select = oracle_dialect.verified_only_select_with_canonical(
+        "SELECT /*one two three*/ /*+not a hint!*/ 1 FROM dual",
+        "SELECT 1 FROM dual",
+    );
+    assert_eq!(select.optimizer_hint, None);
+
+    let select = oracle_dialect.verified_only_select_with_canonical(
+        "SELECT --+ one two three /* asdf */\n 1 FROM dual",
+        "SELECT --+ one two three /* asdf */\n 1 FROM dual",
+    );
+    assert_eq!(
+        select
+            .optimizer_hint
+            .as_ref()
+            .map(|hint| hint.text.as_str()),
+        Some(" one two three /* asdf */\n")
+    );
+
+    // inserts
+    oracle_dialect.verified_stmt("INSERT /*+ append */ INTO t1 SELECT * FROM all_objects");
+
+    // updates
+    oracle_dialect.verified_stmt("UPDATE /*+ DISABLE_PARALLEL_DML */ table_name SET column1 = 1");
+
+    // deletes
+    oracle_dialect.verified_stmt("DELETE --+ ENABLE_PARALLEL_DML\n FROM table_name");
+
+    // merges
+    oracle_dialect.verified_stmt(
+        "MERGE /*+ CLUSTERING */ INTO people_target pt \
+         USING people_source ps \
+            ON (pt.person_id = ps.person_id) \
+          WHEN NOT MATCHED THEN INSERT \
+               (pt.person_id, pt.first_name, pt.last_name, pt.title) \
+               VALUES (ps.person_id, ps.first_name, ps.last_name, ps.title)",
+    );
+}
+
+#[test]
+fn test_connect_by() {
+    let oracle_dialect = oracle();
+
+    oracle_dialect.verified_only_select(
+        "SELECT last_name AS \"Employee\", CONNECT_BY_ISCYCLE AS \"Cycle\", \
+                LEVEL, \
+                SYS_CONNECT_BY_PATH(last_name, '/') AS \"Path\" \
+           FROM employees \
+          WHERE level <= 3 AND department_id = 80 \
+          START WITH last_name = 'King' \
+        CONNECT BY NOCYCLE PRIOR employee_id = manager_id AND LEVEL <= 4 \
+          ORDER BY \"Employee\", \"Cycle\", LEVEL, \"Path\"",
+    );
+
+    // CONNECT_BY_ROOT
+    oracle_dialect.verified_only_select(
+        "SELECT last_name AS \"Employee\", CONNECT_BY_ROOT last_name AS \"Manager\", \
+                LEVEL - 1 AS \"Pathlen\", SYS_CONNECT_BY_PATH(last_name, '/') AS \"Path\" \
+           FROM employees \
+          WHERE LEVEL > 1 AND department_id = 110 \
+        CONNECT BY PRIOR employee_id = manager_id \
+          ORDER BY \"Employee\", \"Manager\", \"Pathlen\", \"Path\"",
     );
 }

@@ -51,6 +51,82 @@ pub use self::postgresql::PostgreSqlDialect;
 pub use self::redshift::RedshiftSqlDialect;
 pub use self::snowflake::SnowflakeDialect;
 pub use self::sqlite::SQLiteDialect;
+
+/// Macro for streamlining the creation of derived `Dialect` objects.
+/// The generated struct includes `new()` and `default()` constructors.
+/// Requires the `derive-dialect` feature.
+///
+/// # Syntax
+///
+/// ```text
+/// derive_dialect!(NewDialect, BaseDialect);
+/// derive_dialect!(NewDialect, BaseDialect, overrides = { method = value, ... });
+/// derive_dialect!(NewDialect, BaseDialect, preserve_type_id = true);
+/// derive_dialect!(NewDialect, BaseDialect, preserve_type_id = true, overrides = { ... });
+/// ```
+///
+/// # Example
+///
+/// ```
+/// use sqlparser::derive_dialect;
+/// use sqlparser::dialect::{Dialect, GenericDialect};
+///
+/// // Override boolean methods (supports_*, allow_*, etc.)
+/// derive_dialect!(CustomDialect, GenericDialect, overrides = {
+///     supports_order_by_all = true,
+///     supports_nested_comments = true,
+/// });
+///
+/// let dialect = CustomDialect::new();
+/// assert!(dialect.supports_order_by_all());
+/// assert!(dialect.supports_nested_comments());
+/// ```
+///
+/// # Overriding `identifier_quote_style`
+///
+/// Use a char literal or `None`:
+/// ```
+/// use sqlparser::derive_dialect;
+/// use sqlparser::dialect::{Dialect, PostgreSqlDialect};
+///
+/// derive_dialect!(BacktickPostgreSqlDialect, PostgreSqlDialect,
+///     preserve_type_id = true,
+///     overrides = { identifier_quote_style = '`' }
+/// );
+/// let d: &dyn Dialect = &BacktickPostgreSqlDialect::new();
+/// assert_eq!(d.identifier_quote_style("foo"), Some('`'));
+///
+/// derive_dialect!(QuotelessPostgreSqlDialect, PostgreSqlDialect,
+///     preserve_type_id = true,
+///     overrides = { identifier_quote_style = None }
+/// );
+/// let d: &dyn Dialect = &QuotelessPostgreSqlDialect::new();
+/// assert_eq!(d.identifier_quote_style("foo"), None);
+/// ```
+///
+/// # Type Identity
+///
+/// By default, derived dialects have their own `TypeId`. Set `preserve_type_id = true` to
+/// retain the base dialect's identity with respect to the parser's `dialect.is::<T>()` checks:
+/// ```
+/// use sqlparser::derive_dialect;
+/// use sqlparser::dialect::{Dialect, GenericDialect};
+///
+/// derive_dialect!(EnhancedGenericDialect, GenericDialect,
+///     preserve_type_id = true,
+///     overrides = {
+///         supports_order_by_all = true,
+///         supports_nested_comments = true,
+///     }
+/// );
+/// let d: &dyn Dialect = &EnhancedGenericDialect::new();
+/// assert!(d.is::<GenericDialect>());  // still recognized as a GenericDialect
+/// assert!(d.supports_nested_comments());
+/// assert!(d.supports_order_by_all());
+/// ```
+#[cfg(feature = "derive-dialect")]
+pub use sqlparser_derive::derive_dialect;
+
 use crate::ast::{ColumnOption, Expr, GranteesType, Ident, ObjectNamePart, Statement};
 pub use crate::keywords;
 use crate::keywords::Keyword;
@@ -62,14 +138,14 @@ use alloc::boxed::Box;
 
 /// Convenience check if a [`Parser`] uses a certain dialect.
 ///
-/// Note: when possible please the new style, adding a method to the [`Dialect`]
-/// trait rather than using this macro.
+/// Note: when possible, please use the new style, adding a method to
+/// the [`Dialect`] trait rather than using this macro.
 ///
 /// The benefits of adding a method on `Dialect` over this macro are:
 /// 1. user defined [`Dialect`]s can customize the parsing behavior
 /// 2. The differences between dialects can be clearly documented in the trait
 ///
-/// `dialect_of!(parser is SQLiteDialect |  GenericDialect)` evaluates
+/// `dialect_of!(parser is SQLiteDialect | GenericDialect)` evaluates
 /// to `true` if `parser.dialect` is one of the [`Dialect`]s specified.
 macro_rules! dialect_of {
     ( $parsed_dialect: ident is $($dialect_type: ty)|+ ) => {
@@ -123,9 +199,8 @@ macro_rules! dialect_is {
 pub trait Dialect: Debug + Any {
     /// Determine the [`TypeId`] of this dialect.
     ///
-    /// By default, return the same [`TypeId`] as [`Any::type_id`]. Can be overridden
-    /// by dialects that behave like other dialects
-    /// (for example when wrapping a dialect).
+    /// By default, return the same [`TypeId`] as [`Any::type_id`]. Can be overridden by
+    /// dialects that behave like other dialects (for example, when wrapping a dialect).
     fn dialect(&self) -> TypeId {
         self.type_id()
     }
@@ -489,6 +564,19 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports concatenating string literals with a newline.
+    /// For example, the following statement would return `true`:
+    /// ```sql
+    /// SELECT 'abc' in (
+    ///   'a'
+    ///   'b'
+    ///   'c'
+    /// );
+    /// ```
+    fn supports_string_literal_concatenation_with_newline(&self) -> bool {
+        false
+    }
+
     /// Does the dialect support trailing commas in the projection list?
     fn supports_projection_trailing_commas(&self) -> bool {
         self.supports_trailing_commas()
@@ -607,6 +695,19 @@ pub trait Dialect: Debug + Any {
     /// in a `CREATE TABLE` statement for the structure of the new table. For example:
     /// `CREATE TABLE t (a INT, b INT) AS SELECT 1 AS b, 2 AS a`
     fn supports_create_table_multi_schema_info_sources(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports MySQL-specific SELECT modifiers
+    /// like `HIGH_PRIORITY`, `STRAIGHT_JOIN`, `SQL_SMALL_RESULT`, etc.
+    ///
+    /// For example:
+    /// ```sql
+    /// SELECT HIGH_PRIORITY STRAIGHT_JOIN SQL_SMALL_RESULT * FROM t1 JOIN t2 ON ...
+    /// ```
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/select.html)
+    fn supports_select_modifiers(&self) -> bool {
         false
     }
 
@@ -856,6 +957,87 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect supports the `EXTRACT` function
+    /// with a comma separator instead of `FROM`.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT EXTRACT(YEAR, date_column) FROM table;
+    /// ```
+    ///
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/functions/extract)
+    fn supports_extract_comma_syntax(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports a subquery passed to a function
+    /// as the only argument without enclosing parentheses.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT FLATTEN(SELECT * FROM tbl);
+    /// ```
+    ///
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/functions/flatten)
+    fn supports_subquery_as_function_arg(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `COMMENT` clause in
+    /// `CREATE VIEW` statements using the `COMMENT = 'comment'` syntax.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE VIEW v COMMENT = 'my comment' AS SELECT 1;
+    /// ```
+    ///
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/create-view#optional-parameters)
+    fn supports_create_view_comment_syntax(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `ARRAY` type without
+    /// specifying an element type.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE TABLE t (a ARRAY);
+    /// ```
+    ///
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/data-types-semistructured#array)
+    fn supports_array_typedef_without_element_type(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports extra parentheses around
+    /// lone table names or derived tables in the `FROM` clause.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * FROM (mytable);
+    /// SELECT * FROM ((SELECT 1));
+    /// SELECT * FROM (mytable) AS alias;
+    /// ```
+    ///
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/constructs/from)
+    fn supports_parens_around_table_factor(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports `VALUES` as a table factor
+    /// without requiring parentheses around the entire clause.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * FROM VALUES (1, 'a'), (2, 'b') AS t (col1, col2);
+    /// ```
+    ///
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/constructs/values)
+    /// [Databricks](https://docs.databricks.com/en/sql/language-manual/sql-ref-syntax-qry-select-values.html)
+    fn supports_values_as_table_factor(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect allows dollar placeholders
     /// e.g. `SELECT $var` (SQLite)
     fn supports_dollar_placeholder(&self) -> bool {
@@ -914,6 +1096,12 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports nested comments
     /// e.g. `/* /* nested */ */`
     fn supports_nested_comments(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports optimizer hints in multiline comments
+    /// e.g. `/*!50110 KEY_BLOCK_SIZE = 1024*/`
+    fn supports_multiline_comment_hints(&self) -> bool {
         false
     }
 
@@ -984,6 +1172,23 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports PartiQL for querying semi-structured data
     /// <https://partiql.org/index.html>
     fn supports_partiql(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports the `CONSTRAINT` keyword without a name
+    /// in table constraint definitions.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE TABLE t (a INT, CONSTRAINT CHECK (a > 0))
+    /// ```
+    ///
+    /// This is a MySQL extension; the SQL standard requires a name after `CONSTRAINT`.
+    /// When the name is omitted, the output normalizes to just the constraint type
+    /// without the `CONSTRAINT` keyword (e.g., `CHECK (a > 0)`).
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
+    fn supports_constraint_keyword_without_name(&self) -> bool {
         false
     }
 
@@ -1241,6 +1446,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns `true` if the dialect supports query optimizer hints in the
+    /// format of single and multi line comments immediately following a
+    /// `SELECT`, `INSERT`, `REPLACE`, `DELETE`, or `MERGE` keyword.
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/19/sqlrf/Comments.html#SQLRF-GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
+    fn supports_comment_optimizer_hint(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect considers the `&&` operator as a boolean AND operator.
     fn supports_double_ampersand_operator(&self) -> bool {
         false
@@ -1249,6 +1464,159 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports casting an expression to a binary type
     /// using the `BINARY <expr>` syntax.
     fn supports_binary_kw_as_cast(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `REPLACE` option in a
+    /// `SELECT *` wildcard expression.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * REPLACE (col1 AS col1_alias) FROM table;
+    /// ```
+    ///
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#select_replace)
+    /// [ClickHouse](https://clickhouse.com/docs/sql-reference/statements/select#replace)
+    /// [DuckDB](https://duckdb.org/docs/sql/query_syntax/select#replace-clause)
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/select#parameters)
+    fn supports_select_wildcard_replace(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `ILIKE` option in a
+    /// `SELECT *` wildcard expression.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * ILIKE '%pattern%' FROM table;
+    /// ```
+    ///
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/select#parameters)
+    fn supports_select_wildcard_ilike(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `RENAME` option in a
+    /// `SELECT *` wildcard expression.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * RENAME col1 AS col1_alias FROM table;
+    /// ```
+    ///
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/select#parameters)
+    fn supports_select_wildcard_rename(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `OPTIMIZE TABLE` statement.
+    ///
+    /// Example:
+    /// ```sql
+    /// OPTIMIZE TABLE table_name;
+    /// ```
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
+    fn supports_optimize_table(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `INSTALL` statement.
+    ///
+    /// Example:
+    /// ```sql
+    /// INSTALL extension_name;
+    /// ```
+    ///
+    /// [DuckDB](https://duckdb.org/docs/extensions/overview)
+    fn supports_install(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `DETACH` statement.
+    ///
+    /// Example:
+    /// ```sql
+    /// DETACH DATABASE db_name;
+    /// ```
+    ///
+    /// [DuckDB](https://duckdb.org/docs/sql/statements/attach#detach-syntax)
+    fn supports_detach(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `PREWHERE` clause
+    /// in `SELECT` statements.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * FROM table PREWHERE col > 0 WHERE col < 100;
+    /// ```
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select/prewhere)
+    fn supports_prewhere(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `WITH FILL` clause
+    /// in `ORDER BY` expressions.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * FROM table ORDER BY col WITH FILL FROM 1 TO 10 STEP 1;
+    /// ```
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier)
+    fn supports_with_fill(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `LIMIT BY` clause.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * FROM table LIMIT 10 BY col;
+    /// ```
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select/limit-by)
+    fn supports_limit_by(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `INTERPOLATE` clause
+    /// in `ORDER BY` expressions.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * FROM table ORDER BY col WITH FILL INTERPOLATE (col2 AS col2 + 1);
+    /// ```
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier)
+    fn supports_interpolate(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `SETTINGS` clause.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * FROM table SETTINGS max_threads = 4;
+    /// ```
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select#settings-in-select-query)
+    fn supports_settings(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `FORMAT` clause in `SELECT` statements.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT * FROM table FORMAT JSON;
+    /// ```
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select/format)
+    fn supports_select_format(&self) -> bool {
         false
     }
 }
@@ -1387,6 +1755,27 @@ mod tests {
 
     fn parse_dialect(v: &str) -> Box<dyn Dialect> {
         dialect_from_str(v).unwrap()
+    }
+
+    #[test]
+    #[cfg(feature = "derive-dialect")]
+    fn test_dialect_override() {
+        derive_dialect!(EnhancedGenericDialect, GenericDialect,
+            preserve_type_id = true,
+            overrides = {
+                supports_order_by_all = true,
+                supports_nested_comments = true,
+                supports_triple_quoted_string = true,
+            },
+        );
+        let dialect = EnhancedGenericDialect::new();
+
+        assert!(dialect.supports_order_by_all());
+        assert!(dialect.supports_nested_comments());
+        assert!(dialect.supports_triple_quoted_string());
+
+        let d: &dyn Dialect = &dialect;
+        assert!(d.is::<GenericDialect>());
     }
 
     #[test]

@@ -513,6 +513,13 @@ fn parse_create_table_with_defaults() {
 }
 
 #[test]
+fn parse_cast_in_default_expr() {
+    pg().verified_stmt("CREATE TABLE t (c TEXT DEFAULT (foo())::TEXT)");
+    pg().verified_stmt("CREATE TABLE t (c TEXT DEFAULT (foo())::INT::TEXT)");
+    pg().verified_stmt("CREATE TABLE t (c TEXT DEFAULT (foo())::TEXT NOT NULL)");
+}
+
+#[test]
 fn parse_create_table_from_pg_dump() {
     let sql = "CREATE TABLE public.customer (
             customer_id integer DEFAULT nextval('public.customer_customer_id_seq'::regclass) NOT NULL,
@@ -640,6 +647,8 @@ fn parse_alter_table_enable() {
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE REPLICA TRIGGER trigger_name");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE REPLICA RULE rule_name");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE ROW LEVEL SECURITY");
+    pg_and_generic().verified_stmt("ALTER TABLE tab FORCE ROW LEVEL SECURITY");
+    pg_and_generic().verified_stmt("ALTER TABLE tab NO FORCE ROW LEVEL SECURITY");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE RULE rule_name");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE TRIGGER ALL");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE TRIGGER USER");
@@ -1282,7 +1291,9 @@ fn parse_copy_to() {
                 with: None,
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
+                    optimizer_hint: None,
                     distinct: None,
+                    select_modifiers: None,
                     top: None,
                     top_before_distinct: false,
                     projection: vec![
@@ -1320,7 +1331,7 @@ fn parse_copy_to() {
                     sort_by: vec![],
                     qualify: None,
                     value_table_mode: None,
-                    connect_by: None,
+                    connect_by: vec![],
                     flavor: SelectFlavor::Standard,
                 }))),
                 order_by: None,
@@ -1706,6 +1717,7 @@ fn parse_execute() {
                             (Value::Number("1337".parse().unwrap(), false)).with_empty_span()
                         )),
                         data_type: DataType::SmallInt(None),
+                        array: false,
                         format: None
                     },
                     alias: None
@@ -1717,6 +1729,7 @@ fn parse_execute() {
                             (Value::Number("7331".parse().unwrap(), false)).with_empty_span()
                         )),
                         data_type: DataType::SmallInt(None),
+                        array: false,
                         format: None
                     },
                     alias: None
@@ -2343,6 +2356,7 @@ fn parse_array_index_expr() {
                     ))),
                     None
                 )),
+                array: false,
                 format: None,
             }))),
             access_chain: vec![
@@ -3059,7 +3073,9 @@ fn parse_array_subquery_expr() {
                     set_quantifier: SetQuantifier::None,
                     left: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
+                        optimizer_hint: None,
                         distinct: None,
+                        select_modifiers: None,
                         top: None,
                         top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Value(
@@ -3080,12 +3096,14 @@ fn parse_array_subquery_expr() {
                         qualify: None,
                         window_before_qualify: false,
                         value_table_mode: None,
-                        connect_by: None,
+                        connect_by: vec![],
                         flavor: SelectFlavor::Standard,
                     }))),
                     right: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
+                        optimizer_hint: None,
                         distinct: None,
+                        select_modifiers: None,
                         top: None,
                         top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Value(
@@ -3106,7 +3124,7 @@ fn parse_array_subquery_expr() {
                         qualify: None,
                         window_before_qualify: false,
                         value_table_mode: None,
-                        connect_by: None,
+                        connect_by: vec![],
                         flavor: SelectFlavor::Standard,
                     }))),
                 }),
@@ -5083,12 +5101,14 @@ fn parse_truncate() {
     let table_names = vec![TruncateTableTarget {
         name: table_name.clone(),
         only: false,
+        has_asterisk: false,
     }];
     assert_eq!(
         Statement::Truncate(Truncate {
             table_names,
             partitions: None,
             table: false,
+            if_exists: false,
             identity: None,
             cascade: None,
             on_cluster: None,
@@ -5106,6 +5126,7 @@ fn parse_truncate_with_options() {
     let table_names = vec![TruncateTableTarget {
         name: table_name.clone(),
         only: true,
+        has_asterisk: false,
     }];
 
     assert_eq!(
@@ -5113,6 +5134,7 @@ fn parse_truncate_with_options() {
             table_names,
             partitions: None,
             table: true,
+            if_exists: false,
             identity: Some(TruncateIdentityOption::Restart),
             cascade: Some(CascadeOption::Cascade),
             on_cluster: None,
@@ -5134,10 +5156,12 @@ fn parse_truncate_with_table_list() {
         TruncateTableTarget {
             name: table_name_a.clone(),
             only: false,
+            has_asterisk: false,
         },
         TruncateTableTarget {
             name: table_name_b.clone(),
             only: false,
+            has_asterisk: false,
         },
     ];
 
@@ -5146,8 +5170,67 @@ fn parse_truncate_with_table_list() {
             table_names,
             partitions: None,
             table: true,
+            if_exists: false,
             identity: Some(TruncateIdentityOption::Restart),
             cascade: Some(CascadeOption::Cascade),
+            on_cluster: None,
+        }),
+        truncate
+    );
+}
+
+#[test]
+fn parse_truncate_with_descendant() {
+    let truncate = pg_and_generic().verified_stmt("TRUNCATE TABLE t *");
+
+    let table_names = vec![TruncateTableTarget {
+        name: ObjectName::from(vec![Ident::new("t")]),
+        only: false,
+        has_asterisk: true,
+    }];
+
+    assert_eq!(
+        Statement::Truncate(Truncate {
+            table_names,
+            partitions: None,
+            table: true,
+            if_exists: false,
+            identity: None,
+            cascade: None,
+            on_cluster: None,
+        }),
+        truncate
+    );
+
+    let truncate = pg_and_generic()
+        .verified_stmt("TRUNCATE TABLE ONLY parent, child *, grandchild RESTART IDENTITY");
+
+    let table_names = vec![
+        TruncateTableTarget {
+            name: ObjectName::from(vec![Ident::new("parent")]),
+            only: true,
+            has_asterisk: false,
+        },
+        TruncateTableTarget {
+            name: ObjectName::from(vec![Ident::new("child")]),
+            only: false,
+            has_asterisk: true,
+        },
+        TruncateTableTarget {
+            name: ObjectName::from(vec![Ident::new("grandchild")]),
+            only: false,
+            has_asterisk: false,
+        },
+    ];
+
+    assert_eq!(
+        Statement::Truncate(Truncate {
+            table_names,
+            partitions: None,
+            table: true,
+            if_exists: false,
+            identity: Some(TruncateIdentityOption::Restart),
+            cascade: None,
             on_cluster: None,
         }),
         truncate
@@ -5314,6 +5397,7 @@ fn test_simple_postgres_insert_with_alias() {
         statement,
         Statement::Insert(Insert {
             insert_token: AttachedToken::empty(),
+            optimizer_hint: None,
             or: None,
             ignore: false,
             into: true,
@@ -5385,6 +5469,7 @@ fn test_simple_postgres_insert_with_alias() {
         statement,
         Statement::Insert(Insert {
             insert_token: AttachedToken::empty(),
+            optimizer_hint: None,
             or: None,
             ignore: false,
             into: true,
@@ -5458,6 +5543,7 @@ fn test_simple_insert_with_quoted_alias() {
         statement,
         Statement::Insert(Insert {
             insert_token: AttachedToken::empty(),
+            optimizer_hint: None,
             or: None,
             ignore: false,
             into: true,
@@ -5570,6 +5656,7 @@ fn parse_at_time_zone() {
                     Value::SingleQuotedString("America/Los_Angeles".to_owned()).with_empty_span(),
                 )),
                 data_type: DataType::Text,
+                array: false,
                 format: None,
             }),
         }),
@@ -6386,6 +6473,7 @@ fn arrow_cast_precedence() {
                     (Value::SingleQuotedString("bar".to_string())).with_empty_span()
                 )),
                 data_type: DataType::Text,
+                array: false,
                 format: None,
             }),
         }
@@ -6560,6 +6648,30 @@ fn parse_alter_table_replica_identity() {
                 operations,
                 vec![AlterTableOperation::ReplicaIdentity {
                     identity: ReplicaIdentity::Index("foo_idx".into())
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match pg_and_generic().verified_stmt("ALTER TABLE foo REPLICA IDENTITY NOTHING") {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::ReplicaIdentity {
+                    identity: ReplicaIdentity::Nothing
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match pg_and_generic().verified_stmt("ALTER TABLE foo REPLICA IDENTITY DEFAULT") {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::ReplicaIdentity {
+                    identity: ReplicaIdentity::Default
                 }]
             );
         }
@@ -8398,4 +8510,29 @@ fn parse_create_table_partition_of_errors() {
         err.contains("at least one value"),
         "Expected error about empty TO list, got: {err}"
     );
+}
+
+#[test]
+fn parse_pg_analyze() {
+    // Bare ANALYZE
+    pg_and_generic().verified_stmt("ANALYZE");
+
+    // ANALYZE with table name
+    pg_and_generic().verified_stmt("ANALYZE t");
+
+    // ANALYZE with column specification
+    pg_and_generic().verified_stmt("ANALYZE t (col1, col2)");
+
+    // Verify AST for column specification
+    let stmt = pg().verified_stmt("ANALYZE t (col1, col2)");
+    match &stmt {
+        Statement::Analyze(analyze) => {
+            assert_eq!(analyze.table_name.as_ref().unwrap().to_string(), "t");
+            assert_eq!(analyze.columns.len(), 2);
+            assert_eq!(analyze.columns[0].to_string(), "col1");
+            assert_eq!(analyze.columns[1].to_string(), "col2");
+            assert!(!analyze.for_columns);
+        }
+        _ => panic!("Expected Analyze, got: {stmt:?}"),
+    }
 }

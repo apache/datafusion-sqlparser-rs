@@ -18,7 +18,7 @@
 [package]
 name = "sqlparser"
 description = "Extensible SQL Lexer and Parser with support for ANSI SQL:2011"
-version = "0.60.0"
+version = "0.61.0"
 authors = ["Apache DataFusion <dev@datafusion.apache.org>"]
 homepage = "https://github.com/apache/datafusion-sqlparser-rs"
 documentation = "https://docs.rs/sqlparser/"
@@ -42,6 +42,7 @@ std = []
 recursive-protection = ["std", "recursive"]
 # Enable JSON output in the `cli` example:
 json_example = ["serde_json", "serde"]
+derive-dialect = ["sqlparser_derive"]
 visitor = ["sqlparser_derive"]
 
 [dependencies]
@@ -54,13 +55,17 @@ serde = { version = "1.0", default-features = false, features = ["derive", "allo
 # of dev-dependencies because of
 # https://github.com/rust-lang/cargo/issues/1596
 serde_json = { version = "1.0", optional = true }
-sqlparser_derive = { version = "0.4.0", path = "derive", optional = true }
+sqlparser_derive = { version = "0.5.0", path = "derive", optional = true }
 
 [dev-dependencies]
 simple_logger = "5.0"
 matches = "0.1"
 pretty_assertions = "1"
 
+[[test]]
+name = "sqlparser_derive_dialect"
+required-features = ["derive-dialect"]
+
 [package.metadata.docs.rs]
 # Document these features on docs.rs
-features = ["serde", "visitor"]
+features = ["serde", "visitor", "derive-dialect"]

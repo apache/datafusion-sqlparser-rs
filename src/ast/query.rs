@@ -334,6 +334,108 @@ pub enum SelectFlavor {
     FromFirstNoSelect,
 }
 
+/// MySQL-specific SELECT modifiers that appear after the SELECT keyword.
+///
+/// These modifiers affect query execution and optimization. They can appear in any order after
+/// SELECT and before the column list, can be repeated, and can be interleaved with
+/// DISTINCT/DISTINCTROW/ALL:
+///
+/// ```sql
+/// SELECT
+///     [ALL | DISTINCT | DISTINCTROW]
+///     [HIGH_PRIORITY]
+///     [STRAIGHT_JOIN]
+///     [SQL_SMALL_RESULT] [SQL_BIG_RESULT] [SQL_BUFFER_RESULT]
+///     [SQL_NO_CACHE] [SQL_CALC_FOUND_ROWS]
+///     select_expr [, select_expr] ...
+/// ```
+///
+/// See [MySQL SELECT](https://dev.mysql.com/doc/refman/8.4/en/select.html).
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SelectModifiers {
+    /// `HIGH_PRIORITY` gives the SELECT higher priority than statements that update a table.
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/select.html>
+    pub high_priority: bool,
+    /// `STRAIGHT_JOIN` forces the optimizer to join tables in the order listed in the FROM clause.
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/select.html>
+    pub straight_join: bool,
+    /// `SQL_SMALL_RESULT` hints that the result set is small, using in-memory temp tables.
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/select.html>
+    pub sql_small_result: bool,
+    /// `SQL_BIG_RESULT` hints that the result set is large, using disk-based temp tables.
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/select.html>
+    pub sql_big_result: bool,
+    /// `SQL_BUFFER_RESULT` forces the result to be put into a temporary table to release locks early.
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/select.html>
+    pub sql_buffer_result: bool,
+    /// `SQL_NO_CACHE` tells MySQL not to cache the query result. (Deprecated in 8.4+.)
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/select.html>
+    pub sql_no_cache: bool,
+    /// `SQL_CALC_FOUND_ROWS` tells MySQL to calculate the total number of rows. (Deprecated in 8.0.17+.)
+    ///
+    /// - [MySQL SELECT modifiers](https://dev.mysql.com/doc/refman/8.4/en/select.html)
+    /// - [`FOUND_ROWS()`](https://dev.mysql.com/doc/refman/8.4/en/information-functions.html#function_found-rows)
+    pub sql_calc_found_rows: bool,
+}
+
+impl fmt::Display for SelectModifiers {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.high_priority {
+            f.write_str(" HIGH_PRIORITY")?;
+        }
+        if self.straight_join {
+            f.write_str(" STRAIGHT_JOIN")?;
+        }
+        if self.sql_small_result {
+            f.write_str(" SQL_SMALL_RESULT")?;
+        }
+        if self.sql_big_result {
+            f.write_str(" SQL_BIG_RESULT")?;
+        }
+        if self.sql_buffer_result {
+            f.write_str(" SQL_BUFFER_RESULT")?;
+        }
+        if self.sql_no_cache {
+            f.write_str(" SQL_NO_CACHE")?;
+        }
+        if self.sql_calc_found_rows {
+            f.write_str(" SQL_CALC_FOUND_ROWS")?;
+        }
+        Ok(())
+    }
+}
+
+impl SelectModifiers {
+    /// Returns true if any of the modifiers are set.
+    pub fn is_any_set(&self) -> bool {
+        // Using irrefutable destructuring to catch fields added in the future
+        let Self {
+            high_priority,
+            straight_join,
+            sql_small_result,
+            sql_big_result,
+            sql_buffer_result,
+            sql_no_cache,
+            sql_calc_found_rows,
+        } = self;
+        *high_priority
+            || *straight_join
+            || *sql_small_result
+            || *sql_big_result
+            || *sql_buffer_result
+            || *sql_no_cache
+            || *sql_calc_found_rows
+    }
+}
+
 /// A restricted variant of `SELECT` (without CTEs/`ORDER BY`), which may
 /// appear either as the only body item of a `Query`, or as an operand
 /// to a set operation like `UNION`.
@@ -343,8 +445,17 @@ pub enum SelectFlavor {
 pub struct Select {
     /// Token for the `SELECT` keyword
     pub select_token: AttachedToken,
+    /// A query optimizer hint
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
+    pub optimizer_hint: Option<OptimizerHint>,
     /// `SELECT [DISTINCT] ...`
     pub distinct: Option<Distinct>,
+    /// MySQL-specific SELECT modifiers.
+    ///
+    /// See [MySQL SELECT](https://dev.mysql.com/doc/refman/8.4/en/select.html).
+    pub select_modifiers: Option<SelectModifiers>,
     /// MSSQL syntax: `TOP (<N>) [ PERCENT ] [ WITH TIES ]`
     pub top: Option<Top>,
     /// Whether the top was located before `ALL`/`DISTINCT`
@@ -369,6 +480,8 @@ pub struct Select {
     pub prewhere: Option<Expr>,
     /// WHERE
     pub selection: Option<Expr>,
+    /// [START WITH ..] CONNECT BY ..
+    pub connect_by: Vec<ConnectByKind>,
     /// GROUP BY
     pub group_by: GroupByExpr,
     /// CLUSTER BY (Hive)
@@ -390,8 +503,6 @@ pub struct Select {
     pub window_before_qualify: bool,
     /// BigQuery syntax: `SELECT AS VALUE | SELECT AS STRUCT`
     pub value_table_mode: Option<ValueTableMode>,
-    /// STARTING WITH .. CONNECT BY
-    pub connect_by: Option<ConnectBy>,
     /// Was this a FROM-first query?
     pub flavor: SelectFlavor,
 }
@@ -408,6 +519,11 @@ impl fmt::Display for Select {
             SelectFlavor::FromFirstNoSelect => {
                 write!(f, "FROM {}", display_comma_separated(&self.from))?;
             }
+        }
+
+        if let Some(hint) = self.optimizer_hint.as_ref() {
+            f.write_str(" ")?;
+            hint.fmt(f)?;
         }
 
         if let Some(value_table_mode) = self.value_table_mode {
@@ -430,6 +546,10 @@ impl fmt::Display for Select {
                 f.write_str(" ")?;
                 top.fmt(f)?;
             }
+        }
+
+        if let Some(ref select_modifiers) = self.select_modifiers {
+            select_modifiers.fmt(f)?;
         }
 
         if !self.projection.is_empty() {
@@ -464,6 +584,10 @@ impl fmt::Display for Select {
             f.write_str("WHERE")?;
             SpaceOrNewline.fmt(f)?;
             Indent(selection).fmt(f)?;
+        }
+        for clause in &self.connect_by {
+            SpaceOrNewline.fmt(f)?;
+            clause.fmt(f)?;
         }
         match &self.group_by {
             GroupByExpr::All(_) => {
@@ -527,10 +651,6 @@ impl fmt::Display for Select {
                 SpaceOrNewline.fmt(f)?;
                 display_comma_separated(&self.named_window).fmt(f)?;
             }
-        }
-        if let Some(ref connect_by) = self.connect_by {
-            SpaceOrNewline.fmt(f)?;
-            connect_by.fmt(f)?;
         }
         Ok(())
     }
@@ -1084,24 +1204,60 @@ impl fmt::Display for TableWithJoins {
 /// Joins a table to itself to process hierarchical data in the table.
 ///
 /// See <https://docs.snowflake.com/en/sql-reference/constructs/connect-by>.
+/// See <https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Hierarchical-Queries.html>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct ConnectBy {
-    /// START WITH
-    pub condition: Expr,
+pub enum ConnectByKind {
     /// CONNECT BY
-    pub relationships: Vec<Expr>,
+    ConnectBy {
+        /// the `CONNECT` token
+        connect_token: AttachedToken,
+
+        /// [CONNECT BY] NOCYCLE
+        ///
+        /// Optional on [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Hierarchical-Queries.html#GUID-0118DF1D-B9A9-41EB-8556-C6E7D6A5A84E__GUID-5377971A-F518-47E4-8781-F06FEB3EF993)
+        nocycle: bool,
+
+        /// join conditions denoting the hierarchical relationship
+        relationships: Vec<Expr>,
+    },
+
+    /// START WITH
+    ///
+    /// Optional on [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Hierarchical-Queries.html#GUID-0118DF1D-B9A9-41EB-8556-C6E7D6A5A84E)
+    /// when comming _after_ the `CONNECT BY`.
+    StartWith {
+        /// the `START` token
+        start_token: AttachedToken,
+
+        /// condition selecting the root rows of the hierarchy
+        condition: Box<Expr>,
+    },
 }
 
-impl fmt::Display for ConnectBy {
+impl fmt::Display for ConnectByKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "START WITH {condition} CONNECT BY {relationships}",
-            condition = self.condition,
-            relationships = display_comma_separated(&self.relationships)
-        )
+        match self {
+            ConnectByKind::ConnectBy {
+                connect_token: _,
+                nocycle,
+                relationships,
+            } => {
+                write!(
+                    f,
+                    "CONNECT BY {nocycle}{relationships}",
+                    nocycle = if *nocycle { "NOCYCLE " } else { "" },
+                    relationships = display_comma_separated(relationships)
+                )
+            }
+            ConnectByKind::StartWith {
+                start_token: _,
+                condition,
+            } => {
+                write!(f, "START WITH {condition}")
+            }
+        }
     }
 }
 
@@ -1325,6 +1481,8 @@ pub enum TableFactor {
         subquery: Box<Query>,
         /// Optional alias for the derived table.
         alias: Option<TableAlias>,
+        /// Optional table sample modifier
+        sample: Option<TableSampleKind>,
     },
     /// `TABLE(<expr>)[ AS <alias> ]`
     TableFunction {
@@ -2071,6 +2229,7 @@ impl fmt::Display for TableFactor {
                 lateral,
                 subquery,
                 alias,
+                sample,
             } => {
                 if *lateral {
                     write!(f, "LATERAL ")?;
@@ -2082,6 +2241,9 @@ impl fmt::Display for TableFactor {
                 f.write_str(")")?;
                 if let Some(alias) = alias {
                     write!(f, " {alias}")?;
+                }
+                if let Some(TableSampleKind::AfterTableAlias(sample)) = sample {
+                    write!(f, " {sample}")?;
                 }
                 Ok(())
             }
@@ -3335,8 +3497,14 @@ impl fmt::Display for NonBlock {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-/// `DISTINCT` or `DISTINCT ON (...)` modifiers for `SELECT` lists.
+/// `ALL`, `DISTINCT`, or `DISTINCT ON (...)` modifiers for `SELECT` lists.
 pub enum Distinct {
+    /// `ALL` (keep duplicate rows)
+    ///
+    /// Generally this is the default if omitted, but omission should be represented as
+    /// `None::<Option<Distinct>>`
+    All,
+
     /// `DISTINCT` (remove duplicate rows)
     Distinct,
 
@@ -3347,6 +3515,7 @@ pub enum Distinct {
 impl fmt::Display for Distinct {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Distinct::All => write!(f, "ALL"),
             Distinct::Distinct => write!(f, "DISTINCT"),
             Distinct::On(col_names) => {
                 let col_names = display_comma_separated(col_names);

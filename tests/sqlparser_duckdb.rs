@@ -266,7 +266,9 @@ fn test_select_union_by_name() {
             set_quantifier: *expected_quantifier,
             left: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
+                optimizer_hint: None,
                 distinct: None,
+                select_modifiers: None,
                 top: None,
                 projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
                 exclude: None,
@@ -292,12 +294,14 @@ fn test_select_union_by_name() {
                 window_before_qualify: false,
                 qualify: None,
                 value_table_mode: None,
-                connect_by: None,
+                connect_by: vec![],
                 flavor: SelectFlavor::Standard,
             }))),
             right: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
+                optimizer_hint: None,
                 distinct: None,
+                select_modifiers: None,
                 top: None,
                 projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
                 exclude: None,
@@ -323,7 +327,7 @@ fn test_select_union_by_name() {
                 window_before_qualify: false,
                 qualify: None,
                 value_table_mode: None,
-                connect_by: None,
+                connect_by: vec![],
                 flavor: SelectFlavor::Standard,
             }))),
         });
@@ -380,6 +384,7 @@ fn test_duckdb_specific_int_types() {
                     Value::Number("123".parse().unwrap(), false).with_empty_span()
                 )),
                 data_type: data_type.clone(),
+                array: false,
                 format: None,
             },
             expr_from_projection(&select.projection[0])

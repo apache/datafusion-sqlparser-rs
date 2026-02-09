@@ -19,7 +19,8 @@ use crate::dialect::Dialect;
 
 /// A permissive, general purpose [`Dialect`], which parses a wide variety of SQL
 /// statements, from many different dialects.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GenericDialect;
 
 impl Dialect for GenericDialect {
@@ -104,6 +105,22 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_extract_comma_syntax(&self) -> bool {
+        true
+    }
+
+    fn supports_create_view_comment_syntax(&self) -> bool {
+        true
+    }
+
+    fn supports_parens_around_table_factor(&self) -> bool {
+        true
+    }
+
+    fn supports_values_as_table_factor(&self) -> bool {
+        true
+    }
+
     fn supports_create_index_with_clause(&self) -> bool {
         true
     }
@@ -160,6 +177,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_multiline_comment_hints(&self) -> bool {
+        true
+    }
+
     fn supports_user_host_grantee(&self) -> bool {
         true
     }
@@ -205,6 +226,62 @@ impl Dialect for GenericDialect {
     }
 
     fn supports_lambda_functions(&self) -> bool {
+        true
+    }
+
+    fn supports_select_wildcard_replace(&self) -> bool {
+        true
+    }
+
+    fn supports_select_wildcard_ilike(&self) -> bool {
+        true
+    }
+
+    fn supports_select_wildcard_rename(&self) -> bool {
+        true
+    }
+
+    fn supports_optimize_table(&self) -> bool {
+        true
+    }
+
+    fn supports_install(&self) -> bool {
+        true
+    }
+
+    fn supports_detach(&self) -> bool {
+        true
+    }
+
+    fn supports_prewhere(&self) -> bool {
+        true
+    }
+
+    fn supports_with_fill(&self) -> bool {
+        true
+    }
+
+    fn supports_limit_by(&self) -> bool {
+        true
+    }
+
+    fn supports_interpolate(&self) -> bool {
+        true
+    }
+
+    fn supports_settings(&self) -> bool {
+        true
+    }
+
+    fn supports_select_format(&self) -> bool {
+        true
+    }
+
+    fn supports_comment_optimizer_hint(&self) -> bool {
+        true
+    }
+
+    fn supports_constraint_keyword_without_name(&self) -> bool {
         true
     }
 }

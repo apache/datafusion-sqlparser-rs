@@ -22,7 +22,8 @@ use core::str::Chars;
 use super::PostgreSqlDialect;
 
 /// A [`Dialect`] for [RedShift](https://aws.amazon.com/redshift/)
-#[derive(Debug)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RedshiftSqlDialect {}
 
 // In most cases the redshift dialect is identical to [`PostgresSqlDialect`].
@@ -145,6 +146,10 @@ impl Dialect for RedshiftSqlDialect {
     }
 
     fn supports_create_table_like_parenthesized(&self) -> bool {
+        true
+    }
+
+    fn supports_string_literal_concatenation_with_newline(&self) -> bool {
         true
     }
 }

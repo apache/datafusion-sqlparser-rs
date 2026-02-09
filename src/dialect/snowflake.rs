@@ -127,7 +127,8 @@ const RESERVED_KEYWORDS_FOR_TABLE_FACTOR: &[Keyword] = &[
 ];
 
 /// A [`Dialect`] for [Snowflake](https://www.snowflake.com/)
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SnowflakeDialect;
 
 impl Dialect for SnowflakeDialect {
@@ -208,6 +209,36 @@ impl Dialect for SnowflakeDialect {
 
     /// See [doc](https://docs.snowflake.com/en/sql-reference/sql/comment)
     fn supports_comment_on(&self) -> bool {
+        true
+    }
+
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/functions/extract)
+    fn supports_extract_comma_syntax(&self) -> bool {
+        true
+    }
+
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/functions/flatten)
+    fn supports_subquery_as_function_arg(&self) -> bool {
+        true
+    }
+
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/sql/create-view#optional-parameters)
+    fn supports_create_view_comment_syntax(&self) -> bool {
+        true
+    }
+
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/data-types-semistructured#array)
+    fn supports_array_typedef_without_element_type(&self) -> bool {
+        true
+    }
+
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/constructs/from)
+    fn supports_parens_around_table_factor(&self) -> bool {
+        true
+    }
+
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/constructs/values)
+    fn supports_values_as_table_factor(&self) -> bool {
         true
     }
 
@@ -584,6 +615,21 @@ impl Dialect for SnowflakeDialect {
     }
 
     fn supports_semantic_view_table_factor(&self) -> bool {
+        true
+    }
+
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/select#parameters>
+    fn supports_select_wildcard_replace(&self) -> bool {
+        true
+    }
+
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/select#parameters>
+    fn supports_select_wildcard_ilike(&self) -> bool {
+        true
+    }
+
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/select#parameters>
+    fn supports_select_wildcard_rename(&self) -> bool {
         true
     }
 }

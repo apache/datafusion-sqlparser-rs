@@ -1101,8 +1101,8 @@ fn parse_create_dynamic_table() {
         " EXTERNAL_VOLUME='my_external_volume'",
         " CATALOG='SNOWFLAKE'",
         " BASE_LOCATION='my_iceberg_table'",
-        " TARGET_LAG='20 minutes'", 
-        " WAREHOUSE=mywh",       
+        " TARGET_LAG='20 minutes'",
+        " WAREHOUSE=mywh",
         " AS SELECT product_id, product_name FROM staging_table"
     ));
 
@@ -1250,6 +1250,7 @@ fn parse_array() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("a"))),
             data_type: DataType::Array(ArrayElemTypeDef::None),
+            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -1349,8 +1350,6 @@ fn parse_semi_structured_data_traversal() {
         Expr::JsonAccess {
             value: Box::new(Expr::Cast {
                 kind: CastKind::DoubleColon,
-                data_type: DataType::Array(ArrayElemTypeDef::None),
-                format: None,
                 expr: Box::new(Expr::JsonAccess {
                     value: Box::new(Expr::Identifier(Ident::new("a"))),
                     path: JsonPath {
@@ -1359,7 +1358,10 @@ fn parse_semi_structured_data_traversal() {
                             quoted: false
                         }]
                     }
-                })
+                }),
+                data_type: DataType::Array(ArrayElemTypeDef::None),
+                array: false,
+                format: None,
             }),
             path: JsonPath {
                 path: vec![JsonPathElem::Bracket {
@@ -3200,12 +3202,10 @@ fn parse_view_column_descriptions() {
 
 #[test]
 fn test_parentheses_overflow() {
-    // TODO: increase / improve after we fix the recursion limit
-    // for real (see https://github.com/apache/datafusion-sqlparser-rs/issues/984)
     let max_nesting_level: usize = 25;
 
-    // Verify the recursion check is not too wasteful... (num of parentheses - 2 is acceptable)
-    let slack = 2;
+    // Verify the recursion check is not too wasteful (num of parentheses within budget)
+    let slack = 3;
     let l_parens = "(".repeat(max_nesting_level - slack);
     let r_parens = ")".repeat(max_nesting_level - slack);
     let sql = format!("SELECT * FROM {l_parens}a.b.c{r_parens}");
@@ -3213,8 +3213,8 @@ fn test_parentheses_overflow() {
         snowflake_with_recursion_limit(max_nesting_level).parse_sql_statements(sql.as_str());
     assert_eq!(parsed.err(), None);
 
-    // Verify the recursion check triggers... (num of parentheses - 1 is acceptable)
-    let slack = 1;
+    // Verify the recursion check triggers (one more paren exceeds the budget)
+    let slack = 2;
     let l_parens = "(".repeat(max_nesting_level - slack);
     let r_parens = ")".repeat(max_nesting_level - slack);
     let sql = format!("SELECT * FROM {l_parens}a.b.c{r_parens}");
@@ -3402,6 +3402,23 @@ fn test_table_sample() {
         .verified_stmt("SELECT * FROM testtable TABLESAMPLE SYSTEM (3) REPEATABLE (82)");
     snowflake_and_generic().verified_stmt("SELECT id FROM mytable TABLESAMPLE (10) REPEATABLE (1)");
     snowflake_and_generic().verified_stmt("SELECT id FROM mytable TABLESAMPLE (10) SEED (1)");
+}
+
+#[test]
+fn test_subquery_sample() {
+    // Test SAMPLE clause on subqueries (derived tables)
+    snowflake_and_generic().verified_stmt("SELECT * FROM (SELECT * FROM mytable) SAMPLE (10)");
+    snowflake_and_generic()
+        .verified_stmt("SELECT * FROM (SELECT * FROM mytable) SAMPLE (10000 ROWS)");
+    snowflake_and_generic()
+        .verified_stmt("SELECT * FROM (SELECT * FROM mytable) AS t SAMPLE (50 PERCENT)");
+    // Nested subquery with SAMPLE
+    snowflake_and_generic().verified_stmt(
+        "SELECT * FROM (SELECT * FROM (SELECT report_from FROM mytable) SAMPLE (10000 ROWS)) AS anon_1",
+    );
+    // SAMPLE with SEED on subquery
+    snowflake_and_generic()
+        .verified_stmt("SELECT * FROM (SELECT * FROM mytable) SAMPLE (10) SEED (42)");
 }
 
 #[test]
@@ -4532,4 +4549,11 @@ fn test_alter_external_table() {
     snowflake().verified_stmt("ALTER EXTERNAL TABLE IF EXISTS some_table REFRESH");
     snowflake()
         .verified_stmt("ALTER EXTERNAL TABLE IF EXISTS some_table REFRESH 'year=2025/month=12/'");
+}
+
+#[test]
+fn test_truncate_table_if_exists() {
+    snowflake().verified_stmt("TRUNCATE TABLE IF EXISTS my_table");
+    snowflake().verified_stmt("TRUNCATE TABLE my_table");
+    snowflake().verified_stmt("TRUNCATE IF EXISTS my_table");
 }

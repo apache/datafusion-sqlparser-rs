@@ -32,7 +32,7 @@ use super::{
     AlterIndexOperation, AlterTableOperation, Analyze, Array, Assignment, AssignmentTarget,
     AttachedToken, BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef,
     ColumnOption, ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements,
-    ConflictTarget, ConnectBy, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
+    ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
     CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr,
     ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr,
     FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
@@ -841,7 +841,9 @@ impl Spanned for ConstraintCharacteristics {
 impl Spanned for Analyze {
     fn span(&self) -> Span {
         union_spans(
-            core::iter::once(self.table_name.span())
+            self.table_name
+                .iter()
+                .map(|t| t.span())
                 .chain(
                     self.partitions
                         .iter()
@@ -894,6 +896,7 @@ impl Spanned for Delete {
     fn span(&self) -> Span {
         let Delete {
             delete_token,
+            optimizer_hint: _,
             tables,
             from,
             using,
@@ -927,6 +930,7 @@ impl Spanned for Update {
     fn span(&self) -> Span {
         let Update {
             update_token,
+            optimizer_hint: _,
             table,
             assignments,
             from,
@@ -1121,6 +1125,8 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::EnableReplicaRule { name } => name.span,
             AlterTableOperation::EnableReplicaTrigger { name } => name.span,
             AlterTableOperation::EnableRowLevelSecurity => Span::empty(),
+            AlterTableOperation::ForceRowLevelSecurity => Span::empty(),
+            AlterTableOperation::NoForceRowLevelSecurity => Span::empty(),
             AlterTableOperation::EnableRule { name } => name.span,
             AlterTableOperation::EnableTrigger { name } => name.span,
             AlterTableOperation::RenamePartitions {
@@ -1288,6 +1294,7 @@ impl Spanned for Insert {
     fn span(&self) -> Span {
         let Insert {
             insert_token,
+            optimizer_hint: _,
             or: _,     // enum, sqlite specific
             ignore: _, // bool
             into: _,   // bool
@@ -1540,6 +1547,7 @@ impl Spanned for Expr {
                 kind: _,
                 expr,
                 data_type: _,
+                array: _,
                 format: _,
             } => expr.span(),
             Expr::AtTimeZone {
@@ -1914,6 +1922,7 @@ impl Spanned for TableFactor {
                 lateral: _,
                 subquery,
                 alias,
+                sample: _,
             } => subquery
                 .span()
                 .union_opt(&alias.as_ref().map(|alias| alias.span())),
@@ -2229,8 +2238,10 @@ impl Spanned for Select {
     fn span(&self) -> Span {
         let Select {
             select_token,
+            optimizer_hint: _,
             distinct: _, // todo
-            top: _,      // todo, mysql specific
+            select_modifiers: _,
+            top: _, // todo, mysql specific
             projection,
             exclude: _,
             into,
@@ -2260,28 +2271,34 @@ impl Spanned for Select {
                 .chain(lateral_views.iter().map(|item| item.span()))
                 .chain(prewhere.iter().map(|item| item.span()))
                 .chain(selection.iter().map(|item| item.span()))
+                .chain(connect_by.iter().map(|item| item.span()))
                 .chain(core::iter::once(group_by.span()))
                 .chain(cluster_by.iter().map(|item| item.span()))
                 .chain(distribute_by.iter().map(|item| item.span()))
                 .chain(sort_by.iter().map(|item| item.span()))
                 .chain(having.iter().map(|item| item.span()))
                 .chain(named_window.iter().map(|item| item.span()))
-                .chain(qualify.iter().map(|item| item.span()))
-                .chain(connect_by.iter().map(|item| item.span())),
+                .chain(qualify.iter().map(|item| item.span())),
         )
     }
 }
 
-impl Spanned for ConnectBy {
+impl Spanned for ConnectByKind {
     fn span(&self) -> Span {
-        let ConnectBy {
-            condition,
-            relationships,
-        } = self;
-
-        union_spans(
-            core::iter::once(condition.span()).chain(relationships.iter().map(|item| item.span())),
-        )
+        match self {
+            ConnectByKind::ConnectBy {
+                connect_token,
+                nocycle: _,
+                relationships,
+            } => union_spans(
+                core::iter::once(connect_token.0.span())
+                    .chain(relationships.last().iter().map(|item| item.span())),
+            ),
+            ConnectByKind::StartWith {
+                start_token,
+                condition,
+            } => union_spans([start_token.0.span(), condition.span()].into_iter()),
+        }
     }
 }
 
@@ -2801,7 +2818,7 @@ WHERE id = 1
             UPDATE SET target_table.description = source_table.description
 
               WHEN MATCHED AND target_table.x != 'X' THEN   DELETE
-        WHEN NOT MATCHED AND 1 THEN INSERT (product, quantity) ROW 
+        WHEN NOT MATCHED AND 1 THEN INSERT (product, quantity) ROW
         "#;
 
         let r = Parser::parse_sql(&crate::dialect::GenericDialect, sql).unwrap();
@@ -2815,6 +2832,7 @@ WHERE id = 1
         // ~ individual tokens within the statement
         let Statement::Merge(Merge {
             merge_token,
+            optimizer_hint: _,
             into: _,
             table: _,
             source: _,

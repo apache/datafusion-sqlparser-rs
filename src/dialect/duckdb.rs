@@ -18,7 +18,8 @@
 use crate::dialect::Dialect;
 
 /// A [`Dialect`] for [DuckDB](https://duckdb.org/)
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DuckDbDialect;
 
 // In most cases the redshift dialect is identical to [`PostgresSqlDialect`].
@@ -111,6 +112,21 @@ impl Dialect for DuckDbDialect {
     /// DuckDB supports `NOTNULL` as an alias for `IS NOT NULL`,
     /// see DuckDB Comparisons <https://duckdb.org/docs/stable/sql/expressions/comparison_operators#between-and-is-not-null>
     fn supports_notnull_operator(&self) -> bool {
+        true
+    }
+
+    /// See <https://duckdb.org/docs/extensions/overview>
+    fn supports_install(&self) -> bool {
+        true
+    }
+
+    /// See <https://duckdb.org/docs/sql/statements/attach#detach-syntax>
+    fn supports_detach(&self) -> bool {
+        true
+    }
+
+    /// See <https://duckdb.org/docs/sql/query_syntax/select#replace-clause>
+    fn supports_select_wildcard_replace(&self) -> bool {
         true
     }
 }

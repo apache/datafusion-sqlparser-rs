@@ -2681,7 +2681,9 @@ fn test_export_data() {
                         }),
                         Span::empty()
                     )),
+                    optimizer_hint: None,
                     distinct: None,
+                    select_modifiers: None,
                     top: None,
                     top_before_distinct: false,
                     projection: vec![
@@ -2709,7 +2711,7 @@ fn test_export_data() {
                     qualify: None,
                     window_before_qualify: false,
                     value_table_mode: None,
-                    connect_by: None,
+                    connect_by: vec![],
                     flavor: SelectFlavor::Standard,
                 }))),
                 order_by: Some(OrderBy {
@@ -2785,7 +2787,9 @@ fn test_export_data() {
                         }),
                         Span::empty()
                     )),
+                    optimizer_hint: None,
                     distinct: None,
+                    select_modifiers: None,
                     top: None,
                     top_before_distinct: false,
                     projection: vec![
@@ -2813,7 +2817,7 @@ fn test_export_data() {
                     qualify: None,
                     window_before_qualify: false,
                     value_table_mode: None,
-                    connect_by: None,
+                    connect_by: vec![],
                     flavor: SelectFlavor::Standard,
                 }))),
                 order_by: Some(OrderBy {

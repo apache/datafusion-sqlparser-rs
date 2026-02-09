@@ -141,7 +141,9 @@ fn parse_create_procedure() {
                     pipe_operators: vec![],
                     body: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
+                        optimizer_hint: None,
                         distinct: None,
+                        select_modifiers: None,
                         top: None,
                         top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Value(
@@ -162,7 +164,7 @@ fn parse_create_procedure() {
                         window_before_qualify: false,
                         qualify: None,
                         value_table_mode: None,
-                        connect_by: None,
+                        connect_by: vec![],
                         flavor: SelectFlavor::Standard,
                     })))
                 }))],
@@ -1348,7 +1350,9 @@ fn parse_substring_in_select() {
 
                     body: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
+                        optimizer_hint: None,
                         distinct: Some(Distinct::Distinct),
+                        select_modifiers: None,
                         top: None,
                         top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
@@ -1388,7 +1392,7 @@ fn parse_substring_in_select() {
                         qualify: None,
                         window_before_qualify: false,
                         value_table_mode: None,
-                        connect_by: None,
+                        connect_by: vec![],
                         flavor: SelectFlavor::Standard,
                     }))),
                     order_by: None,
@@ -1505,7 +1509,9 @@ fn parse_mssql_declare() {
 
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
+                    optimizer_hint: None,
                     distinct: None,
+                    select_modifiers: None,
                     top: None,
                     top_before_distinct: false,
                     projection: vec![SelectItem::UnnamedExpr(Expr::BinaryOp {
@@ -1530,7 +1536,7 @@ fn parse_mssql_declare() {
                     window_before_qualify: false,
                     qualify: None,
                     value_table_mode: None,
-                    connect_by: None,
+                    connect_by: vec![],
                     flavor: SelectFlavor::Standard,
                 })))
             }))
@@ -2549,5 +2555,76 @@ fn test_sql_keywords_as_column_aliases() {
                 .parse_sql_statements(&format!("SELECT col {explicit}{kw} FROM tbl"))
                 .is_err());
         }
+    }
+}
+
+#[test]
+fn parse_mssql_begin_end_block() {
+    // Single statement
+    let sql = "BEGIN SELECT 1; END";
+    let stmt = ms().verified_stmt(sql);
+    match &stmt {
+        Statement::StartTransaction {
+            begin,
+            has_end_keyword,
+            statements,
+            transaction,
+            modifier,
+            ..
+        } => {
+            assert!(begin);
+            assert!(has_end_keyword);
+            assert!(transaction.is_none());
+            assert!(modifier.is_none());
+            assert_eq!(statements.len(), 1);
+        }
+        _ => panic!("Expected StartTransaction, got: {stmt:?}"),
+    }
+
+    // Multiple statements
+    let sql = "BEGIN SELECT 1; SELECT 2; END";
+    let stmt = ms().verified_stmt(sql);
+    match &stmt {
+        Statement::StartTransaction {
+            statements,
+            has_end_keyword,
+            ..
+        } => {
+            assert!(has_end_keyword);
+            assert_eq!(statements.len(), 2);
+        }
+        _ => panic!("Expected StartTransaction, got: {stmt:?}"),
+    }
+
+    // DML inside BEGIN/END
+    let sql = "BEGIN INSERT INTO t VALUES (1); UPDATE t SET x = 2; END";
+    let stmt = ms().verified_stmt(sql);
+    match &stmt {
+        Statement::StartTransaction {
+            statements,
+            has_end_keyword,
+            ..
+        } => {
+            assert!(has_end_keyword);
+            assert_eq!(statements.len(), 2);
+        }
+        _ => panic!("Expected StartTransaction, got: {stmt:?}"),
+    }
+
+    // BEGIN TRANSACTION still works
+    let sql = "BEGIN TRANSACTION";
+    let stmt = ms().verified_stmt(sql);
+    match &stmt {
+        Statement::StartTransaction {
+            begin,
+            has_end_keyword,
+            transaction,
+            ..
+        } => {
+            assert!(begin);
+            assert!(!has_end_keyword);
+            assert!(transaction.is_some());
+        }
+        _ => panic!("Expected StartTransaction, got: {stmt:?}"),
     }
 }

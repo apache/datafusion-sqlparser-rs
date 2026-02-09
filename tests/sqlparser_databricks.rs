@@ -349,6 +349,7 @@ fn data_type_timestamp_ntz() {
                 "created_at".into()
             )))),
             data_type: DataType::TimestampNtz(None),
+            array: false,
             format: None
         }
     );

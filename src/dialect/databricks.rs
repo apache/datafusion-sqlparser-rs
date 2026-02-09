@@ -85,4 +85,9 @@ impl Dialect for DatabricksDialect {
     fn supports_values_as_table_factor(&self) -> bool {
         true
     }
+
+    /// See <https://docs.databricks.com/en/sql/language-manual/delta-optimize.html>
+    fn supports_optimize_table(&self) -> bool {
+        true
+    }
 }

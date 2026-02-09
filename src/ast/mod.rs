@@ -4578,22 +4578,40 @@ pub enum Statement {
         /// Legacy copy-style options.
         options: Vec<CopyLegacyOption>,
     },
+    /// ClickHouse:
     /// ```sql
     /// OPTIMIZE TABLE [db.]name [ON CLUSTER cluster] [PARTITION partition | PARTITION ID 'partition_id'] [FINAL] [DEDUPLICATE [BY expression]]
     /// ```
-    ///
     /// See ClickHouse <https://clickhouse.com/docs/en/sql-reference/statements/optimize>
+    ///
+    /// Databricks:
+    /// ```sql
+    /// OPTIMIZE table_name [WHERE predicate] [ZORDER BY (col_name1 [, ...])]
+    /// ```
+    /// See Databricks <https://docs.databricks.com/en/sql/language-manual/delta-optimize.html>
     OptimizeTable {
         /// Table name to optimize.
         name: ObjectName,
+        /// Whether the `TABLE` keyword was present (ClickHouse uses `OPTIMIZE TABLE`, Databricks uses `OPTIMIZE`).
+        has_table_keyword: bool,
         /// Optional cluster identifier.
+        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
         on_cluster: Option<Ident>,
         /// Optional partition spec.
+        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
         partition: Option<Partition>,
         /// Whether `FINAL` was specified.
+        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
         include_final: bool,
         /// Optional deduplication settings.
+        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
         deduplicate: Option<Deduplicate>,
+        /// Optional WHERE predicate.
+        /// [Databricks](https://docs.databricks.com/en/sql/language-manual/delta-optimize.html)
+        predicate: Option<Expr>,
+        /// Optional ZORDER BY columns.
+        /// [Databricks](https://docs.databricks.com/en/sql/language-manual/delta-optimize.html)
+        zorder: Option<Vec<Expr>>,
     },
     /// ```sql
     /// LISTEN
@@ -6069,12 +6087,19 @@ impl fmt::Display for Statement {
             }
             Statement::OptimizeTable {
                 name,
+                has_table_keyword,
                 on_cluster,
                 partition,
                 include_final,
                 deduplicate,
+                predicate,
+                zorder,
             } => {
-                write!(f, "OPTIMIZE TABLE {name}")?;
+                write!(f, "OPTIMIZE")?;
+                if *has_table_keyword {
+                    write!(f, " TABLE")?;
+                }
+                write!(f, " {name}")?;
                 if let Some(on_cluster) = on_cluster {
                     write!(f, " ON CLUSTER {on_cluster}")?;
                 }
@@ -6086,6 +6111,12 @@ impl fmt::Display for Statement {
                 }
                 if let Some(deduplicate) = deduplicate {
                     write!(f, " {deduplicate}")?;
+                }
+                if let Some(predicate) = predicate {
+                    write!(f, " WHERE {predicate}")?;
+                }
+                if let Some(zorder) = zorder {
+                    write!(f, " ZORDER BY ({})", display_comma_separated(zorder))?;
                 }
                 Ok(())
             }

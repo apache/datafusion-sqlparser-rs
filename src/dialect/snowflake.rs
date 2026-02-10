@@ -31,9 +31,12 @@ use crate::ast::{
     ColumnPolicy, ColumnPolicyProperty, ContactEntry, CopyIntoSnowflakeKind, CreateTable,
     CreateTableLikeKind, DollarQuotedString, Ident, IdentityParameters, IdentityProperty,
     IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, InitializeKind,
-    ObjectName, ObjectNamePart, RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption,
-    Statement, StorageSerializationPolicy, TagsColumnOption, Value, WrappedCollection,
+    Insert, MultiTableInsertIntoClause, MultiTableInsertType, MultiTableInsertValue,
+    MultiTableInsertValues, MultiTableInsertWhenClause, ObjectName, ObjectNamePart,
+    RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement,
+    StorageSerializationPolicy, TableObject, TagsColumnOption, Value, WrappedCollection,
 };
+use crate::tokenizer::TokenWithSpan;
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{IsOptional, Parser, ParserError};
@@ -351,6 +354,33 @@ impl Dialect for SnowflakeDialect {
             }
             //Give back Keyword::SHOW
             parser.prev_token();
+        }
+
+        // Check for multi-table INSERT
+        // `INSERT [OVERWRITE] ALL ... or INSERT [OVERWRITE] FIRST ...`
+        if parser.parse_keyword(Keyword::INSERT) {
+            let insert_token = parser.get_current_token().clone();
+            let overwrite = parser.parse_keyword(Keyword::OVERWRITE);
+
+            // Check for ALL or FIRST keyword
+            if let Some(kw) = parser.parse_one_of_keywords(&[Keyword::ALL, Keyword::FIRST]) {
+                let multi_table_insert_type = match kw {
+                    Keyword::FIRST => MultiTableInsertType::First,
+                    _ => MultiTableInsertType::All,
+                };
+                return Some(parse_multi_table_insert(
+                    parser,
+                    insert_token,
+                    overwrite,
+                    multi_table_insert_type,
+                ));
+            }
+
+            // Not a multi-table insert, rewind
+            if overwrite {
+                parser.prev_token(); // rewind OVERWRITE
+            }
+            parser.prev_token(); // rewind INSERT
         }
 
         None
@@ -1677,4 +1707,164 @@ fn parse_show_objects(terse: bool, parser: &mut Parser) -> Result<Statement, Par
         terse,
         show_options,
     }))
+}
+
+/// Parse multi-table INSERT statement.
+///
+/// Syntax:
+/// ```sql
+/// -- Unconditional multi-table insert
+/// INSERT [ OVERWRITE ] ALL
+///   intoClause [ ... ]
+/// <subquery>
+///
+/// -- Conditional multi-table insert
+/// INSERT [ OVERWRITE ] { FIRST | ALL }
+///   { WHEN <condition> THEN intoClause [ ... ] }
+///   [ ... ]
+///   [ ELSE intoClause ]
+/// <subquery>
+/// ```
+///
+/// See: <https://docs.snowflake.com/en/sql-reference/sql/insert-multi-table>
+fn parse_multi_table_insert(
+    parser: &mut Parser,
+    insert_token: TokenWithSpan,
+    overwrite: bool,
+    multi_table_insert_type: MultiTableInsertType,
+) -> Result<Statement, ParserError> {
+    // Check if this is conditional (has WHEN clauses) or unconditional (direct INTO clauses)
+    let is_conditional = parser.peek_keyword(Keyword::WHEN);
+
+    let (multi_table_into_clauses, multi_table_when_clauses, multi_table_else_clause) =
+        if is_conditional {
+            // Conditional multi-table insert: WHEN clauses
+            let (when_clauses, else_clause) = parse_multi_table_insert_when_clauses(parser)?;
+            (vec![], when_clauses, else_clause)
+        } else {
+            // Unconditional multi-table insert: direct INTO clauses
+            let into_clauses = parse_multi_table_insert_into_clauses(parser)?;
+            (into_clauses, vec![], None)
+        };
+
+    // Parse the source query
+    let source = parser.parse_query()?;
+
+    Ok(Statement::Insert(Insert {
+        insert_token: insert_token.into(),
+        optimizer_hint: None,
+        or: None,
+        ignore: false,
+        into: false,
+        table: TableObject::TableName(ObjectName(vec![])), // Not used for multi-table insert
+        table_alias: None,
+        columns: vec![],
+        overwrite,
+        source: Some(source),
+        assignments: vec![],
+        partitioned: None,
+        after_columns: vec![],
+        has_table_keyword: false,
+        on: None,
+        returning: None,
+        replace_into: false,
+        priority: None,
+        insert_alias: None,
+        settings: None,
+        format_clause: None,
+        multi_table_insert_type: Some(multi_table_insert_type),
+        multi_table_into_clauses,
+        multi_table_when_clauses,
+        multi_table_else_clause,
+    }))
+}
+
+/// Parse one or more INTO clauses for multi-table INSERT.
+fn parse_multi_table_insert_into_clauses(
+    parser: &mut Parser,
+) -> Result<Vec<MultiTableInsertIntoClause>, ParserError> {
+    let mut into_clauses = vec![];
+    while parser.parse_keyword(Keyword::INTO) {
+        into_clauses.push(parse_multi_table_insert_into_clause(parser)?);
+    }
+    if into_clauses.is_empty() {
+        return parser.expected("INTO clause in multi-table INSERT", parser.peek_token());
+    }
+    Ok(into_clauses)
+}
+
+/// Parse a single INTO clause for multi-table INSERT.
+///
+/// Syntax: `INTO <table> [ ( <columns> ) ] [ VALUES ( <values> ) ]`
+fn parse_multi_table_insert_into_clause(
+    parser: &mut Parser,
+) -> Result<MultiTableInsertIntoClause, ParserError> {
+    let table_name = parser.parse_object_name(false)?;
+
+    // Parse optional column list: ( <column_name> [, ...] )
+    let columns = parser
+        .maybe_parse(|p| p.parse_parenthesized_column_list(IsOptional::Mandatory, false))?
+        .unwrap_or_default();
+
+    // Parse optional VALUES clause
+    let values = if parser.parse_keyword(Keyword::VALUES) {
+        parser.expect_token(&Token::LParen)?;
+        let values = parser.parse_comma_separated(parse_multi_table_insert_value)?;
+        parser.expect_token(&Token::RParen)?;
+        Some(MultiTableInsertValues { values })
+    } else {
+        None
+    };
+
+    Ok(MultiTableInsertIntoClause {
+        table_name,
+        columns,
+        values,
+    })
+}
+
+/// Parse a single value in a multi-table INSERT VALUES clause.
+fn parse_multi_table_insert_value(parser: &mut Parser) -> Result<MultiTableInsertValue, ParserError> {
+    if parser.parse_keyword(Keyword::DEFAULT) {
+        Ok(MultiTableInsertValue::Default)
+    } else {
+        Ok(MultiTableInsertValue::Expr(parser.parse_expr()?))
+    }
+}
+
+/// Parse WHEN clauses for conditional multi-table INSERT.
+fn parse_multi_table_insert_when_clauses(
+    parser: &mut Parser,
+) -> Result<(Vec<MultiTableInsertWhenClause>, Option<Vec<MultiTableInsertIntoClause>>), ParserError>
+{
+    let mut when_clauses = vec![];
+    let mut else_clause = None;
+
+    // Parse WHEN clauses
+    while parser.parse_keyword(Keyword::WHEN) {
+        let condition = parser.parse_expr()?;
+        parser.expect_keyword(Keyword::THEN)?;
+
+        // Parse INTO clauses for this WHEN
+        let into_clauses = parse_multi_table_insert_into_clauses(parser)?;
+
+        when_clauses.push(MultiTableInsertWhenClause {
+            condition,
+            into_clauses,
+        });
+    }
+
+    // Parse optional ELSE clause
+    if parser.parse_keyword(Keyword::ELSE) {
+        else_clause = Some(parse_multi_table_insert_into_clauses(parser)?);
+    }
+
+    if when_clauses.is_empty() {
+        return parser.expected(
+            "at least one WHEN clause in conditional multi-table INSERT",
+            parser.peek_token(),
+        );
+    }
+
+    Ok((when_clauses, else_clause))
 }

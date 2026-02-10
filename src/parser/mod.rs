@@ -17162,6 +17162,10 @@ impl<'a> Parser<'a> {
                 insert_alias,
                 settings,
                 format_clause,
+                multi_table_insert_type: None,
+                multi_table_into_clauses: vec![],
+                multi_table_when_clauses: vec![],
+                multi_table_else_clause: None,
             }
             .into())
         }

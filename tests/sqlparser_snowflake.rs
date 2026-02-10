@@ -3422,6 +3422,327 @@ fn test_subquery_sample() {
 }
 
 #[test]
+fn test_multi_table_insert_unconditional() {
+    // Basic unconditional multi-table insert
+    // See: https://docs.snowflake.com/en/sql-reference/sql/insert-multi-table
+    snowflake().verified_stmt("INSERT ALL INTO t1 SELECT n1, n2, n3 FROM src");
+
+    // Multiple INTO clauses
+    snowflake().verified_stmt("INSERT ALL INTO t1 INTO t2 SELECT n1, n2, n3 FROM src");
+
+    // With column list
+    snowflake().verified_stmt("INSERT ALL INTO t1 (c1, c2, c3) SELECT n1, n2, n3 FROM src");
+
+    // With VALUES clause
+    snowflake().verified_stmt(
+        "INSERT ALL INTO t1 (c1, c2, c3) VALUES (n2, n1, DEFAULT) SELECT n1, n2, n3 FROM src",
+    );
+
+    // Complex example from Snowflake docs
+    snowflake().verified_stmt(
+        "INSERT ALL INTO t1 INTO t1 (c1, c2, c3) VALUES (n2, n1, DEFAULT) INTO t2 (c1, c2, c3) INTO t2 VALUES (n3, n2, n1) SELECT n1, n2, n3 FROM src"
+    );
+
+    // With OVERWRITE
+    snowflake().verified_stmt("INSERT OVERWRITE ALL INTO t1 INTO t2 SELECT n1, n2, n3 FROM src");
+}
+
+#[test]
+fn test_multi_table_insert_conditional() {
+    // Basic conditional multi-table insert with WHEN clause
+    // See: https://docs.snowflake.com/en/sql-reference/sql/insert-multi-table
+    snowflake().verified_stmt("INSERT ALL WHEN n1 > 100 THEN INTO t1 SELECT n1 FROM src");
+
+    // Multiple WHEN clauses
+    snowflake().verified_stmt(
+        "INSERT ALL WHEN n1 > 100 THEN INTO t1 WHEN n1 > 10 THEN INTO t2 SELECT n1 FROM src",
+    );
+
+    // WHEN with multiple INTO clauses
+    snowflake().verified_stmt("INSERT ALL WHEN n1 > 10 THEN INTO t1 INTO t2 SELECT n1 FROM src");
+
+    // With ELSE clause
+    snowflake()
+        .verified_stmt("INSERT ALL WHEN n1 > 100 THEN INTO t1 ELSE INTO t2 SELECT n1 FROM src");
+
+    // Complex conditional insert from Snowflake docs
+    snowflake().verified_stmt(
+        "INSERT ALL WHEN n1 > 100 THEN INTO t1 WHEN n1 > 10 THEN INTO t1 INTO t2 ELSE INTO t2 SELECT n1 FROM src"
+    );
+
+    // INSERT FIRST - only first matching WHEN clause executes
+    snowflake().verified_stmt(
+        "INSERT FIRST WHEN n1 > 100 THEN INTO t1 WHEN n1 > 10 THEN INTO t1 INTO t2 ELSE INTO t2 SELECT n1 FROM src"
+    );
+
+    // With OVERWRITE
+    snowflake().verified_stmt(
+        "INSERT OVERWRITE ALL WHEN n1 > 100 THEN INTO t1 ELSE INTO t2 SELECT n1 FROM src",
+    );
+
+    // WHEN with always-true condition
+    snowflake().verified_stmt("INSERT ALL WHEN 1 = 1 THEN INTO t1 SELECT n1 FROM src");
+}
+
+#[test]
+fn test_multi_table_insert_with_values() {
+    // INTO clause with VALUES using column references
+    snowflake().verified_stmt("INSERT ALL INTO t1 VALUES (n1, n2) SELECT n1, n2 FROM src");
+
+    // INTO clause with VALUES using DEFAULT
+    snowflake().verified_stmt(
+        "INSERT ALL INTO t1 (c1, c2, c3) VALUES (n1, n2, DEFAULT) SELECT n1, n2 FROM src",
+    );
+
+    // INTO clause with VALUES using NULL
+    snowflake().verified_stmt(
+        "INSERT ALL INTO t1 (c1, c2, c3) VALUES (n1, NULL, n2) SELECT n1, n2 FROM src",
+    );
+
+    // Positional alias in VALUES
+    snowflake().verified_stmt("INSERT ALL INTO t1 VALUES ($1, $2) SELECT 1, 50 AS an_alias");
+}
+
+/// Unit tests for multi-table INSERT AST structure validation
+#[test]
+fn test_multi_table_insert_ast_unconditional() {
+    // Test basic unconditional multi-table insert AST
+    let sql = "INSERT ALL INTO t1 INTO t2 (c1, c2) SELECT n1, n2 FROM src";
+    let stmt = snowflake().verified_stmt(sql);
+
+    match stmt {
+        Statement::Insert(Insert {
+            multi_table_insert_type,
+            overwrite,
+            multi_table_into_clauses,
+            multi_table_when_clauses,
+            multi_table_else_clause,
+            source,
+            ..
+        }) => {
+            // Should be INSERT ALL (not FIRST)
+            assert_eq!(multi_table_insert_type, Some(MultiTableInsertType::All));
+            assert!(!overwrite);
+
+            // Should have 2 INTO clauses
+            assert_eq!(multi_table_into_clauses.len(), 2);
+
+            // First INTO clause: INTO t1
+            assert_eq!(multi_table_into_clauses[0].table_name.to_string(), "t1");
+            assert!(multi_table_into_clauses[0].columns.is_empty());
+            assert!(multi_table_into_clauses[0].values.is_none());
+
+            // Second INTO clause: INTO t2 (c1, c2)
+            assert_eq!(multi_table_into_clauses[1].table_name.to_string(), "t2");
+            assert_eq!(multi_table_into_clauses[1].columns.len(), 2);
+            assert_eq!(multi_table_into_clauses[1].columns[0].to_string(), "c1");
+            assert_eq!(multi_table_into_clauses[1].columns[1].to_string(), "c2");
+            assert!(multi_table_into_clauses[1].values.is_none());
+
+            // No WHEN clauses for unconditional insert
+            assert!(multi_table_when_clauses.is_empty());
+            assert!(multi_table_else_clause.is_none());
+
+            // Should have source query
+            assert!(source.is_some());
+        }
+        _ => panic!("Expected INSERT statement"),
+    }
+}
+
+#[test]
+fn test_multi_table_insert_ast_with_values() {
+    // Test INTO clause with VALUES
+    let sql = "INSERT ALL INTO t1 (c1, c2, c3) VALUES (n1, n2, DEFAULT) SELECT n1, n2 FROM src";
+    let stmt = snowflake().verified_stmt(sql);
+
+    match stmt {
+        Statement::Insert(Insert {
+            multi_table_into_clauses,
+            ..
+        }) => {
+            assert_eq!(multi_table_into_clauses.len(), 1);
+
+            let into_clause = &multi_table_into_clauses[0];
+            assert_eq!(into_clause.table_name.to_string(), "t1");
+            assert_eq!(into_clause.columns.len(), 3);
+
+            // Check VALUES clause
+            let values = into_clause.values.as_ref().expect("Expected VALUES clause");
+            assert_eq!(values.values.len(), 3);
+
+            // First value: n1 (expression)
+            match &values.values[0] {
+                MultiTableInsertValue::Expr(expr) => {
+                    assert_eq!(expr.to_string(), "n1");
+                }
+                _ => panic!("Expected Expr"),
+            }
+
+            // Second value: n2 (expression)
+            match &values.values[1] {
+                MultiTableInsertValue::Expr(expr) => {
+                    assert_eq!(expr.to_string(), "n2");
+                }
+                _ => panic!("Expected Expr"),
+            }
+
+            // Third value: DEFAULT
+            match &values.values[2] {
+                MultiTableInsertValue::Default => {}
+                _ => panic!("Expected DEFAULT"),
+            }
+        }
+        _ => panic!("Expected INSERT statement"),
+    }
+}
+
+#[test]
+fn test_multi_table_insert_ast_conditional() {
+    // Test conditional multi-table insert with WHEN clauses
+    let sql = "INSERT ALL WHEN n1 > 100 THEN INTO t1 WHEN n1 > 10 THEN INTO t2 INTO t3 ELSE INTO t4 SELECT n1 FROM src";
+    let stmt = snowflake().verified_stmt(sql);
+
+    match stmt {
+        Statement::Insert(Insert {
+            multi_table_insert_type,
+            multi_table_into_clauses,
+            multi_table_when_clauses,
+            multi_table_else_clause,
+            ..
+        }) => {
+            // Should be INSERT ALL (not FIRST)
+            assert_eq!(multi_table_insert_type, Some(MultiTableInsertType::All));
+
+            // Unconditional INTO clauses should be empty for conditional insert
+            assert!(multi_table_into_clauses.is_empty());
+
+            // Should have 2 WHEN clauses
+            assert_eq!(multi_table_when_clauses.len(), 2);
+
+            // First WHEN clause: WHEN n1 > 100 THEN INTO t1
+            assert_eq!(
+                multi_table_when_clauses[0].condition.to_string(),
+                "n1 > 100"
+            );
+            assert_eq!(multi_table_when_clauses[0].into_clauses.len(), 1);
+            assert_eq!(
+                multi_table_when_clauses[0].into_clauses[0]
+                    .table_name
+                    .to_string(),
+                "t1"
+            );
+
+            // Second WHEN clause: WHEN n1 > 10 THEN INTO t2 INTO t3
+            assert_eq!(multi_table_when_clauses[1].condition.to_string(), "n1 > 10");
+            assert_eq!(multi_table_when_clauses[1].into_clauses.len(), 2);
+            assert_eq!(
+                multi_table_when_clauses[1].into_clauses[0]
+                    .table_name
+                    .to_string(),
+                "t2"
+            );
+            assert_eq!(
+                multi_table_when_clauses[1].into_clauses[1]
+                    .table_name
+                    .to_string(),
+                "t3"
+            );
+
+            // ELSE clause: ELSE INTO t4
+            let else_clause = multi_table_else_clause.expect("Expected ELSE clause");
+            assert_eq!(else_clause.len(), 1);
+            assert_eq!(else_clause[0].table_name.to_string(), "t4");
+        }
+        _ => panic!("Expected INSERT statement"),
+    }
+}
+
+#[test]
+fn test_multi_table_insert_ast_first() {
+    // Test INSERT FIRST vs INSERT ALL
+    let sql =
+        "INSERT FIRST WHEN n1 > 100 THEN INTO t1 WHEN n1 > 10 THEN INTO t2 SELECT n1 FROM src";
+    let stmt = snowflake().verified_stmt(sql);
+
+    match stmt {
+        Statement::Insert(Insert {
+            multi_table_insert_type,
+            multi_table_when_clauses,
+            ..
+        }) => {
+            // Should be INSERT FIRST
+            assert_eq!(multi_table_insert_type, Some(MultiTableInsertType::First));
+            assert_eq!(multi_table_when_clauses.len(), 2);
+        }
+        _ => panic!("Expected INSERT statement"),
+    }
+}
+
+#[test]
+fn test_multi_table_insert_ast_overwrite() {
+    // Test INSERT OVERWRITE ALL
+    let sql = "INSERT OVERWRITE ALL INTO t1 INTO t2 SELECT n1 FROM src";
+    let stmt = snowflake().verified_stmt(sql);
+
+    match stmt {
+        Statement::Insert(Insert {
+            overwrite,
+            multi_table_insert_type,
+            multi_table_into_clauses,
+            ..
+        }) => {
+            assert!(overwrite);
+            assert_eq!(multi_table_insert_type, Some(MultiTableInsertType::All));
+            assert_eq!(multi_table_into_clauses.len(), 2);
+        }
+        _ => panic!("Expected INSERT statement"),
+    }
+}
+
+#[test]
+fn test_multi_table_insert_ast_complex_values() {
+    // Test complex VALUES with expressions
+    let sql = "INSERT ALL INTO t1 VALUES (n1 + n2, n3 * 2, DEFAULT) SELECT n1, n2, n3 FROM src";
+    let stmt = snowflake().verified_stmt(sql);
+
+    match stmt {
+        Statement::Insert(Insert {
+            multi_table_into_clauses,
+            ..
+        }) => {
+            assert_eq!(multi_table_into_clauses.len(), 1);
+
+            let values = multi_table_into_clauses[0]
+                .values
+                .as_ref()
+                .expect("Expected VALUES");
+            assert_eq!(values.values.len(), 3);
+
+            // First value: n1 + n2 (binary expression)
+            match &values.values[0] {
+                MultiTableInsertValue::Expr(Expr::BinaryOp { op, .. }) => {
+                    assert_eq!(*op, BinaryOperator::Plus);
+                }
+                _ => panic!("Expected BinaryOp expression"),
+            }
+
+            // Second value: n3 * 2 (binary expression)
+            match &values.values[1] {
+                MultiTableInsertValue::Expr(Expr::BinaryOp { op, .. }) => {
+                    assert_eq!(*op, BinaryOperator::Multiply);
+                }
+                _ => panic!("Expected BinaryOp expression"),
+            }
+
+            // Third value: DEFAULT
+            assert!(matches!(&values.values[2], MultiTableInsertValue::Default));
+        }
+        _ => panic!("Expected INSERT statement"),
+    }
+}
+
+#[test]
 fn parse_ls_and_rm() {
     snowflake().one_statement_parses_to("LS @~", "LIST @~");
     snowflake().one_statement_parses_to("RM @~", "REMOVE @~");

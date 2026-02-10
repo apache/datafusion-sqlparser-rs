@@ -14546,6 +14546,15 @@ impl<'a> Parser<'a> {
             }
             .into());
         } else if self.parse_keyword(Keyword::AUTHORIZATION) {
+            let scope = match scope {
+                Some(s) => s,
+                None => {
+                    return self.expected_at(
+                        "SESSION, LOCAL, or other scope modifier before AUTHORIZATION",
+                        self.get_current_index(),
+                    )
+                }
+            };
             let auth_value = if self.parse_keyword(Keyword::DEFAULT) {
                 SetSessionAuthorizationParamKind::Default
             } else {
@@ -14553,7 +14562,7 @@ impl<'a> Parser<'a> {
                 SetSessionAuthorizationParamKind::User(value)
             };
             return Ok(Set::SetSessionAuthorization(SetSessionAuthorizationParam {
-                scope: scope.expect("SET ... AUTHORIZATION must have a scope"),
+                scope,
                 kind: auth_value,
             })
             .into());

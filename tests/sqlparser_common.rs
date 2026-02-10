@@ -18334,6 +18334,16 @@ fn test_parse_set_session_authorization() {
 }
 
 #[test]
+fn test_set_authorization_without_scope_errors() {
+    // This should return a parser error, not panic.
+    let res = parse_sql_statements("SET AUTHORIZATION TIME TIME");
+    assert!(
+        res.is_err(),
+        "SET AUTHORIZATION without a scope modifier (e.g. SESSION) should error"
+    );
+}
+
+#[test]
 fn parse_select_parenthesized_wildcard() {
     // Test SELECT DISTINCT(*) which uses a parenthesized wildcard
     // The parentheses are syntactic sugar and get normalized to just *

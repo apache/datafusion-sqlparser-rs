@@ -14546,17 +14546,21 @@ impl<'a> Parser<'a> {
             }
             .into());
         } else if self.parse_keyword(Keyword::AUTHORIZATION) {
+            let scope = match scope {
+                Some(s) => s,
+                None => {
+                    return self.expected_at(
+                        "SESSION, LOCAL, or other scope modifier before AUTHORIZATION",
+                        self.get_current_index(),
+                    )
+                }
+            };
             let auth_value = if self.parse_keyword(Keyword::DEFAULT) {
                 SetSessionAuthorizationParamKind::Default
             } else {
                 let value = self.parse_identifier()?;
                 SetSessionAuthorizationParamKind::User(value)
             };
-            let scope = scope.ok_or_else(|| {
-                ParserError::ParserError(
-                    "Expected a scope modifier (e.g. SESSION) before AUTHORIZATION".to_string(),
-                )
-            })?;
             return Ok(Set::SetSessionAuthorization(SetSessionAuthorizationParam {
                 scope,
                 kind: auth_value,

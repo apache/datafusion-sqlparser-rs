@@ -1666,6 +1666,43 @@ fn test_parse_raiserror() {
 }
 
 #[test]
+fn test_parse_throw() {
+    // THROW with arguments
+    let sql = r#"THROW 51000, 'Record does not exist.', 1"#;
+    let s = ms().verified_stmt(sql);
+    assert_eq!(
+        s,
+        Statement::Throw(ThrowStatement {
+            error_number: Some(Box::new(Expr::Value(
+                (Value::Number("51000".parse().unwrap(), false)).with_empty_span()
+            ))),
+            message: Some(Box::new(Expr::Value(
+                (Value::SingleQuotedString("Record does not exist.".to_string())).with_empty_span()
+            ))),
+            state: Some(Box::new(Expr::Value(
+                (Value::Number("1".parse().unwrap(), false)).with_empty_span()
+            ))),
+        })
+    );
+
+    // THROW with variable references
+    let sql = r#"THROW @ErrorNumber, @ErrorMessage, @ErrorState"#;
+    let _ = ms().verified_stmt(sql);
+
+    // Re-throw (no arguments)
+    let sql = r#"THROW"#;
+    let s = ms().verified_stmt(sql);
+    assert_eq!(
+        s,
+        Statement::Throw(ThrowStatement {
+            error_number: None,
+            message: None,
+            state: None,
+        })
+    );
+}
+
+#[test]
 fn parse_use() {
     let valid_object_names = [
         "mydb",

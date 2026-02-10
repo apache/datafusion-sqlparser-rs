@@ -670,6 +670,10 @@ impl<'a> Parser<'a> {
                 Keyword::RELEASE => self.parse_release(),
                 Keyword::COMMIT => self.parse_commit(),
                 Keyword::RAISERROR => Ok(self.parse_raiserror()?),
+                Keyword::THROW => {
+                    self.prev_token();
+                    self.parse_throw().map(Into::into)
+                }
                 Keyword::ROLLBACK => self.parse_rollback(),
                 Keyword::ASSERT => self.parse_assert(),
                 // `PREPARE`, `EXECUTE` and `DEALLOCATE` are Postgres-specific
@@ -18294,6 +18298,30 @@ impl<'a> Parser<'a> {
                 self.peek_token(),
             ),
         }
+    }
+
+    /// Parse a MSSQL `THROW` statement.
+    ///
+    /// See [Statement::Throw]
+    pub fn parse_throw(&mut self) -> Result<ThrowStatement, ParserError> {
+        self.expect_keyword_is(Keyword::THROW)?;
+
+        let error_number = self.maybe_parse(|p| p.parse_expr().map(Box::new))?;
+        let (message, state) = if error_number.is_some() {
+            self.expect_token(&Token::Comma)?;
+            let message = Box::new(self.parse_expr()?);
+            self.expect_token(&Token::Comma)?;
+            let state = Box::new(self.parse_expr()?);
+            (Some(message), Some(state))
+        } else {
+            (None, None)
+        };
+
+        Ok(ThrowStatement {
+            error_number,
+            message,
+            state,
+        })
     }
 
     /// Parse a SQL `DEALLOCATE` statement

@@ -1029,6 +1029,7 @@ define_keywords!(
     TEXT,
     TEXTFILE,
     THEN,
+    THROW,
     TIES,
     TIME,
     TIMEFORMAT,

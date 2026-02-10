@@ -693,7 +693,6 @@ impl<'a> Parser<'a> {
                 // `INSTALL` is duckdb specific https://duckdb.org/docs/extensions/overview
                 Keyword::INSTALL if self.dialect.supports_install() => self.parse_install(),
                 Keyword::LOAD => self.parse_load(),
-                // `OPTIMIZE` is clickhouse specific https://clickhouse.tech/docs/en/sql-reference/statements/optimize/
                 Keyword::OPTIMIZE if self.dialect.supports_optimize_table() => {
                     self.parse_optimize_table()
                 }
@@ -1193,13 +1192,20 @@ impl<'a> Parser<'a> {
     /// Parse `ANALYZE` statement.
     pub fn parse_analyze(&mut self) -> Result<Analyze, ParserError> {
         let has_table_keyword = self.parse_keyword(Keyword::TABLE);
-        let table_name = self.parse_object_name(false)?;
+        let table_name = self.maybe_parse(|parser| parser.parse_object_name(false))?;
         let mut for_columns = false;
         let mut cache_metadata = false;
         let mut noscan = false;
         let mut partitions = None;
         let mut compute_statistics = false;
         let mut columns = vec![];
+
+        // PostgreSQL syntax: ANALYZE t (col1, col2)
+        if table_name.is_some() && self.consume_token(&Token::LParen) {
+            columns = self.parse_comma_separated(|p| p.parse_identifier())?;
+            self.expect_token(&Token::RParen)?;
+        }
+
         loop {
             match self.parse_one_of_keywords(&[
                 Keyword::PARTITION,
@@ -3375,24 +3381,28 @@ impl<'a> Parser<'a> {
     ///
     /// ```sql
     /// [field_name] field_type
+    /// field_name: field_type
     /// ```
     ///
     /// [struct]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#declaring_a_struct_type
     /// [tuple]: https://clickhouse.com/docs/en/sql-reference/data-types/tuple
+    /// [databricks]: https://docs.databricks.com/en/sql/language-manual/data-types/struct-type.html
     fn parse_struct_field_def(
         &mut self,
     ) -> Result<(StructField, MatchedTrailingBracket), ParserError> {
         // Look beyond the next item to infer whether both field name
         // and type are specified.
-        let is_anonymous_field = !matches!(
+        let is_named_field = matches!(
             (self.peek_nth_token(0).token, self.peek_nth_token(1).token),
-            (Token::Word(_), Token::Word(_))
+            (Token::Word(_), Token::Word(_)) | (Token::Word(_), Token::Colon)
         );
 
-        let field_name = if is_anonymous_field {
-            None
+        let field_name = if is_named_field {
+            let name = self.parse_identifier()?;
+            let _ = self.consume_token(&Token::Colon);
+            Some(name)
         } else {
-            Some(self.parse_identifier()?)
+            None
         };
 
         let (field_type, trailing_bracket) = self.parse_data_type_helper()?;
@@ -3503,7 +3513,8 @@ impl<'a> Parser<'a> {
     ///
     /// [map]: https://duckdb.org/docs/sql/data_types/map.html#creating-maps
     fn parse_duckdb_map_field(&mut self) -> Result<MapEntry, ParserError> {
-        let key = self.parse_expr()?;
+        // Stop before `:` so it can act as a key/value separator
+        let key = self.parse_subexpr(self.dialect.prec_value(Precedence::Colon))?;
 
         self.expect_token(&Token::Colon)?;
 
@@ -7977,7 +7988,8 @@ impl<'a> Parser<'a> {
     pub fn parse_hive_distribution(&mut self) -> Result<HiveDistributionStyle, ParserError> {
         if self.parse_keywords(&[Keyword::PARTITIONED, Keyword::BY]) {
             self.expect_token(&Token::LParen)?;
-            let columns = self.parse_comma_separated(Parser::parse_column_def)?;
+            let columns =
+                self.parse_comma_separated(|parser| parser.parse_column_def_inner(true))?;
             self.expect_token(&Token::RParen)?;
             Ok(HiveDistributionStyle::PARTITIONED { columns })
         } else {
@@ -8801,9 +8813,19 @@ impl<'a> Parser<'a> {
 
     /// Parse column definition.
     pub fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
+        self.parse_column_def_inner(false)
+    }
+
+    fn parse_column_def_inner(
+        &mut self,
+        optional_data_type: bool,
+    ) -> Result<ColumnDef, ParserError> {
         let col_name = self.parse_identifier()?;
         let data_type = if self.is_column_type_sqlite_unspecified() {
             DataType::Unspecified
+        } else if optional_data_type {
+            self.maybe_parse(|parser| parser.parse_data_type())?
+                .unwrap_or(DataType::Unspecified)
         } else {
             self.parse_data_type()?
         };
@@ -9293,7 +9315,20 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<Option<TableConstraint>, ParserError> {
         let name = if self.parse_keyword(Keyword::CONSTRAINT) {
-            Some(self.parse_identifier()?)
+            if self.dialect.supports_constraint_keyword_without_name()
+                && self
+                    .peek_one_of_keywords(&[
+                        Keyword::CHECK,
+                        Keyword::PRIMARY,
+                        Keyword::UNIQUE,
+                        Keyword::FOREIGN,
+                    ])
+                    .is_some()
+            {
+                None
+            } else {
+                Some(self.parse_identifier()?)
+            }
         } else {
             None
         };
@@ -11896,7 +11931,8 @@ impl<'a> Parser<'a> {
                     let field_defs = self.parse_duckdb_struct_type_def()?;
                     Ok(DataType::Struct(field_defs, StructBracketKind::Parentheses))
                 }
-                Keyword::STRUCT if dialect_is!(dialect is BigQueryDialect | GenericDialect) => {
+                Keyword::STRUCT if dialect_is!(dialect is BigQueryDialect | DatabricksDialect | GenericDialect) =>
+                {
                     self.prev_token();
                     let (field_defs, _trailing_bracket) =
                         self.parse_struct_type_def(Self::parse_struct_field_def)?;
@@ -13255,6 +13291,7 @@ impl<'a> Parser<'a> {
     /// preceded with some `WITH` CTE declarations and optionally followed
     /// by `ORDER BY`. Unlike some other parse_... methods, this one doesn't
     /// expect the initial keyword to be already consumed
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     pub fn parse_query(&mut self) -> Result<Box<Query>, ParserError> {
         let _guard = self.recursion_counter.try_decrease()?;
         let with = if self.parse_keyword(Keyword::WITH) {
@@ -15110,7 +15147,9 @@ impl<'a> Parser<'a> {
     }
 
     /// A table name or a parenthesized subquery, followed by optional `[AS] alias`
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     pub fn parse_table_factor(&mut self) -> Result<TableFactor, ParserError> {
+        let _guard = self.recursion_counter.try_decrease()?;
         if self.parse_keyword(Keyword::LATERAL) {
             // LATERAL must always be followed by a subquery or table function.
             if self.consume_token(&Token::LParen) {
@@ -18461,13 +18500,23 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// ClickHouse:
     /// ```sql
     /// OPTIMIZE TABLE [db.]name [ON CLUSTER cluster] [PARTITION partition | PARTITION ID 'partition_id'] [FINAL] [DEDUPLICATE [BY expression]]
     /// ```
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
+    ///
+    /// Databricks:
+    /// ```sql
+    /// OPTIMIZE table_name [WHERE predicate] [ZORDER BY (col_name1 [, ...])]
+    /// ```
+    /// [Databricks](https://docs.databricks.com/en/sql/language-manual/delta-optimize.html)
     pub fn parse_optimize_table(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword_is(Keyword::TABLE)?;
+        let has_table_keyword = self.parse_keyword(Keyword::TABLE);
+
         let name = self.parse_object_name(false)?;
+
+        // ClickHouse-specific options
         let on_cluster = self.parse_optional_on_cluster()?;
 
         let partition = if self.parse_keyword(Keyword::PARTITION) {
@@ -18481,6 +18530,7 @@ impl<'a> Parser<'a> {
         };
 
         let include_final = self.parse_keyword(Keyword::FINAL);
+
         let deduplicate = if self.parse_keyword(Keyword::DEDUPLICATE) {
             if self.parse_keyword(Keyword::BY) {
                 Some(Deduplicate::ByExpression(self.parse_expr()?))
@@ -18491,12 +18541,31 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // Databricks-specific options
+        let predicate = if self.parse_keyword(Keyword::WHERE) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
+        let zorder = if self.parse_keywords(&[Keyword::ZORDER, Keyword::BY]) {
+            self.expect_token(&Token::LParen)?;
+            let columns = self.parse_comma_separated(|p| p.parse_expr())?;
+            self.expect_token(&Token::RParen)?;
+            Some(columns)
+        } else {
+            None
+        };
+
         Ok(Statement::OptimizeTable {
             name,
+            has_table_keyword,
             on_cluster,
             partition,
             include_final,
             deduplicate,
+            predicate,
+            zorder,
         })
     }
 

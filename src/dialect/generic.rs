@@ -19,7 +19,8 @@ use crate::dialect::Dialect;
 
 /// A permissive, general purpose [`Dialect`], which parses a wide variety of SQL
 /// statements, from many different dialects.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GenericDialect;
 
 impl Dialect for GenericDialect {
@@ -176,6 +177,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_multiline_comment_hints(&self) -> bool {
+        true
+    }
+
     fn supports_user_host_grantee(&self) -> bool {
         true
     }
@@ -273,6 +278,10 @@ impl Dialect for GenericDialect {
     }
 
     fn supports_comment_optimizer_hint(&self) -> bool {
+        true
+    }
+
+    fn supports_constraint_keyword_without_name(&self) -> bool {
         true
     }
 }

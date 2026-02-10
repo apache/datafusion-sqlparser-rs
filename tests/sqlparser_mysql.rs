@@ -3470,6 +3470,27 @@ fn parse_create_table_unallow_constraint_then_index() {
 }
 
 #[test]
+fn parse_create_table_constraint_check_without_name() {
+    let dialects = all_dialects_where(|d| d.supports_constraint_keyword_without_name());
+    dialects.one_statement_parses_to(
+        "CREATE TABLE t (x INT, CONSTRAINT PRIMARY KEY (x))",
+        "CREATE TABLE t (x INT, PRIMARY KEY (x))",
+    );
+    dialects.one_statement_parses_to(
+        "CREATE TABLE t (x INT, CONSTRAINT UNIQUE (x))",
+        "CREATE TABLE t (x INT, UNIQUE (x))",
+    );
+    dialects.one_statement_parses_to(
+        "CREATE TABLE t (x INT, CONSTRAINT FOREIGN KEY (x) REFERENCES t2(id))",
+        "CREATE TABLE t (x INT, FOREIGN KEY (x) REFERENCES t2(id))",
+    );
+    dialects.one_statement_parses_to(
+        "CREATE TABLE t (x INT, CONSTRAINT CHECK (x > 1))",
+        "CREATE TABLE t (x INT, CHECK (x > 1))",
+    );
+}
+
+#[test]
 fn parse_create_table_with_fulltext_definition() {
     mysql_and_generic().verified_stmt("CREATE TABLE tb (id INT, FULLTEXT (id))");
 

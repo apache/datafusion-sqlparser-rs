@@ -390,3 +390,201 @@ fn parse_table_time_travel() {
         .parse_sql_statements("SELECT 1 FROM t1 VERSION AS OF 1 - 2",)
         .is_err())
 }
+
+#[test]
+fn parse_optimize_table() {
+    // Basic OPTIMIZE (Databricks style - no TABLE keyword)
+    databricks().verified_stmt("OPTIMIZE my_table");
+    databricks().verified_stmt("OPTIMIZE db.my_table");
+    databricks().verified_stmt("OPTIMIZE catalog.db.my_table");
+
+    // With WHERE clause
+    databricks().verified_stmt("OPTIMIZE my_table WHERE date = '2023-01-01'");
+    databricks()
+        .verified_stmt("OPTIMIZE my_table WHERE date >= '2023-01-01' AND date < '2023-02-01'");
+
+    // With ZORDER BY clause
+    databricks().verified_stmt("OPTIMIZE my_table ZORDER BY (col1)");
+    databricks().verified_stmt("OPTIMIZE my_table ZORDER BY (col1, col2)");
+    databricks().verified_stmt("OPTIMIZE my_table ZORDER BY (col1, col2, col3)");
+
+    // Combined WHERE and ZORDER BY
+    databricks().verified_stmt("OPTIMIZE my_table WHERE date = '2023-01-01' ZORDER BY (col1)");
+    databricks()
+        .verified_stmt("OPTIMIZE my_table WHERE date >= '2023-01-01' ZORDER BY (col1, col2)");
+
+    // Verify AST structure
+    match databricks()
+        .verified_stmt("OPTIMIZE my_table WHERE date = '2023-01-01' ZORDER BY (col1, col2)")
+    {
+        Statement::OptimizeTable {
+            name,
+            has_table_keyword,
+            on_cluster,
+            partition,
+            include_final,
+            deduplicate,
+            predicate,
+            zorder,
+        } => {
+            assert_eq!(name.to_string(), "my_table");
+            assert!(!has_table_keyword);
+            assert!(on_cluster.is_none());
+            assert!(partition.is_none());
+            assert!(!include_final);
+            assert!(deduplicate.is_none());
+            assert!(predicate.is_some());
+            assert_eq!(
+                zorder,
+                Some(vec![
+                    Expr::Identifier(Ident::new("col1")),
+                    Expr::Identifier(Ident::new("col2")),
+                ])
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // Negative cases
+    assert_eq!(
+        databricks()
+            .parse_sql_statements("OPTIMIZE my_table ZORDER BY")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: (, found: EOF".to_string())
+    );
+    assert_eq!(
+        databricks()
+            .parse_sql_statements("OPTIMIZE my_table ZORDER BY ()")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: an expression, found: )".to_string())
+    );
+}
+
+#[test]
+fn parse_create_table_partitioned_by() {
+    // Databricks allows PARTITIONED BY with just column names (referencing existing columns)
+    // https://docs.databricks.com/en/sql/language-manual/sql-ref-partition.html
+
+    // Single partition column without type
+    databricks().verified_stmt("CREATE TABLE t (col1 STRING, col2 INT) PARTITIONED BY (col1)");
+
+    // Multiple partition columns without types
+    databricks().verified_stmt(
+        "CREATE TABLE t (col1 STRING, col2 INT, col3 DATE) PARTITIONED BY (col1, col2)",
+    );
+
+    // Partition columns with types (new columns not in table spec)
+    databricks().verified_stmt("CREATE TABLE t (name STRING) PARTITIONED BY (year INT, month INT)");
+
+    // Mixed: some with types, some without
+    databricks()
+        .verified_stmt("CREATE TABLE t (id INT, name STRING) PARTITIONED BY (region, year INT)");
+
+    // Verify AST structure for column without type
+    match databricks().verified_stmt("CREATE TABLE t (col1 STRING) PARTITIONED BY (col1)") {
+        Statement::CreateTable(CreateTable {
+            name,
+            columns,
+            hive_distribution,
+            ..
+        }) => {
+            assert_eq!(name.to_string(), "t");
+            assert_eq!(columns.len(), 1);
+            assert_eq!(columns[0].name.to_string(), "col1");
+            match hive_distribution {
+                HiveDistributionStyle::PARTITIONED {
+                    columns: partition_cols,
+                } => {
+                    assert_eq!(partition_cols.len(), 1);
+                    assert_eq!(partition_cols[0].name.to_string(), "col1");
+                    assert_eq!(partition_cols[0].data_type, DataType::Unspecified);
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    }
+
+    // Verify AST structure for column with type
+    match databricks().verified_stmt("CREATE TABLE t (name STRING) PARTITIONED BY (year INT)") {
+        Statement::CreateTable(CreateTable {
+            hive_distribution:
+                HiveDistributionStyle::PARTITIONED {
+                    columns: partition_cols,
+                },
+            ..
+        }) => {
+            assert_eq!(partition_cols.len(), 1);
+            assert_eq!(partition_cols[0].name.to_string(), "year");
+            assert_eq!(partition_cols[0].data_type, DataType::Int(None));
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_databricks_struct_type() {
+    // Databricks uses colon-separated struct field syntax (colon is optional)
+    // https://docs.databricks.com/en/sql/language-manual/data-types/struct-type.html
+
+    // Basic struct with colon syntax - parses to canonical form without colons
+    databricks().one_statement_parses_to(
+        "CREATE TABLE t (col1 STRUCT<field1: STRING, field2: INT>)",
+        "CREATE TABLE t (col1 STRUCT<field1 STRING, field2 INT>)",
+    );
+
+    // Nested array of struct (the original issue case)
+    databricks().one_statement_parses_to(
+        "CREATE TABLE t (col1 ARRAY<STRUCT<finish_flag: STRING, survive_flag: STRING, score: INT>>)",
+        "CREATE TABLE t (col1 ARRAY<STRUCT<finish_flag STRING, survive_flag STRING, score INT>>)",
+    );
+
+    // Multiple struct columns
+    databricks().one_statement_parses_to(
+        "CREATE TABLE t (col1 STRUCT<a: INT, b: STRING>, col2 STRUCT<x: DOUBLE>)",
+        "CREATE TABLE t (col1 STRUCT<a INT, b STRING>, col2 STRUCT<x DOUBLE>)",
+    );
+
+    // Deeply nested structs
+    databricks().one_statement_parses_to(
+        "CREATE TABLE t (col1 STRUCT<outer: STRUCT<inner: STRING>>)",
+        "CREATE TABLE t (col1 STRUCT<outer STRUCT<inner STRING>>)",
+    );
+
+    // Struct with array field
+    databricks().one_statement_parses_to(
+        "CREATE TABLE t (col1 STRUCT<items: ARRAY<INT>, name: STRING>)",
+        "CREATE TABLE t (col1 STRUCT<items ARRAY<INT>, name STRING>)",
+    );
+
+    // Syntax without colons should also work (BigQuery compatible)
+    databricks().verified_stmt("CREATE TABLE t (col1 STRUCT<field1 STRING, field2 INT>)");
+
+    // Verify AST structure
+    match databricks().one_statement_parses_to(
+        "CREATE TABLE t (col1 STRUCT<field1: STRING, field2: INT>)",
+        "CREATE TABLE t (col1 STRUCT<field1 STRING, field2 INT>)",
+    ) {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(columns.len(), 1);
+            assert_eq!(columns[0].name.to_string(), "col1");
+            match &columns[0].data_type {
+                DataType::Struct(fields, StructBracketKind::AngleBrackets) => {
+                    assert_eq!(fields.len(), 2);
+                    assert_eq!(
+                        fields[0].field_name.as_ref().map(|i| i.to_string()),
+                        Some("field1".to_string())
+                    );
+                    assert_eq!(fields[0].field_type, DataType::String(None));
+                    assert_eq!(
+                        fields[1].field_name.as_ref().map(|i| i.to_string()),
+                        Some("field2".to_string())
+                    );
+                    assert_eq!(fields[1].field_type, DataType::Int(None));
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    }
+}

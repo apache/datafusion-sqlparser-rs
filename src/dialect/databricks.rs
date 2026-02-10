@@ -20,7 +20,8 @@ use crate::dialect::Dialect;
 /// A [`Dialect`] for [Databricks SQL](https://www.databricks.com/)
 ///
 /// See <https://docs.databricks.com/en/sql/language-manual/index.html>.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DatabricksDialect;
 
 impl Dialect for DatabricksDialect {
@@ -82,6 +83,11 @@ impl Dialect for DatabricksDialect {
 
     /// See <https://docs.databricks.com/en/sql/language-manual/sql-ref-syntax-qry-select-values.html>
     fn supports_values_as_table_factor(&self) -> bool {
+        true
+    }
+
+    /// See <https://docs.databricks.com/en/sql/language-manual/delta-optimize.html>
+    fn supports_optimize_table(&self) -> bool {
         true
     }
 }

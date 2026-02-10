@@ -1099,6 +1099,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports optimizer hints in multiline comments
+    /// e.g. `/*!50110 KEY_BLOCK_SIZE = 1024*/`
+    fn supports_multiline_comment_hints(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports treating the equals operator `=` within a `SelectItem`
     /// as an alias assignment operator, rather than a boolean expression.
     /// For example: the following statements are equivalent for such a dialect:
@@ -1166,6 +1172,23 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports PartiQL for querying semi-structured data
     /// <https://partiql.org/index.html>
     fn supports_partiql(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports the `CONSTRAINT` keyword without a name
+    /// in table constraint definitions.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE TABLE t (a INT, CONSTRAINT CHECK (a > 0))
+    /// ```
+    ///
+    /// This is a MySQL extension; the SQL standard requires a name after `CONSTRAINT`.
+    /// When the name is omitted, the output normalizes to just the constraint type
+    /// without the `CONSTRAINT` keyword (e.g., `CHECK (a > 0)`).
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
+    fn supports_constraint_keyword_without_name(&self) -> bool {
         false
     }
 

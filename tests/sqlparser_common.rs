@@ -11021,6 +11021,13 @@ fn parse_deeply_nested_parens_hits_recursion_limits() {
 }
 
 #[test]
+fn parse_update_deeply_nested_parens_hits_recursion_limits() {
+    let sql = format!("\nUPDATE\n\n\n\n\n\n\n\n\n\n{}", "(".repeat(1000));
+    let res = parse_sql_statements(&sql);
+    assert_eq!(ParserError::RecursionLimitExceeded, res.unwrap_err());
+}
+
+#[test]
 fn parse_deeply_nested_unary_op_hits_recursion_limits() {
     let sql = format!("SELECT {}", "+".repeat(1000));
     let res = parse_sql_statements(&sql);
@@ -13577,6 +13584,10 @@ fn test_map_syntax() {
         Expr::value(number(s))
     }
 
+    fn null_expr() -> Expr {
+        Expr::Value((Value::Null).with_empty_span())
+    }
+
     check(
         "MAP {1: 10.0, 2: 20.0}",
         Expr::Map(Map {
@@ -13641,6 +13652,55 @@ fn test_map_syntax() {
     );
 
     check("MAP {}", Expr::Map(Map { entries: vec![] }));
+
+    check(
+        "MAP {'a': 1, 'b': NULL}",
+        Expr::Map(Map {
+            entries: vec![
+                MapEntry {
+                    key: Box::new(Expr::Value(
+                        (Value::SingleQuotedString("a".to_owned())).with_empty_span(),
+                    )),
+                    value: Box::new(number_expr("1")),
+                },
+                MapEntry {
+                    key: Box::new(Expr::Value(
+                        (Value::SingleQuotedString("b".to_owned())).with_empty_span(),
+                    )),
+                    value: Box::new(null_expr()),
+                },
+            ],
+        }),
+    );
+
+    check(
+        "MAP {1: [1, NULL, 3], 2: [4, NULL, 6], 3: [7, 8, 9]}",
+        Expr::Map(Map {
+            entries: vec![
+                MapEntry {
+                    key: Box::new(number_expr("1")),
+                    value: Box::new(Expr::Array(Array {
+                        elem: vec![number_expr("1"), null_expr(), number_expr("3")],
+                        named: false,
+                    })),
+                },
+                MapEntry {
+                    key: Box::new(number_expr("2")),
+                    value: Box::new(Expr::Array(Array {
+                        elem: vec![number_expr("4"), null_expr(), number_expr("6")],
+                        named: false,
+                    })),
+                },
+                MapEntry {
+                    key: Box::new(number_expr("3")),
+                    value: Box::new(Expr::Array(Array {
+                        elem: vec![number_expr("7"), number_expr("8"), number_expr("9")],
+                        named: false,
+                    })),
+                },
+            ],
+        }),
+    );
 }
 
 #[test]

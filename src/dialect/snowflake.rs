@@ -36,11 +36,11 @@ use crate::ast::{
     RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement,
     StorageSerializationPolicy, TableObject, TagsColumnOption, Value, WrappedCollection,
 };
-use crate::tokenizer::TokenWithSpan;
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{IsOptional, Parser, ParserError};
 use crate::tokenizer::Token;
+use crate::tokenizer::TokenWithSpan;
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
 #[cfg(not(feature = "std"))]
@@ -1824,7 +1824,9 @@ fn parse_multi_table_insert_into_clause(
 }
 
 /// Parse a single value in a multi-table INSERT VALUES clause.
-fn parse_multi_table_insert_value(parser: &mut Parser) -> Result<MultiTableInsertValue, ParserError> {
+fn parse_multi_table_insert_value(
+    parser: &mut Parser,
+) -> Result<MultiTableInsertValue, ParserError> {
     if parser.parse_keyword(Keyword::DEFAULT) {
         Ok(MultiTableInsertValue::Default)
     } else {
@@ -1835,8 +1837,13 @@ fn parse_multi_table_insert_value(parser: &mut Parser) -> Result<MultiTableInser
 /// Parse WHEN clauses for conditional multi-table INSERT.
 fn parse_multi_table_insert_when_clauses(
     parser: &mut Parser,
-) -> Result<(Vec<MultiTableInsertWhenClause>, Option<Vec<MultiTableInsertIntoClause>>), ParserError>
-{
+) -> Result<
+    (
+        Vec<MultiTableInsertWhenClause>,
+        Option<Vec<MultiTableInsertIntoClause>>,
+    ),
+    ParserError,
+> {
     let mut when_clauses = vec![];
     let mut else_clause = None;
 

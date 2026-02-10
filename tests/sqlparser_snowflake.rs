@@ -3434,8 +3434,9 @@ fn test_multi_table_insert_unconditional() {
     snowflake().verified_stmt("INSERT ALL INTO t1 (c1, c2, c3) SELECT n1, n2, n3 FROM src");
 
     // With VALUES clause
-    snowflake()
-        .verified_stmt("INSERT ALL INTO t1 (c1, c2, c3) VALUES (n2, n1, DEFAULT) SELECT n1, n2, n3 FROM src");
+    snowflake().verified_stmt(
+        "INSERT ALL INTO t1 (c1, c2, c3) VALUES (n2, n1, DEFAULT) SELECT n1, n2, n3 FROM src",
+    );
 
     // Complex example from Snowflake docs
     snowflake().verified_stmt(
@@ -3450,24 +3451,19 @@ fn test_multi_table_insert_unconditional() {
 fn test_multi_table_insert_conditional() {
     // Basic conditional multi-table insert with WHEN clause
     // See: https://docs.snowflake.com/en/sql-reference/sql/insert-multi-table
-    snowflake().verified_stmt(
-        "INSERT ALL WHEN n1 > 100 THEN INTO t1 SELECT n1 FROM src"
-    );
+    snowflake().verified_stmt("INSERT ALL WHEN n1 > 100 THEN INTO t1 SELECT n1 FROM src");
 
     // Multiple WHEN clauses
     snowflake().verified_stmt(
-        "INSERT ALL WHEN n1 > 100 THEN INTO t1 WHEN n1 > 10 THEN INTO t2 SELECT n1 FROM src"
+        "INSERT ALL WHEN n1 > 100 THEN INTO t1 WHEN n1 > 10 THEN INTO t2 SELECT n1 FROM src",
     );
 
     // WHEN with multiple INTO clauses
-    snowflake().verified_stmt(
-        "INSERT ALL WHEN n1 > 10 THEN INTO t1 INTO t2 SELECT n1 FROM src"
-    );
+    snowflake().verified_stmt("INSERT ALL WHEN n1 > 10 THEN INTO t1 INTO t2 SELECT n1 FROM src");
 
     // With ELSE clause
-    snowflake().verified_stmt(
-        "INSERT ALL WHEN n1 > 100 THEN INTO t1 ELSE INTO t2 SELECT n1 FROM src"
-    );
+    snowflake()
+        .verified_stmt("INSERT ALL WHEN n1 > 100 THEN INTO t1 ELSE INTO t2 SELECT n1 FROM src");
 
     // Complex conditional insert from Snowflake docs
     snowflake().verified_stmt(
@@ -3481,36 +3477,30 @@ fn test_multi_table_insert_conditional() {
 
     // With OVERWRITE
     snowflake().verified_stmt(
-        "INSERT OVERWRITE ALL WHEN n1 > 100 THEN INTO t1 ELSE INTO t2 SELECT n1 FROM src"
+        "INSERT OVERWRITE ALL WHEN n1 > 100 THEN INTO t1 ELSE INTO t2 SELECT n1 FROM src",
     );
 
     // WHEN with always-true condition
-    snowflake().verified_stmt(
-        "INSERT ALL WHEN 1 = 1 THEN INTO t1 SELECT n1 FROM src"
-    );
+    snowflake().verified_stmt("INSERT ALL WHEN 1 = 1 THEN INTO t1 SELECT n1 FROM src");
 }
 
 #[test]
 fn test_multi_table_insert_with_values() {
     // INTO clause with VALUES using column references
-    snowflake().verified_stmt(
-        "INSERT ALL INTO t1 VALUES (n1, n2) SELECT n1, n2 FROM src"
-    );
+    snowflake().verified_stmt("INSERT ALL INTO t1 VALUES (n1, n2) SELECT n1, n2 FROM src");
 
     // INTO clause with VALUES using DEFAULT
     snowflake().verified_stmt(
-        "INSERT ALL INTO t1 (c1, c2, c3) VALUES (n1, n2, DEFAULT) SELECT n1, n2 FROM src"
+        "INSERT ALL INTO t1 (c1, c2, c3) VALUES (n1, n2, DEFAULT) SELECT n1, n2 FROM src",
     );
 
     // INTO clause with VALUES using NULL
     snowflake().verified_stmt(
-        "INSERT ALL INTO t1 (c1, c2, c3) VALUES (n1, NULL, n2) SELECT n1, n2 FROM src"
+        "INSERT ALL INTO t1 (c1, c2, c3) VALUES (n1, NULL, n2) SELECT n1, n2 FROM src",
     );
 
     // Positional alias in VALUES
-    snowflake().verified_stmt(
-        "INSERT ALL INTO t1 VALUES ($1, $2) SELECT 1, 50 AS an_alias"
-    );
+    snowflake().verified_stmt("INSERT ALL INTO t1 VALUES ($1, $2) SELECT 1, 50 AS an_alias");
 }
 
 /// Unit tests for multi-table INSERT AST structure validation
@@ -3631,15 +3621,33 @@ fn test_multi_table_insert_ast_conditional() {
             assert_eq!(multi_table_when_clauses.len(), 2);
 
             // First WHEN clause: WHEN n1 > 100 THEN INTO t1
-            assert_eq!(multi_table_when_clauses[0].condition.to_string(), "n1 > 100");
+            assert_eq!(
+                multi_table_when_clauses[0].condition.to_string(),
+                "n1 > 100"
+            );
             assert_eq!(multi_table_when_clauses[0].into_clauses.len(), 1);
-            assert_eq!(multi_table_when_clauses[0].into_clauses[0].table_name.to_string(), "t1");
+            assert_eq!(
+                multi_table_when_clauses[0].into_clauses[0]
+                    .table_name
+                    .to_string(),
+                "t1"
+            );
 
             // Second WHEN clause: WHEN n1 > 10 THEN INTO t2 INTO t3
             assert_eq!(multi_table_when_clauses[1].condition.to_string(), "n1 > 10");
             assert_eq!(multi_table_when_clauses[1].into_clauses.len(), 2);
-            assert_eq!(multi_table_when_clauses[1].into_clauses[0].table_name.to_string(), "t2");
-            assert_eq!(multi_table_when_clauses[1].into_clauses[1].table_name.to_string(), "t3");
+            assert_eq!(
+                multi_table_when_clauses[1].into_clauses[0]
+                    .table_name
+                    .to_string(),
+                "t2"
+            );
+            assert_eq!(
+                multi_table_when_clauses[1].into_clauses[1]
+                    .table_name
+                    .to_string(),
+                "t3"
+            );
 
             // ELSE clause: ELSE INTO t4
             let else_clause = multi_table_else_clause.expect("Expected ELSE clause");
@@ -3653,7 +3661,8 @@ fn test_multi_table_insert_ast_conditional() {
 #[test]
 fn test_multi_table_insert_ast_first() {
     // Test INSERT FIRST vs INSERT ALL
-    let sql = "INSERT FIRST WHEN n1 > 100 THEN INTO t1 WHEN n1 > 10 THEN INTO t2 SELECT n1 FROM src";
+    let sql =
+        "INSERT FIRST WHEN n1 > 100 THEN INTO t1 WHEN n1 > 10 THEN INTO t2 SELECT n1 FROM src";
     let stmt = snowflake().verified_stmt(sql);
 
     match stmt {
@@ -3704,7 +3713,10 @@ fn test_multi_table_insert_ast_complex_values() {
         }) => {
             assert_eq!(multi_table_into_clauses.len(), 1);
 
-            let values = multi_table_into_clauses[0].values.as_ref().expect("Expected VALUES");
+            let values = multi_table_into_clauses[0]
+                .values
+                .as_ref()
+                .expect("Expected VALUES");
             assert_eq!(values.values.len(), 3);
 
             // First value: n1 + n2 (binary expression)

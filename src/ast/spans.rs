@@ -1312,8 +1312,8 @@ impl Spanned for Insert {
             priority: _,     // todo, mysql specific
             insert_alias: _, // todo, mysql specific
             assignments,
-            settings: _,      // todo, clickhouse specific
-            format_clause: _, // todo, clickhouse specific
+            settings: _,                 // todo, clickhouse specific
+            format_clause: _,            // todo, clickhouse specific
             multi_table_insert_type: _,  // snowflake multi-table insert
             multi_table_into_clauses: _, // snowflake multi-table insert
             multi_table_when_clauses: _, // snowflake multi-table insert

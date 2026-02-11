@@ -21,7 +21,10 @@
 use pretty_assertions::assert_eq;
 
 use sqlparser::{
-    ast::{BinaryOperator, Expr, Ident, QuoteDelimitedString, Value, ValueWithSpan},
+    ast::{
+        BinaryOperator, Expr, Ident, Insert, InsertTableAlias, ObjectName, QuoteDelimitedString,
+        Statement, TableObject, Value, ValueWithSpan,
+    },
     dialect::OracleDialect,
     parser::ParserError,
     tokenizer::Span,
@@ -420,4 +423,56 @@ fn test_connect_by() {
         CONNECT BY PRIOR employee_id = manager_id \
           ORDER BY \"Employee\", \"Manager\", \"Pathlen\", \"Path\"",
     );
+}
+
+#[test]
+fn test_insert_with_table_alias() {
+    let oracle_dialect = oracle();
+
+    fn verify_table_name_with_alias(stmt: &Statement, exp_table_name: &str, exp_table_alias: &str) {
+        assert!(matches!(stmt,
+            Statement::Insert(Insert {
+                table: TableObject::TableName(table_name),
+                table_alias: Some(InsertTableAlias {
+                    explicit: false,
+                    alias: Ident {
+                        value: table_alias,
+                        quote_style: None,
+                        span: _
+                    }
+                }),
+                ..
+            })
+            if table_alias == exp_table_alias
+            && table_name == &ObjectName::from(vec![Ident {
+                value: exp_table_name.into(),
+                quote_style: None,
+                span: Span::empty(),
+            }])
+        ));
+    }
+
+    let stmt = oracle_dialect.verified_stmt(
+        "INSERT INTO foo_t t \
+         SELECT 1, 2, 3 FROM dual",
+    );
+    verify_table_name_with_alias(&stmt, "foo_t", "t");
+
+    let stmt = oracle_dialect.verified_stmt(
+        "INSERT INTO foo_t asdf (a, b, c) \
+         SELECT 1, 2, 3 FROM dual",
+    );
+    verify_table_name_with_alias(&stmt, "foo_t", "asdf");
+
+    let stmt = oracle_dialect.verified_stmt(
+        "INSERT INTO foo_t t (a, b, c) \
+         VALUES (1, 2, 3)",
+    );
+    verify_table_name_with_alias(&stmt, "foo_t", "t");
+
+    let stmt = oracle_dialect.verified_stmt(
+        "INSERT INTO foo_t t \
+         VALUES (1, 2, 3)",
+    );
+    verify_table_name_with_alias(&stmt, "foo_t", "t");
 }

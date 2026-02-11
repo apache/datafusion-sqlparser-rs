@@ -4581,7 +4581,13 @@ impl<'a> Parser<'a> {
     ///
     /// Returns true if the current token matches the expected keyword.
     pub fn peek_keyword(&self, expected: Keyword) -> bool {
-        matches!(&self.peek_token_ref().token, Token::Word(w) if expected == w.keyword)
+        self.peek_keyword_one_of(&[expected])
+    }
+
+    #[must_use]
+    /// Checks whether the current token is one of the expected keywords without consuming it.
+    fn peek_keyword_one_of(&self, expected: &[Keyword]) -> bool {
+        matches!(&self.peek_token_ref().token, Token::Word(w) if expected.contains(&w.keyword))
     }
 
     /// If the current token is the `expected` keyword followed by
@@ -17229,12 +17235,26 @@ impl<'a> Parser<'a> {
             let table = self.parse_keyword(Keyword::TABLE);
             let table_object = self.parse_table_object()?;
 
-            let table_alias =
-                if dialect_of!(self is PostgreSqlDialect) && self.parse_keyword(Keyword::AS) {
-                    Some(self.parse_identifier()?)
+            let table_alias = if dialect_of!(self is OracleDialect) {
+                if !self.peek_sub_query()
+                    && !self.peek_keyword_one_of(&[Keyword::DEFAULT, Keyword::VALUES])
+                {
+                    self.maybe_parse(|parser| parser.parse_identifier())?
+                        .map(|alias| InsertTableAlias {
+                            explicit: false,
+                            alias,
+                        })
                 } else {
                     None
-                };
+                }
+            } else if dialect_of!(self is PostgreSqlDialect) && self.parse_keyword(Keyword::AS) {
+                Some(InsertTableAlias {
+                    explicit: true,
+                    alias: self.parse_identifier()?,
+                })
+            } else {
+                None
+            };
 
             let is_mysql = dialect_of!(self is MySqlDialect);
 
@@ -19475,14 +19495,7 @@ impl<'a> Parser<'a> {
 
     /// Returns true if the next keyword indicates a sub query, i.e. SELECT or WITH
     fn peek_sub_query(&mut self) -> bool {
-        if self
-            .parse_one_of_keywords(&[Keyword::SELECT, Keyword::WITH])
-            .is_some()
-        {
-            self.prev_token();
-            return true;
-        }
-        false
+        self.peek_keyword_one_of(&[Keyword::SELECT, Keyword::WITH])
     }
 
     pub(crate) fn parse_show_stmt_options(&mut self) -> Result<ShowStatementOptions, ParserError> {

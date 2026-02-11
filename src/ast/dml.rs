@@ -31,9 +31,9 @@ use crate::{
 
 use super::{
     display_comma_separated, helpers::attached_token::AttachedToken, query::InputFormatClause,
-    Assignment, Expr, FromTable, Ident, InsertAliases, MysqlInsertPriority, ObjectName, OnInsert,
-    OptimizerHint, OrderByExpr, Query, SelectInto, SelectItem, Setting, SqliteOnConflict,
-    TableFactor, TableObject, TableWithJoins, UpdateTableFromKind, Values,
+    Assignment, Expr, FromTable, Ident, InsertAliases, InsertTableAlias, MysqlInsertPriority,
+    ObjectName, OnInsert, OptimizerHint, OrderByExpr, Query, SelectInto, SelectItem, Setting,
+    SqliteOnConflict, TableFactor, TableObject, TableWithJoins, UpdateTableFromKind, Values,
 };
 
 /// INSERT statement.
@@ -56,8 +56,9 @@ pub struct Insert {
     pub into: bool,
     /// TABLE
     pub table: TableObject,
-    /// table_name as foo (for PostgreSQL)
-    pub table_alias: Option<Ident>,
+    /// `table_name as foo` (for PostgreSQL)
+    /// `table_name foo` (for Oracle)
+    pub table_alias: Option<InsertTableAlias>,
     /// COLUMNS
     pub columns: Vec<Ident>,
     /// Overwrite (Hive)
@@ -125,8 +126,13 @@ pub struct Insert {
 impl Display for Insert {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // SQLite OR conflict has a special format: INSERT OR ... INTO table_name
-        let table_name = if let Some(alias) = &self.table_alias {
-            format!("{0} AS {alias}", self.table)
+        let table_name = if let Some(table_alias) = &self.table_alias {
+            format!(
+                "{table} {as_keyword}{alias}",
+                table = self.table,
+                as_keyword = if table_alias.explicit { "AS " } else { "" },
+                alias = table_alias.alias
+            )
         } else {
             self.table.to_string()
         };

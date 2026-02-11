@@ -5406,10 +5406,13 @@ fn test_simple_postgres_insert_with_alias() {
                 quote_style: None,
                 span: Span::empty(),
             }])),
-            table_alias: Some(Ident {
-                value: "test_table".to_string(),
-                quote_style: None,
-                span: Span::empty(),
+            table_alias: Some(InsertTableAlias {
+                explicit: true,
+                alias: Ident {
+                    value: "test_table".to_string(),
+                    quote_style: None,
+                    span: Span::empty(),
+                }
             }),
             columns: vec![
                 Ident {
@@ -5482,10 +5485,13 @@ fn test_simple_postgres_insert_with_alias() {
                 quote_style: None,
                 span: Span::empty(),
             }])),
-            table_alias: Some(Ident {
-                value: "test_table".to_string(),
-                quote_style: None,
-                span: Span::empty(),
+            table_alias: Some(InsertTableAlias {
+                explicit: true,
+                alias: Ident {
+                    value: "test_table".to_string(),
+                    quote_style: None,
+                    span: Span::empty(),
+                }
             }),
             columns: vec![
                 Ident {
@@ -5560,10 +5566,13 @@ fn test_simple_insert_with_quoted_alias() {
                 quote_style: None,
                 span: Span::empty(),
             }])),
-            table_alias: Some(Ident {
-                value: "Test_Table".to_string(),
-                quote_style: Some('"'),
-                span: Span::empty(),
+            table_alias: Some(InsertTableAlias {
+                explicit: true,
+                alias: Ident {
+                    value: "Test_Table".to_string(),
+                    quote_style: Some('"'),
+                    span: Span::empty(),
+                }
             }),
             columns: vec![
                 Ident {

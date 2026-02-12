@@ -1624,8 +1624,8 @@ impl<'a> Parser<'a> {
             // which is then followed by an arrow, which indicates a lambda function with a single, typed parameter.
             // For example: `a INT -> a * 2`.
             Token::Word(_)
-                if self.peek_nth_token_ref(1).token == Token::Arrow
-                    && self.dialect.supports_lambda_functions() =>
+                if self.dialect.supports_lambda_functions()
+                    && self.peek_nth_token_ref(1).token == Token::Arrow =>
             {
                 let data_type = self.parse_data_type()?;
                 self.expect_token(&Token::Arrow)?;

@@ -455,7 +455,7 @@ fn parse_update_set_from() {
         stmt,
         Statement::Update(Update {
             update_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             table: TableWithJoins {
                 relation: table_from_name(ObjectName::from(vec![Ident::new("t1")])),
                 joins: vec![],
@@ -471,7 +471,7 @@ fn parse_update_set_from() {
                         with: None,
                         body: Box::new(SetExpr::Select(Box::new(Select {
                             select_token: AttachedToken::empty(),
-                            optimizer_hint: None,
+                            optimizer_hints: vec![],
                             distinct: None,
                             select_modifiers: None,
                             top: None,
@@ -551,9 +551,9 @@ fn parse_update_with_table_alias() {
             returning,
             or: None,
             limit: None,
-            optimizer_hint: None,
+            optimizer_hints,
             update_token: _,
-        }) => {
+        }) if optimizer_hints.is_empty() => {
             assert_eq!(
                 TableWithJoins {
                     relation: TableFactor::Table {
@@ -5818,7 +5818,7 @@ fn test_parse_named_window() {
     let actual_select_only = dialects.verified_only_select(sql);
     let expected = Select {
         select_token: AttachedToken::empty(),
-        optimizer_hint: None,
+        optimizer_hints: vec![],
         distinct: None,
         select_modifiers: None,
         top: None,
@@ -6550,7 +6550,7 @@ fn parse_interval_and_or_xor() {
         with: None,
         body: Box::new(SetExpr::Select(Box::new(Select {
             select_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -8928,7 +8928,7 @@ fn lateral_function() {
     let actual_select_only = verified_only_select(sql);
     let expected = Select {
         select_token: AttachedToken::empty(),
-        optimizer_hint: None,
+        optimizer_hints: vec![],
         distinct: None,
         select_modifiers: None,
         top: None,
@@ -9931,7 +9931,7 @@ fn parse_merge() {
                         with: None,
                         body: Box::new(SetExpr::Select(Box::new(Select {
                             select_token: AttachedToken::empty(),
-                            optimizer_hint: None,
+                            optimizer_hints: vec![],
                             distinct: None,
                             select_modifiers: None,
                             top: None,
@@ -12343,7 +12343,7 @@ fn parse_unload() {
             query: Some(Box::new(Query {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
-                    optimizer_hint: None,
+                    optimizer_hints: vec![],
                     distinct: None,
                     select_modifiers: None,
                     top: None,
@@ -12664,7 +12664,7 @@ fn parse_connect_by() {
         dialects.verified_only_select(connect_by_1),
         Select {
             select_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -12731,7 +12731,7 @@ fn parse_connect_by() {
         dialects.verified_only_select(connect_by_2),
         Select {
             select_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -12799,7 +12799,7 @@ fn parse_connect_by() {
         dialects.verified_only_select(connect_by_3),
         Select {
             select_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -12887,7 +12887,7 @@ fn parse_connect_by() {
         dialects.verified_only_select(connect_by_5),
         Select {
             select_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -13850,7 +13850,7 @@ fn test_extract_seconds_ok() {
         with: None,
         body: Box::new(SetExpr::Select(Box::new(Select {
             select_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -15991,7 +15991,7 @@ fn test_select_from_first() {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
-                optimizer_hint: None,
+                optimizer_hints: vec![],
                 distinct: None,
                 select_modifiers: None,
                 top: None,

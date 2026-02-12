@@ -2681,7 +2681,7 @@ fn test_export_data() {
                         }),
                         Span::empty()
                     )),
-                    optimizer_hint: None,
+                    optimizer_hints: vec![],
                     distinct: None,
                     select_modifiers: None,
                     top: None,
@@ -2787,7 +2787,7 @@ fn test_export_data() {
                         }),
                         Span::empty()
                     )),
-                    optimizer_hint: None,
+                    optimizer_hints: vec![],
                     distinct: None,
                     select_modifiers: None,
                     top: None,

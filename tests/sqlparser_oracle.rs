@@ -338,36 +338,34 @@ fn parse_national_quote_delimited_string_but_is_a_word() {
 fn test_optimizer_hints() {
     let oracle_dialect = oracle();
 
-    // selects
+    // selects: all `/*+...*/` comments are collected as hints
     let select = oracle_dialect.verified_only_select_with_canonical(
-        "SELECT /*+one two three*/ /*+not a hint!*/ 1 FROM dual",
-        "SELECT /*+one two three*/ 1 FROM dual",
+        "SELECT /*+one two three*/ /*+four five six*/ 1 FROM dual",
+        "SELECT /*+one two three*/ /*+four five six*/ 1 FROM dual",
     );
-    assert_eq!(
-        select
-            .optimizer_hint
-            .as_ref()
-            .map(|hint| hint.text.as_str()),
-        Some("one two three")
-    );
+    assert_eq!(select.optimizer_hints.len(), 2);
+    assert_eq!(select.optimizer_hints[0].text, "one two three");
+    assert_eq!(select.optimizer_hints[0].prefix, "");
+    assert_eq!(select.optimizer_hints[1].text, "four five six");
 
+    // regular comments are skipped, hints after them are still collected
     let select = oracle_dialect.verified_only_select_with_canonical(
-        "SELECT /*one two three*/ /*+not a hint!*/ 1 FROM dual",
-        "SELECT 1 FROM dual",
+        "SELECT /*one two three*/ /*+four five six*/ 1 FROM dual",
+        "SELECT /*+four five six*/ 1 FROM dual",
     );
-    assert_eq!(select.optimizer_hint, None);
+    assert_eq!(select.optimizer_hints.len(), 1);
+    assert_eq!(select.optimizer_hints[0].text, "four five six");
 
     let select = oracle_dialect.verified_only_select_with_canonical(
         "SELECT --+ one two three /* asdf */\n 1 FROM dual",
         "SELECT --+ one two three /* asdf */\n 1 FROM dual",
     );
+    assert_eq!(select.optimizer_hints.len(), 1);
     assert_eq!(
-        select
-            .optimizer_hint
-            .as_ref()
-            .map(|hint| hint.text.as_str()),
-        Some(" one two three /* asdf */\n")
+        select.optimizer_hints[0].text,
+        " one two three /* asdf */\n"
     );
+    assert_eq!(select.optimizer_hints[0].prefix, "");
 
     // inserts
     oracle_dialect.verified_stmt("INSERT /*+ append */ INTO t1 SELECT * FROM all_objects");
@@ -387,6 +385,15 @@ fn test_optimizer_hints() {
                (pt.person_id, pt.first_name, pt.last_name, pt.title) \
                VALUES (ps.person_id, ps.first_name, ps.last_name, ps.title)",
     );
+
+    // single-line prefixed hint (Oracle supports `--` without trailing whitespace)
+    let select = oracle_dialect.verified_only_select_with_canonical(
+        "SELECT --abc+ text\n 1 FROM dual",
+        "SELECT --abc+ text\n 1 FROM dual",
+    );
+    assert_eq!(select.optimizer_hints.len(), 1);
+    assert_eq!(select.optimizer_hints[0].prefix, "abc");
+    assert_eq!(select.optimizer_hints[0].text, " text\n");
 }
 
 #[test]

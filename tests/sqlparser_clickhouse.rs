@@ -41,7 +41,7 @@ fn parse_map_access_expr() {
     assert_eq!(
         Select {
             select_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             distinct: None,
             select_modifiers: None,
             top: None,

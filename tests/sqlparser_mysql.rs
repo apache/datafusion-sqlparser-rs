@@ -1435,7 +1435,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
-                optimizer_hint: None,
+                optimizer_hints: vec![],
                 distinct: None,
                 select_modifiers: None,
                 top: None,
@@ -1492,7 +1492,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
-                optimizer_hint: None,
+                optimizer_hints: vec![],
                 distinct: None,
                 select_modifiers: None,
                 top: None,
@@ -1541,7 +1541,7 @@ fn parse_escaped_backticks_with_escape() {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
-                optimizer_hint: None,
+                optimizer_hints: vec![],
                 distinct: None,
                 select_modifiers: None,
                 top: None,
@@ -1594,7 +1594,7 @@ fn parse_escaped_backticks_with_no_escape() {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
-                optimizer_hint: None,
+                optimizer_hints: vec![],
                 distinct: None,
                 select_modifiers: None,
                 top: None,
@@ -2415,7 +2415,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                 q.body,
                 Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
-                    optimizer_hint: None,
+                    optimizer_hints: vec![],
                     distinct: None,
                     select_modifiers: None,
                     top: None,
@@ -2591,7 +2591,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                 q.body,
                 Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
-                    optimizer_hint: None,
+                    optimizer_hints: vec![],
                     distinct: None,
                     select_modifiers: None,
                     top: None,
@@ -2660,9 +2660,9 @@ fn parse_update_with_joins() {
             returning,
             or: None,
             limit: None,
-            optimizer_hint: None,
+            optimizer_hints,
             update_token: _,
-        }) => {
+        }) if optimizer_hints.is_empty() => {
             assert_eq!(
                 TableWithJoins {
                     relation: TableFactor::Table {
@@ -3226,7 +3226,7 @@ fn parse_substring_in_select() {
                     with: None,
                     body: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
-                        optimizer_hint: None,
+                        optimizer_hints: vec![],
                         distinct: Some(Distinct::Distinct),
                         select_modifiers: None,
                         top: None,
@@ -3572,7 +3572,7 @@ fn parse_hex_string_introducer() {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
-                optimizer_hint: None,
+                optimizer_hints: vec![],
                 distinct: None,
                 select_modifiers: None,
                 top: None,
@@ -4641,6 +4641,36 @@ fn test_optimizer_hints() {
         "\
        DELETE /*+ foobar */ FROM table_name",
     );
+
+    // prefixed hints: any alphanumeric prefix before `+` is captured
+    let select = mysql_dialect.verified_only_select("SELECT /*abc+ text */ 1");
+    assert_eq!(select.optimizer_hints.len(), 1);
+    assert_eq!(select.optimizer_hints[0].prefix, "abc");
+    assert_eq!(select.optimizer_hints[0].text, " text ");
+
+    // multiple hints with different prefixes
+    let select = mysql_dialect.verified_only_select("SELECT /*+ A */ /*x2+ B */ 1");
+    assert_eq!(select.optimizer_hints.len(), 2);
+    assert_eq!(select.optimizer_hints[0].prefix, "");
+    assert_eq!(select.optimizer_hints[0].text, " A ");
+    assert_eq!(select.optimizer_hints[1].prefix, "x2");
+    assert_eq!(select.optimizer_hints[1].text, " B ");
+
+    // hints mixed with regular comments: regular comments are skipped
+    let select = mysql_dialect.verified_only_select_with_canonical(
+        "SELECT /*+ A */ /* Regular comment */ /*x2+ B */ 1",
+        "SELECT /*+ A */ /*x2+ B */ 1",
+    );
+    assert_eq!(select.optimizer_hints.len(), 2);
+    assert_eq!(select.optimizer_hints[0].prefix, "");
+    assert_eq!(select.optimizer_hints[0].text, " A ");
+    assert_eq!(select.optimizer_hints[1].prefix, "x2");
+    assert_eq!(select.optimizer_hints[1].text, " B ");
+
+    // prefixed hints in INSERT/UPDATE/DELETE
+    mysql_dialect.verified_stmt("INSERT /*abc+ append */ INTO t2 VALUES (2)");
+    mysql_dialect.verified_stmt("UPDATE /*abc+ PARALLEL */ table_name SET column1 = 1");
+    mysql_dialect.verified_stmt("DELETE /*abc+ ENABLE_DML */ FROM table_name");
 }
 
 #[test]

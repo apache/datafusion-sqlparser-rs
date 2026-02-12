@@ -11579,12 +11579,19 @@ pub struct ResetStatement {
 /// `SELECT`, `INSERT`, `UPDATE`, `REPLACE`, `MERGE`, and `DELETE` keywords in
 /// the corresponding statements.
 ///
-/// See [Select::optimizer_hint]
+/// See [Select::optimizer_hints]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct OptimizerHint {
-    /// the raw test of the optimizer hint without its markers
+    /// An optional prefix between the comment marker and `+`.
+    ///
+    /// Standard optimizer hints like `/*+ ... */` have an empty prefix,
+    /// while system-specific hints like `/*abc+ ... */` have `prefix = "abc"`.
+    /// The prefix is any sequence of ASCII alphanumeric characters
+    /// immediately before the `+` marker.
+    pub prefix: String,
+    /// the raw text of the optimizer hint without its markers
     pub text: String,
     /// the style of the comment which `text` was extracted from,
     /// e.g. `/*+...*/` or `--+...`
@@ -11614,11 +11621,14 @@ impl fmt::Display for OptimizerHint {
         match &self.style {
             OptimizerHintStyle::SingleLine { prefix } => {
                 f.write_str(prefix)?;
+                f.write_str(&self.prefix)?;
                 f.write_str("+")?;
                 f.write_str(&self.text)
             }
             OptimizerHintStyle::MultiLine => {
-                f.write_str("/*+")?;
+                f.write_str("/*")?;
+                f.write_str(&self.prefix)?;
+                f.write_str("+")?;
                 f.write_str(&self.text)?;
                 f.write_str("*/")
             }

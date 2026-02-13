@@ -662,6 +662,11 @@ impl Dialect for SnowflakeDialect {
     fn supports_select_wildcard_rename(&self) -> bool {
         true
     }
+
+    /// See <https://docs.snowflake.com/en/user-guide/querying-semistructured#label-higher-order-functions>
+    fn supports_lambda_functions(&self) -> bool {
+        true
+    }
 }
 
 // Peeks ahead to identify tokens that are expected after

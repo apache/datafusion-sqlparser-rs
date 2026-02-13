@@ -632,33 +632,6 @@ impl Spanned for TableConstraint {
     }
 }
 
-impl Spanned for PartitionBoundValue {
-    fn span(&self) -> Span {
-        match self {
-            PartitionBoundValue::Expr(expr) => expr.span(),
-            // MINVALUE and MAXVALUE are keywords without tracked spans
-            PartitionBoundValue::MinValue => Span::empty(),
-            PartitionBoundValue::MaxValue => Span::empty(),
-        }
-    }
-}
-
-impl Spanned for ForValues {
-    fn span(&self) -> Span {
-        match self {
-            ForValues::In(exprs) => union_spans(exprs.iter().map(|e| e.span())),
-            ForValues::From { from, to } => union_spans(
-                from.iter()
-                    .map(|v| v.span())
-                    .chain(to.iter().map(|v| v.span())),
-            ),
-            // WITH (MODULUS n, REMAINDER r) - u64 values have no spans
-            ForValues::With { .. } => Span::empty(),
-            ForValues::Default => Span::empty(),
-        }
-    }
-}
-
 impl Spanned for CreateIndex {
     fn span(&self) -> Span {
         let CreateIndex {

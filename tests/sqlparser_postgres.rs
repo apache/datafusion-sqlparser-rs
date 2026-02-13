@@ -4604,6 +4604,30 @@ fn parse_create_function_detailed() {
 }
 
 #[test]
+fn parse_create_function_returns_setof() {
+    pg_and_generic().verified_stmt(
+        "CREATE FUNCTION get_users() RETURNS SETOF TEXT LANGUAGE sql AS 'SELECT name FROM users'",
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE FUNCTION get_ids() RETURNS SETOF INTEGER LANGUAGE sql AS 'SELECT id FROM users'",
+    );
+    pg_and_generic().verified_stmt(
+        r#"CREATE FUNCTION get_all() RETURNS SETOF my_schema."MyType" LANGUAGE sql AS 'SELECT * FROM t'"#,
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE FUNCTION get_rows() RETURNS SETOF RECORD LANGUAGE sql AS 'SELECT * FROM t'",
+    );
+
+    let sql = "CREATE FUNCTION get_names() RETURNS SETOF TEXT LANGUAGE sql AS 'SELECT name FROM t'";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateFunction(CreateFunction { return_type, .. }) => {
+            assert_eq!(return_type, Some(DataType::SetOf(Box::new(DataType::Text))));
+        }
+        _ => panic!("Expected CreateFunction"),
+    }
+}
+
+#[test]
 fn parse_create_function_with_security() {
     let sql =
         "CREATE FUNCTION test_fn() RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$";

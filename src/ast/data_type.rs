@@ -61,6 +61,11 @@ pub enum DataType {
         /// Table columns.
         columns: Vec<ColumnDef>,
     },
+    /// SETOF type modifier for [PostgreSQL] function return types,
+    /// e.g. `CREATE FUNCTION ... RETURNS SETOF text`.
+    ///
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createfunction.html
+    SetOf(Box<DataType>),
     /// Fixed-length character type, e.g. CHARACTER(10).
     Character(Option<CharacterLength>),
     /// Fixed-length char type, e.g. CHAR(10).
@@ -808,6 +813,7 @@ impl fmt::Display for DataType {
             DataType::NamedTable { name, columns } => {
                 write!(f, "{} TABLE ({})", name, display_comma_separated(columns))
             }
+            DataType::SetOf(inner) => write!(f, "SETOF {inner}"),
             DataType::GeometricType(kind) => write!(f, "{kind}"),
             DataType::TsVector => write!(f, "TSVECTOR"),
             DataType::TsQuery => write!(f, "TSQUERY"),

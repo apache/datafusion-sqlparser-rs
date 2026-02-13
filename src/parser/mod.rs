@@ -12064,6 +12064,10 @@ impl<'a> Parser<'a> {
                     let field_defs = self.parse_click_house_tuple_def()?;
                     Ok(DataType::Tuple(field_defs))
                 }
+                Keyword::SETOF => {
+                    let inner = self.parse_data_type()?;
+                    Ok(DataType::SetOf(Box::new(inner)))
+                }
                 Keyword::TRIGGER => Ok(DataType::Trigger),
                 Keyword::ANY if self.peek_keyword(Keyword::TYPE) => {
                     let _ = self.parse_keyword(Keyword::TYPE);

@@ -4881,5 +4881,12 @@ fn test_truncate_table_if_exists() {
 
 #[test]
 fn test_select_dollar_column_from_stage() {
+    // With table function args and alias
     snowflake().verified_stmt("SELECT t.$1, t.$2 FROM @mystage1(file_format => 'myformat', pattern => '.*data.*[.]csv.gz') t");
+    // Without table function args, with alias
+    snowflake().verified_stmt("SELECT t.$1, t.$2 FROM @mystage1 t");
+    // Without table function args, without alias
+    snowflake().verified_stmt("SELECT $1, $2 FROM @mystage1");
+    // With table function args, without alias
+    snowflake().verified_stmt("SELECT $1, $2 FROM @mystage1(file_format => 'myformat')");
 }

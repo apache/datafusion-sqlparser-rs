@@ -15447,10 +15447,8 @@ impl<'a> Parser<'a> {
             && self.peek_keyword_with_tokens(Keyword::SEMANTIC_VIEW, &[Token::LParen])
         {
             self.parse_semantic_view_table_factor()
-        } else if dialect_of!(self is SnowflakeDialect)
-            && self.peek_token_ref().token == Token::AtSign
-        {
-            // Snowflake stage reference: @mystage or @namespace.stage
+        } else if self.peek_token_ref().token == Token::AtSign {
+            // Stage reference: @mystage or @namespace.stage (e.g. Snowflake)
             self.parse_snowflake_stage_table_factor()
         } else {
             let name = self.parse_object_name(true)?;
@@ -15550,6 +15548,8 @@ impl<'a> Parser<'a> {
 
     /// Parse a Snowflake stage reference as a table factor.
     /// Handles syntax like: `@mystage1 (file_format => 'myformat', pattern => '...')`
+    ///
+    /// See: <https://docs.snowflake.com/en/user-guide/querying-stage>
     fn parse_snowflake_stage_table_factor(&mut self) -> Result<TableFactor, ParserError> {
         // Parse the stage name starting with @
         let name = crate::dialect::parse_snowflake_stage_name(self)?;

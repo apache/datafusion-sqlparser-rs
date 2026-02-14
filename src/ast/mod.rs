@@ -136,8 +136,8 @@ mod dml;
 pub mod helpers;
 pub mod table_constraints;
 pub use table_constraints::{
-    CheckConstraint, ForeignKeyConstraint, FullTextOrSpatialConstraint, IndexConstraint,
-    PrimaryKeyConstraint, TableConstraint, UniqueConstraint,
+    CheckConstraint, ConstraintUsingIndex, ForeignKeyConstraint, FullTextOrSpatialConstraint,
+    IndexConstraint, PrimaryKeyConstraint, TableConstraint, UniqueConstraint,
 };
 mod operator;
 mod query;

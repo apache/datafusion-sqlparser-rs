@@ -102,10 +102,15 @@ impl Dialect for MySqlDialect {
     ) -> Option<Result<crate::ast::Expr, ParserError>> {
         // Parse DIV as an operator
         if parser.parse_keyword(Keyword::DIV) {
+            let left = Box::new(expr.clone());
+            let right = Box::new(match parser.parse_expr() {
+                Ok(expr) => expr,
+                Err(e) => return Some(Err(e)),
+            });
             Some(Ok(Expr::BinaryOp {
-                left: Box::new(expr.clone()),
+                left,
                 op: BinaryOperator::MyIntegerDivide,
-                right: Box::new(parser.parse_expr().unwrap()),
+                right,
             }))
         } else {
             None

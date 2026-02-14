@@ -6390,7 +6390,7 @@ impl Display for CascadeOption {
     }
 }
 
-/// Transaction started with [ TRANSACTION | WORK ]
+/// Transaction started with [ TRANSACTION | WORK | TRAN ]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -6399,6 +6399,9 @@ pub enum BeginTransactionKind {
     Transaction,
     /// Alternate `WORK` keyword.
     Work,
+    /// MSSQL shorthand `TRAN` keyword.
+    /// See <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/begin-transaction-transact-sql>
+    Tran,
 }
 
 impl Display for BeginTransactionKind {
@@ -6406,6 +6409,7 @@ impl Display for BeginTransactionKind {
         match self {
             BeginTransactionKind::Transaction => write!(f, "TRANSACTION"),
             BeginTransactionKind::Work => write!(f, "WORK"),
+            BeginTransactionKind::Tran => write!(f, "TRAN"),
         }
     }
 }

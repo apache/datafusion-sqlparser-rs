@@ -2665,3 +2665,31 @@ fn parse_mssql_begin_end_block() {
         _ => panic!("Expected StartTransaction, got: {stmt:?}"),
     }
 }
+
+/// MSSQL supports `TRAN` as shorthand for `TRANSACTION`.
+/// See <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/begin-transaction-transact-sql>
+#[test]
+fn parse_mssql_tran_shorthand() {
+    // BEGIN TRAN
+    let sql = "BEGIN TRAN";
+    let stmt = ms().verified_stmt(sql);
+    match &stmt {
+        Statement::StartTransaction {
+            begin,
+            transaction,
+            has_end_keyword,
+            ..
+        } => {
+            assert!(begin);
+            assert_eq!(*transaction, Some(BeginTransactionKind::Tran));
+            assert!(!has_end_keyword);
+        }
+        _ => panic!("Expected StartTransaction, got: {stmt:?}"),
+    }
+
+    // COMMIT TRAN normalizes to COMMIT (same as COMMIT TRANSACTION)
+    ms().one_statement_parses_to("COMMIT TRAN", "COMMIT");
+
+    // ROLLBACK TRAN normalizes to ROLLBACK (same as ROLLBACK TRANSACTION)
+    ms().one_statement_parses_to("ROLLBACK TRAN", "ROLLBACK");
+}

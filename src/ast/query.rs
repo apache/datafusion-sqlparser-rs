@@ -1589,6 +1589,7 @@ pub enum TableFactor {
     ///
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#pivot_operator)
     /// [Snowflake](https://docs.snowflake.com/en/sql-reference/constructs/pivot)
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/SELECT.html#GUID-CFA006CA-6FF1-4972-821E-6996142A51C6__GUID-68257B27-1C4C-4C47-8140-5C60E0E65D35)
     Pivot {
         /// The input table to pivot.
         table: Box<TableFactor>,
@@ -1610,8 +1611,10 @@ pub enum TableFactor {
     /// table UNPIVOT [ { INCLUDE | EXCLUDE } NULLS ] (value FOR name IN (column1, [ column2, ... ])) [ alias ]
     /// ```
     ///
-    /// See <https://docs.snowflake.com/en/sql-reference/constructs/unpivot>.
-    /// See <https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-select-unpivot>.
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/constructs/unpivot)
+    /// [Databricks](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-select-unpivot)
+    /// [BigQuery](https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#unpivot_operator)
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/SELECT.html#GUID-CFA006CA-6FF1-4972-821E-6996142A51C6__GUID-9B4E0389-413C-4014-94A1-0A0571BDF7E1)
     Unpivot {
         /// The input table to unpivot.
         table: Box<TableFactor>,

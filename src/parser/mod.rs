@@ -899,23 +899,51 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::COLUMN => {
                 (CommentObject::Column, self.parse_object_name(false)?)
             }
-            Token::Word(w) if w.keyword == Keyword::TABLE => {
-                (CommentObject::Table, self.parse_object_name(false)?)
+            Token::Word(w) if w.keyword == Keyword::DATABASE => {
+                (CommentObject::Database, self.parse_object_name(false)?)
+            }
+            Token::Word(w) if w.keyword == Keyword::DOMAIN => {
+                (CommentObject::Domain, self.parse_object_name(false)?)
             }
             Token::Word(w) if w.keyword == Keyword::EXTENSION => {
                 (CommentObject::Extension, self.parse_object_name(false)?)
             }
+            Token::Word(w) if w.keyword == Keyword::FUNCTION => {
+                (CommentObject::Function, self.parse_object_name(false)?)
+            }
+            Token::Word(w) if w.keyword == Keyword::INDEX => {
+                (CommentObject::Index, self.parse_object_name(false)?)
+            }
+            Token::Word(w) if w.keyword == Keyword::MATERIALIZED => {
+                self.expect_keyword_is(Keyword::VIEW)?;
+                (
+                    CommentObject::MaterializedView,
+                    self.parse_object_name(false)?,
+                )
+            }
+            Token::Word(w) if w.keyword == Keyword::PROCEDURE => {
+                (CommentObject::Procedure, self.parse_object_name(false)?)
+            }
+            Token::Word(w) if w.keyword == Keyword::ROLE => {
+                (CommentObject::Role, self.parse_object_name(false)?)
+            }
             Token::Word(w) if w.keyword == Keyword::SCHEMA => {
                 (CommentObject::Schema, self.parse_object_name(false)?)
             }
-            Token::Word(w) if w.keyword == Keyword::DATABASE => {
-                (CommentObject::Database, self.parse_object_name(false)?)
+            Token::Word(w) if w.keyword == Keyword::SEQUENCE => {
+                (CommentObject::Sequence, self.parse_object_name(false)?)
+            }
+            Token::Word(w) if w.keyword == Keyword::TABLE => {
+                (CommentObject::Table, self.parse_object_name(false)?)
+            }
+            Token::Word(w) if w.keyword == Keyword::TYPE => {
+                (CommentObject::Type, self.parse_object_name(false)?)
             }
             Token::Word(w) if w.keyword == Keyword::USER => {
                 (CommentObject::User, self.parse_object_name(false)?)
             }
-            Token::Word(w) if w.keyword == Keyword::ROLE => {
-                (CommentObject::Role, self.parse_object_name(false)?)
+            Token::Word(w) if w.keyword == Keyword::VIEW => {
+                (CommentObject::View, self.parse_object_name(false)?)
             }
             _ => self.expected("comment object_type", token)?,
         };

@@ -2439,30 +2439,54 @@ impl fmt::Display for ShowCreateObject {
 pub enum CommentObject {
     /// A table column.
     Column,
-    /// A table.
-    Table,
-    /// An extension.
-    Extension,
-    /// A schema.
-    Schema,
     /// A database.
     Database,
-    /// A user.
-    User,
+    /// A domain.
+    Domain,
+    /// An extension.
+    Extension,
+    /// A function.
+    Function,
+    /// An index.
+    Index,
+    /// A materialized view.
+    MaterializedView,
+    /// A procedure.
+    Procedure,
     /// A role.
     Role,
+    /// A schema.
+    Schema,
+    /// A sequence.
+    Sequence,
+    /// A table.
+    Table,
+    /// A type.
+    Type,
+    /// A user.
+    User,
+    /// A view.
+    View,
 }
 
 impl fmt::Display for CommentObject {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             CommentObject::Column => f.write_str("COLUMN"),
-            CommentObject::Table => f.write_str("TABLE"),
-            CommentObject::Extension => f.write_str("EXTENSION"),
-            CommentObject::Schema => f.write_str("SCHEMA"),
             CommentObject::Database => f.write_str("DATABASE"),
-            CommentObject::User => f.write_str("USER"),
+            CommentObject::Domain => f.write_str("DOMAIN"),
+            CommentObject::Extension => f.write_str("EXTENSION"),
+            CommentObject::Function => f.write_str("FUNCTION"),
+            CommentObject::Index => f.write_str("INDEX"),
+            CommentObject::MaterializedView => f.write_str("MATERIALIZED VIEW"),
+            CommentObject::Procedure => f.write_str("PROCEDURE"),
             CommentObject::Role => f.write_str("ROLE"),
+            CommentObject::Schema => f.write_str("SCHEMA"),
+            CommentObject::Sequence => f.write_str("SEQUENCE"),
+            CommentObject::Table => f.write_str("TABLE"),
+            CommentObject::Type => f.write_str("TYPE"),
+            CommentObject::User => f.write_str("USER"),
+            CommentObject::View => f.write_str("VIEW"),
         }
     }
 }

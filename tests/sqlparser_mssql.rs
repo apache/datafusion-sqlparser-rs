@@ -1706,7 +1706,7 @@ fn test_parse_throw() {
 fn test_parse_waitfor() {
     // WAITFOR DELAY
     let sql = "WAITFOR DELAY '00:00:05'";
-    let stmt = ms().verified_stmt(sql);
+    let stmt = ms_and_generic().verified_stmt(sql);
     assert_eq!(
         stmt,
         Statement::WaitFor(WaitForStatement {
@@ -1719,7 +1719,7 @@ fn test_parse_waitfor() {
 
     // WAITFOR TIME
     let sql = "WAITFOR TIME '14:30:00'";
-    let stmt = ms().verified_stmt(sql);
+    let stmt = ms_and_generic().verified_stmt(sql);
     assert_eq!(
         stmt,
         Statement::WaitFor(WaitForStatement {

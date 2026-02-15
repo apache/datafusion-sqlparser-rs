@@ -15172,14 +15172,23 @@ fn parse_comments() {
         _ => unreachable!(),
     }
 
+    // https://www.postgresql.org/docs/current/sql-comment.html
     let object_types = [
         ("COLUMN", CommentObject::Column),
-        ("EXTENSION", CommentObject::Extension),
-        ("TABLE", CommentObject::Table),
-        ("SCHEMA", CommentObject::Schema),
         ("DATABASE", CommentObject::Database),
-        ("USER", CommentObject::User),
+        ("DOMAIN", CommentObject::Domain),
+        ("EXTENSION", CommentObject::Extension),
+        ("FUNCTION", CommentObject::Function),
+        ("INDEX", CommentObject::Index),
+        ("MATERIALIZED VIEW", CommentObject::MaterializedView),
+        ("PROCEDURE", CommentObject::Procedure),
         ("ROLE", CommentObject::Role),
+        ("SCHEMA", CommentObject::Schema),
+        ("SEQUENCE", CommentObject::Sequence),
+        ("TABLE", CommentObject::Table),
+        ("TYPE", CommentObject::Type),
+        ("USER", CommentObject::User),
+        ("VIEW", CommentObject::View),
     ];
     for (keyword, expected_object_type) in object_types.iter() {
         match all_dialects_where(|d| d.supports_comment_on())

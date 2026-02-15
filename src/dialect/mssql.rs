@@ -18,7 +18,7 @@
 use crate::ast::helpers::attached_token::AttachedToken;
 use crate::ast::{
     BeginEndStatements, ConditionalStatementBlock, ConditionalStatements, CreateTrigger,
-    GranteesType, IfStatement, Statement, WaitForStatement, WaitForType,
+    GranteesType, IfStatement, Statement,
 };
 use crate::dialect::Dialect;
 use crate::keywords::Keyword;
@@ -183,8 +183,6 @@ impl Dialect for MsSqlDialect {
             Keyword::TRIGGER,
         ]) {
             Some(self.parse_create_trigger(parser, true))
-        } else if parser.parse_keyword(Keyword::WAITFOR) {
-            Some(self.parse_waitfor(parser))
         } else {
             None
         }
@@ -348,20 +346,5 @@ impl MsSqlDialect {
             }
         }
         Ok(stmts)
-    }
-
-    /// Parse `WAITFOR { DELAY 'time' | TIME 'time' }`
-    ///
-    /// See: <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/waitfor-transact-sql>
-    fn parse_waitfor(&self, parser: &mut Parser) -> Result<Statement, ParserError> {
-        let wait_type = if parser.parse_keyword(Keyword::DELAY) {
-            WaitForType::Delay
-        } else if parser.parse_keyword(Keyword::TIME) {
-            WaitForType::Time
-        } else {
-            return parser.expected("DELAY or TIME", parser.peek_token());
-        };
-        let expr = parser.parse_expr()?;
-        Ok(Statement::WaitFor(WaitForStatement { wait_type, expr }))
     }
 }

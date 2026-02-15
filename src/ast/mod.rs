@@ -4764,6 +4764,10 @@ pub enum Statement {
     ///
     /// See: <https://learn.microsoft.com/en-us/sql/t-sql/statements/print-transact-sql>
     Print(PrintStatement),
+    /// MSSQL `WAITFOR` statement.
+    ///
+    /// See: <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/waitfor-transact-sql>
+    WaitFor(WaitForStatement),
     /// ```sql
     /// RETURN [ expression ]
     /// ```
@@ -6217,6 +6221,7 @@ impl fmt::Display for Statement {
             }
             Statement::Throw(s) => write!(f, "{s}"),
             Statement::Print(s) => write!(f, "{s}"),
+            Statement::WaitFor(s) => write!(f, "{s}"),
             Statement::Return(r) => write!(f, "{r}"),
             Statement::List(command) => write!(f, "LIST {command}"),
             Statement::Remove(command) => write!(f, "REMOVE {command}"),
@@ -10961,6 +10966,47 @@ pub struct PrintStatement {
 impl fmt::Display for PrintStatement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "PRINT {}", self.message)
+    }
+}
+
+/// The type of `WAITFOR` statement (MSSQL).
+///
+/// See: <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/waitfor-transact-sql>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum WaitForType {
+    /// `WAITFOR DELAY 'time_to_pass'`
+    Delay,
+    /// `WAITFOR TIME 'time_to_execute'`
+    Time,
+}
+
+impl fmt::Display for WaitForType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            WaitForType::Delay => write!(f, "DELAY"),
+            WaitForType::Time => write!(f, "TIME"),
+        }
+    }
+}
+
+/// MSSQL `WAITFOR` statement.
+///
+/// See: <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/waitfor-transact-sql>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct WaitForStatement {
+    /// `DELAY` or `TIME`.
+    pub wait_type: WaitForType,
+    /// The time expression.
+    pub expr: Expr,
+}
+
+impl fmt::Display for WaitForStatement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "WAITFOR {} {}", self.wait_type, self.expr)
     }
 }
 

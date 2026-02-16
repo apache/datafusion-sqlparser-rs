@@ -151,8 +151,12 @@ impl Dialect for MsSqlDialect {
             let is_block = parser
                 .maybe_parse(|p| {
                     if p.parse_transaction_modifier().is_some()
-                        || p.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK])
-                            .is_some()
+                        || p.parse_one_of_keywords(&[
+                            Keyword::TRANSACTION,
+                            Keyword::WORK,
+                            Keyword::TRAN,
+                        ])
+                        .is_some()
                         || matches!(p.peek_token_ref().token, Token::SemiColon | Token::EOF)
                     {
                         p.expected("statement", p.peek_token())

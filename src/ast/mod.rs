@@ -1423,7 +1423,7 @@ impl fmt::Display for AccessExpr {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct LambdaFunction {
     /// The parameters to the lambda function.
-    pub params: OneOrManyWithParens<Ident>,
+    pub params: OneOrManyWithParens<LambdaFunctionParameter>,
     /// The body of the lambda function.
     pub body: Box<Expr>,
     /// The syntax style used to write the lambda function.
@@ -1444,6 +1444,27 @@ impl fmt::Display for LambdaFunction {
                 };
                 write!(f, " : {}", self.body)
             }
+        }
+    }
+}
+
+/// A parameter to a lambda function, optionally with a data type.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct LambdaFunctionParameter {
+    /// The name of the parameter
+    pub name: Ident,
+    /// The optional data type of the parameter
+    /// [Snowflake Syntax](https://docs.snowflake.com/en/sql-reference/functions/filter#arguments)
+    pub data_type: Option<DataType>,
+}
+
+impl fmt::Display for LambdaFunctionParameter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.data_type {
+            Some(dt) => write!(f, "{} {}", self.name, dt),
+            None => write!(f, "{}", self.name),
         }
     }
 }
@@ -6369,7 +6390,7 @@ impl Display for CascadeOption {
     }
 }
 
-/// Transaction started with [ TRANSACTION | WORK ]
+/// Transaction started with [ TRANSACTION | WORK | TRAN ]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -6378,6 +6399,9 @@ pub enum BeginTransactionKind {
     Transaction,
     /// Alternate `WORK` keyword.
     Work,
+    /// MSSQL shorthand `TRAN` keyword.
+    /// See <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/begin-transaction-transact-sql>
+    Tran,
 }
 
 impl Display for BeginTransactionKind {
@@ -6385,6 +6409,7 @@ impl Display for BeginTransactionKind {
         match self {
             BeginTransactionKind::Transaction => write!(f, "TRANSACTION"),
             BeginTransactionKind::Work => write!(f, "WORK"),
+            BeginTransactionKind::Tran => write!(f, "TRAN"),
         }
     }
 }

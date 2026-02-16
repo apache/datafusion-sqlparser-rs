@@ -1284,6 +1284,11 @@ impl<'a> Parser<'a> {
                                 // SQLite has single-quoted identifiers
                                 id_parts.push(Ident::with_quote('\'', s))
                             }
+                            Token::Placeholder(s) => {
+                                // Snowflake uses $1, $2, etc. for positional column references
+                                // in staged data queries like: SELECT t.$1 FROM @stage t
+                                id_parts.push(Ident::new(s))
+                            }
                             Token::Mul => {
                                 return Ok(Expr::QualifiedWildcard(
                                     ObjectName::from(id_parts),
@@ -1606,10 +1611,34 @@ impl<'a> Parser<'a> {
                     value: self.parse_introduced_string_expr()?.into(),
                 })
             }
+            // An unreserved word (likely an identifier) is followed by an arrow,
+            // which indicates a lambda function with a single, untyped parameter.
+            // For example: `a -> a * 2`.
             Token::Arrow if self.dialect.supports_lambda_functions() => {
                 self.expect_token(&Token::Arrow)?;
                 Ok(Expr::Lambda(LambdaFunction {
-                    params: OneOrManyWithParens::One(w.to_ident(w_span)),
+                    params: OneOrManyWithParens::One(LambdaFunctionParameter {
+                        name: w.to_ident(w_span),
+                        data_type: None,
+                    }),
+                    body: Box::new(self.parse_expr()?),
+                    syntax: LambdaSyntax::Arrow,
+                }))
+            }
+            // An unreserved word (likely an identifier) that is followed by another word (likley a data type)
+            // which is then followed by an arrow, which indicates a lambda function with a single, typed parameter.
+            // For example: `a INT -> a * 2`.
+            Token::Word(_)
+                if self.dialect.supports_lambda_functions()
+                    && self.peek_nth_token_ref(1).token == Token::Arrow =>
+            {
+                let data_type = self.parse_data_type()?;
+                self.expect_token(&Token::Arrow)?;
+                Ok(Expr::Lambda(LambdaFunction {
+                    params: OneOrManyWithParens::One(LambdaFunctionParameter {
+                        name: w.to_ident(w_span),
+                        data_type: Some(data_type),
+                    }),
                     body: Box::new(self.parse_expr()?),
                     syntax: LambdaSyntax::Arrow,
                 }))
@@ -1922,6 +1951,13 @@ impl<'a> Parser<'a> {
                         chain.push(AccessExpr::Dot(expr));
                         self.advance_token(); // The consumed string
                     }
+                    Token::Placeholder(s) => {
+                        // Snowflake uses $1, $2, etc. for positional column references
+                        // in staged data queries like: SELECT t.$1 FROM @stage t
+                        let expr = Expr::Identifier(Ident::with_span(next_token.span, s));
+                        chain.push(AccessExpr::Dot(expr));
+                        self.advance_token(); // The consumed placeholder
+                    }
                     // Fallback to parsing an arbitrary expression, but restrict to expression
                     // types that are valid after the dot operator. This ensures that e.g.
                     // `T.interval` is parsed as a compound identifier, not as an interval
@@ -2195,7 +2231,7 @@ impl<'a> Parser<'a> {
             return Ok(None);
         }
         self.maybe_parse(|p| {
-            let params = p.parse_comma_separated(|p| p.parse_identifier())?;
+            let params = p.parse_comma_separated(|p| p.parse_lambda_function_parameter())?;
             p.expect_token(&Token::RParen)?;
             p.expect_token(&Token::Arrow)?;
             let expr = p.parse_expr()?;
@@ -2207,7 +2243,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parses a lambda expression using the `LAMBDA` keyword syntax.
+    /// Parses a lambda expression following the `LAMBDA` keyword syntax.
     ///
     /// Syntax: `LAMBDA <params> : <expr>`
     ///
@@ -2218,20 +2254,7 @@ impl<'a> Parser<'a> {
     /// See <https://duckdb.org/docs/stable/sql/functions/lambda>
     fn parse_lambda_expr(&mut self) -> Result<Expr, ParserError> {
         // Parse the parameters: either a single identifier or comma-separated identifiers
-        let params = if self.consume_token(&Token::LParen) {
-            // Parenthesized parameters: (x, y)
-            let params = self.parse_comma_separated(|p| p.parse_identifier())?;
-            self.expect_token(&Token::RParen)?;
-            OneOrManyWithParens::Many(params)
-        } else {
-            // Unparenthesized parameters: x or x, y
-            let params = self.parse_comma_separated(|p| p.parse_identifier())?;
-            if params.len() == 1 {
-                OneOrManyWithParens::One(params.into_iter().next().unwrap())
-            } else {
-                OneOrManyWithParens::Many(params)
-            }
-        };
+        let params = self.parse_lambda_function_parameters()?;
         // Expect the colon separator
         self.expect_token(&Token::Colon)?;
         // Parse the body expression
@@ -2241,6 +2264,38 @@ impl<'a> Parser<'a> {
             body: Box::new(body),
             syntax: LambdaSyntax::LambdaKeyword,
         }))
+    }
+
+    /// Parses the parameters of a lambda function with optional typing.
+    fn parse_lambda_function_parameters(
+        &mut self,
+    ) -> Result<OneOrManyWithParens<LambdaFunctionParameter>, ParserError> {
+        // Parse the parameters: either a single identifier or comma-separated identifiers
+        let params = if self.consume_token(&Token::LParen) {
+            // Parenthesized parameters: (x, y)
+            let params = self.parse_comma_separated(|p| p.parse_lambda_function_parameter())?;
+            self.expect_token(&Token::RParen)?;
+            OneOrManyWithParens::Many(params)
+        } else {
+            // Unparenthesized parameters: x or x, y
+            let params = self.parse_comma_separated(|p| p.parse_lambda_function_parameter())?;
+            if params.len() == 1 {
+                OneOrManyWithParens::One(params.into_iter().next().unwrap())
+            } else {
+                OneOrManyWithParens::Many(params)
+            }
+        };
+        Ok(params)
+    }
+
+    /// Parses a single parameter of a lambda function, with optional typing.
+    fn parse_lambda_function_parameter(&mut self) -> Result<LambdaFunctionParameter, ParserError> {
+        let name = self.parse_identifier()?;
+        let data_type = match self.peek_token().token {
+            Token::Word(_) => self.maybe_parse(|p| p.parse_data_type())?,
+            _ => None,
+        };
+        Ok(LambdaFunctionParameter { name, data_type })
     }
 
     /// Tries to parse the body of an [ODBC escaping sequence]
@@ -15392,6 +15447,9 @@ impl<'a> Parser<'a> {
             && self.peek_keyword_with_tokens(Keyword::SEMANTIC_VIEW, &[Token::LParen])
         {
             self.parse_semantic_view_table_factor()
+        } else if self.peek_token_ref().token == Token::AtSign {
+            // Stage reference: @mystage or @namespace.stage (e.g. Snowflake)
+            self.parse_snowflake_stage_table_factor()
         } else {
             let name = self.parse_object_name(true)?;
 
@@ -15486,6 +15544,37 @@ impl<'a> Parser<'a> {
 
             Ok(table)
         }
+    }
+
+    /// Parse a Snowflake stage reference as a table factor.
+    /// Handles syntax like: `@mystage1 (file_format => 'myformat', pattern => '...')`
+    ///
+    /// See: <https://docs.snowflake.com/en/user-guide/querying-stage>
+    fn parse_snowflake_stage_table_factor(&mut self) -> Result<TableFactor, ParserError> {
+        // Parse the stage name starting with @
+        let name = crate::dialect::parse_snowflake_stage_name(self)?;
+
+        // Parse optional stage options like (file_format => 'myformat', pattern => '...')
+        let args = if self.consume_token(&Token::LParen) {
+            Some(self.parse_table_function_args()?)
+        } else {
+            None
+        };
+
+        let alias = self.maybe_parse_table_alias()?;
+
+        Ok(TableFactor::Table {
+            name,
+            alias,
+            args,
+            with_hints: vec![],
+            version: None,
+            partitions: vec![],
+            with_ordinality: false,
+            json_path: None,
+            sample: None,
+            index_hints: vec![],
+        })
     }
 
     fn maybe_parse_table_sample(&mut self) -> Result<Option<Box<TableSample>>, ParserError> {
@@ -18114,11 +18203,14 @@ impl<'a> Parser<'a> {
     /// Parse a 'BEGIN' statement
     pub fn parse_begin(&mut self) -> Result<Statement, ParserError> {
         let modifier = self.parse_transaction_modifier();
-        let transaction = match self.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK]) {
-            Some(Keyword::TRANSACTION) => Some(BeginTransactionKind::Transaction),
-            Some(Keyword::WORK) => Some(BeginTransactionKind::Work),
-            _ => None,
-        };
+        let transaction =
+            match self.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK, Keyword::TRAN])
+            {
+                Some(Keyword::TRANSACTION) => Some(BeginTransactionKind::Transaction),
+                Some(Keyword::WORK) => Some(BeginTransactionKind::Work),
+                Some(Keyword::TRAN) => Some(BeginTransactionKind::Tran),
+                _ => None,
+            };
         Ok(Statement::StartTransaction {
             modes: self.parse_transaction_modes()?,
             begin: true,
@@ -18252,7 +18344,7 @@ impl<'a> Parser<'a> {
 
     /// Parse an optional `AND [NO] CHAIN` clause for `COMMIT` and `ROLLBACK` statements
     pub fn parse_commit_rollback_chain(&mut self) -> Result<bool, ParserError> {
-        let _ = self.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK]);
+        let _ = self.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK, Keyword::TRAN]);
         if self.parse_keyword(Keyword::AND) {
             let chain = !self.parse_keyword(Keyword::NO);
             self.expect_keyword_is(Keyword::CHAIN)?;

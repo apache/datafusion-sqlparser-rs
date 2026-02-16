@@ -1051,6 +1051,7 @@ define_keywords!(
     TOTP,
     TRACE,
     TRAILING,
+    TRAN,
     TRANSACTION,
     TRANSIENT,
     TRANSLATE,

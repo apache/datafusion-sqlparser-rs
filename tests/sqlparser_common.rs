@@ -11357,6 +11357,18 @@ fn parse_pivot_table() {
         verified_stmt(multiple_value_columns_sql).to_string(),
         multiple_value_columns_sql
     );
+
+    // assert optional "AS" keyword for aliases for pivot values
+    one_statement_parses_to(
+        "SELECT * FROM t PIVOT(SUM(1) FOR a.abc IN (1 x, 'two' y, three z))",
+        "SELECT * FROM t PIVOT(SUM(1) FOR a.abc IN (1 AS x, 'two' AS y, three AS z))",
+    );
+
+    // assert optional "AS" keyword for aliases for pivot aggregate function
+    one_statement_parses_to(
+        "SELECT * FROM t PIVOT(SUM(1) x, COUNT(42) y FOR a.abc IN (1))",
+        "SELECT * FROM t PIVOT(SUM(1) AS x, COUNT(42) AS y FOR a.abc IN (1))",
+    );
 }
 
 #[test]

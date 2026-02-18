@@ -13617,7 +13617,7 @@ impl<'a> Parser<'a> {
                 Keyword::PIVOT => {
                     self.expect_token(&Token::LParen)?;
                     let aggregate_functions =
-                        self.parse_comma_separated(Self::parse_aliased_function_call)?;
+                        self.parse_comma_separated(Self::parse_pivot_aggregate_function)?;
                     self.expect_keyword_is(Keyword::FOR)?;
                     let value_column = self.parse_period_separated(|p| p.parse_identifier())?;
                     self.expect_keyword_is(Keyword::IN)?;
@@ -16242,20 +16242,6 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_aliased_function_call(&mut self) -> Result<ExprWithAlias, ParserError> {
-        let function_name = match self.next_token().token {
-            Token::Word(w) => Ok(w.value),
-            _ => self.expected("a function identifier", self.peek_token()),
-        }?;
-        let expr = self.parse_function(ObjectName::from(vec![Ident::new(function_name)]))?;
-        let alias = if self.parse_keyword(Keyword::AS) {
-            Some(self.parse_identifier()?)
-        } else {
-            None
-        };
-
-        Ok(ExprWithAlias { expr, alias })
-    }
     /// Parses an expression with an optional alias
     ///
     /// Examples:
@@ -16289,13 +16275,40 @@ impl<'a> Parser<'a> {
         Ok(ExprWithAlias { expr, alias })
     }
 
+    /// Parse an expression followed by an optional alias; Unlike
+    /// [Self::parse_expr_with_alias] the "AS" keyword between the expression
+    /// and the alias is optional.
+    fn parse_expr_with_alias_optional_as_keyword(&mut self) -> Result<ExprWithAlias, ParserError> {
+        let expr = self.parse_expr()?;
+        let alias = self.parse_identifier_optional_alias()?;
+        Ok(ExprWithAlias { expr, alias })
+    }
+
+    /// Parses a plain function call with an optional alias for the `PIVOT` clause
+    fn parse_pivot_aggregate_function(&mut self) -> Result<ExprWithAlias, ParserError> {
+        let function_name = match self.next_token().token {
+            Token::Word(w) => Ok(w.value),
+            _ => self.expected("a function identifier", self.peek_token()),
+        }?;
+        let expr = self.parse_function(ObjectName::from(vec![Ident::new(function_name)]))?;
+        let alias = {
+            fn validator(explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
+                // ~ for a PIVOT aggregate function the alias must not be a "FOR"; in any dialect
+                kw != &Keyword::FOR && parser.dialect.is_select_item_alias(explicit, kw, parser)
+            }
+            self.parse_optional_alias_inner(None, validator)?
+        };
+        Ok(ExprWithAlias { expr, alias })
+    }
+
     /// Parse a PIVOT table factor (ClickHouse/Oracle style pivot), returning a TableFactor.
     pub fn parse_pivot_table_factor(
         &mut self,
         table: TableFactor,
     ) -> Result<TableFactor, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let aggregate_functions = self.parse_comma_separated(Self::parse_aliased_function_call)?;
+        let aggregate_functions =
+            self.parse_comma_separated(Self::parse_pivot_aggregate_function)?;
         self.expect_keyword_is(Keyword::FOR)?;
         let value_column = if self.peek_token_ref().token == Token::LParen {
             self.parse_parenthesized_column_list_inner(Mandatory, false, |p| {
@@ -16317,7 +16330,9 @@ impl<'a> Parser<'a> {
         } else if self.peek_sub_query() {
             PivotValueSource::Subquery(self.parse_query()?)
         } else {
-            PivotValueSource::List(self.parse_comma_separated(Self::parse_expr_with_alias)?)
+            PivotValueSource::List(
+                self.parse_comma_separated(Self::parse_expr_with_alias_optional_as_keyword)?,
+            )
         };
         self.expect_token(&Token::RParen)?;
 

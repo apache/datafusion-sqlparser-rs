@@ -9276,6 +9276,21 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse `index_name [ DEFERRABLE | NOT DEFERRABLE ] [ INITIALLY DEFERRED | INITIALLY IMMEDIATE ]`
+    /// after `{ PRIMARY KEY | UNIQUE } USING INDEX`.
+    fn parse_constraint_using_index(
+        &mut self,
+        name: Option<Ident>,
+    ) -> Result<ConstraintUsingIndex, ParserError> {
+        let index_name = self.parse_identifier()?;
+        let characteristics = self.parse_constraint_characteristics()?;
+        Ok(ConstraintUsingIndex {
+            name,
+            index_name,
+            characteristics,
+        })
+    }
+
     /// Parse optional constraint characteristics such as `DEFERRABLE`, `INITIALLY` and `ENFORCED`.
     pub fn parse_constraint_characteristics(
         &mut self,
@@ -9343,17 +9358,9 @@ impl<'a> Parser<'a> {
                 // PostgreSQL: UNIQUE USING INDEX index_name
                 // https://www.postgresql.org/docs/current/sql-altertable.html
                 if self.parse_keywords(&[Keyword::USING, Keyword::INDEX]) {
-                    let index_name = self.parse_identifier()?;
-                    let characteristics = self.parse_constraint_characteristics()?;
-                    return Ok(Some(
-                        ConstraintUsingIndex {
-                            name,
-                            is_primary_key: false,
-                            index_name,
-                            characteristics,
-                        }
-                        .into(),
-                    ));
+                    return Ok(Some(TableConstraint::UniqueUsingIndex(
+                        self.parse_constraint_using_index(name)?,
+                    )));
                 }
 
                 let index_type_display = self.parse_index_type_display();
@@ -9394,17 +9401,9 @@ impl<'a> Parser<'a> {
                 // PostgreSQL: PRIMARY KEY USING INDEX index_name
                 // https://www.postgresql.org/docs/current/sql-altertable.html
                 if self.parse_keywords(&[Keyword::USING, Keyword::INDEX]) {
-                    let index_name = self.parse_identifier()?;
-                    let characteristics = self.parse_constraint_characteristics()?;
-                    return Ok(Some(
-                        ConstraintUsingIndex {
-                            name,
-                            is_primary_key: true,
-                            index_name,
-                            characteristics,
-                        }
-                        .into(),
-                    ));
+                    return Ok(Some(TableConstraint::PrimaryKeyUsingIndex(
+                        self.parse_constraint_using_index(name)?,
+                    )));
                 }
 
                 // optional index name

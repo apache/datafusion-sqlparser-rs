@@ -635,11 +635,10 @@ fn parse_alter_table_constraint_using_index() {
     match pg_and_generic().verified_stmt(sql) {
         Statement::AlterTable(alter_table) => match &alter_table.operations[0] {
             AlterTableOperation::AddConstraint {
-                constraint: TableConstraint::ConstraintUsingIndex(c),
+                constraint: TableConstraint::PrimaryKeyUsingIndex(c),
                 ..
             } => {
                 assert_eq!(c.name.as_ref().unwrap().to_string(), "c");
-                assert!(c.is_primary_key);
                 assert_eq!(c.index_name.to_string(), "my_index");
                 assert!(c.characteristics.is_none());
             }

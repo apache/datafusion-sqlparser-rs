@@ -1732,10 +1732,10 @@ fn test_parse_waitfor() {
 
     // WAITFOR DELAY with variable
     let sql = "WAITFOR DELAY @WaitTime";
-    let _ = ms().verified_stmt(sql);
+    let _ = ms_and_generic().verified_stmt(sql);
 
     // Error: WAITFOR without DELAY or TIME
-    let res = ms().parse_sql_statements("WAITFOR '00:00:05'");
+    let res = ms_and_generic().parse_sql_statements("WAITFOR '00:00:05'");
     assert!(res.is_err());
 }
 

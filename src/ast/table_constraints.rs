@@ -101,6 +101,22 @@ pub enum TableConstraint {
     /// [1]: https://dev.mysql.com/doc/refman/8.0/en/fulltext-natural-language.html
     /// [2]: https://dev.mysql.com/doc/refman/8.0/en/spatial-types.html
     FulltextOrSpatial(FullTextOrSpatialConstraint),
+    /// PostgreSQL [definition][1] for promoting an existing unique index to a
+    /// `PRIMARY KEY` constraint:
+    ///
+    /// `[ CONSTRAINT constraint_name ] PRIMARY KEY USING INDEX index_name
+    ///   [ DEFERRABLE | NOT DEFERRABLE ] [ INITIALLY DEFERRED | INITIALLY IMMEDIATE ]`
+    ///
+    /// [1]: https://www.postgresql.org/docs/current/sql-altertable.html
+    PrimaryKeyUsingIndex(ConstraintUsingIndex),
+    /// PostgreSQL [definition][1] for promoting an existing unique index to a
+    /// `UNIQUE` constraint:
+    ///
+    /// `[ CONSTRAINT constraint_name ] UNIQUE USING INDEX index_name
+    ///   [ DEFERRABLE | NOT DEFERRABLE ] [ INITIALLY DEFERRED | INITIALLY IMMEDIATE ]`
+    ///
+    /// [1]: https://www.postgresql.org/docs/current/sql-altertable.html
+    UniqueUsingIndex(ConstraintUsingIndex),
 }
 
 impl From<UniqueConstraint> for TableConstraint {
@@ -148,6 +164,8 @@ impl fmt::Display for TableConstraint {
             TableConstraint::Check(constraint) => constraint.fmt(f),
             TableConstraint::Index(constraint) => constraint.fmt(f),
             TableConstraint::FulltextOrSpatial(constraint) => constraint.fmt(f),
+            TableConstraint::PrimaryKeyUsingIndex(c) => c.fmt_with_keyword(f, "PRIMARY KEY"),
+            TableConstraint::UniqueUsingIndex(c) => c.fmt_with_keyword(f, "UNIQUE"),
         }
     }
 }
@@ -533,5 +551,55 @@ impl crate::ast::Spanned for UniqueConstraint {
                 .chain(self.columns.iter().map(|i| i.span()))
                 .chain(self.characteristics.iter().map(|i| i.span())),
         )
+    }
+}
+
+/// PostgreSQL constraint that promotes an existing unique index to a table constraint.
+///
+/// `[ CONSTRAINT constraint_name ] { UNIQUE | PRIMARY KEY } USING INDEX index_name
+///   [ DEFERRABLE | NOT DEFERRABLE ] [ INITIALLY DEFERRED | INITIALLY IMMEDIATE ]`
+///
+/// See <https://www.postgresql.org/docs/current/sql-altertable.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ConstraintUsingIndex {
+    /// Optional constraint name.
+    pub name: Option<Ident>,
+    /// The name of the existing unique index to promote.
+    pub index_name: Ident,
+    /// Optional characteristics like `DEFERRABLE`.
+    pub characteristics: Option<ConstraintCharacteristics>,
+}
+
+impl ConstraintUsingIndex {
+    /// Format as `[CONSTRAINT name] <keyword> USING INDEX index_name [characteristics]`.
+    pub fn fmt_with_keyword(&self, f: &mut fmt::Formatter, keyword: &str) -> fmt::Result {
+        use crate::ast::ddl::{display_constraint_name, display_option_spaced};
+        write!(
+            f,
+            "{}{} USING INDEX {}",
+            display_constraint_name(&self.name),
+            keyword,
+            self.index_name,
+        )?;
+        write!(f, "{}", display_option_spaced(&self.characteristics))?;
+        Ok(())
+    }
+}
+
+impl crate::ast::Spanned for ConstraintUsingIndex {
+    fn span(&self) -> Span {
+        let start = self
+            .name
+            .as_ref()
+            .map(|i| i.span)
+            .unwrap_or(self.index_name.span);
+        let end = self
+            .characteristics
+            .as_ref()
+            .map(|c| c.span())
+            .unwrap_or(self.index_name.span);
+        start.union(&end)
     }
 }

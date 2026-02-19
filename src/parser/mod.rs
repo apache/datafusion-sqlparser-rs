@@ -4581,13 +4581,7 @@ impl<'a> Parser<'a> {
     ///
     /// Returns true if the current token matches the expected keyword.
     pub fn peek_keyword(&self, expected: Keyword) -> bool {
-        self.peek_keyword_one_of(&[expected])
-    }
-
-    #[must_use]
-    /// Checks whether the current token is one of the expected keywords without consuming it.
-    fn peek_keyword_one_of(&self, expected: &[Keyword]) -> bool {
-        matches!(&self.peek_token_ref().token, Token::Word(w) if expected.contains(&w.keyword))
+        matches!(&self.peek_token_ref().token, Token::Word(w) if expected == w.keyword)
     }
 
     /// If the current token is the `expected` keyword followed by
@@ -17237,7 +17231,7 @@ impl<'a> Parser<'a> {
 
             let table_alias = if dialect_of!(self is OracleDialect) {
                 if !self.peek_sub_query()
-                    && !self.peek_keyword_one_of(&[Keyword::DEFAULT, Keyword::VALUES])
+                    && self.peek_one_of_keywords(&[Keyword::DEFAULT, Keyword::VALUES]).is_none()
                 {
                     self.maybe_parse(|parser| parser.parse_identifier())?
                         .map(|alias| InsertTableAlias {
@@ -19495,7 +19489,7 @@ impl<'a> Parser<'a> {
 
     /// Returns true if the next keyword indicates a sub query, i.e. SELECT or WITH
     fn peek_sub_query(&mut self) -> bool {
-        self.peek_keyword_one_of(&[Keyword::SELECT, Keyword::WITH])
+        self.peek_one_of_keywords(&[Keyword::SELECT, Keyword::WITH]).is_some()
     }
 
     pub(crate) fn parse_show_stmt_options(&mut self) -> Result<ShowStatementOptions, ParserError> {

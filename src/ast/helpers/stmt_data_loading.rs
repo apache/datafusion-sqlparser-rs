@@ -78,8 +78,9 @@ pub struct StageLoadSelectItem {
     pub alias: Option<Ident>,
     /// Column number within the staged file (1-based).
     pub file_col_num: i32,
-    /// Optional element identifier following the column reference.
-    pub element: Option<Ident>,
+    /// Optional semi-structured element path following the column reference
+    /// (e.g. `$1:UsageMetrics:hh` produces `["UsageMetrics", "hh"]`).
+    pub element: Option<Vec<Ident>>,
     /// Optional alias for the item (AS clause).
     pub item_as: Option<Ident>,
 }
@@ -116,8 +117,10 @@ impl fmt::Display for StageLoadSelectItem {
             write!(f, "{alias}.")?;
         }
         write!(f, "${}", self.file_col_num)?;
-        if let Some(element) = &self.element {
-            write!(f, ":{element}")?;
+        if let Some(elements) = &self.element {
+            for element in elements {
+                write!(f, ":{element}")?;
+            }
         }
         if let Some(item_as) = &self.item_as {
             write!(f, " AS {item_as}")?;

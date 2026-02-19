@@ -703,6 +703,8 @@ impl<'a> Parser<'a> {
                 // `COMMENT` is snowflake specific https://docs.snowflake.com/en/sql-reference/sql/comment
                 Keyword::COMMENT if self.dialect.supports_comment_on() => self.parse_comment(),
                 Keyword::PRINT => self.parse_print(),
+                // `WAITFOR` is MSSQL specific https://learn.microsoft.com/en-us/sql/t-sql/language-elements/waitfor-transact-sql
+                Keyword::WAITFOR => self.parse_waitfor(),
                 Keyword::RETURN => self.parse_return(),
                 Keyword::EXPORT => {
                     self.prev_token();
@@ -9331,6 +9333,21 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse `index_name [ DEFERRABLE | NOT DEFERRABLE ] [ INITIALLY DEFERRED | INITIALLY IMMEDIATE ]`
+    /// after `{ PRIMARY KEY | UNIQUE } USING INDEX`.
+    fn parse_constraint_using_index(
+        &mut self,
+        name: Option<Ident>,
+    ) -> Result<ConstraintUsingIndex, ParserError> {
+        let index_name = self.parse_identifier()?;
+        let characteristics = self.parse_constraint_characteristics()?;
+        Ok(ConstraintUsingIndex {
+            name,
+            index_name,
+            characteristics,
+        })
+    }
+
     /// Parse optional constraint characteristics such as `DEFERRABLE`, `INITIALLY` and `ENFORCED`.
     pub fn parse_constraint_characteristics(
         &mut self,
@@ -9395,6 +9412,14 @@ impl<'a> Parser<'a> {
         let next_token = self.next_token();
         match next_token.token {
             Token::Word(w) if w.keyword == Keyword::UNIQUE => {
+                // PostgreSQL: UNIQUE USING INDEX index_name
+                // https://www.postgresql.org/docs/current/sql-altertable.html
+                if self.parse_keywords(&[Keyword::USING, Keyword::INDEX]) {
+                    return Ok(Some(TableConstraint::UniqueUsingIndex(
+                        self.parse_constraint_using_index(name)?,
+                    )));
+                }
+
                 let index_type_display = self.parse_index_type_display();
                 if !dialect_of!(self is GenericDialect | MySqlDialect)
                     && !index_type_display.is_none()
@@ -9429,6 +9454,14 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::PRIMARY => {
                 // after `PRIMARY` always stay `KEY`
                 self.expect_keyword_is(Keyword::KEY)?;
+
+                // PostgreSQL: PRIMARY KEY USING INDEX index_name
+                // https://www.postgresql.org/docs/current/sql-altertable.html
+                if self.parse_keywords(&[Keyword::USING, Keyword::INDEX]) {
+                    return Ok(Some(TableConstraint::PrimaryKeyUsingIndex(
+                        self.parse_constraint_using_index(name)?,
+                    )));
+                }
 
                 // optional index name
                 let index_name = self.parse_optional_ident()?;
@@ -19287,6 +19320,21 @@ impl<'a> Parser<'a> {
         Ok(Statement::Print(PrintStatement {
             message: Box::new(self.parse_expr()?),
         }))
+    }
+
+    /// Parse [Statement::WaitFor]
+    ///
+    /// See: <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/waitfor-transact-sql>
+    fn parse_waitfor(&mut self) -> Result<Statement, ParserError> {
+        let wait_type = if self.parse_keyword(Keyword::DELAY) {
+            WaitForType::Delay
+        } else if self.parse_keyword(Keyword::TIME) {
+            WaitForType::Time
+        } else {
+            return self.expected("DELAY or TIME", self.peek_token());
+        };
+        let expr = self.parse_expr()?;
+        Ok(Statement::WaitFor(WaitForStatement { wait_type, expr }))
     }
 
     /// Parse [Statement::Return]

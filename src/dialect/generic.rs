@@ -225,10 +225,6 @@ impl Dialect for GenericDialect {
         true
     }
 
-    fn supports_lambda_functions(&self) -> bool {
-        true
-    }
-
     fn supports_select_wildcard_replace(&self) -> bool {
         true
     }

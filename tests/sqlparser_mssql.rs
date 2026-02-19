@@ -1703,6 +1703,43 @@ fn test_parse_throw() {
 }
 
 #[test]
+fn test_parse_waitfor() {
+    // WAITFOR DELAY
+    let sql = "WAITFOR DELAY '00:00:05'";
+    let stmt = ms_and_generic().verified_stmt(sql);
+    assert_eq!(
+        stmt,
+        Statement::WaitFor(WaitForStatement {
+            wait_type: WaitForType::Delay,
+            expr: Expr::Value(
+                (Value::SingleQuotedString("00:00:05".to_string())).with_empty_span()
+            ),
+        })
+    );
+
+    // WAITFOR TIME
+    let sql = "WAITFOR TIME '14:30:00'";
+    let stmt = ms_and_generic().verified_stmt(sql);
+    assert_eq!(
+        stmt,
+        Statement::WaitFor(WaitForStatement {
+            wait_type: WaitForType::Time,
+            expr: Expr::Value(
+                (Value::SingleQuotedString("14:30:00".to_string())).with_empty_span()
+            ),
+        })
+    );
+
+    // WAITFOR DELAY with variable
+    let sql = "WAITFOR DELAY @WaitTime";
+    let _ = ms_and_generic().verified_stmt(sql);
+
+    // Error: WAITFOR without DELAY or TIME
+    let res = ms_and_generic().parse_sql_statements("WAITFOR '00:00:05'");
+    assert!(res.is_err());
+}
+
+#[test]
 fn parse_use() {
     let valid_object_names = [
         "mydb",

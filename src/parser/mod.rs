@@ -703,6 +703,8 @@ impl<'a> Parser<'a> {
                 // `COMMENT` is snowflake specific https://docs.snowflake.com/en/sql-reference/sql/comment
                 Keyword::COMMENT if self.dialect.supports_comment_on() => self.parse_comment(),
                 Keyword::PRINT => self.parse_print(),
+                // `WAITFOR` is MSSQL specific https://learn.microsoft.com/en-us/sql/t-sql/language-elements/waitfor-transact-sql
+                Keyword::WAITFOR => self.parse_waitfor(),
                 Keyword::RETURN => self.parse_return(),
                 Keyword::EXPORT => {
                     self.prev_token();
@@ -19287,6 +19289,21 @@ impl<'a> Parser<'a> {
         Ok(Statement::Print(PrintStatement {
             message: Box::new(self.parse_expr()?),
         }))
+    }
+
+    /// Parse [Statement::WaitFor]
+    ///
+    /// See: <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/waitfor-transact-sql>
+    fn parse_waitfor(&mut self) -> Result<Statement, ParserError> {
+        let wait_type = if self.parse_keyword(Keyword::DELAY) {
+            WaitForType::Delay
+        } else if self.parse_keyword(Keyword::TIME) {
+            WaitForType::Time
+        } else {
+            return self.expected("DELAY or TIME", self.peek_token());
+        };
+        let expr = self.parse_expr()?;
+        Ok(Statement::WaitFor(WaitForStatement { wait_type, expr }))
     }
 
     /// Parse [Statement::Return]

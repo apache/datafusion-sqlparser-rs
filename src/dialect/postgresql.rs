@@ -289,8 +289,9 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
-    /// [Postgres] support insert table aliases with an explicit "AS" keyword.
-    /// See: <https://www.postgresql.org/docs/17/sql-insert.html>
+    /// [Postgres] supports insert table aliases with an explicit "AS" keyword.
+    ///
+    /// [Postgres]: https://www.postgresql.org/docs/17/sql-insert.html
     fn supports_insert_table_explicit_alias(&self) -> bool {
         true
     }

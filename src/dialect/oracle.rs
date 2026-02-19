@@ -110,4 +110,11 @@ impl Dialect for OracleDialect {
     fn supports_comment_optimizer_hint(&self) -> bool {
         true
     }
+
+    /// Supports insert table aliases (but with no preceding "AS" keyword)
+    ///
+    /// See <https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/INSERT.html#GUID-903F8043-0254-4EE9-ACC1-CB8AC0AF3423__GUID-AC239E95-0DD5-4F4B-A849-55C87840D0E6>
+    fn supports_insert_table_implicit_alias(&self) -> bool {
+        true
+    }
 }

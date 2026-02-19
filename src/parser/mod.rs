@@ -17229,19 +17229,15 @@ impl<'a> Parser<'a> {
             let table = self.parse_keyword(Keyword::TABLE);
             let table_object = self.parse_table_object()?;
 
-            let table_alias = if dialect_of!(self is OracleDialect) {
-                if !self.peek_sub_query()
-                    && self.peek_one_of_keywords(&[Keyword::DEFAULT, Keyword::VALUES]).is_none()
-                {
+            let table_alias = if self.dialect.supports_insert_table_implicit_alias()
+                && !self.peek_sub_query()
+                && self.peek_one_of_keywords(&[Keyword::AS, Keyword::DEFAULT, Keyword::VALUES]).is_none() {
                     self.maybe_parse(|parser| parser.parse_identifier())?
                         .map(|alias| TableAliasWithoutColumns {
                             explicit: false,
                             alias,
                         })
-                } else {
-                    None
-                }
-            } else if dialect_of!(self is PostgreSqlDialect) && self.parse_keyword(Keyword::AS) {
+            } else if self.dialect.supports_insert_table_explicit_alias() && self.parse_keyword(Keyword::AS) {
                 Some(TableAliasWithoutColumns {
                     explicit: true,
                     alias: self.parse_identifier()?,

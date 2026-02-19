@@ -288,4 +288,10 @@ impl Dialect for PostgreSqlDialect {
     fn supports_interval_options(&self) -> bool {
         true
     }
+
+    /// [Postgres] support insert table aliases with an explicit "AS" keyword.
+    /// See: <https://www.postgresql.org/docs/17/sql-insert.html>
+    fn supports_insert_table_explicit_alias(&self) -> bool {
+        true
+    }
 }

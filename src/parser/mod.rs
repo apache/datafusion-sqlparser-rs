@@ -17234,7 +17234,7 @@ impl<'a> Parser<'a> {
                     && self.peek_one_of_keywords(&[Keyword::DEFAULT, Keyword::VALUES]).is_none()
                 {
                     self.maybe_parse(|parser| parser.parse_identifier())?
-                        .map(|alias| InsertTableAlias {
+                        .map(|alias| TableAliasWithoutColumns {
                             explicit: false,
                             alias,
                         })
@@ -17242,7 +17242,7 @@ impl<'a> Parser<'a> {
                     None
                 }
             } else if dialect_of!(self is PostgreSqlDialect) && self.parse_keyword(Keyword::AS) {
-                Some(InsertTableAlias {
+                Some(TableAliasWithoutColumns {
                     explicit: true,
                     alias: self.parse_identifier()?,
                 })

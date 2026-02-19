@@ -30,10 +30,7 @@ use crate::{
 };
 
 use super::{
-    display_comma_separated, helpers::attached_token::AttachedToken, query::InputFormatClause,
-    Assignment, Expr, FromTable, Ident, InsertAliases, InsertTableAlias, MysqlInsertPriority,
-    ObjectName, OnInsert, OptimizerHint, OrderByExpr, Query, SelectInto, SelectItem, Setting,
-    SqliteOnConflict, TableFactor, TableObject, TableWithJoins, UpdateTableFromKind, Values,
+    Assignment, Expr, FromTable, Ident, InsertAliases, TableAliasWithoutColumns, MysqlInsertPriority, ObjectName, OnInsert, OptimizerHint, OrderByExpr, Query, SelectInto, SelectItem, Setting, SqliteOnConflict, TableFactor, TableObject, TableWithJoins, UpdateTableFromKind, Values, display_comma_separated, helpers::attached_token::AttachedToken, query::InputFormatClause
 };
 
 /// INSERT statement.
@@ -58,7 +55,7 @@ pub struct Insert {
     pub table: TableObject,
     /// `table_name as foo` (for PostgreSQL)
     /// `table_name foo` (for Oracle)
-    pub table_alias: Option<InsertTableAlias>,
+    pub table_alias: Option<TableAliasWithoutColumns>,
     /// COLUMNS
     pub columns: Vec<Ident>,
     /// Overwrite (Hive)

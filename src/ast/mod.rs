@@ -6484,7 +6484,7 @@ pub struct InsertAliases {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Optional alias for an `INSERT` table; i.e. the table to be inserted into
-pub struct InsertTableAlias {
+pub struct TableAliasWithoutColumns {
     /// `true` if the aliases was explicitly introduced with the "AS" keyword
     pub explicit: bool,
     /// the alias name itself

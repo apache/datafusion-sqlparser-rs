@@ -22,7 +22,7 @@ use pretty_assertions::assert_eq;
 
 use sqlparser::{
     ast::{
-        BinaryOperator, Expr, Ident, Insert, InsertTableAlias, ObjectName, QuoteDelimitedString,
+        BinaryOperator, Expr, Ident, Insert, TableAliasWithoutColumns, ObjectName, QuoteDelimitedString,
         Statement, TableObject, Value, ValueWithSpan,
     },
     dialect::OracleDialect,
@@ -433,7 +433,7 @@ fn test_insert_with_table_alias() {
         assert!(matches!(stmt,
             Statement::Insert(Insert {
                 table: TableObject::TableName(table_name),
-                table_alias: Some(InsertTableAlias {
+                table_alias: Some(TableAliasWithoutColumns {
                     explicit: false,
                     alias: Ident {
                         value: table_alias,

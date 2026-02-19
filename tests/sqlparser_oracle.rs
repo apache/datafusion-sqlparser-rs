@@ -22,8 +22,8 @@ use pretty_assertions::assert_eq;
 
 use sqlparser::{
     ast::{
-        BinaryOperator, Expr, Ident, Insert, TableAliasWithoutColumns, ObjectName, QuoteDelimitedString,
-        Statement, TableObject, Value, ValueWithSpan,
+        BinaryOperator, Expr, Ident, Insert, ObjectName, Query, QuoteDelimitedString, SetExpr,
+        Statement, TableAliasWithoutColumns, TableObject, Value, ValueWithSpan,
     },
     dialect::OracleDialect,
     parser::ParserError,
@@ -475,4 +475,56 @@ fn test_insert_with_table_alias() {
          VALUES (1, 2, 3)",
     );
     verify_table_name_with_alias(&stmt, "foo_t", "t");
+}
+
+#[test]
+fn test_insert_without_alias() {
+    let oracle_dialect = oracle();
+
+    // check DEFAULT
+    let sql = "INSERT INTO t default SELECT 'a' FROM dual";
+    assert_eq!(
+        oracle_dialect.parse_sql_statements(sql),
+        Err(ParserError::ParserError(
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: default".into()
+        ))
+    );
+
+    // check SELECT
+    let sql = "INSERT INTO t SELECT 'a' FROM dual";
+    let stmt = oracle_dialect.verified_stmt(sql);
+    assert!(matches!(
+        &stmt,
+        Statement::Insert(Insert {
+            table_alias: None,
+            source: Some(source),
+            ..
+        })
+        if matches!(&**source, Query { body, .. } if matches!(&**body, SetExpr::Select(_)))));
+
+    // check WITH
+    let sql = "INSERT INTO dual WITH w AS (SELECT 1 AS y FROM dual) SELECT y FROM w";
+    let stmt = oracle_dialect.verified_stmt(sql);
+    assert!(matches!(
+        &stmt,
+        Statement::Insert(Insert {
+            table_alias: None,
+            source: Some(source),
+            ..
+        })
+        if matches!(&**source, Query { body, .. } if matches!(&**body, SetExpr::Select(_)))));
+
+    // check VALUES
+    let sql = "INSERT INTO t VALUES (1)";
+    let stmt = oracle_dialect.verified_stmt(sql);
+    dbg!(&stmt);
+    assert!(matches!(
+        stmt,
+        Statement::Insert(Insert {
+            table_alias: None,
+            source: Some(source),
+            ..
+        })
+        if matches!(&*source, Query { body, .. } if matches!(&**body, SetExpr::Values(_)))
+    ));
 }

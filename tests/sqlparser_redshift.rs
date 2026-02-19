@@ -467,4 +467,3 @@ fn test_create_table_diststyle() {
     redshift().verified_stmt("CREATE TABLE t1 (c1 INT) DISTSTYLE KEY DISTKEY(c1)");
     redshift().verified_stmt("CREATE TABLE t1 (c1 INT) DISTSTYLE ALL");
 }
-

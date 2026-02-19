@@ -1470,8 +1470,7 @@ fn parse_select_item_for_data_load(
 ) -> Result<StageLoadSelectItem, ParserError> {
     let mut alias: Option<Ident> = None;
     let mut file_col_num: i32 = 0;
-    let mut element: Option<Ident> = None;
-    let mut item_as: Option<Ident> = None;
+    let mut element: Option<Vec<Ident>> = None;
 
     let next_token = parser.next_token();
     match next_token.token {
@@ -1503,28 +1502,20 @@ fn parse_select_item_for_data_load(
         }?;
     }
 
-    // try extracting optional element
-    match parser.next_token().token {
-        Token::Colon => {
-            // parse element
-            element = Some(Ident::new(match parser.next_token().token {
-                Token::Word(w) => Ok(w.value),
-                _ => parser.expected_ref("file_col_num", parser.peek_token_ref()),
-            }?));
+    // try extracting optional element path (e.g. :UsageMetrics:hh)
+    let mut elements = Vec::new();
+    while parser.next_token().token == Token::Colon {
+        match parser.next_token().token {
+            Token::Word(w) => elements.push(Ident::new(w.value)),
+            _ => return parser.expected_ref("element name", parser.peek_token_ref()),
         }
-        _ => {
-            // element not present move back
-            parser.prev_token();
-        }
+    }
+    parser.prev_token();
+    if !elements.is_empty() {
+        element = Some(elements);
     }
 
-    // as
-    if parser.parse_keyword(Keyword::AS) {
-        item_as = Some(match parser.next_token().token {
-            Token::Word(w) => Ok(Ident::new(w.value)),
-            _ => parser.expected_ref("column item alias", parser.peek_token_ref()),
-        }?);
-    }
+    let item_as = parser.maybe_parse_select_item_alias()?;
 
     Ok(StageLoadSelectItem {
         alias,

@@ -8058,6 +8058,23 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse Redshift `DISTSTYLE { AUTO | EVEN | KEY | ALL }`.
+    ///
+    /// See <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html>
+    fn parse_dist_style(&mut self) -> Result<DistStyle, ParserError> {
+        let token = self.next_token();
+        match &token.token {
+            Token::Word(w) => match w.keyword {
+                Keyword::AUTO => Ok(DistStyle::Auto),
+                Keyword::EVEN => Ok(DistStyle::Even),
+                Keyword::KEY => Ok(DistStyle::Key),
+                Keyword::ALL => Ok(DistStyle::All),
+                _ => self.expected("AUTO, EVEN, KEY, or ALL", token),
+            },
+            _ => self.expected("AUTO, EVEN, KEY, or ALL", token),
+        }
+    }
+
     /// Parse Hive formats.
     pub fn parse_hive_formats(&mut self) -> Result<Option<HiveFormat>, ParserError> {
         let mut hive_format: Option<HiveFormat> = None;
@@ -8328,6 +8345,21 @@ impl<'a> Parser<'a> {
 
         let strict = self.parse_keyword(Keyword::STRICT);
 
+        // Redshift: DISTSTYLE, DISTKEY
+        let diststyle = if self.parse_keyword(Keyword::DISTSTYLE) {
+            Some(self.parse_dist_style()?)
+        } else {
+            None
+        };
+        let distkey = if self.parse_keyword(Keyword::DISTKEY) {
+            self.expect_token(&Token::LParen)?;
+            let column = self.parse_identifier()?;
+            self.expect_token(&Token::RParen)?;
+            Some(column)
+        } else {
+            None
+        };
+
         // Parse optional `AS ( query )`
         let query = if self.parse_keyword(Keyword::AS) {
             Some(self.parse_query()?)
@@ -8367,6 +8399,8 @@ impl<'a> Parser<'a> {
             .table_options(create_table_config.table_options)
             .primary_key(primary_key)
             .strict(strict)
+            .diststyle(diststyle)
+            .distkey(distkey)
             .build())
     }
 

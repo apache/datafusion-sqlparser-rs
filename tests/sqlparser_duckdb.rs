@@ -784,6 +784,8 @@ fn test_duckdb_union_datatype() {
             refresh_mode: None,
             initialize: None,
             require_user: Default::default(),
+            diststyle: Default::default(),
+            distkey: Default::default(),
         }),
         stmt
     );

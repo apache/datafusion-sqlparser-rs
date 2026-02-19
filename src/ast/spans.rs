@@ -581,6 +581,8 @@ impl Spanned for CreateTable {
             refresh_mode: _,
             initialize: _,
             require_user: _,
+            diststyle: _,  // enum, no span
+            distkey: _,    // Ident, todo
         } = self;
 
         union_spans(

@@ -1969,6 +1969,8 @@ fn parse_create_table_with_valid_options() {
                 refresh_mode: None,
                 initialize: None,
                 require_user: false,
+                diststyle: None,
+                distkey: None,
             })
         );
     }
@@ -2137,6 +2139,8 @@ fn parse_create_table_with_identity_column() {
                 refresh_mode: None,
                 initialize: None,
                 require_user: false,
+                diststyle: None,
+                distkey: None,
             }),
         );
     }

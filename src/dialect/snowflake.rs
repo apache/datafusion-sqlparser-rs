@@ -37,7 +37,7 @@ use crate::ast::{
     StorageSerializationPolicy, TableObject, TagsColumnOption, Value, WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
-use crate::keywords::Keyword;
+use crate::keywords::{Keyword, RESERVED_FOR_COLUMN_ALIAS};
 use crate::parser::{IsOptional, Parser, ParserError};
 use crate::tokenizer::Token;
 use crate::tokenizer::TokenWithSpan;
@@ -1460,7 +1460,7 @@ fn parse_select_item_for_data_load(
 ) -> Result<StageLoadSelectItem, ParserError> {
     let mut alias: Option<Ident> = None;
     let mut file_col_num: i32 = 0;
-    let mut element: Option<Ident> = None;
+    let mut element: Option<Vec<Ident>> = None;
     let mut item_as: Option<Ident> = None;
 
     let next_token = parser.next_token();
@@ -1493,27 +1493,30 @@ fn parse_select_item_for_data_load(
         }?;
     }
 
-    // try extracting optional element
-    match parser.next_token().token {
-        Token::Colon => {
-            // parse element
-            element = Some(Ident::new(match parser.next_token().token {
-                Token::Word(w) => Ok(w.value),
-                _ => parser.expected("file_col_num", parser.peek_token()),
-            }?));
-        }
-        _ => {
-            // element not present move back
-            parser.prev_token();
+    // try extracting optional element path (e.g. :UsageMetrics:hh)
+    let mut elements = Vec::new();
+    while parser.next_token().token == Token::Colon {
+        match parser.next_token().token {
+            Token::Word(w) => elements.push(Ident::new(w.value)),
+            _ => return parser.expected("element name", parser.peek_token()),
         }
     }
+    parser.prev_token();
+    if !elements.is_empty() {
+        element = Some(elements);
+    }
 
-    // as
+    // optional alias: `AS alias` or just `alias` (implicit)
     if parser.parse_keyword(Keyword::AS) {
         item_as = Some(match parser.next_token().token {
             Token::Word(w) => Ok(Ident::new(w.value)),
             _ => parser.expected("column item alias", parser.peek_token()),
         }?);
+    } else if let Token::Word(w) = parser.peek_token().token {
+        if !RESERVED_FOR_COLUMN_ALIAS.contains(&w.keyword) {
+            parser.next_token();
+            item_as = Some(Ident::new(w.value));
+        }
     }
 
     Ok(StageLoadSelectItem {

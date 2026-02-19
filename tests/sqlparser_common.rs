@@ -1663,6 +1663,7 @@ fn parse_json_ops_without_colon() {
             Arrow,
             all_dialects_except(|d| d.supports_lambda_functions()),
         ),
+        ("->", Arrow, pg_and_generic()),
         ("->>", LongArrow, all_dialects()),
         ("#>", HashArrow, pg_and_generic()),
         ("#>>", HashLongArrow, pg_and_generic()),

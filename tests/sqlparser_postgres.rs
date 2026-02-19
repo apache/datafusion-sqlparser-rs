@@ -5524,7 +5524,7 @@ fn test_simple_postgres_insert_with_alias() {
                 quote_style: None,
                 span: Span::empty(),
             }])),
-            table_alias: Some(InsertTableAlias {
+            table_alias: Some(TableAliasWithoutColumns {
                 explicit: true,
                 alias: Ident {
                     value: "test_table".to_string(),

@@ -30,7 +30,11 @@ use crate::{
 };
 
 use super::{
-    Assignment, Expr, FromTable, Ident, InsertAliases, TableAliasWithoutColumns, MysqlInsertPriority, ObjectName, OnInsert, OptimizerHint, OrderByExpr, Query, SelectInto, SelectItem, Setting, SqliteOnConflict, TableFactor, TableObject, TableWithJoins, UpdateTableFromKind, Values, display_comma_separated, helpers::attached_token::AttachedToken, query::InputFormatClause
+    display_comma_separated, helpers::attached_token::AttachedToken, query::InputFormatClause,
+    Assignment, Expr, FromTable, Ident, InsertAliases, MysqlInsertPriority, ObjectName, OnInsert,
+    OptimizerHint, OrderByExpr, Query, SelectInto, SelectItem, Setting, SqliteOnConflict,
+    TableAliasWithoutColumns, TableFactor, TableObject, TableWithJoins, UpdateTableFromKind,
+    Values,
 };
 
 /// INSERT statement.

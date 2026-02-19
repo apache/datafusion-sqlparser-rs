@@ -17231,13 +17231,18 @@ impl<'a> Parser<'a> {
 
             let table_alias = if self.dialect.supports_insert_table_implicit_alias()
                 && !self.peek_sub_query()
-                && self.peek_one_of_keywords(&[Keyword::AS, Keyword::DEFAULT, Keyword::VALUES]).is_none() {
-                    self.maybe_parse(|parser| parser.parse_identifier())?
-                        .map(|alias| TableAliasWithoutColumns {
-                            explicit: false,
-                            alias,
-                        })
-            } else if self.dialect.supports_insert_table_explicit_alias() && self.parse_keyword(Keyword::AS) {
+                && self
+                    .peek_one_of_keywords(&[Keyword::AS, Keyword::DEFAULT, Keyword::VALUES])
+                    .is_none()
+            {
+                self.maybe_parse(|parser| parser.parse_identifier())?
+                    .map(|alias| TableAliasWithoutColumns {
+                        explicit: false,
+                        alias,
+                    })
+            } else if self.dialect.supports_insert_table_explicit_alias()
+                && self.parse_keyword(Keyword::AS)
+            {
                 Some(TableAliasWithoutColumns {
                     explicit: true,
                     alias: self.parse_identifier()?,
@@ -19485,7 +19490,8 @@ impl<'a> Parser<'a> {
 
     /// Returns true if the next keyword indicates a sub query, i.e. SELECT or WITH
     fn peek_sub_query(&mut self) -> bool {
-        self.peek_one_of_keywords(&[Keyword::SELECT, Keyword::WITH]).is_some()
+        self.peek_one_of_keywords(&[Keyword::SELECT, Keyword::WITH])
+            .is_some()
     }
 
     pub(crate) fn parse_show_stmt_options(&mut self) -> Result<ShowStatementOptions, ParserError> {

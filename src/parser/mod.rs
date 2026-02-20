@@ -5545,7 +5545,7 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::RParen)?;
 
         let return_type = if self.parse_keyword(Keyword::RETURNS) {
-            Some(self.parse_data_type()?)
+            Some(self.parse_function_return_type()?)
         } else {
             None
         };
@@ -5724,7 +5724,7 @@ impl<'a> Parser<'a> {
         let (name, args) = self.parse_create_function_name_and_params()?;
 
         let return_type = if self.parse_keyword(Keyword::RETURNS) {
-            Some(self.parse_data_type()?)
+            Some(self.parse_function_return_type()?)
         } else {
             None
         };
@@ -5827,11 +5827,11 @@ impl<'a> Parser<'a> {
             })
         })?;
 
-        let return_type = if return_table.is_some() {
-            return_table
-        } else {
-            Some(self.parse_data_type()?)
+        let data_type = match return_table {
+            Some(table_type) => table_type,
+            None => self.parse_data_type()?,
         };
+        let return_type = Some(FunctionReturnType::DataType(data_type));
 
         let _ = self.parse_keyword(Keyword::AS);
 
@@ -5881,6 +5881,17 @@ impl<'a> Parser<'a> {
             security: None,
             set_params: vec![],
         })
+    }
+
+    /// Parse a [`FunctionReturnType`] after the `RETURNS` keyword.
+    ///
+    /// Handles `RETURNS SETOF <type>` and plain `RETURNS <type>`.
+    fn parse_function_return_type(&mut self) -> Result<FunctionReturnType, ParserError> {
+        if self.parse_keyword(Keyword::SETOF) {
+            Ok(FunctionReturnType::SetOf(self.parse_data_type()?))
+        } else {
+            Ok(FunctionReturnType::DataType(self.parse_data_type()?))
+        }
     }
 
     fn parse_create_function_name_and_params(
@@ -12063,10 +12074,6 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     let field_defs = self.parse_click_house_tuple_def()?;
                     Ok(DataType::Tuple(field_defs))
-                }
-                Keyword::SETOF => {
-                    let inner = self.parse_data_type()?;
-                    Ok(DataType::SetOf(Box::new(inner)))
                 }
                 Keyword::TRIGGER => Ok(DataType::Trigger),
                 Keyword::ANY if self.peek_keyword(Keyword::TYPE) => {

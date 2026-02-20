@@ -597,6 +597,31 @@ impl Spanned for CreateTable {
     }
 }
 
+impl Spanned for PartitionBoundValue {
+    fn span(&self) -> Span {
+        match self {
+            PartitionBoundValue::Expr(expr) => expr.span(),
+            PartitionBoundValue::MinValue => Span::empty(),
+            PartitionBoundValue::MaxValue => Span::empty(),
+        }
+    }
+}
+
+impl Spanned for ForValues {
+    fn span(&self) -> Span {
+        match self {
+            ForValues::In(exprs) => union_spans(exprs.iter().map(|e| e.span())),
+            ForValues::From { from, to } => union_spans(
+                from.iter()
+                    .map(|v| v.span())
+                    .chain(to.iter().map(|v| v.span())),
+            ),
+            ForValues::With { .. } => Span::empty(),
+            ForValues::Default => Span::empty(),
+        }
+    }
+}
+
 impl Spanned for ColumnDef {
     fn span(&self) -> Span {
         let ColumnDef {

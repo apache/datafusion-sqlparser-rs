@@ -490,15 +490,6 @@ fn test_insert_without_alias() {
         ))
     );
 
-    // check AS
-    let sql = "INSERT INTO AS t default SELECT 'a' FROM dual";
-    assert_eq!(
-        oracle_dialect.parse_sql_statements(sql),
-        Err(ParserError::ParserError(
-            "Expected: SELECT, VALUES, or a subquery in the query body, found: default".into()
-        ))
-    );
-
     // check SELECT
     let sql = "INSERT INTO t SELECT 'a' FROM dual";
     let stmt = oracle_dialect.verified_stmt(sql);

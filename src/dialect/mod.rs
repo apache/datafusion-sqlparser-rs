@@ -1240,14 +1240,8 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if this dialect supports `INSERT INTO t AS alias ...`.
-    fn supports_insert_table_explicit_alias(&self) -> bool {
-        false
-    }
-
-    /// Returns true if this dialect supports `INSERT INTO t alias ...` with
-    /// `alias` _not_ preceded by the "AS" keyword.
-    fn supports_insert_table_implicit_alias(&self) -> bool {
+    /// Returns true if this dialect supports `INSERT INTO t [[AS] alias] ...`.
+    fn supports_insert_table_alias(&self) -> bool {
         false
     }
 

@@ -17229,24 +17229,24 @@ impl<'a> Parser<'a> {
             let table = self.parse_keyword(Keyword::TABLE);
             let table_object = self.parse_table_object()?;
 
-            let table_alias = if self.dialect.supports_insert_table_implicit_alias()
+            let table_alias = if self.dialect.supports_insert_table_alias()
                 && !self.peek_sub_query()
                 && self
-                    .peek_one_of_keywords(&[Keyword::AS, Keyword::DEFAULT, Keyword::VALUES])
+                    .peek_one_of_keywords(&[Keyword::DEFAULT, Keyword::VALUES])
                     .is_none()
             {
-                self.maybe_parse(|parser| parser.parse_identifier())?
-                    .map(|alias| TableAliasWithoutColumns {
-                        explicit: false,
-                        alias,
+                if self.parse_keyword(Keyword::AS) {
+                    Some(TableAliasWithoutColumns {
+                        explicit: true,
+                        alias: self.parse_identifier()?,
                     })
-            } else if self.dialect.supports_insert_table_explicit_alias()
-                && self.parse_keyword(Keyword::AS)
-            {
-                Some(TableAliasWithoutColumns {
-                    explicit: true,
-                    alias: self.parse_identifier()?,
-                })
+                } else {
+                    self.maybe_parse(|parser| parser.parse_identifier())?
+                        .map(|alias| TableAliasWithoutColumns {
+                            explicit: false,
+                            alias,
+                        })
+                }
             } else {
                 None
             };

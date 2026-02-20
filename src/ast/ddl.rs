@@ -3473,9 +3473,9 @@ impl fmt::Display for CreateDomain {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum FunctionReturnType {
-    /// RETURNS <type>
+    /// `RETURNS <type>`
     DataType(DataType),
-    /// RETURNS SETOF <type>
+    /// `RETURNS SETOF <type>`
     SetOf(DataType),
 }
 

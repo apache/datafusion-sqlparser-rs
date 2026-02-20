@@ -2279,7 +2279,7 @@ fn test_bigquery_create_function() {
                 Ident::new("myfunction"),
             ]),
             args: Some(vec![OperateFunctionArg::with_name("x", DataType::Float64),]),
-            return_type: Some(DataType::Float64),
+            return_type: Some(FunctionReturnType::DataType(DataType::Float64)),
             function_body: Some(CreateFunctionBody::AsAfterOptions(Expr::Value(
                 number("42").with_empty_span()
             ))),

@@ -1765,7 +1765,7 @@ fn parse_multi_table_insert(
 
     Ok(Statement::Insert(Insert {
         insert_token: insert_token.into(),
-        optimizer_hint: None,
+        optimizer_hints: vec![],
         or: None,
         ignore: false,
         into: false,

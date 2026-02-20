@@ -86,10 +86,10 @@ impl Dialect for OracleDialect {
     }
 
     fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
-        let t = parser.peek_token();
+        let t = parser.peek_token_ref();
         debug!("get_next_precedence() {t:?}");
 
-        match t.token {
+        match &t.token {
             Token::StringConcat => Some(Ok(self.prec_value(Precedence::PlusMinus))),
             _ => None,
         }

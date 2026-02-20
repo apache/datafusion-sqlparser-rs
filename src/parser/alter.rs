@@ -182,9 +182,9 @@ impl Parser<'_> {
             } else if self.parse_keyword(Keyword::AUTHORIZATIONS) {
                 None
             } else {
-                return self.expected(
+                return self.expected_ref(
                     "REMOVE DELEGATED AUTHORIZATION OF ROLE | REMOVE DELEGATED AUTHORIZATIONS",
-                    self.peek_token(),
+                    self.peek_token_ref(),
                 );
             };
             self.expect_keywords(&[Keyword::FROM, Keyword::SECURITY, Keyword::INTEGRATION])?;
@@ -340,7 +340,7 @@ impl Parser<'_> {
         } else if self.parse_keyword(Keyword::DUO) {
             Ok(MfaMethodKind::Duo)
         } else {
-            self.expected("PASSKEY, TOTP or DUO", self.peek_token())
+            self.expected_ref("PASSKEY, TOTP or DUO", self.peek_token_ref())
         }
     }
 
@@ -358,10 +358,10 @@ impl Parser<'_> {
                 let role_name = self.parse_identifier()?;
                 AlterRoleOperation::RenameRole { role_name }
             } else {
-                return self.expected("= after WITH NAME ", self.peek_token());
+                return self.expected_ref("= after WITH NAME ", self.peek_token_ref());
             }
         } else {
-            return self.expected("'ADD' or 'DROP' or 'WITH NAME'", self.peek_token());
+            return self.expected_ref("'ADD' or 'DROP' or 'WITH NAME'", self.peek_token_ref());
         };
 
         Ok(Statement::AlterRole {
@@ -385,7 +385,7 @@ impl Parser<'_> {
                 let role_name = self.parse_identifier()?;
                 AlterRoleOperation::RenameRole { role_name }
             } else {
-                return self.expected("TO after RENAME", self.peek_token());
+                return self.expected_ref("TO after RENAME", self.peek_token_ref());
             }
         // SET
         } else if self.parse_keyword(Keyword::SET) {
@@ -412,10 +412,10 @@ impl Parser<'_> {
                         in_database,
                     }
                 } else {
-                    self.expected("config value", self.peek_token())?
+                    self.expected_ref("config value", self.peek_token_ref())?
                 }
             } else {
-                self.expected("'TO' or '=' or 'FROM CURRENT'", self.peek_token())?
+                self.expected_ref("'TO' or '=' or 'FROM CURRENT'", self.peek_token_ref())?
             }
         // RESET
         } else if self.parse_keyword(Keyword::RESET) {
@@ -442,7 +442,7 @@ impl Parser<'_> {
             }
             // check option
             if options.is_empty() {
-                return self.expected("option", self.peek_token())?;
+                return self.expected_ref("option", self.peek_token_ref())?;
             }
 
             AlterRoleOperation::WithOptions { options }
@@ -504,7 +504,7 @@ impl Parser<'_> {
                 self.expect_keyword_is(Keyword::UNTIL)?;
                 RoleOption::ValidUntil(Expr::Value(self.parse_value()?))
             }
-            _ => self.expected("option", self.peek_token())?,
+            _ => self.expected_ref("option", self.peek_token_ref())?,
         };
 
         Ok(option)

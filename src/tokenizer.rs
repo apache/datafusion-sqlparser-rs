@@ -413,24 +413,42 @@ impl Token {
     /// When `quote_style` is `None`, the parser attempts a case-insensitive keyword
     /// lookup and sets the `Word::keyword` accordingly.
     pub fn make_word(word: &str, quote_style: Option<char>) -> Self {
-        // Only perform keyword lookup for unquoted identifiers.
-        // Use to_ascii_uppercase() since SQL keywords are ASCII,
-        // avoiding Unicode case conversion overhead.
-        let keyword = if quote_style.is_none() {
-            let word_uppercase = word.to_ascii_uppercase();
-            ALL_KEYWORDS
-                .binary_search(&word_uppercase.as_str())
-                .map_or(Keyword::NoKeyword, |x| ALL_KEYWORDS_INDEX[x])
-        } else {
-            Keyword::NoKeyword
-        };
-
         Token::Word(Word {
+            keyword: keyword_lookup(word, quote_style),
             value: word.to_string(),
             quote_style,
-            keyword,
         })
     }
+
+    /// Like [`Self::make_word`] but takes ownership of the word `String`,
+    /// avoiding an extra allocation when the caller already has an owned value.
+    fn make_word_owned(word: String, quote_style: Option<char>) -> Self {
+        Token::Word(Word {
+            keyword: keyword_lookup(&word, quote_style),
+            value: word,
+            quote_style,
+        })
+    }
+}
+
+/// Case-insensitive keyword lookup using binary search over [`ALL_KEYWORDS`].
+fn keyword_lookup(word: &str, quote_style: Option<char>) -> Keyword {
+    if quote_style.is_some() {
+        return Keyword::NoKeyword;
+    }
+    ALL_KEYWORDS
+        .binary_search_by(|probe| {
+            let probe = probe.as_bytes();
+            let word = word.as_bytes();
+            for (p, w) in probe.iter().zip(word.iter()) {
+                let cmp = p.cmp(&w.to_ascii_uppercase());
+                if cmp != core::cmp::Ordering::Equal {
+                    return cmp;
+                }
+            }
+            probe.len().cmp(&word.len())
+        })
+        .map_or(Keyword::NoKeyword, |x| ALL_KEYWORDS_INDEX[x])
 }
 
 /// A keyword (like SELECT) or an optionally quoted SQL identifier
@@ -1041,7 +1059,7 @@ impl<'a> Tokenizer<'a> {
             return Ok(Some(Token::Number(s, false)));
         }
 
-        Ok(Some(Token::make_word(&word, None)))
+        Ok(Some(Token::make_word_owned(word, None)))
     }
 
     /// Get the next token or return None
@@ -1099,7 +1117,7 @@ impl<'a> Tokenizer<'a> {
                         _ => {
                             // regular identifier starting with an "b" or "B"
                             let s = self.tokenize_word(b, chars);
-                            Ok(Some(Token::make_word(&s, None)))
+                            Ok(Some(Token::make_word_owned(s, None)))
                         }
                     }
                 }
@@ -1126,7 +1144,7 @@ impl<'a> Tokenizer<'a> {
                         _ => {
                             // regular identifier starting with an "r" or "R"
                             let s = self.tokenize_word(b, chars);
-                            Ok(Some(Token::make_word(&s, None)))
+                            Ok(Some(Token::make_word_owned(s, None)))
                         }
                     }
                 }
@@ -1151,13 +1169,13 @@ impl<'a> Tokenizer<'a> {
                                     .map(|s| Some(Token::NationalQuoteDelimitedStringLiteral(s)))
                             } else {
                                 let s = self.tokenize_word(String::from_iter([n, q]), chars);
-                                Ok(Some(Token::make_word(&s, None)))
+                                Ok(Some(Token::make_word_owned(s, None)))
                             }
                         }
                         _ => {
                             // regular identifier starting with an "N"
                             let s = self.tokenize_word(n, chars);
-                            Ok(Some(Token::make_word(&s, None)))
+                            Ok(Some(Token::make_word_owned(s, None)))
                         }
                     }
                 }
@@ -1168,7 +1186,7 @@ impl<'a> Tokenizer<'a> {
                             .map(|s| Some(Token::QuoteDelimitedStringLiteral(s)))
                     } else {
                         let s = self.tokenize_word(q, chars);
-                        Ok(Some(Token::make_word(&s, None)))
+                        Ok(Some(Token::make_word_owned(s, None)))
                     }
                 }
                 // PostgreSQL accepts "escape" string constants, which are an extension to the SQL standard.
@@ -1184,7 +1202,7 @@ impl<'a> Tokenizer<'a> {
                         _ => {
                             // regular identifier starting with an "E" or "e"
                             let s = self.tokenize_word(x, chars);
-                            Ok(Some(Token::make_word(&s, None)))
+                            Ok(Some(Token::make_word_owned(s, None)))
                         }
                     }
                 }
@@ -1203,7 +1221,7 @@ impl<'a> Tokenizer<'a> {
                     }
                     // regular identifier starting with an "U" or "u"
                     let s = self.tokenize_word(x, chars);
-                    Ok(Some(Token::make_word(&s, None)))
+                    Ok(Some(Token::make_word_owned(s, None)))
                 }
                 // The spec only allows an uppercase 'X' to introduce a hex
                 // string, but PostgreSQL, at least, allows a lowercase 'x' too.
@@ -1218,7 +1236,7 @@ impl<'a> Tokenizer<'a> {
                         _ => {
                             // regular identifier starting with an "X"
                             let s = self.tokenize_word(x, chars);
-                            Ok(Some(Token::make_word(&s, None)))
+                            Ok(Some(Token::make_word_owned(s, None)))
                         }
                     }
                 }
@@ -1267,7 +1285,7 @@ impl<'a> Tokenizer<'a> {
                 // delimited (quoted) identifier
                 quote_start if self.dialect.is_delimited_identifier_start(ch) => {
                     let word = self.tokenize_quoted_identifier(quote_start, chars)?;
-                    Ok(Some(Token::make_word(&word, Some(quote_start))))
+                    Ok(Some(Token::make_word_owned(word, Some(quote_start))))
                 }
                 // Potentially nested delimited (quoted) identifier
                 quote_start
@@ -1291,7 +1309,7 @@ impl<'a> Tokenizer<'a> {
 
                     let Some(nested_quote_start) = nested_quote_start else {
                         let word = self.tokenize_quoted_identifier(quote_start, chars)?;
-                        return Ok(Some(Token::make_word(&word, Some(quote_start))));
+                        return Ok(Some(Token::make_word_owned(word, Some(quote_start))));
                     };
 
                     let mut word = vec![];
@@ -1319,7 +1337,10 @@ impl<'a> Tokenizer<'a> {
                     }
                     chars.next(); // skip close delimiter
 
-                    Ok(Some(Token::make_word(&word.concat(), Some(quote_start))))
+                    Ok(Some(Token::make_word_owned(
+                        word.concat(),
+                        Some(quote_start),
+                    )))
                 }
                 // numbers and period
                 '0'..='9' | '.' => {
@@ -1429,12 +1450,12 @@ impl<'a> Tokenizer<'a> {
 
                             if !word.is_empty() {
                                 s += word.as_str();
-                                return Ok(Some(Token::make_word(s.as_str(), None)));
+                                return Ok(Some(Token::make_word_owned(s, None)));
                             }
                         } else if prev_token == Some(&Token::Period) {
                             // If the previous token was a period, thus not belonging to a number,
                             // the value we have is part of an identifier.
-                            return Ok(Some(Token::make_word(s.as_str(), None)));
+                            return Ok(Some(Token::make_word_owned(s, None)));
                         }
                     }
 

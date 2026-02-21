@@ -1618,8 +1618,9 @@ impl<'a> Parser<'a> {
         w: &Word,
         w_span: Span,
     ) -> Result<Expr, ParserError> {
-        match self.peek_token().token {
-            Token::LParen if !self.peek_outer_join_operator() => {
+        let is_outer_join = self.peek_outer_join_operator();
+        match &self.peek_token_ref().token {
+            Token::LParen if !is_outer_join => {
                 let id_parts = vec![w.to_ident(w_span)];
                 self.parse_function(ObjectName::from(id_parts))
             }
@@ -2244,8 +2245,8 @@ impl<'a> Parser<'a> {
     fn parse_utility_option(&mut self) -> Result<UtilityOption, ParserError> {
         let name = self.parse_identifier()?;
 
-        let next_token = self.peek_token();
-        if next_token == Token::Comma || next_token == Token::RParen {
+        let next_token = self.peek_token_ref();
+        if next_token == &Token::Comma || next_token == &Token::RParen {
             return Ok(UtilityOption { name, arg: None });
         }
         let arg = self.parse_expr()?;
@@ -2329,7 +2330,7 @@ impl<'a> Parser<'a> {
     /// Parses a single parameter of a lambda function, with optional typing.
     fn parse_lambda_function_parameter(&mut self) -> Result<LambdaFunctionParameter, ParserError> {
         let name = self.parse_identifier()?;
-        let data_type = match self.peek_token().token {
+        let data_type = match &self.peek_token_ref().token {
             Token::Word(_) => self.maybe_parse(|p| p.parse_data_type())?,
             _ => None,
         };
@@ -2566,7 +2567,7 @@ impl<'a> Parser<'a> {
             let rows = if self.parse_keyword(Keyword::UNBOUNDED) {
                 None
             } else {
-                Some(Box::new(match self.peek_token().token {
+                Some(Box::new(match &self.peek_token_ref().token {
                     Token::SingleQuotedString(_) => self.parse_interval()?,
                     _ => self.parse_expr()?,
                 }))
@@ -3015,7 +3016,7 @@ impl<'a> Parser<'a> {
                 Ok(Some(ListAggOnOverflow::Error))
             } else {
                 self.expect_keyword_is(Keyword::TRUNCATE)?;
-                let filler = match self.peek_token().token {
+                let filler = match &self.peek_token_ref().token {
                     Token::Word(w)
                         if w.keyword == Keyword::WITH || w.keyword == Keyword::WITHOUT =>
                     {
@@ -3128,7 +3129,7 @@ impl<'a> Parser<'a> {
     ///
     /// Represented in the AST as `Expr::UnaryOp` with `UnaryOperator::Not`.
     pub fn parse_not(&mut self) -> Result<Expr, ParserError> {
-        match self.peek_token().token {
+        match &self.peek_token_ref().token {
             Token::Word(w) => match w.keyword {
                 Keyword::EXISTS => {
                     let negated = true;
@@ -3677,7 +3678,7 @@ impl<'a> Parser<'a> {
         trailing_bracket: MatchedTrailingBracket,
     ) -> Result<MatchedTrailingBracket, ParserError> {
         let trailing_bracket = if !trailing_bracket.0 {
-            match self.peek_token().token {
+            match &self.peek_token_ref().token {
                 Token::Gt => {
                     self.next_token();
                     false.into()
@@ -5337,7 +5338,7 @@ impl<'a> Parser<'a> {
 
     /// Parse 'AS' before as query,such as `WITH XXX AS SELECT XXX` oer `CACHE TABLE AS SELECT XXX`
     pub fn parse_as_query(&mut self) -> Result<(bool, Box<Query>), ParserError> {
-        match self.peek_token().token {
+        match &self.peek_token_ref().token {
             Token::Word(word) => match word.keyword {
                 Keyword::AS => {
                     self.next_token();
@@ -5854,7 +5855,7 @@ impl<'a> Parser<'a> {
                 }
                 _ => parser_err!(
                     "Expected table column definitions after TABLE keyword",
-                    p.peek_token().span.start
+                    p.peek_token_ref().span.start
                 )?,
             };
 
@@ -7499,7 +7500,7 @@ impl<'a> Parser<'a> {
     pub fn parse_big_query_declare(&mut self) -> Result<Statement, ParserError> {
         let names = self.parse_comma_separated(Parser::parse_identifier)?;
 
-        let data_type = match self.peek_token().token {
+        let data_type = match &self.peek_token_ref().token {
             Token::Word(w) if w.keyword == Keyword::DEFAULT => None,
             _ => Some(self.parse_data_type()?),
         };
@@ -7563,7 +7564,7 @@ impl<'a> Parser<'a> {
             let (declare_type, for_query, assigned_expr, data_type) =
                 if self.parse_keyword(Keyword::CURSOR) {
                     self.expect_keyword_is(Keyword::FOR)?;
-                    match self.peek_token().token {
+                    match &self.peek_token_ref().token {
                         Token::Word(w) if w.keyword == Keyword::SELECT => (
                             Some(DeclareType::Cursor),
                             Some(self.parse_query()?),
@@ -7626,7 +7627,7 @@ impl<'a> Parser<'a> {
 
             stmts.push(stmt);
             if self.consume_token(&Token::SemiColon) {
-                match self.peek_token().token {
+                match &self.peek_token_ref().token {
                     Token::Word(w)
                         if ALL_KEYWORDS
                             .binary_search(&w.value.to_uppercase().as_str())
@@ -7680,7 +7681,7 @@ impl<'a> Parser<'a> {
             let ident = self.parse_identifier()?;
             if !ident.value.starts_with('@')
                 && !matches!(
-                    self.peek_token().token,
+                    &self.peek_token_ref().token,
                     Token::Word(w) if w.keyword == Keyword::CURSOR
                 )
             {
@@ -7692,7 +7693,7 @@ impl<'a> Parser<'a> {
             }
         }?;
 
-        let (declare_type, data_type) = match self.peek_token().token {
+        let (declare_type, data_type) = match &self.peek_token_ref().token {
             Token::Word(w) => match w.keyword {
                 Keyword::CURSOR => {
                     self.next_token();
@@ -7739,7 +7740,7 @@ impl<'a> Parser<'a> {
     pub fn parse_snowflake_variable_declaration_expression(
         &mut self,
     ) -> Result<Option<DeclareAssignment>, ParserError> {
-        Ok(match self.peek_token().token {
+        Ok(match &self.peek_token_ref().token {
             Token::Word(w) if w.keyword == Keyword::DEFAULT => {
                 self.next_token(); // Skip `DEFAULT`
                 Some(DeclareAssignment::Default(Box::new(self.parse_expr()?)))
@@ -7763,7 +7764,7 @@ impl<'a> Parser<'a> {
     pub fn parse_mssql_variable_declaration_expression(
         &mut self,
     ) -> Result<Option<DeclareAssignment>, ParserError> {
-        Ok(match self.peek_token().token {
+        Ok(match &self.peek_token_ref().token {
             Token::Eq => {
                 self.next_token(); // Skip `=`
                 Some(DeclareAssignment::MsSqlAssignment(Box::new(
@@ -8457,7 +8458,7 @@ impl<'a> Parser<'a> {
         } else {
             parser_err!(
                 "Expecting DELETE ROWS, PRESERVE ROWS or DROP",
-                self.peek_token()
+                self.peek_token_ref()
             )
         }
     }
@@ -9602,7 +9603,7 @@ impl<'a> Parser<'a> {
             {
                 let display_as_key = w.keyword == Keyword::KEY;
 
-                let name = match self.peek_token().token {
+                let name = match &self.peek_token_ref().token {
                     Token::Word(word) if word.keyword == Keyword::USING => None,
                     _ => self.parse_optional_ident()?,
                 };
@@ -9803,7 +9804,7 @@ impl<'a> Parser<'a> {
     pub fn parse_sql_option(&mut self) -> Result<SqlOption, ParserError> {
         let is_mssql = dialect_of!(self is MsSqlDialect|GenericDialect);
 
-        match self.peek_token().token {
+        match &self.peek_token_ref().token {
             Token::Word(w) if w.keyword == Keyword::HEAP && is_mssql => {
                 Ok(SqlOption::Ident(self.parse_identifier()?))
             }
@@ -11740,7 +11741,7 @@ impl<'a> Parser<'a> {
         if trailing_bracket.0 {
             return parser_err!(
                 format!("unmatched > after parsing data type {ty}"),
-                self.peek_token()
+                self.peek_token_ref()
             );
         }
 
@@ -15172,7 +15173,7 @@ impl<'a> Parser<'a> {
                 }
             } else {
                 let natural = self.parse_keyword(Keyword::NATURAL);
-                let peek_keyword = if let Token::Word(w) = self.peek_token().token {
+                let peek_keyword = if let Token::Word(w) = &self.peek_token_ref().token {
                     w.keyword
                 } else {
                     Keyword::NoKeyword
@@ -15549,7 +15550,7 @@ impl<'a> Parser<'a> {
         } else {
             let name = self.parse_object_name(true)?;
 
-            let json_path = match self.peek_token().token {
+            let json_path = match &self.peek_token_ref().token {
                 Token::LBracket if self.dialect.supports_partiql() => Some(self.parse_json_path()?),
                 _ => None,
             };
@@ -15953,12 +15954,13 @@ impl<'a> Parser<'a> {
                 }
                 where_clause = Some(self.parse_expr()?);
             } else {
+                let tok = self.peek_token_ref();
                 return parser_err!(
                     format!(
                         "Expected one of DIMENSIONS, METRICS, FACTS or WHERE, got {}",
-                        self.peek_token().token
+                        tok.token
                     ),
-                    self.peek_token_ref().span.start
+                    tok.span.start
                 )?;
             }
         }
@@ -18979,7 +18981,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a window specification.
     pub fn parse_window_spec(&mut self) -> Result<WindowSpec, ParserError> {
-        let window_name = match self.peek_token().token {
+        let window_name = match &self.peek_token_ref().token {
             Token::Word(word) if word.keyword == Keyword::NoKeyword => {
                 self.parse_optional_ident()?
             }
@@ -19277,9 +19279,9 @@ impl<'a> Parser<'a> {
                     Some(Keyword::DOUBLE) => Ok(UserDefinedTypeSqlDefinitionOption::Alignment(
                         Alignment::Double,
                     )),
-                    _ => self.expected(
+                    _ => self.expected_ref(
                         "alignment value (char, int2, int4, or double)",
-                        self.peek_token(),
+                        self.peek_token_ref(),
                     ),
                 }
             }
@@ -19304,9 +19306,9 @@ impl<'a> Parser<'a> {
                     Some(Keyword::MAIN) => Ok(UserDefinedTypeSqlDefinitionOption::Storage(
                         UserDefinedTypeStorage::Main,
                     )),
-                    _ => self.expected(
+                    _ => self.expected_ref(
                         "storage value (plain, external, extended, or main)",
-                        self.peek_token(),
+                        self.peek_token_ref(),
                     ),
                 }
             }
@@ -19645,9 +19647,9 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 _ => {
-                    return self.expected(
+                    return self.expected_ref(
                         "another option, EOF, SemiColon, Comma or ')'",
-                        self.peek_token(),
+                        self.peek_token_ref(),
                     )
                 }
             };

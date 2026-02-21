@@ -288,4 +288,8 @@ impl Dialect for PostgreSqlDialect {
     fn supports_interval_options(&self) -> bool {
         true
     }
+
+    fn supports_insert_table_alias(&self) -> bool {
+        true
+    }
 }

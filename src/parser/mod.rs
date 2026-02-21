@@ -17229,12 +17229,27 @@ impl<'a> Parser<'a> {
             let table = self.parse_keyword(Keyword::TABLE);
             let table_object = self.parse_table_object()?;
 
-            let table_alias =
-                if dialect_of!(self is PostgreSqlDialect) && self.parse_keyword(Keyword::AS) {
-                    Some(self.parse_identifier()?)
+            let table_alias = if self.dialect.supports_insert_table_alias()
+                && !self.peek_sub_query()
+                && self
+                    .peek_one_of_keywords(&[Keyword::DEFAULT, Keyword::VALUES])
+                    .is_none()
+            {
+                if self.parse_keyword(Keyword::AS) {
+                    Some(TableAliasWithoutColumns {
+                        explicit: true,
+                        alias: self.parse_identifier()?,
+                    })
                 } else {
-                    None
-                };
+                    self.maybe_parse(|parser| parser.parse_identifier())?
+                        .map(|alias| TableAliasWithoutColumns {
+                            explicit: false,
+                            alias,
+                        })
+                }
+            } else {
+                None
+            };
 
             let is_mysql = dialect_of!(self is MySqlDialect);
 
@@ -19475,14 +19490,8 @@ impl<'a> Parser<'a> {
 
     /// Returns true if the next keyword indicates a sub query, i.e. SELECT or WITH
     fn peek_sub_query(&mut self) -> bool {
-        if self
-            .parse_one_of_keywords(&[Keyword::SELECT, Keyword::WITH])
+        self.peek_one_of_keywords(&[Keyword::SELECT, Keyword::WITH])
             .is_some()
-        {
-            self.prev_token();
-            return true;
-        }
-        false
     }
 
     pub(crate) fn parse_show_stmt_options(&mut self) -> Result<ShowStatementOptions, ParserError> {

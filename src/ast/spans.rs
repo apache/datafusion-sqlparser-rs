@@ -1327,7 +1327,7 @@ impl Spanned for Insert {
         union_spans(
             core::iter::once(insert_token.0.span)
                 .chain(core::iter::once(table.span()))
-                .chain(table_alias.as_ref().map(|i| i.span))
+                .chain(table_alias.iter().map(|k| k.alias.span))
                 .chain(columns.iter().map(|i| i.span))
                 .chain(source.as_ref().map(|q| q.span()))
                 .chain(assignments.iter().map(|i| i.span()))

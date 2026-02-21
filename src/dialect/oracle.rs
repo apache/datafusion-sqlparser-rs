@@ -110,4 +110,8 @@ impl Dialect for OracleDialect {
     fn supports_comment_optimizer_hint(&self) -> bool {
         true
     }
+
+    fn supports_insert_table_alias(&self) -> bool {
+        true
+    }
 }

@@ -6483,6 +6483,17 @@ pub struct InsertAliases {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Optional alias for an `INSERT` table; i.e. the table to be inserted into
+pub struct TableAliasWithoutColumns {
+    /// `true` if the aliases was explicitly introduced with the "AS" keyword
+    pub explicit: bool,
+    /// the alias name itself
+    pub alias: Ident,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// `ON CONFLICT` clause representation.
 pub struct OnConflict {
     /// Optional conflict target specifying columns or constraint.

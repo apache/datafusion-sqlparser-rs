@@ -530,6 +530,7 @@ fn parse_update_set_from() {
                 ])),
             }),
             returning: None,
+            output: None,
             or: None,
             limit: None
         })
@@ -553,6 +554,7 @@ fn parse_update_with_table_alias() {
             limit: None,
             optimizer_hints,
             update_token: _,
+            output: _,
         }) if optimizer_hints.is_empty() => {
             assert_eq!(
                 TableWithJoins {

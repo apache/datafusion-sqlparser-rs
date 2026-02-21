@@ -218,7 +218,7 @@ impl Parser<'_> {
         self.parse_parenthesized_qualified_column_list(IsOptional::Optional, allow_empty)
     }
 
-    fn parse_output(
+    pub(super) fn parse_output(
         &mut self,
         start_keyword: Keyword,
         start_token: TokenWithSpan,

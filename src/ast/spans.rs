@@ -906,6 +906,7 @@ impl Spanned for Delete {
             using,
             selection,
             returning,
+            output,
             order_by,
             limit,
         } = self;
@@ -923,6 +924,7 @@ impl Spanned for Delete {
                     )
                     .chain(selection.iter().map(|i| i.span()))
                     .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
+                    .chain(output.iter().map(|i| i.span()))
                     .chain(order_by.iter().map(|i| i.span()))
                     .chain(limit.iter().map(|i| i.span())),
             ),
@@ -940,6 +942,7 @@ impl Spanned for Update {
             from,
             selection,
             returning,
+            output,
             or: _,
             limit,
         } = self;
@@ -951,6 +954,7 @@ impl Spanned for Update {
                 .chain(from.iter().map(|i| i.span()))
                 .chain(selection.iter().map(|i| i.span()))
                 .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
+                .chain(output.iter().map(|i| i.span()))
                 .chain(limit.iter().map(|i| i.span())),
         )
     }
@@ -1312,6 +1316,7 @@ impl Spanned for Insert {
             has_table_keyword: _, // bool
             on,
             returning,
+            output,
             replace_into: _, // bool
             priority: _,     // todo, mysql specific
             insert_alias: _, // todo, mysql specific
@@ -1334,7 +1339,8 @@ impl Spanned for Insert {
                 .chain(partitioned.iter().flat_map(|i| i.iter().map(|k| k.span())))
                 .chain(after_columns.iter().map(|i| i.span))
                 .chain(on.as_ref().map(|i| i.span()))
-                .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span()))),
+                .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
+                .chain(output.iter().map(|i| i.span())),
         )
     }
 }

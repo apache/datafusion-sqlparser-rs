@@ -756,17 +756,17 @@ pub trait Dialect: Debug + Any {
             };
         }
 
-        let token = parser.peek_token();
+        let token = parser.peek_token_ref();
         debug!("get_next_precedence_full() {token:?}");
-        match token.token {
+        match &token.token {
             Token::Word(w) if w.keyword == Keyword::OR => Ok(p!(Or)),
             Token::Word(w) if w.keyword == Keyword::AND => Ok(p!(And)),
             Token::Word(w) if w.keyword == Keyword::XOR => Ok(p!(Xor)),
 
             Token::Word(w) if w.keyword == Keyword::AT => {
                 match (
-                    parser.peek_nth_token(1).token,
-                    parser.peek_nth_token(2).token,
+                    &parser.peek_nth_token_ref(1).token,
+                    &parser.peek_nth_token_ref(2).token,
                 ) {
                     (Token::Word(w), Token::Word(w2))
                         if w.keyword == Keyword::TIME && w2.keyword == Keyword::ZONE =>
@@ -777,28 +777,30 @@ pub trait Dialect: Debug + Any {
                 }
             }
 
-            Token::Word(w) if w.keyword == Keyword::NOT => match parser.peek_nth_token(1).token {
-                // The precedence of NOT varies depending on keyword that
-                // follows it. If it is followed by IN, BETWEEN, or LIKE,
-                // it takes on the precedence of those tokens. Otherwise, it
-                // is not an infix operator, and therefore has zero
-                // precedence.
-                Token::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
-                Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
-                Token::Word(w) if w.keyword == Keyword::LIKE => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::MATCH => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::MEMBER => Ok(p!(Like)),
-                Token::Word(w)
-                    if w.keyword == Keyword::NULL && !parser.in_column_definition_state() =>
-                {
-                    Ok(p!(Is))
+            Token::Word(w) if w.keyword == Keyword::NOT => {
+                match &parser.peek_nth_token_ref(1).token {
+                    // The precedence of NOT varies depending on keyword that
+                    // follows it. If it is followed by IN, BETWEEN, or LIKE,
+                    // it takes on the precedence of those tokens. Otherwise, it
+                    // is not an infix operator, and therefore has zero
+                    // precedence.
+                    Token::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
+                    Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
+                    Token::Word(w) if w.keyword == Keyword::LIKE => Ok(p!(Like)),
+                    Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(p!(Like)),
+                    Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(p!(Like)),
+                    Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(p!(Like)),
+                    Token::Word(w) if w.keyword == Keyword::MATCH => Ok(p!(Like)),
+                    Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
+                    Token::Word(w) if w.keyword == Keyword::MEMBER => Ok(p!(Like)),
+                    Token::Word(w)
+                        if w.keyword == Keyword::NULL && !parser.in_column_definition_state() =>
+                    {
+                        Ok(p!(Is))
+                    }
+                    _ => Ok(self.prec_unknown()),
                 }
-                _ => Ok(self.prec_unknown()),
-            },
+            }
             Token::Word(w) if w.keyword == Keyword::NOTNULL && self.supports_notnull_operator() => {
                 Ok(p!(Is))
             }
@@ -861,7 +863,7 @@ pub trait Dialect: Debug + Any {
             Token::DoubleColon | Token::ExclamationMark | Token::LBracket | Token::CaretAt => {
                 Ok(p!(DoubleColon))
             }
-            Token::Colon => match parser.peek_nth_token(1).token {
+            Token::Colon => match &parser.peek_nth_token_ref(1).token {
                 // When colon is followed by a string or a number, it's usually in MAP syntax.
                 Token::SingleQuotedString(_) | Token::Number(_, _) => Ok(self.prec_unknown()),
                 // In other cases, it's used in semi-structured data traversal like in variant or JSON

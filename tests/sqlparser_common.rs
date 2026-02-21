@@ -455,7 +455,7 @@ fn parse_update_set_from() {
         stmt,
         Statement::Update(Update {
             update_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             table: TableWithJoins {
                 relation: table_from_name(ObjectName::from(vec![Ident::new("t1")])),
                 joins: vec![],
@@ -471,7 +471,7 @@ fn parse_update_set_from() {
                         with: None,
                         body: Box::new(SetExpr::Select(Box::new(Select {
                             select_token: AttachedToken::empty(),
-                            optimizer_hint: None,
+                            optimizer_hints: vec![],
                             distinct: None,
                             select_modifiers: None,
                             top: None,
@@ -551,9 +551,9 @@ fn parse_update_with_table_alias() {
             returning,
             or: None,
             limit: None,
-            optimizer_hint: None,
+            optimizer_hints,
             update_token: _,
-        }) => {
+        }) if optimizer_hints.is_empty() => {
             assert_eq!(
                 TableWithJoins {
                     relation: TableFactor::Table {
@@ -5819,7 +5819,7 @@ fn test_parse_named_window() {
     let actual_select_only = dialects.verified_only_select(sql);
     let expected = Select {
         select_token: AttachedToken::empty(),
-        optimizer_hint: None,
+        optimizer_hints: vec![],
         distinct: None,
         select_modifiers: None,
         top: None,
@@ -6551,7 +6551,7 @@ fn parse_interval_and_or_xor() {
         with: None,
         body: Box::new(SetExpr::Select(Box::new(Select {
             select_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -8929,7 +8929,7 @@ fn lateral_function() {
     let actual_select_only = verified_only_select(sql);
     let expected = Select {
         select_token: AttachedToken::empty(),
-        optimizer_hint: None,
+        optimizer_hints: vec![],
         distinct: None,
         select_modifiers: None,
         top: None,
@@ -9932,7 +9932,7 @@ fn parse_merge() {
                         with: None,
                         body: Box::new(SetExpr::Select(Box::new(Select {
                             select_token: AttachedToken::empty(),
-                            optimizer_hint: None,
+                            optimizer_hints: vec![],
                             distinct: None,
                             select_modifiers: None,
                             top: None,
@@ -12356,7 +12356,7 @@ fn parse_unload() {
             query: Some(Box::new(Query {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
-                    optimizer_hint: None,
+                    optimizer_hints: vec![],
                     distinct: None,
                     select_modifiers: None,
                     top: None,
@@ -12677,7 +12677,7 @@ fn parse_connect_by() {
         dialects.verified_only_select(connect_by_1),
         Select {
             select_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -12744,7 +12744,7 @@ fn parse_connect_by() {
         dialects.verified_only_select(connect_by_2),
         Select {
             select_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -12812,7 +12812,7 @@ fn parse_connect_by() {
         dialects.verified_only_select(connect_by_3),
         Select {
             select_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -12900,7 +12900,7 @@ fn parse_connect_by() {
         dialects.verified_only_select(connect_by_5),
         Select {
             select_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -13863,7 +13863,7 @@ fn test_extract_seconds_ok() {
         with: None,
         body: Box::new(SetExpr::Select(Box::new(Select {
             select_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -15185,14 +15185,23 @@ fn parse_comments() {
         _ => unreachable!(),
     }
 
+    // https://www.postgresql.org/docs/current/sql-comment.html
     let object_types = [
         ("COLUMN", CommentObject::Column),
-        ("EXTENSION", CommentObject::Extension),
-        ("TABLE", CommentObject::Table),
-        ("SCHEMA", CommentObject::Schema),
         ("DATABASE", CommentObject::Database),
-        ("USER", CommentObject::User),
+        ("DOMAIN", CommentObject::Domain),
+        ("EXTENSION", CommentObject::Extension),
+        ("FUNCTION", CommentObject::Function),
+        ("INDEX", CommentObject::Index),
+        ("MATERIALIZED VIEW", CommentObject::MaterializedView),
+        ("PROCEDURE", CommentObject::Procedure),
         ("ROLE", CommentObject::Role),
+        ("SCHEMA", CommentObject::Schema),
+        ("SEQUENCE", CommentObject::Sequence),
+        ("TABLE", CommentObject::Table),
+        ("TYPE", CommentObject::Type),
+        ("USER", CommentObject::User),
+        ("VIEW", CommentObject::View),
     ];
     for (keyword, expected_object_type) in object_types.iter() {
         match all_dialects_where(|d| d.supports_comment_on())
@@ -16019,7 +16028,7 @@ fn test_select_from_first() {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
-                optimizer_hint: None,
+                optimizer_hints: vec![],
                 distinct: None,
                 select_modifiers: None,
                 top: None,

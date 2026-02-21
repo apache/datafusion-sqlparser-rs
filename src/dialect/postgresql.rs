@@ -105,12 +105,12 @@ impl Dialect for PostgreSqlDialect {
     }
 
     fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
-        let token = parser.peek_token();
+        let token = parser.peek_token_ref();
         debug!("get_next_precedence() {token:?}");
 
         // we only return some custom value here when the behaviour (not merely the numeric value) differs
         // from the default implementation
-        match token.token {
+        match &token.token {
             Token::Word(w)
                 if w.keyword == Keyword::COLLATE && !parser.in_column_definition_state() =>
             {

@@ -159,7 +159,7 @@ impl Dialect for MsSqlDialect {
                         .is_some()
                         || matches!(p.peek_token_ref().token, Token::SemiColon | Token::EOF)
                     {
-                        p.expected("statement", p.peek_token())
+                        p.expected_ref("statement", p.peek_token_ref())
                     } else {
                         Ok(())
                     }
@@ -189,8 +189,8 @@ impl Dialect for MsSqlDialect {
     }
 
     fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
-        let token = parser.peek_token();
-        match token.token {
+        let token = parser.peek_token_ref();
+        match &token.token {
             // lowest prec to prevent it from turning into a binary op
             Token::Colon => Some(Ok(self.prec_unknown())),
             _ => None,

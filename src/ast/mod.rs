@@ -2439,30 +2439,54 @@ impl fmt::Display for ShowCreateObject {
 pub enum CommentObject {
     /// A table column.
     Column,
-    /// A table.
-    Table,
-    /// An extension.
-    Extension,
-    /// A schema.
-    Schema,
     /// A database.
     Database,
-    /// A user.
-    User,
+    /// A domain.
+    Domain,
+    /// An extension.
+    Extension,
+    /// A function.
+    Function,
+    /// An index.
+    Index,
+    /// A materialized view.
+    MaterializedView,
+    /// A procedure.
+    Procedure,
     /// A role.
     Role,
+    /// A schema.
+    Schema,
+    /// A sequence.
+    Sequence,
+    /// A table.
+    Table,
+    /// A type.
+    Type,
+    /// A user.
+    User,
+    /// A view.
+    View,
 }
 
 impl fmt::Display for CommentObject {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             CommentObject::Column => f.write_str("COLUMN"),
-            CommentObject::Table => f.write_str("TABLE"),
-            CommentObject::Extension => f.write_str("EXTENSION"),
-            CommentObject::Schema => f.write_str("SCHEMA"),
             CommentObject::Database => f.write_str("DATABASE"),
-            CommentObject::User => f.write_str("USER"),
+            CommentObject::Domain => f.write_str("DOMAIN"),
+            CommentObject::Extension => f.write_str("EXTENSION"),
+            CommentObject::Function => f.write_str("FUNCTION"),
+            CommentObject::Index => f.write_str("INDEX"),
+            CommentObject::MaterializedView => f.write_str("MATERIALIZED VIEW"),
+            CommentObject::Procedure => f.write_str("PROCEDURE"),
             CommentObject::Role => f.write_str("ROLE"),
+            CommentObject::Schema => f.write_str("SCHEMA"),
+            CommentObject::Sequence => f.write_str("SEQUENCE"),
+            CommentObject::Table => f.write_str("TABLE"),
+            CommentObject::Type => f.write_str("TYPE"),
+            CommentObject::User => f.write_str("USER"),
+            CommentObject::View => f.write_str("VIEW"),
         }
     }
 }
@@ -11650,12 +11674,19 @@ pub struct ResetStatement {
 /// `SELECT`, `INSERT`, `UPDATE`, `REPLACE`, `MERGE`, and `DELETE` keywords in
 /// the corresponding statements.
 ///
-/// See [Select::optimizer_hint]
+/// See [Select::optimizer_hints]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct OptimizerHint {
-    /// the raw test of the optimizer hint without its markers
+    /// An optional prefix between the comment marker and `+`.
+    ///
+    /// Standard optimizer hints like `/*+ ... */` have an empty prefix,
+    /// while system-specific hints like `/*abc+ ... */` have `prefix = "abc"`.
+    /// The prefix is any sequence of ASCII alphanumeric characters
+    /// immediately before the `+` marker.
+    pub prefix: String,
+    /// the raw text of the optimizer hint without its markers
     pub text: String,
     /// the style of the comment which `text` was extracted from,
     /// e.g. `/*+...*/` or `--+...`
@@ -11685,11 +11716,14 @@ impl fmt::Display for OptimizerHint {
         match &self.style {
             OptimizerHintStyle::SingleLine { prefix } => {
                 f.write_str(prefix)?;
+                f.write_str(&self.prefix)?;
                 f.write_str("+")?;
                 f.write_str(&self.text)
             }
             OptimizerHintStyle::MultiLine => {
-                f.write_str("/*+")?;
+                f.write_str("/*")?;
+                f.write_str(&self.prefix)?;
+                f.write_str("+")?;
                 f.write_str(&self.text)?;
                 f.write_str("*/")
             }

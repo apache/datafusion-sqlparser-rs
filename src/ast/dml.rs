@@ -43,11 +43,11 @@ use super::{
 pub struct Insert {
     /// Token for the `INSERT` keyword (or its substitutes)
     pub insert_token: AttachedToken,
-    /// A query optimizer hint
+    /// Query optimizer hints
     ///
     /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
     /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
-    pub optimizer_hint: Option<OptimizerHint>,
+    pub optimizer_hints: Vec<OptimizerHint>,
     /// Only for Sqlite
     pub or: Option<SqliteOnConflict>,
     /// Only for mysql
@@ -133,7 +133,7 @@ impl Display for Insert {
 
         if let Some(on_conflict) = self.or {
             f.write_str("INSERT")?;
-            if let Some(hint) = self.optimizer_hint.as_ref() {
+            for hint in &self.optimizer_hints {
                 write!(f, " {hint}")?;
             }
             write!(f, " {on_conflict} INTO {table_name} ")?;
@@ -147,7 +147,7 @@ impl Display for Insert {
                     "INSERT"
                 }
             )?;
-            if let Some(hint) = self.optimizer_hint.as_ref() {
+            for hint in &self.optimizer_hints {
                 write!(f, " {hint}")?;
             }
             if let Some(priority) = self.priority {
@@ -267,11 +267,11 @@ impl Display for Insert {
 pub struct Delete {
     /// Token for the `DELETE` keyword
     pub delete_token: AttachedToken,
-    /// A query optimizer hint
+    /// Query optimizer hints
     ///
     /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
     /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
-    pub optimizer_hint: Option<OptimizerHint>,
+    pub optimizer_hints: Vec<OptimizerHint>,
     /// Multi tables delete are supported in mysql
     pub tables: Vec<ObjectName>,
     /// FROM
@@ -291,7 +291,7 @@ pub struct Delete {
 impl Display for Delete {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("DELETE")?;
-        if let Some(hint) = self.optimizer_hint.as_ref() {
+        for hint in &self.optimizer_hints {
             f.write_str(" ")?;
             hint.fmt(f)?;
         }
@@ -345,11 +345,11 @@ impl Display for Delete {
 pub struct Update {
     /// Token for the `UPDATE` keyword
     pub update_token: AttachedToken,
-    /// A query optimizer hint
+    /// Query optimizer hints
     ///
     /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
     /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
-    pub optimizer_hint: Option<OptimizerHint>,
+    pub optimizer_hints: Vec<OptimizerHint>,
     /// TABLE
     pub table: TableWithJoins,
     /// Column assignments
@@ -368,11 +368,12 @@ pub struct Update {
 
 impl Display for Update {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("UPDATE ")?;
-        if let Some(hint) = self.optimizer_hint.as_ref() {
-            hint.fmt(f)?;
+        f.write_str("UPDATE")?;
+        for hint in &self.optimizer_hints {
             f.write_str(" ")?;
+            hint.fmt(f)?;
         }
+        f.write_str(" ")?;
         if let Some(or) = &self.or {
             or.fmt(f)?;
             f.write_str(" ")?;
@@ -419,10 +420,10 @@ impl Display for Update {
 pub struct Merge {
     /// The `MERGE` token that starts the statement.
     pub merge_token: AttachedToken,
-    /// A query optimizer hint
+    /// Query optimizer hints
     ///
     /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
-    pub optimizer_hint: Option<OptimizerHint>,
+    pub optimizer_hints: Vec<OptimizerHint>,
     /// optional INTO keyword
     pub into: bool,
     /// Specifies the table to merge
@@ -440,7 +441,7 @@ pub struct Merge {
 impl Display for Merge {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("MERGE")?;
-        if let Some(hint) = self.optimizer_hint.as_ref() {
+        for hint in &self.optimizer_hints {
             write!(f, " {hint}")?;
         }
         if self.into {

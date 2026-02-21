@@ -265,7 +265,7 @@ impl Dialect for SnowflakeDialect {
             let set = match parser.parse_one_of_keywords(&[Keyword::SET, Keyword::UNSET]) {
                 Some(Keyword::SET) => true,
                 Some(Keyword::UNSET) => false,
-                _ => return Some(parser.expected("SET or UNSET", parser.peek_token())),
+                _ => return Some(parser.expected_ref("SET or UNSET", parser.peek_token_ref())),
             };
             return Some(parse_alter_session(parser, set));
         }
@@ -417,9 +417,9 @@ impl Dialect for SnowflakeDialect {
     }
 
     fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
-        let token = parser.peek_token();
+        let token = parser.peek_token_ref();
         // Snowflake supports the `:` cast operator unlike other dialects
-        match token.token {
+        match &token.token {
             Token::Colon => Some(Ok(self.prec_value(Precedence::DoubleColon))),
             _ => None,
         }
@@ -715,9 +715,9 @@ fn parse_alter_dynamic_table(parser: &mut Parser) -> Result<Statement, ParserErr
     } else if parser.parse_keyword(Keyword::RESUME) {
         AlterTableOperation::Resume
     } else {
-        return parser.expected(
+        return parser.expected_ref(
             "REFRESH, SUSPEND, or RESUME after ALTER DYNAMIC TABLE",
-            parser.peek_token(),
+            parser.peek_token_ref(),
         );
     };
 
@@ -757,7 +757,10 @@ fn parse_alter_external_table(parser: &mut Parser) -> Result<Statement, ParserEr
         };
         AlterTableOperation::Refresh { subpath }
     } else {
-        return parser.expected("REFRESH after ALTER EXTERNAL TABLE", parser.peek_token());
+        return parser.expected_ref(
+            "REFRESH after ALTER EXTERNAL TABLE",
+            parser.peek_token_ref(),
+        );
     };
 
     let end_token = if parser.peek_token_ref().token == Token::SemiColon {
@@ -1242,7 +1245,7 @@ pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserE
             Token::Minus => ident.push('-'),
             Token::Number(n, _) => ident.push_str(n),
             Token::Word(w) => ident.push_str(&w.to_string()),
-            _ => return parser.expected("stage name identifier", parser.peek_token()),
+            _ => return parser.expected_ref("stage name identifier", parser.peek_token_ref()),
         }
     }
     Ok(Ident::new(ident))
@@ -1273,7 +1276,7 @@ pub fn parse_snowflake_stage_name(parser: &mut Parser) -> Result<ObjectName, Par
 /// Parses a `COPY INTO` statement. Snowflake has two variants, `COPY INTO <table>`
 /// and `COPY INTO <location>` which have different syntax.
 pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
-    let kind = match parser.peek_token().token {
+    let kind = match &parser.peek_token_ref().token {
         // Indicates an internal stage
         Token::AtSign => CopyIntoSnowflakeKind::Location,
         // Indicates an external stage, i.e. s3://, gcs:// or azure://
@@ -1346,7 +1349,7 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
             from_stage_alias = if parser.parse_keyword(Keyword::AS) {
                 Some(match parser.next_token().token {
                     Token::Word(w) => Ok(Ident::new(w.value)),
-                    _ => parser.expected("stage alias", parser.peek_token()),
+                    _ => parser.expected_ref("stage alias", parser.peek_token_ref()),
                 }?)
             } else {
                 None
@@ -1404,7 +1407,10 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
                 // In `COPY INTO <location>` the copy options do not have a shared key
                 // like in `COPY INTO <table>`
                 Token::Word(key) => copy_options.push(parser.parse_key_value_option(&key)?),
-                _ => return parser.expected("another copy option, ; or EOF'", parser.peek_token()),
+                _ => {
+                    return parser
+                        .expected_ref("another copy option, ; or EOF'", parser.peek_token_ref())
+                }
             }
         }
     }
@@ -1499,7 +1505,7 @@ fn parse_select_item_for_data_load(
             // parse element
             element = Some(Ident::new(match parser.next_token().token {
                 Token::Word(w) => Ok(w.value),
-                _ => parser.expected("file_col_num", parser.peek_token()),
+                _ => parser.expected_ref("file_col_num", parser.peek_token_ref()),
             }?));
         }
         _ => {
@@ -1512,7 +1518,7 @@ fn parse_select_item_for_data_load(
     if parser.parse_keyword(Keyword::AS) {
         item_as = Some(match parser.next_token().token {
             Token::Word(w) => Ok(Ident::new(w.value)),
-            _ => parser.expected("column item alias", parser.peek_token()),
+            _ => parser.expected_ref("column item alias", parser.peek_token_ref()),
         }?);
     }
 
@@ -1540,7 +1546,7 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
         parser.expect_token(&Token::Eq)?;
         url = Some(match parser.next_token().token {
             Token::SingleQuotedString(word) => Ok(word),
-            _ => parser.expected("a URL statement", parser.peek_token()),
+            _ => parser.expected_ref("a URL statement", parser.peek_token_ref()),
         }?)
     }
 
@@ -1555,7 +1561,7 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
         parser.expect_token(&Token::Eq)?;
         endpoint = Some(match parser.next_token().token {
             Token::SingleQuotedString(word) => Ok(word),
-            _ => parser.expected("an endpoint statement", parser.peek_token()),
+            _ => parser.expected_ref("an endpoint statement", parser.peek_token_ref()),
         }?)
     }
 
@@ -1759,7 +1765,7 @@ fn parse_multi_table_insert(
 
     Ok(Statement::Insert(Insert {
         insert_token: insert_token.into(),
-        optimizer_hint: None,
+        optimizer_hints: vec![],
         or: None,
         ignore: false,
         into: false,
@@ -1795,7 +1801,7 @@ fn parse_multi_table_insert_into_clauses(
         into_clauses.push(parse_multi_table_insert_into_clause(parser)?);
     }
     if into_clauses.is_empty() {
-        return parser.expected("INTO clause in multi-table INSERT", parser.peek_token());
+        return parser.expected_ref("INTO clause in multi-table INSERT", parser.peek_token_ref());
     }
     Ok(into_clauses)
 }
@@ -1874,9 +1880,9 @@ fn parse_multi_table_insert_when_clauses(
     }
 
     if when_clauses.is_empty() {
-        return parser.expected(
+        return parser.expected_ref(
             "at least one WHEN clause in conditional multi-table INSERT",
-            parser.peek_token(),
+            parser.peek_token_ref(),
         );
     }
 

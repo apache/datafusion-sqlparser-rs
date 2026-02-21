@@ -1615,12 +1615,12 @@ impl<'a> Parser<'a> {
     /// Tries to parse an expression by a word that is not known to have a special meaning in the dialect.
     fn parse_expr_prefix_by_unreserved_word(
         &mut self,
-        w: &Word,
+        w: Word,
         w_span: Span,
     ) -> Result<Expr, ParserError> {
         match self.peek_token().token {
             Token::LParen if !self.peek_outer_join_operator() => {
-                let id_parts = vec![w.to_ident(w_span)];
+                let id_parts = vec![w.into_ident(w_span)];
                 self.parse_function(ObjectName::from(id_parts))
             }
             // string introducer https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html
@@ -1630,7 +1630,7 @@ impl<'a> Parser<'a> {
                 if w.value.starts_with('_') =>
             {
                 Ok(Expr::Prefixed {
-                    prefix: w.to_ident(w_span),
+                    prefix: w.into_ident(w_span),
                     value: self.parse_introduced_string_expr()?.into(),
                 })
             }
@@ -1641,7 +1641,7 @@ impl<'a> Parser<'a> {
                 if w.value.starts_with('_') =>
             {
                 Ok(Expr::Prefixed {
-                    prefix: w.to_ident(w_span),
+                    prefix: w.into_ident(w_span),
                     value: self.parse_introduced_string_expr()?.into(),
                 })
             }
@@ -1652,7 +1652,7 @@ impl<'a> Parser<'a> {
                 self.expect_token(&Token::Arrow)?;
                 Ok(Expr::Lambda(LambdaFunction {
                     params: OneOrManyWithParens::One(LambdaFunctionParameter {
-                        name: w.to_ident(w_span),
+                        name: w.into_ident(w_span),
                         data_type: None,
                     }),
                     body: Box::new(self.parse_expr()?),
@@ -1670,14 +1670,14 @@ impl<'a> Parser<'a> {
                 self.expect_token(&Token::Arrow)?;
                 Ok(Expr::Lambda(LambdaFunction {
                     params: OneOrManyWithParens::One(LambdaFunctionParameter {
-                        name: w.to_ident(w_span),
+                        name: w.into_ident(w_span),
                         data_type: Some(data_type),
                     }),
                     body: Box::new(self.parse_expr()?),
                     syntax: LambdaSyntax::Arrow,
                 }))
             }
-            _ => Ok(Expr::Identifier(w.to_ident(w_span))),
+            _ => Ok(Expr::Identifier(w.into_ident(w_span))),
         }
     }
 
@@ -1755,31 +1755,60 @@ impl<'a> Parser<'a> {
                 //                          ^^^^^^^^^^^^^^^^      ^^^^^^^^
                 //                         interval expression   identifier
                 //
-                // We first try to parse the word and following tokens as a special expression, and if that fails,
-                // we rollback and try to parse it as an identifier.
-                let w = w.clone();
-                match self.try_parse(|parser| parser.parse_expr_prefix_by_reserved_word(&w, span)) {
-                    // This word indicated an expression prefix and parsing was successful
-                    Ok(Some(expr)) => Ok(expr),
+                if w.keyword == Keyword::NoKeyword {
+                    // Fast path: for non-keyword words not followed by
+                    // special tokens, produce an identifier directly.
+                    let peek = &self.peek_token_ref().token;
+                    let is_special = matches!(
+                        peek,
+                        Token::LParen
+                            | Token::Arrow
+                            | Token::SingleQuotedString(_)
+                            | Token::DoubleQuotedString(_)
+                            | Token::HexStringLiteral(_)
+                    );
+                    // Typed lambda: `a INT -> a * 2`
+                    let is_typed_lambda = matches!(peek, Token::Word(_))
+                        && self.dialect.supports_lambda_functions()
+                        && self.peek_nth_token_ref(1).token == Token::Arrow;
+                    if !is_special && !is_typed_lambda {
+                        Ok(Expr::Identifier(w.to_ident(span)))
+                    } else {
+                        // Non-keyword followed by special token (e.g. function call)
+                        let w = w.clone();
+                        Ok(self.parse_expr_prefix_by_unreserved_word(w, span)?)
+                    }
+                } else {
+                    // We first try to parse the word and following tokens as a special
+                    // expression, and if that fails, we rollback and try to parse it
+                    // as an identifier.
+                    let w = w.clone();
+                    match self
+                        .try_parse(|parser| parser.parse_expr_prefix_by_reserved_word(&w, span))
+                    {
+                        // This word indicated an expression prefix and parsing was successful
+                        Ok(Some(expr)) => Ok(expr),
 
-                    // No expression prefix associated with this word
-                    Ok(None) => Ok(self.parse_expr_prefix_by_unreserved_word(&w, span)?),
+                        // No expression prefix associated with this word
+                        Ok(None) => Ok(self.parse_expr_prefix_by_unreserved_word(w, span)?),
 
-                    // If parsing of the word as a special expression failed, we are facing two options:
-                    // 1. The statement is malformed, e.g. `SELECT INTERVAL '1 DAI` (`DAI` instead of `DAY`)
-                    // 2. The word is used as an identifier, e.g. `SELECT MAX(interval) FROM tbl`
-                    // We first try to parse the word as an identifier and if that fails
-                    // we rollback and return the parsing error we got from trying to parse a
-                    // special expression (to maintain backwards compatibility of parsing errors).
-                    Err(e) => {
-                        if !self.dialect.is_reserved_for_identifier(w.keyword) {
-                            if let Ok(Some(expr)) = self.maybe_parse(|parser| {
-                                parser.parse_expr_prefix_by_unreserved_word(&w, span)
-                            }) {
-                                return Ok(expr);
+                        // If parsing of the word as a special expression failed, we are facing
+                        // two options:
+                        // 1. The statement is malformed, e.g. `SELECT INTERVAL '1 DAI`
+                        // 2. The word is used as an identifier, e.g. `SELECT MAX(interval) FROM tbl`
+                        // We first try to parse the word as an identifier and if that fails
+                        // we rollback and return the parsing error we got from trying to parse a
+                        // special expression (to maintain backwards compatibility of parsing errors).
+                        Err(e) => {
+                            if !self.dialect.is_reserved_for_identifier(w.keyword) {
+                                if let Ok(Some(expr)) = self.maybe_parse(|parser| {
+                                    parser.parse_expr_prefix_by_unreserved_word(w, span)
+                                }) {
+                                    return Ok(expr);
+                                }
                             }
+                            return Err(e);
                         }
-                        return Err(e);
                     }
                 }
             } // End of Token::Word
@@ -5015,7 +5044,7 @@ impl<'a> Parser<'a> {
     /// Returns `Ok(None)` if `f` returns any other error.
     pub fn maybe_parse<T, F>(&mut self, f: F) -> Result<Option<T>, ParserError>
     where
-        F: FnMut(&mut Parser) -> Result<T, ParserError>,
+        F: FnOnce(&mut Parser) -> Result<T, ParserError>,
     {
         match self.try_parse(f) {
             Ok(t) => Ok(Some(t)),
@@ -5025,9 +5054,9 @@ impl<'a> Parser<'a> {
     }
 
     /// Run a parser method `f`, reverting back to the current position if unsuccessful.
-    pub fn try_parse<T, F>(&mut self, mut f: F) -> Result<T, ParserError>
+    pub fn try_parse<T, F>(&mut self, f: F) -> Result<T, ParserError>
     where
-        F: FnMut(&mut Parser) -> Result<T, ParserError>,
+        F: FnOnce(&mut Parser) -> Result<T, ParserError>,
     {
         let index = self.index;
         match f(self) {

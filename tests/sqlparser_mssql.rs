@@ -2730,3 +2730,46 @@ fn parse_mssql_tran_shorthand() {
     // ROLLBACK TRAN normalizes to ROLLBACK (same as ROLLBACK TRANSACTION)
     ms().one_statement_parses_to("ROLLBACK TRAN", "ROLLBACK");
 }
+
+// MSSQL OUTPUT clause on INSERT/UPDATE/DELETE
+// https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql
+
+#[test]
+fn parse_mssql_insert_with_output() {
+    ms_and_generic().verified_stmt(
+        "INSERT INTO customers (name, email) OUTPUT INSERTED.id, INSERTED.name VALUES ('John', 'john@example.com')",
+    );
+}
+
+#[test]
+fn parse_mssql_insert_with_output_into() {
+    ms_and_generic().verified_stmt(
+        "INSERT INTO customers (name, email) OUTPUT INSERTED.id, INSERTED.name INTO @new_ids VALUES ('John', 'john@example.com')",
+    );
+}
+
+#[test]
+fn parse_mssql_delete_with_output() {
+    ms_and_generic().verified_stmt("DELETE FROM customers OUTPUT DELETED.* WHERE id = 1");
+}
+
+#[test]
+fn parse_mssql_delete_with_output_into() {
+    ms_and_generic().verified_stmt(
+        "DELETE FROM customers OUTPUT DELETED.id, DELETED.name INTO @deleted_rows WHERE active = 0",
+    );
+}
+
+#[test]
+fn parse_mssql_update_with_output() {
+    ms_and_generic().verified_stmt(
+        "UPDATE employees SET salary = salary * 1.1 OUTPUT INSERTED.id, DELETED.salary, INSERTED.salary WHERE department = 'Engineering'",
+    );
+}
+
+#[test]
+fn parse_mssql_update_with_output_into() {
+    ms_and_generic().verified_stmt(
+        "UPDATE employees SET salary = salary * 1.1 OUTPUT INSERTED.id, DELETED.salary, INSERTED.salary INTO @changes WHERE department = 'Engineering'",
+    );
+}

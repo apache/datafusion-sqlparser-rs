@@ -496,6 +496,7 @@ fn parse_update_tuple_row_values() {
             },
             from: None,
             returning: None,
+            output: None,
             limit: None,
             update_token: AttachedToken::empty()
         })

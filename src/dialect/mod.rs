@@ -1512,6 +1512,18 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect supports aliasing a wildcard select item.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT t.* AS alias FROM t
+    /// ```
+    ///
+    /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_SELECT_list.html)
+    fn supports_select_wildcard_with_alias(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports the `OPTIMIZE TABLE` statement.
     ///
     /// Example:

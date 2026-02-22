@@ -17847,6 +17847,16 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let opt_alias = if self.dialect.supports_select_wildcard_with_alias() {
+            if self.parse_keyword(Keyword::AS) {
+                Some(self.parse_identifier()?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         Ok(WildcardAdditionalOptions {
             wildcard_token: wildcard_token.into(),
             opt_ilike,
@@ -17854,6 +17864,7 @@ impl<'a> Parser<'a> {
             opt_except,
             opt_rename,
             opt_replace,
+            opt_alias,
         })
     }
 

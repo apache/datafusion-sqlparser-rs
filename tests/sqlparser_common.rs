@@ -1281,6 +1281,26 @@ fn parse_select_expr_star() {
 }
 
 #[test]
+fn parse_select_wildcard_with_alias() {
+    let dialects = all_dialects_where(|d| d.supports_select_wildcard_with_alias());
+
+    // qualified wildcard with alias
+    dialects
+        .parse_sql_statements("SELECT t.* AS all_cols FROM t")
+        .unwrap();
+
+    // unqualified wildcard with alias
+    dialects
+        .parse_sql_statements("SELECT * AS all_cols FROM t")
+        .unwrap();
+
+    // mixed: regular column + qualified wildcard with alias
+    dialects
+        .parse_sql_statements("SELECT a.id, b.* AS b_cols FROM a JOIN b ON (a.id = b.a_id)")
+        .unwrap();
+}
+
+#[test]
 fn test_eof_after_as() {
     let res = parse_sql_statements("SELECT foo AS");
     assert_eq!(

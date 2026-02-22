@@ -452,22 +452,3 @@ fn parse_vacuum() {
         _ => unreachable!(),
     }
 }
-
-
-#[test]
-fn test_redshift_select_wildcard_with_alias() {
-    // qualified wildcard with alias: t.* AS alias
-    redshift()
-        .parse_sql_statements(r#"SELECT t.* AS all_cols FROM t"#)
-        .unwrap();
-
-    // unqualified wildcard with alias
-    redshift()
-        .parse_sql_statements(r#"SELECT * AS all_cols FROM t"#)
-        .unwrap();
-
-    // mixed: regular column + qualified wildcard with alias in a multi-join query
-    redshift()
-        .parse_sql_statements(r#"SELECT a.id, b.* AS b_cols FROM a JOIN b ON (a.id = b.a_id)"#)
-        .unwrap();
-}

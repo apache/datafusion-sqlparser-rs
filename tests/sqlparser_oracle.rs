@@ -517,7 +517,6 @@ fn test_insert_without_alias() {
     // check VALUES
     let sql = "INSERT INTO t VALUES (1)";
     let stmt = oracle_dialect.verified_stmt(sql);
-    dbg!(&stmt);
     assert!(matches!(
         stmt,
         Statement::Insert(Insert {

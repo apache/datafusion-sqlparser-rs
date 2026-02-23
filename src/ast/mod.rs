@@ -9946,7 +9946,7 @@ pub enum CreateFunctionBody {
     /// ```
     ///
     /// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql?view=sql-server-ver16#select_stmt
-    AsReturnSelect(Select),
+    AsReturnSelect(#[cfg_attr(feature = "visitor", visit(with = "visit_select"))] Select),
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

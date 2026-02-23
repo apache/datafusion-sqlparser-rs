@@ -156,12 +156,12 @@ pub enum SetExpr {
     /// UNION/EXCEPT/INTERSECT of two queries
     /// A set operation combining two query expressions.
     SetOperation {
+        /// Left operand of the set operation.
+        left: Box<SetExpr>,
         /// The set operator used (e.g. `UNION`, `EXCEPT`).
         op: SetOperator,
         /// Optional quantifier (`ALL`, `DISTINCT`, etc.).
         set_quantifier: SetQuantifier,
-        /// Left operand of the set operation.
-        left: Box<SetExpr>,
         /// Right operand of the set operation.
         right: Box<SetExpr>,
     },

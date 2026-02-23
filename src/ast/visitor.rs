@@ -330,12 +330,12 @@ pub trait VisitorMut {
     }
 
     /// Invoked for any [Select] that appear in the AST before visiting children
-    fn pre_visit_select(&mut self, _select: &Select) -> ControlFlow<Self::Break> {
+    fn pre_visit_select(&mut self, _select: &mut Select) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
     }
 
     /// Invoked for any [Select] that appear in the AST after visiting children
-    fn post_visit_select(&mut self, _select: &Select) -> ControlFlow<Self::Break> {
+    fn post_visit_select(&mut self, _select: &mut Select) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
     }
 

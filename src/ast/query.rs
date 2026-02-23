@@ -149,10 +149,10 @@ impl fmt::Display for ProjectionSelect {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum SetExpr {
     /// Restricted SELECT .. FROM .. HAVING (no ORDER BY or set operations)
-    Select(#[cfg_attr(feature = "visitor", visit(with = "visit_select"))] Box<Select>),
+    Select(Box<Select>),
     /// Parenthesized SELECT subquery, which may include more set operations
     /// in its body and an optional ORDER BY / LIMIT.
-    Query(#[cfg_attr(feature = "visitor", visit(with = "visit_query"))] Box<Query>),
+    Query(Box<Query>),
     /// UNION/EXCEPT/INTERSECT of two queries
     /// A set operation combining two query expressions.
     SetOperation {
@@ -442,6 +442,7 @@ impl SelectModifiers {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "visitor", visit(with = "visit_select"))]
 pub struct Select {
     /// Token for the `SELECT` keyword
     pub select_token: AttachedToken,

@@ -17,7 +17,7 @@
 
 //! Recursive visitors for ast Nodes. See [`Visitor`] for more details.
 
-use crate::ast::{Expr, ObjectName, Query, Statement, TableFactor, Value, Select};
+use crate::ast::{Expr, ObjectName, Query, Select, Statement, TableFactor, Value};
 use core::ops::ControlFlow;
 
 /// A type that can be visited by a [`Visitor`]. See [`Visitor`] for

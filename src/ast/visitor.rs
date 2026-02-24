@@ -729,6 +729,16 @@ mod tests {
             ControlFlow::Continue(())
         }
 
+        fn pre_visit_select(&mut self, select: &Select) -> ControlFlow<Self::Break> {
+            self.visited.push(format!("PRE: SELECT: {select}"));
+            ControlFlow::Continue(())
+        }
+
+        fn post_visit_select(&mut self, select: &Select) -> ControlFlow<Self::Break> {
+            self.visited.push(format!("POST: SELECT: {select}"));
+            ControlFlow::Continue(())
+        }
+
         fn pre_visit_relation(&mut self, relation: &ObjectName) -> ControlFlow<Self::Break> {
             self.visited.push(format!("PRE: RELATION: {relation}"));
             ControlFlow::Continue(())
@@ -799,10 +809,12 @@ mod tests {
                 vec![
                     "PRE: STATEMENT: SELECT * FROM table_name AS my_table",
                     "PRE: QUERY: SELECT * FROM table_name AS my_table",
+                    "PRE: SELECT: SELECT * FROM table_name AS my_table",
                     "PRE: TABLE FACTOR: table_name AS my_table",
                     "PRE: RELATION: table_name",
                     "POST: RELATION: table_name",
                     "POST: TABLE FACTOR: table_name AS my_table",
+                    "POST: SELECT: SELECT * FROM table_name AS my_table",
                     "POST: QUERY: SELECT * FROM table_name AS my_table",
                     "POST: STATEMENT: SELECT * FROM table_name AS my_table",
                 ],
@@ -812,6 +824,7 @@ mod tests {
                 vec![
                     "PRE: STATEMENT: SELECT * FROM t1 JOIN t2 ON t1.id = t2.t1_id",
                     "PRE: QUERY: SELECT * FROM t1 JOIN t2 ON t1.id = t2.t1_id",
+                    "PRE: SELECT: SELECT * FROM t1 JOIN t2 ON t1.id = t2.t1_id",
                     "PRE: TABLE FACTOR: t1",
                     "PRE: RELATION: t1",
                     "POST: RELATION: t1",
@@ -826,6 +839,7 @@ mod tests {
                     "PRE: EXPR: t2.t1_id",
                     "POST: EXPR: t2.t1_id",
                     "POST: EXPR: t1.id = t2.t1_id",
+                    "POST: SELECT: SELECT * FROM t1 JOIN t2 ON t1.id = t2.t1_id",
                     "POST: QUERY: SELECT * FROM t1 JOIN t2 ON t1.id = t2.t1_id",
                     "POST: STATEMENT: SELECT * FROM t1 JOIN t2 ON t1.id = t2.t1_id",
                 ],
@@ -835,20 +849,24 @@ mod tests {
                 vec![
                     "PRE: STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
                     "PRE: QUERY: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
+                    "PRE: SELECT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
                     "PRE: TABLE FACTOR: t1",
                     "PRE: RELATION: t1",
                     "POST: RELATION: t1",
                     "POST: TABLE FACTOR: t1",
                     "PRE: EXPR: EXISTS (SELECT column FROM t2)",
                     "PRE: QUERY: SELECT column FROM t2",
+                    "PRE: SELECT: SELECT column FROM t2",
                     "PRE: EXPR: column",
                     "POST: EXPR: column",
                     "PRE: TABLE FACTOR: t2",
                     "PRE: RELATION: t2",
                     "POST: RELATION: t2",
                     "POST: TABLE FACTOR: t2",
+                    "POST: SELECT: SELECT column FROM t2",
                     "POST: QUERY: SELECT column FROM t2",
                     "POST: EXPR: EXISTS (SELECT column FROM t2)",
+                    "POST: SELECT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
                     "POST: QUERY: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
                     "POST: STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
                 ],
@@ -858,20 +876,24 @@ mod tests {
                 vec![
                     "PRE: STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
                     "PRE: QUERY: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
+                    "PRE: SELECT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
                     "PRE: TABLE FACTOR: t1",
                     "PRE: RELATION: t1",
                     "POST: RELATION: t1",
                     "POST: TABLE FACTOR: t1",
                     "PRE: EXPR: EXISTS (SELECT column FROM t2)",
                     "PRE: QUERY: SELECT column FROM t2",
+                    "PRE: SELECT: SELECT column FROM t2",
                     "PRE: EXPR: column",
                     "POST: EXPR: column",
                     "PRE: TABLE FACTOR: t2",
                     "PRE: RELATION: t2",
                     "POST: RELATION: t2",
                     "POST: TABLE FACTOR: t2",
+                    "POST: SELECT: SELECT column FROM t2",
                     "POST: QUERY: SELECT column FROM t2",
                     "POST: EXPR: EXISTS (SELECT column FROM t2)",
+                    "POST: SELECT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
                     "POST: QUERY: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
                     "POST: STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
                 ],
@@ -881,24 +903,30 @@ mod tests {
                 vec![
                     "PRE: STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2) UNION SELECT * FROM t3",
                     "PRE: QUERY: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2) UNION SELECT * FROM t3",
+                    "PRE: SELECT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
                     "PRE: TABLE FACTOR: t1",
                     "PRE: RELATION: t1",
                     "POST: RELATION: t1",
                     "POST: TABLE FACTOR: t1",
                     "PRE: EXPR: EXISTS (SELECT column FROM t2)",
                     "PRE: QUERY: SELECT column FROM t2",
+                    "PRE: SELECT: SELECT column FROM t2",
                     "PRE: EXPR: column",
                     "POST: EXPR: column",
                     "PRE: TABLE FACTOR: t2",
                     "PRE: RELATION: t2",
                     "POST: RELATION: t2",
                     "POST: TABLE FACTOR: t2",
+                    "POST: SELECT: SELECT column FROM t2",
                     "POST: QUERY: SELECT column FROM t2",
                     "POST: EXPR: EXISTS (SELECT column FROM t2)",
+                    "POST: SELECT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
+                    "PRE: SELECT: SELECT * FROM t3",
                     "PRE: TABLE FACTOR: t3",
                     "PRE: RELATION: t3",
                     "POST: RELATION: t3",
                     "POST: TABLE FACTOR: t3",
+                    "POST: SELECT: SELECT * FROM t3",
                     "POST: QUERY: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2) UNION SELECT * FROM t3",
                     "POST: STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2) UNION SELECT * FROM t3",
                 ],
@@ -912,6 +940,7 @@ mod tests {
                 vec![
                     "PRE: STATEMENT: SELECT * FROM monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ORDER BY EMPID",
                     "PRE: QUERY: SELECT * FROM monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ORDER BY EMPID",
+                    "PRE: SELECT: SELECT * FROM monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d)",
                     "PRE: TABLE FACTOR: monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d)",
                     "PRE: TABLE FACTOR: monthly_sales",
                     "PRE: RELATION: monthly_sales",
@@ -932,6 +961,7 @@ mod tests {
                     "PRE: EXPR: 'APR'",
                     "POST: EXPR: 'APR'",
                     "POST: TABLE FACTOR: monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d)",
+                    "POST: SELECT: SELECT * FROM monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d)",
                     "PRE: EXPR: EMPID",
                     "POST: EXPR: EMPID",
                     "POST: QUERY: SELECT * FROM monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ORDER BY EMPID",

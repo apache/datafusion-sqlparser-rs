@@ -33,6 +33,8 @@ use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
 
+use super::keywords::RESERVED_FOR_IDENTIFIER;
+
 /// A [`Dialect`] for [PostgreSQL](https://www.postgresql.org/)
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -79,6 +81,14 @@ impl Dialect for PostgreSqlDialect {
 
     fn supports_unicode_string_literal(&self) -> bool {
         true
+    }
+
+    fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {
+        if matches!(kw, Keyword::INTERVAL) {
+            false
+        } else {
+            RESERVED_FOR_IDENTIFIER.contains(&kw)
+        }
     }
 
     /// See <https://www.postgresql.org/docs/current/sql-createoperator.html>

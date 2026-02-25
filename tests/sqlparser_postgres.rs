@@ -5778,6 +5778,12 @@ fn parse_interval_data_type() {
 }
 
 #[test]
+fn parse_interval_keyword_as_unquoted_identifier() {
+    pg().verified_stmt("SELECT MAX(interval) FROM tbl");
+    pg().verified_expr("INTERVAL '1 day'");
+}
+
+#[test]
 fn parse_create_table_with_options() {
     let sql = "CREATE TABLE t (c INT) WITH (foo = 'bar', a = 123)";
     match pg().verified_stmt(sql) {

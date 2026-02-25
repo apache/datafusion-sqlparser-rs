@@ -9048,17 +9048,38 @@ impl<'a> Parser<'a> {
                 .into(),
             ))
         } else if self.parse_keyword(Keyword::UNIQUE) {
+            let index_type_display =
+                if self.dialect.supports_key_column_option() && self.parse_keyword(Keyword::KEY) {
+                    KeyOrIndexDisplay::Key
+                } else {
+                    KeyOrIndexDisplay::None
+                };
             let characteristics = self.parse_constraint_characteristics()?;
             Ok(Some(
                 UniqueConstraint {
                     name: None,
                     index_name: None,
-                    index_type_display: KeyOrIndexDisplay::None,
+                    index_type_display,
                     index_type: None,
                     columns: vec![],
                     index_options: vec![],
                     characteristics,
                     nulls_distinct: NullsDistinctOption::None,
+                }
+                .into(),
+            ))
+        } else if self.dialect.supports_key_column_option() && self.parse_keyword(Keyword::KEY) {
+            // In MySQL, `KEY` in a column definition is shorthand for `PRIMARY KEY`.
+            // See: https://dev.mysql.com/doc/refman/8.4/en/create-table.html
+            let characteristics = self.parse_constraint_characteristics()?;
+            Ok(Some(
+                PrimaryKeyConstraint {
+                    name: None,
+                    index_name: None,
+                    index_type: None,
+                    columns: vec![],
+                    index_options: vec![],
+                    characteristics,
                 }
                 .into(),
             ))

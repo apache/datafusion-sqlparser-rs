@@ -8099,10 +8099,9 @@ fn parse_trim() {
         parse_sql_statements("SELECT TRIM(FOO 'xyz' FROM 'xyzfooxyz')").unwrap_err()
     );
 
-    //keep Snowflake/BigQuery TRIM syntax failing
-    let all_expected_snowflake = TestedDialects::new(vec![
+    // keep dialects without comma-style TRIM syntax failing
+    let all_expected_error = TestedDialects::new(vec![
         //Box::new(GenericDialect {}),
-        Box::new(PostgreSqlDialect {}),
         Box::new(MsSqlDialect {}),
         Box::new(AnsiDialect {}),
         //Box::new(SnowflakeDialect {}),
@@ -8115,7 +8114,7 @@ fn parse_trim() {
 
     assert_eq!(
         ParserError::ParserError("Expected: ), found: 'a'".to_owned()),
-        all_expected_snowflake
+        all_expected_error
             .parse_sql_statements("SELECT TRIM('xyz', 'a')")
             .unwrap_err()
     );

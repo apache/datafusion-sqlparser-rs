@@ -8641,3 +8641,44 @@ fn parse_pg_analyze() {
         _ => panic!("Expected Analyze, got: {stmt:?}"),
     }
 }
+
+#[test]
+fn parse_postgres_two_argument_trim() {
+    let sql = "SELECT TRIM('  xyz  ', ' ')";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        &Expr::Trim {
+            expr: Box::new(Expr::Value(
+                Value::SingleQuotedString("  xyz  ".to_owned()).with_empty_span()
+            )),
+            trim_where: None,
+            trim_what: None,
+            trim_characters: Some(vec![Expr::Value(
+                Value::SingleQuotedString(" ".to_owned()).with_empty_span()
+            )]),
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let sql = "SELECT TRIM('xyz', 'a')";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        &Expr::Trim {
+            expr: Box::new(Expr::Value(
+                Value::SingleQuotedString("xyz".to_owned()).with_empty_span()
+            )),
+            trim_where: None,
+            trim_what: None,
+            trim_characters: Some(vec![Expr::Value(
+                Value::SingleQuotedString("a".to_owned()).with_empty_span()
+            )]),
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let error_sql = "SELECT TRIM('xyz' 'a')";
+    assert_eq!(
+        ParserError::ParserError("Expected: ), found: 'a'".to_owned()),
+        pg().parse_sql_statements(error_sql).unwrap_err()
+    );
+}

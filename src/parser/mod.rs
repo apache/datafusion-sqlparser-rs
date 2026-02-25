@@ -2940,7 +2940,7 @@ impl<'a> Parser<'a> {
     /// ```sql
     /// TRIM ([WHERE] ['text' FROM] 'text')
     /// TRIM ('text')
-    /// TRIM(<expr>, [, characters]) -- only Snowflake or BigQuery
+    /// TRIM(<expr>, [, characters]) -- PostgreSQL, DuckDB, Snowflake, BigQuery, Generic
     /// ```
     pub fn parse_trim_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
@@ -2962,7 +2962,13 @@ impl<'a> Parser<'a> {
                 trim_characters: None,
             })
         } else if self.consume_token(&Token::Comma)
-            && dialect_of!(self is DuckDbDialect | SnowflakeDialect | BigQueryDialect | GenericDialect)
+            && dialect_of!(
+                self is DuckDbDialect
+                    | SnowflakeDialect
+                    | BigQueryDialect
+                    | PostgreSqlDialect
+                    | GenericDialect
+            )
         {
             let characters = self.parse_comma_separated(Parser::parse_expr)?;
             self.expect_token(&Token::RParen)?;

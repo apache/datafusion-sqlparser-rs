@@ -1131,7 +1131,7 @@ pub enum Expr {
     /// ```sql
     /// TRIM([BOTH | LEADING | TRAILING] [<expr> FROM] <expr>)
     /// TRIM(<expr>)
-    /// TRIM(<expr>, [, characters]) -- only Snowflake or Bigquery
+    /// TRIM(<expr>, [, characters]) -- PostgreSQL, DuckDB, Snowflake, BigQuery, Generic
     /// ```
     Trim {
         /// The expression to trim from.

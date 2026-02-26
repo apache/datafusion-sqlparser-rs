@@ -902,6 +902,9 @@ impl<'a> Parser<'a> {
         let token = self.next_token();
 
         let (object_type, object_name) = match token.token {
+            Token::Word(w) if w.keyword == Keyword::COLLATION => {
+                (CommentObject::Collation, self.parse_object_name(false)?)
+            }
             Token::Word(w) if w.keyword == Keyword::COLUMN => {
                 (CommentObject::Column, self.parse_object_name(false)?)
             }
@@ -5188,6 +5191,8 @@ impl<'a> Parser<'a> {
             self.parse_create_role().map(Into::into)
         } else if self.parse_keyword(Keyword::SEQUENCE) {
             self.parse_create_sequence(temporary)
+        } else if self.parse_keyword(Keyword::COLLATION) {
+            self.parse_create_collation().map(Into::into)
         } else if self.parse_keyword(Keyword::TYPE) {
             self.parse_create_type()
         } else if self.parse_keyword(Keyword::PROCEDURE) {
@@ -7352,6 +7357,8 @@ impl<'a> Parser<'a> {
 
         let object_type = if self.parse_keyword(Keyword::TABLE) {
             ObjectType::Table
+        } else if self.parse_keyword(Keyword::COLLATION) {
+            ObjectType::Collation
         } else if self.parse_keyword(Keyword::VIEW) {
             ObjectType::View
         } else if self.parse_keywords(&[Keyword::MATERIALIZED, Keyword::VIEW]) {
@@ -7401,7 +7408,7 @@ impl<'a> Parser<'a> {
             };
         } else {
             return self.expected_ref(
-                "CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW or USER after DROP",
+                "COLLATION, CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW or USER after DROP",
                 self.peek_token_ref(),
             );
         };
@@ -8139,6 +8146,31 @@ impl<'a> Parser<'a> {
             schema,
             version,
             cascade,
+        })
+    }
+
+    /// Parse a PostgreSQL-specific [Statement::CreateCollation] statement.
+    pub fn parse_create_collation(&mut self) -> Result<CreateCollation, ParserError> {
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let name = self.parse_object_name(false)?;
+
+        let definition = if self.parse_keyword(Keyword::FROM) {
+            CreateCollationDefinition::From(self.parse_object_name(false)?)
+        } else if self.consume_token(&Token::LParen) {
+            let options = self.parse_comma_separated(Parser::parse_sql_option)?;
+            self.expect_token(&Token::RParen)?;
+            CreateCollationDefinition::Options(options)
+        } else {
+            return self.expected_ref(
+                "FROM or parenthesized option list after CREATE COLLATION name",
+                self.peek_token_ref(),
+            );
+        };
+
+        Ok(CreateCollation {
+            if_not_exists,
+            name,
+            definition,
         })
     }
 
@@ -10673,6 +10705,7 @@ impl<'a> Parser<'a> {
         let object_type = self.expect_one_of_keywords(&[
             Keyword::VIEW,
             Keyword::TYPE,
+            Keyword::COLLATION,
             Keyword::TABLE,
             Keyword::INDEX,
             Keyword::FUNCTION,
@@ -10693,6 +10726,7 @@ impl<'a> Parser<'a> {
             }
             Keyword::VIEW => self.parse_alter_view(),
             Keyword::TYPE => self.parse_alter_type(),
+            Keyword::COLLATION => self.parse_alter_collation().map(Into::into),
             Keyword::TABLE => self.parse_alter_table(false),
             Keyword::ICEBERG => {
                 self.expect_keyword(Keyword::TABLE)?;
@@ -10733,7 +10767,7 @@ impl<'a> Parser<'a> {
             Keyword::USER => self.parse_alter_user().map(Into::into),
             // unreachable because expect_one_of_keywords used above
             unexpected_keyword => Err(ParserError::ParserError(
-                format!("Internal parser error: expected any of {{VIEW, TYPE, TABLE, INDEX, FUNCTION, AGGREGATE, ROLE, POLICY, CONNECTOR, ICEBERG, SCHEMA, USER, OPERATOR}}, got {unexpected_keyword:?}"),
+                format!("Internal parser error: expected any of {{VIEW, TYPE, COLLATION, TABLE, INDEX, FUNCTION, AGGREGATE, ROLE, POLICY, CONNECTOR, ICEBERG, SCHEMA, USER, OPERATOR}}, got {unexpected_keyword:?}"),
             )),
         }
     }
@@ -11068,6 +11102,33 @@ impl<'a> Parser<'a> {
                 self.peek_token_ref(),
             )
         }
+    }
+
+    /// Parse a [Statement::AlterCollation].
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-altercollation.html)
+    pub fn parse_alter_collation(&mut self) -> Result<AlterCollation, ParserError> {
+        let name = self.parse_object_name(false)?;
+        let operation = if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            AlterCollationOperation::RenameTo {
+                new_name: self.parse_identifier()?,
+            }
+        } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            AlterCollationOperation::OwnerTo(self.parse_owner()?)
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+            AlterCollationOperation::SetSchema {
+                schema_name: self.parse_object_name(false)?,
+            }
+        } else if self.parse_keywords(&[Keyword::REFRESH, Keyword::VERSION]) {
+            AlterCollationOperation::RefreshVersion
+        } else {
+            return self.expected_ref(
+                "RENAME TO, OWNER TO, SET SCHEMA, or REFRESH VERSION after ALTER COLLATION",
+                self.peek_token_ref(),
+            );
+        };
+
+        Ok(AlterCollation { name, operation })
     }
 
     /// Parse a [Statement::AlterOperator]

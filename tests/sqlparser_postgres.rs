@@ -1085,6 +1085,61 @@ PHP	₱ USD $
 }
 
 #[test]
+fn parse_copy_from_stdin_without_semicolon() {
+    let stmt = pg().verified_stmt("COPY bitwise_test FROM STDIN NULL 'null'");
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            source: CopySource::Table {
+                table_name: ObjectName::from(vec!["bitwise_test".into()]),
+                columns: vec![],
+            },
+            to: false,
+            target: CopyTarget::Stdin,
+            options: vec![],
+            legacy_options: vec![CopyLegacyOption::Null("null".into())],
+            values: vec![],
+        }
+    );
+}
+
+#[test]
+fn parse_copy_from_stdin_without_semicolon_variants() {
+    let cases = [
+        "COPY bool_test FROM STDIN NULL 'null'",
+        "COPY varbit_table FROM stdin",
+        "COPY bit_table FROM stdin",
+        "copy copytest2(test) from stdin",
+        "copy copytest3 from stdin csv header",
+        "copy copytest4 from stdin (header)",
+        "copy parted_copytest from stdin",
+        "copy tab_progress_reporting from stdin",
+        "copy oversized_column_default from stdin",
+        "COPY x (a, b, c, d, e) from stdin",
+        "copy header_copytest (c, a) from stdin",
+        "COPY atest5 (two) FROM stdin",
+        "COPY main_table (a, b) FROM stdin",
+    ];
+
+    for sql in cases {
+        match pg().one_statement_parses_to(sql, "") {
+            Statement::Copy {
+                to: false,
+                target: CopyTarget::Stdin,
+                values,
+                ..
+            } => {
+                assert!(
+                    values.is_empty(),
+                    "expected no inline COPY payload for `{sql}`"
+                );
+            }
+            _ => panic!("expected COPY ... FROM STDIN statement for `{sql}`"),
+        }
+    }
+}
+
+#[test]
 fn test_copy_from() {
     let stmt = pg().verified_stmt("COPY users FROM 'data.csv'");
     assert_eq!(

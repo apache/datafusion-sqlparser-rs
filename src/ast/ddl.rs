@@ -4402,6 +4402,142 @@ impl Spanned for DropExtension {
     }
 }
 
+/// CREATE COLLATION statement.
+/// Note: this is a PostgreSQL-specific statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateCollation {
+    /// Whether `IF NOT EXISTS` was specified.
+    pub if_not_exists: bool,
+    /// Name of the collation being created.
+    pub name: ObjectName,
+    /// Source definition for the collation.
+    pub definition: CreateCollationDefinition,
+}
+
+/// Definition forms supported by `CREATE COLLATION`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreateCollationDefinition {
+    /// Create from an existing collation.
+    ///
+    /// ```sql
+    /// CREATE COLLATION name FROM existing_collation
+    /// ```
+    From(ObjectName),
+    /// Create with an option list.
+    ///
+    /// ```sql
+    /// CREATE COLLATION name (key = value, ...)
+    /// ```
+    Options(Vec<SqlOption>),
+}
+
+impl fmt::Display for CreateCollation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CREATE COLLATION {if_not_exists}{name}",
+            if_not_exists = if self.if_not_exists {
+                "IF NOT EXISTS "
+            } else {
+                ""
+            },
+            name = self.name
+        )?;
+        match &self.definition {
+            CreateCollationDefinition::From(existing_collation) => {
+                write!(f, " FROM {existing_collation}")
+            }
+            CreateCollationDefinition::Options(options) => {
+                write!(f, " ({})", display_comma_separated(options))
+            }
+        }
+    }
+}
+
+impl Spanned for CreateCollation {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}
+
+/// ALTER COLLATION statement.
+/// Note: this is a PostgreSQL-specific statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterCollation {
+    /// Name of the collation being altered.
+    pub name: ObjectName,
+    /// The operation to perform on the collation.
+    pub operation: AlterCollationOperation,
+}
+
+/// Operations supported by `ALTER COLLATION`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterCollationOperation {
+    /// Rename the collation.
+    ///
+    /// ```sql
+    /// ALTER COLLATION name RENAME TO new_name
+    /// ```
+    RenameTo {
+        /// New collation name.
+        new_name: Ident,
+    },
+    /// Change the collation owner.
+    ///
+    /// ```sql
+    /// ALTER COLLATION name OWNER TO role_name
+    /// ```
+    OwnerTo(Owner),
+    /// Move the collation to another schema.
+    ///
+    /// ```sql
+    /// ALTER COLLATION name SET SCHEMA new_schema
+    /// ```
+    SetSchema {
+        /// Target schema name.
+        schema_name: ObjectName,
+    },
+    /// Refresh collation version metadata.
+    ///
+    /// ```sql
+    /// ALTER COLLATION name REFRESH VERSION
+    /// ```
+    RefreshVersion,
+}
+
+impl fmt::Display for AlterCollationOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterCollationOperation::RenameTo { new_name } => write!(f, "RENAME TO {new_name}"),
+            AlterCollationOperation::OwnerTo(owner) => write!(f, "OWNER TO {owner}"),
+            AlterCollationOperation::SetSchema { schema_name } => {
+                write!(f, "SET SCHEMA {schema_name}")
+            }
+            AlterCollationOperation::RefreshVersion => write!(f, "REFRESH VERSION"),
+        }
+    }
+}
+
+impl fmt::Display for AlterCollation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ALTER COLLATION {} {}", self.name, self.operation)
+    }
+}
+
+impl Spanned for AlterCollation {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}
+
 /// Table type for ALTER TABLE statements.
 /// Used to distinguish between regular tables, Iceberg tables, and Dynamic tables.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

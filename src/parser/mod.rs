@@ -5686,15 +5686,19 @@ impl<'a> Parser<'a> {
                     return self.expected_ref("DEFINER or INVOKER", self.peek_token_ref());
                 }
             } else if self.parse_keyword(Keyword::SET) {
-                let name = self.parse_identifier()?;
+                let name = self.parse_object_name(false)?;
                 let value = if self.parse_keywords(&[Keyword::FROM, Keyword::CURRENT]) {
                     FunctionSetValue::FromCurrent
                 } else {
                     if !self.consume_token(&Token::Eq) && !self.parse_keyword(Keyword::TO) {
                         return self.expected_ref("= or TO", self.peek_token_ref());
                     }
-                    let values = self.parse_comma_separated(Parser::parse_expr)?;
-                    FunctionSetValue::Values(values)
+                    if self.parse_keyword(Keyword::DEFAULT) {
+                        FunctionSetValue::Default
+                    } else {
+                        let values = self.parse_comma_separated(Parser::parse_expr)?;
+                        FunctionSetValue::Values(values)
+                    }
                 };
                 set_params.push(FunctionDefinitionSetParam { name, value });
             } else if self.parse_keyword(Keyword::RETURN) {
@@ -5976,6 +5980,8 @@ impl<'a> Parser<'a> {
             Some(ArgMode::Out)
         } else if self.parse_keyword(Keyword::INOUT) {
             Some(ArgMode::InOut)
+        } else if self.parse_keyword(Keyword::VARIADIC) {
+            Some(ArgMode::Variadic)
         } else {
             None
         };
@@ -6025,6 +6031,69 @@ impl<'a> Parser<'a> {
             name,
             data_type,
             default_expr,
+        })
+    }
+
+    fn parse_aggregate_function_arg(&mut self) -> Result<OperateFunctionArg, ParserError> {
+        let mode = if self.parse_keyword(Keyword::IN) {
+            Some(ArgMode::In)
+        } else {
+            if self
+                .peek_one_of_keywords(&[Keyword::OUT, Keyword::INOUT, Keyword::VARIADIC])
+                .is_some()
+            {
+                return self.expected_ref(
+                    "IN or argument type in aggregate signature",
+                    self.peek_token_ref(),
+                );
+            }
+            None
+        };
+
+        // Parse: [ argname ] argtype, but do not consume ORDER from
+        // `... argtype ORDER BY ...` as a type-name disambiguator.
+        let mut name = None;
+        let mut data_type = self.parse_data_type()?;
+        let data_type_idx = self.get_current_index();
+
+        fn parse_data_type_for_aggregate_arg(parser: &mut Parser) -> Result<DataType, ParserError> {
+            if parser.peek_keyword(Keyword::DEFAULT)
+                || parser.peek_keyword(Keyword::ORDER)
+                || parser.peek_token_ref().token == Token::Comma
+                || parser.peek_token_ref().token == Token::RParen
+            {
+                // Dummy error ignored by maybe_parse
+                parser_err!(
+                    "The current token cannot start an aggregate argument type",
+                    parser.peek_token_ref().span.start
+                )
+            } else {
+                parser.parse_data_type()
+            }
+        }
+
+        if let Some(next_data_type) = self.maybe_parse(parse_data_type_for_aggregate_arg)? {
+            let token = self.token_at(data_type_idx);
+            if !matches!(token.token, Token::Word(_)) {
+                return self.expected("a name or type", token.clone());
+            }
+
+            name = Some(Ident::new(token.to_string()));
+            data_type = next_data_type;
+        }
+
+        if self.peek_keyword(Keyword::DEFAULT) || self.peek_token_ref().token == Token::Eq {
+            return self.expected_ref(
+                "',' or ')' or ORDER BY after aggregate argument type",
+                self.peek_token_ref(),
+            );
+        }
+
+        Ok(OperateFunctionArg {
+            mode,
+            name,
+            data_type,
+            default_expr: None,
         })
     }
 
@@ -10582,6 +10651,8 @@ impl<'a> Parser<'a> {
             Keyword::TYPE,
             Keyword::TABLE,
             Keyword::INDEX,
+            Keyword::FUNCTION,
+            Keyword::AGGREGATE,
             Keyword::ROLE,
             Keyword::POLICY,
             Keyword::CONNECTOR,
@@ -10621,6 +10692,8 @@ impl<'a> Parser<'a> {
                     operation,
                 })
             }
+            Keyword::FUNCTION => self.parse_alter_function(AlterFunctionKind::Function),
+            Keyword::AGGREGATE => self.parse_alter_function(AlterFunctionKind::Aggregate),
             Keyword::OPERATOR => {
                 if self.parse_keyword(Keyword::FAMILY) {
                     self.parse_alter_operator_family().map(Into::into)
@@ -10636,9 +10709,240 @@ impl<'a> Parser<'a> {
             Keyword::USER => self.parse_alter_user().map(Into::into),
             // unreachable because expect_one_of_keywords used above
             unexpected_keyword => Err(ParserError::ParserError(
-                format!("Internal parser error: expected any of {{VIEW, TYPE, TABLE, INDEX, ROLE, POLICY, CONNECTOR, ICEBERG, SCHEMA, USER, OPERATOR}}, got {unexpected_keyword:?}"),
+                format!("Internal parser error: expected any of {{VIEW, TYPE, TABLE, INDEX, FUNCTION, AGGREGATE, ROLE, POLICY, CONNECTOR, ICEBERG, SCHEMA, USER, OPERATOR}}, got {unexpected_keyword:?}"),
             )),
         }
+    }
+
+    fn parse_unreserved_keyword(&mut self, expected: &str) -> bool {
+        match &self.peek_token_ref().token {
+            Token::Word(w) if w.quote_style.is_none() && w.value.eq_ignore_ascii_case(expected) => {
+                self.advance_token();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn parse_alter_aggregate_signature(
+        &mut self,
+    ) -> Result<(FunctionDesc, bool, Option<Vec<OperateFunctionArg>>), ParserError> {
+        let name = self.parse_object_name(false)?;
+        self.expect_token(&Token::LParen)?;
+
+        if self.consume_token(&Token::Mul) {
+            self.expect_token(&Token::RParen)?;
+            return Ok((
+                FunctionDesc {
+                    name,
+                    args: Some(vec![]),
+                },
+                true,
+                None,
+            ));
+        }
+
+        let args =
+            if self.peek_keyword(Keyword::ORDER) || self.peek_token_ref().token == Token::RParen {
+                vec![]
+            } else {
+                self.parse_comma_separated(Parser::parse_aggregate_function_arg)?
+            };
+
+        let aggregate_order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+            Some(self.parse_comma_separated(Parser::parse_aggregate_function_arg)?)
+        } else {
+            None
+        };
+
+        self.expect_token(&Token::RParen)?;
+        Ok((
+            FunctionDesc {
+                name,
+                args: Some(args),
+            },
+            false,
+            aggregate_order_by,
+        ))
+    }
+
+    fn parse_alter_function_action(&mut self) -> Result<Option<AlterFunctionAction>, ParserError> {
+        let action = if self.parse_keywords(&[
+            Keyword::CALLED,
+            Keyword::ON,
+            Keyword::NULL,
+            Keyword::INPUT,
+        ]) {
+            Some(AlterFunctionAction::CalledOnNull(
+                FunctionCalledOnNull::CalledOnNullInput,
+            ))
+        } else if self.parse_keywords(&[
+            Keyword::RETURNS,
+            Keyword::NULL,
+            Keyword::ON,
+            Keyword::NULL,
+            Keyword::INPUT,
+        ]) {
+            Some(AlterFunctionAction::CalledOnNull(
+                FunctionCalledOnNull::ReturnsNullOnNullInput,
+            ))
+        } else if self.parse_keyword(Keyword::STRICT) {
+            Some(AlterFunctionAction::CalledOnNull(
+                FunctionCalledOnNull::Strict,
+            ))
+        } else if self.parse_keyword(Keyword::IMMUTABLE) {
+            Some(AlterFunctionAction::Behavior(FunctionBehavior::Immutable))
+        } else if self.parse_keyword(Keyword::STABLE) {
+            Some(AlterFunctionAction::Behavior(FunctionBehavior::Stable))
+        } else if self.parse_keyword(Keyword::VOLATILE) {
+            Some(AlterFunctionAction::Behavior(FunctionBehavior::Volatile))
+        } else if self.parse_keyword(Keyword::NOT) {
+            self.expect_keyword(Keyword::LEAKPROOF)?;
+            Some(AlterFunctionAction::Leakproof(false))
+        } else if self.parse_keyword(Keyword::LEAKPROOF) {
+            Some(AlterFunctionAction::Leakproof(true))
+        } else if self.parse_keyword(Keyword::EXTERNAL) {
+            self.expect_keyword(Keyword::SECURITY)?;
+            let security = if self.parse_keyword(Keyword::DEFINER) {
+                FunctionSecurity::Definer
+            } else if self.parse_keyword(Keyword::INVOKER) {
+                FunctionSecurity::Invoker
+            } else {
+                return self.expected_ref("DEFINER or INVOKER", self.peek_token_ref());
+            };
+            Some(AlterFunctionAction::Security {
+                external: true,
+                security,
+            })
+        } else if self.parse_keyword(Keyword::SECURITY) {
+            let security = if self.parse_keyword(Keyword::DEFINER) {
+                FunctionSecurity::Definer
+            } else if self.parse_keyword(Keyword::INVOKER) {
+                FunctionSecurity::Invoker
+            } else {
+                return self.expected_ref("DEFINER or INVOKER", self.peek_token_ref());
+            };
+            Some(AlterFunctionAction::Security {
+                external: false,
+                security,
+            })
+        } else if self.parse_keyword(Keyword::PARALLEL) {
+            let parallel = if self.parse_keyword(Keyword::UNSAFE) {
+                FunctionParallel::Unsafe
+            } else if self.parse_keyword(Keyword::RESTRICTED) {
+                FunctionParallel::Restricted
+            } else if self.parse_keyword(Keyword::SAFE) {
+                FunctionParallel::Safe
+            } else {
+                return self
+                    .expected_ref("one of UNSAFE | RESTRICTED | SAFE", self.peek_token_ref());
+            };
+            Some(AlterFunctionAction::Parallel(parallel))
+        } else if self.parse_unreserved_keyword("COST") {
+            Some(AlterFunctionAction::Cost(self.parse_number()?))
+        } else if self.parse_keyword(Keyword::ROWS) {
+            Some(AlterFunctionAction::Rows(self.parse_number()?))
+        } else if self.parse_keyword(Keyword::SUPPORT) {
+            Some(AlterFunctionAction::Support(self.parse_object_name(false)?))
+        } else if self.parse_keyword(Keyword::SET) {
+            let name = self.parse_object_name(false)?;
+            let value = if self.parse_keywords(&[Keyword::FROM, Keyword::CURRENT]) {
+                FunctionSetValue::FromCurrent
+            } else {
+                if !self.consume_token(&Token::Eq) && !self.parse_keyword(Keyword::TO) {
+                    return self.expected_ref("= or TO", self.peek_token_ref());
+                }
+                if self.parse_keyword(Keyword::DEFAULT) {
+                    FunctionSetValue::Default
+                } else {
+                    FunctionSetValue::Values(self.parse_comma_separated(Parser::parse_expr)?)
+                }
+            };
+            Some(AlterFunctionAction::Set(FunctionDefinitionSetParam {
+                name,
+                value,
+            }))
+        } else if self.parse_keyword(Keyword::RESET) {
+            let reset_config = if self.parse_keyword(Keyword::ALL) {
+                ResetConfig::ALL
+            } else {
+                ResetConfig::ConfigName(self.parse_object_name(false)?)
+            };
+            Some(AlterFunctionAction::Reset(reset_config))
+        } else {
+            None
+        };
+
+        Ok(action)
+    }
+
+    fn parse_alter_function_actions(
+        &mut self,
+    ) -> Result<(Vec<AlterFunctionAction>, bool), ParserError> {
+        let mut actions = vec![];
+        while let Some(action) = self.parse_alter_function_action()? {
+            actions.push(action);
+        }
+        if actions.is_empty() {
+            return self.expected_ref("at least one ALTER FUNCTION action", self.peek_token_ref());
+        }
+        let restrict = self.parse_keyword(Keyword::RESTRICT);
+        Ok((actions, restrict))
+    }
+
+    /// Parse an `ALTER FUNCTION` or `ALTER AGGREGATE` statement.
+    pub fn parse_alter_function(
+        &mut self,
+        kind: AlterFunctionKind,
+    ) -> Result<Statement, ParserError> {
+        let (function, aggregate_star, aggregate_order_by) = match kind {
+            AlterFunctionKind::Function => (self.parse_function_desc()?, false, None),
+            AlterFunctionKind::Aggregate => self.parse_alter_aggregate_signature()?,
+        };
+
+        let operation = if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            let new_name = self.parse_identifier()?;
+            AlterFunctionOperation::RenameTo { new_name }
+        } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            AlterFunctionOperation::OwnerTo(self.parse_owner()?)
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+            AlterFunctionOperation::SetSchema {
+                schema_name: self.parse_object_name(false)?,
+            }
+        } else if matches!(kind, AlterFunctionKind::Function) && self.parse_keyword(Keyword::NO) {
+            if !self.parse_unreserved_keyword("DEPENDS") {
+                return self.expected_ref("DEPENDS after NO", self.peek_token_ref());
+            }
+            self.expect_keywords(&[Keyword::ON, Keyword::EXTENSION])?;
+            AlterFunctionOperation::DependsOnExtension {
+                no: true,
+                extension_name: self.parse_object_name(false)?,
+            }
+        } else if matches!(kind, AlterFunctionKind::Function)
+            && self.parse_unreserved_keyword("DEPENDS")
+        {
+            self.expect_keywords(&[Keyword::ON, Keyword::EXTENSION])?;
+            AlterFunctionOperation::DependsOnExtension {
+                no: false,
+                extension_name: self.parse_object_name(false)?,
+            }
+        } else if matches!(kind, AlterFunctionKind::Function) {
+            let (actions, restrict) = self.parse_alter_function_actions()?;
+            AlterFunctionOperation::Actions { actions, restrict }
+        } else {
+            return self.expected_ref(
+                "RENAME TO, OWNER TO, or SET SCHEMA after ALTER AGGREGATE",
+                self.peek_token_ref(),
+            );
+        };
+
+        Ok(Statement::AlterFunction(AlterFunction {
+            kind,
+            function,
+            aggregate_order_by,
+            aggregate_star,
+            operation,
+        }))
     }
 
     /// Parse a [Statement::AlterTable]

@@ -1127,6 +1127,7 @@ define_keywords!(
     VARCHAR2,
     VARIABLE,
     VARIABLES,
+    VARIADIC,
     VARYING,
     VAR_POP,
     VAR_SAMP,

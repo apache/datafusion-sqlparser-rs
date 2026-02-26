@@ -402,6 +402,7 @@ impl Spanned for Statement {
                     .chain(with_options.iter().map(|i| i.span())),
             ),
             // These statements need to be implemented
+            Statement::AlterFunction { .. } => Span::empty(),
             Statement::AlterType { .. } => Span::empty(),
             Statement::AlterOperator { .. } => Span::empty(),
             Statement::AlterOperatorFamily { .. } => Span::empty(),

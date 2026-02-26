@@ -82,6 +82,7 @@ pub use self::ddl::{
     Truncate, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
     UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
     UserDefinedTypeStorage, ViewColumnDef,
+    AlterCollation, AlterCollationOperation, CreateCollation, CreateCollationDefinition,
 };
 pub use self::dml::{
     Delete, Insert, Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr,
@@ -2450,6 +2451,8 @@ impl fmt::Display for ShowCreateObject {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Objects that can be targeted by a `COMMENT` statement.
 pub enum CommentObject {
+    /// A collation.
+    Collation,
     /// A table column.
     Column,
     /// A database.
@@ -2485,6 +2488,7 @@ pub enum CommentObject {
 impl fmt::Display for CommentObject {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            CommentObject::Collation => f.write_str("COLLATION"),
             CommentObject::Column => f.write_str("COLUMN"),
             CommentObject::Database => f.write_str("DATABASE"),
             CommentObject::Domain => f.write_str("DOMAIN"),
@@ -3764,6 +3768,11 @@ pub enum Statement {
     /// ```
     AlterType(AlterType),
     /// ```sql
+    /// ALTER COLLATION
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altercollation.html)
+    AlterCollation(AlterCollation),
+    /// ```sql
     /// ALTER OPERATOR
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alteroperator.html)
@@ -3959,6 +3968,12 @@ pub enum Statement {
     ///
     /// Note: this is a PostgreSQL-specific statement,
     CreateExtension(CreateExtension),
+    /// ```sql
+    /// CREATE COLLATION
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createcollation.html>
+    CreateCollation(CreateCollation),
     /// ```sql
     /// DROP EXTENSION [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
     /// ```
@@ -5430,6 +5445,7 @@ impl fmt::Display for Statement {
             }
             Statement::CreateIndex(create_index) => create_index.fmt(f),
             Statement::CreateExtension(create_extension) => write!(f, "{create_extension}"),
+            Statement::CreateCollation(create_collation) => write!(f, "{create_collation}"),
             Statement::DropExtension(drop_extension) => write!(f, "{drop_extension}"),
             Statement::DropOperator(drop_operator) => write!(f, "{drop_operator}"),
             Statement::DropOperatorFamily(drop_operator_family) => {
@@ -5507,6 +5523,7 @@ impl fmt::Display for Statement {
             Statement::AlterType(AlterType { name, operation }) => {
                 write!(f, "ALTER TYPE {name} {operation}")
             }
+            Statement::AlterCollation(alter_collation) => write!(f, "{alter_collation}"),
             Statement::AlterOperator(alter_operator) => write!(f, "{alter_operator}"),
             Statement::AlterOperatorFamily(alter_operator_family) => {
                 write!(f, "{alter_operator_family}")
@@ -8380,6 +8397,8 @@ impl fmt::Display for HavingBoundKind {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Types of database objects referenced by DDL statements.
 pub enum ObjectType {
+    /// A collation.
+    Collation,
     /// A table.
     Table,
     /// A view.
@@ -8409,6 +8428,7 @@ pub enum ObjectType {
 impl fmt::Display for ObjectType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match self {
+            ObjectType::Collation => "COLLATION",
             ObjectType::Table => "TABLE",
             ObjectType::View => "VIEW",
             ObjectType::MaterializedView => "MATERIALIZED VIEW",
@@ -12011,6 +12031,12 @@ impl From<CreateExtension> for Statement {
     }
 }
 
+impl From<CreateCollation> for Statement {
+    fn from(c: CreateCollation) -> Self {
+        Self::CreateCollation(c)
+    }
+}
+
 impl From<DropExtension> for Statement {
     fn from(de: DropExtension) -> Self {
         Self::DropExtension(de)
@@ -12122,6 +12148,12 @@ impl From<AlterFunction> for Statement {
 impl From<AlterType> for Statement {
     fn from(a: AlterType) -> Self {
         Self::AlterType(a)
+    }
+}
+
+impl From<AlterCollation> for Statement {
+    fn from(a: AlterCollation) -> Self {
+        Self::AlterCollation(a)
     }
 }
 

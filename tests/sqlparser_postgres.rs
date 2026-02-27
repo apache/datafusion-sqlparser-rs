@@ -8280,6 +8280,73 @@ fn parse_alter_function_and_aggregate() {
 }
 
 #[test]
+fn parse_create_and_alter_text_search_failure_cases() {
+    let sql_cases = [
+        "CREATE TEXT SEARCH DICTIONARY alt_ts_dict1 (template=simple)",
+        "CREATE TEXT SEARCH DICTIONARY alt_ts_dict2 (template=simple)",
+        "ALTER TEXT SEARCH DICTIONARY alt_ts_dict1 RENAME TO alt_ts_dict2",
+        "ALTER TEXT SEARCH DICTIONARY alt_ts_dict1 RENAME TO alt_ts_dict3",
+        "ALTER TEXT SEARCH DICTIONARY alt_ts_dict2 OWNER TO regress_alter_generic_user2",
+        "ALTER TEXT SEARCH DICTIONARY alt_ts_dict2 OWNER TO regress_alter_generic_user3",
+        "ALTER TEXT SEARCH DICTIONARY alt_ts_dict2 SET SCHEMA alt_nsp2",
+        "ALTER TEXT SEARCH DICTIONARY alt_ts_dict3 RENAME TO alt_ts_dict4",
+        "ALTER TEXT SEARCH DICTIONARY alt_ts_dict1 RENAME TO alt_ts_dict4",
+        "ALTER TEXT SEARCH DICTIONARY alt_ts_dict3 OWNER TO regress_alter_generic_user2",
+        "ALTER TEXT SEARCH DICTIONARY alt_ts_dict3 SET SCHEMA alt_nsp2",
+        "CREATE TEXT SEARCH CONFIGURATION alt_ts_conf1 (copy=english)",
+        "CREATE TEXT SEARCH CONFIGURATION alt_ts_conf2 (copy=english)",
+        "ALTER TEXT SEARCH CONFIGURATION alt_ts_conf1 RENAME TO alt_ts_conf2",
+        "ALTER TEXT SEARCH CONFIGURATION alt_ts_conf1 RENAME TO alt_ts_conf3",
+        "ALTER TEXT SEARCH CONFIGURATION alt_ts_conf2 OWNER TO regress_alter_generic_user2",
+        "ALTER TEXT SEARCH CONFIGURATION alt_ts_conf2 OWNER TO regress_alter_generic_user3",
+        "ALTER TEXT SEARCH CONFIGURATION alt_ts_conf2 SET SCHEMA alt_nsp2",
+        "ALTER TEXT SEARCH CONFIGURATION alt_ts_conf3 RENAME TO alt_ts_conf4",
+        "ALTER TEXT SEARCH CONFIGURATION alt_ts_conf1 RENAME TO alt_ts_conf4",
+        "ALTER TEXT SEARCH CONFIGURATION alt_ts_conf3 OWNER TO regress_alter_generic_user2",
+        "ALTER TEXT SEARCH CONFIGURATION alt_ts_conf3 SET SCHEMA alt_nsp2",
+        "CREATE TEXT SEARCH TEMPLATE alt_ts_temp1 (lexize=dsimple_lexize)",
+        "CREATE TEXT SEARCH TEMPLATE alt_ts_temp2 (lexize=dsimple_lexize)",
+        "ALTER TEXT SEARCH TEMPLATE alt_ts_temp1 RENAME TO alt_ts_temp2",
+        "ALTER TEXT SEARCH TEMPLATE alt_ts_temp1 RENAME TO alt_ts_temp3",
+        "ALTER TEXT SEARCH TEMPLATE alt_ts_temp2 SET SCHEMA alt_nsp2",
+        "CREATE TEXT SEARCH TEMPLATE tstemp_case (\"Init\" = init_function)",
+        "CREATE TEXT SEARCH PARSER alt_ts_prs1 (start = prsd_start, gettoken = prsd_nexttoken, end = prsd_end, lextypes = prsd_lextype)",
+        "CREATE TEXT SEARCH PARSER alt_ts_prs2 (start = prsd_start, gettoken = prsd_nexttoken, end = prsd_end, lextypes = prsd_lextype)",
+        "ALTER TEXT SEARCH PARSER alt_ts_prs1 RENAME TO alt_ts_prs2",
+        "ALTER TEXT SEARCH PARSER alt_ts_prs1 RENAME TO alt_ts_prs3",
+        "ALTER TEXT SEARCH PARSER alt_ts_prs2 SET SCHEMA alt_nsp2",
+        "CREATE TEXT SEARCH PARSER tspars_case (\"Start\" = start_function)",
+    ];
+
+    for sql in sql_cases {
+        if let Err(err) = pg().parse_sql_statements(sql) {
+            panic!("Failed to parse `{sql}`: {err}");
+        }
+    }
+
+    // Object type must be an unquoted keyword-like token in this position.
+    assert!(pg()
+        .parse_sql_statements("CREATE TEXT SEARCH \"DICTIONARY\" d (template = simple)")
+        .is_err());
+
+    // CREATE options are key-value pairs in PostgreSQL syntax.
+    assert!(pg()
+        .parse_sql_statements("CREATE TEXT SEARCH DICTIONARY d (template)")
+        .is_err());
+
+    // CREATE TEXT SEARCH does not support generic CREATE modifiers.
+    assert!(pg()
+        .parse_sql_statements("CREATE OR REPLACE TEXT SEARCH DICTIONARY d (template = simple)")
+        .is_err());
+    assert!(pg()
+        .parse_sql_statements("CREATE OR ALTER TEXT SEARCH DICTIONARY d (template = simple)")
+        .is_err());
+    assert!(pg()
+        .parse_sql_statements("CREATE TEMP TEXT SEARCH DICTIONARY d (template = simple)")
+        .is_err());
+}
+
+#[test]
 fn parse_drop_operator_family() {
     for if_exists in [true, false] {
         for drop_behavior in [

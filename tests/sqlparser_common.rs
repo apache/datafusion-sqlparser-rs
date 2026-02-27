@@ -10747,8 +10747,19 @@ fn parse_is_boolean() {
     verified_stmt("SELECT f FROM foo WHERE field IS UNKNOWN");
     verified_stmt("SELECT f FROM foo WHERE field IS NOT UNKNOWN");
 
+    let supported_dialects = all_dialects_where(|d| d.supports_is_json_predicate());
+    let unsupported_dialects = all_dialects_where(|d| !d.supports_is_json_predicate());
+
     let sql = "SELECT f from foo where field is 0";
-    let res = parse_sql_statements(sql);
+    let res = supported_dialects.parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [NOT] JSON [VALUE | SCALAR | ARRAY | OBJECT] [WITH | WITHOUT UNIQUE [KEYS]] | [form] NORMALIZED FROM after IS, found: 0"
+                .to_string()
+        ),
+        res.unwrap_err()
+    );
+    let res = unsupported_dialects.parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError(
             "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: 0"
@@ -10758,7 +10769,15 @@ fn parse_is_boolean() {
     );
 
     let sql = "SELECT s, s IS XYZ NORMALIZED FROM foo";
-    let res = parse_sql_statements(sql);
+    let res = supported_dialects.parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [NOT] JSON [VALUE | SCALAR | ARRAY | OBJECT] [WITH | WITHOUT UNIQUE [KEYS]] | [form] NORMALIZED FROM after IS, found: XYZ"
+                .to_string()
+        ),
+        res.unwrap_err()
+    );
+    let res = unsupported_dialects.parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError(
             "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: XYZ"
@@ -10768,7 +10787,15 @@ fn parse_is_boolean() {
     );
 
     let sql = "SELECT s, s IS NFKC FROM foo";
-    let res = parse_sql_statements(sql);
+    let res = supported_dialects.parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [NOT] JSON [VALUE | SCALAR | ARRAY | OBJECT] [WITH | WITHOUT UNIQUE [KEYS]] | [form] NORMALIZED FROM after IS, found: FROM"
+                .to_string()
+        ),
+        res.unwrap_err()
+    );
+    let res = unsupported_dialects.parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError(
             "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: FROM"
@@ -10778,7 +10805,15 @@ fn parse_is_boolean() {
     );
 
     let sql = "SELECT s, s IS TRIM(' NFKC ') FROM foo";
-    let res = parse_sql_statements(sql);
+    let res = supported_dialects.parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [NOT] JSON [VALUE | SCALAR | ARRAY | OBJECT] [WITH | WITHOUT UNIQUE [KEYS]] | [form] NORMALIZED FROM after IS, found: TRIM"
+                .to_string()
+        ),
+        res.unwrap_err()
+    );
+    let res = unsupported_dialects.parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError(
             "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: TRIM"
@@ -10786,6 +10821,221 @@ fn parse_is_boolean() {
         ),
         res.unwrap_err()
     );
+}
+
+#[test]
+fn parse_is_json_predicate() {
+    use self::Expr::*;
+
+    let supported_dialects = all_dialects_where(|d| d.supports_is_json_predicate());
+
+    let sql = "a IS JSON";
+    assert_eq!(
+        IsJson {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            kind: None,
+            unique_keys: None,
+            negated: false,
+        },
+        supported_dialects.verified_expr(sql)
+    );
+
+    let sql = "a IS NOT JSON";
+    assert_eq!(
+        IsJson {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            kind: None,
+            unique_keys: None,
+            negated: true,
+        },
+        supported_dialects.verified_expr(sql)
+    );
+
+    let sql = "a IS JSON VALUE";
+    assert_eq!(
+        IsJson {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            kind: Some(JsonPredicateType::Value),
+            unique_keys: None,
+            negated: false,
+        },
+        supported_dialects.verified_expr(sql)
+    );
+
+    let sql = "a IS JSON SCALAR";
+    assert_eq!(
+        IsJson {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            kind: Some(JsonPredicateType::Scalar),
+            unique_keys: None,
+            negated: false,
+        },
+        supported_dialects.verified_expr(sql)
+    );
+
+    let sql = "a IS JSON ARRAY";
+    assert_eq!(
+        IsJson {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            kind: Some(JsonPredicateType::Array),
+            unique_keys: None,
+            negated: false,
+        },
+        supported_dialects.verified_expr(sql)
+    );
+
+    let sql = "a IS JSON OBJECT";
+    assert_eq!(
+        IsJson {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            kind: Some(JsonPredicateType::Object),
+            unique_keys: None,
+            negated: false,
+        },
+        supported_dialects.verified_expr(sql)
+    );
+
+    let sql = "a IS JSON WITH UNIQUE KEYS";
+    assert_eq!(
+        IsJson {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            kind: None,
+            unique_keys: Some(JsonKeyUniqueness::WithUniqueKeys),
+            negated: false,
+        },
+        supported_dialects.verified_expr(sql)
+    );
+
+    let sql = "a IS JSON WITHOUT UNIQUE KEYS";
+    assert_eq!(
+        IsJson {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            kind: None,
+            unique_keys: Some(JsonKeyUniqueness::WithoutUniqueKeys),
+            negated: false,
+        },
+        supported_dialects.verified_expr(sql)
+    );
+
+    let sql = "a IS NOT JSON OBJECT WITHOUT UNIQUE KEYS";
+    assert_eq!(
+        IsJson {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            kind: Some(JsonPredicateType::Object),
+            unique_keys: Some(JsonKeyUniqueness::WithoutUniqueKeys),
+            negated: true,
+        },
+        supported_dialects.verified_expr(sql)
+    );
+
+    supported_dialects.expr_parses_to("a IS JSON WITH UNIQUE", "a IS JSON WITH UNIQUE KEYS");
+    supported_dialects.expr_parses_to("a IS JSON WITHOUT UNIQUE", "a IS JSON WITHOUT UNIQUE KEYS");
+
+    assert_matches!(
+        supported_dialects.verified_expr("NOT a IS JSON"),
+        Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            expr
+        } if matches!(&*expr, Expr::IsJson { .. })
+    );
+}
+
+#[test]
+fn parse_is_json_predicate_unsupported_dialects() {
+    let unsupported_dialects = all_dialects_where(|d| !d.supports_is_json_predicate());
+    assert!(!unsupported_dialects.dialects.is_empty());
+
+    for sql in ["SELECT a IS JSON FROM t", "SELECT a IS NOT JSON FROM t"] {
+        let err = unsupported_dialects.parse_sql_statements(sql).unwrap_err();
+        let ParserError::ParserError(msg) = err else {
+            panic!("Expected ParserError::ParserError for `{sql}`, got: {err:?}");
+        };
+        assert!(
+            msg.contains("[NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS"),
+            "Unexpected error hint for unsupported dialects in `{sql}`: {msg}"
+        );
+        assert!(
+            !msg.contains("[NOT] JSON [VALUE | SCALAR | ARRAY | OBJECT]"),
+            "Unsupported dialects should not advertise JSON IS-predicate syntax in `{sql}`: {msg}"
+        );
+        assert!(
+            msg.contains("found: JSON"),
+            "Expected parser to fail at JSON token for unsupported dialects in `{sql}`: {msg}"
+        );
+    }
+}
+
+#[test]
+fn parse_is_json_predicate_negative() {
+    let supported_dialects = all_dialects_where(|d| d.supports_is_json_predicate());
+
+    let cases = [
+        (
+            "SELECT * FROM t WHERE a IS JSON WITH FROM",
+            &["Expected: UNIQUE", "found: FROM"][..],
+        ),
+        (
+            "SELECT * FROM t WHERE a IS JSON WITH KEYS",
+            &["Expected: UNIQUE", "found: KEYS"][..],
+        ),
+        (
+            "SELECT * FROM t WHERE a IS JSON WITHOUT FROM",
+            &["Expected: UNIQUE", "found: FROM"][..],
+        ),
+        (
+            "SELECT * FROM t WHERE a IS JSON WITHOUT KEYS",
+            &["Expected: UNIQUE", "found: KEYS"][..],
+        ),
+        (
+            "SELECT * FROM t WHERE a IS NOT JSON WITH FROM",
+            &["Expected: UNIQUE", "found: FROM"][..],
+        ),
+        (
+            "SELECT * FROM t WHERE a IS JSON VALUE ARRAY",
+            &["Expected: end of statement", "found: ARRAY"][..],
+        ),
+        (
+            "SELECT * FROM t WHERE a IS JSON OBJECT VALUE",
+            &["Expected: end of statement", "found: VALUE"][..],
+        ),
+        (
+            "SELECT * FROM t WHERE a IS JSON WITH UNIQUE EXTRA",
+            &["Expected: end of statement", "found: EXTRA"][..],
+        ),
+        (
+            "SELECT * FROM t WHERE a IS JSON WITH UNIQUE KEYS EXTRA",
+            &["Expected: end of statement", "found: EXTRA"][..],
+        ),
+        (
+            "SELECT * FROM t WHERE a IS JSON WITHOUT UNIQUE EXTRA",
+            &["Expected: end of statement", "found: EXTRA"][..],
+        ),
+        (
+            "SELECT * FROM t WHERE a IS JSON WITHOUT UNIQUE KEYS EXTRA",
+            &["Expected: end of statement", "found: EXTRA"][..],
+        ),
+        (
+            "SELECT * FROM t WHERE a IS JSON WITH UNIQUE KEYS WITH UNIQUE KEYS",
+            &["Expected: end of statement", "found: WITH"][..],
+        ),
+        (
+            "SELECT * FROM t WHERE a IS JSON WITHOUT UNIQUE KEYS WITHOUT UNIQUE KEYS",
+            &["Expected: end of statement", "found: WITHOUT"][..],
+        ),
+    ];
+
+    for (sql, expected_fragments) in cases {
+        let err = supported_dialects.parse_sql_statements(sql).unwrap_err();
+        let ParserError::ParserError(msg) = err else {
+            panic!("Expected ParserError::ParserError for `{sql}`, got: {err:?}");
+        };
+        for fragment in expected_fragments {
+            assert!(
+                msg.contains(fragment),
+                "Expected parser diagnostic for `{sql}` to contain `{fragment}`, got: {msg}"
+            );
+        }
+    }
 }
 
 #[test]

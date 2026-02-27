@@ -6898,6 +6898,156 @@ fn parse_create_server() {
 }
 
 #[test]
+fn parse_subscription_statements() {
+    let statements = [
+        "CREATE SUBSCRIPTION regress_testsub CONNECTION 'testconn' PUBLICATION testpub WITH (create_slot)",
+        "CREATE SUBSCRIPTION regress_testsub CONNECTION 'testconn' PUBLICATION testpub",
+        "CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION foo, testpub, foo WITH (connect = false)",
+        "CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false)",
+        "COMMENT ON SUBSCRIPTION regress_testsub IS 'test subscription'",
+        "CREATE SUBSCRIPTION regress_testsub2 CONNECTION 'dbname=regress_doesnotexist' PUBLICATION foo WITH (connect = false)",
+        "CREATE SUBSCRIPTION regress_testsub2 CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, copy_data = true)",
+        "CREATE SUBSCRIPTION regress_testsub2 CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, enabled = true)",
+        "CREATE SUBSCRIPTION regress_testsub2 CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, create_slot = true)",
+        "CREATE SUBSCRIPTION regress_testsub2 CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (slot_name = NONE, enabled = true)",
+        "CREATE SUBSCRIPTION regress_testsub2 CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (slot_name = NONE, enabled = false, create_slot = true)",
+        "CREATE SUBSCRIPTION regress_testsub2 CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (slot_name = NONE)",
+        "CREATE SUBSCRIPTION regress_testsub2 CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (slot_name = NONE, enabled = false)",
+        "CREATE SUBSCRIPTION regress_testsub2 CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (slot_name = NONE, create_slot = false)",
+        "CREATE SUBSCRIPTION regress_testsub3 CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (slot_name = NONE, connect = false)",
+        "ALTER SUBSCRIPTION regress_testsub3 ENABLE",
+        "ALTER SUBSCRIPTION regress_testsub3 REFRESH PUBLICATION",
+        "CREATE SUBSCRIPTION regress_testsub4 CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (slot_name = NONE, connect = false, origin = foo)",
+        "CREATE SUBSCRIPTION regress_testsub4 CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (slot_name = NONE, connect = false, origin = none)",
+        "DROP SUBSCRIPTION regress_testsub4",
+        "CREATE SUBSCRIPTION regress_testsub5 CONNECTION 'i_dont_exist=param' PUBLICATION testpub",
+        "DROP SUBSCRIPTION regress_testsub",
+        "ALTER SUBSCRIPTION regress_testsub SET (slot_name = NONE)",
+        "DROP SUBSCRIPTION IF EXISTS regress_testsub",
+        "CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, binary = foo)",
+        "CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, binary = true)",
+        "CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, streaming = foo)",
+        "CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, streaming = true)",
+        "ALTER SUBSCRIPTION regress_testsub ADD PUBLICATION testpub1, testpub1 WITH (refresh = false)",
+        "ALTER SUBSCRIPTION regress_testsub ADD PUBLICATION testpub1, testpub2 WITH (refresh = false)",
+        "ALTER SUBSCRIPTION regress_testsub DROP PUBLICATION testpub, testpub1, testpub2 WITH (refresh = false)",
+        "ALTER SUBSCRIPTION regress_testsub DROP PUBLICATION testpub3 WITH (refresh = false)",
+        "ALTER SUBSCRIPTION regress_testsub DROP PUBLICATION testpub1, testpub2 WITH (refresh = false)",
+        "CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION mypub WITH (connect = false, create_slot = false, copy_data = false)",
+        "ALTER SUBSCRIPTION regress_testsub ENABLE",
+        "ALTER SUBSCRIPTION regress_testsub SET PUBLICATION mypub WITH (refresh = true)",
+        "ALTER SUBSCRIPTION regress_testsub REFRESH PUBLICATION",
+        "ALTER SUBSCRIPTION regress_testsub DISABLE",
+        "CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, two_phase = foo)",
+        "CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, two_phase = true)",
+        "CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, streaming = true, two_phase = true)",
+        "CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, disable_on_error = foo)",
+        "CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, disable_on_error = false)",
+        "CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, retain_dead_tuples = foo)",
+        "CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, retain_dead_tuples = false)",
+        "CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, max_retention_duration = foo)",
+        "CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, max_retention_duration = 1000)",
+        "CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, password_required = false)",
+        "CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist password=regress_fakepassword' PUBLICATION testpub WITH (connect = false)",
+        "ALTER SUBSCRIPTION regress_testsub OWNER TO regress_subscription_user",
+        "ALTER SUBSCRIPTION regress_testsub RENAME TO regress_testsub2",
+        "REVOKE pg_create_subscription FROM regress_subscription_user3",
+        "ALTER SUBSCRIPTION regress_testsub2 RENAME TO regress_testsub",
+    ];
+
+    for sql in statements {
+        pg().verified_stmt(sql);
+    }
+
+    let multi_statement = "SET SESSION AUTHORIZATION regress_subscription_user3; CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false); RESET SESSION AUTHORIZATION; GRANT CREATE ON DATABASE REGRESSION TO regress_subscription_user3; SET SESSION AUTHORIZATION regress_subscription_user3; CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false); RESET SESSION AUTHORIZATION";
+    assert_eq!(pg().parse_sql_statements(multi_statement).unwrap().len(), 7);
+}
+
+#[test]
+fn parse_postgres_predefined_role_grant_revoke() {
+    match pg().verified_stmt("GRANT pg_create_subscription TO regress_subscription_user3") {
+        Statement::Grant(Grant {
+            privileges: Privileges::Actions(actions),
+            objects: None,
+            grantees,
+            ..
+        }) => {
+            assert_eq!(
+                actions,
+                vec![Action::Custom {
+                    name: Ident::new("pg_create_subscription"),
+                }]
+            );
+            assert_eq_vec(&["regress_subscription_user3"], &grantees);
+        }
+        _ => unreachable!(),
+    }
+
+    match pg().verified_stmt(
+        "REVOKE pg_create_subscription, pg_read_all_data FROM regress_subscription_user3",
+    ) {
+        Statement::Revoke(Revoke {
+            privileges: Privileges::Actions(actions),
+            objects: None,
+            grantees,
+            granted_by,
+            cascade,
+        }) => {
+            assert_eq!(
+                actions,
+                vec![
+                    Action::Custom {
+                        name: Ident::new("pg_create_subscription"),
+                    },
+                    Action::Custom {
+                        name: Ident::new("pg_read_all_data"),
+                    }
+                ]
+            );
+            assert_eq_vec(&["regress_subscription_user3"], &grantees);
+            assert_eq!(granted_by, None);
+            assert_eq!(cascade, None);
+        }
+        _ => unreachable!(),
+    }
+
+    assert!(pg()
+        .parse_sql_statements("REVOKE some_random_privilege FROM regress_subscription_user3")
+        .is_err());
+    assert!(pg()
+        .parse_sql_statements("REVOKE selct FROM regress_subscription_user3")
+        .is_err());
+    assert!(pg()
+        .parse_sql_statements(
+            "REVOKE pg_create_subscription ON testpub FROM regress_subscription_user3"
+        )
+        .is_err());
+}
+
+#[test]
+fn parse_subscription_names_must_be_single_identifiers() {
+    assert!(pg()
+        .parse_sql_statements(
+            "CREATE SUBSCRIPTION public.regress_testsub CONNECTION 'testconn' PUBLICATION testpub"
+        )
+        .is_err());
+    assert!(pg()
+        .parse_sql_statements("ALTER SUBSCRIPTION public.regress_testsub ENABLE")
+        .is_err());
+    assert!(pg()
+        .parse_sql_statements("COMMENT ON SUBSCRIPTION public.regress_testsub IS 'x'")
+        .is_err());
+    assert!(pg()
+        .parse_sql_statements("DROP SUBSCRIPTION public.regress_testsub")
+        .is_err());
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER SUBSCRIPTION regress_testsub RENAME TO public.regress_testsub2"
+        )
+        .is_err());
+}
+
+#[test]
 fn parse_alter_schema() {
     // Test RENAME operation
     let stmt = pg_and_generic().verified_stmt("ALTER SCHEMA foo RENAME TO bar");

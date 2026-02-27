@@ -2961,14 +2961,8 @@ impl<'a> Parser<'a> {
                 trim_what: Some(trim_what),
                 trim_characters: None,
             })
-        } else if self.consume_token(&Token::Comma)
-            && dialect_of!(
-                self is DuckDbDialect
-                    | SnowflakeDialect
-                    | BigQueryDialect
-                    | PostgreSqlDialect
-                    | GenericDialect
-            )
+        } else if self.dialect.supports_comma_separated_trim()
+            && self.consume_token(&Token::Comma)
         {
             let characters = self.parse_comma_separated(Parser::parse_expr)?;
             self.expect_token(&Token::RParen)?;

@@ -667,6 +667,10 @@ impl Dialect for SnowflakeDialect {
     fn supports_lambda_functions(&self) -> bool {
         true
     }
+
+    fn supports_comma_separated_trim(&self) -> bool {
+        true
+    }
 }
 
 // Peeks ahead to identify tokens that are expected after

@@ -306,4 +306,8 @@ impl Dialect for PostgreSqlDialect {
     fn supports_create_table_like_parenthesized(&self) -> bool {
         true
     }
+
+    fn supports_comma_separated_trim(&self) -> bool {
+        true
+    }
 }

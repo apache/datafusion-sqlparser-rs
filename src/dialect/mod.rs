@@ -1651,6 +1651,12 @@ pub trait Dialect: Debug + Any {
     fn supports_select_format(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect supports the two-argument comma-separated
+    /// form of the `TRIM` function: `TRIM(expr, characters)`.
+    fn supports_comma_separated_trim(&self) -> bool {
+        false
+    }
 }
 
 /// Operators for which precedence must be defined.

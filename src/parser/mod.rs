@@ -10371,32 +10371,30 @@ impl<'a> Parser<'a> {
         } else if self.parse_keywords(&[Keyword::VALIDATE, Keyword::CONSTRAINT]) {
             let name = self.parse_identifier()?;
             AlterTableOperation::ValidateConstraint { name }
+        } else if dialect_of!(self is PostgreSqlDialect | GenericDialect)
+            && self.parse_keywords(&[Keyword::SET, Keyword::LOGGED])
+        {
+            AlterTableOperation::SetLogged
+        } else if dialect_of!(self is PostgreSqlDialect | GenericDialect)
+            && self.parse_keywords(&[Keyword::SET, Keyword::UNLOGGED])
+        {
+            AlterTableOperation::SetUnlogged
         } else {
-            if dialect_of!(self is PostgreSqlDialect | GenericDialect)
-                && self.parse_keywords(&[Keyword::SET, Keyword::LOGGED])
-            {
-                AlterTableOperation::SetLogged
-            } else if dialect_of!(self is PostgreSqlDialect | GenericDialect)
-                && self.parse_keywords(&[Keyword::SET, Keyword::UNLOGGED])
-            {
-                AlterTableOperation::SetUnlogged
+            let mut options =
+                self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;
+            if !options.is_empty() {
+                AlterTableOperation::SetTblProperties {
+                    table_properties: options,
+                }
             } else {
-                let mut options =
-                    self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;
+                options = self.parse_options(Keyword::SET)?;
                 if !options.is_empty() {
-                    AlterTableOperation::SetTblProperties {
-                        table_properties: options,
-                    }
+                    AlterTableOperation::SetOptionsParens { options }
                 } else {
-                    options = self.parse_options(Keyword::SET)?;
-                    if !options.is_empty() {
-                        AlterTableOperation::SetOptionsParens { options }
-                    } else {
-                        return self.expected_ref(
-                        "ADD, RENAME, PARTITION, SWAP, DROP, REPLICA IDENTITY, SET, or SET TBLPROPERTIES after ALTER TABLE",
-                        self.peek_token_ref(),
-                      );
-                    }
+                    return self.expected_ref(
+                    "ADD, RENAME, PARTITION, SWAP, DROP, REPLICA IDENTITY, SET, or SET TBLPROPERTIES after ALTER TABLE",
+                    self.peek_token_ref(),
+                  );
                 }
             }
         };

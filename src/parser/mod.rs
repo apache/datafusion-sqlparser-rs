@@ -5225,6 +5225,10 @@ impl<'a> Parser<'a> {
         let columns = self.parse_comma_separated(Parser::parse_create_statistics_param)?;
         self.expect_keyword_is(Keyword::FROM)?;
         let from = self.parse_comma_separated(Parser::parse_table_and_joins)?;
+        // `parse_table_and_joins` is intentionally permissive and supports legacy
+        // forms (including single-quoted aliases) for broad compatibility.
+        // PostgreSQL `CREATE STATISTICS` is stricter, so we enforce those rules
+        // here without tightening FROM parsing globally.
         self.validate_pg_statistics_from_list(&from)?;
 
         Ok(CreateStatistics {
@@ -5236,6 +5240,11 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Validate `FROM from_list` after generic table-factor parsing.
+    ///
+    /// This pass is required because `CREATE STATISTICS` uses PostgreSQL object
+    /// name semantics for relation and alias identifiers, while the shared table
+    /// parser accepts additional legacy forms in other contexts.
     fn validate_pg_statistics_from_list(&self, from: &[TableWithJoins]) -> Result<(), ParserError> {
         for table_with_joins in from {
             self.validate_pg_statistics_table_with_joins(table_with_joins)?;
@@ -5258,6 +5267,8 @@ impl<'a> Parser<'a> {
         &self,
         relation: &TableFactor,
     ) -> Result<(), ParserError> {
+        // Recurse through wrappers so strict identifier checks are applied to
+        // every relation/alias position reachable from CREATE STATISTICS FROM.
         match relation {
             TableFactor::Table { name, alias, .. }
             | TableFactor::Function { name, alias, .. }
@@ -5303,6 +5314,7 @@ impl<'a> Parser<'a> {
     }
 
     fn validate_pg_statistics_identifier(&self, ident: &Ident) -> Result<(), ParserError> {
+        // Single-quoted text is a string literal in PostgreSQL, not an identifier.
         if ident.quote_style == Some('\'') {
             return self.expected(
                 "identifier",

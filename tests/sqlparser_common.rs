@@ -6817,6 +6817,205 @@ fn parse_typed_strings() {
 }
 
 #[test]
+fn parse_generic_xml_special_expressions() {
+    let generic = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+
+    let select = generic
+        .verified_only_select_with_canonical("SELECT xmlconcat(1, 2)", "SELECT XMLCONCAT(1, 2)");
+    match &select.projection[0] {
+        SelectItem::UnnamedExpr(Expr::XmlConcat(items)) => assert_eq!(items.len(), 2),
+        item => panic!("expected XmlConcat expression, got {item:?}"),
+    }
+
+    let select = generic.verified_only_select_with_canonical(
+        "SELECT xmlelement(name foo, 'bar')",
+        "SELECT XMLELEMENT(NAME foo, 'bar')",
+    );
+    match &select.projection[0] {
+        SelectItem::UnnamedExpr(Expr::XmlElement(XmlElementExpr {
+            name,
+            attributes,
+            content,
+        })) => {
+            assert_eq!(name.value, "foo");
+            assert!(attributes.is_none());
+            assert_eq!(content.len(), 1);
+        }
+        item => panic!("expected XmlElement expression, got {item:?}"),
+    }
+
+    let select = generic.verified_only_select_with_canonical(
+        "SELECT xmlforest(1 as one, 2)",
+        "SELECT XMLFOREST(1 AS one, 2)",
+    );
+    match &select.projection[0] {
+        SelectItem::UnnamedExpr(Expr::XmlForest(items)) => {
+            assert_eq!(items.len(), 2);
+            assert_eq!(items[0].alias.as_ref().unwrap().value, "one");
+            assert!(items[1].alias.is_none());
+        }
+        item => panic!("expected XmlForest expression, got {item:?}"),
+    }
+
+    let select = generic.verified_only_select_with_canonical(
+        "SELECT xmlparse(content '<a/>')",
+        "SELECT XMLPARSE(CONTENT '<a/>')",
+    );
+    match &select.projection[0] {
+        SelectItem::UnnamedExpr(Expr::XmlParse(XmlParseExpr { mode, .. })) => {
+            assert_eq!(*mode, XmlParseMode::Content);
+        }
+        item => panic!("expected XmlParse expression, got {item:?}"),
+    }
+
+    let select = generic.verified_only_select_with_canonical(
+        "SELECT xmlpi(name foo, 'bar')",
+        "SELECT XMLPI(NAME foo, 'bar')",
+    );
+    match &select.projection[0] {
+        SelectItem::UnnamedExpr(Expr::XmlPi(XmlPiExpr { name, content })) => {
+            assert_eq!(name.value, "foo");
+            assert!(content.is_some());
+        }
+        item => panic!("expected XmlPi expression, got {item:?}"),
+    }
+
+    let select = generic.verified_only_select_with_canonical(
+        "SELECT xmlserialize(document '<a/>' as text no indent)",
+        "SELECT XMLSERIALIZE(DOCUMENT '<a/>' AS TEXT NO INDENT)",
+    );
+    match &select.projection[0] {
+        SelectItem::UnnamedExpr(Expr::XmlSerialize(XmlSerializeExpr { mode, indent, .. })) => {
+            assert_eq!(*mode, XmlParseMode::Document);
+            assert_eq!(*indent, Some(XmlIndentOption::NoIndent));
+        }
+        item => panic!("expected XmlSerialize expression, got {item:?}"),
+    }
+
+    let select = generic.verified_only_select_with_canonical(
+        "SELECT xmlroot(xml '<foo/>', version no value, standalone yes)",
+        "SELECT XMLROOT(xml '<foo/>', VERSION NO VALUE, STANDALONE YES)",
+    );
+    match &select.projection[0] {
+        SelectItem::UnnamedExpr(Expr::XmlRoot(XmlRootExpr {
+            version,
+            standalone,
+            ..
+        })) => {
+            assert!(matches!(version, XmlRootVersion::NoValue));
+            assert_eq!(*standalone, Some(XmlStandalone::Yes));
+        }
+        item => panic!("expected XmlRoot expression, got {item:?}"),
+    }
+}
+
+#[test]
+fn parse_generic_xml_special_expressions_reject_invalid_forms() {
+    let generic = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+
+    assert!(
+        generic.parse_sql_statements("SELECT xmlparse(1)").is_err(),
+        "xmlparse requires DOCUMENT|CONTENT mode"
+    );
+    assert!(
+        generic
+            .parse_sql_statements("SELECT xmlroot(xml '<foo/>', standalone yes)")
+            .is_err(),
+        "xmlroot requires VERSION clause"
+    );
+    assert!(
+        generic
+            .parse_sql_statements("SELECT xmlserialize(document '<foo/>' text)")
+            .is_err(),
+        "xmlserialize requires AS <type>"
+    );
+}
+
+#[test]
+fn parse_non_pg_dialects_keep_xml_names_as_regular_functions() {
+    let cases = [
+        ("SELECT xmlparse(1)", "xmlparse", 1usize),
+        ("SELECT xmlelement(1, 2)", "xmlelement", 2usize),
+        ("SELECT xmlroot(1, 2)", "xmlroot", 2usize),
+        ("SELECT xmlserialize(1, 2)", "xmlserialize", 2usize),
+    ];
+
+    let non_pg_dialects =
+        all_dialects_except(|d| d.is::<PostgreSqlDialect>() || d.is::<GenericDialect>()).dialects;
+
+    for dialect in non_pg_dialects {
+        let dialect_name = format!("{dialect:?}");
+        for (sql, expected_name, expected_arg_count) in cases {
+            let statements = Parser::parse_sql(&*dialect, sql)
+                .unwrap_or_else(|e| panic!("dialect {dialect_name} failed to parse `{sql}`: {e}"));
+            match statements.as_slice() {
+                [Statement::Query(query)] => match query.body.as_ref() {
+                    SetExpr::Select(select) => match select.projection.as_slice() {
+                        [SelectItem::UnnamedExpr(Expr::Function(function))] => {
+                            match function.name.0.as_slice() {
+                                [ObjectNamePart::Identifier(ident)] => {
+                                    assert!(
+                                        ident.value.eq_ignore_ascii_case(expected_name),
+                                        "dialect {dialect_name} parsed `{sql}` as function `{}` instead of `{expected_name}`",
+                                        ident.value
+                                    );
+                                }
+                                name_parts => {
+                                    panic!("dialect {dialect_name} expected simple function name, got {name_parts:?}")
+                                }
+                            }
+                            match &function.args {
+                                FunctionArguments::List(list) => {
+                                    assert_eq!(
+                                        list.args.len(),
+                                        expected_arg_count,
+                                        "dialect {dialect_name} parsed `{sql}` with unexpected argument count"
+                                    );
+                                }
+                                args => panic!(
+                                    "dialect {dialect_name} expected positional argument list, got {args:?}"
+                                ),
+                            }
+                        }
+                        projection => panic!(
+                            "dialect {dialect_name} expected single function projection for `{sql}`, got {projection:?}"
+                        ),
+                    },
+                    body => panic!(
+                        "dialect {dialect_name} expected SELECT query body for `{sql}`, got {body:?}"
+                    ),
+                },
+                parsed => panic!(
+                    "dialect {dialect_name} expected a single query statement for `{sql}`, got {parsed:?}"
+                ),
+            }
+        }
+    }
+}
+
+#[test]
+fn parse_non_pg_dialects_reject_xml_special_syntax() {
+    let xml_special_forms = [
+        "SELECT xmlparse(content '<a/>')",
+        "SELECT xmlelement(name foo, 'bar')",
+        "SELECT xmlserialize(document '<a/>' as text)",
+    ];
+
+    let non_pg_dialects =
+        all_dialects_except(|d| d.is::<PostgreSqlDialect>() || d.is::<GenericDialect>()).dialects;
+
+    for dialect in non_pg_dialects {
+        let dialect_name = format!("{dialect:?}");
+        for sql in xml_special_forms {
+            assert!(
+                Parser::parse_sql(&*dialect, sql).is_err(),
+                "dialect {dialect_name} unexpectedly accepted XML special syntax: `{sql}`"
+            );
+        }
+    }
+}
+
+#[test]
 fn parse_bignumeric_keyword() {
     let sql = r#"SELECT BIGNUMERIC '0'"#;
     let select = verified_only_select(sql);

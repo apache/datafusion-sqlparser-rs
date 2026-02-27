@@ -8602,3 +8602,234 @@ fn parse_pg_analyze() {
         _ => panic!("Expected Analyze, got: {stmt:?}"),
     }
 }
+
+#[test]
+fn parse_postgres_xml_expression_regression_statements() {
+    let statements = [
+        "SELECT xmlconcat(xmlcomment('hello'), xmlelement(NAME qux, 'foo'), xmlcomment('world'))",
+        "SELECT xmlelement(name element, xmlattributes (1 as one, 'deuce' as two), 'content')",
+        "SELECT xmlelement(name element, xmlattributes ('unnamed and wrong'))",
+        "SELECT xmlelement(name element, xmlelement(name nested, 'stuff'))",
+        "SELECT xmlelement(name employee, xmlforest(name, age, salary as pay)) FROM emp",
+        "SELECT xmlelement(name duplicate, xmlattributes(1 as a, 2 as b, 3 as a))",
+        "SELECT xmlelement(name num, 37)",
+        "SELECT xmlelement(name foo, text 'bar')",
+        "SELECT xmlelement(name foo, xml 'bar')",
+        "SELECT xmlelement(name foo, text 'b<a/>r')",
+        "SELECT xmlelement(name foo, xml 'b<a/>r')",
+        "SELECT xmlelement(name foo, array[1, 2, 3])",
+        "SELECT xmlelement(name foo, bytea 'bar')",
+        "SELECT xmlelement(name foo, xmlattributes(true as bar))",
+        "SELECT xmlelement(name foo, xmlattributes('2009-04-09 00:24:37'::timestamp as bar))",
+        "SELECT xmlelement(name foo, xmlattributes('infinity'::timestamp as bar))",
+        r#"SELECT xmlelement(name foo, xmlattributes('<>&"''' as funny, xml 'b<a/>r' as funnier))"#,
+        "SELECT xmlparse(content '')",
+        "SELECT xmlparse(content ' ')",
+        "SELECT xmlparse(content 'abc')",
+        "SELECT xmlparse(content '<abc>x</abc>')",
+        "SELECT xmlparse(content '<invalidentity>&</invalidentity>')",
+        "SELECT xmlparse(content '<undefinedentity>&idontexist;</undefinedentity>')",
+        "SELECT xmlparse(content '<invalidns xmlns=''&lt;''/>')",
+        "SELECT xmlparse(content '<relativens xmlns=''relative''/>')",
+        "SELECT xmlparse(content '<twoerrors>&idontexist;</unbalanced>')",
+        "SELECT xmlparse(content '<nosuchprefix:tag/>')",
+        "SELECT xmlparse(document ' ')",
+        "SELECT xmlparse(document 'abc')",
+        "SELECT xmlparse(document '<abc>x</abc>')",
+        "SELECT xmlparse(document '<invalidentity>&</abc>')",
+        "SELECT xmlparse(document '<undefinedentity>&idontexist;</abc>')",
+        "SELECT xmlparse(document '<invalidns xmlns=''&lt;''/>')",
+        "SELECT xmlparse(document '<relativens xmlns=''relative''/>')",
+        "SELECT xmlparse(document '<twoerrors>&idontexist;</unbalanced>')",
+        "SELECT xmlparse(document '<nosuchprefix:tag/>')",
+        "SELECT xmlpi(name foo)",
+        "SELECT xmlpi(name xml)",
+        "SELECT xmlpi(name xmlstuff)",
+        "SELECT xmlpi(name foo, 'bar')",
+        "SELECT xmlpi(name foo, 'in?>valid')",
+        "SELECT xmlpi(name foo, null)",
+        "SELECT xmlpi(name xml, null)",
+        "SELECT xmlpi(name xmlstuff, null)",
+        r#"SELECT xmlpi(name "xml-stylesheet", 'href="mystyle.css" type="text/css"')"#,
+        "SELECT xmlpi(name foo, ' bar')",
+        "SELECT xmlroot(xml '<foo/>', version no value, standalone no value)",
+        "SELECT xmlroot(xml '<foo/>', version '2.0')",
+        "SELECT xmlroot(xml '<foo/>', version no value, standalone yes)",
+        "SELECT xmlroot(xml '<?xml version=\"1.1\"?><foo/>', version no value, standalone yes)",
+        "SELECT xmlroot(xmlroot(xml '<foo/>', version '1.0'), version '1.1', standalone no)",
+        "SELECT xmlroot('<?xml version=\"1.1\" standalone=\"yes\"?><foo/>', version no value, standalone no)",
+        "SELECT xmlroot('<?xml version=\"1.1\" standalone=\"yes\"?><foo/>', version no value, standalone no value)",
+        "SELECT xmlroot('<?xml version=\"1.1\" standalone=\"yes\"?><foo/>', version no value)",
+        "SELECT xmlroot ( xmlelement ( name gazonk, xmlattributes ( 'val' AS name, 1 + 1 AS num ), xmlelement ( NAME qux, 'foo' ) ), version '1.0', standalone yes )",
+        "SELECT xmlserialize(content data as character varying(20)) FROM xmltest",
+        "SELECT xmlserialize(content 'good' as char(10))",
+        "SELECT xmlserialize(document 'bad' as text)",
+        r#"SELECT xmlserialize(DOCUMENT '<foo><bar><val x="y">42</val></bar></foo>' AS text INDENT)"#,
+        r#"SELECT xmlserialize(CONTENT '<foo><bar><val x="y">42</val></bar></foo>' AS text INDENT)"#,
+        r#"SELECT xmlserialize(DOCUMENT '<foo><bar><val x="y">42</val></bar></foo>' AS text NO INDENT)"#,
+        r#"SELECT xmlserialize(CONTENT '<foo><bar><val x="y">42</val></bar></foo>' AS text NO INDENT)"#,
+        r#"SELECT xmlserialize(DOCUMENT '<foo>73</foo><bar><val x="y">42</val></bar>' AS text INDENT)"#,
+        r#"SELECT xmlserialize(CONTENT '<foo>73</foo><bar><val x="y">42</val></bar>' AS text INDENT)"#,
+        r#"SELECT xmlserialize(DOCUMENT 'text node<foo>73</foo>text node<bar><val x="y">42</val></bar>' AS text INDENT)"#,
+        r#"SELECT xmlserialize(CONTENT 'text node<foo>73</foo>text node<bar><val x="y">42</val></bar>' AS text INDENT)"#,
+        r#"SELECT xmlserialize(DOCUMENT '<foo><bar><val x="y">42</val><val x="y">text node<val>73</val></val></bar></foo>' AS text INDENT)"#,
+        r#"SELECT xmlserialize(CONTENT '<foo><bar><val x="y">42</val><val x="y">text node<val>73</val></val></bar></foo>' AS text INDENT)"#,
+        "SELECT xmlserialize(DOCUMENT '' AS text INDENT)",
+        "SELECT xmlserialize(CONTENT '' AS text INDENT)",
+        "SELECT xmlserialize(DOCUMENT ' ' AS text INDENT)",
+        "SELECT xmlserialize(CONTENT ' ' AS text INDENT)",
+        "SELECT xmlserialize(DOCUMENT NULL AS text INDENT)",
+        "SELECT xmlserialize(CONTENT NULL AS text INDENT)",
+        "SELECT xmlserialize(DOCUMENT '<?xml version=\"1.0\" encoding=\"UTF-8\"?><foo><bar><val>73</val></bar></foo>' AS text INDENT)",
+        "SELECT xmlserialize(CONTENT '<?xml version=\"1.0\" encoding=\"UTF-8\"?><foo><bar><val>73</val></bar></foo>' AS text INDENT)",
+        "SELECT xmlserialize(DOCUMENT '<!DOCTYPE a><a/>' AS text INDENT)",
+        "SELECT xmlserialize(CONTENT '<!DOCTYPE a><a/>' AS text INDENT)",
+        "SELECT xmlserialize(DOCUMENT '<foo><bar></bar></foo>' AS text INDENT)",
+        "SELECT xmlserialize(CONTENT '<foo><bar></bar></foo>' AS text INDENT)",
+        r#"SELECT xmlserialize(DOCUMENT '<foo><bar><val x="y">42</val></bar></foo>' AS text) = xmlserialize(DOCUMENT '<foo><bar><val x="y">42</val></bar></foo>' AS text NO INDENT)"#,
+        r#"SELECT xmlserialize(CONTENT '<foo><bar><val x="y">42</val></bar></foo>' AS text) = xmlserialize(CONTENT '<foo><bar><val x="y">42</val></bar></foo>' AS text NO INDENT)"#,
+        "SELECT xmlserialize(DOCUMENT '<foo> <bar></bar> </foo>' AS text INDENT)",
+        "SELECT xmlserialize(CONTENT 'text node<foo> <bar></bar> </foo>' AS text INDENT)",
+    ];
+
+    for sql in statements {
+        pg().parse_sql_statements(sql).unwrap_or_else(|e| {
+            panic!("failed to parse statement `{sql}` with error `{e}`");
+        });
+    }
+}
+
+#[test]
+fn parse_postgres_xml_expression_ast_shapes() {
+    let select = pg()
+        .verified_only_select_with_canonical("SELECT xmlconcat(1, 2)", "SELECT XMLCONCAT(1, 2)");
+    match &select.projection[0] {
+        SelectItem::UnnamedExpr(Expr::XmlConcat(items)) => assert_eq!(items.len(), 2),
+        item => panic!("expected XmlConcat expression, got {item:?}"),
+    }
+
+    let select = pg().verified_only_select_with_canonical(
+        "SELECT xmlelement(name element, xmlattributes (1 as one, 'deuce' as two), 'content')",
+        "SELECT XMLELEMENT(NAME element, XMLATTRIBUTES(1 AS one, 'deuce' AS two), 'content')",
+    );
+    match &select.projection[0] {
+        SelectItem::UnnamedExpr(Expr::XmlElement(xml_element)) => {
+            assert_eq!(xml_element.name.value, "element");
+            assert_eq!(xml_element.attributes.as_ref().unwrap().len(), 2);
+            assert_eq!(xml_element.content.len(), 1);
+        }
+        item => panic!("expected XmlElement expression, got {item:?}"),
+    }
+
+    let select = pg().verified_only_select_with_canonical(
+        "SELECT xmlelement(name foo, xml 'bar')",
+        "SELECT XMLELEMENT(NAME foo, xml 'bar')",
+    );
+    match &select.projection[0] {
+        SelectItem::UnnamedExpr(Expr::XmlElement(XmlElementExpr { content, .. })) => {
+            assert_eq!(content.len(), 1);
+            match &content[0] {
+                Expr::TypedString(TypedString {
+                    data_type: DataType::Custom(type_name, modifiers),
+                    value,
+                    uses_odbc_syntax: false,
+                }) => {
+                    match type_name.0.as_slice() {
+                        [ObjectNamePart::Identifier(ident)] => {
+                            assert!(ident.value.eq_ignore_ascii_case("xml"));
+                            assert_eq!(ident.quote_style, None);
+                        }
+                        parts => panic!("expected simple xml type name, got {parts:?}"),
+                    }
+                    assert!(modifiers.is_empty());
+                    assert_eq!(value.value, Value::SingleQuotedString("bar".to_string()));
+                }
+                expr => panic!("expected xml typed-string content, got {expr:?}"),
+            }
+        }
+        item => panic!("expected XmlElement expression, got {item:?}"),
+    }
+
+    let select = pg().verified_only_select_with_canonical(
+        "SELECT xmlforest(1 as one, 2)",
+        "SELECT XMLFOREST(1 AS one, 2)",
+    );
+    match &select.projection[0] {
+        SelectItem::UnnamedExpr(Expr::XmlForest(items)) => {
+            assert_eq!(items.len(), 2);
+            assert_eq!(items[0].alias.as_ref().unwrap().value, "one");
+            assert!(items[1].alias.is_none());
+        }
+        item => panic!("expected XmlForest expression, got {item:?}"),
+    }
+
+    let select = pg().verified_only_select_with_canonical(
+        "SELECT xmlparse(content '<foo/>')",
+        "SELECT XMLPARSE(CONTENT '<foo/>')",
+    );
+    match &select.projection[0] {
+        SelectItem::UnnamedExpr(Expr::XmlParse(XmlParseExpr { mode, .. })) => {
+            assert_eq!(*mode, XmlParseMode::Content);
+        }
+        item => panic!("expected XmlParse expression, got {item:?}"),
+    }
+
+    let select = pg().verified_only_select_with_canonical(
+        "SELECT xmlpi(name foo, 'bar')",
+        "SELECT XMLPI(NAME foo, 'bar')",
+    );
+    match &select.projection[0] {
+        SelectItem::UnnamedExpr(Expr::XmlPi(XmlPiExpr { name, content })) => {
+            assert_eq!(name.value, "foo");
+            assert!(content.is_some());
+        }
+        item => panic!("expected XmlPi expression, got {item:?}"),
+    }
+
+    let select = pg().verified_only_select_with_canonical(
+        "SELECT xmlroot(xml '<foo/>', version no value, standalone yes)",
+        "SELECT XMLROOT(xml '<foo/>', VERSION NO VALUE, STANDALONE YES)",
+    );
+    match &select.projection[0] {
+        SelectItem::UnnamedExpr(Expr::XmlRoot(XmlRootExpr {
+            version,
+            standalone,
+            ..
+        })) => {
+            assert!(matches!(version, XmlRootVersion::NoValue));
+            assert_eq!(*standalone, Some(XmlStandalone::Yes));
+        }
+        item => panic!("expected XmlRoot expression, got {item:?}"),
+    }
+
+    let select = pg().verified_only_select_with_canonical(
+        "SELECT xmlserialize(document '<foo/>' as text no indent)",
+        "SELECT XMLSERIALIZE(DOCUMENT '<foo/>' AS TEXT NO INDENT)",
+    );
+    match &select.projection[0] {
+        SelectItem::UnnamedExpr(Expr::XmlSerialize(XmlSerializeExpr { mode, indent, .. })) => {
+            assert_eq!(*mode, XmlParseMode::Document);
+            assert_eq!(*indent, Some(XmlIndentOption::NoIndent));
+        }
+        item => panic!("expected XmlSerialize expression, got {item:?}"),
+    }
+}
+
+#[test]
+fn parse_postgres_xml_expression_negative_syntax() {
+    assert!(
+        pg().parse_sql_statements("SELECT xmlparse('<abc>x</abc>')")
+            .is_err(),
+        "xmlparse requires DOCUMENT|CONTENT mode"
+    );
+    assert!(
+        pg().parse_sql_statements("SELECT xmlroot(xml '<foo/>', standalone yes)")
+            .is_err(),
+        "xmlroot requires VERSION clause"
+    );
+    assert!(
+        pg().parse_sql_statements("SELECT xmlserialize(document '<foo/>' text)")
+            .is_err(),
+        "xmlserialize requires AS <type>"
+    );
+}

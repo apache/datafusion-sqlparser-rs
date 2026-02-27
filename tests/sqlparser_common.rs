@@ -8099,22 +8099,46 @@ fn parse_trim() {
         parse_sql_statements("SELECT TRIM(FOO 'xyz' FROM 'xyzfooxyz')").unwrap_err()
     );
 
-    // keep dialects without comma-style TRIM syntax failing
-    let all_expected_error = TestedDialects::new(vec![
-        //Box::new(GenericDialect {}),
-        Box::new(MsSqlDialect {}),
-        Box::new(AnsiDialect {}),
-        //Box::new(SnowflakeDialect {}),
-        Box::new(HiveDialect {}),
-        Box::new(RedshiftSqlDialect {}),
-        Box::new(MySqlDialect {}),
-        //Box::new(BigQueryDialect {}),
-        Box::new(SQLiteDialect {}),
-    ]);
+    // dialects that support comma-separated TRIM syntax
+    let dialects = all_dialects_where(|d| d.supports_comma_separated_trim());
 
+    let sql = "SELECT TRIM('  xyz  ', ' ')";
+    let select = dialects.verified_only_select(sql);
     assert_eq!(
-        ParserError::ParserError("Expected: ), found: 'a'".to_owned()),
-        all_expected_error
+        &Expr::Trim {
+            expr: Box::new(Expr::Value(
+                Value::SingleQuotedString("  xyz  ".to_owned()).with_empty_span()
+            )),
+            trim_where: None,
+            trim_what: None,
+            trim_characters: Some(vec![Expr::Value(
+                Value::SingleQuotedString(" ".to_owned()).with_empty_span()
+            )]),
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let sql = "SELECT TRIM('xyz', 'a')";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        &Expr::Trim {
+            expr: Box::new(Expr::Value(
+                Value::SingleQuotedString("xyz".to_owned()).with_empty_span()
+            )),
+            trim_where: None,
+            trim_what: None,
+            trim_characters: Some(vec![Expr::Value(
+                Value::SingleQuotedString("a".to_owned()).with_empty_span()
+            )]),
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    // dialects without comma-style TRIM syntax should fail
+    let unsupported_dialects = all_dialects_where(|d| !d.supports_comma_separated_trim());
+    assert_eq!(
+        ParserError::ParserError("Expected: ), found: ,".to_owned()),
+        unsupported_dialects
             .parse_sql_statements("SELECT TRIM('xyz', 'a')")
             .unwrap_err()
     );

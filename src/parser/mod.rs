@@ -508,10 +508,10 @@ impl<'a> Parser<'a> {
                 Token::EOF => break,
 
                 // end of statement
-                Token::Word(word) => {
-                    if expecting_statement_delimiter && word.keyword == Keyword::END {
-                        break;
-                    }
+                Token::Word(word)
+                    if expecting_statement_delimiter && word.keyword == Keyword::END =>
+                {
+                    break;
                 }
                 _ => {}
             }
@@ -1298,41 +1298,40 @@ impl<'a> Parser<'a> {
 
         let next_token = self.next_token();
         match next_token.token {
-            t @ (Token::Word(_) | Token::SingleQuotedString(_)) => {
-                if self.peek_token_ref().token == Token::Period {
-                    let mut id_parts: Vec<Ident> = vec![match t {
-                        Token::Word(w) => w.into_ident(next_token.span),
-                        Token::SingleQuotedString(s) => Ident::with_quote('\'', s),
-                        _ => {
-                            return Err(ParserError::ParserError(
-                                "Internal parser error: unexpected token type".to_string(),
-                            ))
-                        }
-                    }];
+            t @ (Token::Word(_) | Token::SingleQuotedString(_))
+                if self.peek_token_ref().token == Token::Period =>
+            {
+                let mut id_parts: Vec<Ident> = vec![match t {
+                    Token::Word(w) => w.into_ident(next_token.span),
+                    Token::SingleQuotedString(s) => Ident::with_quote('\'', s),
+                    _ => {
+                        return Err(ParserError::ParserError(
+                            "Internal parser error: unexpected token type".to_string(),
+                        ))
+                    }
+                }];
 
-                    while self.consume_token(&Token::Period) {
-                        let next_token = self.next_token();
-                        match next_token.token {
-                            Token::Word(w) => id_parts.push(w.into_ident(next_token.span)),
-                            Token::SingleQuotedString(s) => {
-                                // SQLite has single-quoted identifiers
-                                id_parts.push(Ident::with_quote('\'', s))
-                            }
-                            Token::Placeholder(s) => {
-                                // Snowflake uses $1, $2, etc. for positional column references
-                                // in staged data queries like: SELECT t.$1 FROM @stage t
-                                id_parts.push(Ident::new(s))
-                            }
-                            Token::Mul => {
-                                return Ok(Expr::QualifiedWildcard(
-                                    ObjectName::from(id_parts),
-                                    AttachedToken(next_token),
-                                ));
-                            }
-                            _ => {
-                                return self
-                                    .expected("an identifier or a '*' after '.'", next_token);
-                            }
+                while self.consume_token(&Token::Period) {
+                    let next_token = self.next_token();
+                    match next_token.token {
+                        Token::Word(w) => id_parts.push(w.into_ident(next_token.span)),
+                        Token::SingleQuotedString(s) => {
+                            // SQLite has single-quoted identifiers
+                            id_parts.push(Ident::with_quote('\'', s))
+                        }
+                        Token::Placeholder(s) => {
+                            // Snowflake uses $1, $2, etc. for positional column references
+                            // in staged data queries like: SELECT t.$1 FROM @stage t
+                            id_parts.push(Ident::new(s))
+                        }
+                        Token::Mul => {
+                            return Ok(Expr::QualifiedWildcard(
+                                ObjectName::from(id_parts),
+                                AttachedToken(next_token),
+                            ));
+                        }
+                        _ => {
+                            return self.expected("an identifier or a '*' after '.'", next_token);
                         }
                     }
                 }
@@ -1716,6 +1715,17 @@ impl<'a> Parser<'a> {
                 // name, resulting in `NOT 'a'` being recognized as a `TypedString` instead of
                 // an unary negation `NOT ('a' LIKE 'b')`. To solve this, we don't accept the
                 // `type 'string'` syntax for the custom data types at all.
+                DataType::Custom(type_name, modifiers)
+                    if dialect_of!(self is PostgreSqlDialect | GenericDialect)
+                        && modifiers.is_empty()
+                        && Self::is_simple_unquoted_object_name(&type_name, "xml") =>
+                {
+                    Ok(Expr::TypedString(TypedString {
+                        data_type: DataType::Custom(type_name, modifiers),
+                        value: parser.parse_value()?,
+                        uses_odbc_syntax: false,
+                    }))
+                }
                 DataType::Custom(..) => parser_err!("dummy", loc),
                 // MySQL supports using the `BINARY` keyword as a cast to binary type.
                 DataType::Binary(..) if self.dialect.supports_binary_kw_as_cast() => {
@@ -2399,8 +2409,256 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn is_simple_unquoted_object_name(name: &ObjectName, expected: &str) -> bool {
+        name.0.len() == 1
+            && matches!(
+                &name.0[0],
+                ObjectNamePart::Identifier(Ident {
+                    value,
+                    quote_style: None,
+                    ..
+                }) if value.eq_ignore_ascii_case(expected)
+            )
+    }
+
+    fn parse_unquoted_word_value(&mut self, expected: &str) -> bool {
+        if let Token::Word(word) = &self.peek_token_ref().token {
+            if word.quote_style.is_none() && word.value.eq_ignore_ascii_case(expected) {
+                let _ = self.next_token();
+                return true;
+            }
+        }
+        false
+    }
+
+    fn expect_unquoted_word_value(&mut self, expected: &str) -> Result<(), ParserError> {
+        if self.parse_unquoted_word_value(expected) {
+            Ok(())
+        } else {
+            self.expected_ref(expected, self.peek_token_ref())
+        }
+    }
+
+    fn peek_unquoted_word_with_lparen(&self, expected: &str) -> bool {
+        matches!(
+            (&self.peek_token_ref().token, &self.peek_nth_token_ref(1).token),
+            (
+                Token::Word(Word {
+                    value,
+                    quote_style: None,
+                    ..
+                }),
+                Token::LParen
+            ) if value.eq_ignore_ascii_case(expected)
+        )
+    }
+
+    fn parse_xml_parse_mode(&mut self) -> Result<XmlParseMode, ParserError> {
+        if self.parse_unquoted_word_value("content") {
+            Ok(XmlParseMode::Content)
+        } else if self.parse_unquoted_word_value("document") {
+            Ok(XmlParseMode::Document)
+        } else {
+            self.expected_ref("CONTENT or DOCUMENT", self.peek_token_ref())
+        }
+    }
+
+    fn parse_xml_standalone(&mut self) -> Result<XmlStandalone, ParserError> {
+        if self.parse_unquoted_word_value("yes") {
+            Ok(XmlStandalone::Yes)
+        } else if self.parse_keyword(Keyword::NO) {
+            if self.parse_keyword(Keyword::VALUE) {
+                Ok(XmlStandalone::NoValue)
+            } else {
+                Ok(XmlStandalone::No)
+            }
+        } else {
+            self.expected_ref("YES, NO, or NO VALUE", self.peek_token_ref())
+        }
+    }
+
+    fn parse_xml_named_expr(&mut self) -> Result<XmlNamedExpr, ParserError> {
+        let expr = self.parse_expr()?;
+        let alias = if self.parse_keyword(Keyword::AS) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+        Ok(XmlNamedExpr { expr, alias })
+    }
+
+    fn parse_xml_attribute(&mut self) -> Result<XmlAttribute, ParserError> {
+        let expr = self.parse_expr()?;
+        let alias = if self.parse_keyword(Keyword::AS) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+        Ok(XmlAttribute { expr, alias })
+    }
+
+    fn parse_xmlattributes_clause(&mut self) -> Result<Vec<XmlAttribute>, ParserError> {
+        self.expect_unquoted_word_value("xmlattributes")?;
+        self.expect_token(&Token::LParen)?;
+        let attributes = self.parse_comma_separated(Parser::parse_xml_attribute)?;
+        self.expect_token(&Token::RParen)?;
+        Ok(attributes)
+    }
+
+    fn parse_xmlconcat_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let exprs = self.parse_comma_separated(Parser::parse_expr)?;
+        self.expect_token(&Token::RParen)?;
+        Ok(Expr::XmlConcat(exprs))
+    }
+
+    fn parse_xmlelement_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        self.expect_keyword_is(Keyword::NAME)?;
+        let name = self.parse_identifier()?;
+
+        let mut attributes = None;
+        let mut content = vec![];
+
+        if self.consume_token(&Token::Comma) {
+            if self.peek_unquoted_word_with_lparen("xmlattributes") {
+                attributes = Some(self.parse_xmlattributes_clause()?);
+                if self.consume_token(&Token::Comma) {
+                    content = self.parse_comma_separated(Parser::parse_expr)?;
+                }
+            } else {
+                content = self.parse_comma_separated(Parser::parse_expr)?;
+            }
+        }
+
+        self.expect_token(&Token::RParen)?;
+        Ok(Expr::XmlElement(XmlElementExpr {
+            name,
+            attributes,
+            content,
+        }))
+    }
+
+    fn parse_xmlforest_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let entries = self.parse_comma_separated(Parser::parse_xml_named_expr)?;
+        self.expect_token(&Token::RParen)?;
+        Ok(Expr::XmlForest(entries))
+    }
+
+    fn parse_xmlparse_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let mode = self.parse_xml_parse_mode()?;
+        let expr = Box::new(self.parse_expr()?);
+        self.expect_token(&Token::RParen)?;
+        Ok(Expr::XmlParse(XmlParseExpr { mode, expr }))
+    }
+
+    fn parse_xmlpi_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        self.expect_keyword_is(Keyword::NAME)?;
+        let name = self.parse_identifier()?;
+        let content = if self.consume_token(&Token::Comma) {
+            Some(Box::new(self.parse_expr()?))
+        } else {
+            None
+        };
+        self.expect_token(&Token::RParen)?;
+        Ok(Expr::XmlPi(XmlPiExpr { name, content }))
+    }
+
+    fn parse_xmlroot_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let expr = Box::new(self.parse_expr()?);
+        self.expect_token(&Token::Comma)?;
+        self.expect_keyword_is(Keyword::VERSION)?;
+        let version = if self.parse_keywords(&[Keyword::NO, Keyword::VALUE]) {
+            XmlRootVersion::NoValue
+        } else {
+            XmlRootVersion::Value(Box::new(self.parse_expr()?))
+        };
+        let standalone = if self.consume_token(&Token::Comma) {
+            self.expect_unquoted_word_value("standalone")?;
+            Some(self.parse_xml_standalone()?)
+        } else {
+            None
+        };
+        self.expect_token(&Token::RParen)?;
+        Ok(Expr::XmlRoot(XmlRootExpr {
+            expr,
+            version,
+            standalone,
+        }))
+    }
+
+    fn parse_xmlserialize_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let mode = self.parse_xml_parse_mode()?;
+        let expr = Box::new(self.parse_expr()?);
+        self.expect_keyword_is(Keyword::AS)?;
+        let data_type = self.parse_data_type()?;
+        let indent = if self.parse_unquoted_word_value("indent") {
+            Some(XmlIndentOption::Indent)
+        } else if self.parse_keyword(Keyword::NO) {
+            self.expect_unquoted_word_value("indent")?;
+            Some(XmlIndentOption::NoIndent)
+        } else {
+            None
+        };
+        self.expect_token(&Token::RParen)?;
+        Ok(Expr::XmlSerialize(XmlSerializeExpr {
+            mode,
+            expr,
+            data_type,
+            indent,
+        }))
+    }
+
+    fn maybe_parse_xml_function(&mut self, name: &ObjectName) -> Result<Option<Expr>, ParserError> {
+        if !dialect_of!(self is PostgreSqlDialect | GenericDialect)
+            || name.0.len() != 1
+            || !matches!(
+                &name.0[0],
+                ObjectNamePart::Identifier(Ident {
+                    quote_style: None,
+                    ..
+                })
+            )
+        {
+            return Ok(None);
+        }
+
+        let function_name = match &name.0[0] {
+            ObjectNamePart::Identifier(ident) => ident.value.as_str(),
+            ObjectNamePart::Function(_) => return Ok(None),
+        };
+
+        let expr = if function_name.eq_ignore_ascii_case("xmlconcat") {
+            Some(self.parse_xmlconcat_expr()?)
+        } else if function_name.eq_ignore_ascii_case("xmlelement") {
+            Some(self.parse_xmlelement_expr()?)
+        } else if function_name.eq_ignore_ascii_case("xmlforest") {
+            Some(self.parse_xmlforest_expr()?)
+        } else if function_name.eq_ignore_ascii_case("xmlparse") {
+            Some(self.parse_xmlparse_expr()?)
+        } else if function_name.eq_ignore_ascii_case("xmlpi") {
+            Some(self.parse_xmlpi_expr()?)
+        } else if function_name.eq_ignore_ascii_case("xmlroot") {
+            Some(self.parse_xmlroot_expr()?)
+        } else if function_name.eq_ignore_ascii_case("xmlserialize") {
+            Some(self.parse_xmlserialize_expr()?)
+        } else {
+            None
+        };
+
+        Ok(expr)
+    }
+
     /// Parse a function call expression named by `name` and return it as an `Expr`.
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
+        if let Some(expr) = self.maybe_parse_xml_function(&name)? {
+            return Ok(expr);
+        }
         self.parse_function_call(name).map(Expr::Function)
     }
 
@@ -4990,10 +5248,10 @@ impl<'a> Parser<'a> {
         loop {
             match &self.peek_nth_token_ref(0).token {
                 Token::EOF => break,
-                Token::Word(w) => {
-                    if w.quote_style.is_none() && terminal_keywords.contains(&w.keyword) {
-                        break;
-                    }
+                Token::Word(w)
+                    if w.quote_style.is_none() && terminal_keywords.contains(&w.keyword) =>
+                {
+                    break;
                 }
                 _ => {}
             }
@@ -8173,71 +8431,68 @@ impl<'a> Parser<'a> {
                         Keyword::LINES,
                         Keyword::NULL,
                     ]) {
-                        Some(Keyword::FIELDS) => {
-                            if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) {
+                        Some(Keyword::FIELDS)
+                            if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) =>
+                        {
+                            row_delimiters.push(HiveRowDelimiter {
+                                delimiter: HiveDelimiter::FieldsTerminatedBy,
+                                char: self.parse_identifier()?,
+                            });
+
+                            if self.parse_keywords(&[Keyword::ESCAPED, Keyword::BY]) {
                                 row_delimiters.push(HiveRowDelimiter {
-                                    delimiter: HiveDelimiter::FieldsTerminatedBy,
+                                    delimiter: HiveDelimiter::FieldsEscapedBy,
                                     char: self.parse_identifier()?,
                                 });
-
-                                if self.parse_keywords(&[Keyword::ESCAPED, Keyword::BY]) {
-                                    row_delimiters.push(HiveRowDelimiter {
-                                        delimiter: HiveDelimiter::FieldsEscapedBy,
-                                        char: self.parse_identifier()?,
-                                    });
-                                }
-                            } else {
-                                break;
                             }
                         }
-                        Some(Keyword::COLLECTION) => {
+                        Some(Keyword::COLLECTION)
                             if self.parse_keywords(&[
                                 Keyword::ITEMS,
                                 Keyword::TERMINATED,
                                 Keyword::BY,
-                            ]) {
-                                row_delimiters.push(HiveRowDelimiter {
-                                    delimiter: HiveDelimiter::CollectionItemsTerminatedBy,
-                                    char: self.parse_identifier()?,
-                                });
-                            } else {
-                                break;
-                            }
+                            ]) =>
+                        {
+                            row_delimiters.push(HiveRowDelimiter {
+                                delimiter: HiveDelimiter::CollectionItemsTerminatedBy,
+                                char: self.parse_identifier()?,
+                            });
                         }
-                        Some(Keyword::MAP) => {
+                        Some(Keyword::MAP)
                             if self.parse_keywords(&[
                                 Keyword::KEYS,
                                 Keyword::TERMINATED,
                                 Keyword::BY,
-                            ]) {
-                                row_delimiters.push(HiveRowDelimiter {
-                                    delimiter: HiveDelimiter::MapKeysTerminatedBy,
-                                    char: self.parse_identifier()?,
-                                });
-                            } else {
-                                break;
-                            }
+                            ]) =>
+                        {
+                            row_delimiters.push(HiveRowDelimiter {
+                                delimiter: HiveDelimiter::MapKeysTerminatedBy,
+                                char: self.parse_identifier()?,
+                            });
                         }
-                        Some(Keyword::LINES) => {
-                            if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) {
-                                row_delimiters.push(HiveRowDelimiter {
-                                    delimiter: HiveDelimiter::LinesTerminatedBy,
-                                    char: self.parse_identifier()?,
-                                });
-                            } else {
-                                break;
-                            }
+                        Some(Keyword::LINES)
+                            if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) =>
+                        {
+                            row_delimiters.push(HiveRowDelimiter {
+                                delimiter: HiveDelimiter::LinesTerminatedBy,
+                                char: self.parse_identifier()?,
+                            });
                         }
-                        Some(Keyword::NULL) => {
-                            if self.parse_keywords(&[Keyword::DEFINED, Keyword::AS]) {
-                                row_delimiters.push(HiveRowDelimiter {
-                                    delimiter: HiveDelimiter::NullDefinedAs,
-                                    char: self.parse_identifier()?,
-                                });
-                            } else {
-                                break;
-                            }
+                        Some(Keyword::NULL)
+                            if self.parse_keywords(&[Keyword::DEFINED, Keyword::AS]) =>
+                        {
+                            row_delimiters.push(HiveRowDelimiter {
+                                delimiter: HiveDelimiter::NullDefinedAs,
+                                char: self.parse_identifier()?,
+                            });
                         }
+                        Some(
+                            Keyword::FIELDS
+                            | Keyword::COLLECTION
+                            | Keyword::MAP
+                            | Keyword::LINES
+                            | Keyword::NULL,
+                        ) => break,
                         _ => {
                             break;
                         }

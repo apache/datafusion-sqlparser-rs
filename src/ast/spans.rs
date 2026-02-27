@@ -388,6 +388,7 @@ impl Spanned for Statement {
                 create_operator_family.span()
             }
             Statement::CreateOperatorClass(create_operator_class) => create_operator_class.span(),
+            Statement::CreateStatistics(..) => Span::empty(),
             Statement::AlterTable(alter_table) => alter_table.span(),
             Statement::AlterIndex { name, operation } => name.span().union(&operation.span()),
             Statement::AlterView {
@@ -406,6 +407,7 @@ impl Spanned for Statement {
             Statement::AlterOperator { .. } => Span::empty(),
             Statement::AlterOperatorFamily { .. } => Span::empty(),
             Statement::AlterOperatorClass { .. } => Span::empty(),
+            Statement::AlterStatistics(..) => Span::empty(),
             Statement::AlterRole { .. } => Span::empty(),
             Statement::AlterSession { .. } => Span::empty(),
             Statement::AttachDatabase { .. } => Span::empty(),

@@ -547,6 +547,7 @@ impl Spanned for CreateTable {
         let CreateTable {
             or_replace: _,    // bool
             temporary: _,     // bool
+            unlogged: _,      // bool
             external: _,      // bool
             global: _,        // bool
             dynamic: _,       // bool
@@ -1212,6 +1213,8 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::SetTblProperties { table_properties } => {
                 union_spans(table_properties.iter().map(|i| i.span()))
             }
+            AlterTableOperation::SetLogged => Span::empty(),
+            AlterTableOperation::SetUnlogged => Span::empty(),
             AlterTableOperation::OwnerTo { .. } => Span::empty(),
             AlterTableOperation::ClusterBy { exprs } => union_spans(exprs.iter().map(|e| e.span())),
             AlterTableOperation::DropClusteringKey => Span::empty(),

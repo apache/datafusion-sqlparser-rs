@@ -1923,6 +1923,7 @@ fn parse_create_table_with_valid_options() {
             Statement::CreateTable(CreateTable {
                 or_replace: false,
                 temporary: false,
+                unlogged: false,
                 external: false,
                 global: None,
                 dynamic: false,
@@ -2116,6 +2117,7 @@ fn parse_create_table_with_identity_column() {
             Statement::CreateTable(CreateTable {
                 or_replace: false,
                 temporary: false,
+                unlogged: false,
                 external: false,
                 global: None,
                 dynamic: false,

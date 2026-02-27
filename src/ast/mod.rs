@@ -2509,6 +2509,8 @@ pub enum CommentObject {
     Schema,
     /// A sequence.
     Sequence,
+    /// Statistics object.
+    Statistics,
     /// A table.
     Table,
     /// A type.
@@ -2534,6 +2536,7 @@ impl fmt::Display for CommentObject {
             CommentObject::Role => f.write_str("ROLE"),
             CommentObject::Schema => f.write_str("SCHEMA"),
             CommentObject::Sequence => f.write_str("SEQUENCE"),
+            CommentObject::Statistics => f.write_str("STATISTICS"),
             CommentObject::Table => f.write_str("TABLE"),
             CommentObject::Type => f.write_str("TYPE"),
             CommentObject::User => f.write_str("USER"),
@@ -3762,6 +3765,11 @@ pub enum Statement {
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/textsearch-intro.html)
     CreateTextSearch(CreateTextSearch),
     /// ```sql
+    /// CREATE STATISTICS
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createstatistics.html)
+    CreateStatistics(CreateStatistics),
+    /// ```sql
     /// ALTER TABLE
     /// ```
     AlterTable(AlterTable),
@@ -3829,6 +3837,11 @@ pub enum Statement {
     ///
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/textsearch-configuration.html)
     AlterTextSearch(AlterTextSearch),
+    /// ```sql
+    /// ALTER STATISTICS
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterstatistics.html)
+    AlterStatistics(AlterStatistics),
     /// ```sql
     /// ALTER ROLE
     /// ```
@@ -5590,6 +5603,7 @@ impl fmt::Display for Statement {
             }
             Statement::CreateOperatorClass(create_operator_class) => create_operator_class.fmt(f),
             Statement::CreateTextSearch(create_text_search) => create_text_search.fmt(f),
+            Statement::CreateStatistics(create_statistics) => create_statistics.fmt(f),
             Statement::AlterTable(alter_table) => write!(f, "{alter_table}"),
             Statement::AlterIndex { name, operation } => {
                 write!(f, "ALTER INDEX {name} {operation}")
@@ -5622,6 +5636,7 @@ impl fmt::Display for Statement {
                 write!(f, "{alter_operator_class}")
             }
             Statement::AlterTextSearch(alter_text_search) => write!(f, "{alter_text_search}"),
+            Statement::AlterStatistics(alter_statistics) => write!(f, "{alter_statistics}"),
             Statement::AlterRole { name, operation } => {
                 write!(f, "ALTER ROLE {name} {operation}")
             }
@@ -8554,6 +8569,8 @@ pub enum ObjectType {
     Role,
     /// A sequence.
     Sequence,
+    /// Statistics object.
+    Statistics,
     /// A stage.
     Stage,
     /// A type definition.
@@ -8576,6 +8593,7 @@ impl fmt::Display for ObjectType {
             ObjectType::Database => "DATABASE",
             ObjectType::Role => "ROLE",
             ObjectType::Sequence => "SEQUENCE",
+            ObjectType::Statistics => "STATISTICS",
             ObjectType::Stage => "STAGE",
             ObjectType::Type => "TYPE",
             ObjectType::User => "USER",
@@ -9012,6 +9030,158 @@ pub struct SecretOption {
 impl fmt::Display for SecretOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} {}", self.key, self.value)
+    }
+}
+
+/// Statistics kinds supported by PostgreSQL `CREATE STATISTICS`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum StatisticsType {
+    /// `ndistinct` kind.
+    Ndistinct,
+    /// `dependencies` kind.
+    Dependencies,
+    /// `mcv` kind.
+    Mcv,
+    /// Any other statistics kind identifier accepted by PostgreSQL grammar.
+    Other(Ident),
+}
+
+impl fmt::Display for StatisticsType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StatisticsType::Ndistinct => write!(f, "NDISTINCT"),
+            StatisticsType::Dependencies => write!(f, "DEPENDENCIES"),
+            StatisticsType::Mcv => write!(f, "MCV"),
+            StatisticsType::Other(ident) => write!(f, "{ident}"),
+        }
+    }
+}
+
+/// A `CREATE STATISTICS` statement.
+///
+/// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createstatistics.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateStatistics {
+    /// Whether `IF NOT EXISTS` was specified.
+    pub if_not_exists: bool,
+    /// Optional name of the statistics object.
+    pub name: Option<ObjectName>,
+    /// Optional list of statistics kinds.
+    pub statistics_types: Vec<StatisticsType>,
+    /// Target expressions listed after `ON`.
+    pub columns: Vec<Expr>,
+    /// Source relation list after `FROM`.
+    pub from: Vec<TableWithJoins>,
+}
+
+impl fmt::Display for CreateStatistics {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "CREATE STATISTICS")?;
+        if self.if_not_exists {
+            write!(f, " IF NOT EXISTS")?;
+        }
+        if let Some(name) = &self.name {
+            write!(f, " {name}")?;
+        }
+        if !self.statistics_types.is_empty() {
+            write!(f, " ({})", display_comma_separated(&self.statistics_types))?;
+        }
+        write!(
+            f,
+            " ON {} FROM {}",
+            display_comma_separated(&self.columns),
+            display_comma_separated(&self.from)
+        )
+    }
+}
+
+/// Target value for `ALTER STATISTICS ... SET STATISTICS`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterStatisticsTarget {
+    /// Numeric target value.
+    Value(i64),
+    /// `DEFAULT` target.
+    Default,
+}
+
+impl fmt::Display for AlterStatisticsTarget {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AlterStatisticsTarget::Value(value) => write!(f, "{value}"),
+            AlterStatisticsTarget::Default => write!(f, "DEFAULT"),
+        }
+    }
+}
+
+/// Operation variants for `ALTER STATISTICS`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterStatisticsOperation {
+    /// `RENAME TO new_name`.
+    RenameTo {
+        /// New name of the statistics object.
+        new_name: ObjectName,
+    },
+    /// `OWNER TO { new_owner | CURRENT_ROLE | CURRENT_USER | SESSION_USER }`.
+    OwnerTo(Owner),
+    /// `SET SCHEMA new_schema`.
+    SetSchema {
+        /// New schema for the statistics object.
+        schema_name: ObjectName,
+    },
+    /// `SET STATISTICS { integer | DEFAULT }`.
+    SetStatistics {
+        /// New statistics target value.
+        target: AlterStatisticsTarget,
+    },
+}
+
+impl fmt::Display for AlterStatisticsOperation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AlterStatisticsOperation::RenameTo { new_name } => write!(f, "RENAME TO {new_name}"),
+            AlterStatisticsOperation::OwnerTo(owner) => write!(f, "OWNER TO {owner}"),
+            AlterStatisticsOperation::SetSchema { schema_name } => {
+                write!(f, "SET SCHEMA {schema_name}")
+            }
+            AlterStatisticsOperation::SetStatistics { target } => {
+                write!(f, "SET STATISTICS {target}")
+            }
+        }
+    }
+}
+
+/// An `ALTER STATISTICS` statement.
+///
+/// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-alterstatistics.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterStatistics {
+    /// Whether `IF EXISTS` was specified.
+    pub if_exists: bool,
+    /// Name of the statistics object.
+    pub name: ObjectName,
+    /// Operation to apply.
+    pub operation: AlterStatisticsOperation,
+}
+
+impl fmt::Display for AlterStatistics {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "ALTER STATISTICS {if_exists}{name} {operation}",
+            if_exists = if self.if_exists { "IF EXISTS " } else { "" },
+            name = self.name,
+            operation = self.operation
+        )
     }
 }
 
@@ -12288,6 +12458,12 @@ impl From<CreateTextSearch> for Statement {
     }
 }
 
+impl From<CreateStatistics> for Statement {
+    fn from(c: CreateStatistics) -> Self {
+        Self::CreateStatistics(c)
+    }
+}
+
 impl From<AlterSchema> for Statement {
     fn from(a: AlterSchema) -> Self {
         Self::AlterSchema(a)
@@ -12333,6 +12509,12 @@ impl From<AlterOperatorClass> for Statement {
 impl From<AlterTextSearch> for Statement {
     fn from(a: AlterTextSearch) -> Self {
         Self::AlterTextSearch(a)
+    }
+}
+
+impl From<AlterStatistics> for Statement {
+    fn from(a: AlterStatistics) -> Self {
+        Self::AlterStatistics(a)
     }
 }
 

@@ -7625,6 +7625,10 @@ pub enum FunctionArgExpr {
     QualifiedWildcard(ObjectName),
     /// An unqualified `*` wildcard.
     Wildcard,
+    /// An unqualified `*` wildcard with additional options, e.g. `* EXCLUDE(col)`.
+    ///
+    /// Used in Snowflake to support expressions like `HASH(* EXCLUDE(col))`.
+    WildcardWithOptions(WildcardAdditionalOptions),
 }
 
 impl From<Expr> for FunctionArgExpr {
@@ -7643,6 +7647,7 @@ impl fmt::Display for FunctionArgExpr {
             FunctionArgExpr::Expr(expr) => write!(f, "{expr}"),
             FunctionArgExpr::QualifiedWildcard(prefix) => write!(f, "{prefix}.*"),
             FunctionArgExpr::Wildcard => f.write_str("*"),
+            FunctionArgExpr::WildcardWithOptions(opts) => write!(f, "*{opts}"),
         }
     }
 }

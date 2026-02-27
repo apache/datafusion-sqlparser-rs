@@ -302,4 +302,8 @@ impl Dialect for PostgreSqlDialect {
     fn supports_insert_table_alias(&self) -> bool {
         true
     }
+
+    fn supports_create_table_like_parenthesized(&self) -> bool {
+        true
+    }
 }

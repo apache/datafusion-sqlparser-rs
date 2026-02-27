@@ -594,6 +594,45 @@ fn parse_create_table_constraints_only() {
 }
 
 #[test]
+fn parse_create_table_like_with_defaults() {
+    let sql = "CREATE TABLE new (LIKE old INCLUDING DEFAULTS)";
+    match pg().verified_stmt(sql) {
+        Statement::CreateTable(stmt) => {
+            assert_eq!(
+                stmt.name,
+                ObjectName::from(vec![Ident::new("new".to_string())])
+            );
+            assert_eq!(
+                stmt.like,
+                Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
+                    name: ObjectName::from(vec![Ident::new("old".to_string())]),
+                    defaults: Some(CreateTableLikeDefaults::Including),
+                }))
+            )
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "CREATE TABLE new (LIKE old EXCLUDING DEFAULTS)";
+    match pg().verified_stmt(sql) {
+        Statement::CreateTable(stmt) => {
+            assert_eq!(
+                stmt.name,
+                ObjectName::from(vec![Ident::new("new".to_string())])
+            );
+            assert_eq!(
+                stmt.like,
+                Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
+                    name: ObjectName::from(vec![Ident::new("old".to_string())]),
+                    defaults: Some(CreateTableLikeDefaults::Excluding),
+                }))
+            )
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_alter_table_constraints_rename() {
     match alter_table_op(
         pg().verified_stmt("ALTER TABLE tab RENAME CONSTRAINT old_name TO new_name"),

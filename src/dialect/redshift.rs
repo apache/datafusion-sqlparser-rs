@@ -141,6 +141,10 @@ impl Dialect for RedshiftSqlDialect {
         true
     }
 
+    fn supports_select_wildcard_with_alias(&self) -> bool {
+        true
+    }
+
     fn supports_select_exclude(&self) -> bool {
         true
     }

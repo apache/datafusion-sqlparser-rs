@@ -792,6 +792,247 @@ impl fmt::Display for CaseWhen {
     }
 }
 
+/// Modes accepted by XML parsing/serialization clauses.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum XmlParseMode {
+    /// `CONTENT`
+    Content,
+    /// `DOCUMENT`
+    Document,
+}
+
+impl fmt::Display for XmlParseMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            XmlParseMode::Content => write!(f, "CONTENT"),
+            XmlParseMode::Document => write!(f, "DOCUMENT"),
+        }
+    }
+}
+
+/// A named XML argument (for XMLFOREST entries).
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct XmlNamedExpr {
+    /// Value expression.
+    pub expr: Expr,
+    /// Optional explicit XML name.
+    pub alias: Option<Ident>,
+}
+
+impl fmt::Display for XmlNamedExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.expr)?;
+        if let Some(alias) = &self.alias {
+            write!(f, " AS {alias}")?;
+        }
+        Ok(())
+    }
+}
+
+/// A single XML attribute expression, optionally named.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct XmlAttribute {
+    /// Attribute value expression.
+    pub expr: Expr,
+    /// Optional explicit attribute name.
+    pub alias: Option<Ident>,
+}
+
+impl fmt::Display for XmlAttribute {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.expr)?;
+        if let Some(alias) = &self.alias {
+            write!(f, " AS {alias}")?;
+        }
+        Ok(())
+    }
+}
+
+/// `XMLELEMENT(NAME ..., [XMLATTRIBUTES(...)], [content ...])`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct XmlElementExpr {
+    /// Element name.
+    pub name: Ident,
+    /// Optional XML attributes.
+    pub attributes: Option<Vec<XmlAttribute>>,
+    /// Optional content expressions.
+    pub content: Vec<Expr>,
+}
+
+impl fmt::Display for XmlElementExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "XMLELEMENT(NAME {}", self.name)?;
+        if let Some(attrs) = &self.attributes {
+            write!(f, ", XMLATTRIBUTES({})", display_comma_separated(attrs))?;
+        }
+        if !self.content.is_empty() {
+            write!(f, ", {}", display_comma_separated(&self.content))?;
+        }
+        write!(f, ")")
+    }
+}
+
+/// `XMLPARSE(<mode> <expr>)`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct XmlParseExpr {
+    /// Parsing mode.
+    pub mode: XmlParseMode,
+    /// Expression to parse as XML.
+    pub expr: Box<Expr>,
+}
+
+impl fmt::Display for XmlParseExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "XMLPARSE({} {})", self.mode, self.expr)
+    }
+}
+
+/// `XMLPI(NAME ..., [content])`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct XmlPiExpr {
+    /// Processing instruction target name.
+    pub name: Ident,
+    /// Optional processing instruction content.
+    pub content: Option<Box<Expr>>,
+}
+
+impl fmt::Display for XmlPiExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "XMLPI(NAME {}", self.name)?;
+        if let Some(content) = &self.content {
+            write!(f, ", {content}")?;
+        }
+        write!(f, ")")
+    }
+}
+
+/// Version argument in XMLROOT.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum XmlRootVersion {
+    /// `VERSION NO VALUE`
+    NoValue,
+    /// `VERSION <expr>`
+    Value(Box<Expr>),
+}
+
+impl fmt::Display for XmlRootVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            XmlRootVersion::NoValue => write!(f, "NO VALUE"),
+            XmlRootVersion::Value(expr) => write!(f, "{expr}"),
+        }
+    }
+}
+
+/// Standalone option in XMLROOT.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum XmlStandalone {
+    /// `YES`
+    Yes,
+    /// `NO`
+    No,
+    /// `NO VALUE`
+    NoValue,
+}
+
+impl fmt::Display for XmlStandalone {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            XmlStandalone::Yes => write!(f, "YES"),
+            XmlStandalone::No => write!(f, "NO"),
+            XmlStandalone::NoValue => write!(f, "NO VALUE"),
+        }
+    }
+}
+
+/// `XMLROOT(...)` expression.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct XmlRootExpr {
+    /// XML expression to rewrite.
+    pub expr: Box<Expr>,
+    /// Required version argument.
+    pub version: XmlRootVersion,
+    /// Optional standalone option.
+    pub standalone: Option<XmlStandalone>,
+}
+
+impl fmt::Display for XmlRootExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "XMLROOT({}, VERSION {}", self.expr, self.version)?;
+        if let Some(standalone) = &self.standalone {
+            write!(f, ", STANDALONE {standalone}")?;
+        }
+        write!(f, ")")
+    }
+}
+
+/// Optional indentation behavior in XMLSERIALIZE.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum XmlIndentOption {
+    /// `INDENT`
+    Indent,
+    /// `NO INDENT`
+    NoIndent,
+}
+
+impl fmt::Display for XmlIndentOption {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            XmlIndentOption::Indent => write!(f, "INDENT"),
+            XmlIndentOption::NoIndent => write!(f, "NO INDENT"),
+        }
+    }
+}
+
+/// `XMLSERIALIZE(<mode> <expr> AS <type> [indent-option])`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct XmlSerializeExpr {
+    /// Input XML mode.
+    pub mode: XmlParseMode,
+    /// Expression to serialize.
+    pub expr: Box<Expr>,
+    /// Output SQL data type.
+    pub data_type: DataType,
+    /// Optional indentation behavior.
+    pub indent: Option<XmlIndentOption>,
+}
+
+impl fmt::Display for XmlSerializeExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "XMLSERIALIZE({} {} AS {}",
+            self.mode, self.expr, self.data_type
+        )?;
+        if let Some(indent) = self.indent {
+            write!(f, " {indent}")?;
+        }
+        write!(f, ")")
+    }
+}
+
 /// An SQL expression of any type.
 ///
 /// # Semantics / Type Checking
@@ -1181,6 +1422,20 @@ pub enum Expr {
     /// This can represent ANSI SQL `DATE`, `TIME`, and `TIMESTAMP` literals (such as `DATE '2020-01-01'`),
     /// as well as constants of other types (a non-standard PostgreSQL extension).
     TypedString(TypedString),
+    /// XML concatenation expression: `XMLCONCAT(expr [, ...])`.
+    XmlConcat(Vec<Expr>),
+    /// XML element constructor: `XMLELEMENT(NAME ... [, XMLATTRIBUTES(...)] [, content ...])`.
+    XmlElement(XmlElementExpr),
+    /// XML forest constructor: `XMLFOREST(expr [AS name] [, ...])`.
+    XmlForest(Vec<XmlNamedExpr>),
+    /// XML parse expression: `XMLPARSE(CONTENT|DOCUMENT expr)`.
+    XmlParse(XmlParseExpr),
+    /// XML processing instruction constructor: `XMLPI(NAME target [, content])`.
+    XmlPi(XmlPiExpr),
+    /// XML root mutator: `XMLROOT(expr, VERSION ... [, STANDALONE ...])`.
+    XmlRoot(XmlRootExpr),
+    /// XML serialization expression: `XMLSERIALIZE(CONTENT|DOCUMENT expr AS type [INDENT|NO INDENT])`.
+    XmlSerialize(XmlSerializeExpr),
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
@@ -1970,6 +2225,15 @@ impl fmt::Display for Expr {
             Expr::Value(v) => write!(f, "{v}"),
             Expr::Prefixed { prefix, value } => write!(f, "{prefix} {value}"),
             Expr::TypedString(ts) => ts.fmt(f),
+            Expr::XmlConcat(exprs) => write!(f, "XMLCONCAT({})", display_comma_separated(exprs)),
+            Expr::XmlElement(xml_element) => write!(f, "{xml_element}"),
+            Expr::XmlForest(items) => {
+                write!(f, "XMLFOREST({})", display_comma_separated(items))
+            }
+            Expr::XmlParse(xml_parse) => write!(f, "{xml_parse}"),
+            Expr::XmlPi(xml_pi) => write!(f, "{xml_pi}"),
+            Expr::XmlRoot(xml_root) => write!(f, "{xml_root}"),
+            Expr::XmlSerialize(xml_serialize) => write!(f, "{xml_serialize}"),
             Expr::Function(fun) => fun.fmt(f),
             Expr::Case {
                 case_token: _,

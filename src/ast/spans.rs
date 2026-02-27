@@ -1517,6 +1517,34 @@ impl Spanned for Expr {
             Expr::Nested(expr) => expr.span(),
             Expr::Value(value) => value.span(),
             Expr::TypedString(TypedString { value, .. }) => value.span(),
+            Expr::XmlConcat(exprs) => union_spans(exprs.iter().map(|expr| expr.span())),
+            Expr::XmlElement(xml_element) => union_spans(
+                iter::once(xml_element.name.span)
+                    .chain(
+                        xml_element
+                            .attributes
+                            .as_ref()
+                            .into_iter()
+                            .flatten()
+                            .flat_map(|attr| {
+                                iter::once(attr.expr.span())
+                                    .chain(attr.alias.as_ref().map(|ident| ident.span))
+                            }),
+                    )
+                    .chain(xml_element.content.iter().map(|expr| expr.span())),
+            ),
+            Expr::XmlForest(items) => union_spans(items.iter().flat_map(|item| {
+                iter::once(item.expr.span()).chain(item.alias.as_ref().map(|ident| ident.span))
+            })),
+            Expr::XmlParse(xml_parse) => xml_parse.expr.span(),
+            Expr::XmlPi(xml_pi) => union_spans(
+                iter::once(xml_pi.name.span).chain(xml_pi.content.as_ref().map(|expr| expr.span())),
+            ),
+            Expr::XmlRoot(xml_root) => xml_root.expr.span().union_opt(&match &xml_root.version {
+                crate::ast::XmlRootVersion::NoValue => None,
+                crate::ast::XmlRootVersion::Value(expr) => Some(expr.span()),
+            }),
+            Expr::XmlSerialize(xml_serialize) => xml_serialize.expr.span(),
             Expr::Function(function) => function.span(),
             Expr::GroupingSets(vec) => {
                 union_spans(vec.iter().flat_map(|i| i.iter().map(|k| k.span())))

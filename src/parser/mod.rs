@@ -5100,7 +5100,14 @@ impl<'a> Parser<'a> {
         let persistent = dialect_of!(self is DuckDbDialect)
             && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
         let create_view_params = self.parse_create_view_params()?;
-        if self.parse_keyword(Keyword::TABLE) {
+        if self.parse_keywords(&[Keyword::TEXT, Keyword::SEARCH]) {
+            if or_replace || or_alter || temporary || global.is_some() || transient || persistent {
+                return Err(ParserError::ParserError(
+                    "CREATE TEXT SEARCH does not support CREATE modifiers".to_string(),
+                ));
+            }
+            self.parse_create_text_search().map(Into::into)
+        } else if self.parse_keyword(Keyword::TABLE) {
             self.parse_create_table(or_replace, temporary, global, transient)
                 .map(Into::into)
         } else if self.peek_keyword(Keyword::MATERIALIZED)
@@ -5171,6 +5178,145 @@ impl<'a> Parser<'a> {
         } else {
             self.expected_ref("an object type after CREATE", self.peek_token_ref())
         }
+    }
+
+    fn parse_text_search_object_type(&mut self) -> Result<TextSearchObjectType, ParserError> {
+        match self.expect_one_of_keywords(&[
+            Keyword::DICTIONARY,
+            Keyword::CONFIGURATION,
+            Keyword::TEMPLATE,
+            Keyword::PARSER,
+        ])? {
+            Keyword::DICTIONARY => Ok(TextSearchObjectType::Dictionary),
+            Keyword::CONFIGURATION => Ok(TextSearchObjectType::Configuration),
+            Keyword::TEMPLATE => Ok(TextSearchObjectType::Template),
+            Keyword::PARSER => Ok(TextSearchObjectType::Parser),
+            // unreachable because expect_one_of_keywords used above
+            unexpected_keyword => Err(ParserError::ParserError(format!(
+                "Internal parser error: expected any of {{DICTIONARY, CONFIGURATION, TEMPLATE, PARSER}}, got {unexpected_keyword:?}"
+            ))),
+        }
+    }
+
+    fn parse_text_search_option(&mut self) -> Result<SqlOption, ParserError> {
+        let key = self.parse_identifier()?;
+        self.expect_token(&Token::Eq)?;
+        let value = self.parse_expr()?;
+        Ok(SqlOption::KeyValue { key, value })
+    }
+
+    /// Parse a PostgreSQL `CREATE TEXT SEARCH ...` statement.
+    pub fn parse_create_text_search(&mut self) -> Result<CreateTextSearch, ParserError> {
+        let object_type = self.parse_text_search_object_type()?;
+        let name = self.parse_object_name(false)?;
+        self.expect_token(&Token::LParen)?;
+        let options = self.parse_comma_separated(Parser::parse_text_search_option)?;
+        self.expect_token(&Token::RParen)?;
+        Ok(CreateTextSearch {
+            object_type,
+            name,
+            options,
+        })
+    }
+
+    fn parse_alter_text_search_dictionary_option(
+        &mut self,
+    ) -> Result<AlterTextSearchDictionaryOption, ParserError> {
+        let key = self.parse_identifier()?;
+        let value = if self.consume_token(&Token::Eq) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+        Ok(AlterTextSearchDictionaryOption { key, value })
+    }
+
+    /// Parse a PostgreSQL `ALTER TEXT SEARCH ...` statement.
+    pub fn parse_alter_text_search(&mut self) -> Result<AlterTextSearch, ParserError> {
+        let object_type = self.parse_text_search_object_type()?;
+        let name = self.parse_object_name(false)?;
+
+        let operation = match object_type {
+            TextSearchObjectType::Dictionary => {
+                if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+                    AlterTextSearchOperation::RenameTo {
+                        new_name: self.parse_identifier()?,
+                    }
+                } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+                    AlterTextSearchOperation::OwnerTo(self.parse_owner()?)
+                } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+                    AlterTextSearchOperation::SetSchema {
+                        schema_name: self.parse_object_name(false)?,
+                    }
+                } else if self.consume_token(&Token::LParen) {
+                    let options = self
+                        .parse_comma_separated(Parser::parse_alter_text_search_dictionary_option)?;
+                    self.expect_token(&Token::RParen)?;
+                    AlterTextSearchOperation::SetOptions { options }
+                } else {
+                    return self.expected_ref(
+                        "RENAME TO, OWNER TO, SET SCHEMA, or (...) after ALTER TEXT SEARCH DICTIONARY",
+                        self.peek_token_ref(),
+                    );
+                }
+            }
+            TextSearchObjectType::Configuration => {
+                if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+                    AlterTextSearchOperation::RenameTo {
+                        new_name: self.parse_identifier()?,
+                    }
+                } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+                    AlterTextSearchOperation::OwnerTo(self.parse_owner()?)
+                } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+                    AlterTextSearchOperation::SetSchema {
+                        schema_name: self.parse_object_name(false)?,
+                    }
+                } else {
+                    return self.expected_ref(
+                        "RENAME TO, OWNER TO, or SET SCHEMA after ALTER TEXT SEARCH CONFIGURATION",
+                        self.peek_token_ref(),
+                    );
+                }
+            }
+            TextSearchObjectType::Template => {
+                if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+                    AlterTextSearchOperation::RenameTo {
+                        new_name: self.parse_identifier()?,
+                    }
+                } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+                    AlterTextSearchOperation::SetSchema {
+                        schema_name: self.parse_object_name(false)?,
+                    }
+                } else {
+                    return self.expected_ref(
+                        "RENAME TO or SET SCHEMA after ALTER TEXT SEARCH TEMPLATE",
+                        self.peek_token_ref(),
+                    );
+                }
+            }
+            TextSearchObjectType::Parser => {
+                if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+                    AlterTextSearchOperation::RenameTo {
+                        new_name: self.parse_identifier()?,
+                    }
+                } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+                    AlterTextSearchOperation::SetSchema {
+                        schema_name: self.parse_object_name(false)?,
+                    }
+                } else {
+                    return self.expected_ref(
+                        "RENAME TO or SET SCHEMA after ALTER TEXT SEARCH PARSER",
+                        self.peek_token_ref(),
+                    );
+                }
+            }
+        };
+
+        Ok(AlterTextSearch {
+            object_type,
+            name,
+            operation,
+        })
     }
 
     fn parse_create_user(&mut self, or_replace: bool) -> Result<CreateUser, ParserError> {
@@ -10428,6 +10574,10 @@ impl<'a> Parser<'a> {
 
     /// Parse an `ALTER <object>` statement and dispatch to the appropriate alter handler.
     pub fn parse_alter(&mut self) -> Result<Statement, ParserError> {
+        if self.parse_keywords(&[Keyword::TEXT, Keyword::SEARCH]) {
+            return self.parse_alter_text_search().map(Into::into);
+        }
+
         let object_type = self.expect_one_of_keywords(&[
             Keyword::VIEW,
             Keyword::TYPE,
@@ -10487,7 +10637,7 @@ impl<'a> Parser<'a> {
             Keyword::USER => self.parse_alter_user().map(Into::into),
             // unreachable because expect_one_of_keywords used above
             unexpected_keyword => Err(ParserError::ParserError(
-                format!("Internal parser error: expected any of {{VIEW, TYPE, TABLE, INDEX, ROLE, POLICY, CONNECTOR, ICEBERG, SCHEMA, USER, OPERATOR}}, got {unexpected_keyword:?}"),
+                format!("Internal parser error: expected any of {{VIEW, TYPE, TABLE, INDEX, ROLE, POLICY, CONNECTOR, ICEBERG, SCHEMA, USER, OPERATOR, TEXT SEARCH}}, got {unexpected_keyword:?}"),
             )),
         }
     }

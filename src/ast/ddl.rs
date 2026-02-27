@@ -5430,6 +5430,151 @@ impl Spanned for AlterFunction {
     }
 }
 
+/// PostgreSQL text search object kind.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TextSearchObjectType {
+    /// `DICTIONARY`
+    Dictionary,
+    /// `CONFIGURATION`
+    Configuration,
+    /// `TEMPLATE`
+    Template,
+    /// `PARSER`
+    Parser,
+}
+
+impl fmt::Display for TextSearchObjectType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TextSearchObjectType::Dictionary => write!(f, "DICTIONARY"),
+            TextSearchObjectType::Configuration => write!(f, "CONFIGURATION"),
+            TextSearchObjectType::Template => write!(f, "TEMPLATE"),
+            TextSearchObjectType::Parser => write!(f, "PARSER"),
+        }
+    }
+}
+
+/// PostgreSQL `CREATE TEXT SEARCH ...` statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateTextSearch {
+    /// The specific text search object type.
+    pub object_type: TextSearchObjectType,
+    /// Object name.
+    pub name: ObjectName,
+    /// Parenthesized options.
+    pub options: Vec<SqlOption>,
+}
+
+impl fmt::Display for CreateTextSearch {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CREATE TEXT SEARCH {} {} ({})",
+            self.object_type,
+            self.name,
+            display_comma_separated(&self.options)
+        )
+    }
+}
+
+impl Spanned for CreateTextSearch {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}
+
+/// Option assignment used by `ALTER TEXT SEARCH DICTIONARY ... ( ... )`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterTextSearchDictionaryOption {
+    /// Option name.
+    pub key: Ident,
+    /// Optional value (`option [= value]`).
+    pub value: Option<Expr>,
+}
+
+impl fmt::Display for AlterTextSearchDictionaryOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.value {
+            Some(value) => write!(f, "{} = {}", self.key, value),
+            None => write!(f, "{}", self.key),
+        }
+    }
+}
+
+/// Operation for PostgreSQL `ALTER TEXT SEARCH ...`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterTextSearchOperation {
+    /// `RENAME TO new_name`
+    RenameTo {
+        /// New name.
+        new_name: Ident,
+    },
+    /// `OWNER TO ...`
+    OwnerTo(Owner),
+    /// `SET SCHEMA schema_name`
+    SetSchema {
+        /// Target schema.
+        schema_name: ObjectName,
+    },
+    /// `( option [= value] [, ...] )`
+    SetOptions {
+        /// Dictionary options to apply.
+        options: Vec<AlterTextSearchDictionaryOption>,
+    },
+}
+
+impl fmt::Display for AlterTextSearchOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterTextSearchOperation::RenameTo { new_name } => write!(f, "RENAME TO {new_name}"),
+            AlterTextSearchOperation::OwnerTo(owner) => write!(f, "OWNER TO {owner}"),
+            AlterTextSearchOperation::SetSchema { schema_name } => {
+                write!(f, "SET SCHEMA {schema_name}")
+            }
+            AlterTextSearchOperation::SetOptions { options } => {
+                write!(f, "({})", display_comma_separated(options))
+            }
+        }
+    }
+}
+
+/// PostgreSQL `ALTER TEXT SEARCH ...` statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterTextSearch {
+    /// The specific text search object type.
+    pub object_type: TextSearchObjectType,
+    /// Object name.
+    pub name: ObjectName,
+    /// Operation to apply.
+    pub operation: AlterTextSearchOperation,
+}
+
+impl fmt::Display for AlterTextSearch {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "ALTER TEXT SEARCH {} {} {}",
+            self.object_type, self.name, self.operation
+        )
+    }
+}
+
+impl Spanned for AlterTextSearch {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}
+
 /// CREATE POLICY statement.
 ///
 /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)

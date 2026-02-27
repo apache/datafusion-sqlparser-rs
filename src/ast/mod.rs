@@ -876,6 +876,17 @@ pub enum Expr {
     IsDistinctFrom(Box<Expr>, Box<Expr>),
     /// `IS NOT DISTINCT FROM` operator
     IsNotDistinctFrom(Box<Expr>, Box<Expr>),
+    /// `<expr> IS [NOT] JSON [VALUE|SCALAR|ARRAY|OBJECT] [WITH|WITHOUT UNIQUE [KEYS]]`
+    IsJson {
+        /// Expression being tested.
+        expr: Box<Expr>,
+        /// Optional JSON shape constraint.
+        kind: Option<JsonPredicateType>,
+        /// Optional duplicate-key handling constraint for JSON objects.
+        unique_keys: Option<JsonKeyUniqueness>,
+        /// `true` when `NOT` is present.
+        negated: bool,
+    },
     /// `<expr> IS [ NOT ] [ form ] NORMALIZED`
     IsNormalized {
         /// Expression being tested.
@@ -1685,6 +1696,25 @@ impl fmt::Display for Expr {
             Expr::IsNotNull(ast) => write!(f, "{ast} IS NOT NULL"),
             Expr::IsUnknown(ast) => write!(f, "{ast} IS UNKNOWN"),
             Expr::IsNotUnknown(ast) => write!(f, "{ast} IS NOT UNKNOWN"),
+            Expr::IsJson {
+                expr,
+                kind,
+                unique_keys,
+                negated,
+            } => {
+                write!(f, "{expr} IS ")?;
+                if *negated {
+                    write!(f, "NOT ")?;
+                }
+                write!(f, "JSON")?;
+                if let Some(kind) = kind {
+                    write!(f, " {kind}")?;
+                }
+                if let Some(unique_keys) = unique_keys {
+                    write!(f, " {unique_keys}")?;
+                }
+                Ok(())
+            }
             Expr::InList {
                 expr,
                 list,
@@ -8105,6 +8135,52 @@ pub enum AnalyzeFormat {
     TRADITIONAL,
     /// Tree-style explain output.
     TREE,
+}
+
+/// Optional type constraint for `IS JSON`.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum JsonPredicateType {
+    /// `VALUE` form.
+    Value,
+    /// `SCALAR` form.
+    Scalar,
+    /// `ARRAY` form.
+    Array,
+    /// `OBJECT` form.
+    Object,
+}
+
+impl fmt::Display for JsonPredicateType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JsonPredicateType::Value => write!(f, "VALUE"),
+            JsonPredicateType::Scalar => write!(f, "SCALAR"),
+            JsonPredicateType::Array => write!(f, "ARRAY"),
+            JsonPredicateType::Object => write!(f, "OBJECT"),
+        }
+    }
+}
+
+/// Optional duplicate-key handling for `IS JSON`.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum JsonKeyUniqueness {
+    /// `WITH UNIQUE KEYS` form.
+    WithUniqueKeys,
+    /// `WITHOUT UNIQUE KEYS` form.
+    WithoutUniqueKeys,
+}
+
+impl fmt::Display for JsonKeyUniqueness {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JsonKeyUniqueness::WithUniqueKeys => write!(f, "WITH UNIQUE KEYS"),
+            JsonKeyUniqueness::WithoutUniqueKeys => write!(f, "WITHOUT UNIQUE KEYS"),
+        }
+    }
 }
 
 impl fmt::Display for AnalyzeFormat {

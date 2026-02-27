@@ -39,4 +39,8 @@ impl Dialect for AnsiDialect {
     fn supports_nested_comments(&self) -> bool {
         true
     }
+
+    fn supports_is_json_predicate(&self) -> bool {
+        true
+    }
 }

@@ -1399,6 +1399,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports the `IS [NOT] JSON` predicate.
+    fn supports_is_json_predicate(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect allows an optional `SIGNED` suffix after integer data types.
     ///
     /// Example:

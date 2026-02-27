@@ -935,6 +935,10 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::SEQUENCE => {
                 (CommentObject::Sequence, self.parse_object_name(false)?)
             }
+            Token::Word(w) if w.keyword == Keyword::STATISTICS => (
+                CommentObject::Statistics,
+                self.parse_pg_object_name_strict()?,
+            ),
             Token::Word(w) if w.keyword == Keyword::TABLE => {
                 (CommentObject::Table, self.parse_object_name(false)?)
             }
@@ -5129,6 +5133,28 @@ impl<'a> Parser<'a> {
             self.parse_create_secret(or_replace, temporary, persistent)
         } else if self.parse_keyword(Keyword::USER) {
             self.parse_create_user(or_replace).map(Into::into)
+        } else if self.peek_keyword(Keyword::STATISTICS) {
+            let loc = self.peek_token_ref().span.start;
+            self.expect_keyword_is(Keyword::STATISTICS)?;
+            if or_replace {
+                return parser_err!("Cannot specify OR REPLACE in CREATE STATISTICS", loc);
+            }
+            if or_alter {
+                return parser_err!("Cannot specify OR ALTER in CREATE STATISTICS", loc);
+            }
+            if global.is_some() {
+                return parser_err!("Cannot specify LOCAL or GLOBAL in CREATE STATISTICS", loc);
+            }
+            if transient {
+                return parser_err!("Cannot specify TRANSIENT in CREATE STATISTICS", loc);
+            }
+            if temporary {
+                return parser_err!("Cannot specify TEMPORARY in CREATE STATISTICS", loc);
+            }
+            if persistent {
+                return parser_err!("Cannot specify PERSISTENT in CREATE STATISTICS", loc);
+            }
+            self.parse_create_statistics().map(Into::into)
         } else if or_replace {
             self.expected_ref(
                 "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION after CREATE OR REPLACE",
@@ -5169,6 +5195,187 @@ impl<'a> Parser<'a> {
             self.parse_pg_create_server()
         } else {
             self.expected_ref("an object type after CREATE", self.peek_token_ref())
+        }
+    }
+
+    /// Parse a `CREATE STATISTICS` statement.
+    pub fn parse_create_statistics(&mut self) -> Result<CreateStatistics, ParserError> {
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let name = if self.peek_keyword(Keyword::ON) || self.peek_token_ref().token == Token::LParen
+        {
+            None
+        } else {
+            Some(self.parse_pg_object_name_strict()?)
+        };
+
+        if if_not_exists && name.is_none() {
+            return self.expected_ref("statistics name after IF NOT EXISTS", self.peek_token_ref());
+        }
+
+        let statistics_types = if self.consume_token(&Token::LParen) {
+            let types = self.parse_comma_separated(|p| p.parse_statistics_type())?;
+            self.expect_token(&Token::RParen)?;
+            types
+        } else {
+            vec![]
+        };
+
+        self.expect_keyword_is(Keyword::ON)?;
+        let columns = self.parse_comma_separated(Parser::parse_create_statistics_param)?;
+        self.expect_keyword_is(Keyword::FROM)?;
+        let from = self.parse_comma_separated(Parser::parse_table_and_joins)?;
+        // `parse_table_and_joins` is intentionally permissive and supports legacy
+        // forms (including single-quoted aliases) for broad compatibility.
+        // PostgreSQL `CREATE STATISTICS` is stricter, so we enforce those rules
+        // here without tightening FROM parsing globally.
+        self.enforce_pg_statistics_identifier_rules_in_from(&from)?;
+
+        Ok(CreateStatistics {
+            if_not_exists,
+            name,
+            statistics_types,
+            columns,
+            from,
+        })
+    }
+
+    /// Enforce PostgreSQL identifier rules for `CREATE STATISTICS ... FROM`.
+    ///
+    /// This pass is required because `CREATE STATISTICS` uses PostgreSQL object
+    /// name semantics for relation and alias identifiers, while the shared table
+    /// parser accepts additional legacy forms in other contexts.
+    ///
+    /// The parser already uses this post-parse pattern for context-specific
+    /// constraints in other places (for example, `parse_all_or_distinct`,
+    /// `parse_duplicate_treatment`, DROP option-combination checks, and
+    /// `ALTER STATISTICS IF EXISTS` operation checks).
+    fn enforce_pg_statistics_identifier_rules_in_from(
+        &self,
+        from: &[TableWithJoins],
+    ) -> Result<(), ParserError> {
+        for table_with_joins in from {
+            self.enforce_pg_statistics_identifier_rules_in_table_with_joins(table_with_joins)?;
+        }
+        Ok(())
+    }
+
+    fn enforce_pg_statistics_identifier_rules_in_table_with_joins(
+        &self,
+        table_with_joins: &TableWithJoins,
+    ) -> Result<(), ParserError> {
+        self.enforce_pg_statistics_identifier_rules_in_table_factor(&table_with_joins.relation)?;
+        for join in &table_with_joins.joins {
+            self.enforce_pg_statistics_identifier_rules_in_table_factor(&join.relation)?;
+        }
+        Ok(())
+    }
+
+    fn enforce_pg_statistics_identifier_rules_in_table_factor(
+        &self,
+        relation: &TableFactor,
+    ) -> Result<(), ParserError> {
+        // Recurse through wrappers so strict identifier checks are applied to
+        // every relation/alias position reachable from CREATE STATISTICS FROM.
+        match relation {
+            TableFactor::Table { name, alias, .. }
+            | TableFactor::Function { name, alias, .. }
+            | TableFactor::SemanticView { name, alias, .. } => {
+                self.enforce_pg_object_name_identifier_rules(name)?;
+                self.enforce_pg_identifier_rules_in_table_alias(alias.as_ref())
+            }
+            TableFactor::NestedJoin {
+                table_with_joins,
+                alias,
+            } => {
+                self.enforce_pg_statistics_identifier_rules_in_table_with_joins(table_with_joins)?;
+                self.enforce_pg_identifier_rules_in_table_alias(alias.as_ref())
+            }
+            TableFactor::Pivot { table, alias, .. }
+            | TableFactor::Unpivot { table, alias, .. }
+            | TableFactor::MatchRecognize { table, alias, .. } => {
+                self.enforce_pg_statistics_identifier_rules_in_table_factor(table)?;
+                self.enforce_pg_identifier_rules_in_table_alias(alias.as_ref())
+            }
+            TableFactor::Derived { alias, .. }
+            | TableFactor::TableFunction { alias, .. }
+            | TableFactor::UNNEST { alias, .. }
+            | TableFactor::JsonTable { alias, .. }
+            | TableFactor::OpenJsonTable { alias, .. }
+            | TableFactor::XmlTable { alias, .. } => {
+                self.enforce_pg_identifier_rules_in_table_alias(alias.as_ref())
+            }
+        }
+    }
+
+    fn enforce_pg_identifier_rules_in_table_alias(
+        &self,
+        alias: Option<&TableAlias>,
+    ) -> Result<(), ParserError> {
+        if let Some(alias) = alias {
+            self.enforce_pg_identifier_token_rules(&alias.name)?;
+            for column in &alias.columns {
+                self.enforce_pg_identifier_token_rules(&column.name)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn enforce_pg_identifier_token_rules(&self, ident: &Ident) -> Result<(), ParserError> {
+        // Single-quoted text is a string literal in PostgreSQL, not an identifier.
+        if ident.quote_style == Some('\'') {
+            return self.expected(
+                "identifier",
+                TokenWithSpan::new(Token::SingleQuotedString(ident.value.clone()), ident.span),
+            );
+        }
+        Ok(())
+    }
+
+    fn enforce_pg_object_name_identifier_rules(
+        &self,
+        object_name: &ObjectName,
+    ) -> Result<(), ParserError> {
+        for part in &object_name.0 {
+            match part {
+                ObjectNamePart::Identifier(ident) => {
+                    self.enforce_pg_identifier_token_rules(ident)?
+                }
+                ObjectNamePart::Function(func) => {
+                    self.enforce_pg_identifier_token_rules(&func.name)?
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn parse_statistics_type(&mut self) -> Result<StatisticsType, ParserError> {
+        let next_token = self.next_token();
+        let ident = match next_token.token {
+            Token::Word(w) => w.into_ident(next_token.span),
+            _ => return self.expected("identifier", next_token),
+        };
+        if ident.quote_style.is_none() {
+            if ident.value.eq_ignore_ascii_case("ndistinct") {
+                return Ok(StatisticsType::Ndistinct);
+            } else if ident.value.eq_ignore_ascii_case("dependencies") {
+                return Ok(StatisticsType::Dependencies);
+            } else if ident.value.eq_ignore_ascii_case("mcv") {
+                return Ok(StatisticsType::Mcv);
+            }
+        }
+        Ok(StatisticsType::Other(ident))
+    }
+
+    fn parse_create_statistics_param(&mut self) -> Result<Expr, ParserError> {
+        let expr = self.parse_expr()?;
+        match &expr {
+            Expr::Identifier(_) => Ok(expr),
+            Expr::Function(Function { over: None, .. }) => Ok(expr),
+            Expr::Nested(_) => Ok(expr),
+            _ => parser_err!(
+                "Expected column reference, windowless function, or parenthesized expression in CREATE STATISTICS ON list",
+                expr.span().start
+            ),
         }
     }
 
@@ -7213,6 +7420,8 @@ impl<'a> Parser<'a> {
             ObjectType::Database
         } else if self.parse_keyword(Keyword::SEQUENCE) {
             ObjectType::Sequence
+        } else if self.parse_keyword(Keyword::STATISTICS) {
+            ObjectType::Statistics
         } else if self.parse_keyword(Keyword::STAGE) {
             ObjectType::Stage
         } else if self.parse_keyword(Keyword::TYPE) {
@@ -7248,14 +7457,18 @@ impl<'a> Parser<'a> {
             };
         } else {
             return self.expected_ref(
-                "CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW or USER after DROP",
+                "CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STATISTICS, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW or USER after DROP",
                 self.peek_token_ref(),
             );
         };
         // Many dialects support the non-standard `IF EXISTS` clause and allow
         // specifying multiple objects to delete in a single statement
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-        let names = self.parse_comma_separated(|p| p.parse_object_name(false))?;
+        let names = if object_type == ObjectType::Statistics {
+            self.parse_comma_separated(|p| p.parse_pg_object_name_strict())?
+        } else {
+            self.parse_comma_separated(|p| p.parse_object_name(false))?
+        };
 
         let loc = self.peek_token_ref().span.start;
         let cascade = self.parse_keyword(Keyword::CASCADE);
@@ -7275,6 +7488,15 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+        if object_type == ObjectType::Statistics && purge {
+            return parser_err!("Cannot specify PURGE in DROP STATISTICS", loc);
+        }
+        if object_type == ObjectType::Statistics && temporary {
+            return parser_err!("Cannot specify TEMPORARY in DROP STATISTICS", loc);
+        }
+        if object_type == ObjectType::Statistics && table.is_some() {
+            return parser_err!("Cannot specify ON in DROP STATISTICS", loc);
+        }
         Ok(Statement::Drop {
             object_type,
             if_exists,
@@ -10460,6 +10682,7 @@ impl<'a> Parser<'a> {
             Keyword::SCHEMA,
             Keyword::USER,
             Keyword::OPERATOR,
+            Keyword::STATISTICS,
         ])?;
         match object_type {
             Keyword::SCHEMA => {
@@ -10505,10 +10728,57 @@ impl<'a> Parser<'a> {
             Keyword::POLICY => self.parse_alter_policy().map(Into::into),
             Keyword::CONNECTOR => self.parse_alter_connector(),
             Keyword::USER => self.parse_alter_user().map(Into::into),
+            Keyword::STATISTICS => self.parse_alter_statistics().map(Into::into),
             // unreachable because expect_one_of_keywords used above
             unexpected_keyword => Err(ParserError::ParserError(
-                format!("Internal parser error: expected any of {{VIEW, TYPE, TABLE, INDEX, ROLE, POLICY, CONNECTOR, ICEBERG, SCHEMA, USER, OPERATOR}}, got {unexpected_keyword:?}"),
+                format!("Internal parser error: expected any of {{VIEW, TYPE, TABLE, INDEX, ROLE, POLICY, CONNECTOR, ICEBERG, SCHEMA, USER, OPERATOR, STATISTICS}}, got {unexpected_keyword:?}"),
             )),
+        }
+    }
+
+    /// Parse an `ALTER STATISTICS` statement.
+    pub fn parse_alter_statistics(&mut self) -> Result<AlterStatistics, ParserError> {
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let name = self.parse_pg_object_name_strict()?;
+
+        let operation = if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            AlterStatisticsOperation::RenameTo {
+                new_name: ObjectName::from(vec![self.parse_pg_identifier_strict()?]),
+            }
+        } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            AlterStatisticsOperation::OwnerTo(self.parse_owner()?)
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+            AlterStatisticsOperation::SetSchema {
+                schema_name: ObjectName::from(vec![self.parse_pg_identifier_strict()?]),
+            }
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::STATISTICS]) {
+            AlterStatisticsOperation::SetStatistics {
+                target: self.parse_alter_statistics_target()?,
+            }
+        } else {
+            return self.expected_ref(
+                "RENAME TO, OWNER TO, SET SCHEMA, or SET STATISTICS after ALTER STATISTICS",
+                self.peek_token_ref(),
+            );
+        };
+        if if_exists && !matches!(operation, AlterStatisticsOperation::SetStatistics { .. }) {
+            return parser_err!(
+                "IF EXISTS is only supported with ALTER STATISTICS ... SET STATISTICS",
+                self.peek_token_ref().span.start
+            );
+        }
+        Ok(AlterStatistics {
+            if_exists,
+            name,
+            operation,
+        })
+    }
+
+    fn parse_alter_statistics_target(&mut self) -> Result<AlterStatisticsTarget, ParserError> {
+        if self.parse_keyword(Keyword::DEFAULT) {
+            Ok(AlterStatisticsTarget::Default)
+        } else {
+            Ok(AlterStatisticsTarget::Value(self.parse_signed_integer()?))
         }
     }
 
@@ -12408,7 +12678,9 @@ impl<'a> Parser<'a> {
                 Ok(Some(w.into_ident(next_token.span)))
             }
             // For backwards-compatibility, we accept quoted strings as aliases regardless of the context.
-            Token::SingleQuotedString(s) => Ok(Some(Ident::with_quote('\'', s))),
+            Token::SingleQuotedString(s) => {
+                Ok(Some(Ident::with_quote_and_span('\'', next_token.span, s)))
+            }
             Token::DoubleQuotedString(s) => Ok(Some(Ident::with_quote('\"', s))),
             _ => {
                 if after_as {
@@ -12790,10 +13062,39 @@ impl<'a> Parser<'a> {
         let next_token = self.next_token();
         match next_token.token {
             Token::Word(w) => Ok(w.into_ident(next_token.span)),
-            Token::SingleQuotedString(s) => Ok(Ident::with_quote('\'', s)),
+            Token::SingleQuotedString(s) => {
+                Ok(Ident::with_quote_and_span('\'', next_token.span, s))
+            }
             Token::DoubleQuotedString(s) => Ok(Ident::with_quote('\"', s)),
             _ => self.expected("identifier", next_token),
         }
+    }
+
+    /// Parse a PostgreSQL identifier token for contexts where single-quoted
+    /// string literals must not be accepted as identifiers.
+    fn parse_pg_identifier_strict(&mut self) -> Result<Ident, ParserError> {
+        let next_token = self.next_token();
+        match next_token.token {
+            Token::Word(w) => Ok(w.into_ident(next_token.span)),
+            Token::DoubleQuotedString(s) => {
+                Ok(Ident::with_quote_and_span('\"', next_token.span, s))
+            }
+            _ => self.expected("identifier", next_token),
+        }
+    }
+
+    /// Parse a PostgreSQL object name for contexts that disallow single-quoted
+    /// identifier parts.
+    fn parse_pg_object_name_strict(&mut self) -> Result<ObjectName, ParserError> {
+        let mut parts = vec![ObjectNamePart::Identifier(
+            self.parse_pg_identifier_strict()?,
+        )];
+        while self.consume_token(&Token::Period) {
+            parts.push(ObjectNamePart::Identifier(
+                self.parse_pg_identifier_strict()?,
+            ));
+        }
+        Ok(ObjectName(parts))
     }
 
     /// On BigQuery, hyphens are permitted in unquoted identifiers inside of a FROM or

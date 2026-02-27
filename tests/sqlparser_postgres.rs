@@ -25,7 +25,7 @@ mod test_utils;
 use helpers::attached_token::AttachedToken;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
-use sqlparser::parser::ParserError;
+use sqlparser::parser::{Parser, ParserError};
 use sqlparser::tokenizer::Span;
 use test_utils::*;
 
@@ -8643,4 +8643,422 @@ fn parse_pg_analyze() {
         }
         _ => panic!("Expected Analyze, got: {stmt:?}"),
     }
+}
+
+#[test]
+fn parse_create_statistics() {
+    pg_and_generic().one_statement_parses_to(
+        "CREATE STATISTICS tst ON a, b FROM ext_stats_test",
+        "CREATE STATISTICS tst ON a, b FROM ext_stats_test",
+    );
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE STATISTICS ON (date_trunc('day', d)) FROM ab1",
+        "CREATE STATISTICS ON (date_trunc('day', d)) FROM ab1",
+    );
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE STATISTICS tst ON date_trunc('day', d) FROM ab1",
+        "CREATE STATISTICS tst ON date_trunc('day', d) FROM ab1",
+    );
+
+    let stmt = pg_and_generic().one_statement_parses_to(
+        "CREATE STATISTICS tst (ndistinct, dependencies, mcv) ON (z + 1), z FROM ext_stats_test1",
+        "CREATE STATISTICS tst (NDISTINCT, DEPENDENCIES, MCV) ON (z + 1), z FROM ext_stats_test1",
+    );
+    let Statement::CreateStatistics(create_statistics) = stmt else {
+        panic!("Expected CREATE STATISTICS statement");
+    };
+    assert_eq!(
+        create_statistics.statistics_types,
+        vec![
+            StatisticsType::Ndistinct,
+            StatisticsType::Dependencies,
+            StatisticsType::Mcv
+        ]
+    );
+    assert_eq!(
+        create_statistics.name,
+        Some(ObjectName::from(vec![Ident::new("tst")]))
+    );
+    assert_eq!(create_statistics.columns.len(), 2);
+    assert_eq!(create_statistics.from.len(), 1);
+    assert_eq!(create_statistics.from[0].to_string(), "ext_stats_test1");
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE STATISTICS IF NOT EXISTS ab1_a_b_stats ON a, b FROM ab1",
+        "CREATE STATISTICS IF NOT EXISTS ab1_a_b_stats ON a, b FROM ab1",
+    );
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE STATISTICS tst ON date_trunc('day', d), (case a when 1 then true else false end), b FROM ab1",
+        "CREATE STATISTICS tst ON date_trunc('day', d), (CASE a WHEN 1 THEN true ELSE false END), b FROM ab1",
+    );
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE STATISTICS tst ON date_trunc('day', d), y FROM ext_stats_test",
+        "CREATE STATISTICS tst ON date_trunc('day', d), y FROM ext_stats_test",
+    );
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE STATISTICS tst ON (rank() OVER ()), a FROM ab1",
+        "CREATE STATISTICS tst ON (rank() OVER ()), a FROM ab1",
+    );
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE STATISTICS (ndistinct) ON a, b FROM ab1",
+        "CREATE STATISTICS (NDISTINCT) ON a, b FROM ab1",
+    );
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE STATISTICS tst (unrecognized, \"ndistinct\") ON x FROM ext_stats_test",
+        "CREATE STATISTICS tst (unrecognized, \"ndistinct\") ON x FROM ext_stats_test",
+    );
+    let stmt = pg_and_generic().verified_stmt(
+        "CREATE STATISTICS tst (unrecognized, \"ndistinct\") ON x FROM ext_stats_test",
+    );
+    let Statement::CreateStatistics(create_statistics) = stmt else {
+        panic!("Expected CREATE STATISTICS statement");
+    };
+    assert_eq!(
+        create_statistics.statistics_types,
+        vec![
+            StatisticsType::Other(Ident::new("unrecognized")),
+            StatisticsType::Other(Ident::with_quote('"', "ndistinct"))
+        ]
+    );
+
+    // Relation existence and duplicate statistic targets are validated by PostgreSQL's
+    // semantic analysis, so these should still parse.
+    pg_and_generic().one_statement_parses_to(
+        "CREATE STATISTICS tst ON a, b FROM nonexistent",
+        "CREATE STATISTICS tst ON a, b FROM nonexistent",
+    );
+    pg_and_generic().one_statement_parses_to(
+        "CREATE STATISTICS tst ON x, x, y FROM ext_stats_test",
+        "CREATE STATISTICS tst ON x, x, y FROM ext_stats_test",
+    );
+    pg_and_generic().one_statement_parses_to(
+        "CREATE STATISTICS tst ON (x || 'x'), (x || 'x'), (y + 1) FROM ext_stats_test",
+        "CREATE STATISTICS tst ON (x || 'x'), (x || 'x'), (y + 1) FROM ext_stats_test",
+    );
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE STATISTICS tst ON a FROM (VALUES (x)) AS foo",
+        "CREATE STATISTICS tst ON a FROM (VALUES (x)) AS foo",
+    );
+    pg_and_generic().one_statement_parses_to(
+        "CREATE STATISTICS tst ON a FROM foo NATURAL JOIN bar",
+        "CREATE STATISTICS tst ON a FROM foo NATURAL JOIN bar",
+    );
+    pg_and_generic().one_statement_parses_to(
+        "CREATE STATISTICS tst ON a FROM (SELECT * FROM ext_stats_test) AS foo",
+        "CREATE STATISTICS tst ON a FROM (SELECT * FROM ext_stats_test) AS foo",
+    );
+    pg_and_generic().one_statement_parses_to(
+        "CREATE STATISTICS tst ON a FROM ext_stats_test s TABLESAMPLE system (x)",
+        "CREATE STATISTICS tst ON a FROM ext_stats_test s TABLESAMPLE SYSTEM (x)",
+    );
+    pg_and_generic().one_statement_parses_to(
+        "CREATE STATISTICS tst ON a FROM XMLTABLE('foo' PASSING 'bar' COLUMNS a text)",
+        "CREATE STATISTICS tst ON a FROM XMLTABLE('foo' PASSING 'bar' COLUMNS a TEXT)",
+    );
+    pg_and_generic().one_statement_parses_to(
+        "CREATE STATISTICS tst ON a FROM JSON_TABLE('[1,2]', '$[*]' COLUMNS(item INT PATH '$')) AS jt",
+        "CREATE STATISTICS tst ON a FROM JSON_TABLE('[1,2]', '$[*]' COLUMNS(item INT PATH '$')) AS jt",
+    );
+    pg_and_generic().one_statement_parses_to(
+        "CREATE STATISTICS alt_stat2 ON a FROM tftest(1)",
+        "CREATE STATISTICS alt_stat2 ON a FROM tftest(1)",
+    );
+}
+
+#[test]
+fn parse_alter_statistics() {
+    assert_eq!(
+        pg_and_generic()
+            .verified_stmt("ALTER STATISTICS ab1_a_b_stats RENAME TO ab1_a_b_stats_new"),
+        Statement::AlterStatistics(AlterStatistics {
+            if_exists: false,
+            name: ObjectName::from(vec![Ident::new("ab1_a_b_stats")]),
+            operation: AlterStatisticsOperation::RenameTo {
+                new_name: ObjectName::from(vec![Ident::new("ab1_a_b_stats_new")]),
+            },
+        })
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER STATISTICS IF EXISTS ab1_a_b_stats SET STATISTICS 0"),
+        Statement::AlterStatistics(AlterStatistics {
+            if_exists: true,
+            name: ObjectName::from(vec![Ident::new("ab1_a_b_stats")]),
+            operation: AlterStatisticsOperation::SetStatistics {
+                target: AlterStatisticsTarget::Value(0),
+            },
+        })
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER STATISTICS ab1_a_b_stats SET STATISTICS DEFAULT"),
+        Statement::AlterStatistics(AlterStatistics {
+            if_exists: false,
+            name: ObjectName::from(vec![Ident::new("ab1_a_b_stats")]),
+            operation: AlterStatisticsOperation::SetStatistics {
+                target: AlterStatisticsTarget::Default,
+            },
+        })
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER STATISTICS ab1_a_b_stats SET STATISTICS -1"),
+        Statement::AlterStatistics(AlterStatistics {
+            if_exists: false,
+            name: ObjectName::from(vec![Ident::new("ab1_a_b_stats")]),
+            operation: AlterStatisticsOperation::SetStatistics {
+                target: AlterStatisticsTarget::Value(-1),
+            },
+        })
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER STATISTICS ab1_a_b_stats OWNER TO CURRENT_USER"),
+        Statement::AlterStatistics(AlterStatistics {
+            if_exists: false,
+            name: ObjectName::from(vec![Ident::new("ab1_a_b_stats")]),
+            operation: AlterStatisticsOperation::OwnerTo(Owner::CurrentUser),
+        })
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER STATISTICS ab1_a_b_stats SET SCHEMA new_schema"),
+        Statement::AlterStatistics(AlterStatistics {
+            if_exists: false,
+            name: ObjectName::from(vec![Ident::new("ab1_a_b_stats")]),
+            operation: AlterStatisticsOperation::SetSchema {
+                schema_name: ObjectName::from(vec![Ident::new("new_schema")]),
+            },
+        })
+    );
+}
+
+#[test]
+fn parse_drop_statistics() {
+    assert_eq!(
+        pg_and_generic().verified_stmt("DROP STATISTICS ab1_a_b_stats"),
+        Statement::Drop {
+            object_type: ObjectType::Statistics,
+            if_exists: false,
+            names: vec![ObjectName::from(vec![Ident::new("ab1_a_b_stats")])],
+            cascade: false,
+            restrict: false,
+            purge: false,
+            temporary: false,
+            table: None,
+        }
+    );
+
+    pg_and_generic().one_statement_parses_to(
+        "DROP STATISTICS IF EXISTS stats_ext_temp, pg_temp.stats_ext_temp",
+        "DROP STATISTICS IF EXISTS stats_ext_temp, pg_temp.stats_ext_temp",
+    );
+}
+
+#[test]
+fn parse_comment_on_statistics() {
+    assert_eq!(
+        pg_and_generic().verified_stmt("COMMENT ON STATISTICS ab1_a_b_stats IS 'new comment'"),
+        Statement::Comment {
+            object_type: CommentObject::Statistics,
+            object_name: ObjectName::from(vec![Ident::new("ab1_a_b_stats")]),
+            comment: Some("new comment".to_string()),
+            if_exists: false,
+        }
+    );
+
+    pg_and_generic().one_statement_parses_to(
+        "COMMENT ON STATISTICS ab1_a_b_stats IS NULL",
+        "COMMENT ON STATISTICS ab1_a_b_stats IS NULL",
+    );
+}
+
+#[test]
+fn parse_statistics_syntax_errors() {
+    assert!(pg_and_generic()
+        .parse_sql_statements("CREATE STATISTICS IF NOT EXISTS ON (a + 1) FROM ext_stats_test")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("CREATE STATISTICS tst ON FROM ext_stats_test")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("CREATE STATISTICS tst ON rank() OVER () FROM ext_stats_test")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("CREATE STATISTICS tst ON rank() OVER (), a FROM ext_stats_test")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("CREATE STATISTICS tst ON x + 1, y FROM ext_stats_test")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("CREATE STATISTICS tst ON t.a, b FROM ext_stats_test")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("CREATE STATISTICS tst ON rank() OVER () + 1, a FROM ext_stats_test")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("CREATE STATISTICS tst ('foo') ON x FROM ext_stats_test")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("CREATE STATISTICS tst ('ndistinct') ON x FROM ext_stats_test")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("CREATE STATISTICS 'tst' ON x FROM ext_stats_test")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("CREATE STATISTICS tst ON a FROM 'ext_stats_test'")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("CREATE TEMPORARY STATISTICS tst ON a FROM ext_stats_test")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("CREATE TRANSIENT STATISTICS tst ON a FROM ext_stats_test")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("CREATE LOCAL STATISTICS tst ON a FROM ext_stats_test")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("CREATE GLOBAL STATISTICS tst ON a FROM ext_stats_test")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("CREATE OR REPLACE STATISTICS tst ON a FROM ext_stats_test")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("CREATE OR ALTER STATISTICS tst ON a FROM ext_stats_test")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("CREATE STATISTICS tst ON a FROM ext_stats_test 's'")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("CREATE STATISTICS tst ON a FROM (SELECT 1) 's'")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements(
+            "CREATE STATISTICS tst ON a FROM JSON_TABLE('[1,2]', '$[*]' COLUMNS(item INT PATH '$')) 'jt'"
+        )
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("ALTER STATISTICS 'ab1_a_b_stats' SET STATISTICS 0")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("DROP STATISTICS 'ab1_a_b_stats'")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("COMMENT ON STATISTICS 'ab1_a_b_stats' IS 'new comment'")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("ALTER STATISTICS ab1_a_b_stats SET STATISTICS")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements(
+            "ALTER STATISTICS IF EXISTS ab1_a_b_stats RENAME TO ab1_a_b_stats_new"
+        )
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("ALTER STATISTICS IF EXISTS ab1_a_b_stats OWNER TO CURRENT_USER")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("ALTER STATISTICS IF EXISTS ab1_a_b_stats SET SCHEMA new_schema")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("ALTER STATISTICS ab1_a_b_stats")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("ALTER STATISTICS ab1_a_b_stats RENAME TO new_schema.ab1_a_b_stats")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("ALTER STATISTICS ab1_a_b_stats SET SCHEMA new_schema.other")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("DROP STATISTICS ab1_a_b_stats ON ab1")
+        .is_err());
+
+    assert!(pg_and_generic()
+        .parse_sql_statements("DROP STATISTICS ab1_a_b_stats PURGE")
+        .is_err());
+
+    assert!(pg()
+        .parse_sql_statements("DROP TEMPORARY STATISTICS ab1_a_b_stats")
+        .is_err());
+
+    assert!(TestedDialects::new(vec![Box::new(GenericDialect {})])
+        .parse_sql_statements("DROP TEMPORARY STATISTICS ab1_a_b_stats")
+        .is_err());
+}
+
+#[test]
+fn parse_statistics_identifier_error_style() {
+    let err = Parser::new(&PostgreSqlDialect {})
+        .try_with_sql("CREATE STATISTICS tst ON a FROM ext_stats_test 's'")
+        .unwrap()
+        .parse_statements()
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("Expected: identifier"),
+        "Expected identifier-style parser error, got: {err}"
+    );
+    assert!(
+        err.contains("Line: 1"),
+        "Expected location info in parser error, got: {err}"
+    );
+}
+
+#[test]
+fn parse_statistics_modifier_error_style() {
+    let err = pg_and_generic()
+        .parse_sql_statements("CREATE OR REPLACE STATISTICS tst ON a FROM ext_stats_test")
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("Cannot specify OR REPLACE in CREATE STATISTICS"),
+        "Expected CREATE STATISTICS modifier error, got: {err}"
+    );
+
+    let err = pg_and_generic()
+        .parse_sql_statements("CREATE OR ALTER STATISTICS tst ON a FROM ext_stats_test")
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("Cannot specify OR ALTER in CREATE STATISTICS"),
+        "Expected CREATE STATISTICS modifier error, got: {err}"
+    );
 }

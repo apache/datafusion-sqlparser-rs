@@ -699,6 +699,7 @@ fn test_duckdb_union_datatype() {
         Statement::CreateTable(CreateTable {
             or_replace: Default::default(),
             temporary: Default::default(),
+            unlogged: Default::default(),
             external: Default::default(),
             global: Default::default(),
             if_not_exists: Default::default(),

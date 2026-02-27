@@ -989,6 +989,33 @@ fn parse_alter_table_owner_to() {
 }
 
 #[test]
+fn parse_alter_table_set_logged_unlogged() {
+    let sql = "ALTER TABLE unlogged1 SET LOGGED";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::AlterTable(AlterTable {
+            name, operations, ..
+        }) => {
+            assert_eq!("unlogged1", name.to_string());
+            assert_eq!(vec![AlterTableOperation::SetLogged], operations);
+        }
+        _ => unreachable!(),
+    }
+    pg_and_generic().one_statement_parses_to(sql, sql);
+
+    let sql = "ALTER TABLE unlogged1 SET UNLOGGED";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::AlterTable(AlterTable {
+            name, operations, ..
+        }) => {
+            assert_eq!("unlogged1", name.to_string());
+            assert_eq!(vec![AlterTableOperation::SetUnlogged], operations);
+        }
+        _ => unreachable!(),
+    }
+    pg_and_generic().one_statement_parses_to(sql, sql);
+}
+
+#[test]
 fn parse_create_table_if_not_exists() {
     let sql = "CREATE TABLE IF NOT EXISTS uk_cities ()";
     let ast = pg_and_generic().verified_stmt(sql);
@@ -5390,6 +5417,51 @@ fn parse_create_table_with_partition_by() {
 }
 
 #[test]
+fn parse_create_unlogged_table() {
+    let sql = "CREATE UNLOGGED TABLE public.unlogged2 (a int primary key)";
+    match pg_and_generic().one_statement_parses_to(
+        sql,
+        "CREATE UNLOGGED TABLE public.unlogged2 (a INT PRIMARY KEY)",
+    ) {
+        Statement::CreateTable(CreateTable { name, unlogged, .. }) => {
+            assert!(unlogged);
+            assert_eq!("public.unlogged2", name.to_string());
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "CREATE UNLOGGED TABLE pg_temp.unlogged3 (a int primary key)";
+    match pg_and_generic().one_statement_parses_to(
+        sql,
+        "CREATE UNLOGGED TABLE pg_temp.unlogged3 (a INT PRIMARY KEY)",
+    ) {
+        Statement::CreateTable(CreateTable { name, unlogged, .. }) => {
+            assert!(unlogged);
+            assert_eq!("pg_temp.unlogged3", name.to_string());
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "CREATE UNLOGGED TABLE unlogged1 (a int) PARTITION BY RANGE (a)";
+    match pg_and_generic().one_statement_parses_to(
+        sql,
+        "CREATE UNLOGGED TABLE unlogged1 (a INT) PARTITION BY RANGE(a)",
+    ) {
+        Statement::CreateTable(CreateTable {
+            name,
+            unlogged,
+            partition_by,
+            ..
+        }) => {
+            assert!(unlogged);
+            assert_eq!("unlogged1", name.to_string());
+            assert!(partition_by.is_some());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_join_constraint_unnest_alias() {
     assert_eq!(
         only(
@@ -6304,6 +6376,7 @@ fn parse_trigger_related_functions() {
         CreateTable {
             or_replace: false,
             temporary: false,
+            unlogged: false,
             external: false,
             global: None,
             dynamic: false,

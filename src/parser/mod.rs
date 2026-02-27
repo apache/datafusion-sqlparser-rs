@@ -5229,7 +5229,7 @@ impl<'a> Parser<'a> {
         // forms (including single-quoted aliases) for broad compatibility.
         // PostgreSQL `CREATE STATISTICS` is stricter, so we enforce those rules
         // here without tightening FROM parsing globally.
-        self.validate_pg_statistics_from_list(&from)?;
+        self.enforce_pg_statistics_identifier_rules_in_from(&from)?;
 
         Ok(CreateStatistics {
             if_not_exists,
@@ -5240,30 +5240,38 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Validate `FROM from_list` after generic table-factor parsing.
+    /// Enforce PostgreSQL identifier rules for `CREATE STATISTICS ... FROM`.
     ///
     /// This pass is required because `CREATE STATISTICS` uses PostgreSQL object
     /// name semantics for relation and alias identifiers, while the shared table
     /// parser accepts additional legacy forms in other contexts.
-    fn validate_pg_statistics_from_list(&self, from: &[TableWithJoins]) -> Result<(), ParserError> {
+    ///
+    /// The parser already uses this post-parse pattern for context-specific
+    /// constraints in other places (for example, `parse_all_or_distinct`,
+    /// `parse_duplicate_treatment`, DROP option-combination checks, and
+    /// `ALTER STATISTICS IF EXISTS` operation checks).
+    fn enforce_pg_statistics_identifier_rules_in_from(
+        &self,
+        from: &[TableWithJoins],
+    ) -> Result<(), ParserError> {
         for table_with_joins in from {
-            self.validate_pg_statistics_table_with_joins(table_with_joins)?;
+            self.enforce_pg_statistics_identifier_rules_in_table_with_joins(table_with_joins)?;
         }
         Ok(())
     }
 
-    fn validate_pg_statistics_table_with_joins(
+    fn enforce_pg_statistics_identifier_rules_in_table_with_joins(
         &self,
         table_with_joins: &TableWithJoins,
     ) -> Result<(), ParserError> {
-        self.validate_pg_statistics_table_factor(&table_with_joins.relation)?;
+        self.enforce_pg_statistics_identifier_rules_in_table_factor(&table_with_joins.relation)?;
         for join in &table_with_joins.joins {
-            self.validate_pg_statistics_table_factor(&join.relation)?;
+            self.enforce_pg_statistics_identifier_rules_in_table_factor(&join.relation)?;
         }
         Ok(())
     }
 
-    fn validate_pg_statistics_table_factor(
+    fn enforce_pg_statistics_identifier_rules_in_table_factor(
         &self,
         relation: &TableFactor,
     ) -> Result<(), ParserError> {
@@ -5273,21 +5281,21 @@ impl<'a> Parser<'a> {
             TableFactor::Table { name, alias, .. }
             | TableFactor::Function { name, alias, .. }
             | TableFactor::SemanticView { name, alias, .. } => {
-                self.validate_no_single_quoted_object_name(name)?;
-                self.validate_pg_statistics_table_alias(alias.as_ref())
+                self.enforce_pg_object_name_identifier_rules(name)?;
+                self.enforce_pg_identifier_rules_in_table_alias(alias.as_ref())
             }
             TableFactor::NestedJoin {
                 table_with_joins,
                 alias,
             } => {
-                self.validate_pg_statistics_table_with_joins(table_with_joins)?;
-                self.validate_pg_statistics_table_alias(alias.as_ref())
+                self.enforce_pg_statistics_identifier_rules_in_table_with_joins(table_with_joins)?;
+                self.enforce_pg_identifier_rules_in_table_alias(alias.as_ref())
             }
             TableFactor::Pivot { table, alias, .. }
             | TableFactor::Unpivot { table, alias, .. }
             | TableFactor::MatchRecognize { table, alias, .. } => {
-                self.validate_pg_statistics_table_factor(table)?;
-                self.validate_pg_statistics_table_alias(alias.as_ref())
+                self.enforce_pg_statistics_identifier_rules_in_table_factor(table)?;
+                self.enforce_pg_identifier_rules_in_table_alias(alias.as_ref())
             }
             TableFactor::Derived { alias, .. }
             | TableFactor::TableFunction { alias, .. }
@@ -5295,25 +5303,25 @@ impl<'a> Parser<'a> {
             | TableFactor::JsonTable { alias, .. }
             | TableFactor::OpenJsonTable { alias, .. }
             | TableFactor::XmlTable { alias, .. } => {
-                self.validate_pg_statistics_table_alias(alias.as_ref())
+                self.enforce_pg_identifier_rules_in_table_alias(alias.as_ref())
             }
         }
     }
 
-    fn validate_pg_statistics_table_alias(
+    fn enforce_pg_identifier_rules_in_table_alias(
         &self,
         alias: Option<&TableAlias>,
     ) -> Result<(), ParserError> {
         if let Some(alias) = alias {
-            self.validate_pg_statistics_identifier(&alias.name)?;
+            self.enforce_pg_identifier_token_rules(&alias.name)?;
             for column in &alias.columns {
-                self.validate_pg_statistics_identifier(&column.name)?;
+                self.enforce_pg_identifier_token_rules(&column.name)?;
             }
         }
         Ok(())
     }
 
-    fn validate_pg_statistics_identifier(&self, ident: &Ident) -> Result<(), ParserError> {
+    fn enforce_pg_identifier_token_rules(&self, ident: &Ident) -> Result<(), ParserError> {
         // Single-quoted text is a string literal in PostgreSQL, not an identifier.
         if ident.quote_style == Some('\'') {
             return self.expected(
@@ -5324,17 +5332,17 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    fn validate_no_single_quoted_object_name(
+    fn enforce_pg_object_name_identifier_rules(
         &self,
         object_name: &ObjectName,
     ) -> Result<(), ParserError> {
         for part in &object_name.0 {
             match part {
                 ObjectNamePart::Identifier(ident) => {
-                    self.validate_pg_statistics_identifier(ident)?
+                    self.enforce_pg_identifier_token_rules(ident)?
                 }
                 ObjectNamePart::Function(func) => {
-                    self.validate_pg_statistics_identifier(&func.name)?
+                    self.enforce_pg_identifier_token_rules(&func.name)?
                 }
             }
         }

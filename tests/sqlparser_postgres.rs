@@ -24,7 +24,7 @@ mod test_utils;
 
 use helpers::attached_token::AttachedToken;
 use sqlparser::ast::*;
-use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
+use sqlparser::dialect::{GenericDialect, MySqlDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Span;
 use test_utils::*;
@@ -8601,4 +8601,131 @@ fn parse_pg_analyze() {
         }
         _ => panic!("Expected Analyze, got: {stmt:?}"),
     }
+}
+
+#[test]
+fn parse_tablespace_and_reindex_regression_cases() {
+    for sql in [
+        "CREATE TABLESPACE regress_tblspace LOCATION 'relative'",
+        "CREATE TABLESPACE regress_tblspace LOCATION ''",
+        "CREATE TABLESPACE regress_tblspacewith LOCATION '' WITH (some_nonexistent_parameter = true)",
+        "CREATE TABLESPACE regress_tblspacewith LOCATION '' WITH (random_page_cost = 3.0)",
+        "DROP TABLESPACE regress_tblspacewith",
+        "ALTER TABLESPACE regress_tblspace SET (random_page_cost = 1.0, seq_page_cost = 1.1)",
+        "ALTER TABLESPACE regress_tblspace SET (some_nonexistent_parameter = true)",
+        "ALTER TABLESPACE regress_tblspace RESET (random_page_cost = 2.0)",
+        "ALTER TABLESPACE regress_tblspace RESET (random_page_cost, effective_io_concurrency)",
+        "REINDEX (TABLESPACE regress_tblspace) TABLE pg_am",
+        "REINDEX (TABLESPACE regress_tblspace) TABLE CONCURRENTLY pg_am",
+        "REINDEX (TABLESPACE regress_tblspace) TABLE pg_authid",
+        "REINDEX (TABLESPACE regress_tblspace) TABLE CONCURRENTLY pg_authid",
+        "REINDEX (TABLESPACE regress_tblspace) INDEX pg_toast.pg_toast_1262_index",
+        "REINDEX (TABLESPACE regress_tblspace) INDEX CONCURRENTLY pg_toast.pg_toast_1262_index",
+        "REINDEX (TABLESPACE regress_tblspace) TABLE pg_toast.pg_toast_1262",
+        "REINDEX (TABLESPACE regress_tblspace) TABLE CONCURRENTLY pg_toast.pg_toast_1262",
+        "REINDEX (TABLESPACE pg_global) TABLE pg_authid",
+        "REINDEX (TABLESPACE pg_global) TABLE CONCURRENTLY pg_authid",
+        "REINDEX (TABLESPACE pg_global) INDEX regress_tblspace_test_tbl_idx",
+        "REINDEX (TABLESPACE pg_global) INDEX CONCURRENTLY regress_tblspace_test_tbl_idx",
+        "REINDEX (TABLESPACE regress_tblspace) INDEX regress_tblspace_test_tbl_idx",
+        "REINDEX (TABLESPACE regress_tblspace) TABLE regress_tblspace_test_tbl",
+    ] {
+        pg_and_generic().verified_stmt(sql);
+    }
+}
+
+#[test]
+fn parse_alter_tablespace_reset_assignment_option() {
+    let stmt = pg_and_generic()
+        .verified_stmt("ALTER TABLESPACE regress_tblspace RESET (random_page_cost = 2.0)");
+    let Statement::AlterTablespace(AlterTablespace {
+        name,
+        operation: AlterTablespaceOperation::Reset { options },
+    }) = stmt
+    else {
+        panic!("Expected ALTER TABLESPACE RESET statement");
+    };
+
+    assert_eq!(name.value, "regress_tblspace");
+    assert_eq!(options.len(), 1);
+    let TablespaceResetOption::Assign { key, value } = &options[0] else {
+        panic!("Expected assignment form in RESET option list");
+    };
+    assert_eq!(key.value, "random_page_cost");
+    assert_eq!(value.to_string(), "2.0");
+}
+
+#[test]
+fn parse_reindex_with_tablespace_utility_option() {
+    let stmt = pg_and_generic()
+        .verified_stmt("REINDEX (TABLESPACE regress_tblspace) TABLE CONCURRENTLY pg_am");
+    let Statement::Reindex(ReindexStatement {
+        options,
+        object_type,
+        concurrently,
+        name,
+    }) = stmt
+    else {
+        panic!("Expected REINDEX statement");
+    };
+
+    assert_eq!(object_type, ReindexObjectType::Table);
+    assert!(concurrently);
+    assert_eq!(name.to_string(), "pg_am");
+
+    let options = options.expect("Expected utility options");
+    assert_eq!(options.len(), 1);
+    assert_eq!(options[0].name.value, "TABLESPACE");
+    assert_eq!(
+        options[0].arg.as_ref().map(ToString::to_string),
+        Some("regress_tblspace".to_string())
+    );
+}
+
+#[test]
+fn reject_postgres_tablespace_forms_in_mysql_dialect() {
+    let mysql = TestedDialects::new(vec![Box::new(MySqlDialect {})]);
+    assert!(mysql
+        .parse_sql_statements("CREATE TABLESPACE t LOCATION ''")
+        .is_err());
+    assert!(mysql
+        .parse_sql_statements("ALTER TABLESPACE t SET (random_page_cost = 1.0)")
+        .is_err());
+    assert!(mysql
+        .parse_sql_statements("DROP TABLESPACE IF EXISTS t")
+        .is_err());
+    assert!(mysql
+        .parse_sql_statements("REINDEX (TABLESPACE t) TABLE pg_am")
+        .is_err());
+}
+
+#[test]
+fn parse_drop_tablespace_in_postgres() {
+    let stmt = pg_and_generic().verified_stmt("DROP TABLESPACE IF EXISTS regress_tblspace");
+    let Statement::DropTablespace(DropTablespace {
+        if_exists,
+        undo,
+        name,
+        engine,
+    }) = stmt
+    else {
+        panic!("Expected DROP TABLESPACE statement");
+    };
+
+    assert!(if_exists);
+    assert!(!undo);
+    assert_eq!(name.value, "regress_tblspace");
+    assert!(engine.is_none());
+}
+
+#[test]
+fn reject_drop_tablespace_cascade_in_postgres() {
+    let err = pg()
+        .parse_sql_statements("DROP TABLESPACE regress_tblspace CASCADE")
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("Expected: end of DROP TABLESPACE statement"),
+        "unexpected error: {err}"
+    );
 }

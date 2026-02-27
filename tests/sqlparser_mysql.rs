@@ -4773,3 +4773,107 @@ fn parse_create_database_with_charset_option_ordering() {
         "CREATE DATABASE mydb DEFAULT CHARACTER SET utf8mb4 DEFAULT COLLATE utf8mb4_unicode_ci",
     );
 }
+
+#[test]
+fn parse_mysql_create_tablespace() {
+    let sql =
+        "CREATE TABLESPACE ts ADD DATAFILE 'ts.ibd' FILE_BLOCK_SIZE = 4096 ENCRYPTION = 'Y' ENGINE = InnoDB ENGINE_ATTRIBUTE = 'ndb_general'";
+    let stmt = mysql_and_generic().verified_stmt(sql);
+
+    let Statement::CreateTablespace(CreateTablespace { name, definition }) = stmt else {
+        panic!("Expected CREATE TABLESPACE");
+    };
+    assert_eq!(name.value, "ts");
+
+    let CreateTablespaceDefinition::MySql { undo, options } = definition else {
+        panic!("Expected MySQL CREATE TABLESPACE definition");
+    };
+    assert!(!undo);
+    assert_eq!(
+        options[0],
+        MySqlCreateTablespaceOption::AddDatafile("ts.ibd".to_string())
+    );
+    assert_eq!(options[1].to_string(), "FILE_BLOCK_SIZE = 4096");
+    assert_eq!(options[2].to_string(), "ENCRYPTION = 'Y'");
+    assert_eq!(options[3].to_string(), "ENGINE = InnoDB");
+    assert_eq!(options[4].to_string(), "ENGINE_ATTRIBUTE = 'ndb_general'");
+}
+
+#[test]
+fn parse_mysql_create_tablespace_without_add_datafile() {
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLESPACE ts ENGINE InnoDB",
+        "CREATE TABLESPACE ts ENGINE = InnoDB",
+    );
+}
+
+#[test]
+fn parse_mysql_create_undo_tablespace() {
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE UNDO TABLESPACE undo_ts ADD DATAFILE 'undo_001.ibu' ENGINE InnoDB",
+        "CREATE UNDO TABLESPACE undo_ts ADD DATAFILE 'undo_001.ibu' ENGINE = InnoDB",
+    );
+}
+
+#[test]
+fn parse_mysql_alter_tablespace() {
+    let stmt = mysql_and_generic().verified_stmt(
+        "ALTER TABLESPACE ts ADD DATAFILE 'ts2.ibd' INITIAL_SIZE = 16 AUTOEXTEND_SIZE = 32 WAIT ENGINE = InnoDB ENGINE_ATTRIBUTE = 'ndb_general'",
+    );
+    let Statement::AlterTablespace(AlterTablespace {
+        name,
+        operation: AlterTablespaceOperation::MySql { undo, options },
+    }) = stmt
+    else {
+        panic!("Expected MySQL ALTER TABLESPACE ADD DATAFILE");
+    };
+
+    assert_eq!(name.value, "ts");
+    assert!(!undo);
+    assert_eq!(
+        options
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<String>>(),
+        vec![
+            "ADD DATAFILE 'ts2.ibd'",
+            "INITIAL_SIZE = 16",
+            "AUTOEXTEND_SIZE = 32",
+            "WAIT",
+            "ENGINE = InnoDB",
+            "ENGINE_ATTRIBUTE = 'ndb_general'",
+        ]
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "ALTER UNDO TABLESPACE undo_ts SET ACTIVE",
+        "ALTER UNDO TABLESPACE undo_ts SET ACTIVE",
+    );
+}
+
+#[test]
+fn parse_mysql_drop_tablespace() {
+    let stmt = mysql_and_generic().one_statement_parses_to(
+        "DROP UNDO TABLESPACE undo_ts ENGINE InnoDB",
+        "DROP UNDO TABLESPACE undo_ts ENGINE = InnoDB",
+    );
+    let Statement::DropTablespace(DropTablespace {
+        if_exists,
+        undo,
+        name,
+        engine,
+    }) = stmt
+    else {
+        panic!("Expected DROP TABLESPACE");
+    };
+
+    assert!(!if_exists);
+    assert!(undo);
+    assert_eq!(name.value, "undo_ts");
+    assert_eq!(engine.as_ref().map(|i| i.value.as_str()), Some("InnoDB"));
+
+    mysql_and_generic().one_statement_parses_to(
+        "DROP TABLESPACE ts ENGINE InnoDB",
+        "DROP TABLESPACE ts ENGINE = InnoDB",
+    );
+}

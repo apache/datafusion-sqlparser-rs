@@ -49,8 +49,8 @@ use crate::ast::{
     MySQLColumnPosition, ObjectName, OnCommit, OneOrManyWithParens, OperateFunctionArg,
     OrderByExpr, ProjectionSelect, Query, RefreshModeKind, RowAccessPolicy, SequenceOptions,
     Spanned, SqlOption, StorageSerializationPolicy, TableVersion, Tag, TriggerEvent,
-    TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value, ValueWithSpan,
-    WrappedCollection,
+    TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, UtilityOption, Value,
+    ValueWithSpan, WrappedCollection,
 };
 use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
 use crate::keywords::Keyword;
@@ -3805,6 +3805,410 @@ impl fmt::Display for AlterSchema {
         }
 
         Ok(())
+    }
+}
+
+/// `CREATE TABLESPACE` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtablespace.html)
+/// and [MySQL](https://dev.mysql.com/doc/refman/8.4/en/create-tablespace.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateTablespace {
+    /// Name of the tablespace being created.
+    pub name: Ident,
+    /// Dialect-specific definition payload.
+    pub definition: CreateTablespaceDefinition,
+}
+
+/// Dialect-specific `CREATE TABLESPACE` definitions.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreateTablespaceDefinition {
+    /// PostgreSQL form:
+    /// `CREATE TABLESPACE name LOCATION 'path' [WITH (...)]`
+    PostgreSql {
+        /// Filesystem location for the tablespace.
+        location: String,
+        /// Optional storage parameters (`WITH (...)`).
+        with_options: Vec<SqlOption>,
+    },
+    /// MySQL form:
+    /// `CREATE [UNDO] TABLESPACE name <options ...>`
+    MySql {
+        /// Whether `UNDO` was specified before `TABLESPACE`.
+        undo: bool,
+        /// Ordered MySQL options/clauses.
+        options: Vec<MySqlCreateTablespaceOption>,
+    },
+}
+
+/// A MySQL `CREATE TABLESPACE` clause.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum MySqlCreateTablespaceOption {
+    /// `ADD DATAFILE 'file_name'`.
+    AddDatafile(String),
+    /// `USE LOGFILE GROUP logfile_group`.
+    UseLogfileGroup(Ident),
+    /// `FILE_BLOCK_SIZE [=] value`.
+    FileBlockSize(Expr),
+    /// `EXTENT_SIZE [=] extent_size`.
+    ExtentSize(Expr),
+    /// `INITIAL_SIZE [=] initial_size`.
+    InitialSize(Expr),
+    /// `AUTOEXTEND_SIZE [=] autoextend_size`.
+    AutoextendSize(Expr),
+    /// `MAX_SIZE [=] max_size`.
+    MaxSize(Expr),
+    /// `NODEGROUP [=] nodegroup_id`.
+    Nodegroup(Expr),
+    /// `WAIT`.
+    Wait,
+    /// `COMMENT [=] 'comment'`.
+    Comment(String),
+    /// `ENCRYPTION [=] {'Y' | 'N'}`.
+    Encryption(Expr),
+    /// `ENGINE [=] engine_name`.
+    Engine(Ident),
+    /// `ENGINE_ATTRIBUTE [=] 'string'`.
+    EngineAttribute(String),
+}
+
+impl fmt::Display for MySqlCreateTablespaceOption {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MySqlCreateTablespaceOption::AddDatafile(file) => {
+                write!(f, "ADD DATAFILE '{}'", escape_single_quote_string(file))
+            }
+            MySqlCreateTablespaceOption::UseLogfileGroup(group) => {
+                write!(f, "USE LOGFILE GROUP {group}")
+            }
+            MySqlCreateTablespaceOption::FileBlockSize(value) => {
+                write!(f, "FILE_BLOCK_SIZE = {value}")
+            }
+            MySqlCreateTablespaceOption::ExtentSize(value) => {
+                write!(f, "EXTENT_SIZE = {value}")
+            }
+            MySqlCreateTablespaceOption::InitialSize(value) => {
+                write!(f, "INITIAL_SIZE = {value}")
+            }
+            MySqlCreateTablespaceOption::AutoextendSize(value) => {
+                write!(f, "AUTOEXTEND_SIZE = {value}")
+            }
+            MySqlCreateTablespaceOption::MaxSize(value) => write!(f, "MAX_SIZE = {value}"),
+            MySqlCreateTablespaceOption::Nodegroup(value) => write!(f, "NODEGROUP = {value}"),
+            MySqlCreateTablespaceOption::Wait => write!(f, "WAIT"),
+            MySqlCreateTablespaceOption::Comment(comment) => {
+                write!(f, "COMMENT = '{}'", escape_single_quote_string(comment))
+            }
+            MySqlCreateTablespaceOption::Encryption(value) => write!(f, "ENCRYPTION = {value}"),
+            MySqlCreateTablespaceOption::Engine(engine) => write!(f, "ENGINE = {engine}"),
+            MySqlCreateTablespaceOption::EngineAttribute(attr) => {
+                write!(
+                    f,
+                    "ENGINE_ATTRIBUTE = '{}'",
+                    escape_single_quote_string(attr)
+                )
+            }
+        }
+    }
+}
+
+impl fmt::Display for CreateTablespace {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.definition {
+            CreateTablespaceDefinition::PostgreSql {
+                location,
+                with_options,
+            } => {
+                write!(
+                    f,
+                    "CREATE TABLESPACE {} LOCATION '{}'",
+                    self.name,
+                    escape_single_quote_string(location)
+                )?;
+                if !with_options.is_empty() {
+                    write!(f, " WITH ({})", display_comma_separated(with_options))?;
+                }
+            }
+            CreateTablespaceDefinition::MySql { undo, options } => {
+                write!(
+                    f,
+                    "CREATE {}TABLESPACE {}",
+                    if *undo { "UNDO " } else { "" },
+                    self.name
+                )?;
+                for option in options {
+                    write!(f, " {option}")?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+/// A single option in `ALTER TABLESPACE ... RESET (...)`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TablespaceResetOption {
+    /// A plain parameter name.
+    Name(Ident),
+    /// A permissive `name = value` form.
+    Assign {
+        /// Parameter name.
+        key: Ident,
+        /// Parameter value expression.
+        value: Expr,
+    },
+}
+
+impl fmt::Display for TablespaceResetOption {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TablespaceResetOption::Name(name) => write!(f, "{name}"),
+            TablespaceResetOption::Assign { key, value } => write!(f, "{key} = {value}"),
+        }
+    }
+}
+
+/// `ALTER TABLESPACE` operation.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertablespace.html)
+/// and [MySQL](https://dev.mysql.com/doc/refman/8.4/en/alter-tablespace.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterTablespaceOperation {
+    /// Rename the tablespace.
+    RenameTo(Ident),
+    /// Change tablespace owner.
+    OwnerTo(Owner),
+    /// Set tablespace parameters.
+    Set {
+        /// Parameters to set.
+        options: Vec<SqlOption>,
+    },
+    /// Reset tablespace parameters.
+    Reset {
+        /// Parameters to reset.
+        options: Vec<TablespaceResetOption>,
+    },
+    /// MySQL-specific operation.
+    MySql {
+        /// Whether `UNDO` was specified before `TABLESPACE`.
+        undo: bool,
+        /// Ordered MySQL options/clauses.
+        options: Vec<MySqlAlterTablespaceOperation>,
+    },
+}
+
+/// MySQL `ALTER TABLESPACE` operation body.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum MySqlAlterTablespaceOperation {
+    /// `ADD DATAFILE 'file_name'`.
+    AddDatafile(String),
+    /// `DROP DATAFILE 'file_name'`.
+    DropDatafile(String),
+    /// `INITIAL_SIZE [=] size`.
+    InitialSize(Expr),
+    /// `AUTOEXTEND_SIZE [=] autoextend_size`.
+    AutoextendSize(Expr),
+    /// `WAIT`.
+    Wait,
+    /// `RENAME TO tablespace_name`.
+    RenameTo(Ident),
+    /// `SET ACTIVE`.
+    SetActive,
+    /// `SET INACTIVE`.
+    SetInactive,
+    /// `ENCRYPTION [=] {'Y' | 'N'}`.
+    Encryption(Expr),
+    /// `ENGINE [=] engine_name`.
+    Engine(Ident),
+    /// `ENGINE_ATTRIBUTE [=] 'string'`.
+    EngineAttribute(String),
+}
+
+impl fmt::Display for MySqlAlterTablespaceOperation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MySqlAlterTablespaceOperation::AddDatafile(file) => {
+                write!(f, "ADD DATAFILE '{}'", escape_single_quote_string(file))
+            }
+            MySqlAlterTablespaceOperation::DropDatafile(file) => {
+                write!(f, "DROP DATAFILE '{}'", escape_single_quote_string(file))
+            }
+            MySqlAlterTablespaceOperation::InitialSize(size) => write!(f, "INITIAL_SIZE = {size}"),
+            MySqlAlterTablespaceOperation::AutoextendSize(size) => {
+                write!(f, "AUTOEXTEND_SIZE = {size}")
+            }
+            MySqlAlterTablespaceOperation::Wait => write!(f, "WAIT"),
+            MySqlAlterTablespaceOperation::RenameTo(name) => write!(f, "RENAME TO {name}"),
+            MySqlAlterTablespaceOperation::SetActive => write!(f, "SET ACTIVE"),
+            MySqlAlterTablespaceOperation::SetInactive => write!(f, "SET INACTIVE"),
+            MySqlAlterTablespaceOperation::Encryption(value) => write!(f, "ENCRYPTION = {value}"),
+            MySqlAlterTablespaceOperation::Engine(engine) => write!(f, "ENGINE = {engine}"),
+            MySqlAlterTablespaceOperation::EngineAttribute(attr) => {
+                write!(
+                    f,
+                    "ENGINE_ATTRIBUTE = '{}'",
+                    escape_single_quote_string(attr)
+                )
+            }
+        }
+    }
+}
+
+impl fmt::Display for AlterTablespaceOperation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AlterTablespaceOperation::RenameTo(name) => write!(f, "RENAME TO {name}"),
+            AlterTablespaceOperation::OwnerTo(owner) => write!(f, "OWNER TO {owner}"),
+            AlterTablespaceOperation::Set { options } => {
+                write!(f, "SET ({})", display_comma_separated(options))
+            }
+            AlterTablespaceOperation::Reset { options } => {
+                write!(f, "RESET ({})", display_comma_separated(options))
+            }
+            AlterTablespaceOperation::MySql { undo, options } => {
+                if *undo {
+                    write!(f, "UNDO ")?;
+                }
+                write!(f, "{}", display_separated(options, " "))
+            }
+        }
+    }
+}
+
+/// `ALTER TABLESPACE` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertablespace.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterTablespace {
+    /// Name of the tablespace.
+    pub name: Ident,
+    /// Operation to apply.
+    pub operation: AlterTablespaceOperation,
+}
+
+impl fmt::Display for AlterTablespace {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let AlterTablespaceOperation::MySql { undo, options } = &self.operation {
+            write!(
+                f,
+                "ALTER {}TABLESPACE {} {}",
+                if *undo { "UNDO " } else { "" },
+                self.name,
+                display_separated(options, " ")
+            )
+        } else {
+            write!(f, "ALTER TABLESPACE {} {}", self.name, self.operation)
+        }
+    }
+}
+
+/// `DROP TABLESPACE` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-droptablespace.html)
+/// and [MySQL](https://dev.mysql.com/doc/refman/8.4/en/drop-tablespace.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DropTablespace {
+    /// Whether `IF EXISTS` was specified.
+    pub if_exists: bool,
+    /// Whether `UNDO` was specified before `TABLESPACE`.
+    pub undo: bool,
+    /// Name of the tablespace.
+    pub name: Ident,
+    /// Optional MySQL storage engine.
+    pub engine: Option<Ident>,
+}
+
+impl fmt::Display for DropTablespace {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "DROP {}TABLESPACE {}{}",
+            if self.undo { "UNDO " } else { "" },
+            if self.if_exists { "IF EXISTS " } else { "" },
+            self.name
+        )?;
+        if let Some(engine) = &self.engine {
+            write!(f, " ENGINE = {engine}")?;
+        }
+        Ok(())
+    }
+}
+
+/// `REINDEX` object type.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-reindex.html)
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ReindexObjectType {
+    /// Reindex an index.
+    Index,
+    /// Reindex a table.
+    Table,
+    /// Reindex a schema.
+    Schema,
+    /// Reindex a database.
+    Database,
+    /// Reindex system catalogs.
+    System,
+}
+
+impl fmt::Display for ReindexObjectType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            ReindexObjectType::Index => "INDEX",
+            ReindexObjectType::Table => "TABLE",
+            ReindexObjectType::Schema => "SCHEMA",
+            ReindexObjectType::Database => "DATABASE",
+            ReindexObjectType::System => "SYSTEM",
+        })
+    }
+}
+
+/// `REINDEX` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-reindex.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ReindexStatement {
+    /// Optional utility-style options (e.g. `(TABLESPACE foo)`).
+    pub options: Option<Vec<UtilityOption>>,
+    /// Target object type.
+    pub object_type: ReindexObjectType,
+    /// Whether `CONCURRENTLY` was specified.
+    pub concurrently: bool,
+    /// Target object name.
+    pub name: ObjectName,
+}
+
+impl fmt::Display for ReindexStatement {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "REINDEX ")?;
+        if let Some(options) = &self.options {
+            write!(f, "({}) ", display_comma_separated(options))?;
+        }
+        write!(f, "{}", self.object_type)?;
+        if self.concurrently {
+            write!(f, " CONCURRENTLY")?;
+        }
+        write!(f, " {}", self.name)
     }
 }
 

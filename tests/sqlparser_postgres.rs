@@ -4643,6 +4643,31 @@ fn parse_create_function_detailed() {
 }
 
 #[test]
+fn parse_create_function_returns_setof() {
+    let cases = [
+        "CREATE FUNCTION any_ids() RETURNS SETOF UUID LANGUAGE sql STABLE AS 'SELECT ''00000000-0000-0000-0000-000000000000''::uuid'",
+        "CREATE FUNCTION ids_for_user(p_user_id UUID) RETURNS SETOF UUID LANGUAGE sql STABLE AS 'SELECT p_user_id'",
+        "CREATE FUNCTION ids_from_array() RETURNS SETOF UUID LANGUAGE sql STABLE AS 'SELECT unnest(ARRAY[''00000000-0000-0000-0000-000000000000''::uuid])'",
+    ];
+
+    for sql in cases {
+        match pg_and_generic().verified_stmt(sql) {
+            Statement::CreateFunction(CreateFunction {
+                return_type,
+                language,
+                behavior,
+                ..
+            }) => {
+                assert_eq!(return_type, Some(DataType::SetOf(Box::new(DataType::Uuid))));
+                assert_eq!(language, Some(Ident::new("sql")));
+                assert_eq!(behavior, Some(FunctionBehavior::Stable));
+            }
+            _ => panic!("Expected CreateFunction"),
+        }
+    }
+}
+
+#[test]
 fn parse_create_function_with_security() {
     let sql =
         "CREATE FUNCTION test_fn() RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$";

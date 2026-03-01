@@ -47,6 +47,10 @@ pub enum EnumMember {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum DataType {
+    /// Set-returning function type in [PostgreSQL], e.g. CREATE FUNCTION RETURNS SETOF UUID.
+    ///
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createfunction.html
+    SetOf(Box<DataType>),
     /// Table type in [PostgreSQL], e.g. CREATE FUNCTION RETURNS TABLE(...).
     ///
     /// [PostgreSQL]: https://www.postgresql.org/docs/15/sql-createfunction.html
@@ -501,6 +505,7 @@ pub enum DataType {
 impl fmt::Display for DataType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            DataType::SetOf(data_type) => write!(f, "SETOF {data_type}"),
             DataType::Character(size) => format_character_string_type(f, "CHARACTER", size),
             DataType::Char(size) => format_character_string_type(f, "CHAR", size),
             DataType::CharacterVarying(size) => {

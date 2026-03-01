@@ -5581,7 +5581,13 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::RParen)?;
 
         let return_type = if self.parse_keyword(Keyword::RETURNS) {
-            Some(self.parse_data_type()?)
+            let setof = self.parse_keyword(Keyword::SETOF);
+            let return_type = self.parse_data_type()?;
+            Some(if setof {
+                DataType::SetOf(Box::new(return_type))
+            } else {
+                return_type
+            })
         } else {
             None
         };

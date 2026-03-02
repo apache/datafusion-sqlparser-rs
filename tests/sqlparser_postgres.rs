@@ -1105,24 +1105,25 @@ fn parse_copy_from_stdin_without_semicolon() {
 
 #[test]
 fn parse_copy_from_stdin_without_semicolon_variants() {
+    // This covers additional COPY ... FROM STDIN shapes without inline payload.
+    // `parse_copy_from_stdin_without_semicolon` asserts the legacy NULL option details.
     let cases = [
-        "COPY bool_test FROM STDIN NULL 'null'",
-        "COPY varbit_table FROM stdin",
-        "COPY bit_table FROM stdin",
-        "copy copytest2(test) from stdin",
-        "copy copytest3 from stdin csv header",
-        "copy copytest4 from stdin (header)",
-        "copy parted_copytest from stdin",
-        "copy tab_progress_reporting from stdin",
-        "copy oversized_column_default from stdin",
-        "COPY x (a, b, c, d, e) from stdin",
-        "copy header_copytest (c, a) from stdin",
-        "COPY atest5 (two) FROM stdin",
-        "COPY main_table (a, b) FROM stdin",
+        "COPY varbit_table FROM STDIN",
+        "COPY bit_table FROM STDIN",
+        "COPY copytest2 (test) FROM STDIN",
+        "COPY copytest3 FROM STDIN CSV HEADER",
+        "COPY copytest4 FROM STDIN (HEADER)",
+        "COPY parted_copytest FROM STDIN",
+        "COPY tab_progress_reporting FROM STDIN",
+        "COPY oversized_column_default FROM STDIN",
+        "COPY x (a, b, c, d, e) FROM STDIN",
+        "COPY header_copytest (c, a) FROM STDIN",
+        "COPY atest5 (two) FROM STDIN",
+        "COPY main_table (a, b) FROM STDIN",
     ];
 
     for sql in cases {
-        match pg().one_statement_parses_to(sql, "") {
+        match pg().verified_stmt(sql) {
             Statement::Copy {
                 to: false,
                 target: CopyTarget::Stdin,

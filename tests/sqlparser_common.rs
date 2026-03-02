@@ -2575,6 +2575,7 @@ fn parse_select_order_by() {
                         asc: Some(true),
                         nulls_first: None,
                     },
+                    using_operator: None,
                     with_fill: None,
                 },
                 OrderByExpr {
@@ -2583,6 +2584,7 @@ fn parse_select_order_by() {
                         asc: Some(false),
                         nulls_first: None,
                     },
+                    using_operator: None,
                     with_fill: None,
                 },
                 OrderByExpr {
@@ -2591,6 +2593,7 @@ fn parse_select_order_by() {
                         asc: None,
                         nulls_first: None,
                     },
+                    using_operator: None,
                     with_fill: None,
                 },
             ]),
@@ -2616,6 +2619,7 @@ fn parse_select_order_by_limit() {
                     asc: Some(true),
                     nulls_first: None,
                 },
+                using_operator: None,
                 with_fill: None,
             },
             OrderByExpr {
@@ -2624,6 +2628,7 @@ fn parse_select_order_by_limit() {
                     asc: Some(false),
                     nulls_first: None,
                 },
+                using_operator: None,
                 with_fill: None,
             },
         ]),
@@ -2737,6 +2742,7 @@ fn parse_select_order_by_not_support_all() {
                     asc: None,
                     nulls_first: None,
                 },
+                using_operator: None,
                 with_fill: None,
             }]),
         ),
@@ -2748,6 +2754,7 @@ fn parse_select_order_by_not_support_all() {
                     asc: Some(true),
                     nulls_first: Some(true),
                 },
+                using_operator: None,
                 with_fill: None,
             }]),
         ),
@@ -2759,6 +2766,7 @@ fn parse_select_order_by_not_support_all() {
                     asc: Some(false),
                     nulls_first: Some(false),
                 },
+                using_operator: None,
                 with_fill: None,
             }]),
         ),
@@ -2782,6 +2790,7 @@ fn parse_select_order_by_nulls_order() {
                     asc: Some(true),
                     nulls_first: Some(true),
                 },
+                using_operator: None,
                 with_fill: None,
             },
             OrderByExpr {
@@ -2790,6 +2799,7 @@ fn parse_select_order_by_nulls_order() {
                     asc: Some(false),
                     nulls_first: Some(false),
                 },
+                using_operator: None,
                 with_fill: None,
             },
         ]),
@@ -3012,6 +3022,7 @@ fn parse_select_qualify() {
                             asc: None,
                             nulls_first: None,
                         },
+                        using_operator: None,
                         with_fill: None,
                     }],
                     window_frame: None,
@@ -3457,6 +3468,7 @@ fn parse_listagg() {
                         asc: None,
                         nulls_first: None,
                     },
+                    using_operator: None,
                     with_fill: None,
                 },
                 OrderByExpr {
@@ -3469,6 +3481,7 @@ fn parse_listagg() {
                         asc: None,
                         nulls_first: None,
                     },
+                    using_operator: None,
                     with_fill: None,
                 },
             ]
@@ -5728,6 +5741,7 @@ fn parse_window_functions() {
                         asc: Some(false),
                         nulls_first: None,
                     },
+                    using_operator: None,
                     with_fill: None,
                 }],
                 window_frame: None,
@@ -5954,6 +5968,7 @@ fn test_parse_named_window() {
                             asc: None,
                             nulls_first: None,
                         },
+                        using_operator: None,
                         with_fill: None,
                     }],
                     window_frame: None,
@@ -9415,6 +9430,7 @@ fn parse_create_index() {
             operator_class: None,
             column: OrderByExpr {
                 expr: Expr::Identifier(Ident::new("name")),
+                using_operator: None,
                 with_fill: None,
                 options: OrderByOptions {
                     asc: None,
@@ -9426,6 +9442,7 @@ fn parse_create_index() {
             operator_class: None,
             column: OrderByExpr {
                 expr: Expr::Identifier(Ident::new("age")),
+                using_operator: None,
                 with_fill: None,
                 options: OrderByOptions {
                     asc: Some(false),
@@ -9461,6 +9478,7 @@ fn test_create_index_with_using_function() {
             operator_class: None,
             column: OrderByExpr {
                 expr: Expr::Identifier(Ident::new("name")),
+                using_operator: None,
                 with_fill: None,
                 options: OrderByOptions {
                     asc: None,
@@ -9472,6 +9490,7 @@ fn test_create_index_with_using_function() {
             operator_class: None,
             column: OrderByExpr {
                 expr: Expr::Identifier(Ident::new("age")),
+                using_operator: None,
                 with_fill: None,
                 options: OrderByOptions {
                     asc: Some(false),
@@ -9522,6 +9541,7 @@ fn test_create_index_with_with_clause() {
                 asc: None,
                 nulls_first: None,
             },
+            using_operator: None,
             with_fill: None,
         },
         operator_class: None,
@@ -13148,6 +13168,7 @@ fn test_match_recognize() {
                     asc: None,
                     nulls_first: None,
                 },
+                using_operator: None,
                 with_fill: None,
             }],
             measures: vec![

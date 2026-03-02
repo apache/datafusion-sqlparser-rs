@@ -1333,6 +1333,14 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports PostgreSQL-style ordering operators:
+    /// `ORDER BY expr USING <operator>`.
+    ///
+    /// For example: `SELECT * FROM t ORDER BY a USING <`.
+    fn supports_order_by_using_operator(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `SET NAMES <charset_name> [COLLATE <collation_name>]`.
     ///
     /// - [MySQL](https://dev.mysql.com/doc/refman/8.4/en/set-names.html)

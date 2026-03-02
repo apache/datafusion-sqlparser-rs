@@ -334,6 +334,7 @@ fn parse_alter_table_add_projection() {
                                     asc: None,
                                     nulls_first: None,
                                 },
+                                using_operator: None,
                                 with_fill: None,
                             }]),
                             interpolate: None,
@@ -1162,6 +1163,7 @@ fn parse_select_order_by_with_fill_interpolate() {
                         asc: Some(true),
                         nulls_first: Some(true),
                     },
+                    using_operator: None,
                     with_fill: Some(WithFill {
                         from: Some(Expr::value(number("10"))),
                         to: Some(Expr::value(number("20"))),
@@ -1174,6 +1176,7 @@ fn parse_select_order_by_with_fill_interpolate() {
                         asc: Some(false),
                         nulls_first: Some(false),
                     },
+                    using_operator: None,
                     with_fill: Some(WithFill {
                         from: Some(Expr::value(number("30"))),
                         to: Some(Expr::value(number("40"))),

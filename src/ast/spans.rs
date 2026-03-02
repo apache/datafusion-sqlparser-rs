@@ -2087,6 +2087,7 @@ impl Spanned for OrderByExpr {
     fn span(&self) -> Span {
         let OrderByExpr {
             expr,
+            using_operator: _,
             options: _,
             with_fill,
         } = self;

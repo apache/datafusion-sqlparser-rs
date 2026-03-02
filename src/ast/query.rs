@@ -2860,6 +2860,8 @@ impl fmt::Display for OrderBy {
 pub struct OrderByExpr {
     /// The expression to order by.
     pub expr: Expr,
+    /// Optional PostgreSQL `USING <operator>` clause.
+    pub using_operator: Option<ObjectName>,
     /// Ordering options such as `ASC`/`DESC` and `NULLS` behavior.
     pub options: OrderByOptions,
     /// Optional `WITH FILL` clause (ClickHouse extension) which specifies how to fill gaps.
@@ -2870,6 +2872,7 @@ impl From<Ident> for OrderByExpr {
     fn from(ident: Ident) -> Self {
         OrderByExpr {
             expr: Expr::Identifier(ident),
+            using_operator: None,
             options: OrderByOptions::default(),
             with_fill: None,
         }
@@ -2878,7 +2881,15 @@ impl From<Ident> for OrderByExpr {
 
 impl fmt::Display for OrderByExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}{}", self.expr, self.options)?;
+        write!(f, "{}", self.expr)?;
+        if let Some(using_operator) = &self.using_operator {
+            if using_operator.0.len() > 1 {
+                write!(f, " USING OPERATOR({using_operator})")?;
+            } else {
+                write!(f, " USING {using_operator}")?;
+            }
+        }
+        write!(f, "{}", self.options)?;
         if let Some(ref with_fill) = self.with_fill {
             write!(f, " {with_fill}")?
         }

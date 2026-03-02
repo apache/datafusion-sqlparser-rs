@@ -174,6 +174,7 @@ fn create_table_with_clustered_by() {
                                 asc: Some(true),
                                 nulls_first: None,
                             },
+                            using_operator: None,
                             with_fill: None,
                         },
                         OrderByExpr {
@@ -182,6 +183,7 @@ fn create_table_with_clustered_by() {
                                 asc: Some(false),
                                 nulls_first: None,
                             },
+                            using_operator: None,
                             with_fill: None,
                         },
                     ]),

@@ -667,6 +667,10 @@ impl Dialect for SnowflakeDialect {
     fn supports_lambda_functions(&self) -> bool {
         true
     }
+
+    fn supports_comma_separated_trim(&self) -> bool {
+        true
+    }
 }
 
 // Peeks ahead to identify tokens that are expected after
@@ -1780,6 +1784,7 @@ fn parse_multi_table_insert(
         has_table_keyword: false,
         on: None,
         returning: None,
+        output: None,
         replace_into: false,
         priority: None,
         insert_alias: None,

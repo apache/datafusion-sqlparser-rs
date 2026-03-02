@@ -2040,7 +2040,7 @@ impl fmt::Display for ColumnOption {
                 Ok(())
             }
             Unique(constraint) => {
-                write!(f, "UNIQUE")?;
+                write!(f, "UNIQUE{:>}", constraint.index_type_display)?;
                 if let Some(characteristics) = &constraint.characteristics {
                     write!(f, " {characteristics}")?;
                 }

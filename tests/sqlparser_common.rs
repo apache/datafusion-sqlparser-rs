@@ -530,6 +530,7 @@ fn parse_update_set_from() {
                 ])),
             }),
             returning: None,
+            output: None,
             or: None,
             limit: None
         })
@@ -553,6 +554,7 @@ fn parse_update_with_table_alias() {
             limit: None,
             optimizer_hints,
             update_token: _,
+            output: _,
         }) if optimizer_hints.is_empty() => {
             assert_eq!(
                 TableWithJoins {
@@ -8114,23 +8116,46 @@ fn parse_trim() {
         parse_sql_statements("SELECT TRIM(FOO 'xyz' FROM 'xyzfooxyz')").unwrap_err()
     );
 
-    //keep Snowflake/BigQuery TRIM syntax failing
-    let all_expected_snowflake = TestedDialects::new(vec![
-        //Box::new(GenericDialect {}),
-        Box::new(PostgreSqlDialect {}),
-        Box::new(MsSqlDialect {}),
-        Box::new(AnsiDialect {}),
-        //Box::new(SnowflakeDialect {}),
-        Box::new(HiveDialect {}),
-        Box::new(RedshiftSqlDialect {}),
-        Box::new(MySqlDialect {}),
-        //Box::new(BigQueryDialect {}),
-        Box::new(SQLiteDialect {}),
-    ]);
+    // dialects that support comma-separated TRIM syntax
+    let dialects = all_dialects_where(|d| d.supports_comma_separated_trim());
 
+    let sql = "SELECT TRIM('  xyz  ', ' ')";
+    let select = dialects.verified_only_select(sql);
     assert_eq!(
-        ParserError::ParserError("Expected: ), found: 'a'".to_owned()),
-        all_expected_snowflake
+        &Expr::Trim {
+            expr: Box::new(Expr::Value(
+                Value::SingleQuotedString("  xyz  ".to_owned()).with_empty_span()
+            )),
+            trim_where: None,
+            trim_what: None,
+            trim_characters: Some(vec![Expr::Value(
+                Value::SingleQuotedString(" ".to_owned()).with_empty_span()
+            )]),
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let sql = "SELECT TRIM('xyz', 'a')";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        &Expr::Trim {
+            expr: Box::new(Expr::Value(
+                Value::SingleQuotedString("xyz".to_owned()).with_empty_span()
+            )),
+            trim_where: None,
+            trim_what: None,
+            trim_characters: Some(vec![Expr::Value(
+                Value::SingleQuotedString("a".to_owned()).with_empty_span()
+            )]),
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    // dialects without comma-style TRIM syntax should fail
+    let unsupported_dialects = all_dialects_where(|d| !d.supports_comma_separated_trim());
+    assert_eq!(
+        ParserError::ParserError("Expected: ), found: ,".to_owned()),
+        unsupported_dialects
             .parse_sql_statements("SELECT TRIM('xyz', 'a')")
             .unwrap_err()
     );
@@ -17341,7 +17366,9 @@ fn test_select_exclude() {
         SelectItem::Wildcard(WildcardAdditionalOptions { opt_exclude, .. }) => {
             assert_eq!(
                 *opt_exclude,
-                Some(ExcludeSelectItem::Single(Ident::new("c1")))
+                Some(ExcludeSelectItem::Single(ObjectName::from(Ident::new(
+                    "c1"
+                ))))
             );
         }
         _ => unreachable!(),
@@ -17354,8 +17381,8 @@ fn test_select_exclude() {
             assert_eq!(
                 *opt_exclude,
                 Some(ExcludeSelectItem::Multiple(vec![
-                    Ident::new("c1"),
-                    Ident::new("c2")
+                    ObjectName::from(Ident::new("c1")),
+                    ObjectName::from(Ident::new("c2")),
                 ]))
             );
         }
@@ -17366,7 +17393,9 @@ fn test_select_exclude() {
         SelectItem::Wildcard(WildcardAdditionalOptions { opt_exclude, .. }) => {
             assert_eq!(
                 *opt_exclude,
-                Some(ExcludeSelectItem::Single(Ident::new("c1")))
+                Some(ExcludeSelectItem::Single(ObjectName::from(Ident::new(
+                    "c1"
+                ))))
             );
         }
         _ => unreachable!(),
@@ -17388,7 +17417,9 @@ fn test_select_exclude() {
     }
     assert_eq!(
         select.exclude,
-        Some(ExcludeSelectItem::Single(Ident::new("c1")))
+        Some(ExcludeSelectItem::Single(ObjectName::from(Ident::new(
+            "c1"
+        ))))
     );
 
     let dialects = all_dialects_where(|d| {
@@ -17399,7 +17430,9 @@ fn test_select_exclude() {
         SelectItem::Wildcard(WildcardAdditionalOptions { opt_exclude, .. }) => {
             assert_eq!(
                 *opt_exclude,
-                Some(ExcludeSelectItem::Single(Ident::new("c1")))
+                Some(ExcludeSelectItem::Single(ObjectName::from(Ident::new(
+                    "c1"
+                ))))
             );
         }
         _ => unreachable!(),
@@ -17434,6 +17467,32 @@ fn test_select_exclude() {
             .unwrap(),
         ParserError::ParserError("Expected: end of statement, found: EXCLUDE".to_string())
     );
+}
+
+#[test]
+fn test_select_exclude_qualified_names() {
+    // EXCLUDE should accept qualified names like `f.col` parsed as ObjectName.
+    let dialects = all_dialects_where(|d| d.supports_select_wildcard_exclude());
+
+    // Qualified name in multi-column EXCLUDE list: f.* EXCLUDE (f.col1, f.col2)
+    let select = dialects
+        .verified_only_select("SELECT f.* EXCLUDE (f.account_canonical_id, f.amount) FROM t AS f");
+    match &select.projection[0] {
+        SelectItem::QualifiedWildcard(_, WildcardAdditionalOptions { opt_exclude, .. }) => {
+            assert_eq!(
+                *opt_exclude,
+                Some(ExcludeSelectItem::Multiple(vec![
+                    ObjectName::from(vec![Ident::new("f"), Ident::new("account_canonical_id")]),
+                    ObjectName::from(vec![Ident::new("f"), Ident::new("amount")]),
+                ]))
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // Plain identifiers must still parse successfully.
+    dialects.verified_only_select("SELECT f.* EXCLUDE (account_canonical_id) FROM t AS f");
+    dialects.verified_only_select("SELECT f.* EXCLUDE (col1, col2) FROM t AS f");
 }
 
 #[test]

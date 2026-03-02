@@ -2940,7 +2940,7 @@ impl<'a> Parser<'a> {
     /// ```sql
     /// TRIM ([WHERE] ['text' FROM] 'text')
     /// TRIM ('text')
-    /// TRIM(<expr>, [, characters]) -- only Snowflake or BigQuery
+    /// TRIM(<expr>, [, characters]) -- PostgreSQL, DuckDB, Snowflake, BigQuery, Generic
     /// ```
     pub fn parse_trim_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
@@ -2961,8 +2961,7 @@ impl<'a> Parser<'a> {
                 trim_what: Some(trim_what),
                 trim_characters: None,
             })
-        } else if self.consume_token(&Token::Comma)
-            && dialect_of!(self is DuckDbDialect | SnowflakeDialect | BigQueryDialect | GenericDialect)
+        } else if self.dialect.supports_comma_separated_trim() && self.consume_token(&Token::Comma)
         {
             let characters = self.parse_comma_separated(Parser::parse_expr)?;
             self.expect_token(&Token::RParen)?;
@@ -9048,17 +9047,38 @@ impl<'a> Parser<'a> {
                 .into(),
             ))
         } else if self.parse_keyword(Keyword::UNIQUE) {
+            let index_type_display =
+                if self.dialect.supports_key_column_option() && self.parse_keyword(Keyword::KEY) {
+                    KeyOrIndexDisplay::Key
+                } else {
+                    KeyOrIndexDisplay::None
+                };
             let characteristics = self.parse_constraint_characteristics()?;
             Ok(Some(
                 UniqueConstraint {
                     name: None,
                     index_name: None,
-                    index_type_display: KeyOrIndexDisplay::None,
+                    index_type_display,
                     index_type: None,
                     columns: vec![],
                     index_options: vec![],
                     characteristics,
                     nulls_distinct: NullsDistinctOption::None,
+                }
+                .into(),
+            ))
+        } else if self.dialect.supports_key_column_option() && self.parse_keyword(Keyword::KEY) {
+            // In MySQL, `KEY` in a column definition is shorthand for `PRIMARY KEY`.
+            // See: https://dev.mysql.com/doc/refman/8.4/en/create-table.html
+            let characteristics = self.parse_constraint_characteristics()?;
+            Ok(Some(
+                PrimaryKeyConstraint {
+                    name: None,
+                    index_name: None,
+                    index_type: None,
+                    columns: vec![],
+                    index_options: vec![],
+                    characteristics,
                 }
                 .into(),
             ))
@@ -13290,6 +13310,9 @@ impl<'a> Parser<'a> {
         };
 
         let from = self.parse_comma_separated(Parser::parse_table_and_joins)?;
+
+        let output = self.maybe_parse_output_clause()?;
+
         let using = if self.parse_keyword(Keyword::USING) {
             Some(self.parse_comma_separated(Parser::parse_table_and_joins)?)
         } else {
@@ -13328,6 +13351,7 @@ impl<'a> Parser<'a> {
             using,
             selection,
             returning,
+            output,
             order_by,
             limit,
         }))
@@ -17256,10 +17280,10 @@ impl<'a> Parser<'a> {
 
             let is_mysql = dialect_of!(self is MySqlDialect);
 
-            let (columns, partitioned, after_columns, source, assignments) = if self
+            let (columns, partitioned, after_columns, output, source, assignments) = if self
                 .parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES])
             {
-                (vec![], None, vec![], None, vec![])
+                (vec![], None, vec![], None, None, vec![])
             } else {
                 let (columns, partitioned, after_columns) = if !self.peek_subquery_start() {
                     let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
@@ -17276,6 +17300,8 @@ impl<'a> Parser<'a> {
                     Default::default()
                 };
 
+                let output = self.maybe_parse_output_clause()?;
+
                 let (source, assignments) = if self.peek_keyword(Keyword::FORMAT)
                     || self.peek_keyword(Keyword::SETTINGS)
                 {
@@ -17286,7 +17312,14 @@ impl<'a> Parser<'a> {
                     (Some(self.parse_query()?), vec![])
                 };
 
-                (columns, partitioned, after_columns, source, assignments)
+                (
+                    columns,
+                    partitioned,
+                    after_columns,
+                    output,
+                    source,
+                    assignments,
+                )
             };
 
             let (format_clause, settings) = if self.dialect.supports_insert_format() {
@@ -17388,6 +17421,7 @@ impl<'a> Parser<'a> {
                 has_table_keyword: table,
                 on,
                 returning,
+                output,
                 replace_into,
                 priority,
                 insert_alias,
@@ -17493,6 +17527,9 @@ impl<'a> Parser<'a> {
         };
         self.expect_keyword(Keyword::SET)?;
         let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
+
+        let output = self.maybe_parse_output_clause()?;
+
         let from = if from_before_set.is_none() && self.parse_keyword(Keyword::FROM) {
             Some(UpdateTableFromKind::AfterSet(
                 self.parse_table_with_joins()?,
@@ -17523,6 +17560,7 @@ impl<'a> Parser<'a> {
             from,
             selection,
             returning,
+            output,
             or,
             limit,
         }
@@ -17932,11 +17970,12 @@ impl<'a> Parser<'a> {
     ) -> Result<Option<ExcludeSelectItem>, ParserError> {
         let opt_exclude = if self.parse_keyword(Keyword::EXCLUDE) {
             if self.consume_token(&Token::LParen) {
-                let columns = self.parse_comma_separated(|parser| parser.parse_identifier())?;
+                let columns =
+                    self.parse_comma_separated(|parser| parser.parse_object_name(false))?;
                 self.expect_token(&Token::RParen)?;
                 Some(ExcludeSelectItem::Multiple(columns))
             } else {
-                let column = self.parse_identifier()?;
+                let column = self.parse_object_name(false)?;
                 Some(ExcludeSelectItem::Single(column))
             }
         } else {
@@ -18584,6 +18623,9 @@ impl<'a> Parser<'a> {
 
     /// Parse a SQL `EXECUTE` statement
     pub fn parse_execute(&mut self) -> Result<Statement, ParserError> {
+        // Track whether the procedure/expression name itself was wrapped in parens,
+        // i.e. `EXEC (@sql)` (dynamic string execution) vs `EXEC sp_name`.
+        // When the name has parens there are no additional parameters.
         let name = if self.dialect.supports_execute_immediate()
             && self.parse_keyword(Keyword::IMMEDIATE)
         {
@@ -18594,10 +18636,18 @@ impl<'a> Parser<'a> {
             if has_parentheses {
                 self.expect_token(&Token::RParen)?;
             }
-            Some(name)
+            Some((name, has_parentheses))
         };
 
-        let has_parentheses = self.consume_token(&Token::LParen);
+        let name_had_parentheses = name.as_ref().map(|(_, p)| *p).unwrap_or(false);
+
+        // Only look for a parameter list when the name was NOT wrapped in parens.
+        // `EXEC (@sql)` is dynamic SQL execution and takes no parameters here.
+        let has_parentheses = if name_had_parentheses {
+            false
+        } else {
+            self.consume_token(&Token::LParen)
+        };
 
         let end_kws = &[Keyword::USING, Keyword::OUTPUT, Keyword::DEFAULT];
         let end_token = match (has_parentheses, self.peek_token().token) {
@@ -18607,11 +18657,17 @@ impl<'a> Parser<'a> {
             (false, _) => Token::SemiColon,
         };
 
-        let parameters = self.parse_comma_separated0(Parser::parse_expr, end_token)?;
+        let parameters = if name_had_parentheses {
+            vec![]
+        } else {
+            self.parse_comma_separated0(Parser::parse_expr, end_token)?
+        };
 
         if has_parentheses {
             self.expect_token(&Token::RParen)?;
         }
+
+        let name = name.map(|(n, _)| n);
 
         let into = if self.parse_keyword(Keyword::INTO) {
             self.parse_comma_separated(Self::parse_identifier)?

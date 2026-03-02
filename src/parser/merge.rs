@@ -218,7 +218,21 @@ impl Parser<'_> {
         self.parse_parenthesized_qualified_column_list(IsOptional::Optional, allow_empty)
     }
 
-    fn parse_output(
+    /// Parses an `OUTPUT` clause if present (MSSQL).
+    pub(super) fn maybe_parse_output_clause(
+        &mut self,
+    ) -> Result<Option<OutputClause>, ParserError> {
+        if self.parse_keyword(Keyword::OUTPUT) {
+            Ok(Some(self.parse_output(
+                Keyword::OUTPUT,
+                self.get_current_token().clone(),
+            )?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub(super) fn parse_output(
         &mut self,
         start_keyword: Keyword,
         start_token: TokenWithSpan,

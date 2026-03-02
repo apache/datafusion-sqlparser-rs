@@ -280,4 +280,12 @@ impl Dialect for GenericDialect {
     fn supports_constraint_keyword_without_name(&self) -> bool {
         true
     }
+
+    fn supports_key_column_option(&self) -> bool {
+        true
+    }
+
+    fn supports_comma_separated_trim(&self) -> bool {
+        true
+    }
 }

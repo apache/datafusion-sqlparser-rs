@@ -1018,13 +1018,13 @@ pub enum ExcludeSelectItem {
     /// ```plaintext
     /// <col_name>
     /// ```
-    Single(Ident),
+    Single(ObjectName),
     /// Multiple column names inside parenthesis.
     /// # Syntax
     /// ```plaintext
     /// (<col_name>, <col_name>, ...)
     /// ```
-    Multiple(Vec<Ident>),
+    Multiple(Vec<ObjectName>),
 }
 
 impl fmt::Display for ExcludeSelectItem {

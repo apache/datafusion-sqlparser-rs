@@ -206,6 +206,11 @@ impl Dialect for MySqlDialect {
     fn supports_constraint_keyword_without_name(&self) -> bool {
         true
     }
+
+    /// See: <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
+    fn supports_key_column_option(&self) -> bool {
+        true
+    }
 }
 
 /// `LOCK TABLES`

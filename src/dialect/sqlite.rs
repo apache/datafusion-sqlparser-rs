@@ -120,4 +120,8 @@ impl Dialect for SQLiteDialect {
     fn supports_notnull_operator(&self) -> bool {
         true
     }
+
+    fn supports_comma_separated_trim(&self) -> bool {
+        true
+    }
 }

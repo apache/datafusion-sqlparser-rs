@@ -1195,6 +1195,18 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports the `KEY` keyword as part of
+    /// column-level constraints in a `CREATE TABLE` statement.
+    ///
+    /// When enabled, the parser accepts these MySQL-specific column options:
+    /// - `UNIQUE [KEY]` — optional `KEY` after `UNIQUE`
+    /// - `[PRIMARY] KEY` — standalone `KEY` as shorthand for `PRIMARY KEY`
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
+    fn supports_key_column_option(&self) -> bool {
+        false
+    }
+
     /// Returns true if the specified keyword is reserved and cannot be
     /// used as an identifier without special handling like quoting.
     fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {
@@ -1637,6 +1649,12 @@ pub trait Dialect: Debug + Any {
     ///
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select/format)
     fn supports_select_format(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports the two-argument comma-separated
+    /// form of the `TRIM` function: `TRIM(expr, characters)`.
+    fn supports_comma_separated_trim(&self) -> bool {
         false
     }
 }

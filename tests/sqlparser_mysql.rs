@@ -945,6 +945,15 @@ fn parse_create_table_primary_and_unique_key_characteristic_test() {
 }
 
 #[test]
+fn parse_create_table_column_key_options() {
+    mysql_and_generic().verified_stmt("CREATE TABLE foo (x INT UNIQUE KEY)");
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (x INT KEY)",
+        "CREATE TABLE foo (x INT PRIMARY KEY)",
+    );
+}
+
+#[test]
 fn parse_create_table_comment() {
     let without_equal = "CREATE TABLE foo (bar INT) COMMENT 'baz'";
     let with_equal = "CREATE TABLE foo (bar INT) COMMENT = 'baz'";
@@ -2662,6 +2671,7 @@ fn parse_update_with_joins() {
             limit: None,
             optimizer_hints,
             update_token: _,
+            output: _,
         }) if optimizer_hints.is_empty() => {
             assert_eq!(
                 TableWithJoins {

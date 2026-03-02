@@ -2783,3 +2783,68 @@ fn test_tsql_statement_keywords_not_implicit_aliases() {
         );
     }
 }
+
+#[test]
+fn test_exec_dynamic_sql() {
+    // EXEC (@sql) executes a dynamic SQL string held in a variable.
+    // It must parse as a single Execute statement and not attempt to parse
+    // parameters after the closing paren.
+    let stmts = tsql()
+        .parse_sql_statements("EXEC (@sql)")
+        .expect("EXEC (@sql) should parse");
+    assert_eq!(stmts.len(), 1);
+    assert!(
+        matches!(&stmts[0], Statement::Execute { .. }),
+        "expected Execute, got: {:?}",
+        stmts[0]
+    );
+
+    // Verify that a statement following EXEC (@sql) on the next line is parsed
+    // as a separate statement and not consumed as a parameter.
+    let stmts = tsql()
+        .parse_sql_statements("EXEC (@sql)\nDROP TABLE #tmp")
+        .expect("EXEC (@sql) followed by DROP TABLE should parse");
+    assert_eq!(stmts.len(), 2);
+}
+
+// MSSQL OUTPUT clause on INSERT/UPDATE/DELETE
+// https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql
+#[test]
+fn parse_mssql_insert_with_output() {
+    ms_and_generic().verified_stmt(
+        "INSERT INTO customers (name, email) OUTPUT INSERTED.id, INSERTED.name VALUES ('John', 'john@example.com')",
+    );
+}
+
+#[test]
+fn parse_mssql_insert_with_output_into() {
+    ms_and_generic().verified_stmt(
+        "INSERT INTO customers (name, email) OUTPUT INSERTED.id, INSERTED.name INTO @new_ids VALUES ('John', 'john@example.com')",
+    );
+}
+
+#[test]
+fn parse_mssql_delete_with_output() {
+    ms_and_generic().verified_stmt("DELETE FROM customers OUTPUT DELETED.* WHERE id = 1");
+}
+
+#[test]
+fn parse_mssql_delete_with_output_into() {
+    ms_and_generic().verified_stmt(
+        "DELETE FROM customers OUTPUT DELETED.id, DELETED.name INTO @deleted_rows WHERE active = 0",
+    );
+}
+
+#[test]
+fn parse_mssql_update_with_output() {
+    ms_and_generic().verified_stmt(
+        "UPDATE employees SET salary = salary * 1.1 OUTPUT INSERTED.id, DELETED.salary, INSERTED.salary WHERE department = 'Engineering'",
+    );
+}
+
+#[test]
+fn parse_mssql_update_with_output_into() {
+    ms_and_generic().verified_stmt(
+        "UPDATE employees SET salary = salary * 1.1 OUTPUT INSERTED.id, DELETED.salary, INSERTED.salary INTO @changes WHERE department = 'Engineering'",
+    );
+}

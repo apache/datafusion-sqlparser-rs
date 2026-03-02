@@ -79,6 +79,9 @@ pub struct Insert {
     pub on: Option<OnInsert>,
     /// RETURNING
     pub returning: Option<Vec<SelectItem>>,
+    /// OUTPUT (MSSQL)
+    /// See <https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql>
+    pub output: Option<OutputClause>,
     /// Only for mysql
     pub replace_into: bool,
     /// Only for mysql
@@ -203,6 +206,11 @@ impl Display for Insert {
             SpaceOrNewline.fmt(f)?;
         }
 
+        if let Some(output) = &self.output {
+            write!(f, "{output}")?;
+            SpaceOrNewline.fmt(f)?;
+        }
+
         if let Some(settings) = &self.settings {
             write!(f, "SETTINGS {}", display_comma_separated(settings))?;
             SpaceOrNewline.fmt(f)?;
@@ -289,6 +297,9 @@ pub struct Delete {
     pub selection: Option<Expr>,
     /// RETURNING
     pub returning: Option<Vec<SelectItem>>,
+    /// OUTPUT (MSSQL)
+    /// See <https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql>
+    pub output: Option<OutputClause>,
     /// ORDER BY (MySQL)
     pub order_by: Vec<OrderByExpr>,
     /// LIMIT (MySQL)
@@ -313,6 +324,10 @@ impl Display for Delete {
             FromTable::WithoutKeyword(from) => {
                 indented_list(f, from)?;
             }
+        }
+        if let Some(output) = &self.output {
+            SpaceOrNewline.fmt(f)?;
+            write!(f, "{output}")?;
         }
         if let Some(using) = &self.using {
             SpaceOrNewline.fmt(f)?;
@@ -367,6 +382,9 @@ pub struct Update {
     pub selection: Option<Expr>,
     /// RETURNING
     pub returning: Option<Vec<SelectItem>>,
+    /// OUTPUT (MSSQL)
+    /// See <https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql>
+    pub output: Option<OutputClause>,
     /// SQLite-specific conflict resolution clause
     pub or: Option<SqliteOnConflict>,
     /// LIMIT
@@ -395,6 +413,10 @@ impl Display for Update {
             SpaceOrNewline.fmt(f)?;
             f.write_str("SET")?;
             indented_list(f, &self.assignments)?;
+        }
+        if let Some(output) = &self.output {
+            SpaceOrNewline.fmt(f)?;
+            write!(f, "{output}")?;
         }
         if let Some(UpdateTableFromKind::AfterSet(from)) = &self.from {
             SpaceOrNewline.fmt(f)?;
@@ -717,11 +739,11 @@ impl Display for MergeUpdateExpr {
     }
 }
 
-/// A `OUTPUT` Clause in the end of a `MERGE` Statement
+/// An `OUTPUT` clause on `MERGE`, `INSERT`, `UPDATE`, or `DELETE` (MSSQL).
 ///
 /// Example:
 /// OUTPUT $action, deleted.* INTO dbo.temp_products;
-/// [mssql](https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql)
+/// <https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

@@ -1210,6 +1210,7 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::ANTI,
     Keyword::SEMI,
     Keyword::RETURNING,
+    Keyword::OUTPUT,
     Keyword::ASOF,
     Keyword::MATCH_CONDITION,
     // for MSSQL-specific OUTER APPLY (seems reserved in most dialects)
@@ -1264,6 +1265,7 @@ pub const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
     Keyword::CLUSTER,
     Keyword::DISTRIBUTE,
     Keyword::RETURNING,
+    Keyword::VALUES,
     // Reserved only as a column alias in the `SELECT` clause
     Keyword::FROM,
     Keyword::INTO,

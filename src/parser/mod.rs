@@ -11027,14 +11027,13 @@ impl<'a> Parser<'a> {
         while let Some(opt) = self.maybe_parse(|parser| parser.parse_copy_legacy_option())? {
             legacy_options.push(opt);
         }
-        let values = if matches!(target, CopyTarget::Stdin)
-            && self.peek_token_ref().token != Token::EOF
-        {
-            self.expect_token(&Token::SemiColon)?;
-            self.parse_tsv()
-        } else {
-            vec![]
-        };
+        let values =
+            if matches!(target, CopyTarget::Stdin) && self.peek_token_ref().token != Token::EOF {
+                self.expect_token(&Token::SemiColon)?;
+                self.parse_tsv()
+            } else {
+                vec![]
+            };
         Ok(Statement::Copy {
             source,
             to,

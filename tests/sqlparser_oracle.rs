@@ -475,6 +475,21 @@ fn test_insert_with_table_alias() {
          VALUES (1, 2, 3)",
     );
     verify_table_name_with_alias(&stmt, "foo_t", "t");
+
+    let stmt =
+        oracle_dialect.verified_stmt("INSERT INTO foo_t t (t.id, t.val) SELECT 1, 2 FROM dual");
+    verify_table_name_with_alias(&stmt, "foo_t", "t");
+    if let Statement::Insert(Insert { columns, .. }) = stmt {
+        assert_eq!(
+            vec![
+                ObjectName::from(vec![Ident::new("t"), Ident::new("id")]),
+                ObjectName::from(vec![Ident::new("t"), Ident::new("val")])
+            ],
+            columns
+        );
+    } else {
+        panic!("not an insert statement");
+    };
 }
 
 #[test]

@@ -17319,7 +17319,8 @@ impl<'a> Parser<'a> {
                 (vec![], None, vec![], None, None, vec![])
             } else {
                 let (columns, partitioned, after_columns) = if !self.peek_subquery_start() {
-                    let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
+                    let columns =
+                        self.parse_parenthesized_qualified_column_list(Optional, is_mysql)?;
 
                     let partitioned = self.parse_insert_partition()?;
                     // Hive allows you to specify columns after partitions as well if you want.

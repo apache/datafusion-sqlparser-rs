@@ -61,7 +61,7 @@ pub struct Insert {
     /// `table_name foo` (for Oracle)
     pub table_alias: Option<TableAliasWithoutColumns>,
     /// COLUMNS
-    pub columns: Vec<Ident>,
+    pub columns: Vec<ObjectName>,
     /// Overwrite (Hive)
     pub overwrite: bool,
     /// A SQL query that specifies what to insert

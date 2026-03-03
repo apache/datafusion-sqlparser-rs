@@ -452,3 +452,18 @@ fn parse_vacuum() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn test_create_table_diststyle_distkey() {
+    redshift().verified_stmt(
+        "CREATE TEMPORARY TABLE tmp_sbk_summary_pp DISTSTYLE KEY DISTKEY(bet_id) AS SELECT 1 AS bet_id",
+    );
+}
+
+#[test]
+fn test_create_table_diststyle() {
+    redshift().verified_stmt("CREATE TABLE t1 (c1 INT) DISTSTYLE AUTO");
+    redshift().verified_stmt("CREATE TABLE t1 (c1 INT) DISTSTYLE EVEN");
+    redshift().verified_stmt("CREATE TABLE t1 (c1 INT) DISTSTYLE KEY DISTKEY(c1)");
+    redshift().verified_stmt("CREATE TABLE t1 (c1 INT) DISTSTYLE ALL");
+}

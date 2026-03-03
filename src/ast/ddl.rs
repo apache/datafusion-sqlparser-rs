@@ -3032,6 +3032,12 @@ pub struct CreateTable {
     /// Snowflake "REQUIRE USER" clause for dybamic tables
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-dynamic-table>
     pub require_user: bool,
+    /// Redshift `DISTSTYLE` option
+    /// <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html>
+    pub diststyle: Option<DistStyle>,
+    /// Redshift `DISTKEY` option
+    /// <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html>
+    pub distkey: Option<Ident>,
 }
 
 impl fmt::Display for CreateTable {
@@ -3330,6 +3336,12 @@ impl fmt::Display for CreateTable {
         if self.strict {
             write!(f, " STRICT")?;
         }
+        if let Some(diststyle) = &self.diststyle {
+            write!(f, " DISTSTYLE {diststyle}")?;
+        }
+        if let Some(distkey) = &self.distkey {
+            write!(f, " DISTKEY({distkey})")?;
+        }
         if let Some(query) = &self.query {
             write!(f, " AS {query}")?;
         }
@@ -3413,6 +3425,34 @@ impl fmt::Display for PartitionBoundValue {
             PartitionBoundValue::Expr(expr) => write!(f, "{expr}"),
             PartitionBoundValue::MinValue => write!(f, "MINVALUE"),
             PartitionBoundValue::MaxValue => write!(f, "MAXVALUE"),
+        }
+    }
+}
+
+/// Redshift distribution style for `CREATE TABLE`.
+///
+/// See [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DistStyle {
+    /// `DISTSTYLE AUTO`
+    Auto,
+    /// `DISTSTYLE EVEN`
+    Even,
+    /// `DISTSTYLE KEY`
+    Key,
+    /// `DISTSTYLE ALL`
+    All,
+}
+
+impl fmt::Display for DistStyle {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DistStyle::Auto => write!(f, "AUTO"),
+            DistStyle::Even => write!(f, "EVEN"),
+            DistStyle::Key => write!(f, "KEY"),
+            DistStyle::All => write!(f, "ALL"),
         }
     }
 }

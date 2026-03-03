@@ -25,10 +25,11 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::{
-    ClusteredBy, ColumnDef, CommentDef, CreateTable, CreateTableLikeKind, CreateTableOptions, Expr,
-    FileFormat, ForValues, HiveDistributionStyle, HiveFormat, Ident, InitializeKind, ObjectName,
-    OnCommit, OneOrManyWithParens, Query, RefreshModeKind, RowAccessPolicy, Statement,
-    StorageSerializationPolicy, TableConstraint, TableVersion, Tag, WrappedCollection,
+    ClusteredBy, ColumnDef, CommentDef, CreateTable, CreateTableLikeKind, CreateTableOptions,
+    DistStyle, Expr, FileFormat, ForValues, HiveDistributionStyle, HiveFormat, Ident,
+    InitializeKind, ObjectName, OnCommit, OneOrManyWithParens, Query, RefreshModeKind,
+    RowAccessPolicy, Statement, StorageSerializationPolicy, TableConstraint, TableVersion, Tag,
+    WrappedCollection,
 };
 
 use crate::parser::ParserError;
@@ -170,6 +171,10 @@ pub struct CreateTableBuilder {
     pub initialize: Option<InitializeKind>,
     /// Whether operations require a user identity.
     pub require_user: bool,
+    /// Redshift `DISTSTYLE` option.
+    pub diststyle: Option<DistStyle>,
+    /// Redshift `DISTKEY` option.
+    pub distkey: Option<Ident>,
 }
 
 impl CreateTableBuilder {
@@ -229,6 +234,8 @@ impl CreateTableBuilder {
             refresh_mode: None,
             initialize: None,
             require_user: false,
+            diststyle: None,
+            distkey: None,
         }
     }
     /// Set `OR REPLACE` for the CREATE TABLE statement.
@@ -504,6 +511,16 @@ impl CreateTableBuilder {
         self.require_user = require_user;
         self
     }
+    /// Set Redshift `DISTSTYLE` option.
+    pub fn diststyle(mut self, diststyle: Option<DistStyle>) -> Self {
+        self.diststyle = diststyle;
+        self
+    }
+    /// Set Redshift `DISTKEY` option.
+    pub fn distkey(mut self, distkey: Option<Ident>) -> Self {
+        self.distkey = distkey;
+        self
+    }
     /// Consume the builder and produce a `CreateTable`.
     pub fn build(self) -> CreateTable {
         CreateTable {
@@ -560,6 +577,8 @@ impl CreateTableBuilder {
             refresh_mode: self.refresh_mode,
             initialize: self.initialize,
             require_user: self.require_user,
+            diststyle: self.diststyle,
+            distkey: self.distkey,
         }
     }
 }
@@ -635,6 +654,8 @@ impl From<CreateTable> for CreateTableBuilder {
             refresh_mode: table.refresh_mode,
             initialize: table.initialize,
             require_user: table.require_user,
+            diststyle: table.diststyle,
+            distkey: table.distkey,
         }
     }
 }

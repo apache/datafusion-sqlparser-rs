@@ -5493,16 +5493,16 @@ fn test_simple_postgres_insert_with_alias() {
                 }
             }),
             columns: vec![
-                Ident {
+                ObjectName::from(Ident {
                     value: "id".to_string(),
                     quote_style: None,
                     span: Span::empty(),
-                },
-                Ident {
+                }),
+                ObjectName::from(Ident {
                     value: "a".to_string(),
                     quote_style: None,
                     span: Span::empty(),
-                }
+                })
             ],
             overwrite: false,
             source: Some(Box::new(Query {
@@ -5573,16 +5573,16 @@ fn test_simple_postgres_insert_with_alias() {
                 }
             }),
             columns: vec![
-                Ident {
+                ObjectName::from(Ident {
                     value: "id".to_string(),
                     quote_style: None,
                     span: Span::empty(),
-                },
-                Ident {
+                }),
+                ObjectName::from(Ident {
                     value: "a".to_string(),
                     quote_style: None,
                     span: Span::empty(),
-                }
+                })
             ],
             overwrite: false,
             source: Some(Box::new(Query {
@@ -5655,16 +5655,16 @@ fn test_simple_insert_with_quoted_alias() {
                 }
             }),
             columns: vec![
-                Ident {
+                ObjectName::from(Ident {
                     value: "id".to_string(),
                     quote_style: None,
                     span: Span::empty(),
-                },
-                Ident {
+                }),
+                ObjectName::from(Ident {
                     value: "a".to_string(),
                     quote_style: None,
                     span: Span::empty(),
-                }
+                })
             ],
             overwrite: false,
             source: Some(Box::new(Query {

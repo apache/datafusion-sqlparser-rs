@@ -153,7 +153,10 @@ fn parse_insert_values() {
                 assert_eq!(table_name.to_string(), expected_table_name);
                 assert_eq!(columns.len(), expected_columns.len());
                 for (index, column) in columns.iter().enumerate() {
-                    assert_eq!(column, &Ident::new(expected_columns[index].clone()));
+                    assert_eq!(
+                        column,
+                        &ObjectName::from(Ident::new(expected_columns[index].clone()))
+                    );
                 }
                 match *source.body {
                     SetExpr::Values(Values {

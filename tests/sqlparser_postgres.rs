@@ -6461,6 +6461,7 @@ fn parse_trigger_related_functions() {
             default_ddl_collation: None,
             with_aggregation_policy: None,
             with_row_access_policy: None,
+            with_storage_lifecycle_policy: None,
             with_tags: None,
             base_location: None,
             external_volume: None,

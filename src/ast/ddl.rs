@@ -48,9 +48,9 @@ use crate::ast::{
     HiveFormat, HiveIOFormat, HiveRowFormat, HiveSetLocation, Ident, InitializeKind,
     MySQLColumnPosition, ObjectName, OnCommit, OneOrManyWithParens, OperateFunctionArg,
     OrderByExpr, ProjectionSelect, Query, RefreshModeKind, RowAccessPolicy, SequenceOptions,
-    Spanned, SqlOption, StorageSerializationPolicy, TableVersion, Tag, TriggerEvent,
-    TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value, ValueWithSpan,
-    WrappedCollection,
+    Spanned, SqlOption, StorageLifecyclePolicy, StorageSerializationPolicy, TableVersion, Tag,
+    TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value,
+    ValueWithSpan, WrappedCollection,
 };
 use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
 use crate::keywords::Keyword;
@@ -2999,6 +2999,9 @@ pub struct CreateTable {
     /// Snowflake "WITH ROW ACCESS POLICY" clause
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
     pub with_row_access_policy: Option<RowAccessPolicy>,
+    /// Snowflake "WITH STORAGE LIFECYCLE POLICY" clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
+    pub with_storage_lifecycle_policy: Option<StorageLifecyclePolicy>,
     /// Snowflake "WITH TAG" clause
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
     pub with_tags: Option<Vec<Tag>>,
@@ -3298,6 +3301,10 @@ impl fmt::Display for CreateTable {
 
         if let Some(row_access_policy) = &self.with_row_access_policy {
             write!(f, " {row_access_policy}",)?;
+        }
+
+        if let Some(storage_lifecycle_policy) = &self.with_storage_lifecycle_policy {
+            write!(f, " {storage_lifecycle_policy}",)?;
         }
 
         if let Some(tag) = &self.with_tags {

@@ -2641,6 +2641,29 @@ fn test_snowflake_copy_into_stage_name_ends_with_parens() {
 }
 
 #[test]
+fn test_snowflake_stage_name_with_special_chars() {
+    // Stage path with '=' (Hive-style partitioning)
+    let sql = "SELECT * FROM @stage/day=18/23.parquet";
+    let stmt = snowflake().parse_sql_statements(sql).unwrap();
+    assert_eq!(1, stmt.len());
+
+    // Stage path with ':' (time-based partitioning)
+    let sql = "SELECT * FROM @stage/0:18:23/23.parquet";
+    let stmt = snowflake().parse_sql_statements(sql).unwrap();
+    assert_eq!(1, stmt.len());
+
+    // COPY INTO with '=' in stage path
+    snowflake().parse_sql_statements(
+        "COPY INTO my_table FROM @stage/day=18/file.parquet",
+    ).unwrap();
+
+    // COPY INTO with ':' in stage path
+    snowflake().parse_sql_statements(
+        "COPY INTO my_table FROM @stage/0:18:23/file.parquet",
+    ).unwrap();
+}
+
+#[test]
 fn test_snowflake_trim() {
     let real_sql = r#"SELECT customer_id, TRIM(sub_items.value:item_price_id, '"', "a") AS item_price_id FROM models_staging.subscriptions"#;
     assert_eq!(snowflake().verified_stmt(real_sql).to_string(), real_sql);

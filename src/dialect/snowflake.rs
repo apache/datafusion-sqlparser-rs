@@ -1504,13 +1504,13 @@ fn parse_select_item_for_data_load(
 
     // try extracting optional element path (e.g. :UsageMetrics:hh)
     let mut elements = Vec::new();
-    while parser.next_token().token == Token::Colon {
+    while parser.peek_token_ref().token == Token::Colon {
+        parser.next_token(); // consume the colon
         match parser.next_token().token {
             Token::Word(w) => elements.push(Ident::new(w.value)),
             _ => return parser.expected_ref("element name", parser.peek_token_ref()),
         }
     }
-    parser.prev_token();
     if !elements.is_empty() {
         element = Some(elements);
     }

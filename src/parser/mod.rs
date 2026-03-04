@@ -12314,7 +12314,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Optionally parses an alias for a select list item
-    pub fn maybe_parse_select_item_alias(&mut self) -> Result<Option<Ident>, ParserError> {
+    pub(crate) fn maybe_parse_select_item_alias(&mut self) -> Result<Option<Ident>, ParserError> {
         fn validator(explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
             parser.dialect.is_select_item_alias(explicit, kw, parser)
         }

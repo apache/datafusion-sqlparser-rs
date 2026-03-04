@@ -9988,6 +9988,18 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse Redshift `ALTER SORTKEY (column_list)`.
+    ///
+    /// See <https://docs.aws.amazon.com/redshift/latest/dg/r_ALTER_TABLE.html>
+    fn parse_alter_sort_key(&mut self) -> Result<AlterTableOperation, ParserError> {
+        self.expect_keyword_is(Keyword::ALTER)?;
+        self.expect_keyword_is(Keyword::SORTKEY)?;
+        self.expect_token(&Token::LParen)?;
+        let columns = self.parse_comma_separated(|p| p.parse_expr())?;
+        self.expect_token(&Token::RParen)?;
+        Ok(AlterTableOperation::AlterSortKey { columns })
+    }
+
     /// Parse a single `ALTER TABLE` operation and return an `AlterTableOperation`.
     pub fn parse_alter_table_operation(&mut self) -> Result<AlterTableOperation, ParserError> {
         let operation = if self.parse_keyword(Keyword::ADD) {
@@ -10266,12 +10278,9 @@ impl<'a> Parser<'a> {
                 column_position,
             }
         } else if self.parse_keyword(Keyword::ALTER) {
-            // Redshift: ALTER SORTKEY (column_list)
-            if self.parse_keyword(Keyword::SORTKEY) {
-                self.expect_token(&Token::LParen)?;
-                let columns = self.parse_comma_separated(|p| p.parse_expr())?;
-                self.expect_token(&Token::RParen)?;
-                return Ok(AlterTableOperation::AlterSortKey { columns });
+            if self.peek_keyword(Keyword::SORTKEY) {
+                self.prev_token();
+                return self.parse_alter_sort_key();
             }
 
             let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]

@@ -202,6 +202,7 @@ define_keywords!(
     CENTURY,
     CHAIN,
     CHANGE,
+    CHANGES,
     CHANGE_TRACKING,
     CHANNEL,
     CHAR,

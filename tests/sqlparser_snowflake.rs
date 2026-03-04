@@ -3964,6 +3964,34 @@ fn test_timetravel_at_before() {
 }
 
 #[test]
+fn test_changes_clause() {
+    // CHANGES with AT and END
+    snowflake().verified_stmt(
+        "SELECT a FROM \"PCH_ODS_FIDELIO\".\"SRC_VW_SYS_ACC_MASTER\" CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP_TZ('2026-02-18 11:23:19.660000000')) END(TIMESTAMP => TO_TIMESTAMP_TZ('2026-02-18 11:38:30.211000000'))",
+    );
+
+    // CHANGES with AT only (no END)
+    snowflake().verified_stmt(
+        "SELECT a FROM t CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP_TZ('2026-02-18 11:23:19.660000000'))",
+    );
+
+    // CHANGES with APPEND_ONLY
+    snowflake().verified_stmt(
+        "SELECT a FROM t CHANGES(INFORMATION => APPEND_ONLY) AT(TIMESTAMP => TO_TIMESTAMP_TZ('2026-01-01 00:00:00'))",
+    );
+
+    // CHANGES with OFFSET
+    snowflake().verified_stmt(
+        "SELECT a FROM t CHANGES(INFORMATION => DEFAULT) AT(OFFSET => -60)",
+    );
+
+    // CHANGES with STATEMENT
+    snowflake().verified_stmt(
+        "SELECT a FROM t CHANGES(INFORMATION => DEFAULT) AT(STATEMENT => '8e5d0ca9-005e-44e6-b858-a8f5b37c5726')",
+    );
+}
+
+#[test]
 fn test_grant_account_global_privileges() {
     let privileges = vec![
         "ALL",

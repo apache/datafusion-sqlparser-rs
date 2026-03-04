@@ -16305,6 +16305,20 @@ impl<'a> Parser<'a> {
             {
                 let expr = self.parse_expr()?;
                 return Ok(Some(TableVersion::ForSystemTimeAsOf(expr)));
+            } else if self.peek_keyword(Keyword::CHANGES) {
+                // Snowflake CHANGES clause:
+                // CHANGES(INFORMATION => ...) AT(...) [END(...)]
+                let changes_name = self.parse_object_name(true)?;
+                let changes = self.parse_function(changes_name)?;
+                let at_name = self.parse_object_name(true)?;
+                let at = self.parse_function(at_name)?;
+                let end = if self.peek_keyword(Keyword::END) {
+                    let end_name = self.parse_object_name(true)?;
+                    Some(self.parse_function(end_name)?)
+                } else {
+                    None
+                };
+                return Ok(Some(TableVersion::Changes { changes, at, end }));
             } else if self.peek_keyword(Keyword::AT) || self.peek_keyword(Keyword::BEFORE) {
                 let func_name = self.parse_object_name(true)?;
                 let func = self.parse_function(func_name)?;

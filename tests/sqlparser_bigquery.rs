@@ -2890,3 +2890,24 @@ fn test_alter_schema() {
     bigquery_and_generic()
         .verified_stmt("ALTER SCHEMA IF EXISTS mydataset SET OPTIONS (location = 'us')");
 }
+
+#[test]
+fn test_create_snapshot_table() {
+    bigquery().verified_stmt("CREATE SNAPSHOT TABLE dataset_id.table1 CLONE dataset_id.table2");
+
+    bigquery().verified_stmt(
+        "CREATE SNAPSHOT TABLE IF NOT EXISTS dataset_id.table1 CLONE dataset_id.table2",
+    );
+
+    bigquery().verified_stmt(
+        "CREATE SNAPSHOT TABLE dataset_id.table1 CLONE dataset_id.table2 FOR SYSTEM_TIME AS OF TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 HOUR)",
+    );
+
+    bigquery().verified_stmt(
+        "CREATE SNAPSHOT TABLE dataset_id.table1 CLONE dataset_id.table2 OPTIONS(expiration_timestamp = TIMESTAMP '2025-01-01 00:00:00 UTC', friendly_name = 'my_table')",
+    );
+
+    bigquery().verified_stmt(
+        "CREATE SNAPSHOT TABLE IF NOT EXISTS dataset_id.table1 CLONE dataset_id.table2 FOR SYSTEM_TIME AS OF TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 HOUR) OPTIONS(expiration_timestamp = TIMESTAMP '2025-01-01 00:00:00 UTC')",
+    );
+}

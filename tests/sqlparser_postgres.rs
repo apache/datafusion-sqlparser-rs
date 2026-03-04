@@ -6409,6 +6409,7 @@ fn parse_trigger_related_functions() {
             transient: false,
             volatile: false,
             iceberg: false,
+            snapshot: false,
             name: ObjectName::from(vec![Ident::new("emp")]),
             columns: vec![
                 ColumnDef {

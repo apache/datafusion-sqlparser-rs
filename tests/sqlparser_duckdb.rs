@@ -709,6 +709,7 @@ fn test_duckdb_union_datatype() {
             transient: Default::default(),
             volatile: Default::default(),
             iceberg: Default::default(),
+            snapshot: false,
             dynamic: Default::default(),
             name: ObjectName::from(vec!["tbl1".into()]),
             columns: vec![

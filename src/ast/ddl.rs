@@ -2903,6 +2903,9 @@ pub struct CreateTable {
     pub volatile: bool,
     /// `ICEBERG` clause
     pub iceberg: bool,
+    /// BigQuery `SNAPSHOT` clause
+    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_snapshot_table_statement>
+    pub snapshot: bool,
     /// Table name
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     pub name: ObjectName,
@@ -3051,9 +3054,10 @@ impl fmt::Display for CreateTable {
         //   `CREATE TABLE t (a INT) AS SELECT a from t2`
         write!(
             f,
-            "CREATE {or_replace}{external}{global}{temporary}{transient}{volatile}{dynamic}{iceberg}TABLE {if_not_exists}{name}",
+            "CREATE {or_replace}{external}{global}{temporary}{transient}{volatile}{dynamic}{iceberg}{snapshot}TABLE {if_not_exists}{name}",
             or_replace = if self.or_replace { "OR REPLACE " } else { "" },
             external = if self.external { "EXTERNAL " } else { "" },
+            snapshot = if self.snapshot { "SNAPSHOT " } else { "" },
             global = self.global
                 .map(|global| {
                     if global {

@@ -3981,9 +3981,7 @@ fn test_changes_clause() {
     );
 
     // CHANGES with OFFSET
-    snowflake().verified_stmt(
-        "SELECT a FROM t CHANGES(INFORMATION => DEFAULT) AT(OFFSET => -60)",
-    );
+    snowflake().verified_stmt("SELECT a FROM t CHANGES(INFORMATION => DEFAULT) AT(OFFSET => -60)");
 
     // CHANGES with STATEMENT
     snowflake().verified_stmt(

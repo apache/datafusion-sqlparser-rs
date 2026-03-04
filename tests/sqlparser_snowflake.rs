@@ -4611,6 +4611,24 @@ END
 }
 
 #[test]
+fn test_begin_transaction() {
+    snowflake().verified_stmt("BEGIN TRANSACTION");
+    snowflake().verified_stmt("BEGIN WORK");
+
+    // BEGIN TRANSACTION with statements
+    let stmts = snowflake()
+        .parse_sql_statements("BEGIN TRANSACTION; DROP TABLE IF EXISTS bla; COMMIT")
+        .unwrap();
+    assert_eq!(3, stmts.len());
+
+    // Bare BEGIN (no TRANSACTION keyword) with statements
+    let stmts = snowflake()
+        .parse_sql_statements("BEGIN; DROP TABLE IF EXISTS bla; COMMIT")
+        .unwrap();
+    assert_eq!(3, stmts.len());
+}
+
+#[test]
 fn test_snowflake_fetch_clause_syntax() {
     let canonical = "SELECT c1 FROM fetch_test FETCH FIRST 2 ROWS ONLY";
     snowflake().verified_only_select_with_canonical("SELECT c1 FROM fetch_test FETCH 2", canonical);

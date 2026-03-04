@@ -2008,6 +2008,7 @@ fn parse_create_table_with_valid_options() {
                 require_user: false,
                 diststyle: None,
                 distkey: None,
+                sortkey: None,
             })
         );
     }
@@ -2178,6 +2179,7 @@ fn parse_create_table_with_identity_column() {
                 require_user: false,
                 diststyle: None,
                 distkey: None,
+                sortkey: None,
             }),
         );
     }

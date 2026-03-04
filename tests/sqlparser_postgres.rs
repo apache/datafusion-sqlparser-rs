@@ -6476,6 +6476,7 @@ fn parse_trigger_related_functions() {
             require_user: false,
             diststyle: None,
             distkey: None,
+            sortkey: None,
         }
     );
 

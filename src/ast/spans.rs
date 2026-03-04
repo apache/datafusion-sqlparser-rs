@@ -582,8 +582,9 @@ impl Spanned for CreateTable {
             refresh_mode: _,
             initialize: _,
             require_user: _,
-            diststyle: _, // enum, no span
-            distkey: _,   // Ident, todo
+            diststyle: _,
+            distkey: _,
+            sortkey: _,
         } = self;
 
         union_spans(
@@ -1193,6 +1194,7 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::OwnerTo { .. } => Span::empty(),
             AlterTableOperation::ClusterBy { exprs } => union_spans(exprs.iter().map(|e| e.span())),
             AlterTableOperation::DropClusteringKey => Span::empty(),
+            AlterTableOperation::AlterSortKey { .. } => Span::empty(),
             AlterTableOperation::SuspendRecluster => Span::empty(),
             AlterTableOperation::ResumeRecluster => Span::empty(),
             AlterTableOperation::Refresh { .. } => Span::empty(),

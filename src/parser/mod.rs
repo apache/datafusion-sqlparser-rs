@@ -8384,7 +8384,7 @@ impl<'a> Parser<'a> {
 
         let strict = self.parse_keyword(Keyword::STRICT);
 
-        // Redshift: DISTSTYLE, DISTKEY
+        // Redshift: DISTSTYLE, DISTKEY, SORTKEY
         let diststyle = if self.parse_keyword(Keyword::DISTSTYLE) {
             Some(self.parse_dist_style()?)
         } else {
@@ -8392,9 +8392,17 @@ impl<'a> Parser<'a> {
         };
         let distkey = if self.parse_keyword(Keyword::DISTKEY) {
             self.expect_token(&Token::LParen)?;
-            let column = self.parse_identifier()?;
+            let expr = self.parse_expr()?;
             self.expect_token(&Token::RParen)?;
-            Some(column)
+            Some(expr)
+        } else {
+            None
+        };
+        let sortkey = if self.parse_keyword(Keyword::SORTKEY) {
+            self.expect_token(&Token::LParen)?;
+            let columns = self.parse_comma_separated(|p| p.parse_expr())?;
+            self.expect_token(&Token::RParen)?;
+            Some(columns)
         } else {
             None
         };
@@ -8440,6 +8448,7 @@ impl<'a> Parser<'a> {
             .strict(strict)
             .diststyle(diststyle)
             .distkey(distkey)
+            .sortkey(sortkey)
             .build())
     }
 
@@ -10257,6 +10266,14 @@ impl<'a> Parser<'a> {
                 column_position,
             }
         } else if self.parse_keyword(Keyword::ALTER) {
+            // Redshift: ALTER SORTKEY (column_list)
+            if self.parse_keyword(Keyword::SORTKEY) {
+                self.expect_token(&Token::LParen)?;
+                let columns = self.parse_comma_separated(|p| p.parse_expr())?;
+                self.expect_token(&Token::RParen)?;
+                return Ok(AlterTableOperation::AlterSortKey { columns });
+            }
+
             let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
             let column_name = self.parse_identifier()?;
             let is_postgresql = dialect_of!(self is PostgreSqlDialect);

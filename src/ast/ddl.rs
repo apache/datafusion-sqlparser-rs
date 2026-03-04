@@ -1000,11 +1000,7 @@ impl fmt::Display for AlterTableOperation {
                 Ok(())
             }
             AlterTableOperation::AlterSortKey { columns } => {
-                write!(
-                    f,
-                    "ALTER SORTKEY({})",
-                    display_comma_separated(columns)
-                )?;
+                write!(f, "ALTER SORTKEY({})", display_comma_separated(columns))?;
                 Ok(())
             }
             AlterTableOperation::SuspendRecluster => {

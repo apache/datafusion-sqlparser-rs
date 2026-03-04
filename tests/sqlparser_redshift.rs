@@ -477,10 +477,8 @@ fn test_copy_credentials() {
 
 #[test]
 fn test_create_table_sortkey() {
-    redshift()
-        .verified_stmt("CREATE TABLE t1 (c1 INT, c2 INT, c3 TIMESTAMP) SORTKEY(c3)");
-    redshift()
-        .verified_stmt("CREATE TABLE t1 (c1 INT, c2 INT) SORTKEY(c1, c2)");
+    redshift().verified_stmt("CREATE TABLE t1 (c1 INT, c2 INT, c3 TIMESTAMP) SORTKEY(c3)");
+    redshift().verified_stmt("CREATE TABLE t1 (c1 INT, c2 INT) SORTKEY(c1, c2)");
 }
 
 #[test]

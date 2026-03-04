@@ -2653,14 +2653,14 @@ fn test_snowflake_stage_name_with_special_chars() {
     assert_eq!(1, stmt.len());
 
     // COPY INTO with '=' in stage path
-    snowflake().parse_sql_statements(
-        "COPY INTO my_table FROM @stage/day=18/file.parquet",
-    ).unwrap();
+    snowflake()
+        .parse_sql_statements("COPY INTO my_table FROM @stage/day=18/file.parquet")
+        .unwrap();
 
     // COPY INTO with ':' in stage path
-    snowflake().parse_sql_statements(
-        "COPY INTO my_table FROM @stage/0:18:23/file.parquet",
-    ).unwrap();
+    snowflake()
+        .parse_sql_statements("COPY INTO my_table FROM @stage/0:18:23/file.parquet")
+        .unwrap();
 }
 
 #[test]

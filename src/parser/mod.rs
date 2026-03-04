@@ -11177,6 +11177,7 @@ impl<'a> Parser<'a> {
             Keyword::BZIP2,
             Keyword::CLEANPATH,
             Keyword::COMPUPDATE,
+            Keyword::CREDENTIALS,
             Keyword::CSV,
             Keyword::DATEFORMAT,
             Keyword::DELIMITER,
@@ -11233,6 +11234,9 @@ impl<'a> Parser<'a> {
                     _ => None,
                 };
                 CopyLegacyOption::CompUpdate { preset, enabled }
+            }
+            Some(Keyword::CREDENTIALS) => {
+                CopyLegacyOption::Credentials(self.parse_literal_string()?)
             }
             Some(Keyword::CSV) => CopyLegacyOption::Csv({
                 let mut opts = vec![];

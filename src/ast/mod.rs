@@ -9217,6 +9217,9 @@ pub enum CopyLegacyOption {
     TruncateColumns,
     /// ZSTD
     Zstd,
+    /// Redshift `CREDENTIALS 'auth-args'`
+    /// <https://docs.aws.amazon.com/redshift/latest/dg/copy-parameters-authorization.html>
+    Credentials(String),
 }
 
 impl fmt::Display for CopyLegacyOption {
@@ -9327,6 +9330,7 @@ impl fmt::Display for CopyLegacyOption {
             }
             TruncateColumns => write!(f, "TRUNCATECOLUMNS"),
             Zstd => write!(f, "ZSTD"),
+            Credentials(s) => write!(f, "CREDENTIALS '{}'", value::escape_single_quote_string(s)),
         }
     }
 }

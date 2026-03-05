@@ -174,7 +174,9 @@ pub struct CreateTableBuilder {
     /// Redshift `DISTSTYLE` option.
     pub diststyle: Option<DistStyle>,
     /// Redshift `DISTKEY` option.
-    pub distkey: Option<Ident>,
+    pub distkey: Option<Expr>,
+    /// Redshift `SORTKEY` option.
+    pub sortkey: Option<Vec<Expr>>,
 }
 
 impl CreateTableBuilder {
@@ -236,6 +238,7 @@ impl CreateTableBuilder {
             require_user: false,
             diststyle: None,
             distkey: None,
+            sortkey: None,
         }
     }
     /// Set `OR REPLACE` for the CREATE TABLE statement.
@@ -517,8 +520,13 @@ impl CreateTableBuilder {
         self
     }
     /// Set Redshift `DISTKEY` option.
-    pub fn distkey(mut self, distkey: Option<Ident>) -> Self {
+    pub fn distkey(mut self, distkey: Option<Expr>) -> Self {
         self.distkey = distkey;
+        self
+    }
+    /// Set Redshift `SORTKEY` option.
+    pub fn sortkey(mut self, sortkey: Option<Vec<Expr>>) -> Self {
+        self.sortkey = sortkey;
         self
     }
     /// Consume the builder and produce a `CreateTable`.
@@ -579,6 +587,7 @@ impl CreateTableBuilder {
             require_user: self.require_user,
             diststyle: self.diststyle,
             distkey: self.distkey,
+            sortkey: self.sortkey,
         }
     }
 }
@@ -656,6 +665,7 @@ impl From<CreateTable> for CreateTableBuilder {
             require_user: table.require_user,
             diststyle: table.diststyle,
             distkey: table.distkey,
+            sortkey: table.sortkey,
         }
     }
 }

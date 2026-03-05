@@ -474,3 +474,29 @@ fn test_copy_credentials() {
         "COPY t1 FROM 's3://bucket/file.csv' CREDENTIALS 'aws_access_key_id=AK;aws_secret_access_key=SK' CSV",
     );
 }
+
+#[test]
+fn test_create_table_sortkey() {
+    redshift().verified_stmt("CREATE TABLE t1 (c1 INT, c2 INT, c3 TIMESTAMP) SORTKEY(c3)");
+    redshift().verified_stmt("CREATE TABLE t1 (c1 INT, c2 INT) SORTKEY(c1, c2)");
+}
+
+#[test]
+fn test_create_table_distkey_sortkey_with_ctas() {
+    redshift().verified_stmt(
+        "CREATE TABLE t1 DISTKEY(1) SORTKEY(1, 3) AS SELECT eventid, venueid, dateid, eventname FROM event",
+    );
+}
+
+#[test]
+fn test_create_table_diststyle_distkey_sortkey() {
+    redshift().verified_stmt(
+        "CREATE TABLE t1 (c1 INT, c2 INT) DISTSTYLE KEY DISTKEY(c1) SORTKEY(c1, c2)",
+    );
+}
+
+#[test]
+fn test_alter_table_alter_sortkey() {
+    redshift().verified_stmt("ALTER TABLE users ALTER SORTKEY(created_at)");
+    redshift().verified_stmt("ALTER TABLE users ALTER SORTKEY(c1, c2)");
+}

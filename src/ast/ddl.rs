@@ -457,6 +457,12 @@ pub enum AlterTableOperation {
     },
     /// Remove the clustering key from the table.
     DropClusteringKey,
+    /// Redshift `ALTER SORTKEY (column_list)`
+    /// <https://docs.aws.amazon.com/redshift/latest/dg/r_ALTER_TABLE.html>
+    AlterSortKey {
+        /// Column references in the sort key.
+        columns: Vec<Expr>,
+    },
     /// Suspend background reclustering operations.
     SuspendRecluster,
     /// Resume background reclustering operations.
@@ -991,6 +997,10 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::DropClusteringKey => {
                 write!(f, "DROP CLUSTERING KEY")?;
+                Ok(())
+            }
+            AlterTableOperation::AlterSortKey { columns } => {
+                write!(f, "ALTER SORTKEY({})", display_comma_separated(columns))?;
                 Ok(())
             }
             AlterTableOperation::SuspendRecluster => {
@@ -3037,7 +3047,10 @@ pub struct CreateTable {
     pub diststyle: Option<DistStyle>,
     /// Redshift `DISTKEY` option
     /// <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html>
-    pub distkey: Option<Ident>,
+    pub distkey: Option<Expr>,
+    /// Redshift `SORTKEY` option
+    /// <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html>
+    pub sortkey: Option<Vec<Expr>>,
 }
 
 impl fmt::Display for CreateTable {
@@ -3341,6 +3354,9 @@ impl fmt::Display for CreateTable {
         }
         if let Some(distkey) = &self.distkey {
             write!(f, " DISTKEY({distkey})")?;
+        }
+        if let Some(sortkey) = &self.sortkey {
+            write!(f, " SORTKEY({})", display_comma_separated(sortkey))?;
         }
         if let Some(query) = &self.query {
             write!(f, " AS {query}")?;

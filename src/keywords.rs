@@ -953,6 +953,7 @@ define_keywords!(
     SOME,
     SORT,
     SORTED,
+    SORTKEY,
     SOURCE,
     SPATIAL,
     SPECIFIC,

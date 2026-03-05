@@ -250,11 +250,10 @@ impl Dialect for SnowflakeDialect {
             // Snowflake supports both `BEGIN TRANSACTION` and `BEGIN ... END` blocks.
             // If the next keyword indicates a transaction statement, let the
             // standard parse_begin() handle it.
-            if parser.peek_keyword(Keyword::TRANSACTION)
-                || parser.peek_keyword(Keyword::WORK)
-                || parser.peek_keyword(Keyword::NAME)
-                || parser.peek_token().token == Token::SemiColon
-                || parser.peek_token().token == Token::EOF
+            if parser
+                .peek_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK, Keyword::NAME])
+                .is_some()
+                || matches!(parser.peek_token_ref().token, Token::SemiColon | Token::EOF)
             {
                 parser.prev_token();
                 return None;

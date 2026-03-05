@@ -4626,6 +4626,9 @@ fn test_begin_transaction() {
         .parse_sql_statements("BEGIN; DROP TABLE IF EXISTS bla; COMMIT")
         .unwrap();
     assert_eq!(3, stmts.len());
+
+    // Bare BEGIN at EOF (no semicolon, no TRANSACTION keyword)
+    snowflake().verified_stmt("BEGIN");
 }
 
 #[test]

@@ -2776,7 +2776,7 @@ fn parse_create_indices_with_operator_classes() {
                         null_treatment: None,
                         over: None,
                         within_group: vec![],
-                    }),
+                    }.into()),
                     options: OrderByOptions {
                         asc: None,
                         nulls_first: None,
@@ -3275,7 +3275,7 @@ fn parse_array_subquery_expr() {
             null_treatment: None,
             over: None,
             within_group: vec![]
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -3538,8 +3538,9 @@ fn test_json() {
 
 #[test]
 fn json_object_colon_syntax() {
-    match pg().verified_expr("JSON_OBJECT('name' : 'value')") {
-        Expr::Function(Function {
+    let expr = pg().verified_expr("JSON_OBJECT('name' : 'value')");
+    match expr.as_function() {
+        Some(Function {
             args: FunctionArguments::List(FunctionArgumentList { args, .. }),
             ..
         }) => {
@@ -3554,22 +3555,23 @@ fn json_object_colon_syntax() {
                 "Invalid function argument: {args:?}"
             );
         }
-        other => panic!(
-            "Expected: JSON_OBJECT('name' : 'value') to be parsed as a function, but got {other:?}"
+        _ => panic!(
+            "Expected: JSON_OBJECT('name' : 'value') to be parsed as a function, but got {expr:?}"
         ),
     }
 }
 
 #[test]
 fn json_object_value_syntax() {
-    match pg().verified_expr("JSON_OBJECT('name' VALUE 'value')") {
-        Expr::Function(Function { args: FunctionArguments::List(FunctionArgumentList { args, .. }), .. }) => {
+    let expr = pg().verified_expr("JSON_OBJECT('name' VALUE 'value')");
+    match expr.as_function() {
+        Some(Function { args: FunctionArguments::List(FunctionArgumentList { args, .. }), .. }) => {
             assert!(matches!(
                 &args[..],
                 &[FunctionArg::ExprNamed { operator: FunctionArgOperator::Value, .. }]
             ), "Invalid function argument: {args:?}");
         }
-        other => panic!("Expected: JSON_OBJECT('name' VALUE 'value') to be parsed as a function, but got {other:?}"),
+        _ => panic!("Expected: JSON_OBJECT('name' VALUE 'value') to be parsed as a function, but got {expr:?}"),
     }
 }
 
@@ -3579,17 +3581,17 @@ fn parse_json_object() {
     let expr = pg().verified_expr(sql);
     assert!(
         matches!(
-            expr.clone(),
-            Expr::Function(Function {
+            expr.as_function(),
+            Some(Function {
                 name: ObjectName(parts),
                 args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
                 ..
-            }) if parts == vec![ObjectNamePart::Identifier(Ident::new("JSON_OBJECT"))]
+            }) if parts == &[ObjectNamePart::Identifier(Ident::new("JSON_OBJECT"))]
                 && matches!(
                     &args[..],
                     &[FunctionArg::ExprNamed { operator: FunctionArgOperator::Value, .. }]
                 )
-                && clauses == vec![FunctionArgumentClause::JsonNullClause(JsonNullClause::NullOnNull)]
+                && clauses == &[FunctionArgumentClause::JsonNullClause(JsonNullClause::NullOnNull)]
         ),
         "Failed to parse JSON_OBJECT with expected structure, got: {expr:?}"
     );
@@ -3598,17 +3600,17 @@ fn parse_json_object() {
     let expr = pg().verified_expr(sql);
     assert!(
         matches!(
-            expr.clone(),
-            Expr::Function(Function {
+            expr.as_function(),
+            Some(Function {
                 name: ObjectName(parts),
                 args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
                 ..
-            }) if parts == vec![ObjectNamePart::Identifier(Ident::new("JSON_OBJECT"))]
+            }) if parts == &[ObjectNamePart::Identifier(Ident::new("JSON_OBJECT"))]
                 && matches!(
                     &args[..],
                     &[FunctionArg::ExprNamed { operator: FunctionArgOperator::Value, .. }]
                 )
-                && clauses == vec![FunctionArgumentClause::JsonReturningClause(JsonReturningClause { data_type: DataType::JSONB })]
+                && clauses == &[FunctionArgumentClause::JsonReturningClause(JsonReturningClause { data_type: DataType::JSONB })]
         ),
         "Failed to parse JSON_OBJECT with expected structure, got: {expr:?}"
     );
@@ -3617,14 +3619,14 @@ fn parse_json_object() {
     let expr = pg().verified_expr(sql);
     assert!(
         matches!(
-            expr.clone(),
-            Expr::Function(Function {
+            expr.as_function(),
+            Some(Function {
                 name: ObjectName(parts),
                 args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
                 ..
-            }) if parts == vec![ObjectNamePart::Identifier(Ident::new("JSON_OBJECT"))]
+            }) if parts == &[ObjectNamePart::Identifier(Ident::new("JSON_OBJECT"))]
                 && args.is_empty()
-                && clauses == vec![FunctionArgumentClause::JsonReturningClause(JsonReturningClause { data_type: DataType::JSONB })]
+                && clauses == &[FunctionArgumentClause::JsonReturningClause(JsonReturningClause { data_type: DataType::JSONB })]
         ),
         "Failed to parse JSON_OBJECT with expected structure, got: {expr:?}"
     );
@@ -3718,7 +3720,7 @@ fn test_composite_value() {
                 filter: None,
                 over: None,
                 within_group: vec![],
-            })))),
+            }.into())))),
             access_chain: vec![AccessExpr::Dot(Expr::Identifier(Ident::new("n")))],
         },
         expr_from_projection(&select.projection[0])
@@ -3885,7 +3887,7 @@ fn parse_current_functions() {
             filter: None,
             over: None,
             within_group: vec![],
-        }),
+        }.into()),
         expr_from_projection(&select.projection[0])
     );
     assert_eq!(
@@ -3898,7 +3900,7 @@ fn parse_current_functions() {
             filter: None,
             over: None,
             within_group: vec![],
-        }),
+        }.into()),
         expr_from_projection(&select.projection[1])
     );
     assert_eq!(
@@ -3911,7 +3913,7 @@ fn parse_current_functions() {
             filter: None,
             over: None,
             within_group: vec![],
-        }),
+        }.into()),
         expr_from_projection(&select.projection[2])
     );
     assert_eq!(
@@ -3924,7 +3926,7 @@ fn parse_current_functions() {
             filter: None,
             over: None,
             within_group: vec![],
-        }),
+        }.into()),
         expr_from_projection(&select.projection[3])
     );
 }
@@ -4376,7 +4378,7 @@ fn parse_delimited_identifiers() {
             filter: None,
             over: None,
             within_group: vec![],
-        }),
+        }.into()),
         expr_from_projection(&select.projection[1]),
     );
     match &select.projection[2] {

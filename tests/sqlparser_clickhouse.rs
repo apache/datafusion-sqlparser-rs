@@ -191,7 +191,7 @@ fn parse_delimited_identifiers() {
         expr_from_projection(&select.projection[0]),
     );
     assert_eq!(
-        &Expr::Function(Function {
+        Some(&Function {
             name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
@@ -205,7 +205,7 @@ fn parse_delimited_identifiers() {
             over: None,
             within_group: vec![],
         }),
-        expr_from_projection(&select.projection[1]),
+        expr_from_projection(&select.projection[1]).as_function(),
     );
     match &select.projection[2] {
         SelectItem::ExprWithAlias { expr, alias } => {
@@ -826,28 +826,7 @@ fn parse_create_table_with_variant_default_expressions() {
                         data_type: DataType::Datetime(None),
                         options: vec![ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::Materialized(Expr::Function(Function {
-                                name: ObjectName::from(vec![Ident::new("now")]),
-                                uses_odbc_syntax: false,
-                                args: FunctionArguments::List(FunctionArgumentList {
-                                    args: vec![],
-                                    duplicate_treatment: None,
-                                    clauses: vec![],
-                                }),
-                                parameters: FunctionArguments::None,
-                                null_treatment: None,
-                                filter: None,
-                                over: None,
-                                within_group: vec![],
-                            }))
-                        }],
-                    },
-                    ColumnDef {
-                        name: Ident::new("b"),
-                        data_type: DataType::Datetime(None),
-                        options: vec![ColumnOptionDef {
-                            name: None,
-                            option: ColumnOption::Ephemeral(Some(Expr::Function(Function {
+                            option: ColumnOption::Materialized(Expr::Function(Box::new(Function {
                                 name: ObjectName::from(vec![Ident::new("now")]),
                                 uses_odbc_syntax: false,
                                 args: FunctionArguments::List(FunctionArgumentList {
@@ -864,6 +843,27 @@ fn parse_create_table_with_variant_default_expressions() {
                         }],
                     },
                     ColumnDef {
+                        name: Ident::new("b"),
+                        data_type: DataType::Datetime(None),
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Ephemeral(Some(Expr::Function(Box::new(Function {
+                                name: ObjectName::from(vec![Ident::new("now")]),
+                                uses_odbc_syntax: false,
+                                args: FunctionArguments::List(FunctionArgumentList {
+                                    args: vec![],
+                                    duplicate_treatment: None,
+                                    clauses: vec![],
+                                }),
+                                parameters: FunctionArguments::None,
+                                null_treatment: None,
+                                filter: None,
+                                over: None,
+                                within_group: vec![],
+                            }))))
+                        }],
+                    },
+                    ColumnDef {
                         name: Ident::new("c"),
                         data_type: DataType::Datetime(None),
                         options: vec![ColumnOptionDef {
@@ -876,7 +876,7 @@ fn parse_create_table_with_variant_default_expressions() {
                         data_type: DataType::String(None),
                         options: vec![ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::Alias(Expr::Function(Function {
+                            option: ColumnOption::Alias(Expr::Function(Box::new(Function {
                                 name: ObjectName::from(vec![Ident::new("toString")]),
                                 uses_odbc_syntax: false,
                                 args: FunctionArguments::List(FunctionArgumentList {
@@ -891,7 +891,7 @@ fn parse_create_table_with_variant_default_expressions() {
                                 filter: None,
                                 over: None,
                                 within_group: vec![],
-                            }))
+                            })))
                         }],
                     }
                 ]

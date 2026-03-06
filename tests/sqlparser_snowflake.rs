@@ -548,7 +548,7 @@ fn test_snowflake_create_table_cluster_by() {
                         null_treatment: None,
                         over: None,
                         within_group: vec![],
-                    }),
+                    }.into()),
                 ])),
                 cluster_by
             )
@@ -1435,7 +1435,7 @@ fn parse_delimited_identifiers() {
         expr_from_projection(&select.projection[0]),
     );
     assert_eq!(
-        &Expr::Function(Function {
+        Some(&Function {
             name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
@@ -1449,7 +1449,7 @@ fn parse_delimited_identifiers() {
             over: None,
             within_group: vec![],
         }),
-        expr_from_projection(&select.projection[1]),
+        expr_from_projection(&select.projection[1]).as_function(),
     );
     match &select.projection[2] {
         SelectItem::ExprWithAlias { expr, alias } => {
@@ -1668,7 +1668,7 @@ fn test_alter_table_clustering() {
                         null_treatment: None,
                         over: None,
                         within_group: vec![]
-                    })
+                    }.into())
                 ],
             );
         }
@@ -4755,70 +4755,55 @@ fn test_snowflake_create_view_copy_grants() {
 #[test]
 fn test_snowflake_identifier_function() {
     // Using IDENTIFIER to reference a column
-    match &snowflake()
+    let SelectItem::UnnamedExpr(expr) = &snowflake()
         .verified_only_select("SELECT identifier('email') FROM customers")
-        .projection[0]
-    {
-        SelectItem::UnnamedExpr(Expr::Function(Function { name, args, .. })) => {
-            assert_eq!(*name, ObjectName::from(vec![Ident::new("identifier")]));
-            assert_eq!(
-                *args,
-                FunctionArguments::List(FunctionArgumentList {
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        Value::SingleQuotedString("email".to_string()).into()
-                    )))],
-                    clauses: vec![],
-                    duplicate_treatment: None
-                })
-            );
-        }
-        _ => unreachable!(),
-    }
+        .projection[0] else { panic!("not an unnamed expression"); };
+    let Function { name, args, .. } = expr.as_function().expect("not a function");
+    assert_eq!(*name, ObjectName::from(vec![Ident::new("identifier")]));
+    assert_eq!(
+        *args,
+        FunctionArguments::List(FunctionArgumentList {
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                Value::SingleQuotedString("email".to_string()).into()
+            )))],
+            clauses: vec![],
+            duplicate_treatment: None
+        })
+    );
 
     // Using IDENTIFIER to reference a case-sensitive column
-    match &snowflake()
+    let SelectItem::UnnamedExpr(expr) = &snowflake()
         .verified_only_select(r#"SELECT identifier('"Email"') FROM customers"#)
-        .projection[0]
-    {
-        SelectItem::UnnamedExpr(Expr::Function(Function { name, args, .. })) => {
-            assert_eq!(*name, ObjectName::from(vec![Ident::new("identifier")]));
-            assert_eq!(
-                *args,
-                FunctionArguments::List(FunctionArgumentList {
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        Value::SingleQuotedString("\"Email\"".to_string()).into()
-                    )))],
-                    clauses: vec![],
-                    duplicate_treatment: None
-                })
-            );
-        }
-        _ => unreachable!(),
-    }
+        .projection[0] else { panic!("not an unnamed expression"); };
+    let Function { name, args, .. } = expr.as_function().expect("not a function");
+    assert_eq!(*name, ObjectName::from(vec![Ident::new("identifier")]));
+    assert_eq!(
+        *args,
+        FunctionArguments::List(FunctionArgumentList {
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                Value::SingleQuotedString("\"Email\"".to_string()).into()
+            )))],
+            clauses: vec![],
+            duplicate_treatment: None
+        })
+    );
 
     // Using IDENTIFIER to reference an alias of a table
-    match &snowflake()
+    let SelectItem::QualifiedWildcard(SelectItemQualifiedWildcardKind::Expr(expr), _) = &snowflake()
         .verified_only_select("SELECT identifier('alias1').* FROM tbl AS alias1")
-        .projection[0]
-    {
-        SelectItem::QualifiedWildcard(
-            SelectItemQualifiedWildcardKind::Expr(Expr::Function(Function { name, args, .. })),
-            _,
-        ) => {
-            assert_eq!(*name, ObjectName::from(vec![Ident::new("identifier")]));
-            assert_eq!(
-                *args,
-                FunctionArguments::List(FunctionArgumentList {
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        Value::SingleQuotedString("alias1".to_string()).into()
-                    )))],
-                    clauses: vec![],
-                    duplicate_treatment: None
-                })
-            );
-        }
-        _ => unreachable!(),
-    }
+        .projection[0] else { panic!("not a qualified wildcard"); };
+    let Function { name, args, .. }= expr.as_function().expect("not a function");
+    assert_eq!(*name, ObjectName::from(vec![Ident::new("identifier")]));
+    assert_eq!(
+        *args,
+        FunctionArguments::List(FunctionArgumentList {
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                Value::SingleQuotedString("alias1".to_string()).into()
+            )))],
+            clauses: vec![],
+            duplicate_treatment: None
+        })
+    );
 
     // Using IDENTIFIER to reference a database
     match snowflake().verified_stmt("CREATE DATABASE IDENTIFIER('tbl')") {

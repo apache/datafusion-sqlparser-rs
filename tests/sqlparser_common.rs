@@ -1349,7 +1349,7 @@ fn parse_select_count_wildcard() {
             filter: None,
             over: None,
             within_group: vec![]
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection))
     );
 }
@@ -1375,7 +1375,7 @@ fn parse_select_count_distinct() {
             within_group: vec![],
             filter: None,
             over: None
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection))
     );
 
@@ -1719,11 +1719,11 @@ fn parse_json_object() {
         Box::new(PostgreSqlDialect {}),
     ]);
     let select = dialects.verified_only_select("SELECT JSON_OBJECT('name' : 'value', 'type' : 1)");
-    match expr_from_projection(&select.projection[0]) {
-        Expr::Function(Function {
+    match expr_from_projection(&select.projection[0]).as_function().expect("not a function") {
+        Function {
             args: FunctionArguments::List(FunctionArgumentList { args, .. }),
             ..
-        }) => assert_eq!(
+        } => assert_eq!(
             &[
                 FunctionArg::ExprNamed {
                     name: Expr::Value((Value::SingleQuotedString("name".into())).with_empty_span()),
@@ -1744,11 +1744,11 @@ fn parse_json_object() {
     }
     let select = dialects
         .verified_only_select("SELECT JSON_OBJECT('name' : 'value', 'type' : NULL ABSENT ON NULL)");
-    match expr_from_projection(&select.projection[0]) {
-        Expr::Function(Function {
+    match expr_from_projection(&select.projection[0]).as_function().expect("not a function") {
+        Function {
             args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
             ..
-        }) => {
+        } => {
             assert_eq!(
                 &[
                     FunctionArg::ExprNamed {
@@ -1780,11 +1780,11 @@ fn parse_json_object() {
         _ => unreachable!(),
     }
     let select = dialects.verified_only_select("SELECT JSON_OBJECT(NULL ON NULL)");
-    match expr_from_projection(&select.projection[0]) {
-        Expr::Function(Function {
+    match expr_from_projection(&select.projection[0]).as_function().expect("not a function") {
+        Function {
             args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
             ..
-        }) => {
+        } => {
             assert!(args.is_empty());
             assert_eq!(
                 &[FunctionArgumentClause::JsonNullClause(
@@ -1796,11 +1796,11 @@ fn parse_json_object() {
         _ => unreachable!(),
     }
     let select = dialects.verified_only_select("SELECT JSON_OBJECT(ABSENT ON NULL)");
-    match expr_from_projection(&select.projection[0]) {
-        Expr::Function(Function {
+    match expr_from_projection(&select.projection[0]).as_function().expect("not a function") {
+        Function {
             args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
             ..
-        }) => {
+        } => {
             assert!(args.is_empty());
             assert_eq!(
                 &[FunctionArgumentClause::JsonNullClause(
@@ -1814,11 +1814,11 @@ fn parse_json_object() {
     let select = dialects.verified_only_select(
         "SELECT JSON_OBJECT('name' : 'value', 'type' : JSON_ARRAY(1, 2) ABSENT ON NULL)",
     );
-    match expr_from_projection(&select.projection[0]) {
-        Expr::Function(Function {
+    match expr_from_projection(&select.projection[0]).as_function().expect("not a function") {
+        Function {
             args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
             ..
-        }) => {
+        } => {
             assert_eq!(
                 &FunctionArg::ExprNamed {
                     name: Expr::Value((Value::SingleQuotedString("name".into())).with_empty_span()),
@@ -1852,41 +1852,35 @@ fn parse_json_object() {
     let select = dialects.verified_only_select(
         "SELECT JSON_OBJECT('name' : 'value', 'type' : JSON_OBJECT('type_id' : 1, 'name' : 'a') NULL ON NULL)",
     );
-    match expr_from_projection(&select.projection[0]) {
-        Expr::Function(Function {
-            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
-            ..
-        }) => {
-            assert_eq!(
-                &FunctionArg::ExprNamed {
-                    name: Expr::Value((Value::SingleQuotedString("name".into())).with_empty_span()),
-                    arg: FunctionArgExpr::Expr(Expr::Value(
-                        (Value::SingleQuotedString("value".into())).with_empty_span()
-                    )),
-                    operator: FunctionArgOperator::Colon
-                },
-                &args[0]
-            );
-            assert!(matches!(
-                args[1],
-                FunctionArg::ExprNamed {
-                    name: Expr::Value(ValueWithSpan {
-                        value: Value::SingleQuotedString(_),
-                        span: _
-                    }),
-                    arg: FunctionArgExpr::Expr(Expr::Function(_)),
-                    operator: FunctionArgOperator::Colon
-                }
-            ));
-            assert_eq!(
-                &[FunctionArgumentClause::JsonNullClause(
-                    JsonNullClause::NullOnNull
-                )],
-                &clauses[..]
-            );
+    let Function { args, .. } = expr_from_projection(&select.projection[0]).as_function().expect("not a function");
+    let FunctionArguments::List(FunctionArgumentList { args, clauses, .. }) = args else { panic!("not a function arg list"); };
+    assert_eq!(
+        &FunctionArg::ExprNamed {
+            name: Expr::Value((Value::SingleQuotedString("name".into())).with_empty_span()),
+            arg: FunctionArgExpr::Expr(Expr::Value(
+                (Value::SingleQuotedString("value".into())).with_empty_span()
+            )),
+            operator: FunctionArgOperator::Colon
+        },
+        &args[0]
+    );
+    assert!(matches!(
+        args[1],
+        FunctionArg::ExprNamed {
+            name: Expr::Value(ValueWithSpan {
+                value: Value::SingleQuotedString(_),
+                span: _
+            }),
+            arg: FunctionArgExpr::Expr(Expr::Function(_)),
+            operator: FunctionArgOperator::Colon
         }
-        _ => unreachable!(),
-    }
+    ));
+    assert_eq!(
+        &[FunctionArgumentClause::JsonNullClause(
+            JsonNullClause::NullOnNull
+        )],
+        &clauses[..]
+    );
 }
 
 #[test]
@@ -2979,7 +2973,7 @@ fn parse_select_having() {
                 filter: None,
                 over: None,
                 within_group: vec![]
-            })),
+            }.into())),
             op: BinaryOperator::Gt,
             right: Box::new(Expr::value(number("1"))),
         }),
@@ -3022,7 +3016,7 @@ fn parse_select_qualify() {
                     window_frame: None,
                 })),
                 within_group: vec![]
-            })),
+            }.into())),
             op: BinaryOperator::Eq,
             right: Box::new(Expr::value(number("1"))),
         }),
@@ -3477,7 +3471,7 @@ fn parse_listagg() {
                     with_fill: None,
                 },
             ]
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection))
     );
 
@@ -5626,7 +5620,7 @@ fn parse_named_argument_function() {
             filter: None,
             over: None,
             within_group: vec![]
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection))
     );
 }
@@ -5666,7 +5660,7 @@ fn parse_named_argument_function_with_eq_operator() {
             filter: None,
             over: None,
             within_group: vec![],
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection))
     );
 
@@ -5738,14 +5732,14 @@ fn parse_window_functions() {
                 window_frame: None,
             })),
             within_group: vec![],
-        }),
+        }.into()),
         expr_from_projection(&select.projection[0])
     );
 
     for i in 0..EXPECTED_PROJ_QTY {
         assert!(matches!(
-            expr_from_projection(&select.projection[i]),
-            Expr::Function(Function {
+            expr_from_projection(&select.projection[i]).as_function(),
+            Some(Function {
                 over: Some(WindowType::WindowSpec(WindowSpec {
                     window_name: None,
                     ..
@@ -5781,8 +5775,8 @@ fn parse_named_window_functions() {
     const EXPECTED_WIN_NAMES: [&str; 2] = ["w", "win"];
     for (i, win_name) in EXPECTED_WIN_NAMES.iter().enumerate() {
         assert!(matches!(
-            expr_from_projection(&select.projection[i]),
-            Expr::Function(Function {
+            expr_from_projection(&select.projection[i]).as_function(),
+            Some(Function {
                 over: Some(WindowType::WindowSpec(WindowSpec {
                     window_name: Some(Ident { value, .. }),
                     ..
@@ -5878,7 +5872,7 @@ fn test_parse_named_window() {
                         span: Span::empty(),
                     })),
                     within_group: vec![],
-                }),
+                }.into()),
                 alias: Ident {
                     value: "min1".to_string(),
                     quote_style: None,
@@ -5913,7 +5907,7 @@ fn test_parse_named_window() {
                         span: Span::empty(),
                     })),
                     within_group: vec![],
-                }),
+                }.into()),
                 alias: Ident {
                     value: "max1".to_string(),
                     quote_style: None,
@@ -10604,7 +10598,7 @@ fn parse_time_functions() {
             within_group: vec![],
         };
         assert_eq!(
-            &Expr::Function(select_localtime_func_call_ast.clone()),
+            &Expr::Function(select_localtime_func_call_ast.clone().into()),
             expr_from_projection(&select.projection[0])
         );
 
@@ -10613,7 +10607,7 @@ fn parse_time_functions() {
         let mut ast_without_parens = select_localtime_func_call_ast;
         ast_without_parens.args = FunctionArguments::None;
         assert_eq!(
-            &Expr::Function(ast_without_parens),
+            &Expr::Function(ast_without_parens.into()),
             expr_from_projection(&verified_only_select(&sql_without_parens).projection[0])
         );
     }
@@ -12705,7 +12699,7 @@ fn parse_map_access_expr() {
                     over: None,
                     within_group: vec![],
                     uses_odbc_syntax: false,
-                }),
+                }.into()),
             }),
         ],
     };
@@ -13046,7 +13040,7 @@ fn test_selective_aggregation() {
                 over: None,
                 within_group: vec![],
                 null_treatment: None
-            })),
+            }.into())),
             SelectItem::ExprWithAlias {
                 expr: Expr::Function(Function {
                     name: ObjectName::from(vec![Ident::new("ARRAY_AGG")]),
@@ -13071,7 +13065,7 @@ fn test_selective_aggregation() {
                     null_treatment: None,
                     over: None,
                     within_group: vec![]
-                }),
+                }.into()),
                 alias: Ident::new("agg2")
             },
         ]
@@ -13528,15 +13522,12 @@ fn insert_into_with_parentheses() {
 #[test]
 fn parse_odbc_scalar_function() {
     let select = verified_only_select("SELECT {fn my_func(1, 2)}");
-    let Expr::Function(Function {
+    let Function {
         name,
         uses_odbc_syntax,
         args,
         ..
-    }) = expr_from_projection(only(&select.projection))
-    else {
-        unreachable!("expected function")
-    };
+    } = expr_from_projection(only(&select.projection)).as_function().expect("not a function");
     assert_eq!(name, &ObjectName::from(vec![Ident::new("my_func")]));
     assert!(uses_odbc_syntax);
     matches!(args, FunctionArguments::List(l) if l.args.len() == 2);
@@ -15440,7 +15431,7 @@ fn parse_composite_access_expr() {
                 filter: None,
                 over: None,
                 within_group: vec![]
-            })),
+            }.into())),
             access_chain: vec![AccessExpr::Dot(Expr::Identifier(Ident::new("b")))]
         }
     );
@@ -15464,7 +15455,7 @@ fn parse_composite_access_expr() {
                 filter: None,
                 over: None,
                 within_group: vec![]
-            })),
+            }.into())),
             access_chain: vec![
                 AccessExpr::Dot(Expr::Identifier(Ident::new("b"))),
                 AccessExpr::Dot(Expr::Identifier(Ident::new("c"))),
@@ -15490,7 +15481,7 @@ fn parse_composite_access_expr() {
             filter: None,
             over: None,
             within_group: vec![],
-        })),
+        }.into())),
         access_chain: vec![AccessExpr::Dot(Expr::Identifier(Ident::new("b")))],
     };
 

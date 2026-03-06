@@ -832,17 +832,11 @@ fn parse_prefix_key_part() {
         "ALTER TABLE tab ADD FULLTEXT INDEX (textcol(10))",
         "CREATE TABLE t (textcol TEXT, INDEX idx_index (textcol(10)))",
     ] {
-        match index_column(mysql_and_generic().verified_stmt(sql)) {
-            Expr::Function(Function {
-                name,
-                args: FunctionArguments::List(FunctionArgumentList { args, .. }),
-                ..
-            }) => {
-                assert_eq!(name.to_string(), "textcol");
-                assert_eq!(args, expected);
-            }
-            expr => panic!("unexpected expression {expr} for {sql}"),
-        }
+        let expr = index_column(mysql_and_generic().verified_stmt(sql));
+        let Function { name, args, .. } = expr.as_function().expect("not a function");
+        assert_eq!(name.to_string(), "textcol");
+        let FunctionArguments::List(FunctionArgumentList { args, .. }) = args else { panic!("not a function arg list"); };
+        assert_eq!(args, &expected);
     }
 }
 

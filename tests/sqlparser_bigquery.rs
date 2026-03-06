@@ -2247,7 +2247,7 @@ fn parse_map_access_expr() {
                     over: None,
                     within_group: vec![],
                     uses_odbc_syntax: false,
-                }),
+                }.into()),
             }),
             AccessExpr::Dot(Expr::Identifier(Ident::with_span(
                 Span::new(Location::of(1, 24), Location::of(1, 25)),

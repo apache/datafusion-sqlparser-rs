@@ -1520,7 +1520,7 @@ impl<'a> Parser<'a> {
                         filter: None,
                         over: None,
                         within_group: vec![],
-                    })))
+                    }.into())))
                 }
             Keyword::CURRENT_TIMESTAMP
             | Keyword::CURRENT_TIME
@@ -1582,7 +1582,7 @@ impl<'a> Parser<'a> {
                         null_treatment: None,
                         over: None,
                         within_group: vec![],
-                    })))
+                    }.into())))
                 }
             Keyword::NOT => Ok(Some(self.parse_not()?)),
             Keyword::MATCH if self.dialect.supports_match_against() => {
@@ -2408,7 +2408,7 @@ impl<'a> Parser<'a> {
         self.parse_function_call(name).map(Expr::Function)
     }
 
-    fn parse_function_call(&mut self, name: ObjectName) -> Result<Function, ParserError> {
+    fn parse_function_call(&mut self, name: ObjectName) -> Result<Box<Function>, ParserError> {
         self.expect_token(&Token::LParen)?;
 
         // Snowflake permits a subquery to be passed as an argument without
@@ -2425,7 +2425,7 @@ impl<'a> Parser<'a> {
                 null_treatment: None,
                 over: None,
                 within_group: vec![],
-            });
+            }.into());
         }
 
         let mut args = self.parse_function_argument_list()?;
@@ -2493,7 +2493,7 @@ impl<'a> Parser<'a> {
             filter,
             over,
             within_group,
-        })
+        }.into())
     }
 
     /// Optionally parses a null treatment clause.
@@ -2528,7 +2528,7 @@ impl<'a> Parser<'a> {
             over: None,
             null_treatment: None,
             within_group: vec![],
-        }))
+        }.into()))
     }
 
     /// Parse window frame `UNITS` clause: `ROWS`, `RANGE`, or `GROUPS`.
@@ -11095,7 +11095,7 @@ impl<'a> Parser<'a> {
         let object_name = self.parse_object_name(false)?;
         if self.peek_token_ref().token == Token::LParen {
             match self.parse_function(object_name)? {
-                Expr::Function(f) => Ok(Statement::Call(f)),
+                Expr::Function(f) => Ok(Statement::Call(*f)),
                 other => parser_err!(
                     format!("Expected a simple procedure call but found: {other}"),
                     self.peek_token_ref().span.start
@@ -13839,7 +13839,7 @@ impl<'a> Parser<'a> {
                     let function_expr = self.parse_function(function_name)?;
                     if let Expr::Function(function) = function_expr {
                         let alias = self.parse_identifier_optional_alias()?;
-                        pipe_operators.push(PipeOperator::Call { function, alias });
+                        pipe_operators.push(PipeOperator::Call { function: *function, alias });
                     } else {
                         return Err(ParserError::ParserError(
                             "Expected function call after CALL".to_string(),

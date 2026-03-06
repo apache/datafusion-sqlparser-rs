@@ -451,7 +451,7 @@ pub fn call(function: &str, args: impl IntoIterator<Item = Expr>) -> Expr {
         null_treatment: None,
         over: None,
         within_group: vec![],
-    })
+    }.into())
 }
 
 /// Gets the first index column (mysql calls it a key part) of the first index found in a

@@ -1025,6 +1025,7 @@ pub enum Expr {
         expr: Box<Expr>,
     },
     /// CONVERT a value to a different data type or character encoding. e.g. `CONVERT(foo USING utf8mb4)`
+    // XXX too big
     Convert {
         /// CONVERT (false) or TRY_CONVERT (true)
         /// <https://learn.microsoft.com/en-us/sql/t-sql/functions/try-convert-transact-sql?view=sql-server-ver16>
@@ -1043,6 +1044,7 @@ pub enum Expr {
         styles: Vec<Expr>,
     },
     /// `CAST` an expression to a different data type e.g. `CAST(foo AS VARCHAR(123))`
+    // XXX too big
     Cast {
         /// The cast kind (e.g., `CAST`, `TRY_CAST`).
         kind: CastKind,
@@ -1192,14 +1194,17 @@ pub enum Expr {
     /// A constant of form `<data_type> 'value'`.
     /// This can represent ANSI SQL `DATE`, `TIME`, and `TIMESTAMP` literals (such as `DATE '2020-01-01'`),
     /// as well as constants of other types (a non-standard PostgreSQL extension).
+    // XXX too big
     TypedString(TypedString),
     /// Scalar function call e.g. `LEFT(foo, 5)`
-    Function(Function),
+    // XXX too big
+    Function(Box<Function>),
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
     ///
     /// Note we only recognize a complete single expression as `<condition>`,
     /// not `< 0` nor `1, 2, 3` as allowed in a `<simple when clause>` per
     /// <https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#simple-when-clause>
+    // XXX too big
     Case {
         /// The attached `CASE` token (keeps original spacing/comments).
         case_token: AttachedToken,
@@ -1277,6 +1282,7 @@ pub enum Expr {
     /// An array expression e.g. `ARRAY[1, 2]`
     Array(Array),
     /// An interval expression e.g. `INTERVAL '1' YEAR`
+    // XXX too big
     Interval(Interval),
     /// `MySQL` specific text search function [(1)].
     ///
@@ -1328,6 +1334,7 @@ pub enum Expr {
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/functions#higher-order-functions---operator-and-lambdaparams-expr-function)
     /// [Databricks](https://docs.databricks.com/en/sql/language-manual/sql-ref-lambda-functions.html)
     /// [DuckDB](https://duckdb.org/docs/stable/sql/functions/lambda)
+    // XXX too big
     Lambda(LambdaFunction),
     /// Checks membership of a value in a JSON array
     MemberOf(MemberOf),
@@ -1337,6 +1344,16 @@ impl Expr {
     /// Creates a new [`Expr::Value`]
     pub fn value(value: impl Into<ValueWithSpan>) -> Self {
         Expr::Value(value.into())
+    }
+
+    /// Convenience method to retrieve `Expr::Function`'s value if `self` is a
+    /// function expression.
+    pub fn as_function(&self) -> Option<&Function> {
+        if let Expr::Function(f) = self {
+            Some(&**f)
+        } else {
+            None
+        }
     }
 }
 
@@ -10887,7 +10904,7 @@ pub enum TableObject {
     /// INSERT INTO TABLE FUNCTION remote('localhost', default.simple_table)
     /// ```
     /// [Clickhouse](https://clickhouse.com/docs/en/sql-reference/table-functions)
-    TableFunction(Function),
+    TableFunction(Box<Function>),
 }
 
 impl fmt::Display for TableObject {

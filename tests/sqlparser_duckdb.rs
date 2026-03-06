@@ -634,7 +634,7 @@ fn test_duckdb_named_argument_function_with_assignment_operator() {
     let sql = "SELECT FUN(a := '1', b := '2') FROM foo";
     let select = duckdb_and_generic().verified_only_select(sql);
     assert_eq!(
-        &Expr::Function(Function {
+        Some(&Function {
             name: ObjectName::from(vec![Ident::new("FUN")]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
@@ -663,7 +663,7 @@ fn test_duckdb_named_argument_function_with_assignment_operator() {
             over: None,
             within_group: vec![],
         }),
-        expr_from_projection(only(&select.projection))
+        expr_from_projection(only(&select.projection)).as_function()
     );
 }
 

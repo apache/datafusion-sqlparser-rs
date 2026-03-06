@@ -2425,7 +2425,8 @@ impl<'a> Parser<'a> {
                 null_treatment: None,
                 over: None,
                 within_group: vec![],
-            }.into());
+            }
+            .into());
         }
 
         let mut args = self.parse_function_argument_list()?;
@@ -2493,7 +2494,8 @@ impl<'a> Parser<'a> {
             filter,
             over,
             within_group,
-        }.into())
+        }
+        .into())
     }
 
     /// Optionally parses a null treatment clause.
@@ -2519,16 +2521,19 @@ impl<'a> Parser<'a> {
         } else {
             FunctionArguments::None
         };
-        Ok(Expr::Function(Function {
-            name,
-            uses_odbc_syntax: false,
-            parameters: FunctionArguments::None,
-            args,
-            filter: None,
-            over: None,
-            null_treatment: None,
-            within_group: vec![],
-        }.into()))
+        Ok(Expr::Function(
+            Function {
+                name,
+                uses_odbc_syntax: false,
+                parameters: FunctionArguments::None,
+                args,
+                filter: None,
+                over: None,
+                null_treatment: None,
+                within_group: vec![],
+            }
+            .into(),
+        ))
     }
 
     /// Parse window frame `UNITS` clause: `ROWS`, `RANGE`, or `GROUPS`.
@@ -13839,7 +13844,10 @@ impl<'a> Parser<'a> {
                     let function_expr = self.parse_function(function_name)?;
                     if let Expr::Function(function) = function_expr {
                         let alias = self.parse_identifier_optional_alias()?;
-                        pipe_operators.push(PipeOperator::Call { function: *function, alias });
+                        pipe_operators.push(PipeOperator::Call {
+                            function: *function,
+                            alias,
+                        });
                     } else {
                         return Err(ParserError::ParserError(
                             "Expected function call after CALL".to_string(),

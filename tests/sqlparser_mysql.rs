@@ -835,7 +835,9 @@ fn parse_prefix_key_part() {
         let expr = index_column(mysql_and_generic().verified_stmt(sql));
         let Function { name, args, .. } = expr.as_function().expect("not a function");
         assert_eq!(name.to_string(), "textcol");
-        let FunctionArguments::List(FunctionArgumentList { args, .. }) = args else { panic!("not a function arg list"); };
+        let FunctionArguments::List(FunctionArgumentList { args, .. }) = args else {
+            panic!("not a function arg list");
+        };
         assert_eq!(args, &expected);
     }
 }

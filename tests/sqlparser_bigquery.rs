@@ -2229,25 +2229,28 @@ fn parse_map_access_expr() {
                 },
             }),
             AccessExpr::Subscript(Subscript::Index {
-                index: Expr::Function(Function {
-                    name: ObjectName::from(vec![Ident::with_span(
-                        Span::new(Location::of(1, 11), Location::of(1, 22)),
-                        "safe_offset",
-                    )]),
-                    parameters: FunctionArguments::None,
-                    args: FunctionArguments::List(FunctionArgumentList {
-                        duplicate_treatment: None,
-                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                            number("2").with_empty_span(),
-                        )))],
-                        clauses: vec![],
-                    }),
-                    filter: None,
-                    null_treatment: None,
-                    over: None,
-                    within_group: vec![],
-                    uses_odbc_syntax: false,
-                }.into()),
+                index: Expr::Function(
+                    Function {
+                        name: ObjectName::from(vec![Ident::with_span(
+                            Span::new(Location::of(1, 11), Location::of(1, 22)),
+                            "safe_offset",
+                        )]),
+                        parameters: FunctionArguments::None,
+                        args: FunctionArguments::List(FunctionArgumentList {
+                            duplicate_treatment: None,
+                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                                number("2").with_empty_span(),
+                            )))],
+                            clauses: vec![],
+                        }),
+                        filter: None,
+                        null_treatment: None,
+                        over: None,
+                        within_group: vec![],
+                        uses_odbc_syntax: false,
+                    }
+                    .into(),
+                ),
             }),
             AccessExpr::Dot(Expr::Identifier(Ident::with_span(
                 Span::new(Location::of(1, 24), Location::of(1, 25)),

@@ -435,23 +435,26 @@ pub fn join(relation: TableFactor) -> Join {
 }
 
 pub fn call(function: &str, args: impl IntoIterator<Item = Expr>) -> Expr {
-    Expr::Function(Function {
-        name: ObjectName::from(vec![Ident::new(function)]),
-        uses_odbc_syntax: false,
-        parameters: FunctionArguments::None,
-        args: FunctionArguments::List(FunctionArgumentList {
-            duplicate_treatment: None,
-            args: args
-                .into_iter()
-                .map(|arg| FunctionArg::Unnamed(FunctionArgExpr::Expr(arg)))
-                .collect(),
-            clauses: vec![],
-        }),
-        filter: None,
-        null_treatment: None,
-        over: None,
-        within_group: vec![],
-    }.into())
+    Expr::Function(
+        Function {
+            name: ObjectName::from(vec![Ident::new(function)]),
+            uses_odbc_syntax: false,
+            parameters: FunctionArguments::None,
+            args: FunctionArguments::List(FunctionArgumentList {
+                duplicate_treatment: None,
+                args: args
+                    .into_iter()
+                    .map(|arg| FunctionArg::Unnamed(FunctionArgExpr::Expr(arg)))
+                    .collect(),
+                clauses: vec![],
+            }),
+            filter: None,
+            null_treatment: None,
+            over: None,
+            within_group: vec![],
+        }
+        .into(),
+    )
 }
 
 /// Gets the first index column (mysql calls it a key part) of the first index found in a

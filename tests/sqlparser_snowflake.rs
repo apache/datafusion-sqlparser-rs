@@ -533,22 +533,25 @@ fn test_snowflake_create_table_cluster_by() {
                 Some(WrappedCollection::Parentheses(vec![
                     Expr::Identifier(Ident::new("a")),
                     Expr::Identifier(Ident::new("b")),
-                    Expr::Function(Function {
-                        name: ObjectName::from(vec![Ident::new("my_func")]),
-                        uses_odbc_syntax: false,
-                        parameters: FunctionArguments::None,
-                        args: FunctionArguments::List(FunctionArgumentList {
-                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("c"))
-                            ))],
-                            duplicate_treatment: None,
-                            clauses: vec![],
-                        }),
-                        filter: None,
-                        null_treatment: None,
-                        over: None,
-                        within_group: vec![],
-                    }.into()),
+                    Expr::Function(
+                        Function {
+                            name: ObjectName::from(vec![Ident::new("my_func")]),
+                            uses_odbc_syntax: false,
+                            parameters: FunctionArguments::None,
+                            args: FunctionArguments::List(FunctionArgumentList {
+                                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                    Expr::Identifier(Ident::new("c"))
+                                ))],
+                                duplicate_treatment: None,
+                                clauses: vec![],
+                            }),
+                            filter: None,
+                            null_treatment: None,
+                            over: None,
+                            within_group: vec![],
+                        }
+                        .into()
+                    ),
                 ])),
                 cluster_by
             )
@@ -1653,22 +1656,25 @@ fn test_alter_table_clustering() {
                 [
                     Expr::Identifier(Ident::new("c1")),
                     Expr::Identifier(Ident::with_quote('"', "c2")),
-                    Expr::Function(Function {
-                        name: ObjectName::from(vec![Ident::new("TO_DATE")]),
-                        uses_odbc_syntax: false,
-                        parameters: FunctionArguments::None,
-                        args: FunctionArguments::List(FunctionArgumentList {
-                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("c3"))
-                            ))],
-                            duplicate_treatment: None,
-                            clauses: vec![],
-                        }),
-                        filter: None,
-                        null_treatment: None,
-                        over: None,
-                        within_group: vec![]
-                    }.into())
+                    Expr::Function(
+                        Function {
+                            name: ObjectName::from(vec![Ident::new("TO_DATE")]),
+                            uses_odbc_syntax: false,
+                            parameters: FunctionArguments::None,
+                            args: FunctionArguments::List(FunctionArgumentList {
+                                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                    Expr::Identifier(Ident::new("c3"))
+                                ))],
+                                duplicate_treatment: None,
+                                clauses: vec![],
+                            }),
+                            filter: None,
+                            null_treatment: None,
+                            over: None,
+                            within_group: vec![]
+                        }
+                        .into()
+                    )
                 ],
             );
         }
@@ -4757,7 +4763,10 @@ fn test_snowflake_identifier_function() {
     // Using IDENTIFIER to reference a column
     let SelectItem::UnnamedExpr(expr) = &snowflake()
         .verified_only_select("SELECT identifier('email') FROM customers")
-        .projection[0] else { panic!("not an unnamed expression"); };
+        .projection[0]
+    else {
+        panic!("not an unnamed expression");
+    };
     let Function { name, args, .. } = expr.as_function().expect("not a function");
     assert_eq!(*name, ObjectName::from(vec![Ident::new("identifier")]));
     assert_eq!(
@@ -4774,7 +4783,10 @@ fn test_snowflake_identifier_function() {
     // Using IDENTIFIER to reference a case-sensitive column
     let SelectItem::UnnamedExpr(expr) = &snowflake()
         .verified_only_select(r#"SELECT identifier('"Email"') FROM customers"#)
-        .projection[0] else { panic!("not an unnamed expression"); };
+        .projection[0]
+    else {
+        panic!("not an unnamed expression");
+    };
     let Function { name, args, .. } = expr.as_function().expect("not a function");
     assert_eq!(*name, ObjectName::from(vec![Ident::new("identifier")]));
     assert_eq!(
@@ -4789,10 +4801,14 @@ fn test_snowflake_identifier_function() {
     );
 
     // Using IDENTIFIER to reference an alias of a table
-    let SelectItem::QualifiedWildcard(SelectItemQualifiedWildcardKind::Expr(expr), _) = &snowflake()
-        .verified_only_select("SELECT identifier('alias1').* FROM tbl AS alias1")
-        .projection[0] else { panic!("not a qualified wildcard"); };
-    let Function { name, args, .. }= expr.as_function().expect("not a function");
+    let SelectItem::QualifiedWildcard(SelectItemQualifiedWildcardKind::Expr(expr), _) =
+        &snowflake()
+            .verified_only_select("SELECT identifier('alias1').* FROM tbl AS alias1")
+            .projection[0]
+    else {
+        panic!("not a qualified wildcard");
+    };
+    let Function { name, args, .. } = expr.as_function().expect("not a function");
     assert_eq!(*name, ObjectName::from(vec![Ident::new("identifier")]));
     assert_eq!(
         *args,

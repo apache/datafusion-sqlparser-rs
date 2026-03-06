@@ -826,20 +826,22 @@ fn parse_create_table_with_variant_default_expressions() {
                         data_type: DataType::Datetime(None),
                         options: vec![ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::Materialized(Expr::Function(Box::new(Function {
-                                name: ObjectName::from(vec![Ident::new("now")]),
-                                uses_odbc_syntax: false,
-                                args: FunctionArguments::List(FunctionArgumentList {
-                                    args: vec![],
-                                    duplicate_treatment: None,
-                                    clauses: vec![],
-                                }),
-                                parameters: FunctionArguments::None,
-                                null_treatment: None,
-                                filter: None,
-                                over: None,
-                                within_group: vec![],
-                            })))
+                            option: ColumnOption::Materialized(Expr::Function(Box::new(
+                                Function {
+                                    name: ObjectName::from(vec![Ident::new("now")]),
+                                    uses_odbc_syntax: false,
+                                    args: FunctionArguments::List(FunctionArgumentList {
+                                        args: vec![],
+                                        duplicate_treatment: None,
+                                        clauses: vec![],
+                                    }),
+                                    parameters: FunctionArguments::None,
+                                    null_treatment: None,
+                                    filter: None,
+                                    over: None,
+                                    within_group: vec![],
+                                }
+                            )))
                         }],
                     },
                     ColumnDef {
@@ -847,20 +849,22 @@ fn parse_create_table_with_variant_default_expressions() {
                         data_type: DataType::Datetime(None),
                         options: vec![ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::Ephemeral(Some(Expr::Function(Box::new(Function {
-                                name: ObjectName::from(vec![Ident::new("now")]),
-                                uses_odbc_syntax: false,
-                                args: FunctionArguments::List(FunctionArgumentList {
-                                    args: vec![],
-                                    duplicate_treatment: None,
-                                    clauses: vec![],
-                                }),
-                                parameters: FunctionArguments::None,
-                                null_treatment: None,
-                                filter: None,
-                                over: None,
-                                within_group: vec![],
-                            }))))
+                            option: ColumnOption::Ephemeral(Some(Expr::Function(Box::new(
+                                Function {
+                                    name: ObjectName::from(vec![Ident::new("now")]),
+                                    uses_odbc_syntax: false,
+                                    args: FunctionArguments::List(FunctionArgumentList {
+                                        args: vec![],
+                                        duplicate_treatment: None,
+                                        clauses: vec![],
+                                    }),
+                                    parameters: FunctionArguments::None,
+                                    null_treatment: None,
+                                    filter: None,
+                                    over: None,
+                                    within_group: vec![],
+                                }
+                            ))))
                         }],
                     },
                     ColumnDef {

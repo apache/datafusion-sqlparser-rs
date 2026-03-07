@@ -600,3 +600,156 @@ fn parse_databricks_struct_type() {
         _ => unreachable!(),
     }
 }
+
+// https://docs.databricks.com/en/sql/language-manual/functions/colonsign.html
+#[test]
+fn parse_databricks_json_accessor() {
+    // Basic colon accessor — unquoted field names are case-insensitive
+    databricks().verified_only_select("SELECT raw:owner, RAW:owner FROM store_data");
+
+    // Unquoted field access is case-insensitive. Bracket notation (`raw:['OWNER']`) also
+    // parses successfully; its AST is asserted below.
+    databricks().verified_only_select("SELECT raw:OWNER FROM store_data");
+    databricks()
+        .parse_sql_statements("SELECT raw:['OWNER'] FROM store_data")
+        .unwrap();
+
+    // Backtick-quoted keys (Databricks delimited identifiers) normalise to double-quoted output.
+    databricks().one_statement_parses_to(
+        "SELECT raw:`zip code`, raw:`Zip Code` FROM store_data",
+        r#"SELECT raw:"zip code", raw:"Zip Code" FROM store_data"#,
+    );
+    // A colon inside a string literal key is parsed as part of the string, not as an operator.
+    databricks()
+        .parse_sql_statements("SELECT raw:['fb:testid'] FROM store_data")
+        .unwrap();
+
+    // Dot notation
+    databricks().verified_only_select("SELECT raw:store.bicycle FROM store_data");
+
+    // String-key bracket notation after a dot segment
+    databricks()
+        .verified_only_select("SELECT raw:store['bicycle'], raw:store['BICYCLE'] FROM store_data");
+
+    // Integer-index bracket notation
+    databricks()
+        .verified_only_select("SELECT raw:store.fruit[0], raw:store.fruit[1] FROM store_data");
+
+    // Wildcard [*] — including chained and mixed positions
+    databricks().verified_only_select(
+        "SELECT raw:store.basket[*], raw:store.basket[*][0] AS first_of_baskets, \
+         raw:store.basket[0][*] AS first_basket, raw:store.basket[*][*] AS all_elements_flattened, \
+         raw:store.basket[0][2].b AS subfield FROM store_data",
+    );
+
+    // Dot access following a wildcard bracket
+    databricks().verified_only_select("SELECT raw:store.book[*].isbn FROM store_data");
+
+    // Double-colon cast — type keyword normalises to upper case
+    databricks().one_statement_parses_to(
+        "SELECT raw:store.bicycle.price::double FROM store_data",
+        "SELECT raw:store.bicycle.price::DOUBLE FROM store_data",
+    );
+
+    // --- AST structure assertions ---
+
+    // Simple dot access
+    assert_eq!(
+        databricks().verified_expr("raw:owner"),
+        Expr::JsonAccess {
+            value: Box::new(Expr::Identifier(Ident::new("raw"))),
+            path: JsonPath {
+                path: vec![JsonPathElem::Dot {
+                    key: "owner".to_owned(),
+                    quoted: false,
+                }],
+            },
+        }
+    );
+
+    // Multi-level dot access
+    assert_eq!(
+        databricks().verified_expr("raw:store.bicycle"),
+        Expr::JsonAccess {
+            value: Box::new(Expr::Identifier(Ident::new("raw"))),
+            path: JsonPath {
+                path: vec![
+                    JsonPathElem::Dot {
+                        key: "store".to_owned(),
+                        quoted: false,
+                    },
+                    JsonPathElem::Dot {
+                        key: "bicycle".to_owned(),
+                        quoted: false,
+                    },
+                ],
+            },
+        }
+    );
+
+    // Dot path followed by an integer-index bracket
+    assert_eq!(
+        databricks().verified_expr("raw:store.fruit[0]"),
+        Expr::JsonAccess {
+            value: Box::new(Expr::Identifier(Ident::new("raw"))),
+            path: JsonPath {
+                path: vec![
+                    JsonPathElem::Dot {
+                        key: "store".to_owned(),
+                        quoted: false,
+                    },
+                    JsonPathElem::Dot {
+                        key: "fruit".to_owned(),
+                        quoted: false,
+                    },
+                    JsonPathElem::Bracket {
+                        key: Expr::value(number("0")),
+                    },
+                ],
+            },
+        }
+    );
+
+    // [*] is stored as Expr::Wildcard inside a Bracket element
+    assert_eq!(
+        databricks().verified_expr("raw:store.basket[*]"),
+        Expr::JsonAccess {
+            value: Box::new(Expr::Identifier(Ident::new("raw"))),
+            path: JsonPath {
+                path: vec![
+                    JsonPathElem::Dot {
+                        key: "store".to_owned(),
+                        quoted: false,
+                    },
+                    JsonPathElem::Dot {
+                        key: "basket".to_owned(),
+                        quoted: false,
+                    },
+                    JsonPathElem::Bracket {
+                        key: Expr::Wildcard(AttachedToken::empty()),
+                    },
+                ],
+            },
+        }
+    );
+
+    // raw:['OWNER'] — bracket as the first path element (directly after the colon)
+    let select = databricks()
+        .parse_sql_statements("SELECT raw:['OWNER'] FROM t")
+        .unwrap();
+    if let Statement::Query(q) = &select[0] {
+        if let SetExpr::Select(sel) = q.body.as_ref() {
+            assert_eq!(
+                sel.projection[0],
+                SelectItem::UnnamedExpr(Expr::JsonAccess {
+                    value: Box::new(Expr::Identifier(Ident::new("raw"))),
+                    path: JsonPath {
+                        path: vec![JsonPathElem::Bracket {
+                            key: Expr::value(Value::SingleQuotedString("OWNER".to_owned())),
+                        }],
+                    },
+                })
+            );
+        }
+    }
+}

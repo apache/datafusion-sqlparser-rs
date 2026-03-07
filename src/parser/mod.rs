@@ -4191,8 +4191,9 @@ impl<'a> Parser<'a> {
         match token.token {
             Token::Word(Word {
                 value,
-                // path segments in SF dot notation can be unquoted or double-quoted
-                quote_style: quote_style @ (Some('"') | None),
+                // path segments in SF dot notation can be unquoted or double-quoted;
+                // Databricks also supports backtick-quoted identifiers
+                quote_style: quote_style @ (Some('"') | Some('`') | None),
                 // some experimentation suggests that snowflake permits
                 // any keyword here unquoted.
                 keyword: _,
@@ -4210,6 +4211,15 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_json_path_bracket_key(&mut self) -> Result<Expr, ParserError> {
+        // Databricks supports [*] wildcard accessor
+        if self.consume_token(&Token::Mul) {
+            Ok(Expr::Wildcard(AttachedToken::empty()))
+        } else {
+            self.parse_expr()
+        }
+    }
+
     fn parse_json_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         let path = self.parse_json_path()?;
         Ok(Expr::JsonAccess {
@@ -4223,13 +4233,20 @@ impl<'a> Parser<'a> {
         loop {
             match self.next_token().token {
                 Token::Colon if path.is_empty() => {
-                    path.push(self.parse_json_path_object_key()?);
+                    if self.peek_token_ref().token == Token::LBracket {
+                        self.next_token();
+                        let key = self.parse_json_path_bracket_key()?;
+                        self.expect_token(&Token::RBracket)?;
+                        path.push(JsonPathElem::Bracket { key });
+                    } else {
+                        path.push(self.parse_json_path_object_key()?);
+                    }
                 }
                 Token::Period if !path.is_empty() => {
                     path.push(self.parse_json_path_object_key()?);
                 }
                 Token::LBracket => {
-                    let key = self.parse_expr()?;
+                    let key = self.parse_json_path_bracket_key()?;
                     self.expect_token(&Token::RBracket)?;
 
                     path.push(JsonPathElem::Bracket { key });

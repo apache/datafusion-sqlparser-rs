@@ -4624,6 +4624,19 @@ pub enum Statement {
         is_eq: bool,
     },
     /// ```sql
+    /// LOCK [ TABLE ] [ ONLY ] name [ * ] [, ...] [ IN lockmode MODE ] [ NOWAIT ]
+    /// ```
+    ///
+    /// Note: this is a PostgreSQL-specific statement. See <https://www.postgresql.org/docs/current/sql-lock.html>
+    Lock {
+        /// List of tables to lock.
+        tables: Vec<LockTableTarget>,
+        /// Optional lock mode. PostgreSQL defaults to `ACCESS EXCLUSIVE` when omitted.
+        lock_mode: Option<LockTableMode>,
+        /// Whether `NOWAIT` was specified.
+        nowait: bool,
+    },
+    /// ```sql
     /// LOCK TABLES <table_name> [READ [LOCAL] | [LOW_PRIORITY] WRITE]
     /// ```
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
@@ -6141,6 +6154,20 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::Lock {
+                tables,
+                lock_mode,
+                nowait,
+            } => {
+                write!(f, "LOCK TABLE {}", display_comma_separated(tables))?;
+                if let Some(lock_mode) = lock_mode {
+                    write!(f, " IN {lock_mode} MODE")?;
+                }
+                if *nowait {
+                    write!(f, " NOWAIT")?;
+                }
+                Ok(())
+            }
             Statement::LockTables { tables } => {
                 write!(f, "LOCK TABLES {}", display_comma_separated(tables))
             }
@@ -6384,6 +6411,74 @@ impl fmt::Display for TruncateTableTarget {
             write!(f, " *")?;
         };
         Ok(())
+    }
+}
+
+/// Target of a PostgreSQL `LOCK TABLE` command
+///
+/// Note this is its own struct because `visit_relation` requires an `ObjectName` (not a `Vec<ObjectName>`)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct LockTableTarget {
+    /// Name of the table being locked.
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub name: ObjectName,
+    /// Whether `ONLY` was specified to exclude descendant tables.
+    pub only: bool,
+    /// Whether `*` was specified to explicitly include descendant tables.
+    pub has_asterisk: bool,
+}
+
+impl fmt::Display for LockTableTarget {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.only {
+            write!(f, "ONLY ")?;
+        }
+        write!(f, "{}", self.name)?;
+        if self.has_asterisk {
+            write!(f, " *")?;
+        }
+        Ok(())
+    }
+}
+
+/// PostgreSQL lock modes for `LOCK TABLE`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum LockTableMode {
+    /// `ACCESS SHARE`
+    AccessShare,
+    /// `ROW SHARE`
+    RowShare,
+    /// `ROW EXCLUSIVE`
+    RowExclusive,
+    /// `SHARE UPDATE EXCLUSIVE`
+    ShareUpdateExclusive,
+    /// `SHARE`
+    Share,
+    /// `SHARE ROW EXCLUSIVE`
+    ShareRowExclusive,
+    /// `EXCLUSIVE`
+    Exclusive,
+    /// `ACCESS EXCLUSIVE`
+    AccessExclusive,
+}
+
+impl fmt::Display for LockTableMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let text = match self {
+            Self::AccessShare => "ACCESS SHARE",
+            Self::RowShare => "ROW SHARE",
+            Self::RowExclusive => "ROW EXCLUSIVE",
+            Self::ShareUpdateExclusive => "SHARE UPDATE EXCLUSIVE",
+            Self::Share => "SHARE",
+            Self::ShareRowExclusive => "SHARE ROW EXCLUSIVE",
+            Self::Exclusive => "EXCLUSIVE",
+            Self::AccessExclusive => "ACCESS EXCLUSIVE",
+        };
+        write!(f, "{text}")
     }
 }
 

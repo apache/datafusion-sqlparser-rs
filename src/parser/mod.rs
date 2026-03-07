@@ -697,6 +697,9 @@ impl<'a> Parser<'a> {
                 // `INSTALL` is duckdb specific https://duckdb.org/docs/extensions/overview
                 Keyword::INSTALL if self.dialect.supports_install() => self.parse_install(),
                 Keyword::LOAD => self.parse_load(),
+                Keyword::LOCK if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
+                    self.parse_lock_table_statement()
+                }
                 Keyword::OPTIMIZE if self.dialect.supports_optimize_table() => {
                     self.parse_optimize_table()
                 }
@@ -18383,6 +18386,80 @@ impl<'a> Parser<'a> {
             of,
             nonblock,
         })
+    }
+
+    /// Parse a PostgreSQL `LOCK TABLE` statement.
+    pub fn parse_lock_table_statement(&mut self) -> Result<Statement, ParserError> {
+        if self.peek_keyword(Keyword::TABLES) {
+            return self.expected_ref("TABLE or a table name", self.peek_token_ref());
+        }
+
+        let _ = self.parse_keyword(Keyword::TABLE);
+        let tables = self.parse_comma_separated(Parser::parse_lock_table_target)?;
+        let lock_mode = if self.parse_keyword(Keyword::IN) {
+            let lock_mode = self.parse_lock_table_mode()?;
+            self.expect_keyword(Keyword::MODE)?;
+            Some(lock_mode)
+        } else {
+            None
+        };
+        let nowait = self.parse_keyword(Keyword::NOWAIT);
+
+        Ok(Statement::Lock {
+            tables,
+            lock_mode,
+            nowait,
+        })
+    }
+
+    fn parse_lock_table_target(&mut self) -> Result<LockTableTarget, ParserError> {
+        let only = self.parse_keyword(Keyword::ONLY);
+        let name = self.parse_object_name(false)?;
+        let has_asterisk = self.consume_token(&Token::Mul);
+
+        Ok(LockTableTarget {
+            name,
+            only,
+            has_asterisk,
+        })
+    }
+
+    fn parse_lock_table_mode(&mut self) -> Result<LockTableMode, ParserError> {
+        if self.parse_keyword(Keyword::ACCESS) {
+            return match self.expect_one_of_keywords(&[Keyword::SHARE, Keyword::EXCLUSIVE])? {
+                Keyword::SHARE => Ok(LockTableMode::AccessShare),
+                Keyword::EXCLUSIVE => Ok(LockTableMode::AccessExclusive),
+                unexpected_keyword => Err(ParserError::ParserError(format!(
+                    "Internal parser error: expected any of {{SHARE, EXCLUSIVE}}, got {unexpected_keyword:?}"
+                ))),
+            };
+        }
+
+        if self.parse_keyword(Keyword::ROW) {
+            return match self.expect_one_of_keywords(&[Keyword::SHARE, Keyword::EXCLUSIVE])? {
+                Keyword::SHARE => Ok(LockTableMode::RowShare),
+                Keyword::EXCLUSIVE => Ok(LockTableMode::RowExclusive),
+                unexpected_keyword => Err(ParserError::ParserError(format!(
+                    "Internal parser error: expected any of {{SHARE, EXCLUSIVE}}, got {unexpected_keyword:?}"
+                ))),
+            };
+        }
+
+        if self.parse_keyword(Keyword::SHARE) {
+            if self.parse_keywords(&[Keyword::UPDATE, Keyword::EXCLUSIVE]) {
+                return Ok(LockTableMode::ShareUpdateExclusive);
+            }
+            if self.parse_keywords(&[Keyword::ROW, Keyword::EXCLUSIVE]) {
+                return Ok(LockTableMode::ShareRowExclusive);
+            }
+            return Ok(LockTableMode::Share);
+        }
+
+        if self.parse_keyword(Keyword::EXCLUSIVE) {
+            return Ok(LockTableMode::Exclusive);
+        }
+
+        self.expected_ref("a PostgreSQL LOCK TABLE mode", self.peek_token_ref())
     }
 
     /// Parse a VALUES clause

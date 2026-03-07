@@ -8703,3 +8703,39 @@ fn parse_pg_analyze() {
         _ => panic!("Expected Analyze, got: {stmt:?}"),
     }
 }
+
+#[test]
+fn parse_lock_table() {
+    pg_and_generic().one_statement_parses_to(
+        "LOCK public.widgets IN EXCLUSIVE MODE",
+        "LOCK TABLE public.widgets IN EXCLUSIVE MODE",
+    );
+    pg_and_generic().one_statement_parses_to(
+        "LOCK TABLE ONLY public.widgets, analytics.events * IN SHARE ROW EXCLUSIVE MODE NOWAIT",
+        "LOCK TABLE ONLY public.widgets, analytics.events * IN SHARE ROW EXCLUSIVE MODE NOWAIT",
+    );
+    pg_and_generic().one_statement_parses_to(
+        "LOCK TABLE public.widgets NOWAIT",
+        "LOCK TABLE public.widgets NOWAIT",
+    );
+}
+
+#[test]
+fn parse_lock_table_ast() {
+    let stmt = pg().verified_stmt("LOCK TABLE ONLY public.widgets IN ACCESS EXCLUSIVE MODE NOWAIT");
+    match stmt {
+        Statement::Lock {
+            tables,
+            lock_mode,
+            nowait,
+        } => {
+            assert_eq!(tables.len(), 1);
+            assert_eq!(tables[0].name.to_string(), "public.widgets");
+            assert!(tables[0].only);
+            assert!(!tables[0].has_asterisk);
+            assert_eq!(lock_mode, Some(LockTableMode::AccessExclusive));
+            assert!(nowait);
+        }
+        _ => panic!("Expected Lock, got: {stmt:?}"),
+    }
+}

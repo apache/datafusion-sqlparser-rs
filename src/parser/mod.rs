@@ -4234,6 +4234,12 @@ impl<'a> Parser<'a> {
             match self.next_token().token {
                 Token::Colon if path.is_empty() => {
                     if self.peek_token_ref().token == Token::LBracket {
+                        // A bracket element directly after the colon, e.g. `raw:['field']`.
+                        // Push an empty Dot so the display re-emits the leading `:` for syntax roundtrip.
+                        path.push(JsonPathElem::Dot {
+                            key: String::new(),
+                            quoted: false,
+                        });
                         self.next_token();
                         let key = self.parse_json_path_bracket_key()?;
                         self.expect_token(&Token::RBracket)?;

@@ -607,22 +607,16 @@ fn parse_databricks_json_accessor() {
     // Basic colon accessor — unquoted field names are case-insensitive
     databricks().verified_only_select("SELECT raw:owner, RAW:owner FROM store_data");
 
-    // Unquoted field access is case-insensitive. Bracket notation (`raw:['OWNER']`) also
-    // parses successfully; its AST is asserted below.
-    databricks().verified_only_select("SELECT raw:OWNER FROM store_data");
-    databricks()
-        .parse_sql_statements("SELECT raw:['OWNER'] FROM store_data")
-        .unwrap();
+    // Unquoted field access is case-insensitive; bracket notation is case-sensitive.
+    databricks().verified_only_select(
+        "SELECT raw:OWNER AS case_insensitive, raw:['OWNER'] AS case_sensitive FROM store_data",
+    );
 
     // Backtick-quoted keys (Databricks delimited identifiers) normalise to double-quoted output.
     databricks().one_statement_parses_to(
-        "SELECT raw:`zip code`, raw:`Zip Code` FROM store_data",
-        r#"SELECT raw:"zip code", raw:"Zip Code" FROM store_data"#,
+        "SELECT raw:`zip code`, raw:`Zip Code`, raw:['fb:testid'] FROM store_data",
+        r#"SELECT raw:"zip code", raw:"Zip Code", raw:['fb:testid'] FROM store_data"#,
     );
-    // A colon inside a string literal key is parsed as part of the string, not as an operator.
-    databricks()
-        .parse_sql_statements("SELECT raw:['fb:testid'] FROM store_data")
-        .unwrap();
 
     // Dot notation
     databricks().verified_only_select("SELECT raw:store.bicycle FROM store_data");
@@ -733,23 +727,23 @@ fn parse_databricks_json_accessor() {
         }
     );
 
-    // raw:['OWNER'] — bracket as the first path element (directly after the colon)
-    let select = databricks()
-        .parse_sql_statements("SELECT raw:['OWNER'] FROM t")
-        .unwrap();
-    if let Statement::Query(q) = &select[0] {
-        if let SetExpr::Select(sel) = q.body.as_ref() {
-            assert_eq!(
-                sel.projection[0],
-                SelectItem::UnnamedExpr(Expr::JsonAccess {
-                    value: Box::new(Expr::Identifier(Ident::new("raw"))),
-                    path: JsonPath {
-                        path: vec![JsonPathElem::Bracket {
-                            key: Expr::value(Value::SingleQuotedString("OWNER".to_owned())),
-                        }],
+    // raw:['OWNER'] — bracket directly after the colon. An empty-key sentinel Dot is prepended
+    // so that the display re-emits the leading `:`, enabling a correct round-trip.
+    assert_eq!(
+        databricks().verified_expr("raw:['OWNER']"),
+        Expr::JsonAccess {
+            value: Box::new(Expr::Identifier(Ident::new("raw"))),
+            path: JsonPath {
+                path: vec![
+                    JsonPathElem::Dot {
+                        key: String::new(),
+                        quoted: false,
                     },
-                })
-            );
+                    JsonPathElem::Bracket {
+                        key: Expr::value(Value::SingleQuotedString("OWNER".to_owned())),
+                    },
+                ],
+            },
         }
-    }
+    );
 }

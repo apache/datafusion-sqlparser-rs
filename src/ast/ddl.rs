@@ -2903,7 +2903,7 @@ pub struct CreateTable {
     pub volatile: bool,
     /// `ICEBERG` clause
     pub iceberg: bool,
-    /// BigQuery `SNAPSHOT` clause
+    /// `SNAPSHOT` clause
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_snapshot_table_statement>
     pub snapshot: bool,
     /// Table name

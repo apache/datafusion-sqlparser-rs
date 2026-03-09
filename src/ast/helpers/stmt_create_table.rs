@@ -81,7 +81,7 @@ pub struct CreateTableBuilder {
     pub volatile: bool,
     /// Iceberg-specific table flag.
     pub iceberg: bool,
-    /// BigQuery `SNAPSHOT` table flag.
+    /// `SNAPSHOT` table flag.
     pub snapshot: bool,
     /// Whether `DYNAMIC` table option is set.
     pub dynamic: bool,

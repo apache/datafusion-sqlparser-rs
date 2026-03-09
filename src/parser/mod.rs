@@ -5099,7 +5099,7 @@ impl<'a> Parser<'a> {
         let persistent = dialect_of!(self is DuckDbDialect)
             && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
         let create_view_params = self.parse_create_view_params()?;
-        if self.parse_keywords(&[Keyword::SNAPSHOT, Keyword::TABLE]) {
+        if self.peek_keywords(&[Keyword::SNAPSHOT, Keyword::TABLE]) {
             self.parse_create_snapshot_table().map(Into::into)
         } else if self.parse_keyword(Keyword::TABLE) {
             self.parse_create_table(or_replace, temporary, global, transient)
@@ -6316,10 +6316,11 @@ impl<'a> Parser<'a> {
             .build())
     }
 
-    /// Parse BigQuery `CREATE SNAPSHOT TABLE` statement.
+    /// Parse `CREATE SNAPSHOT TABLE` statement.
     ///
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_snapshot_table_statement>
     pub fn parse_create_snapshot_table(&mut self) -> Result<CreateTable, ParserError> {
+        self.expect_keywords(&[Keyword::SNAPSHOT, Keyword::TABLE])?;
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name(true)?;
 

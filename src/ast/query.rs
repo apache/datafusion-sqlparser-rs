@@ -2578,7 +2578,7 @@ pub enum TableVersion {
     /// When the table version is defined using a function.
     /// For example: `SELECT * FROM tbl AT(TIMESTAMP => '2020-08-14 09:30:00')`
     Function(Expr),
-    /// Snowflake CHANGES clause for change tracking queries.
+    /// Snowflake `CHANGES` clause for change tracking queries.
     /// For example:
     /// ```sql
     /// SELECT * FROM t

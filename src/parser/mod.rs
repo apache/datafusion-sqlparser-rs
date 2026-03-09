@@ -4211,15 +4211,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_json_path_bracket_key(&mut self) -> Result<Expr, ParserError> {
-        // Databricks supports [*] wildcard accessor
-        if self.consume_token(&Token::Mul) {
-            Ok(Expr::Wildcard(AttachedToken::empty()))
-        } else {
-            self.parse_expr()
-        }
-    }
-
     fn parse_json_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         let path = self.parse_json_path()?;
         Ok(Expr::JsonAccess {
@@ -4232,27 +4223,20 @@ impl<'a> Parser<'a> {
         let mut path = Vec::new();
         loop {
             match self.next_token().token {
+                Token::Colon if path.is_empty() && self.peek_token_ref() == &Token::LBracket => {
+                    self.next_token();
+                    let key = self.parse_wildcard_expr()?;
+                    self.expect_token(&Token::RBracket)?;
+                    path.push(JsonPathElem::ColonBracket { key });
+                }
                 Token::Colon if path.is_empty() => {
-                    if self.peek_token_ref().token == Token::LBracket {
-                        // A bracket element directly after the colon, e.g. `raw:['field']`.
-                        // Push an empty Dot so the display re-emits the leading `:` for syntax roundtrip.
-                        path.push(JsonPathElem::Dot {
-                            key: String::new(),
-                            quoted: false,
-                        });
-                        self.next_token();
-                        let key = self.parse_json_path_bracket_key()?;
-                        self.expect_token(&Token::RBracket)?;
-                        path.push(JsonPathElem::Bracket { key });
-                    } else {
-                        path.push(self.parse_json_path_object_key()?);
-                    }
+                    path.push(self.parse_json_path_object_key()?);
                 }
                 Token::Period if !path.is_empty() => {
                     path.push(self.parse_json_path_object_key()?);
                 }
                 Token::LBracket => {
-                    let key = self.parse_json_path_bracket_key()?;
+                    let key = self.parse_wildcard_expr()?;
                     self.expect_token(&Token::RBracket)?;
 
                     path.push(JsonPathElem::Bracket { key });

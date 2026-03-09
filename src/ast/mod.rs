@@ -651,6 +651,14 @@ pub enum JsonPathElem {
         /// The expression used as the bracket key (string or numeric expression).
         key: Expr,
     },
+    /// Access an object field using colon bracket notation
+    /// e.g. `obj:['foo']`
+    ///
+    /// See <https://docs.databricks.com/en/sql/language-manual/functions/colonsign.html>
+    ColonBracket {
+        /// The expression used as the bracket key (string or numeric expression).
+        key: Expr,
+    },
 }
 
 /// A JSON path.
@@ -684,6 +692,9 @@ impl fmt::Display for JsonPath {
                 }
                 JsonPathElem::Bracket { key } => {
                     write!(f, "[{key}]")?;
+                }
+                JsonPathElem::ColonBracket { key } => {
+                    write!(f, ":[{key}]")?;
                 }
             }
         }

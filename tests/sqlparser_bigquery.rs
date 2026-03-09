@@ -2893,7 +2893,8 @@ fn test_alter_schema() {
 
 #[test]
 fn test_create_snapshot_table() {
-    bigquery_and_generic().verified_stmt("CREATE SNAPSHOT TABLE dataset_id.table1 CLONE dataset_id.table2");
+    bigquery_and_generic()
+        .verified_stmt("CREATE SNAPSHOT TABLE dataset_id.table1 CLONE dataset_id.table2");
 
     bigquery().verified_stmt(
         "CREATE SNAPSHOT TABLE IF NOT EXISTS dataset_id.table1 CLONE dataset_id.table2",

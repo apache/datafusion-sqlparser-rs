@@ -6431,8 +6431,6 @@ impl fmt::Display for Lock {
 /// Target of a `LOCK TABLE` command
 ///
 /// See <https://www.postgresql.org/docs/current/sql-lock.html>
-///
-/// Note this is its own struct because `visit_relation` requires an `ObjectName` (not a `Vec<ObjectName>`)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

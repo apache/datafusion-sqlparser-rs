@@ -698,7 +698,8 @@ impl<'a> Parser<'a> {
                 Keyword::INSTALL if self.dialect.supports_install() => self.parse_install(),
                 Keyword::LOAD => self.parse_load(),
                 Keyword::LOCK => {
-                    self.parse_lock_table_statement()
+                    self.prev_token();
+                    self.parse_lock_statement().map(Into::into)
                 }
                 Keyword::OPTIMIZE if self.dialect.supports_optimize_table() => {
                     self.parse_optimize_table()
@@ -18388,8 +18389,10 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse a PostgreSQL `LOCK TABLE` statement.
-    pub fn parse_lock_table_statement(&mut self) -> Result<Statement, ParserError> {
+    /// Parse a PostgreSQL `LOCK` statement.
+    pub fn parse_lock_statement(&mut self) -> Result<Lock, ParserError> {
+        self.expect_keyword(Keyword::LOCK)?;
+
         if self.peek_keyword(Keyword::TABLES) {
             return self.expected_ref("TABLE or a table name", self.peek_token_ref());
         }
@@ -18405,7 +18408,7 @@ impl<'a> Parser<'a> {
         };
         let nowait = self.parse_keyword(Keyword::NOWAIT);
 
-        Ok(Statement::Lock {
+        Ok(Lock {
             tables,
             lock_mode,
             nowait,
@@ -18425,41 +18428,25 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_lock_table_mode(&mut self) -> Result<LockTableMode, ParserError> {
-        if self.parse_keyword(Keyword::ACCESS) {
-            return match self.expect_one_of_keywords(&[Keyword::SHARE, Keyword::EXCLUSIVE])? {
-                Keyword::SHARE => Ok(LockTableMode::AccessShare),
-                Keyword::EXCLUSIVE => Ok(LockTableMode::AccessExclusive),
-                unexpected_keyword => Err(ParserError::ParserError(format!(
-                    "Internal parser error: expected any of {{SHARE, EXCLUSIVE}}, got {unexpected_keyword:?}"
-                ))),
-            };
+        if self.parse_keywords(&[Keyword::ACCESS, Keyword::SHARE]) {
+            Ok(LockTableMode::AccessShare)
+        } else if self.parse_keywords(&[Keyword::ACCESS, Keyword::EXCLUSIVE]) {
+            Ok(LockTableMode::AccessExclusive)
+        } else if self.parse_keywords(&[Keyword::ROW, Keyword::SHARE]) {
+            Ok(LockTableMode::RowShare)
+        } else if self.parse_keywords(&[Keyword::ROW, Keyword::EXCLUSIVE]) {
+            Ok(LockTableMode::RowExclusive)
+        } else if self.parse_keywords(&[Keyword::SHARE, Keyword::UPDATE, Keyword::EXCLUSIVE]) {
+            Ok(LockTableMode::ShareUpdateExclusive)
+        } else if self.parse_keywords(&[Keyword::SHARE, Keyword::ROW, Keyword::EXCLUSIVE]) {
+            Ok(LockTableMode::ShareRowExclusive)
+        } else if self.parse_keyword(Keyword::SHARE) {
+            Ok(LockTableMode::Share)
+        } else if self.parse_keyword(Keyword::EXCLUSIVE) {
+            Ok(LockTableMode::Exclusive)
+        } else {
+            self.expected_ref("a PostgreSQL LOCK TABLE mode", self.peek_token_ref())
         }
-
-        if self.parse_keyword(Keyword::ROW) {
-            return match self.expect_one_of_keywords(&[Keyword::SHARE, Keyword::EXCLUSIVE])? {
-                Keyword::SHARE => Ok(LockTableMode::RowShare),
-                Keyword::EXCLUSIVE => Ok(LockTableMode::RowExclusive),
-                unexpected_keyword => Err(ParserError::ParserError(format!(
-                    "Internal parser error: expected any of {{SHARE, EXCLUSIVE}}, got {unexpected_keyword:?}"
-                ))),
-            };
-        }
-
-        if self.parse_keyword(Keyword::SHARE) {
-            if self.parse_keywords(&[Keyword::UPDATE, Keyword::EXCLUSIVE]) {
-                return Ok(LockTableMode::ShareUpdateExclusive);
-            }
-            if self.parse_keywords(&[Keyword::ROW, Keyword::EXCLUSIVE]) {
-                return Ok(LockTableMode::ShareRowExclusive);
-            }
-            return Ok(LockTableMode::Share);
-        }
-
-        if self.parse_keyword(Keyword::EXCLUSIVE) {
-            return Ok(LockTableMode::Exclusive);
-        }
-
-        self.expected_ref("a PostgreSQL LOCK TABLE mode", self.peek_token_ref())
     }
 
     /// Parse a VALUES clause

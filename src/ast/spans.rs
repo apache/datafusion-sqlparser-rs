@@ -463,7 +463,7 @@ impl Spanned for Statement {
             Statement::CreateSequence { .. } => Span::empty(),
             Statement::CreateType { .. } => Span::empty(),
             Statement::Pragma { .. } => Span::empty(),
-            Statement::Lock { .. } => Span::empty(),
+            Statement::Lock(_) => Span::empty(),
             Statement::LockTables { .. } => Span::empty(),
             Statement::UnlockTables => Span::empty(),
             Statement::Unload { .. } => Span::empty(),

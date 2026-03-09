@@ -4293,6 +4293,9 @@ pub struct CreateView {
     pub if_not_exists: bool,
     /// if true, has SQLite `TEMP` or `TEMPORARY` clause <https://www.sqlite.org/lang_createview.html>
     pub temporary: bool,
+    /// Snowflake: `COPY GRANTS` clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-view>
+    pub copy_grants: bool,
     /// if not None, has Clickhouse `TO` clause, specify the table into which to insert results
     /// <https://clickhouse.com/docs/en/sql-reference/statements/create/view#materialized-view>
     pub to: Option<ObjectName>,
@@ -4336,6 +4339,9 @@ impl fmt::Display for CreateView {
                 .map(|to| format!(" TO {to}"))
                 .unwrap_or_default()
         )?;
+        if self.copy_grants {
+            write!(f, " COPY GRANTS")?;
+        }
         if !self.columns.is_empty() {
             write!(f, " ({})", display_comma_separated(&self.columns))?;
         }

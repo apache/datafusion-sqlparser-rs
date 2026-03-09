@@ -6301,6 +6301,8 @@ impl<'a> Parser<'a> {
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
         let table_options = if !table_properties.is_empty() {
             CreateTableOptions::TableProperties(table_properties)
+        } else if let Some(options) = self.maybe_parse_options(Keyword::OPTIONS)? {
+            CreateTableOptions::Options(options)
         } else {
             CreateTableOptions::None
         };
@@ -6379,6 +6381,7 @@ impl<'a> Parser<'a> {
         let name_before_not_exists = !if_not_exists_first
             && self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let if_not_exists = if_not_exists_first || name_before_not_exists;
+        let copy_grants = self.parse_keywords(&[Keyword::COPY, Keyword::GRANTS]);
         // Many dialects support `OR ALTER` right after `CREATE`, but we don't (yet).
         // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
         let columns = self.parse_view_columns()?;
@@ -6446,6 +6449,7 @@ impl<'a> Parser<'a> {
             with_no_schema_binding,
             if_not_exists,
             temporary,
+            copy_grants,
             to,
             params: create_view_params,
             name_before_not_exists,

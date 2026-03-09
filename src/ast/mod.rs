@@ -4627,11 +4627,11 @@ pub enum Statement {
     /// LOCK [ TABLE ] [ ONLY ] name [ * ] [, ...] [ IN lockmode MODE ] [ NOWAIT ]
     /// ```
     ///
-    /// Note: this is a PostgreSQL-specific statement. See <https://www.postgresql.org/docs/current/sql-lock.html>
+    /// See <https://www.postgresql.org/docs/current/sql-lock.html>
     Lock {
         /// List of tables to lock.
         tables: Vec<LockTableTarget>,
-        /// Optional lock mode. PostgreSQL defaults to `ACCESS EXCLUSIVE` when omitted.
+        /// Lock mode.
         lock_mode: Option<LockTableMode>,
         /// Whether `NOWAIT` was specified.
         nowait: bool,
@@ -6414,7 +6414,7 @@ impl fmt::Display for TruncateTableTarget {
     }
 }
 
-/// Target of a PostgreSQL `LOCK TABLE` command
+/// Target of a `LOCK TABLE` command
 ///
 /// Note this is its own struct because `visit_relation` requires an `ObjectName` (not a `Vec<ObjectName>`)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

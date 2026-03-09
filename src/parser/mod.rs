@@ -697,7 +697,7 @@ impl<'a> Parser<'a> {
                 // `INSTALL` is duckdb specific https://duckdb.org/docs/extensions/overview
                 Keyword::INSTALL if self.dialect.supports_install() => self.parse_install(),
                 Keyword::LOAD => self.parse_load(),
-                Keyword::LOCK if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
+                Keyword::LOCK => {
                     self.parse_lock_table_statement()
                 }
                 Keyword::OPTIMIZE if self.dialect.supports_optimize_table() => {

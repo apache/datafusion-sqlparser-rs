@@ -4672,6 +4672,17 @@ fn test_snowflake_create_view_with_composite_policy_name() {
 }
 
 #[test]
+fn test_snowflake_create_view_copy_grants() {
+    snowflake().verified_stmt("CREATE OR REPLACE VIEW bla COPY GRANTS AS (SELECT * FROM source)");
+    snowflake()
+        .verified_stmt("CREATE OR REPLACE SECURE VIEW bla COPY GRANTS AS (SELECT * FROM source)");
+    // COPY GRANTS with column list
+    snowflake().verified_stmt(
+        "CREATE OR REPLACE VIEW bla COPY GRANTS (a, b) AS (SELECT a, b FROM source)",
+    );
+}
+
+#[test]
 fn test_snowflake_identifier_function() {
     // Using IDENTIFIER to reference a column
     match &snowflake()

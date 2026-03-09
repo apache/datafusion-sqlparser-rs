@@ -601,7 +601,6 @@ fn parse_databricks_struct_type() {
     }
 }
 
-// https://docs.databricks.com/en/sql/language-manual/functions/colonsign.html
 #[test]
 fn parse_databricks_json_accessor() {
     // Basic colon accessor — unquoted field names are case-insensitive

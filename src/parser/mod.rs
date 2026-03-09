@@ -6297,6 +6297,8 @@ impl<'a> Parser<'a> {
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
         let table_options = if !table_properties.is_empty() {
             CreateTableOptions::TableProperties(table_properties)
+        } else if let Some(options) = self.maybe_parse_options(Keyword::OPTIONS)? {
+            CreateTableOptions::Options(options)
         } else {
             CreateTableOptions::None
         };

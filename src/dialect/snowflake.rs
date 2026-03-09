@@ -247,6 +247,17 @@ impl Dialect for SnowflakeDialect {
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
         if parser.parse_keyword(Keyword::BEGIN) {
+            // Snowflake supports both `BEGIN TRANSACTION` and `BEGIN ... END` blocks.
+            // If the next keyword indicates a transaction statement, let the
+            // standard parse_begin() handle it.
+            if parser
+                .peek_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK, Keyword::NAME])
+                .is_some()
+                || matches!(parser.peek_token_ref().token, Token::SemiColon | Token::EOF)
+            {
+                parser.prev_token();
+                return None;
+            }
             return Some(parser.parse_begin_exception_end());
         }
 

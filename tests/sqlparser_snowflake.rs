@@ -2643,24 +2643,16 @@ fn test_snowflake_copy_into_stage_name_ends_with_parens() {
 #[test]
 fn test_snowflake_stage_name_with_special_chars() {
     // Stage path with '=' (Hive-style partitioning)
-    let sql = "SELECT * FROM @stage/day=18/23.parquet";
-    let stmt = snowflake().parse_sql_statements(sql).unwrap();
-    assert_eq!(1, stmt.len());
+    snowflake().verified_stmt("SELECT * FROM @stage/day=18/23.parquet");
 
     // Stage path with ':' (time-based partitioning)
-    let sql = "SELECT * FROM @stage/0:18:23/23.parquet";
-    let stmt = snowflake().parse_sql_statements(sql).unwrap();
-    assert_eq!(1, stmt.len());
+    snowflake().verified_stmt("SELECT * FROM @stage/0:18:23/23.parquet");
 
     // COPY INTO with '=' in stage path
-    snowflake()
-        .parse_sql_statements("COPY INTO my_table FROM @stage/day=18/file.parquet")
-        .unwrap();
+    snowflake().verified_stmt("COPY INTO my_table FROM @stage/day=18/file.parquet");
 
     // COPY INTO with ':' in stage path
-    snowflake()
-        .parse_sql_statements("COPY INTO my_table FROM @stage/0:18:23/file.parquet")
-        .unwrap();
+    snowflake().verified_stmt("COPY INTO my_table FROM @stage/0:18:23/file.parquet");
 }
 
 #[test]

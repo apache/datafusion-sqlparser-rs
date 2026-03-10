@@ -305,25 +305,11 @@ fn test_snowflake_create_table_with_storage_lifecycle_policy() {
         _ => unreachable!(),
     }
 
-    // Without WITH keyword
-    match snowflake()
-        .parse_sql_statements(
-            "CREATE TABLE my_table (a NUMBER(38,0)) STORAGE LIFECYCLE POLICY my_policy ON (a, b)",
-        )
-        .unwrap()
-        .pop()
-        .unwrap()
-    {
-        Statement::CreateTable(CreateTable {
-            with_storage_lifecycle_policy,
-            ..
-        }) => {
-            let policy = with_storage_lifecycle_policy.unwrap();
-            assert_eq!("my_policy", policy.policy.to_string());
-            assert_eq!(vec![Ident::new("a"), Ident::new("b")], policy.on);
-        }
-        _ => unreachable!(),
-    }
+    // Without WITH keyword — canonicalizes to WITH form
+    snowflake().one_statement_parses_to(
+        "CREATE TABLE my_table (a NUMBER(38, 0)) STORAGE LIFECYCLE POLICY my_policy ON (a, b)",
+        "CREATE TABLE my_table (a NUMBER(38, 0)) WITH STORAGE LIFECYCLE POLICY my_policy ON (a, b)",
+    );
 }
 
 #[test]

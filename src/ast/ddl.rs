@@ -2999,7 +2999,7 @@ pub struct CreateTable {
     /// Snowflake "WITH ROW ACCESS POLICY" clause
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
     pub with_row_access_policy: Option<RowAccessPolicy>,
-    /// Snowflake "WITH STORAGE LIFECYCLE POLICY" clause
+    /// Snowflake `WITH STORAGE LIFECYCLE POLICY` clause
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
     pub with_storage_lifecycle_policy: Option<StorageLifecyclePolicy>,
     /// Snowflake "WITH TAG" clause

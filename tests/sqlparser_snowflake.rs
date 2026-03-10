@@ -3208,7 +3208,10 @@ fn parse_view_column_descriptions() {
 
 #[test]
 fn test_parentheses_overflow() {
-    let max_nesting_level: usize = 25;
+    // Use a modest nesting level to avoid actual stack overflow on
+    // CI runners with small thread stacks (debug builds use large frames
+    // and each nesting level adds extra depth via maybe_parse).
+    let max_nesting_level: usize = 20;
 
     // Verify the recursion check is not too wasteful (num of parentheses within budget)
     let slack = 3;

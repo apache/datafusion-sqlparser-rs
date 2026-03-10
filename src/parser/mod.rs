@@ -12688,6 +12688,8 @@ impl<'a> Parser<'a> {
             let fn_name = self.parse_object_name(false)?;
             self.parse_function_call(fn_name)
                 .map(TableObject::TableFunction)
+        } else if self.dialect.supports_insert_table_query() && self.peek_subquery_start(true) {
+            self.parse_parenthesized(|p| p.parse_query()).map(TableObject::TableQuery)
         } else {
             self.parse_object_name(false).map(TableObject::TableName)
         }
@@ -17434,7 +17436,7 @@ impl<'a> Parser<'a> {
             {
                 (vec![], None, vec![], None, None, vec![])
             } else {
-                let (columns, partitioned, after_columns) = if !self.peek_subquery_start() {
+                let (columns, partitioned, after_columns) = if !self.peek_subquery_start(false) {
                     let columns =
                         self.parse_parenthesized_qualified_column_list(Optional, is_mysql)?;
 
@@ -17599,11 +17601,15 @@ impl<'a> Parser<'a> {
     }
 
     /// Returns true if the immediate tokens look like the
-    /// beginning of a subquery. `(SELECT ...`
-    fn peek_subquery_start(&mut self) -> bool {
+    /// beginning of a subquery, e.g. `(SELECT ...`.
+    ///
+    /// If `full_query == true` attempt to detect a full query with its
+    /// optional, leading `WITH` clause, e.g. `(WITH ...)`
+    fn peek_subquery_start(&mut self, full_query: bool) -> bool {
         let [maybe_lparen, maybe_select] = self.peek_tokens();
         Token::LParen == maybe_lparen
-            && matches!(maybe_select, Token::Word(w) if w.keyword == Keyword::SELECT)
+            && matches!(maybe_select, Token::Word(w)
+                if w.keyword == Keyword::SELECT || (full_query && w.keyword == Keyword::WITH))
     }
 
     fn parse_conflict_clause(&mut self) -> Option<SqliteOnConflict> {

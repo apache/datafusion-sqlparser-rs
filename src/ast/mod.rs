@@ -117,8 +117,8 @@ pub use self::trigger::{
 };
 
 pub use self::value::{
-    escape_double_quote_string, escape_quoted_string, DateTimeField, DollarQuotedString,
-    NormalizationForm, QuoteDelimitedString, TrimWhereField, Value, ValueWithSpan,
+    DateTimeField, DollarQuotedString, NormalizationForm, QuoteDelimitedString, TrimWhereField,
+    Value, ValueWithSpan, escape_double_quote_string, escape_quoted_string,
 };
 
 use crate::ast::helpers::key_value_options::KeyValueOptions;
@@ -10888,6 +10888,16 @@ pub enum TableObject {
     /// ```
     /// [Clickhouse](https://clickhouse.com/docs/en/sql-reference/table-functions)
     TableFunction(Function),
+
+    /// Table specified through a sub-query
+    /// Example:
+    /// ```sql
+    /// INSERT INTO
+    /// (SELECT employee_id, last_name, email, hire_date, job_id,  salary, commission_pct FROM employees)
+    /// VALUES (207, 'Gregory', 'pgregory@example.com', sysdate, 'PU_CLERK', 1.2E3, NULL);
+    /// ```
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/INSERT.html#GUID-903F8043-0254-4EE9-ACC1-CB8AC0AF3423__I2126242)
+    TableQuery(Box<Query>),
 }
 
 impl fmt::Display for TableObject {
@@ -10895,6 +10905,7 @@ impl fmt::Display for TableObject {
         match self {
             Self::TableName(table_name) => write!(f, "{table_name}"),
             Self::TableFunction(func) => write!(f, "FUNCTION {func}"),
+            Self::TableQuery(table_query) => write!(f, "({table_query})"),
         }
     }
 }

@@ -114,4 +114,8 @@ impl Dialect for OracleDialect {
     fn supports_insert_table_alias(&self) -> bool {
         true
     }
+
+    fn supports_insert_table_query(&self) -> bool {
+        true
+    }
 }

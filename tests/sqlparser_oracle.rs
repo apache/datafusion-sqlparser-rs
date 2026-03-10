@@ -30,7 +30,7 @@ use sqlparser::{
     parser::ParserError,
     tokenizer::Span,
 };
-use test_utils::{TestedDialects, all_dialects_where, expr_from_projection, number};
+use test_utils::{all_dialects_where, expr_from_projection, number, TestedDialects};
 
 mod test_utils;
 
@@ -573,6 +573,7 @@ fn test_insert_with_query_table() {
     oracle_dialect.verified_stmt(sql);
 
     // a query table target and a query source, with explicit columns
-    let sql = "INSERT INTO (SELECT foo_t.id, foo_t.val FROM foo_t) (id, val) SELECT 10, 20 FROM dual";
+    let sql =
+        "INSERT INTO (SELECT foo_t.id, foo_t.val FROM foo_t) (id, val) SELECT 10, 20 FROM dual";
     oracle_dialect.verified_stmt(sql);
 }

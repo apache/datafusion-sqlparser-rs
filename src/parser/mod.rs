@@ -12689,7 +12689,8 @@ impl<'a> Parser<'a> {
             self.parse_function_call(fn_name)
                 .map(TableObject::TableFunction)
         } else if self.dialect.supports_insert_table_query() && self.peek_subquery_start(true) {
-            self.parse_parenthesized(|p| p.parse_query()).map(TableObject::TableQuery)
+            self.parse_parenthesized(|p| p.parse_query())
+                .map(TableObject::TableQuery)
         } else {
             self.parse_object_name(false).map(TableObject::TableName)
         }

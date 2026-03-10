@@ -22,9 +22,8 @@ use pretty_assertions::assert_eq;
 
 use sqlparser::{
     ast::{
-        BinaryOperator, Expr, Ident, Insert, ObjectName, ObjectNamePart, Query,
-        QuoteDelimitedString, Select, SelectItem, SetExpr, Statement, TableAliasWithoutColumns,
-        TableFactor, TableObject, TableWithJoins, Value, ValueWithSpan,
+        BinaryOperator, Expr, Ident, Insert, ObjectName, Query, QuoteDelimitedString, SetExpr,
+        Statement, TableAliasWithoutColumns, TableObject, Value, ValueWithSpan,
     },
     dialect::OracleDialect,
     parser::ParserError,

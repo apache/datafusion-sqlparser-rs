@@ -4195,8 +4195,9 @@ impl<'a> Parser<'a> {
         match token.token {
             Token::Word(Word {
                 value,
-                // path segments in SF dot notation can be unquoted or double-quoted
-                quote_style: quote_style @ (Some('"') | None),
+                // path segments in SF dot notation can be unquoted or double-quoted;
+                // Databricks also supports backtick-quoted identifiers
+                quote_style: quote_style @ (Some('"') | Some('`') | None),
                 // some experimentation suggests that snowflake permits
                 // any keyword here unquoted.
                 keyword: _,
@@ -4226,6 +4227,12 @@ impl<'a> Parser<'a> {
         let mut path = Vec::new();
         loop {
             match self.next_token().token {
+                Token::Colon if path.is_empty() && self.peek_token_ref() == &Token::LBracket => {
+                    self.next_token();
+                    let key = self.parse_wildcard_expr()?;
+                    self.expect_token(&Token::RBracket)?;
+                    path.push(JsonPathElem::ColonBracket { key });
+                }
                 Token::Colon if path.is_empty() => {
                     path.push(self.parse_json_path_object_key()?);
                 }
@@ -4233,7 +4240,7 @@ impl<'a> Parser<'a> {
                     path.push(self.parse_json_path_object_key()?);
                 }
                 Token::LBracket => {
-                    let key = self.parse_expr()?;
+                    let key = self.parse_wildcard_expr()?;
                     self.expect_token(&Token::RBracket)?;
 
                     path.push(JsonPathElem::Bracket { key });

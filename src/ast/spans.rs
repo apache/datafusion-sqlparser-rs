@@ -1799,6 +1799,7 @@ impl Spanned for JsonPathElem {
         match self {
             JsonPathElem::Dot { .. } => Span::empty(),
             JsonPathElem::Bracket { key } => key.span(),
+            JsonPathElem::ColonBracket { key } => key.span(),
         }
     }
 }

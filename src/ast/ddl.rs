@@ -442,6 +442,14 @@ pub enum AlterTableOperation {
         /// Table properties specified as SQL options.
         table_properties: Vec<SqlOption>,
     },
+    /// `SET LOGGED`
+    ///
+    /// Note: this is PostgreSQL-specific.
+    SetLogged,
+    /// `SET UNLOGGED`
+    ///
+    /// Note: this is PostgreSQL-specific.
+    SetUnlogged,
     /// `OWNER TO { <new_owner> | CURRENT_ROLE | CURRENT_USER | SESSION_USER }`
     ///
     /// Note: this is PostgreSQL-specific <https://www.postgresql.org/docs/current/sql-altertable.html>
@@ -970,6 +978,12 @@ impl fmt::Display for AlterTableOperation {
                     "SET TBLPROPERTIES({})",
                     display_comma_separated(table_properties)
                 )
+            }
+            AlterTableOperation::SetLogged => {
+                write!(f, "SET LOGGED")
+            }
+            AlterTableOperation::SetUnlogged => {
+                write!(f, "SET UNLOGGED")
             }
             AlterTableOperation::FreezePartition {
                 partition,
@@ -2899,6 +2913,8 @@ pub struct CreateTable {
     pub or_replace: bool,
     /// `TEMP` or `TEMPORARY` clause
     pub temporary: bool,
+    /// `UNLOGGED` clause
+    pub unlogged: bool,
     /// `EXTERNAL` clause
     pub external: bool,
     /// `DYNAMIC` clause
@@ -3064,7 +3080,7 @@ impl fmt::Display for CreateTable {
         //   `CREATE TABLE t (a INT) AS SELECT a from t2`
         write!(
             f,
-            "CREATE {or_replace}{external}{global}{temporary}{transient}{volatile}{dynamic}{iceberg}TABLE {if_not_exists}{name}",
+            "CREATE {or_replace}{external}{global}{temporary}{unlogged}{transient}{volatile}{dynamic}{iceberg}TABLE {if_not_exists}{name}",
             or_replace = if self.or_replace { "OR REPLACE " } else { "" },
             external = if self.external { "EXTERNAL " } else { "" },
             global = self.global
@@ -3078,6 +3094,7 @@ impl fmt::Display for CreateTable {
                 .unwrap_or(""),
             if_not_exists = if self.if_not_exists { "IF NOT EXISTS " } else { "" },
             temporary = if self.temporary { "TEMPORARY " } else { "" },
+            unlogged = if self.unlogged { "UNLOGGED " } else { "" },
             transient = if self.transient { "TRANSIENT " } else { "" },
             volatile = if self.volatile { "VOLATILE " } else { "" },
             // Only for Snowflake

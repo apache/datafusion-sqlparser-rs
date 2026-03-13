@@ -69,6 +69,8 @@ pub struct CreateTableBuilder {
     pub or_replace: bool,
     /// Whether the table is `TEMPORARY`.
     pub temporary: bool,
+    /// Whether the table is `UNLOGGED`.
+    pub unlogged: bool,
     /// Whether the table is `EXTERNAL`.
     pub external: bool,
     /// Optional `GLOBAL` flag for dialects that support it.
@@ -185,6 +187,7 @@ impl CreateTableBuilder {
         Self {
             or_replace: false,
             temporary: false,
+            unlogged: false,
             external: false,
             global: None,
             if_not_exists: false,
@@ -249,6 +252,11 @@ impl CreateTableBuilder {
     /// Mark the table as `TEMPORARY`.
     pub fn temporary(mut self, temporary: bool) -> Self {
         self.temporary = temporary;
+        self
+    }
+    /// Mark the table as `UNLOGGED`.
+    pub fn unlogged(mut self, unlogged: bool) -> Self {
+        self.unlogged = unlogged;
         self
     }
     /// Mark the table as `EXTERNAL`.
@@ -534,6 +542,7 @@ impl CreateTableBuilder {
         CreateTable {
             or_replace: self.or_replace,
             temporary: self.temporary,
+            unlogged: self.unlogged,
             external: self.external,
             global: self.global,
             if_not_exists: self.if_not_exists,
@@ -612,6 +621,7 @@ impl From<CreateTable> for CreateTableBuilder {
         Self {
             or_replace: table.or_replace,
             temporary: table.temporary,
+            unlogged: table.unlogged,
             external: table.external,
             global: table.global,
             if_not_exists: table.if_not_exists,

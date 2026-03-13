@@ -8374,7 +8374,15 @@ impl<'a> Parser<'a> {
         };
 
         // parse optional column list (schema)
-        let (columns, constraints) = self.parse_columns()?;
+        // Redshift CTAS allows column names without types:
+        //   CREATE TABLE t (col1, col2) AS SELECT 1, 2
+        // Detect this by peeking for `( ident ,` or `( ident )` patterns.
+        let (columns, constraints) =
+            if dialect_of!(self is RedshiftSqlDialect) && self.peek_column_names_only() {
+                self.parse_columns_without_types()?
+            } else {
+                self.parse_columns()?
+            };
         let comment_after_column_def =
             if dialect_of!(self is HiveDialect) && self.parse_keyword(Keyword::COMMENT) {
                 let next_token = self.next_token();
@@ -8991,6 +8999,42 @@ impl<'a> Parser<'a> {
         }
 
         Ok((columns, constraints))
+    }
+
+    /// Returns true if the token stream looks like a parenthesized list of
+    /// bare column names (no types), e.g. `(col1, col2)`.
+    fn peek_column_names_only(&self) -> bool {
+        if self.peek_token_ref().token != Token::LParen {
+            return false;
+        }
+        matches!(
+            (
+                &self.peek_nth_token_ref(1).token,
+                &self.peek_nth_token_ref(2).token
+            ),
+            (Token::Word(_), Token::Comma | Token::RParen)
+        )
+    }
+
+    /// Parse a parenthesized list of column names without data types,
+    /// used for Redshift CTAS: `CREATE TABLE t (c1, c2) AS SELECT ...`
+    fn parse_columns_without_types(
+        &mut self,
+    ) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
+        if !self.consume_token(&Token::LParen) || self.consume_token(&Token::RParen) {
+            return Ok((vec![], vec![]));
+        }
+        let column_names = self.parse_comma_separated(|p| p.parse_identifier())?;
+        self.expect_token(&Token::RParen)?;
+        let columns = column_names
+            .into_iter()
+            .map(|name| ColumnDef {
+                name,
+                data_type: DataType::Unspecified,
+                options: vec![],
+            })
+            .collect();
+        Ok((columns, vec![]))
     }
 
     /// Parse procedure parameter.

@@ -81,6 +81,8 @@ pub struct CreateTableBuilder {
     pub volatile: bool,
     /// Iceberg-specific table flag.
     pub iceberg: bool,
+    /// `SNAPSHOT` table flag.
+    pub snapshot: bool,
     /// Whether `DYNAMIC` table option is set.
     pub dynamic: bool,
     /// The table name.
@@ -191,6 +193,7 @@ impl CreateTableBuilder {
             transient: false,
             volatile: false,
             iceberg: false,
+            snapshot: false,
             dynamic: false,
             name,
             columns: vec![],
@@ -279,6 +282,11 @@ impl CreateTableBuilder {
     /// Enable Iceberg table semantics.
     pub fn iceberg(mut self, iceberg: bool) -> Self {
         self.iceberg = iceberg;
+        self
+    }
+    /// Set `SNAPSHOT` table flag (BigQuery).
+    pub fn snapshot(mut self, snapshot: bool) -> Self {
+        self.snapshot = snapshot;
         self
     }
     /// Set `DYNAMIC` table option.
@@ -540,6 +548,7 @@ impl CreateTableBuilder {
             transient: self.transient,
             volatile: self.volatile,
             iceberg: self.iceberg,
+            snapshot: self.snapshot,
             dynamic: self.dynamic,
             name: self.name,
             columns: self.columns,
@@ -618,6 +627,7 @@ impl From<CreateTable> for CreateTableBuilder {
             transient: table.transient,
             volatile: table.volatile,
             iceberg: table.iceberg,
+            snapshot: table.snapshot,
             dynamic: table.dynamic,
             name: table.name,
             columns: table.columns,

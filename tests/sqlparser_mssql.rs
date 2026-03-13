@@ -1985,6 +1985,7 @@ fn parse_create_table_with_valid_options() {
                 for_values: None,
                 strict: false,
                 iceberg: false,
+                snapshot: false,
                 copy_grants: false,
                 enable_schema_evolution: None,
                 change_tracking: None,
@@ -2120,6 +2121,7 @@ fn parse_create_table_with_identity_column() {
                 transient: false,
                 volatile: false,
                 iceberg: false,
+                snapshot: false,
                 name: ObjectName::from(vec![Ident {
                     value: "mytable".to_string(),
                     quote_style: None,

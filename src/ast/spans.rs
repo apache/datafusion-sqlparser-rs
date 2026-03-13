@@ -540,6 +540,7 @@ impl Spanned for CreateTable {
             transient: _,     // bool
             volatile: _,      // bool
             iceberg: _,       // bool, Snowflake specific
+            snapshot: _,      // bool, BigQuery specific
             name,
             columns,
             constraints,

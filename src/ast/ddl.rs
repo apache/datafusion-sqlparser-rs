@@ -3467,8 +3467,6 @@ impl fmt::Display for CreateDomain {
 }
 
 /// The return type of a `CREATE FUNCTION` statement.
-///
-/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -3476,6 +3474,8 @@ pub enum FunctionReturnType {
     /// `RETURNS <type>`
     DataType(DataType),
     /// `RETURNS SETOF <type>`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
     SetOf(DataType),
 }
 

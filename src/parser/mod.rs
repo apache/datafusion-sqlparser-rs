@@ -5883,9 +5883,6 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse a [`FunctionReturnType`] after the `RETURNS` keyword.
-    ///
-    /// Handles `RETURNS SETOF <type>` and plain `RETURNS <type>`.
     fn parse_function_return_type(&mut self) -> Result<FunctionReturnType, ParserError> {
         if self.parse_keyword(Keyword::SETOF) {
             Ok(FunctionReturnType::SetOf(self.parse_data_type()?))

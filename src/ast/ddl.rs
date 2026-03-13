@@ -2001,6 +2001,21 @@ pub enum ColumnOption {
     /// ```
     /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/invisible-columns.html
     Invisible,
+    /// Redshift specific: Column compression encoding
+    /// Syntax: `ENCODE encoding`
+    ///
+    /// [Redshift]: https://docs.aws.amazon.com/redshift/latest/dg/c_Compression_encodings.html
+    Encode(Ident),
+    /// Redshift specific: Column-level `DISTKEY` attribute
+    /// Syntax: `DISTKEY`
+    ///
+    /// [Redshift]: https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html
+    DistKey,
+    /// Redshift specific: Column-level `SORTKEY` attribute
+    /// Syntax: `SORTKEY`
+    ///
+    /// [Redshift]: https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html
+    SortKey,
 }
 
 impl From<UniqueConstraint> for ColumnOption {
@@ -2150,6 +2165,9 @@ impl fmt::Display for ColumnOption {
             Invisible => {
                 write!(f, "INVISIBLE")
             }
+            Encode(encoding) => write!(f, "ENCODE {encoding}"),
+            DistKey => write!(f, "DISTKEY"),
+            SortKey => write!(f, "SORTKEY"),
         }
     }
 }

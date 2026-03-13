@@ -500,3 +500,17 @@ fn test_alter_table_alter_sortkey() {
     redshift().verified_stmt("ALTER TABLE users ALTER SORTKEY(created_at)");
     redshift().verified_stmt("ALTER TABLE users ALTER SORTKEY(c1, c2)");
 }
+
+#[test]
+fn test_create_table_with_column_options() {
+    // Column-level ENCODE, DISTKEY, SORTKEY
+    redshift().verified_stmt(
+        "CREATE TABLE player_activity (date DATE ENCODE raw DISTKEY NOT NULL, userid INTEGER ENCODE az64 NOT NULL) DISTSTYLE KEY SORTKEY(date, userid)",
+    );
+
+    redshift().verified_stmt("CREATE TABLE t1 (c1 INT DISTKEY, c2 INT SORTKEY)");
+
+    redshift().verified_stmt(
+        "CREATE TABLE t1 (c1 INT ENCODE az64 NOT NULL, c2 VARCHAR(100) ENCODE lzo DEFAULT 'x')",
+    );
+}

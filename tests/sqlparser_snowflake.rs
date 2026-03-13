@@ -287,6 +287,32 @@ fn test_snowflake_create_table_with_row_access_policy() {
 }
 
 #[test]
+fn test_snowflake_create_table_with_storage_lifecycle_policy() {
+    // WITH keyword
+    match snowflake().verified_stmt(
+        "CREATE TABLE IF NOT EXISTS my_table (a NUMBER(38, 0), b VARIANT) WITH STORAGE LIFECYCLE POLICY dba.global_settings.my_policy ON (a)",
+    ) {
+        Statement::CreateTable(CreateTable {
+            name,
+            with_storage_lifecycle_policy,
+            ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            let policy = with_storage_lifecycle_policy.unwrap();
+            assert_eq!("dba.global_settings.my_policy", policy.policy.to_string());
+            assert_eq!(vec![Ident::new("a")], policy.on);
+        }
+        _ => unreachable!(),
+    }
+
+    // Without WITH keyword — canonicalizes to WITH form
+    snowflake().one_statement_parses_to(
+        "CREATE TABLE my_table (a NUMBER(38, 0)) STORAGE LIFECYCLE POLICY my_policy ON (a, b)",
+        "CREATE TABLE my_table (a NUMBER(38, 0)) WITH STORAGE LIFECYCLE POLICY my_policy ON (a, b)",
+    );
+}
+
+#[test]
 fn test_snowflake_create_table_with_tag() {
     match snowflake()
         .verified_stmt("CREATE TABLE my_table (a number) WITH TAG (A='TAG A', B='TAG B')")

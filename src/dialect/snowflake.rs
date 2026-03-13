@@ -33,7 +33,7 @@ use crate::ast::{
     IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, InitializeKind,
     Insert, MultiTableInsertIntoClause, MultiTableInsertType, MultiTableInsertValue,
     MultiTableInsertValues, MultiTableInsertWhenClause, ObjectName, ObjectNamePart,
-    RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement,
+    RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement, StorageLifecyclePolicy,
     StorageSerializationPolicy, TableObject, TagsColumnOption, Value, WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
@@ -917,6 +917,7 @@ pub fn parse_create_table(
                 Keyword::WITH => {
                     parser.expect_one_of_keywords(&[
                         Keyword::AGGREGATION,
+                        Keyword::STORAGE,
                         Keyword::TAG,
                         Keyword::ROW,
                     ])?;
@@ -937,6 +938,19 @@ pub fn parse_create_table(
 
                     builder =
                         builder.with_row_access_policy(Some(RowAccessPolicy::new(policy, columns)))
+                }
+                Keyword::STORAGE => {
+                    parser.expect_keywords(&[Keyword::LIFECYCLE, Keyword::POLICY])?;
+                    let policy = parser.parse_object_name(false)?;
+                    parser.expect_keyword_is(Keyword::ON)?;
+                    parser.expect_token(&Token::LParen)?;
+                    let columns = parser.parse_comma_separated(|p| p.parse_identifier())?;
+                    parser.expect_token(&Token::RParen)?;
+
+                    builder = builder.with_storage_lifecycle_policy(Some(StorageLifecyclePolicy {
+                        policy,
+                        on: columns,
+                    }))
                 }
                 Keyword::TAG => {
                     parser.expect_token(&Token::LParen)?;

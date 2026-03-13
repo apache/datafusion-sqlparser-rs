@@ -572,6 +572,7 @@ impl Spanned for CreateTable {
             default_ddl_collation: _,           // string, no span
             with_aggregation_policy: _,         // todo, Snowflake specific
             with_row_access_policy: _,          // todo, Snowflake specific
+            with_storage_lifecycle_policy: _,   // todo, Snowflake specific
             with_tags: _,                       // todo, Snowflake specific
             external_volume: _,                 // todo, Snowflake specific
             base_location: _,                   // todo, Snowflake specific

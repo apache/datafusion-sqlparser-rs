@@ -10472,6 +10472,30 @@ impl Display for RowAccessPolicy {
     }
 }
 
+/// Snowflake `[ WITH ] STORAGE LIFECYCLE POLICY <policy_name> ON ( <col_name> [ , ... ] )`
+///
+/// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct StorageLifecyclePolicy {
+    /// The fully-qualified policy object name.
+    pub policy: ObjectName,
+    /// Column names the policy applies to.
+    pub on: Vec<Ident>,
+}
+
+impl Display for StorageLifecyclePolicy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "WITH STORAGE LIFECYCLE POLICY {} ON ({})",
+            self.policy,
+            display_comma_separated(self.on.as_slice())
+        )
+    }
+}
+
 /// Snowflake `WITH TAG ( tag_name = '<tag_value>', ...)`
 ///
 /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>

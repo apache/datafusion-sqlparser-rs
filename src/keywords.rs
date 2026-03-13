@@ -573,6 +573,7 @@ define_keywords!(
     LEFT,
     LEFTARG,
     LEVEL,
+    LIFECYCLE,
     LIKE,
     LIKE_REGEX,
     LIMIT,

@@ -28,8 +28,8 @@ use crate::ast::{
     ClusteredBy, ColumnDef, CommentDef, CreateTable, CreateTableLikeKind, CreateTableOptions,
     DistStyle, Expr, FileFormat, ForValues, HiveDistributionStyle, HiveFormat, Ident,
     InitializeKind, ObjectName, OnCommit, OneOrManyWithParens, Query, RefreshModeKind,
-    RowAccessPolicy, Statement, StorageSerializationPolicy, TableConstraint, TableVersion, Tag,
-    WrappedCollection,
+    RowAccessPolicy, Statement, StorageLifecyclePolicy, StorageSerializationPolicy,
+    TableConstraint, TableVersion, Tag, WrappedCollection,
 };
 
 use crate::parser::ParserError;
@@ -149,6 +149,8 @@ pub struct CreateTableBuilder {
     pub with_aggregation_policy: Option<ObjectName>,
     /// Optional row access policy applied to the table.
     pub with_row_access_policy: Option<RowAccessPolicy>,
+    /// Optional storage lifecycle policy applied to the table.
+    pub with_storage_lifecycle_policy: Option<StorageLifecyclePolicy>,
     /// Optional tags/labels attached to the table metadata.
     pub with_tags: Option<Vec<Tag>>,
     /// Optional base location for staged data.
@@ -227,6 +229,7 @@ impl CreateTableBuilder {
             default_ddl_collation: None,
             with_aggregation_policy: None,
             with_row_access_policy: None,
+            with_storage_lifecycle_policy: None,
             with_tags: None,
             base_location: None,
             external_volume: None,
@@ -459,6 +462,14 @@ impl CreateTableBuilder {
         self.with_row_access_policy = with_row_access_policy;
         self
     }
+    /// Attach a storage lifecycle policy to the table.
+    pub fn with_storage_lifecycle_policy(
+        mut self,
+        with_storage_lifecycle_policy: Option<StorageLifecyclePolicy>,
+    ) -> Self {
+        self.with_storage_lifecycle_policy = with_storage_lifecycle_policy;
+        self
+    }
     /// Attach tags/labels to the table metadata.
     pub fn with_tags(mut self, with_tags: Option<Vec<Tag>>) -> Self {
         self.with_tags = with_tags;
@@ -582,6 +593,7 @@ impl CreateTableBuilder {
             default_ddl_collation: self.default_ddl_collation,
             with_aggregation_policy: self.with_aggregation_policy,
             with_row_access_policy: self.with_row_access_policy,
+            with_storage_lifecycle_policy: self.with_storage_lifecycle_policy,
             with_tags: self.with_tags,
             base_location: self.base_location,
             external_volume: self.external_volume,
@@ -661,6 +673,7 @@ impl From<CreateTable> for CreateTableBuilder {
             default_ddl_collation: table.default_ddl_collation,
             with_aggregation_policy: table.with_aggregation_policy,
             with_row_access_policy: table.with_row_access_policy,
+            with_storage_lifecycle_policy: table.with_storage_lifecycle_policy,
             with_tags: table.with_tags,
             base_location: table.base_location,
             external_volume: table.external_volume,

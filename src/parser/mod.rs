@@ -4692,6 +4692,17 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Returns `true` if the current token matches `token` and is further
+    /// followed by one of the specified `keywords`.
+    ///
+    /// Does not advance the current token.
+    #[must_use]
+    fn peek_token_with_one_of_keywords(&mut self, token: &Token, keywords: &[Keyword]) -> bool {
+        let [maybe_token, maybe_keyword] = self.peek_tokens_ref();
+        &maybe_token.token == token
+            && matches!(&maybe_keyword.token, Token::Word(w) if keywords.contains(&w.keyword))
+    }
+
     /// If the current token is one of the expected keywords, consume the token
     /// and return the keyword that matches. Otherwise, return an error.
     pub fn expect_one_of_keywords(&mut self, keywords: &[Keyword]) -> Result<Keyword, ParserError> {
@@ -12688,7 +12699,7 @@ impl<'a> Parser<'a> {
             let fn_name = self.parse_object_name(false)?;
             self.parse_function_call(fn_name)
                 .map(TableObject::TableFunction)
-        } else if self.dialect.supports_insert_table_query() && self.peek_subquery_start(true) {
+        } else if self.dialect.supports_insert_table_query() && self.peek_subquery_or_cte_start() {
             self.parse_parenthesized(|p| p.parse_query())
                 .map(TableObject::TableQuery)
         } else {
@@ -17437,7 +17448,7 @@ impl<'a> Parser<'a> {
             {
                 (vec![], None, vec![], None, None, vec![])
             } else {
-                let (columns, partitioned, after_columns) = if !self.peek_subquery_start(false) {
+                let (columns, partitioned, after_columns) = if !self.peek_subquery_start() {
                     let columns =
                         self.parse_parenthesized_qualified_column_list(Optional, is_mysql)?;
 
@@ -17602,15 +17613,16 @@ impl<'a> Parser<'a> {
     }
 
     /// Returns true if the immediate tokens look like the
-    /// beginning of a subquery, e.g. `(SELECT ...`.
-    ///
-    /// If `full_query == true` attempt to detect a full query with its
-    /// optional, leading `WITH` clause, e.g. `(WITH ...)`
-    fn peek_subquery_start(&mut self, full_query: bool) -> bool {
-        let [maybe_lparen, maybe_select] = self.peek_tokens();
-        Token::LParen == maybe_lparen
-            && matches!(maybe_select, Token::Word(w)
-                if w.keyword == Keyword::SELECT || (full_query && w.keyword == Keyword::WITH))
+    /// beginning of a subquery. `(SELECT ...`
+    fn peek_subquery_start(&mut self) -> bool {
+        self.peek_token_with_one_of_keywords(&Token::LParen, &[Keyword::SELECT])
+    }
+
+    /// Returns true if the immediate tokens look like the
+    /// beginning of a subquery possibly preceded by CTEs;
+    /// i.e. `(WITH ...` or `(SELECT ...`.
+    fn peek_subquery_or_cte_start(&mut self) -> bool {
+        self.peek_token_with_one_of_keywords(&Token::LParen, &[Keyword::SELECT, Keyword::WITH])
     }
 
     fn parse_conflict_clause(&mut self) -> Option<SqliteOnConflict> {

@@ -8034,6 +8034,225 @@ fn parse_alter_operator_class() {
 }
 
 #[test]
+fn parse_alter_function_and_aggregate() {
+    for (sql, expected) in [
+        (
+            "ALTER AGGREGATE alt_func1(int) RENAME TO alt_func3",
+            "ALTER AGGREGATE alt_func1(INT) RENAME TO alt_func3",
+        ),
+        (
+            "ALTER AGGREGATE alt_func1(int) OWNER TO regress_alter_generic_user3",
+            "ALTER AGGREGATE alt_func1(INT) OWNER TO regress_alter_generic_user3",
+        ),
+        (
+            "ALTER AGGREGATE alt_func1(int) SET SCHEMA alt_nsp2",
+            "ALTER AGGREGATE alt_func1(INT) SET SCHEMA alt_nsp2",
+        ),
+        (
+            "ALTER AGGREGATE alt_agg1(int) RENAME TO alt_agg2",
+            "ALTER AGGREGATE alt_agg1(INT) RENAME TO alt_agg2",
+        ),
+        (
+            "ALTER AGGREGATE alt_agg1(int) RENAME TO alt_agg3",
+            "ALTER AGGREGATE alt_agg1(INT) RENAME TO alt_agg3",
+        ),
+        (
+            "ALTER AGGREGATE alt_agg2(int) OWNER TO regress_alter_generic_user2",
+            "ALTER AGGREGATE alt_agg2(INT) OWNER TO regress_alter_generic_user2",
+        ),
+        (
+            "ALTER AGGREGATE alt_agg2(int) OWNER TO regress_alter_generic_user3",
+            "ALTER AGGREGATE alt_agg2(INT) OWNER TO regress_alter_generic_user3",
+        ),
+        (
+            "ALTER AGGREGATE alt_agg2(int) SET SCHEMA alt_nsp2",
+            "ALTER AGGREGATE alt_agg2(INT) SET SCHEMA alt_nsp2",
+        ),
+        (
+            "ALTER AGGREGATE alt_order(int ORDER BY text) RENAME TO alt_order2",
+            "ALTER AGGREGATE alt_order(INT ORDER BY TEXT) RENAME TO alt_order2",
+        ),
+        (
+            "ALTER AGGREGATE alt_order_only(ORDER BY int) SET SCHEMA alt_nsp2",
+            "ALTER AGGREGATE alt_order_only(ORDER BY INT) SET SCHEMA alt_nsp2",
+        ),
+        (
+            "ALTER AGGREGATE alt_star(*) OWNER TO regress_alter_generic_user2",
+            "ALTER AGGREGATE alt_star(*) OWNER TO regress_alter_generic_user2",
+        ),
+    ] {
+        let statement = pg_and_generic().one_statement_parses_to(sql, expected);
+        assert!(matches!(
+            statement,
+            Statement::AlterFunction(AlterFunction {
+                kind: AlterFunctionKind::Aggregate,
+                ..
+            })
+        ));
+    }
+
+    for (sql, expected) in [
+        (
+            "ALTER FUNCTION alt_func1(int) RENAME TO alt_func2",
+            "ALTER FUNCTION alt_func1(INT) RENAME TO alt_func2",
+        ),
+        (
+            "ALTER FUNCTION alt_func1(int) RENAME TO alt_func3",
+            "ALTER FUNCTION alt_func1(INT) RENAME TO alt_func3",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) OWNER TO regress_alter_generic_user2",
+            "ALTER FUNCTION alt_func2(INT) OWNER TO regress_alter_generic_user2",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) OWNER TO regress_alter_generic_user3",
+            "ALTER FUNCTION alt_func2(INT) OWNER TO regress_alter_generic_user3",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) SET SCHEMA alt_nsp1",
+            "ALTER FUNCTION alt_func2(INT) SET SCHEMA alt_nsp1",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) SET SCHEMA alt_nsp2",
+            "ALTER FUNCTION alt_func2(INT) SET SCHEMA alt_nsp2",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) DEPENDS ON EXTENSION ext1",
+            "ALTER FUNCTION alt_func2(INT) DEPENDS ON EXTENSION ext1",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) NO DEPENDS ON EXTENSION ext1",
+            "ALTER FUNCTION alt_func2(INT) NO DEPENDS ON EXTENSION ext1",
+        ),
+        (
+            "ALTER FUNCTION alt_func2 IMMUTABLE",
+            "ALTER FUNCTION alt_func2 IMMUTABLE",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) IMMUTABLE",
+            "ALTER FUNCTION alt_func2(INT) IMMUTABLE",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) STABLE",
+            "ALTER FUNCTION alt_func2(INT) STABLE",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) VOLATILE",
+            "ALTER FUNCTION alt_func2(INT) VOLATILE",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) CALLED ON NULL INPUT",
+            "ALTER FUNCTION alt_func2(INT) CALLED ON NULL INPUT",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) RETURNS NULL ON NULL INPUT",
+            "ALTER FUNCTION alt_func2(INT) RETURNS NULL ON NULL INPUT",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) STRICT",
+            "ALTER FUNCTION alt_func2(INT) STRICT",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) LEAKPROOF",
+            "ALTER FUNCTION alt_func2(INT) LEAKPROOF",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) NOT LEAKPROOF",
+            "ALTER FUNCTION alt_func2(INT) NOT LEAKPROOF",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) SECURITY DEFINER",
+            "ALTER FUNCTION alt_func2(INT) SECURITY DEFINER",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) EXTERNAL SECURITY INVOKER",
+            "ALTER FUNCTION alt_func2(INT) EXTERNAL SECURITY INVOKER",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) PARALLEL SAFE",
+            "ALTER FUNCTION alt_func2(INT) PARALLEL SAFE",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) PARALLEL RESTRICTED",
+            "ALTER FUNCTION alt_func2(INT) PARALLEL RESTRICTED",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) PARALLEL UNSAFE",
+            "ALTER FUNCTION alt_func2(INT) PARALLEL UNSAFE",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) COST 3.5",
+            "ALTER FUNCTION alt_func2(INT) COST 3.5",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) ROWS 42",
+            "ALTER FUNCTION alt_func2(INT) ROWS 42",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) SUPPORT pg_catalog.alt_support",
+            "ALTER FUNCTION alt_func2(INT) SUPPORT pg_catalog.alt_support",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) SET work_mem TO DEFAULT",
+            "ALTER FUNCTION alt_func2(INT) SET work_mem = DEFAULT",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) SET work_mem FROM CURRENT",
+            "ALTER FUNCTION alt_func2(INT) SET work_mem FROM CURRENT",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) SET search_path = pg_catalog, public",
+            "ALTER FUNCTION alt_func2(INT) SET search_path = pg_catalog, public",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) RESET work_mem",
+            "ALTER FUNCTION alt_func2(INT) RESET work_mem",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) RESET ALL",
+            "ALTER FUNCTION alt_func2(INT) RESET ALL",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) IMMUTABLE STRICT PARALLEL SAFE RESTRICT",
+            "ALTER FUNCTION alt_func2(INT) IMMUTABLE STRICT PARALLEL SAFE RESTRICT",
+        ),
+        (
+            "ALTER FUNCTION alt_variadic(VARIADIC int[]) STABLE",
+            "ALTER FUNCTION alt_variadic(VARIADIC INT[]) STABLE",
+        ),
+    ] {
+        let statement = pg_and_generic().one_statement_parses_to(sql, expected);
+        assert!(matches!(
+            statement,
+            Statement::AlterFunction(AlterFunction {
+                kind: AlterFunctionKind::Function,
+                ..
+            })
+        ));
+    }
+
+    assert!(pg()
+        .parse_sql_statements("ALTER AGGREGATE alt_func1(INT) DEPENDS ON EXTENSION ext1")
+        .is_err());
+    assert!(pg()
+        .parse_sql_statements("ALTER AGGREGATE alt_func1(INT) NO DEPENDS ON EXTENSION ext1")
+        .is_err());
+    assert!(pg()
+        .parse_sql_statements("ALTER AGGREGATE alt_func1(OUT INT) OWNER TO joe")
+        .is_err());
+    assert!(pg()
+        .parse_sql_statements("ALTER AGGREGATE alt_func1(INOUT INT) OWNER TO joe")
+        .is_err());
+    assert!(pg()
+        .parse_sql_statements("ALTER AGGREGATE alt_func1(INT = 1) OWNER TO joe")
+        .is_err());
+
+    assert!(pg()
+        .parse_sql_statements("ALTER AGGREGATE alt_func1(INT) IMMUTABLE")
+        .is_err());
+}
+
+#[test]
 fn parse_drop_operator_family() {
     for if_exists in [true, false] {
         for drop_behavior in [

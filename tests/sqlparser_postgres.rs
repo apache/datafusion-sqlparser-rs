@@ -4441,7 +4441,7 @@ $$"#;
                     DataType::Varchar(None),
                 ),
             ]),
-            return_type: Some(DataType::Boolean),
+            return_type: Some(FunctionReturnType::DataType(DataType::Boolean)),
             language: Some("plpgsql".into()),
             behavior: None,
             called_on_null: None,
@@ -4484,7 +4484,7 @@ $$"#;
                     DataType::Int(None)
                 )
             ]),
-            return_type: Some(DataType::Boolean),
+            return_type: Some(FunctionReturnType::DataType(DataType::Boolean)),
             language: Some("plpgsql".into()),
             behavior: None,
             called_on_null: None,
@@ -4531,7 +4531,7 @@ $$"#;
                     DataType::Int(None)
                 ),
             ]),
-            return_type: Some(DataType::Boolean),
+            return_type: Some(FunctionReturnType::DataType(DataType::Boolean)),
             language: Some("plpgsql".into()),
             behavior: None,
             called_on_null: None,
@@ -4578,7 +4578,7 @@ $$"#;
                     DataType::Int(None)
                 ),
             ]),
-            return_type: Some(DataType::Boolean),
+            return_type: Some(FunctionReturnType::DataType(DataType::Boolean)),
             language: Some("plpgsql".into()),
             behavior: None,
             called_on_null: None,
@@ -4618,7 +4618,7 @@ $$"#;
                 ),
                 OperateFunctionArg::with_name("b", DataType::Varchar(None)),
             ]),
-            return_type: Some(DataType::Boolean),
+            return_type: Some(FunctionReturnType::DataType(DataType::Boolean)),
             language: Some("plpgsql".into()),
             behavior: None,
             called_on_null: None,
@@ -4661,7 +4661,7 @@ fn parse_create_function() {
                 OperateFunctionArg::unnamed(DataType::Integer(None)),
                 OperateFunctionArg::unnamed(DataType::Integer(None)),
             ]),
-            return_type: Some(DataType::Integer(None)),
+            return_type: Some(FunctionReturnType::DataType(DataType::Integer(None))),
             language: Some("SQL".into()),
             behavior: Some(FunctionBehavior::Immutable),
             called_on_null: Some(FunctionCalledOnNull::Strict),
@@ -4696,6 +4696,30 @@ fn parse_create_function_detailed() {
         "CREATE FUNCTION add(INTEGER, INTEGER DEFAULT 1) RETURNS INTEGER AS 'select $1 + $2;'",
         "CREATE FUNCTION add(INTEGER, INTEGER = 1) RETURNS INTEGER AS 'select $1 + $2;'",
     );
+}
+
+#[test]
+fn parse_create_function_returns_setof() {
+    pg_and_generic().verified_stmt(
+        "CREATE FUNCTION get_users() RETURNS SETOF TEXT LANGUAGE sql AS 'SELECT name FROM users'",
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE FUNCTION get_ids() RETURNS SETOF INTEGER LANGUAGE sql AS 'SELECT id FROM users'",
+    );
+    pg_and_generic().verified_stmt(
+        r#"CREATE FUNCTION get_all() RETURNS SETOF my_schema."MyType" LANGUAGE sql AS 'SELECT * FROM t'"#,
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE FUNCTION get_rows() RETURNS SETOF RECORD LANGUAGE sql AS 'SELECT * FROM t'",
+    );
+
+    let sql = "CREATE FUNCTION get_names() RETURNS SETOF TEXT LANGUAGE sql AS 'SELECT name FROM t'";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateFunction(CreateFunction { return_type, .. }) => {
+            assert_eq!(return_type, Some(FunctionReturnType::SetOf(DataType::Text)));
+        }
+        _ => panic!("Expected CreateFunction"),
+    }
 }
 
 #[test]
@@ -4773,10 +4797,10 @@ fn parse_create_function_c_with_module_pathname() {
                 "input",
                 DataType::Custom(ObjectName::from(vec![Ident::new("cstring")]), vec![]),
             ),]),
-            return_type: Some(DataType::Custom(
+            return_type: Some(FunctionReturnType::DataType(DataType::Custom(
                 ObjectName::from(vec![Ident::new("cas")]),
                 vec![]
-            )),
+            ))),
             language: Some("c".into()),
             behavior: Some(FunctionBehavior::Immutable),
             called_on_null: None,
@@ -6493,7 +6517,7 @@ fn parse_trigger_related_functions() {
             if_not_exists: false,
             name: ObjectName::from(vec![Ident::new("emp_stamp")]),
             args: Some(vec![]),
-            return_type: Some(DataType::Trigger),
+            return_type: Some(FunctionReturnType::DataType(DataType::Trigger)),
             function_body: Some(
                 CreateFunctionBody::AsBeforeOptions {
                     body: Expr::Value((

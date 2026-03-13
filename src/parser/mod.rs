@@ -5594,7 +5594,7 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::RParen)?;
 
         let return_type = if self.parse_keyword(Keyword::RETURNS) {
-            Some(self.parse_data_type()?)
+            Some(self.parse_function_return_type()?)
         } else {
             None
         };
@@ -5774,7 +5774,7 @@ impl<'a> Parser<'a> {
         let (name, args) = self.parse_create_function_name_and_params()?;
 
         let return_type = if self.parse_keyword(Keyword::RETURNS) {
-            Some(self.parse_data_type()?)
+            Some(self.parse_function_return_type()?)
         } else {
             None
         };
@@ -5877,11 +5877,11 @@ impl<'a> Parser<'a> {
             })
         })?;
 
-        let return_type = if return_table.is_some() {
-            return_table
-        } else {
-            Some(self.parse_data_type()?)
+        let data_type = match return_table {
+            Some(table_type) => table_type,
+            None => self.parse_data_type()?,
         };
+        let return_type = Some(FunctionReturnType::DataType(data_type));
 
         let _ = self.parse_keyword(Keyword::AS);
 
@@ -5931,6 +5931,14 @@ impl<'a> Parser<'a> {
             security: None,
             set_params: vec![],
         })
+    }
+
+    fn parse_function_return_type(&mut self) -> Result<FunctionReturnType, ParserError> {
+        if self.parse_keyword(Keyword::SETOF) {
+            Ok(FunctionReturnType::SetOf(self.parse_data_type()?))
+        } else {
+            Ok(FunctionReturnType::DataType(self.parse_data_type()?))
+        }
     }
 
     fn parse_create_function_name_and_params(
@@ -8608,7 +8616,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a single [PartitionBoundValue].
+    /// Parse a single partition bound value (MINVALUE, MAXVALUE, or expression).
     fn parse_partition_bound_value(&mut self) -> Result<PartitionBoundValue, ParserError> {
         if self.parse_keyword(Keyword::MINVALUE) {
             Ok(PartitionBoundValue::MinValue)

@@ -255,7 +255,7 @@ fn parse_create_function() {
                     default_expr: None,
                 },
             ]),
-            return_type: Some(DataType::Int(None)),
+            return_type: Some(FunctionReturnType::DataType(DataType::Int(None))),
             function_body: Some(CreateFunctionBody::AsBeginEnd(BeginEndStatements {
                 begin_token: AttachedToken::empty(),
                 statements: vec![Statement::Return(ReturnStatement {
@@ -430,7 +430,7 @@ fn parse_create_function_parameter_default_values() {
                 data_type: DataType::Int(None),
                 default_expr: Some(Expr::Value((number("42")).with_empty_span())),
             },]),
-            return_type: Some(DataType::Int(None)),
+            return_type: Some(FunctionReturnType::DataType(DataType::Int(None))),
             function_body: Some(CreateFunctionBody::AsBeginEnd(BeginEndStatements {
                 begin_token: AttachedToken::empty(),
                 statements: vec![Statement::Return(ReturnStatement {

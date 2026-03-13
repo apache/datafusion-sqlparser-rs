@@ -9331,6 +9331,12 @@ impl<'a> Parser<'a> {
             )))
         } else if self.parse_keyword(Keyword::INVISIBLE) {
             Ok(Some(ColumnOption::Invisible))
+        } else if self.parse_keyword(Keyword::ENCODE) {
+            Ok(Some(ColumnOption::Encode(self.parse_identifier()?)))
+        } else if self.parse_keyword(Keyword::DISTKEY) {
+            Ok(Some(ColumnOption::DistKey))
+        } else if self.parse_keyword(Keyword::SORTKEY) {
+            Ok(Some(ColumnOption::SortKey))
         } else {
             Ok(None)
         }

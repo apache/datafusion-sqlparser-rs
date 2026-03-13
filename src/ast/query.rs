@@ -1556,6 +1556,8 @@ pub enum TableFactor {
         /// The columns to be extracted from each element of the array or object.
         /// Each column must have a name and a type.
         columns: Vec<JsonTableColumn>,
+        /// Optional table-level `ON ERROR` behavior.
+        on_error: Option<JsonTableOnErrorHandling>,
         /// The alias for the table.
         alias: Option<TableAlias>,
     },
@@ -2309,13 +2311,18 @@ impl fmt::Display for TableFactor {
                 json_expr,
                 json_path,
                 columns,
+                on_error,
                 alias,
             } => {
                 write!(
                     f,
-                    "JSON_TABLE({json_expr}, {json_path} COLUMNS({columns}))",
+                    "JSON_TABLE({json_expr}, {json_path} COLUMNS({columns})",
                     columns = display_comma_separated(columns)
                 )?;
+                if let Some(on_error) = on_error {
+                    write!(f, " {on_error} ON ERROR")?;
+                }
+                write!(f, ")")?;
                 if let Some(alias) = alias {
                     write!(f, " {alias}")?;
                 }
@@ -4040,6 +4047,26 @@ impl fmt::Display for JsonTableColumnErrorHandling {
                 write!(f, "DEFAULT {json_string}")
             }
             JsonTableColumnErrorHandling::Error => write!(f, "ERROR"),
+        }
+    }
+}
+
+/// Table-level `ON ERROR` handling in `JSON_TABLE`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum JsonTableOnErrorHandling {
+    /// `ERROR ON ERROR`
+    Error,
+    /// `EMPTY ARRAY ON ERROR`
+    EmptyArray,
+}
+
+impl fmt::Display for JsonTableOnErrorHandling {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            JsonTableOnErrorHandling::Error => write!(f, "ERROR"),
+            JsonTableOnErrorHandling::EmptyArray => write!(f, "EMPTY ARRAY"),
         }
     }
 }

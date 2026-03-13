@@ -183,6 +183,13 @@ pub enum WildcardExpr {
     Wildcard,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum SqlJsonFunctionKind {
+    Exists,
+    Value,
+    Query,
+}
+
 impl From<TokenizerError> for ParserError {
     fn from(e: TokenizerError) -> Self {
         ParserError::TokenizerError(e.to_string())
@@ -2428,7 +2435,12 @@ impl<'a> Parser<'a> {
             });
         }
 
-        let mut args = self.parse_function_argument_list()?;
+        let sql_json_function = if dialect_of!(self is PostgreSqlDialect | GenericDialect) {
+            Self::json_function_kind(Some(&name))
+        } else {
+            None
+        };
+        let mut args = self.parse_function_argument_list(sql_json_function)?;
         let mut parameters = FunctionArguments::None;
         // ClickHouse aggregations support parametric functions like `HISTOGRAM(0.5, 0.6)(x, y)`
         // which (0.5, 0.6) is a parameter to the function.
@@ -2436,7 +2448,7 @@ impl<'a> Parser<'a> {
             && self.consume_token(&Token::LParen)
         {
             parameters = FunctionArguments::List(args);
-            args = self.parse_function_argument_list()?;
+            args = self.parse_function_argument_list(sql_json_function)?;
         }
 
         let within_group = if self.parse_keywords(&[Keyword::WITHIN, Keyword::GROUP]) {
@@ -2515,7 +2527,7 @@ impl<'a> Parser<'a> {
     /// Parse time-related function `name` possibly followed by `(...)` arguments.
     pub fn parse_time_functions(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
         let args = if self.consume_token(&Token::LParen) {
-            FunctionArguments::List(self.parse_function_argument_list()?)
+            FunctionArguments::List(self.parse_function_argument_list(None)?)
         } else {
             FunctionArguments::None
         };
@@ -15630,12 +15642,14 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::LParen)?;
             let columns = self.parse_comma_separated(Parser::parse_json_table_column_def)?;
             self.expect_token(&Token::RParen)?;
+            let on_error = self.parse_json_table_on_error_handling()?;
             self.expect_token(&Token::RParen)?;
             let alias = self.maybe_parse_table_alias()?;
             Ok(TableFactor::JsonTable {
                 json_expr,
                 json_path,
                 columns,
+                on_error,
                 alias,
             })
         } else if self.parse_keyword_with_tokens(Keyword::OPENJSON, &[Token::LParen]) {
@@ -16416,6 +16430,24 @@ impl<'a> Parser<'a> {
             return Ok(None);
         };
         self.expect_keyword_is(Keyword::ON)?;
+        Ok(Some(res))
+    }
+
+    /// Parse PostgreSQL table-level `JSON_TABLE` error behavior:
+    ///
+    /// `{ ERROR | EMPTY ARRAY } ON ERROR`
+    fn parse_json_table_on_error_handling(
+        &mut self,
+    ) -> Result<Option<JsonTableOnErrorHandling>, ParserError> {
+        let res = if self.parse_keyword(Keyword::ERROR) {
+            JsonTableOnErrorHandling::Error
+        } else if self.parse_keyword(Keyword::EMPTY) {
+            self.expect_keyword_is(Keyword::ARRAY)?;
+            JsonTableOnErrorHandling::EmptyArray
+        } else {
+            return Ok(None);
+        };
+        self.expect_keywords(&[Keyword::ON, Keyword::ERROR])?;
         Ok(Some(res))
     }
 
@@ -17786,7 +17818,10 @@ impl<'a> Parser<'a> {
     /// FIRST_VALUE(x ORDER BY 1,2,3);
     /// FIRST_VALUE(x IGNORE NULL);
     /// ```
-    fn parse_function_argument_list(&mut self) -> Result<FunctionArgumentList, ParserError> {
+    fn parse_function_argument_list(
+        &mut self,
+        sql_json_function: Option<SqlJsonFunctionKind>,
+    ) -> Result<FunctionArgumentList, ParserError> {
         let mut clauses = vec![];
 
         // Handle clauses that may exist with an empty argument list
@@ -17854,14 +17889,18 @@ impl<'a> Parser<'a> {
             clauses.push(FunctionArgumentClause::OnOverflow(on_overflow));
         }
 
-        if let Some(null_clause) = self.parse_json_null_clause() {
-            clauses.push(FunctionArgumentClause::JsonNullClause(null_clause));
-        }
+        if let Some(sql_json_function) = sql_json_function {
+            self.parse_sql_json_function_clauses(sql_json_function, &mut clauses)?;
+        } else {
+            if let Some(null_clause) = self.parse_json_null_clause() {
+                clauses.push(FunctionArgumentClause::JsonNullClause(null_clause));
+            }
 
-        if let Some(json_returning_clause) = self.maybe_parse_json_returning_clause()? {
-            clauses.push(FunctionArgumentClause::JsonReturningClause(
-                json_returning_clause,
-            ));
+            if let Some(json_returning_clause) = self.maybe_parse_json_returning_clause()? {
+                clauses.push(FunctionArgumentClause::JsonReturningClause(
+                    json_returning_clause,
+                ));
+            }
         }
 
         self.expect_token(&Token::RParen)?;
@@ -17891,6 +17930,376 @@ impl<'a> Parser<'a> {
         } else {
             Ok(None)
         }
+    }
+
+    /// Returns SQL/JSON function kind for function-aware clause parsing.
+    ///
+    /// We intentionally inspect only the last function name segment so
+    /// schema-qualified invocations like `pg_catalog.json_value(...)` are
+    /// treated the same as unqualified calls.
+    fn json_function_kind(function_name: Option<&ObjectName>) -> Option<SqlJsonFunctionKind> {
+        let ObjectName(parts) = function_name?;
+        let last = parts.last()?;
+        let ObjectNamePart::Identifier(ident) = last else {
+            return None;
+        };
+        if ident.value.eq_ignore_ascii_case("JSON_EXISTS") {
+            Some(SqlJsonFunctionKind::Exists)
+        } else if ident.value.eq_ignore_ascii_case("JSON_VALUE") {
+            Some(SqlJsonFunctionKind::Value)
+        } else if ident.value.eq_ignore_ascii_case("JSON_QUERY") {
+            Some(SqlJsonFunctionKind::Query)
+        } else {
+            None
+        }
+    }
+
+    /// Parse PostgreSQL SQL/JSON query-function clauses that appear after the
+    /// positional arguments and before the closing `)`.
+    ///
+    /// This helper is function-aware (`JSON_EXISTS`, `JSON_VALUE`, `JSON_QUERY`)
+    /// and enforces per-family single-occurrence constraints for conflicting
+    /// clause groups (for example, duplicate `... ON ERROR` behaviors).
+    ///
+    /// Parsing is done in a loop so clauses can appear in valid mixed
+    /// combinations (e.g. `PASSING`, `RETURNING`, `FORMAT JSON`, wrappers,
+    /// quotes, and `ON EMPTY` / `ON ERROR` behaviors).
+    fn parse_sql_json_function_clauses(
+        &mut self,
+        sql_json_function: SqlJsonFunctionKind,
+        clauses: &mut Vec<FunctionArgumentClause>,
+    ) -> Result<(), ParserError> {
+        let mut seen_passing = false;
+        let mut seen_returning = clauses
+            .iter()
+            .any(|clause| matches!(clause, FunctionArgumentClause::JsonReturningClause(_)));
+        let mut seen_format = false;
+        let mut seen_json_exists_on_error = false;
+        let mut seen_json_value_on_empty = false;
+        let mut seen_json_value_on_error = false;
+        let mut seen_json_query_wrapper = false;
+        let mut seen_json_query_quotes = false;
+        let mut seen_json_query_on_empty = false;
+        let mut seen_json_query_on_error = false;
+
+        loop {
+            if !seen_passing {
+                if let Some(passing_clause) = self.maybe_parse_json_passing_clause()? {
+                    clauses.push(FunctionArgumentClause::JsonPassingClause(passing_clause));
+                    seen_passing = true;
+                    continue;
+                }
+            }
+
+            if !seen_returning {
+                if let Some(json_returning_clause) = self.maybe_parse_json_returning_clause()? {
+                    clauses.push(FunctionArgumentClause::JsonReturningClause(
+                        json_returning_clause,
+                    ));
+                    seen_returning = true;
+                    continue;
+                }
+            }
+
+            if !seen_format {
+                if let Some(format_clause) = self.maybe_parse_json_format_clause()? {
+                    clauses.push(FunctionArgumentClause::JsonFormatClause(format_clause));
+                    seen_format = true;
+                    continue;
+                }
+            }
+
+            match sql_json_function {
+                SqlJsonFunctionKind::Exists => {
+                    if !seen_json_exists_on_error {
+                        if let Some(on_error_clause) =
+                            self.maybe_parse_json_exists_on_error_clause()?
+                        {
+                            clauses.push(FunctionArgumentClause::JsonExistsOnErrorClause(
+                                on_error_clause,
+                            ));
+                            seen_json_exists_on_error = true;
+                            continue;
+                        }
+                    }
+                }
+                SqlJsonFunctionKind::Value => {
+                    if let Some(behavior_clause) = self.maybe_parse_json_value_behavior_clause()? {
+                        match behavior_clause.target {
+                            JsonBehaviorTarget::Empty if seen_json_value_on_empty => {
+                                return Err(ParserError::ParserError(
+                                    "Duplicate JSON_VALUE ON EMPTY clause".to_string(),
+                                ))
+                            }
+                            JsonBehaviorTarget::Error if seen_json_value_on_error => {
+                                return Err(ParserError::ParserError(
+                                    "Duplicate JSON_VALUE ON ERROR clause".to_string(),
+                                ))
+                            }
+                            JsonBehaviorTarget::Empty => seen_json_value_on_empty = true,
+                            JsonBehaviorTarget::Error => seen_json_value_on_error = true,
+                        }
+                        clauses.push(FunctionArgumentClause::JsonValueBehaviorClause(
+                            behavior_clause,
+                        ));
+                        continue;
+                    }
+                }
+                SqlJsonFunctionKind::Query => {
+                    if !seen_json_query_wrapper {
+                        if let Some(wrapper_clause) =
+                            self.maybe_parse_json_query_wrapper_clause()?
+                        {
+                            clauses.push(FunctionArgumentClause::JsonQueryWrapperClause(
+                                wrapper_clause,
+                            ));
+                            seen_json_query_wrapper = true;
+                            continue;
+                        }
+                    }
+                    if !seen_json_query_quotes {
+                        if let Some(quotes_clause) = self.maybe_parse_json_query_quotes_clause()? {
+                            clauses
+                                .push(FunctionArgumentClause::JsonQueryQuotesClause(quotes_clause));
+                            seen_json_query_quotes = true;
+                            continue;
+                        }
+                    }
+                    if let Some(behavior_clause) = self.maybe_parse_json_query_behavior_clause()? {
+                        match behavior_clause.target {
+                            JsonBehaviorTarget::Empty if seen_json_query_on_empty => {
+                                return Err(ParserError::ParserError(
+                                    "Duplicate JSON_QUERY ON EMPTY clause".to_string(),
+                                ))
+                            }
+                            JsonBehaviorTarget::Error if seen_json_query_on_error => {
+                                return Err(ParserError::ParserError(
+                                    "Duplicate JSON_QUERY ON ERROR clause".to_string(),
+                                ))
+                            }
+                            JsonBehaviorTarget::Empty => seen_json_query_on_empty = true,
+                            JsonBehaviorTarget::Error => seen_json_query_on_error = true,
+                        }
+                        clauses.push(FunctionArgumentClause::JsonQueryBehaviorClause(
+                            behavior_clause,
+                        ));
+                        continue;
+                    }
+                }
+            }
+
+            break;
+        }
+
+        Ok(())
+    }
+
+    /// Parse a SQL/JSON `PASSING` clause:
+    ///
+    /// `PASSING <expr> AS <name> [, ...]`
+    fn maybe_parse_json_passing_clause(
+        &mut self,
+    ) -> Result<Option<JsonPassingClause>, ParserError> {
+        if !self.parse_keyword(Keyword::PASSING) {
+            return Ok(None);
+        }
+
+        let mut args = vec![];
+        loop {
+            let expr = self.parse_expr()?;
+            self.expect_keyword_is(Keyword::AS)?;
+            let name = self.parse_identifier()?;
+            args.push(JsonPassingArg { expr, name });
+            if !self.consume_token(&Token::Comma) {
+                break;
+            }
+        }
+
+        Ok(Some(JsonPassingClause { args }))
+    }
+
+    /// Parse SQL/JSON `FORMAT JSON [ENCODING UTF8]`.
+    fn maybe_parse_json_format_clause(&mut self) -> Result<Option<JsonFormatClause>, ParserError> {
+        if !self.parse_keyword(Keyword::FORMAT) {
+            return Ok(None);
+        }
+
+        self.expect_keyword_is(Keyword::JSON)?;
+        let encoding = if self.parse_keyword(Keyword::ENCODING) {
+            if self.parse_keyword(Keyword::UTF8) {
+                Some(JsonFormatEncoding::Utf8)
+            } else {
+                return self.expected_ref("UTF8", self.peek_token_ref());
+            }
+        } else {
+            None
+        };
+
+        Ok(Some(JsonFormatClause {
+            format: JsonFormatType::Json,
+            encoding,
+        }))
+    }
+
+    /// Parse SQL/JSON `JSON_EXISTS` behavior:
+    ///
+    /// `{ ERROR | TRUE | FALSE | UNKNOWN } ON ERROR`
+    fn maybe_parse_json_exists_on_error_clause(
+        &mut self,
+    ) -> Result<Option<JsonExistsOnErrorBehavior>, ParserError> {
+        let on_error = if self.parse_keyword(Keyword::ERROR) {
+            JsonExistsOnErrorBehavior::Error
+        } else if self.parse_keyword(Keyword::TRUE) {
+            JsonExistsOnErrorBehavior::True
+        } else if self.parse_keyword(Keyword::FALSE) {
+            JsonExistsOnErrorBehavior::False
+        } else if self.parse_keyword(Keyword::UNKNOWN) {
+            JsonExistsOnErrorBehavior::Unknown
+        } else {
+            return Ok(None);
+        };
+
+        self.expect_keywords(&[Keyword::ON, Keyword::ERROR])?;
+        Ok(Some(on_error))
+    }
+
+    /// Parse SQL/JSON `JSON_VALUE` behavior:
+    ///
+    /// `{ ERROR | NULL | DEFAULT <expr> } ON { EMPTY | ERROR }`
+    fn maybe_parse_json_value_behavior_clause(
+        &mut self,
+    ) -> Result<Option<JsonValueBehaviorClause>, ParserError> {
+        let behavior = if self.parse_keyword(Keyword::ERROR) {
+            JsonValueBehavior::Error
+        } else if self.parse_keyword(Keyword::NULL) {
+            JsonValueBehavior::Null
+        } else if self.parse_keyword(Keyword::DEFAULT) {
+            JsonValueBehavior::Default(self.parse_expr()?)
+        } else {
+            return Ok(None);
+        };
+
+        self.expect_keyword_is(Keyword::ON)?;
+        let target = if self.parse_keyword(Keyword::EMPTY) {
+            JsonBehaviorTarget::Empty
+        } else {
+            self.expect_keyword_is(Keyword::ERROR)?;
+            JsonBehaviorTarget::Error
+        };
+
+        Ok(Some(JsonValueBehaviorClause { behavior, target }))
+    }
+
+    /// Parse SQL/JSON `JSON_QUERY` wrapper behavior:
+    ///
+    /// `WITHOUT [ARRAY] WRAPPER`
+    /// `WITH [CONDITIONAL|UNCONDITIONAL] [ARRAY] WRAPPER`
+    fn maybe_parse_json_query_wrapper_clause(
+        &mut self,
+    ) -> Result<Option<JsonQueryWrapperClause>, ParserError> {
+        if self.parse_keyword(Keyword::WITHOUT) {
+            let has_array = self.parse_keyword(Keyword::ARRAY);
+            self.expect_keyword_is(Keyword::WRAPPER)?;
+            return Ok(Some(if has_array {
+                JsonQueryWrapperClause::WithoutArrayWrapper
+            } else {
+                JsonQueryWrapperClause::WithoutWrapper
+            }));
+        }
+
+        if self.parse_keyword(Keyword::WITH) {
+            let wrapper_prefix = if self.parse_keyword(Keyword::CONDITIONAL) {
+                Some(Keyword::CONDITIONAL)
+            } else if self.parse_keyword(Keyword::UNCONDITIONAL) {
+                Some(Keyword::UNCONDITIONAL)
+            } else {
+                None
+            };
+            let has_array = self.parse_keyword(Keyword::ARRAY);
+            self.expect_keyword_is(Keyword::WRAPPER)?;
+            return Ok(Some(match (wrapper_prefix, has_array) {
+                (Some(Keyword::CONDITIONAL), true) => {
+                    JsonQueryWrapperClause::WithConditionalArrayWrapper
+                }
+                (Some(Keyword::CONDITIONAL), false) => {
+                    JsonQueryWrapperClause::WithConditionalWrapper
+                }
+                (Some(Keyword::UNCONDITIONAL), true) => {
+                    JsonQueryWrapperClause::WithUnconditionalArrayWrapper
+                }
+                (Some(Keyword::UNCONDITIONAL), false) => {
+                    JsonQueryWrapperClause::WithUnconditionalWrapper
+                }
+                (None, true) => JsonQueryWrapperClause::WithArrayWrapper,
+                (None, false) => JsonQueryWrapperClause::WithWrapper,
+                (Some(unexpected_keyword), _) => {
+                    return Err(ParserError::ParserError(format!(
+                        "Internal parser error: unexpected keyword `{unexpected_keyword}` in JSON_QUERY wrapper clause"
+                    )))
+                }
+            }));
+        }
+
+        Ok(None)
+    }
+
+    /// Parse SQL/JSON `JSON_QUERY` quote behavior:
+    ///
+    /// `{ KEEP | OMIT } QUOTES [ON SCALAR STRING]`
+    fn maybe_parse_json_query_quotes_clause(
+        &mut self,
+    ) -> Result<Option<JsonQueryQuotesClause>, ParserError> {
+        let mode = if self.parse_keyword(Keyword::KEEP) {
+            JsonQueryQuotesMode::Keep
+        } else if self.parse_keyword(Keyword::OMIT) {
+            JsonQueryQuotesMode::Omit
+        } else {
+            return Ok(None);
+        };
+
+        self.expect_keyword_is(Keyword::QUOTES)?;
+        let on_scalar_string =
+            self.parse_keywords(&[Keyword::ON, Keyword::SCALAR, Keyword::STRING]);
+
+        Ok(Some(JsonQueryQuotesClause {
+            mode,
+            on_scalar_string,
+        }))
+    }
+
+    /// Parse SQL/JSON `JSON_QUERY` behavior:
+    ///
+    /// `{ ERROR | NULL | EMPTY [ARRAY|OBJECT] | DEFAULT <expr> } ON { EMPTY | ERROR }`
+    fn maybe_parse_json_query_behavior_clause(
+        &mut self,
+    ) -> Result<Option<JsonQueryBehaviorClause>, ParserError> {
+        let behavior = if self.parse_keyword(Keyword::ERROR) {
+            JsonQueryBehavior::Error
+        } else if self.parse_keyword(Keyword::NULL) {
+            JsonQueryBehavior::Null
+        } else if self.parse_keyword(Keyword::EMPTY) {
+            if self.parse_keyword(Keyword::ARRAY) {
+                JsonQueryBehavior::EmptyArray
+            } else if self.parse_keyword(Keyword::OBJECT) {
+                JsonQueryBehavior::EmptyObject
+            } else {
+                JsonQueryBehavior::Empty
+            }
+        } else if self.parse_keyword(Keyword::DEFAULT) {
+            JsonQueryBehavior::Default(self.parse_expr()?)
+        } else {
+            return Ok(None);
+        };
+
+        self.expect_keyword_is(Keyword::ON)?;
+        let target = if self.parse_keyword(Keyword::EMPTY) {
+            JsonBehaviorTarget::Empty
+        } else {
+            self.expect_keyword_is(Keyword::ERROR)?;
+            JsonBehaviorTarget::Error
+        };
+
+        Ok(Some(JsonQueryBehaviorClause { behavior, target }))
     }
 
     fn parse_duplicate_treatment(&mut self) -> Result<Option<DuplicateTreatment>, ParserError> {

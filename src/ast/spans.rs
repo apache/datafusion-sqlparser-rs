@@ -1775,6 +1775,13 @@ impl Spanned for FunctionArgumentClause {
             FunctionArgumentClause::Separator(value) => value.span(),
             FunctionArgumentClause::JsonNullClause(_) => Span::empty(),
             FunctionArgumentClause::JsonReturningClause(_) => Span::empty(),
+            FunctionArgumentClause::JsonPassingClause(_) => Span::empty(),
+            FunctionArgumentClause::JsonExistsOnErrorClause(_) => Span::empty(),
+            FunctionArgumentClause::JsonValueBehaviorClause(_) => Span::empty(),
+            FunctionArgumentClause::JsonQueryWrapperClause(_) => Span::empty(),
+            FunctionArgumentClause::JsonQueryQuotesClause(_) => Span::empty(),
+            FunctionArgumentClause::JsonQueryBehaviorClause(_) => Span::empty(),
+            FunctionArgumentClause::JsonFormatClause(_) => Span::empty(),
         }
     }
 }

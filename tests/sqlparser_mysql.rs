@@ -3821,6 +3821,7 @@ fn parse_json_table() {
                     on_error: Some(JsonTableColumnErrorHandling::Null),
                 }),
             ],
+            on_error: None,
             alias: table_alias(true, "t"),
         }
     );

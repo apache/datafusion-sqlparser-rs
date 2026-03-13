@@ -95,12 +95,12 @@ pub use self::query::{
     ForJson, ForXml, FormatClause, GroupByExpr, GroupByWithModifier, IdentWithAlias,
     IlikeSelectItem, InputFormatClause, Interpolate, InterpolateExpr, Join, JoinConstraint,
     JoinOperator, JsonTableColumn, JsonTableColumnErrorHandling, JsonTableNamedColumn,
-    JsonTableNestedColumn, LateralView, LimitClause, LockClause, LockType, MatchRecognizePattern,
-    MatchRecognizeSymbol, Measure, NamedWindowDefinition, NamedWindowExpr, NonBlock, Offset,
-    OffsetRows, OpenJsonTableColumn, OrderBy, OrderByExpr, OrderByKind, OrderByOptions,
-    PipeOperator, PivotValueSource, ProjectionSelect, Query, RenameSelectItem,
-    RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select,
-    SelectFlavor, SelectInto, SelectItem, SelectItemQualifiedWildcardKind, SelectModifiers,
+    JsonTableNestedColumn, JsonTableOnErrorHandling, LateralView, LimitClause, LockClause,
+    LockType, MatchRecognizePattern, MatchRecognizeSymbol, Measure, NamedWindowDefinition,
+    NamedWindowExpr, NonBlock, Offset, OffsetRows, OpenJsonTableColumn, OrderBy, OrderByExpr,
+    OrderByKind, OrderByOptions, PipeOperator, PivotValueSource, ProjectionSelect, Query,
+    RenameSelectItem, RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch,
+    Select, SelectFlavor, SelectInto, SelectItem, SelectItemQualifiedWildcardKind, SelectModifiers,
     SetExpr, SetOperator, SetQuantifier, Setting, SymbolDefinition, Table, TableAlias,
     TableAliasColumnDef, TableFactor, TableFunctionArgs, TableIndexHintForClause,
     TableIndexHintType, TableIndexHints, TableIndexType, TableSample, TableSampleBucket,
@@ -8127,6 +8127,20 @@ pub enum FunctionArgumentClause {
     ///
     /// [`JSON_OBJECT`](https://www.postgresql.org/docs/current/functions-json.html#:~:text=json_object)
     JsonReturningClause(JsonReturningClause),
+    /// The `PASSING` clause for SQL/JSON query functions in PostgreSQL.
+    JsonPassingClause(JsonPassingClause),
+    /// The SQL/JSON `... ON ERROR` clause for `JSON_EXISTS`.
+    JsonExistsOnErrorClause(JsonExistsOnErrorBehavior),
+    /// The SQL/JSON `... ON EMPTY`/`... ON ERROR` clause for `JSON_VALUE`.
+    JsonValueBehaviorClause(JsonValueBehaviorClause),
+    /// The SQL/JSON wrapper behavior clause for `JSON_QUERY`.
+    JsonQueryWrapperClause(JsonQueryWrapperClause),
+    /// The SQL/JSON quote handling clause for `JSON_QUERY`.
+    JsonQueryQuotesClause(JsonQueryQuotesClause),
+    /// The SQL/JSON `... ON EMPTY`/`... ON ERROR` clause for `JSON_QUERY`.
+    JsonQueryBehaviorClause(JsonQueryBehaviorClause),
+    /// The SQL/JSON format clause for JSON query functions.
+    JsonFormatClause(JsonFormatClause),
 }
 
 impl fmt::Display for FunctionArgumentClause {
@@ -8145,6 +8159,27 @@ impl fmt::Display for FunctionArgumentClause {
             FunctionArgumentClause::JsonNullClause(null_clause) => write!(f, "{null_clause}"),
             FunctionArgumentClause::JsonReturningClause(returning_clause) => {
                 write!(f, "{returning_clause}")
+            }
+            FunctionArgumentClause::JsonPassingClause(passing_clause) => {
+                write!(f, "{passing_clause}")
+            }
+            FunctionArgumentClause::JsonExistsOnErrorClause(on_error_clause) => {
+                write!(f, "{on_error_clause}")
+            }
+            FunctionArgumentClause::JsonValueBehaviorClause(behavior_clause) => {
+                write!(f, "{behavior_clause}")
+            }
+            FunctionArgumentClause::JsonQueryWrapperClause(wrapper_clause) => {
+                write!(f, "{wrapper_clause}")
+            }
+            FunctionArgumentClause::JsonQueryQuotesClause(quotes_clause) => {
+                write!(f, "{quotes_clause}")
+            }
+            FunctionArgumentClause::JsonQueryBehaviorClause(behavior_clause) => {
+                write!(f, "{behavior_clause}")
+            }
+            FunctionArgumentClause::JsonFormatClause(format_clause) => {
+                write!(f, "{format_clause}")
             }
         }
     }
@@ -10824,6 +10859,315 @@ pub struct JsonReturningClause {
 impl Display for JsonReturningClause {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "RETURNING {}", self.data_type)
+    }
+}
+
+/// SQL/JSON PASSING clause.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct JsonPassingClause {
+    /// Arguments passed in the `PASSING` clause.
+    pub args: Vec<JsonPassingArg>,
+}
+
+impl Display for JsonPassingClause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "PASSING {}", display_comma_separated(&self.args))
+    }
+}
+
+/// A single SQL/JSON `PASSING` argument.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct JsonPassingArg {
+    /// Value expression to pass to the JSON path.
+    pub expr: Expr,
+    /// Variable name used in the path expression.
+    pub name: Ident,
+}
+
+impl Display for JsonPassingArg {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} AS {}", self.expr, self.name)
+    }
+}
+
+/// SQL/JSON `... ON ERROR` behavior for `JSON_EXISTS`.
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum JsonExistsOnErrorBehavior {
+    /// `ERROR ON ERROR`
+    Error,
+    /// `TRUE ON ERROR`
+    True,
+    /// `FALSE ON ERROR`
+    False,
+    /// `UNKNOWN ON ERROR`
+    Unknown,
+}
+
+impl Display for JsonExistsOnErrorBehavior {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JsonExistsOnErrorBehavior::Error => write!(f, "ERROR ON ERROR"),
+            JsonExistsOnErrorBehavior::True => write!(f, "TRUE ON ERROR"),
+            JsonExistsOnErrorBehavior::False => write!(f, "FALSE ON ERROR"),
+            JsonExistsOnErrorBehavior::Unknown => write!(f, "UNKNOWN ON ERROR"),
+        }
+    }
+}
+
+/// SQL/JSON behavior target for `JSON_VALUE` and `JSON_QUERY`.
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum JsonBehaviorTarget {
+    /// `... ON EMPTY`
+    Empty,
+    /// `... ON ERROR`
+    Error,
+}
+
+impl Display for JsonBehaviorTarget {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JsonBehaviorTarget::Empty => write!(f, "EMPTY"),
+            JsonBehaviorTarget::Error => write!(f, "ERROR"),
+        }
+    }
+}
+
+/// SQL/JSON behavior variant for `JSON_VALUE`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum JsonValueBehavior {
+    /// `ERROR`
+    Error,
+    /// `NULL`
+    Null,
+    /// `DEFAULT <expr>`
+    Default(Expr),
+}
+
+impl Display for JsonValueBehavior {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JsonValueBehavior::Error => write!(f, "ERROR"),
+            JsonValueBehavior::Null => write!(f, "NULL"),
+            JsonValueBehavior::Default(expr) => write!(f, "DEFAULT {expr}"),
+        }
+    }
+}
+
+/// SQL/JSON behavior clause for `JSON_VALUE`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct JsonValueBehaviorClause {
+    /// Behavior applied on target condition.
+    pub behavior: JsonValueBehavior,
+    /// Target condition: `ON EMPTY` or `ON ERROR`.
+    pub target: JsonBehaviorTarget,
+}
+
+impl Display for JsonValueBehaviorClause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} ON {}", self.behavior, self.target)
+    }
+}
+
+/// SQL/JSON wrapper behavior clause for `JSON_QUERY`.
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum JsonQueryWrapperClause {
+    /// `WITHOUT WRAPPER`
+    WithoutWrapper,
+    /// `WITHOUT ARRAY WRAPPER`
+    WithoutArrayWrapper,
+    /// `WITH WRAPPER`
+    WithWrapper,
+    /// `WITH ARRAY WRAPPER`
+    WithArrayWrapper,
+    /// `WITH CONDITIONAL WRAPPER`
+    WithConditionalWrapper,
+    /// `WITH CONDITIONAL ARRAY WRAPPER`
+    WithConditionalArrayWrapper,
+    /// `WITH UNCONDITIONAL WRAPPER`
+    WithUnconditionalWrapper,
+    /// `WITH UNCONDITIONAL ARRAY WRAPPER`
+    WithUnconditionalArrayWrapper,
+}
+
+impl Display for JsonQueryWrapperClause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JsonQueryWrapperClause::WithoutWrapper => write!(f, "WITHOUT WRAPPER"),
+            JsonQueryWrapperClause::WithoutArrayWrapper => write!(f, "WITHOUT ARRAY WRAPPER"),
+            JsonQueryWrapperClause::WithWrapper => write!(f, "WITH WRAPPER"),
+            JsonQueryWrapperClause::WithArrayWrapper => write!(f, "WITH ARRAY WRAPPER"),
+            JsonQueryWrapperClause::WithConditionalWrapper => {
+                write!(f, "WITH CONDITIONAL WRAPPER")
+            }
+            JsonQueryWrapperClause::WithConditionalArrayWrapper => {
+                write!(f, "WITH CONDITIONAL ARRAY WRAPPER")
+            }
+            JsonQueryWrapperClause::WithUnconditionalWrapper => {
+                write!(f, "WITH UNCONDITIONAL WRAPPER")
+            }
+            JsonQueryWrapperClause::WithUnconditionalArrayWrapper => {
+                write!(f, "WITH UNCONDITIONAL ARRAY WRAPPER")
+            }
+        }
+    }
+}
+
+/// SQL/JSON quote handling mode for `JSON_QUERY`.
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum JsonQueryQuotesMode {
+    /// `KEEP`
+    Keep,
+    /// `OMIT`
+    Omit,
+}
+
+impl Display for JsonQueryQuotesMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JsonQueryQuotesMode::Keep => write!(f, "KEEP"),
+            JsonQueryQuotesMode::Omit => write!(f, "OMIT"),
+        }
+    }
+}
+
+/// SQL/JSON quote handling clause for `JSON_QUERY`.
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct JsonQueryQuotesClause {
+    /// Whether to keep or omit quotes.
+    pub mode: JsonQueryQuotesMode,
+    /// Whether `ON SCALAR STRING` was specified.
+    pub on_scalar_string: bool,
+}
+
+impl Display for JsonQueryQuotesClause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} QUOTES", self.mode)?;
+        if self.on_scalar_string {
+            write!(f, " ON SCALAR STRING")?;
+        }
+        Ok(())
+    }
+}
+
+/// SQL/JSON behavior variant for `JSON_QUERY`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum JsonQueryBehavior {
+    /// `ERROR`
+    Error,
+    /// `NULL`
+    Null,
+    /// `EMPTY`
+    Empty,
+    /// `EMPTY ARRAY`
+    EmptyArray,
+    /// `EMPTY OBJECT`
+    EmptyObject,
+    /// `DEFAULT <expr>`
+    Default(Expr),
+}
+
+impl Display for JsonQueryBehavior {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JsonQueryBehavior::Error => write!(f, "ERROR"),
+            JsonQueryBehavior::Null => write!(f, "NULL"),
+            JsonQueryBehavior::Empty => write!(f, "EMPTY"),
+            JsonQueryBehavior::EmptyArray => write!(f, "EMPTY ARRAY"),
+            JsonQueryBehavior::EmptyObject => write!(f, "EMPTY OBJECT"),
+            JsonQueryBehavior::Default(expr) => write!(f, "DEFAULT {expr}"),
+        }
+    }
+}
+
+/// SQL/JSON behavior clause for `JSON_QUERY`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct JsonQueryBehaviorClause {
+    /// Behavior applied on target condition.
+    pub behavior: JsonQueryBehavior,
+    /// Target condition: `ON EMPTY` or `ON ERROR`.
+    pub target: JsonBehaviorTarget,
+}
+
+impl Display for JsonQueryBehaviorClause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} ON {}", self.behavior, self.target)
+    }
+}
+
+/// SQL/JSON `FORMAT` clause.
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct JsonFormatClause {
+    /// Format type.
+    pub format: JsonFormatType,
+    /// Optional encoding.
+    pub encoding: Option<JsonFormatEncoding>,
+}
+
+impl Display for JsonFormatClause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "FORMAT {}", self.format)?;
+        if let Some(encoding) = self.encoding {
+            write!(f, " ENCODING {encoding}")?;
+        }
+        Ok(())
+    }
+}
+
+/// SQL/JSON format type.
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum JsonFormatType {
+    /// `JSON`
+    Json,
+}
+
+impl Display for JsonFormatType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JsonFormatType::Json => write!(f, "JSON"),
+        }
+    }
+}
+
+/// SQL/JSON format encoding.
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum JsonFormatEncoding {
+    /// `UTF8`
+    Utf8,
+}
+
+impl Display for JsonFormatEncoding {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JsonFormatEncoding::Utf8 => write!(f, "UTF8"),
+        }
     }
 }
 

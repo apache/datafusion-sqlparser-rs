@@ -1171,6 +1171,7 @@ define_keywords!(
     XOR,
     YEAR,
     YEARS,
+    YES,
     ZONE,
     ZORDER,
     ZSTD

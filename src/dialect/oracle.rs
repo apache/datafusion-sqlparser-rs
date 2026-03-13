@@ -114,4 +114,8 @@ impl Dialect for OracleDialect {
     fn supports_insert_table_alias(&self) -> bool {
         true
     }
+
+    fn supports_is_json_predicate(&self) -> bool {
+        true
+    }
 }

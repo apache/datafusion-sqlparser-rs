@@ -285,6 +285,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_is_json_predicate(&self) -> bool {
+        true
+    }
+
     fn supports_comma_separated_trim(&self) -> bool {
         true
     }

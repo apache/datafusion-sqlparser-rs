@@ -506,12 +506,11 @@ impl<'a> Parser<'a> {
 
             match &self.peek_token_ref().token {
                 Token::EOF => break,
-
                 // end of statement
-                Token::Word(word) => {
-                    if expecting_statement_delimiter && word.keyword == Keyword::END {
-                        break;
-                    }
+                Token::Word(word)
+                    if expecting_statement_delimiter && word.keyword == Keyword::END =>
+                {
+                    break;
                 }
                 _ => {}
             }
@@ -1302,41 +1301,40 @@ impl<'a> Parser<'a> {
 
         let next_token = self.next_token();
         match next_token.token {
-            t @ (Token::Word(_) | Token::SingleQuotedString(_)) => {
-                if self.peek_token_ref().token == Token::Period {
-                    let mut id_parts: Vec<Ident> = vec![match t {
-                        Token::Word(w) => w.into_ident(next_token.span),
-                        Token::SingleQuotedString(s) => Ident::with_quote('\'', s),
-                        _ => {
-                            return Err(ParserError::ParserError(
-                                "Internal parser error: unexpected token type".to_string(),
-                            ))
-                        }
-                    }];
+            t @ (Token::Word(_) | Token::SingleQuotedString(_))
+                if self.peek_token_ref().token == Token::Period =>
+            {
+                let mut id_parts: Vec<Ident> = vec![match t {
+                    Token::Word(w) => w.into_ident(next_token.span),
+                    Token::SingleQuotedString(s) => Ident::with_quote('\'', s),
+                    _ => {
+                        return Err(ParserError::ParserError(
+                            "Internal parser error: unexpected token type".to_string(),
+                        ))
+                    }
+                }];
 
-                    while self.consume_token(&Token::Period) {
-                        let next_token = self.next_token();
-                        match next_token.token {
-                            Token::Word(w) => id_parts.push(w.into_ident(next_token.span)),
-                            Token::SingleQuotedString(s) => {
-                                // SQLite has single-quoted identifiers
-                                id_parts.push(Ident::with_quote('\'', s))
-                            }
-                            Token::Placeholder(s) => {
-                                // Snowflake uses $1, $2, etc. for positional column references
-                                // in staged data queries like: SELECT t.$1 FROM @stage t
-                                id_parts.push(Ident::new(s))
-                            }
-                            Token::Mul => {
-                                return Ok(Expr::QualifiedWildcard(
-                                    ObjectName::from(id_parts),
-                                    AttachedToken(next_token),
-                                ));
-                            }
-                            _ => {
-                                return self
-                                    .expected("an identifier or a '*' after '.'", next_token);
-                            }
+                while self.consume_token(&Token::Period) {
+                    let next_token = self.next_token();
+                    match next_token.token {
+                        Token::Word(w) => id_parts.push(w.into_ident(next_token.span)),
+                        Token::SingleQuotedString(s) => {
+                            // SQLite has single-quoted identifiers
+                            id_parts.push(Ident::with_quote('\'', s))
+                        }
+                        Token::Placeholder(s) => {
+                            // Snowflake uses $1, $2, etc. for positional column references
+                            // in staged data queries like: SELECT t.$1 FROM @stage t
+                            id_parts.push(Ident::new(s))
+                        }
+                        Token::Mul => {
+                            return Ok(Expr::QualifiedWildcard(
+                                ObjectName::from(id_parts),
+                                AttachedToken(next_token),
+                            ));
+                        }
+                        _ => {
+                            return self.expected("an identifier or a '*' after '.'", next_token);
                         }
                     }
                 }
@@ -3956,13 +3954,23 @@ impl<'a> Parser<'a> {
                     {
                         let expr2 = self.parse_expr()?;
                         Ok(Expr::IsNotDistinctFrom(Box::new(expr), Box::new(expr2)))
+                    } else if self.dialect.supports_is_json_predicate()
+                        && self.parse_keyword(Keyword::JSON)
+                    {
+                        self.parse_is_json_predicate(expr, false)
+                    } else if self.dialect.supports_is_json_predicate()
+                        && self.parse_keywords(&[Keyword::NOT, Keyword::JSON])
+                    {
+                        self.parse_is_json_predicate(expr, true)
                     } else if let Ok(is_normalized) = self.parse_unicode_is_normalized(expr) {
                         Ok(is_normalized)
                     } else {
-                        self.expected_ref(
-                            "[NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS",
-                            self.peek_token_ref(),
-                        )
+                        let expected = if self.dialect.supports_is_json_predicate() {
+                            "[NOT] NULL | TRUE | FALSE | DISTINCT | [NOT] JSON [VALUE | SCALAR | ARRAY | OBJECT] [WITH | WITHOUT UNIQUE [KEYS]] | [form] NORMALIZED FROM after IS"
+                        } else {
+                            "[NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS"
+                        };
+                        self.expected_ref(expected, self.peek_token_ref())
                     }
                 }
                 Keyword::AT => {
@@ -5000,10 +5008,10 @@ impl<'a> Parser<'a> {
         loop {
             match &self.peek_nth_token_ref(0).token {
                 Token::EOF => break,
-                Token::Word(w) => {
-                    if w.quote_style.is_none() && terminal_keywords.contains(&w.keyword) {
-                        break;
-                    }
+                Token::Word(w)
+                    if w.quote_style.is_none() && terminal_keywords.contains(&w.keyword) =>
+                {
+                    break;
                 }
                 _ => {}
             }
@@ -8204,71 +8212,66 @@ impl<'a> Parser<'a> {
                         Keyword::LINES,
                         Keyword::NULL,
                     ]) {
-                        Some(Keyword::FIELDS) => {
-                            if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) {
+                        Some(Keyword::FIELDS)
+                            if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) =>
+                        {
+                            row_delimiters.push(HiveRowDelimiter {
+                                delimiter: HiveDelimiter::FieldsTerminatedBy,
+                                char: self.parse_identifier()?,
+                            });
+
+                            if self.parse_keywords(&[Keyword::ESCAPED, Keyword::BY]) {
                                 row_delimiters.push(HiveRowDelimiter {
-                                    delimiter: HiveDelimiter::FieldsTerminatedBy,
+                                    delimiter: HiveDelimiter::FieldsEscapedBy,
                                     char: self.parse_identifier()?,
                                 });
-
-                                if self.parse_keywords(&[Keyword::ESCAPED, Keyword::BY]) {
-                                    row_delimiters.push(HiveRowDelimiter {
-                                        delimiter: HiveDelimiter::FieldsEscapedBy,
-                                        char: self.parse_identifier()?,
-                                    });
-                                }
-                            } else {
-                                break;
                             }
                         }
-                        Some(Keyword::COLLECTION) => {
+                        Some(Keyword::FIELDS) => break,
+                        Some(Keyword::COLLECTION)
                             if self.parse_keywords(&[
                                 Keyword::ITEMS,
                                 Keyword::TERMINATED,
                                 Keyword::BY,
-                            ]) {
-                                row_delimiters.push(HiveRowDelimiter {
-                                    delimiter: HiveDelimiter::CollectionItemsTerminatedBy,
-                                    char: self.parse_identifier()?,
-                                });
-                            } else {
-                                break;
-                            }
+                            ]) =>
+                        {
+                            row_delimiters.push(HiveRowDelimiter {
+                                delimiter: HiveDelimiter::CollectionItemsTerminatedBy,
+                                char: self.parse_identifier()?,
+                            });
                         }
-                        Some(Keyword::MAP) => {
+                        Some(Keyword::COLLECTION) => break,
+                        Some(Keyword::MAP)
                             if self.parse_keywords(&[
                                 Keyword::KEYS,
                                 Keyword::TERMINATED,
                                 Keyword::BY,
-                            ]) {
-                                row_delimiters.push(HiveRowDelimiter {
-                                    delimiter: HiveDelimiter::MapKeysTerminatedBy,
-                                    char: self.parse_identifier()?,
-                                });
-                            } else {
-                                break;
-                            }
+                            ]) =>
+                        {
+                            row_delimiters.push(HiveRowDelimiter {
+                                delimiter: HiveDelimiter::MapKeysTerminatedBy,
+                                char: self.parse_identifier()?,
+                            });
                         }
-                        Some(Keyword::LINES) => {
-                            if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) {
-                                row_delimiters.push(HiveRowDelimiter {
-                                    delimiter: HiveDelimiter::LinesTerminatedBy,
-                                    char: self.parse_identifier()?,
-                                });
-                            } else {
-                                break;
-                            }
+                        Some(Keyword::MAP) => break,
+                        Some(Keyword::LINES)
+                            if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) =>
+                        {
+                            row_delimiters.push(HiveRowDelimiter {
+                                delimiter: HiveDelimiter::LinesTerminatedBy,
+                                char: self.parse_identifier()?,
+                            });
                         }
-                        Some(Keyword::NULL) => {
-                            if self.parse_keywords(&[Keyword::DEFINED, Keyword::AS]) {
-                                row_delimiters.push(HiveRowDelimiter {
-                                    delimiter: HiveDelimiter::NullDefinedAs,
-                                    char: self.parse_identifier()?,
-                                });
-                            } else {
-                                break;
-                            }
+                        Some(Keyword::LINES) => break,
+                        Some(Keyword::NULL)
+                            if self.parse_keywords(&[Keyword::DEFINED, Keyword::AS]) =>
+                        {
+                            row_delimiters.push(HiveRowDelimiter {
+                                delimiter: HiveDelimiter::NullDefinedAs,
+                                char: self.parse_identifier()?,
+                            });
                         }
+                        Some(Keyword::NULL) => break,
                         _ => {
                             break;
                         }
@@ -11788,6 +11791,43 @@ impl<'a> Parser<'a> {
             Some(Keyword::FALSE) => Ok(false),
             _ => self.expected_ref("TRUE or FALSE", self.peek_token_ref()),
         }
+    }
+
+    /// Parse the `IS [NOT] JSON` predicate after `JSON` (and optional `NOT`) was consumed.
+    fn parse_is_json_predicate(&mut self, expr: Expr, negated: bool) -> Result<Expr, ParserError> {
+        let kind = match self.parse_one_of_keywords(&[
+            Keyword::VALUE,
+            Keyword::SCALAR,
+            Keyword::ARRAY,
+            Keyword::OBJECT,
+        ]) {
+            Some(Keyword::VALUE) => Some(JsonPredicateType::Value),
+            Some(Keyword::SCALAR) => Some(JsonPredicateType::Scalar),
+            Some(Keyword::ARRAY) => Some(JsonPredicateType::Array),
+            Some(Keyword::OBJECT) => Some(JsonPredicateType::Object),
+            _ => None,
+        };
+
+        let unique_keys = match self.parse_one_of_keywords(&[Keyword::WITH, Keyword::WITHOUT]) {
+            Some(Keyword::WITH) => {
+                self.expect_keyword_is(Keyword::UNIQUE)?;
+                let _ = self.parse_keyword(Keyword::KEYS);
+                Some(JsonKeyUniqueness::WithUniqueKeys)
+            }
+            Some(Keyword::WITHOUT) => {
+                self.expect_keyword_is(Keyword::UNIQUE)?;
+                let _ = self.parse_keyword(Keyword::KEYS);
+                Some(JsonKeyUniqueness::WithoutUniqueKeys)
+            }
+            _ => None,
+        };
+
+        Ok(Expr::IsJson {
+            expr: Box::new(expr),
+            kind,
+            unique_keys,
+            negated,
+        })
     }
 
     /// Parse a literal unicode normalization clause
@@ -20625,9 +20665,32 @@ mod tests {
         assert_eq!(
             ast,
             Err(ParserError::ParserError(
-                "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: a at Line: 1, Column: 16"
+                "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [NOT] JSON [VALUE | SCALAR | ARRAY | OBJECT] [WITH | WITHOUT UNIQUE [KEYS]] | [form] NORMALIZED FROM after IS, found: a at Line: 1, Column: 16"
                     .to_string()
             ))
+        );
+    }
+
+    #[test]
+    fn test_is_predicate_error_hint_depends_on_dialect() {
+        let sql = "SELECT this is a syntax error";
+
+        let generic_err = Parser::parse_sql(&GenericDialect, sql).unwrap_err();
+        let ParserError::ParserError(generic_msg) = generic_err else {
+            panic!("Expected ParserError::ParserError, got: {generic_err:?}");
+        };
+        assert!(
+            generic_msg.contains("[NOT] JSON [VALUE | SCALAR | ARRAY | OBJECT]"),
+            "Expected Generic dialect to include JSON predicate hint, got: {generic_msg}"
+        );
+
+        let mysql_err = Parser::parse_sql(&MySqlDialect {}, sql).unwrap_err();
+        let ParserError::ParserError(mysql_msg) = mysql_err else {
+            panic!("Expected ParserError::ParserError, got: {mysql_err:?}");
+        };
+        assert!(
+            !mysql_msg.contains("[NOT] JSON [VALUE | SCALAR | ARRAY | OBJECT]"),
+            "Expected MySQL dialect to exclude JSON predicate hint, got: {mysql_msg}"
         );
     }
 

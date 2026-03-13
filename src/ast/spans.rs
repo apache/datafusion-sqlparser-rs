@@ -2387,6 +2387,7 @@ impl Spanned for TableObject {
                 union_spans(segments.iter().map(|i| i.span()))
             }
             TableObject::TableFunction(func) => func.span(),
+            TableObject::TableQuery(query) => query.span(),
         }
     }
 }

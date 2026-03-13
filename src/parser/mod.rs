@@ -12688,6 +12688,9 @@ impl<'a> Parser<'a> {
             let fn_name = self.parse_object_name(false)?;
             self.parse_function_call(fn_name)
                 .map(TableObject::TableFunction)
+        } else if self.dialect.supports_insert_table_query() && self.peek_subquery_or_cte_start() {
+            self.parse_parenthesized(|p| p.parse_query())
+                .map(TableObject::TableQuery)
         } else {
             self.parse_object_name(false).map(TableObject::TableName)
         }
@@ -17601,9 +17604,44 @@ impl<'a> Parser<'a> {
     /// Returns true if the immediate tokens look like the
     /// beginning of a subquery. `(SELECT ...`
     fn peek_subquery_start(&mut self) -> bool {
-        let [maybe_lparen, maybe_select] = self.peek_tokens();
-        Token::LParen == maybe_lparen
-            && matches!(maybe_select, Token::Word(w) if w.keyword == Keyword::SELECT)
+        matches!(
+            self.peek_tokens_ref(),
+            [
+                TokenWithSpan {
+                    token: Token::LParen,
+                    ..
+                },
+                TokenWithSpan {
+                    token: Token::Word(Word {
+                        keyword: Keyword::SELECT,
+                        ..
+                    }),
+                    ..
+                },
+            ]
+        )
+    }
+
+    /// Returns true if the immediate tokens look like the
+    /// beginning of a subquery possibly preceded by CTEs;
+    /// i.e. `(WITH ...` or `(SELECT ...`.
+    fn peek_subquery_or_cte_start(&mut self) -> bool {
+        matches!(
+            self.peek_tokens_ref(),
+            [
+                TokenWithSpan {
+                    token: Token::LParen,
+                    ..
+                },
+                TokenWithSpan {
+                    token: Token::Word(Word {
+                        keyword: Keyword::SELECT | Keyword::WITH,
+                        ..
+                    }),
+                    ..
+                },
+            ]
+        )
     }
 
     fn parse_conflict_clause(&mut self) -> Option<SqliteOnConflict> {

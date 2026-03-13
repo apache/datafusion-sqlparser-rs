@@ -17604,9 +17604,22 @@ impl<'a> Parser<'a> {
     /// Returns true if the immediate tokens look like the
     /// beginning of a subquery. `(SELECT ...`
     fn peek_subquery_start(&mut self) -> bool {
-        let [maybe_lparen, maybe_select] = self.peek_tokens_ref();
-        Token::LParen == maybe_lparen.token
-            && matches!(&maybe_select.token, Token::Word(w) if w.keyword == Keyword::SELECT)
+        matches!(
+            self.peek_tokens_ref(),
+            [
+                TokenWithSpan {
+                    token: Token::LParen,
+                    ..
+                },
+                TokenWithSpan {
+                    token: Token::Word(Word {
+                        keyword: Keyword::SELECT,
+                        ..
+                    }),
+                    ..
+                },
+            ]
+        )
     }
 
     /// Returns true if the immediate tokens look like the

@@ -2578,6 +2578,23 @@ pub enum TableVersion {
     /// When the table version is defined using a function.
     /// For example: `SELECT * FROM tbl AT(TIMESTAMP => '2020-08-14 09:30:00')`
     Function(Expr),
+    /// Snowflake `CHANGES` clause for change tracking queries.
+    /// For example:
+    /// ```sql
+    /// SELECT * FROM t
+    ///   CHANGES(INFORMATION => DEFAULT)
+    ///   AT(TIMESTAMP => TO_TIMESTAMP_TZ('...'))
+    ///   END(TIMESTAMP => TO_TIMESTAMP_TZ('...'))
+    /// ```
+    /// <https://docs.snowflake.com/en/sql-reference/constructs/changes>
+    Changes {
+        /// The `CHANGES(INFORMATION => ...)` function-call expression.
+        changes: Expr,
+        /// The `AT(TIMESTAMP => ...)` function-call expression.
+        at: Expr,
+        /// The optional `END(TIMESTAMP => ...)` function-call expression.
+        end: Option<Expr>,
+    },
 }
 
 impl Display for TableVersion {
@@ -2587,6 +2604,12 @@ impl Display for TableVersion {
             TableVersion::TimestampAsOf(e) => write!(f, "TIMESTAMP AS OF {e}")?,
             TableVersion::VersionAsOf(e) => write!(f, "VERSION AS OF {e}")?,
             TableVersion::Function(func) => write!(f, "{func}")?,
+            TableVersion::Changes { changes, at, end } => {
+                write!(f, "{changes} {at}")?;
+                if let Some(end) = end {
+                    write!(f, " {end}")?;
+                }
+            }
         }
         Ok(())
     }

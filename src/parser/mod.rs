@@ -16352,6 +16352,8 @@ impl<'a> Parser<'a> {
             {
                 let expr = self.parse_expr()?;
                 return Ok(Some(TableVersion::ForSystemTimeAsOf(expr)));
+            } else if self.peek_keyword(Keyword::CHANGES) {
+                return self.parse_table_version_changes().map(Some);
             } else if self.peek_keyword(Keyword::AT) || self.peek_keyword(Keyword::BEFORE) {
                 let func_name = self.parse_object_name(true)?;
                 let func = self.parse_function(func_name)?;
@@ -16365,6 +16367,30 @@ impl<'a> Parser<'a> {
             }
         }
         Ok(None)
+    }
+
+    /// Parses the Snowflake `CHANGES` clause for change tracking queries.
+    ///
+    /// Syntax:
+    /// ```sql
+    /// CHANGES (INFORMATION => DEFAULT)
+    ///   AT (TIMESTAMP => <expr>)
+    ///   [END (TIMESTAMP => <expr>)]
+    /// ```
+    ///
+    /// <https://docs.snowflake.com/en/sql-reference/constructs/changes>
+    fn parse_table_version_changes(&mut self) -> Result<TableVersion, ParserError> {
+        let changes_name = self.parse_object_name(true)?;
+        let changes = self.parse_function(changes_name)?;
+        let at_name = self.parse_object_name(true)?;
+        let at = self.parse_function(at_name)?;
+        let end = if self.peek_keyword(Keyword::END) {
+            let end_name = self.parse_object_name(true)?;
+            Some(self.parse_function(end_name)?)
+        } else {
+            None
+        };
+        Ok(TableVersion::Changes { changes, at, end })
     }
 
     /// Parses MySQL's JSON_TABLE column definition.

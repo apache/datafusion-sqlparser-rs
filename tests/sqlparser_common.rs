@@ -13526,6 +13526,40 @@ fn insert_into_with_parentheses() {
 }
 
 #[test]
+fn test_insert_with_query_table() {
+    let dialects = all_dialects_where(|d| d.supports_insert_table_query());
+
+    // a simple query (block); i.e. SELECT ...
+    let sql = "INSERT INTO (SELECT employee_id, last_name FROM employees) VALUES (207, 'Gregory')";
+    dialects.verified_stmt(sql);
+
+    // a full blown query; i.e. `WITH ... SELECT .. ORDER BY ...`
+    let sql = "INSERT INTO \
+               (WITH cte AS (SELECT 1 AS id, 2 AS val FROM dual) SELECT foo_t.id, foo_t.val FROM foo_t \
+                WHERE EXISTS (SELECT 1 FROM cte WHERE cte.id = foo_t.id) ORDER BY 1, 2) \
+               (id, val) \
+               VALUES (1000, 10101)";
+    dialects.verified_stmt(sql);
+
+    // an alias to the insert target query table
+    let sql = "INSERT INTO \
+               (WITH cte AS (SELECT 1 AS id, 2 AS val FROM dual) SELECT foo_t.id, foo_t.val FROM foo_t \
+                WHERE EXISTS (SELECT 1 FROM cte WHERE cte.id = foo_t.id)) abc \
+               (id, val) \
+               VALUES (1000, 10101)";
+    dialects.verified_stmt(sql);
+
+    // a query table target and a query source
+    let sql = "INSERT INTO (SELECT foo_t.id, foo_t.val FROM foo_t) SELECT 10, 20 FROM dual";
+    dialects.verified_stmt(sql);
+
+    // a query table target and a query source, with explicit columns
+    let sql =
+        "INSERT INTO (SELECT foo_t.id, foo_t.val FROM foo_t) (id, val) SELECT 10, 20 FROM dual";
+    dialects.verified_stmt(sql);
+}
+
+#[test]
 fn parse_odbc_scalar_function() {
     let select = verified_only_select("SELECT {fn my_func(1, 2)}");
     let Expr::Function(Function {

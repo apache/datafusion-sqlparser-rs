@@ -500,3 +500,15 @@ fn test_alter_table_alter_sortkey() {
     redshift().verified_stmt("ALTER TABLE users ALTER SORTKEY(created_at)");
     redshift().verified_stmt("ALTER TABLE users ALTER SORTKEY(c1, c2)");
 }
+
+#[test]
+fn test_create_table_as_with_column_names() {
+    redshift().verified_stmt(
+        "CREATE TEMPORARY TABLE volt_tt (userid, days_played_in_last_31) AS SELECT 1, 2",
+    );
+    // TEMP is an alias for TEMPORARY
+    redshift().one_statement_parses_to(
+        "CREATE TEMP TABLE volt_tt(userid, days_played_in_last_31) AS SELECT 1, 2",
+        "CREATE TEMPORARY TABLE volt_tt (userid, days_played_in_last_31) AS SELECT 1, 2",
+    );
+}

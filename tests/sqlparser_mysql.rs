@@ -682,6 +682,7 @@ fn table_constraint_unique_primary_ctor(
                     asc: None,
                     nulls_first: None,
                 },
+                using_operator: None,
                 with_fill: None,
             },
             operator_class: None,
@@ -2800,6 +2801,7 @@ fn parse_delete_with_order_by() {
                         asc: Some(false),
                         nulls_first: None,
                     },
+                    using_operator: None,
                     with_fill: None,
                 }],
                 order_by

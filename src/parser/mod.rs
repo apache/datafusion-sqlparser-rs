@@ -18192,7 +18192,32 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let options = self.parse_order_by_options()?;
+        let using_operator = if !with_operator_class
+            && self.dialect.supports_order_by_using_operator()
+            && self.parse_keyword(Keyword::USING)
+        {
+            Some(self.parse_order_by_using_operator()?)
+        } else {
+            None
+        };
+
+        let options = if using_operator.is_some() {
+            if self
+                .peek_one_of_keywords(&[Keyword::ASC, Keyword::DESC])
+                .is_some()
+            {
+                return parser_err!(
+                    "ASC/DESC cannot be used together with USING in ORDER BY".to_string(),
+                    self.peek_token_ref().span.start
+                );
+            }
+            OrderByOptions {
+                asc: None,
+                nulls_first: self.parse_order_by_nulls_first_last(),
+            }
+        } else {
+            self.parse_order_by_options()?
+        };
 
         let with_fill = if self.dialect.supports_with_fill()
             && self.parse_keywords(&[Keyword::WITH, Keyword::FILL])
@@ -18205,6 +18230,7 @@ impl<'a> Parser<'a> {
         Ok((
             OrderByExpr {
                 expr,
+                using_operator,
                 options,
                 with_fill,
             },
@@ -18212,16 +18238,53 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    fn parse_order_by_options(&mut self) -> Result<OrderByOptions, ParserError> {
-        let asc = self.parse_asc_desc();
+    fn parse_order_by_using_operator(&mut self) -> Result<ObjectName, ParserError> {
+        let dialect = self.dialect;
 
-        let nulls_first = if self.parse_keywords(&[Keyword::NULLS, Keyword::FIRST]) {
+        if self.parse_keyword(Keyword::OPERATOR) {
+            self.expect_token(&Token::LParen)?;
+            let operator_name = self.parse_operator_name()?;
+            let Some(last_part) = operator_name.0.last() else {
+                return self.expected_ref("an operator name", self.peek_token_ref());
+            };
+            let operator = last_part.to_string();
+            if operator.is_empty()
+                || !operator
+                    .chars()
+                    .all(|ch| dialect.is_custom_operator_part(ch))
+            {
+                return self.expected_ref("an operator name", self.peek_token_ref());
+            }
+            self.expect_token(&Token::RParen)?;
+            return Ok(operator_name);
+        }
+
+        let token = self.next_token();
+        let operator = token.token.to_string();
+        if !operator.is_empty()
+            && operator
+                .chars()
+                .all(|ch| dialect.is_custom_operator_part(ch))
+        {
+            Ok(ObjectName::from(vec![Ident::new(operator)]))
+        } else {
+            self.expected_ref("an ordering operator after USING", &token)
+        }
+    }
+
+    fn parse_order_by_nulls_first_last(&mut self) -> Option<bool> {
+        if self.parse_keywords(&[Keyword::NULLS, Keyword::FIRST]) {
             Some(true)
         } else if self.parse_keywords(&[Keyword::NULLS, Keyword::LAST]) {
             Some(false)
         } else {
             None
-        };
+        }
+    }
+
+    fn parse_order_by_options(&mut self) -> Result<OrderByOptions, ParserError> {
+        let asc = self.parse_asc_desc();
+        let nulls_first = self.parse_order_by_nulls_first_last();
 
         Ok(OrderByOptions { asc, nulls_first })
     }
@@ -20435,6 +20498,7 @@ mod tests {
                         asc: None,
                         nulls_first: None,
                     },
+                    using_operator: None,
                     with_fill: None,
                 },
                 operator_class: None,

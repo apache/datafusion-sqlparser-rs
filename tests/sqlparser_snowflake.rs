@@ -2369,7 +2369,7 @@ fn test_copy_into_with_transformations() {
                 StageLoadSelectItemKind::StageLoadSelectItem(StageLoadSelectItem {
                     alias: Some(Ident::new("t1")),
                     file_col_num: 1,
-                    element: Some(Ident::new("st")),
+                    element: Some(vec![Ident::new("st")]),
                     item_as: Some(Ident::new("st"))
                 })
             );
@@ -2378,7 +2378,7 @@ fn test_copy_into_with_transformations() {
                 StageLoadSelectItemKind::StageLoadSelectItem(StageLoadSelectItem {
                     alias: None,
                     file_col_num: 1,
-                    element: Some(Ident::new("index")),
+                    element: Some(vec![Ident::new("index")]),
                     item_as: None
                 })
             );
@@ -2635,6 +2635,70 @@ fn test_snowflake_copy_into_stage_name_ends_with_parens() {
                     Ident::new("general_finished")
                 ]))
             )
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_copy_into_with_nested_colon_path() {
+    // Nested colon path with explicit AS alias
+    let sql = "COPY INTO tbl (col) FROM (SELECT $1:a:b AS col FROM @stage)";
+    match snowflake().verified_stmt(sql) {
+        Statement::CopyIntoSnowflake {
+            from_transformations,
+            ..
+        } => {
+            assert_eq!(
+                from_transformations.as_ref().unwrap()[0],
+                StageLoadSelectItemKind::StageLoadSelectItem(StageLoadSelectItem {
+                    alias: None,
+                    file_col_num: 1,
+                    element: Some(vec![Ident::new("a"), Ident::new("b")]),
+                    item_as: Some(Ident::new("col"))
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // Nested colon path with implicit alias (no AS keyword)
+    let sql = "COPY INTO tbl (col) FROM (SELECT $1:a:b col FROM @stage)";
+    let stmts = snowflake().parse_sql_statements(sql).unwrap();
+    match &stmts[0] {
+        Statement::CopyIntoSnowflake {
+            from_transformations,
+            ..
+        } => {
+            assert_eq!(
+                from_transformations.as_ref().unwrap()[0],
+                StageLoadSelectItemKind::StageLoadSelectItem(StageLoadSelectItem {
+                    alias: None,
+                    file_col_num: 1,
+                    element: Some(vec![Ident::new("a"), Ident::new("b")]),
+                    item_as: Some(Ident::new("col"))
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // Nested colon path with no alias
+    let sql = "COPY INTO tbl FROM (SELECT $1:a:b FROM @stage)";
+    match snowflake().verified_stmt(sql) {
+        Statement::CopyIntoSnowflake {
+            from_transformations,
+            ..
+        } => {
+            assert_eq!(
+                from_transformations.as_ref().unwrap()[0],
+                StageLoadSelectItemKind::StageLoadSelectItem(StageLoadSelectItem {
+                    alias: None,
+                    file_col_num: 1,
+                    element: Some(vec![Ident::new("a"), Ident::new("b")]),
+                    item_as: None
+                })
+            );
         }
         _ => unreachable!(),
     }

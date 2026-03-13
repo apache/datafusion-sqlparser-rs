@@ -70,9 +70,10 @@ pub use self::ddl::{
     ConstraintCharacteristics, CreateConnector, CreateDomain, CreateExtension, CreateFunction,
     CreateIndex, CreateOperator, CreateOperatorClass, CreateOperatorFamily, CreatePolicy,
     CreatePolicyCommand, CreatePolicyType, CreateTable, CreateTrigger, CreateView, Deduplicate,
-    DeferrableInitial, DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass,
-    DropOperatorFamily, DropOperatorSignature, DropPolicy, DropTrigger, ForValues,
-    FunctionReturnType, GeneratedAs, GeneratedExpressionMode, IdentityParameters, IdentityProperty,
+    DeferrableInitial, DistStyle, DropBehavior, DropExtension, DropFunction, DropOperator,
+    DropOperatorClass, DropOperatorFamily, DropOperatorSignature, DropPolicy, DropTrigger,
+    ForValues, FunctionReturnType, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
+    IdentityProperty,
     IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, IndexColumn,
     IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes,
     OperatorClassItem, OperatorFamilyDropItem, OperatorFamilyItem, OperatorOption, OperatorPurpose,
@@ -1132,7 +1133,7 @@ pub enum Expr {
     /// ```sql
     /// TRIM([BOTH | LEADING | TRAILING] [<expr> FROM] <expr>)
     /// TRIM(<expr>)
-    /// TRIM(<expr>, [, characters]) -- only Snowflake or Bigquery
+    /// TRIM(<expr>, [, characters]) -- PostgreSQL, DuckDB, Snowflake, BigQuery, Generic
     /// ```
     Trim {
         /// The expression to trim from.
@@ -2440,30 +2441,54 @@ impl fmt::Display for ShowCreateObject {
 pub enum CommentObject {
     /// A table column.
     Column,
-    /// A table.
-    Table,
-    /// An extension.
-    Extension,
-    /// A schema.
-    Schema,
     /// A database.
     Database,
-    /// A user.
-    User,
+    /// A domain.
+    Domain,
+    /// An extension.
+    Extension,
+    /// A function.
+    Function,
+    /// An index.
+    Index,
+    /// A materialized view.
+    MaterializedView,
+    /// A procedure.
+    Procedure,
     /// A role.
     Role,
+    /// A schema.
+    Schema,
+    /// A sequence.
+    Sequence,
+    /// A table.
+    Table,
+    /// A type.
+    Type,
+    /// A user.
+    User,
+    /// A view.
+    View,
 }
 
 impl fmt::Display for CommentObject {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             CommentObject::Column => f.write_str("COLUMN"),
-            CommentObject::Table => f.write_str("TABLE"),
-            CommentObject::Extension => f.write_str("EXTENSION"),
-            CommentObject::Schema => f.write_str("SCHEMA"),
             CommentObject::Database => f.write_str("DATABASE"),
-            CommentObject::User => f.write_str("USER"),
+            CommentObject::Domain => f.write_str("DOMAIN"),
+            CommentObject::Extension => f.write_str("EXTENSION"),
+            CommentObject::Function => f.write_str("FUNCTION"),
+            CommentObject::Index => f.write_str("INDEX"),
+            CommentObject::MaterializedView => f.write_str("MATERIALIZED VIEW"),
+            CommentObject::Procedure => f.write_str("PROCEDURE"),
             CommentObject::Role => f.write_str("ROLE"),
+            CommentObject::Schema => f.write_str("SCHEMA"),
+            CommentObject::Sequence => f.write_str("SEQUENCE"),
+            CommentObject::Table => f.write_str("TABLE"),
+            CommentObject::Type => f.write_str("TYPE"),
+            CommentObject::User => f.write_str("USER"),
+            CommentObject::View => f.write_str("VIEW"),
         }
     }
 }
@@ -6460,6 +6485,17 @@ pub struct InsertAliases {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Optional alias for an `INSERT` table; i.e. the table to be inserted into
+pub struct TableAliasWithoutColumns {
+    /// `true` if the aliases was explicitly introduced with the "AS" keyword
+    pub explicit: bool,
+    /// the alias name itself
+    pub alias: Ident,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// `ON CONFLICT` clause representation.
 pub struct OnConflict {
     /// Optional conflict target specifying columns or constraint.
@@ -7591,6 +7627,10 @@ pub enum FunctionArgExpr {
     QualifiedWildcard(ObjectName),
     /// An unqualified `*` wildcard.
     Wildcard,
+    /// An unqualified `*` wildcard with additional options, e.g. `* EXCLUDE(col)`.
+    ///
+    /// Used in Snowflake to support expressions like `HASH(* EXCLUDE(col))`.
+    WildcardWithOptions(WildcardAdditionalOptions),
 }
 
 impl From<Expr> for FunctionArgExpr {
@@ -7609,6 +7649,7 @@ impl fmt::Display for FunctionArgExpr {
             FunctionArgExpr::Expr(expr) => write!(f, "{expr}"),
             FunctionArgExpr::QualifiedWildcard(prefix) => write!(f, "{prefix}.*"),
             FunctionArgExpr::Wildcard => f.write_str("*"),
+            FunctionArgExpr::WildcardWithOptions(opts) => write!(f, "*{opts}"),
         }
     }
 }
@@ -9177,6 +9218,9 @@ pub enum CopyLegacyOption {
     TruncateColumns,
     /// ZSTD
     Zstd,
+    /// Redshift `CREDENTIALS 'auth-args'`
+    /// <https://docs.aws.amazon.com/redshift/latest/dg/copy-parameters-authorization.html>
+    Credentials(String),
 }
 
 impl fmt::Display for CopyLegacyOption {
@@ -9287,6 +9331,7 @@ impl fmt::Display for CopyLegacyOption {
             }
             TruncateColumns => write!(f, "TRUNCATECOLUMNS"),
             Zstd => write!(f, "ZSTD"),
+            Credentials(s) => write!(f, "CREDENTIALS '{}'", value::escape_single_quote_string(s)),
         }
     }
 }
@@ -11651,12 +11696,19 @@ pub struct ResetStatement {
 /// `SELECT`, `INSERT`, `UPDATE`, `REPLACE`, `MERGE`, and `DELETE` keywords in
 /// the corresponding statements.
 ///
-/// See [Select::optimizer_hint]
+/// See [Select::optimizer_hints]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct OptimizerHint {
-    /// the raw test of the optimizer hint without its markers
+    /// An optional prefix between the comment marker and `+`.
+    ///
+    /// Standard optimizer hints like `/*+ ... */` have an empty prefix,
+    /// while system-specific hints like `/*abc+ ... */` have `prefix = "abc"`.
+    /// The prefix is any sequence of ASCII alphanumeric characters
+    /// immediately before the `+` marker.
+    pub prefix: String,
+    /// the raw text of the optimizer hint without its markers
     pub text: String,
     /// the style of the comment which `text` was extracted from,
     /// e.g. `/*+...*/` or `--+...`
@@ -11686,11 +11738,14 @@ impl fmt::Display for OptimizerHint {
         match &self.style {
             OptimizerHintStyle::SingleLine { prefix } => {
                 f.write_str(prefix)?;
+                f.write_str(&self.prefix)?;
                 f.write_str("+")?;
                 f.write_str(&self.text)
             }
             OptimizerHintStyle::MultiLine => {
-                f.write_str("/*+")?;
+                f.write_str("/*")?;
+                f.write_str(&self.prefix)?;
+                f.write_str("+")?;
                 f.write_str(&self.text)?;
                 f.write_str("*/")
             }

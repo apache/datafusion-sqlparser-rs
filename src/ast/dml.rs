@@ -33,7 +33,8 @@ use super::{
     display_comma_separated, helpers::attached_token::AttachedToken, query::InputFormatClause,
     Assignment, Expr, FromTable, Ident, InsertAliases, MysqlInsertPriority, ObjectName, OnInsert,
     OptimizerHint, OrderByExpr, Query, SelectInto, SelectItem, Setting, SqliteOnConflict,
-    TableFactor, TableObject, TableWithJoins, UpdateTableFromKind, Values,
+    TableAliasWithoutColumns, TableFactor, TableObject, TableWithJoins, UpdateTableFromKind,
+    Values,
 };
 
 /// INSERT statement.
@@ -43,11 +44,11 @@ use super::{
 pub struct Insert {
     /// Token for the `INSERT` keyword (or its substitutes)
     pub insert_token: AttachedToken,
-    /// A query optimizer hint
+    /// Query optimizer hints
     ///
     /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
     /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
-    pub optimizer_hint: Option<OptimizerHint>,
+    pub optimizer_hints: Vec<OptimizerHint>,
     /// Only for Sqlite
     pub or: Option<SqliteOnConflict>,
     /// Only for mysql
@@ -56,10 +57,11 @@ pub struct Insert {
     pub into: bool,
     /// TABLE
     pub table: TableObject,
-    /// table_name as foo (for PostgreSQL)
-    pub table_alias: Option<Ident>,
+    /// `table_name as foo` (for PostgreSQL)
+    /// `table_name foo` (for Oracle)
+    pub table_alias: Option<TableAliasWithoutColumns>,
     /// COLUMNS
-    pub columns: Vec<Ident>,
+    pub columns: Vec<ObjectName>,
     /// Overwrite (Hive)
     pub overwrite: bool,
     /// A SQL query that specifies what to insert
@@ -77,6 +79,9 @@ pub struct Insert {
     pub on: Option<OnInsert>,
     /// RETURNING
     pub returning: Option<Vec<SelectItem>>,
+    /// OUTPUT (MSSQL)
+    /// See <https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql>
+    pub output: Option<OutputClause>,
     /// Only for mysql
     pub replace_into: bool,
     /// Only for mysql
@@ -125,15 +130,20 @@ pub struct Insert {
 impl Display for Insert {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // SQLite OR conflict has a special format: INSERT OR ... INTO table_name
-        let table_name = if let Some(alias) = &self.table_alias {
-            format!("{0} AS {alias}", self.table)
+        let table_name = if let Some(table_alias) = &self.table_alias {
+            format!(
+                "{table} {as_keyword}{alias}",
+                table = self.table,
+                as_keyword = if table_alias.explicit { "AS " } else { "" },
+                alias = table_alias.alias
+            )
         } else {
             self.table.to_string()
         };
 
         if let Some(on_conflict) = self.or {
             f.write_str("INSERT")?;
-            if let Some(hint) = self.optimizer_hint.as_ref() {
+            for hint in &self.optimizer_hints {
                 write!(f, " {hint}")?;
             }
             write!(f, " {on_conflict} INTO {table_name} ")?;
@@ -147,7 +157,7 @@ impl Display for Insert {
                     "INSERT"
                 }
             )?;
-            if let Some(hint) = self.optimizer_hint.as_ref() {
+            for hint in &self.optimizer_hints {
                 write!(f, " {hint}")?;
             }
             if let Some(priority) = self.priority {
@@ -193,6 +203,11 @@ impl Display for Insert {
 
         if !self.after_columns.is_empty() {
             write!(f, "({})", display_comma_separated(&self.after_columns))?;
+            SpaceOrNewline.fmt(f)?;
+        }
+
+        if let Some(output) = &self.output {
+            write!(f, "{output}")?;
             SpaceOrNewline.fmt(f)?;
         }
 
@@ -267,11 +282,11 @@ impl Display for Insert {
 pub struct Delete {
     /// Token for the `DELETE` keyword
     pub delete_token: AttachedToken,
-    /// A query optimizer hint
+    /// Query optimizer hints
     ///
     /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
     /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
-    pub optimizer_hint: Option<OptimizerHint>,
+    pub optimizer_hints: Vec<OptimizerHint>,
     /// Multi tables delete are supported in mysql
     pub tables: Vec<ObjectName>,
     /// FROM
@@ -282,6 +297,9 @@ pub struct Delete {
     pub selection: Option<Expr>,
     /// RETURNING
     pub returning: Option<Vec<SelectItem>>,
+    /// OUTPUT (MSSQL)
+    /// See <https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql>
+    pub output: Option<OutputClause>,
     /// ORDER BY (MySQL)
     pub order_by: Vec<OrderByExpr>,
     /// LIMIT (MySQL)
@@ -291,7 +309,7 @@ pub struct Delete {
 impl Display for Delete {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("DELETE")?;
-        if let Some(hint) = self.optimizer_hint.as_ref() {
+        for hint in &self.optimizer_hints {
             f.write_str(" ")?;
             hint.fmt(f)?;
         }
@@ -306,6 +324,10 @@ impl Display for Delete {
             FromTable::WithoutKeyword(from) => {
                 indented_list(f, from)?;
             }
+        }
+        if let Some(output) = &self.output {
+            SpaceOrNewline.fmt(f)?;
+            write!(f, "{output}")?;
         }
         if let Some(using) = &self.using {
             SpaceOrNewline.fmt(f)?;
@@ -345,11 +367,11 @@ impl Display for Delete {
 pub struct Update {
     /// Token for the `UPDATE` keyword
     pub update_token: AttachedToken,
-    /// A query optimizer hint
+    /// Query optimizer hints
     ///
     /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
     /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
-    pub optimizer_hint: Option<OptimizerHint>,
+    pub optimizer_hints: Vec<OptimizerHint>,
     /// TABLE
     pub table: TableWithJoins,
     /// Column assignments
@@ -360,6 +382,9 @@ pub struct Update {
     pub selection: Option<Expr>,
     /// RETURNING
     pub returning: Option<Vec<SelectItem>>,
+    /// OUTPUT (MSSQL)
+    /// See <https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql>
+    pub output: Option<OutputClause>,
     /// SQLite-specific conflict resolution clause
     pub or: Option<SqliteOnConflict>,
     /// LIMIT
@@ -368,11 +393,12 @@ pub struct Update {
 
 impl Display for Update {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("UPDATE ")?;
-        if let Some(hint) = self.optimizer_hint.as_ref() {
-            hint.fmt(f)?;
+        f.write_str("UPDATE")?;
+        for hint in &self.optimizer_hints {
             f.write_str(" ")?;
+            hint.fmt(f)?;
         }
+        f.write_str(" ")?;
         if let Some(or) = &self.or {
             or.fmt(f)?;
             f.write_str(" ")?;
@@ -387,6 +413,10 @@ impl Display for Update {
             SpaceOrNewline.fmt(f)?;
             f.write_str("SET")?;
             indented_list(f, &self.assignments)?;
+        }
+        if let Some(output) = &self.output {
+            SpaceOrNewline.fmt(f)?;
+            write!(f, "{output}")?;
         }
         if let Some(UpdateTableFromKind::AfterSet(from)) = &self.from {
             SpaceOrNewline.fmt(f)?;
@@ -419,10 +449,10 @@ impl Display for Update {
 pub struct Merge {
     /// The `MERGE` token that starts the statement.
     pub merge_token: AttachedToken,
-    /// A query optimizer hint
+    /// Query optimizer hints
     ///
     /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
-    pub optimizer_hint: Option<OptimizerHint>,
+    pub optimizer_hints: Vec<OptimizerHint>,
     /// optional INTO keyword
     pub into: bool,
     /// Specifies the table to merge
@@ -440,7 +470,7 @@ pub struct Merge {
 impl Display for Merge {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("MERGE")?;
-        if let Some(hint) = self.optimizer_hint.as_ref() {
+        for hint in &self.optimizer_hints {
             write!(f, " {hint}")?;
         }
         if self.into {
@@ -709,11 +739,11 @@ impl Display for MergeUpdateExpr {
     }
 }
 
-/// A `OUTPUT` Clause in the end of a `MERGE` Statement
+/// An `OUTPUT` clause on `MERGE`, `INSERT`, `UPDATE`, or `DELETE` (MSSQL).
 ///
 /// Example:
 /// OUTPUT $action, deleted.* INTO dbo.temp_products;
-/// [mssql](https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql)
+/// <https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

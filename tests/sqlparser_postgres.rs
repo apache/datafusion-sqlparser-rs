@@ -594,6 +594,45 @@ fn parse_create_table_constraints_only() {
 }
 
 #[test]
+fn parse_create_table_like_with_defaults() {
+    let sql = "CREATE TABLE new (LIKE old INCLUDING DEFAULTS)";
+    match pg().verified_stmt(sql) {
+        Statement::CreateTable(stmt) => {
+            assert_eq!(
+                stmt.name,
+                ObjectName::from(vec![Ident::new("new".to_string())])
+            );
+            assert_eq!(
+                stmt.like,
+                Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
+                    name: ObjectName::from(vec![Ident::new("old".to_string())]),
+                    defaults: Some(CreateTableLikeDefaults::Including),
+                }))
+            )
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "CREATE TABLE new (LIKE old EXCLUDING DEFAULTS)";
+    match pg().verified_stmt(sql) {
+        Statement::CreateTable(stmt) => {
+            assert_eq!(
+                stmt.name,
+                ObjectName::from(vec![Ident::new("new".to_string())])
+            );
+            assert_eq!(
+                stmt.like,
+                Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
+                    name: ObjectName::from(vec![Ident::new("old".to_string())]),
+                    defaults: Some(CreateTableLikeDefaults::Excluding),
+                }))
+            )
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_alter_table_constraints_rename() {
     match alter_table_op(
         pg().verified_stmt("ALTER TABLE tab RENAME CONSTRAINT old_name TO new_name"),
@@ -1085,6 +1124,62 @@ PHP	₱ USD $
 }
 
 #[test]
+fn parse_copy_from_stdin_without_semicolon() {
+    let stmt = pg().verified_stmt("COPY bitwise_test FROM STDIN NULL 'null'");
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            source: CopySource::Table {
+                table_name: ObjectName::from(vec!["bitwise_test".into()]),
+                columns: vec![],
+            },
+            to: false,
+            target: CopyTarget::Stdin,
+            options: vec![],
+            legacy_options: vec![CopyLegacyOption::Null("null".into())],
+            values: vec![],
+        }
+    );
+}
+
+#[test]
+fn parse_copy_from_stdin_without_semicolon_variants() {
+    // This covers additional COPY ... FROM STDIN shapes without inline payload.
+    // `parse_copy_from_stdin_without_semicolon` asserts the legacy NULL option details.
+    let cases = [
+        "COPY varbit_table FROM STDIN",
+        "COPY bit_table FROM STDIN",
+        "COPY copytest2 (test) FROM STDIN",
+        "COPY copytest3 FROM STDIN CSV HEADER",
+        "COPY copytest4 FROM STDIN (HEADER)",
+        "COPY parted_copytest FROM STDIN",
+        "COPY tab_progress_reporting FROM STDIN",
+        "COPY oversized_column_default FROM STDIN",
+        "COPY x (a, b, c, d, e) FROM STDIN",
+        "COPY header_copytest (c, a) FROM STDIN",
+        "COPY atest5 (two) FROM STDIN",
+        "COPY main_table (a, b) FROM STDIN",
+    ];
+
+    for sql in cases {
+        match pg().verified_stmt(sql) {
+            Statement::Copy {
+                to: false,
+                target: CopyTarget::Stdin,
+                values,
+                ..
+            } => {
+                assert!(
+                    values.is_empty(),
+                    "expected no inline COPY payload for `{sql}`"
+                );
+            }
+            _ => panic!("expected COPY ... FROM STDIN statement for `{sql}`"),
+        }
+    }
+}
+
+#[test]
 fn test_copy_from() {
     let stmt = pg().verified_stmt("COPY users FROM 'data.csv'");
     assert_eq!(
@@ -1330,7 +1425,7 @@ fn parse_copy_to() {
                 with: None,
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
-                    optimizer_hint: None,
+                    optimizer_hints: vec![],
                     distinct: None,
                     select_modifiers: None,
                     top: None,
@@ -3112,7 +3207,7 @@ fn parse_array_subquery_expr() {
                     set_quantifier: SetQuantifier::None,
                     left: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
-                        optimizer_hint: None,
+                        optimizer_hints: vec![],
                         distinct: None,
                         select_modifiers: None,
                         top: None,
@@ -3140,7 +3235,7 @@ fn parse_array_subquery_expr() {
                     }))),
                     right: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
-                        optimizer_hint: None,
+                        optimizer_hints: vec![],
                         distinct: None,
                         select_modifiers: None,
                         top: None,
@@ -5460,7 +5555,7 @@ fn test_simple_postgres_insert_with_alias() {
         statement,
         Statement::Insert(Insert {
             insert_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             or: None,
             ignore: false,
             into: true,
@@ -5469,22 +5564,25 @@ fn test_simple_postgres_insert_with_alias() {
                 quote_style: None,
                 span: Span::empty(),
             }])),
-            table_alias: Some(Ident {
-                value: "test_table".to_string(),
-                quote_style: None,
-                span: Span::empty(),
-            }),
-            columns: vec![
-                Ident {
-                    value: "id".to_string(),
-                    quote_style: None,
-                    span: Span::empty(),
-                },
-                Ident {
-                    value: "a".to_string(),
+            table_alias: Some(TableAliasWithoutColumns {
+                explicit: true,
+                alias: Ident {
+                    value: "test_table".to_string(),
                     quote_style: None,
                     span: Span::empty(),
                 }
+            }),
+            columns: vec![
+                ObjectName::from(Ident {
+                    value: "id".to_string(),
+                    quote_style: None,
+                    span: Span::empty(),
+                }),
+                ObjectName::from(Ident {
+                    value: "a".to_string(),
+                    quote_style: None,
+                    span: Span::empty(),
+                })
             ],
             overwrite: false,
             source: Some(Box::new(Query {
@@ -5512,6 +5610,7 @@ fn test_simple_postgres_insert_with_alias() {
             has_table_keyword: false,
             on: None,
             returning: None,
+            output: None,
             replace_into: false,
             priority: None,
             insert_alias: None,
@@ -5536,7 +5635,7 @@ fn test_simple_postgres_insert_with_alias() {
         statement,
         Statement::Insert(Insert {
             insert_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             or: None,
             ignore: false,
             into: true,
@@ -5545,22 +5644,25 @@ fn test_simple_postgres_insert_with_alias() {
                 quote_style: None,
                 span: Span::empty(),
             }])),
-            table_alias: Some(Ident {
-                value: "test_table".to_string(),
-                quote_style: None,
-                span: Span::empty(),
-            }),
-            columns: vec![
-                Ident {
-                    value: "id".to_string(),
-                    quote_style: None,
-                    span: Span::empty(),
-                },
-                Ident {
-                    value: "a".to_string(),
+            table_alias: Some(TableAliasWithoutColumns {
+                explicit: true,
+                alias: Ident {
+                    value: "test_table".to_string(),
                     quote_style: None,
                     span: Span::empty(),
                 }
+            }),
+            columns: vec![
+                ObjectName::from(Ident {
+                    value: "id".to_string(),
+                    quote_style: None,
+                    span: Span::empty(),
+                }),
+                ObjectName::from(Ident {
+                    value: "a".to_string(),
+                    quote_style: None,
+                    span: Span::empty(),
+                })
             ],
             overwrite: false,
             source: Some(Box::new(Query {
@@ -5591,6 +5693,7 @@ fn test_simple_postgres_insert_with_alias() {
             has_table_keyword: false,
             on: None,
             returning: None,
+            output: None,
             replace_into: false,
             priority: None,
             insert_alias: None,
@@ -5614,7 +5717,7 @@ fn test_simple_insert_with_quoted_alias() {
         statement,
         Statement::Insert(Insert {
             insert_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             or: None,
             ignore: false,
             into: true,
@@ -5623,22 +5726,25 @@ fn test_simple_insert_with_quoted_alias() {
                 quote_style: None,
                 span: Span::empty(),
             }])),
-            table_alias: Some(Ident {
-                value: "Test_Table".to_string(),
-                quote_style: Some('"'),
-                span: Span::empty(),
+            table_alias: Some(TableAliasWithoutColumns {
+                explicit: true,
+                alias: Ident {
+                    value: "Test_Table".to_string(),
+                    quote_style: Some('"'),
+                    span: Span::empty(),
+                }
             }),
             columns: vec![
-                Ident {
+                ObjectName::from(Ident {
                     value: "id".to_string(),
                     quote_style: None,
                     span: Span::empty(),
-                },
-                Ident {
+                }),
+                ObjectName::from(Ident {
                     value: "a".to_string(),
                     quote_style: None,
                     span: Span::empty(),
-                }
+                })
             ],
             overwrite: false,
             source: Some(Box::new(Query {
@@ -5668,6 +5774,7 @@ fn test_simple_insert_with_quoted_alias() {
             has_table_keyword: false,
             on: None,
             returning: None,
+            output: None,
             replace_into: false,
             priority: None,
             insert_alias: None,
@@ -5790,6 +5897,12 @@ fn parse_interval_data_type() {
                 .verified_stmt(&format!("SELECT CAST('1 second' AS INTERVAL {field}({p}))"));
         }
     }
+}
+
+#[test]
+fn parse_interval_keyword_as_unquoted_identifier() {
+    pg().verified_stmt("SELECT MAX(interval) FROM tbl");
+    pg().verified_expr("INTERVAL '1 day'");
 }
 
 #[test]
@@ -6385,6 +6498,9 @@ fn parse_trigger_related_functions() {
             refresh_mode: None,
             initialize: None,
             require_user: false,
+            diststyle: None,
+            distkey: None,
+            sortkey: None,
         }
     );
 

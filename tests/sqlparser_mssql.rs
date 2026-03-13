@@ -141,7 +141,7 @@ fn parse_create_procedure() {
                     pipe_operators: vec![],
                     body: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
-                        optimizer_hint: None,
+                        optimizer_hints: vec![],
                         distinct: None,
                         select_modifiers: None,
                         top: None,
@@ -1350,7 +1350,7 @@ fn parse_substring_in_select() {
 
                     body: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
-                        optimizer_hint: None,
+                        optimizer_hints: vec![],
                         distinct: Some(Distinct::Distinct),
                         select_modifiers: None,
                         top: None,
@@ -1509,7 +1509,7 @@ fn parse_mssql_declare() {
 
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
-                    optimizer_hint: None,
+                    optimizer_hints: vec![],
                     distinct: None,
                     select_modifiers: None,
                     top: None,
@@ -2006,6 +2006,9 @@ fn parse_create_table_with_valid_options() {
                 refresh_mode: None,
                 initialize: None,
                 require_user: false,
+                diststyle: None,
+                distkey: None,
+                sortkey: None,
             })
         );
     }
@@ -2174,6 +2177,9 @@ fn parse_create_table_with_identity_column() {
                 refresh_mode: None,
                 initialize: None,
                 require_user: false,
+                diststyle: None,
+                distkey: None,
+                sortkey: None,
             }),
         );
     }
@@ -2729,4 +2735,122 @@ fn parse_mssql_tran_shorthand() {
 
     // ROLLBACK TRAN normalizes to ROLLBACK (same as ROLLBACK TRANSACTION)
     ms().one_statement_parses_to("ROLLBACK TRAN", "ROLLBACK");
+}
+
+#[test]
+fn test_tsql_statement_keywords_not_implicit_aliases() {
+    // T-SQL statement-starting keywords must never be consumed as implicit
+    // aliases for a preceding SELECT item or table reference when using
+    // newline-delimited multi-statement scripts.
+
+    // Without the fix, the parser would consume a statement-starting keyword
+    // as an implicit alias for the preceding SELECT item or table reference,
+    // then fail on the next token. Verify parsing succeeds and each input
+    // produces the expected number of statements.
+
+    // Keywords that should not become implicit column aliases
+    let col_alias_cases: &[(&str, usize)] = &[
+        ("select 1\ndeclare @x as int", 2),
+        ("select 1\nexec sp_who", 2),
+        ("select 1\ninsert into t values (1)", 2),
+        ("select 1\nupdate t set col=1", 2),
+        ("select 1\ndelete from t", 2),
+        ("select 1\ndrop table t", 2),
+        ("select 1\ncreate table t (id int)", 2),
+        ("select 1\nalter table t add col int", 2),
+        ("select 1\nreturn", 2),
+    ];
+    for (sql, expected) in col_alias_cases {
+        let stmts = tsql()
+            .parse_sql_statements(sql)
+            .unwrap_or_else(|e| panic!("failed to parse {sql:?}: {e}"));
+        assert_eq!(
+            stmts.len(),
+            *expected,
+            "expected {expected} stmts for: {sql:?}"
+        );
+    }
+
+    // Keywords that should not become implicit table aliases
+    let tbl_alias_cases: &[(&str, usize)] = &[
+        ("select * from t\ndeclare @x as int", 2),
+        ("select * from t\ndrop table t", 2),
+        ("select * from t\ncreate table u (id int)", 2),
+        ("select * from t\nexec sp_who", 2),
+    ];
+    for (sql, expected) in tbl_alias_cases {
+        let stmts = tsql()
+            .parse_sql_statements(sql)
+            .unwrap_or_else(|e| panic!("failed to parse {sql:?}: {e}"));
+        assert_eq!(
+            stmts.len(),
+            *expected,
+            "expected {expected} stmts for: {sql:?}"
+        );
+    }
+}
+
+#[test]
+fn test_exec_dynamic_sql() {
+    // EXEC (@sql) executes a dynamic SQL string held in a variable.
+    // It must parse as a single Execute statement and not attempt to parse
+    // parameters after the closing paren.
+    let stmts = tsql()
+        .parse_sql_statements("EXEC (@sql)")
+        .expect("EXEC (@sql) should parse");
+    assert_eq!(stmts.len(), 1);
+    assert!(
+        matches!(&stmts[0], Statement::Execute { .. }),
+        "expected Execute, got: {:?}",
+        stmts[0]
+    );
+
+    // Verify that a statement following EXEC (@sql) on the next line is parsed
+    // as a separate statement and not consumed as a parameter.
+    let stmts = tsql()
+        .parse_sql_statements("EXEC (@sql)\nDROP TABLE #tmp")
+        .expect("EXEC (@sql) followed by DROP TABLE should parse");
+    assert_eq!(stmts.len(), 2);
+}
+
+// MSSQL OUTPUT clause on INSERT/UPDATE/DELETE
+// https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql
+#[test]
+fn parse_mssql_insert_with_output() {
+    ms_and_generic().verified_stmt(
+        "INSERT INTO customers (name, email) OUTPUT INSERTED.id, INSERTED.name VALUES ('John', 'john@example.com')",
+    );
+}
+
+#[test]
+fn parse_mssql_insert_with_output_into() {
+    ms_and_generic().verified_stmt(
+        "INSERT INTO customers (name, email) OUTPUT INSERTED.id, INSERTED.name INTO @new_ids VALUES ('John', 'john@example.com')",
+    );
+}
+
+#[test]
+fn parse_mssql_delete_with_output() {
+    ms_and_generic().verified_stmt("DELETE FROM customers OUTPUT DELETED.* WHERE id = 1");
+}
+
+#[test]
+fn parse_mssql_delete_with_output_into() {
+    ms_and_generic().verified_stmt(
+        "DELETE FROM customers OUTPUT DELETED.id, DELETED.name INTO @deleted_rows WHERE active = 0",
+    );
+}
+
+#[test]
+fn parse_mssql_update_with_output() {
+    ms_and_generic().verified_stmt(
+        "UPDATE employees SET salary = salary * 1.1 OUTPUT INSERTED.id, DELETED.salary, INSERTED.salary WHERE department = 'Engineering'",
+    );
+}
+
+#[test]
+fn parse_mssql_update_with_output_into() {
+    ms_and_generic().verified_stmt(
+        "UPDATE employees SET salary = salary * 1.1 OUTPUT INSERTED.id, DELETED.salary, INSERTED.salary INTO @changes WHERE department = 'Engineering'",
+    );
 }

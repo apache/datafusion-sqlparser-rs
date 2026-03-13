@@ -756,17 +756,17 @@ pub trait Dialect: Debug + Any {
             };
         }
 
-        let token = parser.peek_token();
+        let token = parser.peek_token_ref();
         debug!("get_next_precedence_full() {token:?}");
-        match token.token {
+        match &token.token {
             Token::Word(w) if w.keyword == Keyword::OR => Ok(p!(Or)),
             Token::Word(w) if w.keyword == Keyword::AND => Ok(p!(And)),
             Token::Word(w) if w.keyword == Keyword::XOR => Ok(p!(Xor)),
 
             Token::Word(w) if w.keyword == Keyword::AT => {
                 match (
-                    parser.peek_nth_token(1).token,
-                    parser.peek_nth_token(2).token,
+                    &parser.peek_nth_token_ref(1).token,
+                    &parser.peek_nth_token_ref(2).token,
                 ) {
                     (Token::Word(w), Token::Word(w2))
                         if w.keyword == Keyword::TIME && w2.keyword == Keyword::ZONE =>
@@ -777,28 +777,30 @@ pub trait Dialect: Debug + Any {
                 }
             }
 
-            Token::Word(w) if w.keyword == Keyword::NOT => match parser.peek_nth_token(1).token {
-                // The precedence of NOT varies depending on keyword that
-                // follows it. If it is followed by IN, BETWEEN, or LIKE,
-                // it takes on the precedence of those tokens. Otherwise, it
-                // is not an infix operator, and therefore has zero
-                // precedence.
-                Token::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
-                Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
-                Token::Word(w) if w.keyword == Keyword::LIKE => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::MATCH => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::MEMBER => Ok(p!(Like)),
-                Token::Word(w)
-                    if w.keyword == Keyword::NULL && !parser.in_column_definition_state() =>
-                {
-                    Ok(p!(Is))
+            Token::Word(w) if w.keyword == Keyword::NOT => {
+                match &parser.peek_nth_token_ref(1).token {
+                    // The precedence of NOT varies depending on keyword that
+                    // follows it. If it is followed by IN, BETWEEN, or LIKE,
+                    // it takes on the precedence of those tokens. Otherwise, it
+                    // is not an infix operator, and therefore has zero
+                    // precedence.
+                    Token::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
+                    Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
+                    Token::Word(w) if w.keyword == Keyword::LIKE => Ok(p!(Like)),
+                    Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(p!(Like)),
+                    Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(p!(Like)),
+                    Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(p!(Like)),
+                    Token::Word(w) if w.keyword == Keyword::MATCH => Ok(p!(Like)),
+                    Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
+                    Token::Word(w) if w.keyword == Keyword::MEMBER => Ok(p!(Like)),
+                    Token::Word(w)
+                        if w.keyword == Keyword::NULL && !parser.in_column_definition_state() =>
+                    {
+                        Ok(p!(Is))
+                    }
+                    _ => Ok(self.prec_unknown()),
                 }
-                _ => Ok(self.prec_unknown()),
-            },
+            }
             Token::Word(w) if w.keyword == Keyword::NOTNULL && self.supports_notnull_operator() => {
                 Ok(p!(Is))
             }
@@ -861,7 +863,7 @@ pub trait Dialect: Debug + Any {
             Token::DoubleColon | Token::ExclamationMark | Token::LBracket | Token::CaretAt => {
                 Ok(p!(DoubleColon))
             }
-            Token::Colon => match parser.peek_nth_token(1).token {
+            Token::Colon => match &parser.peek_nth_token_ref(1).token {
                 // When colon is followed by a string or a number, it's usually in MAP syntax.
                 Token::SingleQuotedString(_) | Token::Number(_, _) => Ok(self.prec_unknown()),
                 // In other cases, it's used in semi-structured data traversal like in variant or JSON
@@ -1193,6 +1195,18 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports the `KEY` keyword as part of
+    /// column-level constraints in a `CREATE TABLE` statement.
+    ///
+    /// When enabled, the parser accepts these MySQL-specific column options:
+    /// - `UNIQUE [KEY]` — optional `KEY` after `UNIQUE`
+    /// - `[PRIMARY] KEY` — standalone `KEY` as shorthand for `PRIMARY KEY`
+    ///
+    /// <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
+    fn supports_key_column_option(&self) -> bool {
+        false
+    }
+
     /// Returns true if the specified keyword is reserved and cannot be
     /// used as an identifier without special handling like quoting.
     fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {
@@ -1235,6 +1249,11 @@ pub trait Dialect: Debug + Any {
 
     /// Does the dialect support insert formats, e.g. `INSERT INTO ... FORMAT <format>`
     fn supports_insert_format(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports `INSERT INTO t [[AS] alias] ...`.
+    fn supports_insert_table_alias(&self) -> bool {
         false
     }
 
@@ -1510,6 +1529,18 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect supports aliasing a wildcard select item.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT t.* AS alias FROM t
+    /// ```
+    ///
+    /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_SELECT_list.html)
+    fn supports_select_wildcard_with_alias(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports the `OPTIMIZE TABLE` statement.
     ///
     /// Example:
@@ -1618,6 +1649,12 @@ pub trait Dialect: Debug + Any {
     ///
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select/format)
     fn supports_select_format(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports the two-argument comma-separated
+    /// form of the `TRIM` function: `TRIM(expr, characters)`.
+    fn supports_comma_separated_trim(&self) -> bool {
         false
     }
 }

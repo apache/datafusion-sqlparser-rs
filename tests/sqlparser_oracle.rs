@@ -21,7 +21,10 @@
 use pretty_assertions::assert_eq;
 
 use sqlparser::{
-    ast::{BinaryOperator, Expr, Ident, QuoteDelimitedString, Value, ValueWithSpan},
+    ast::{
+        BinaryOperator, Expr, Ident, Insert, ObjectName, Query, QuoteDelimitedString, SetExpr,
+        Statement, TableAliasWithoutColumns, TableObject, Value, ValueWithSpan,
+    },
     dialect::OracleDialect,
     parser::ParserError,
     tokenizer::Span,
@@ -338,36 +341,34 @@ fn parse_national_quote_delimited_string_but_is_a_word() {
 fn test_optimizer_hints() {
     let oracle_dialect = oracle();
 
-    // selects
+    // selects: all `/*+...*/` comments are collected as hints
     let select = oracle_dialect.verified_only_select_with_canonical(
-        "SELECT /*+one two three*/ /*+not a hint!*/ 1 FROM dual",
-        "SELECT /*+one two three*/ 1 FROM dual",
+        "SELECT /*+one two three*/ /*+four five six*/ 1 FROM dual",
+        "SELECT /*+one two three*/ /*+four five six*/ 1 FROM dual",
     );
-    assert_eq!(
-        select
-            .optimizer_hint
-            .as_ref()
-            .map(|hint| hint.text.as_str()),
-        Some("one two three")
-    );
+    assert_eq!(select.optimizer_hints.len(), 2);
+    assert_eq!(select.optimizer_hints[0].text, "one two three");
+    assert_eq!(select.optimizer_hints[0].prefix, "");
+    assert_eq!(select.optimizer_hints[1].text, "four five six");
 
+    // regular comments are skipped, hints after them are still collected
     let select = oracle_dialect.verified_only_select_with_canonical(
-        "SELECT /*one two three*/ /*+not a hint!*/ 1 FROM dual",
-        "SELECT 1 FROM dual",
+        "SELECT /*one two three*/ /*+four five six*/ 1 FROM dual",
+        "SELECT /*+four five six*/ 1 FROM dual",
     );
-    assert_eq!(select.optimizer_hint, None);
+    assert_eq!(select.optimizer_hints.len(), 1);
+    assert_eq!(select.optimizer_hints[0].text, "four five six");
 
     let select = oracle_dialect.verified_only_select_with_canonical(
         "SELECT --+ one two three /* asdf */\n 1 FROM dual",
         "SELECT --+ one two three /* asdf */\n 1 FROM dual",
     );
+    assert_eq!(select.optimizer_hints.len(), 1);
     assert_eq!(
-        select
-            .optimizer_hint
-            .as_ref()
-            .map(|hint| hint.text.as_str()),
-        Some(" one two three /* asdf */\n")
+        select.optimizer_hints[0].text,
+        " one two three /* asdf */\n"
     );
+    assert_eq!(select.optimizer_hints[0].prefix, "");
 
     // inserts
     oracle_dialect.verified_stmt("INSERT /*+ append */ INTO t1 SELECT * FROM all_objects");
@@ -387,6 +388,15 @@ fn test_optimizer_hints() {
                (pt.person_id, pt.first_name, pt.last_name, pt.title) \
                VALUES (ps.person_id, ps.first_name, ps.last_name, ps.title)",
     );
+
+    // single-line prefixed hint (Oracle supports `--` without trailing whitespace)
+    let select = oracle_dialect.verified_only_select_with_canonical(
+        "SELECT --abc+ text\n 1 FROM dual",
+        "SELECT --abc+ text\n 1 FROM dual",
+    );
+    assert_eq!(select.optimizer_hints.len(), 1);
+    assert_eq!(select.optimizer_hints[0].prefix, "abc");
+    assert_eq!(select.optimizer_hints[0].text, " text\n");
 }
 
 #[test]
@@ -413,4 +423,122 @@ fn test_connect_by() {
         CONNECT BY PRIOR employee_id = manager_id \
           ORDER BY \"Employee\", \"Manager\", \"Pathlen\", \"Path\"",
     );
+}
+
+#[test]
+fn test_insert_with_table_alias() {
+    let oracle_dialect = oracle();
+
+    fn verify_table_name_with_alias(stmt: &Statement, exp_table_name: &str, exp_table_alias: &str) {
+        assert!(matches!(stmt,
+            Statement::Insert(Insert {
+                table: TableObject::TableName(table_name),
+                table_alias: Some(TableAliasWithoutColumns {
+                    explicit: false,
+                    alias: Ident {
+                        value: table_alias,
+                        quote_style: None,
+                        span: _
+                    }
+                }),
+                ..
+            })
+            if table_alias == exp_table_alias
+            && table_name == &ObjectName::from(vec![Ident {
+                value: exp_table_name.into(),
+                quote_style: None,
+                span: Span::empty(),
+            }])
+        ));
+    }
+
+    let stmt = oracle_dialect.verified_stmt(
+        "INSERT INTO foo_t t \
+         SELECT 1, 2, 3 FROM dual",
+    );
+    verify_table_name_with_alias(&stmt, "foo_t", "t");
+
+    let stmt = oracle_dialect.verified_stmt(
+        "INSERT INTO foo_t asdf (a, b, c) \
+         SELECT 1, 2, 3 FROM dual",
+    );
+    verify_table_name_with_alias(&stmt, "foo_t", "asdf");
+
+    let stmt = oracle_dialect.verified_stmt(
+        "INSERT INTO foo_t t (a, b, c) \
+         VALUES (1, 2, 3)",
+    );
+    verify_table_name_with_alias(&stmt, "foo_t", "t");
+
+    let stmt = oracle_dialect.verified_stmt(
+        "INSERT INTO foo_t t \
+         VALUES (1, 2, 3)",
+    );
+    verify_table_name_with_alias(&stmt, "foo_t", "t");
+
+    let stmt =
+        oracle_dialect.verified_stmt("INSERT INTO foo_t t (t.id, t.val) SELECT 1, 2 FROM dual");
+    verify_table_name_with_alias(&stmt, "foo_t", "t");
+    if let Statement::Insert(Insert { columns, .. }) = stmt {
+        assert_eq!(
+            vec![
+                ObjectName::from(vec![Ident::new("t"), Ident::new("id")]),
+                ObjectName::from(vec![Ident::new("t"), Ident::new("val")])
+            ],
+            columns
+        );
+    } else {
+        panic!("not an insert statement");
+    };
+}
+
+#[test]
+fn test_insert_without_alias() {
+    let oracle_dialect = oracle();
+
+    // check DEFAULT
+    let sql = "INSERT INTO t default SELECT 'a' FROM dual";
+    assert_eq!(
+        oracle_dialect.parse_sql_statements(sql),
+        Err(ParserError::ParserError(
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: default".into()
+        ))
+    );
+
+    // check SELECT
+    let sql = "INSERT INTO t SELECT 'a' FROM dual";
+    let stmt = oracle_dialect.verified_stmt(sql);
+    assert!(matches!(
+        &stmt,
+        Statement::Insert(Insert {
+            table_alias: None,
+            source: Some(source),
+            ..
+        })
+        if matches!(&**source, Query { body, .. } if matches!(&**body, SetExpr::Select(_)))));
+
+    // check WITH
+    let sql = "INSERT INTO dual WITH w AS (SELECT 1 AS y FROM dual) SELECT y FROM w";
+    let stmt = oracle_dialect.verified_stmt(sql);
+    assert!(matches!(
+        &stmt,
+        Statement::Insert(Insert {
+            table_alias: None,
+            source: Some(source),
+            ..
+        })
+        if matches!(&**source, Query { body, .. } if matches!(&**body, SetExpr::Select(_)))));
+
+    // check VALUES
+    let sql = "INSERT INTO t VALUES (1)";
+    let stmt = oracle_dialect.verified_stmt(sql);
+    assert!(matches!(
+        stmt,
+        Statement::Insert(Insert {
+            table_alias: None,
+            source: Some(source),
+            ..
+        })
+        if matches!(&*source, Query { body, .. } if matches!(&**body, SetExpr::Values(_)))
+    ));
 }

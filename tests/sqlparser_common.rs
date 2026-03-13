@@ -153,7 +153,10 @@ fn parse_insert_values() {
                 assert_eq!(table_name.to_string(), expected_table_name);
                 assert_eq!(columns.len(), expected_columns.len());
                 for (index, column) in columns.iter().enumerate() {
-                    assert_eq!(column, &Ident::new(expected_columns[index].clone()));
+                    assert_eq!(
+                        column,
+                        &ObjectName::from(Ident::new(expected_columns[index].clone()))
+                    );
                 }
                 match *source.body {
                     SetExpr::Values(Values {
@@ -455,7 +458,7 @@ fn parse_update_set_from() {
         stmt,
         Statement::Update(Update {
             update_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             table: TableWithJoins {
                 relation: table_from_name(ObjectName::from(vec![Ident::new("t1")])),
                 joins: vec![],
@@ -471,7 +474,7 @@ fn parse_update_set_from() {
                         with: None,
                         body: Box::new(SetExpr::Select(Box::new(Select {
                             select_token: AttachedToken::empty(),
-                            optimizer_hint: None,
+                            optimizer_hints: vec![],
                             distinct: None,
                             select_modifiers: None,
                             top: None,
@@ -530,6 +533,7 @@ fn parse_update_set_from() {
                 ])),
             }),
             returning: None,
+            output: None,
             or: None,
             limit: None
         })
@@ -551,9 +555,10 @@ fn parse_update_with_table_alias() {
             returning,
             or: None,
             limit: None,
-            optimizer_hint: None,
+            optimizer_hints,
             update_token: _,
-        }) => {
+            output: _,
+        }) if optimizer_hints.is_empty() => {
             assert_eq!(
                 TableWithJoins {
                     relation: TableFactor::Table {
@@ -1278,6 +1283,26 @@ fn parse_select_expr_star() {
         d.supports_select_expr_star() && d.supports_select_wildcard_except()
     });
     dialects.verified_only_select("SELECT myfunc().* EXCEPT (foo) FROM T");
+}
+
+#[test]
+fn parse_select_wildcard_with_alias() {
+    let dialects = all_dialects_where(|d| d.supports_select_wildcard_with_alias());
+
+    // qualified wildcard with alias
+    dialects
+        .parse_sql_statements("SELECT t.* AS all_cols FROM t")
+        .unwrap();
+
+    // unqualified wildcard with alias
+    dialects
+        .parse_sql_statements("SELECT * AS all_cols FROM t")
+        .unwrap();
+
+    // mixed: regular column + qualified wildcard with alias
+    dialects
+        .parse_sql_statements("SELECT a.id, b.* AS b_cols FROM a JOIN b ON (a.id = b.a_id)")
+        .unwrap();
 }
 
 #[test]
@@ -5819,7 +5844,7 @@ fn test_parse_named_window() {
     let actual_select_only = dialects.verified_only_select(sql);
     let expected = Select {
         select_token: AttachedToken::empty(),
-        optimizer_hint: None,
+        optimizer_hints: vec![],
         distinct: None,
         select_modifiers: None,
         top: None,
@@ -6551,7 +6576,7 @@ fn parse_interval_and_or_xor() {
         with: None,
         body: Box::new(SetExpr::Select(Box::new(Select {
             select_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -8079,23 +8104,46 @@ fn parse_trim() {
         parse_sql_statements("SELECT TRIM(FOO 'xyz' FROM 'xyzfooxyz')").unwrap_err()
     );
 
-    //keep Snowflake/BigQuery TRIM syntax failing
-    let all_expected_snowflake = TestedDialects::new(vec![
-        //Box::new(GenericDialect {}),
-        Box::new(PostgreSqlDialect {}),
-        Box::new(MsSqlDialect {}),
-        Box::new(AnsiDialect {}),
-        //Box::new(SnowflakeDialect {}),
-        Box::new(HiveDialect {}),
-        Box::new(RedshiftSqlDialect {}),
-        Box::new(MySqlDialect {}),
-        //Box::new(BigQueryDialect {}),
-        Box::new(SQLiteDialect {}),
-    ]);
+    // dialects that support comma-separated TRIM syntax
+    let dialects = all_dialects_where(|d| d.supports_comma_separated_trim());
 
+    let sql = "SELECT TRIM('  xyz  ', ' ')";
+    let select = dialects.verified_only_select(sql);
     assert_eq!(
-        ParserError::ParserError("Expected: ), found: 'a'".to_owned()),
-        all_expected_snowflake
+        &Expr::Trim {
+            expr: Box::new(Expr::Value(
+                Value::SingleQuotedString("  xyz  ".to_owned()).with_empty_span()
+            )),
+            trim_where: None,
+            trim_what: None,
+            trim_characters: Some(vec![Expr::Value(
+                Value::SingleQuotedString(" ".to_owned()).with_empty_span()
+            )]),
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let sql = "SELECT TRIM('xyz', 'a')";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        &Expr::Trim {
+            expr: Box::new(Expr::Value(
+                Value::SingleQuotedString("xyz".to_owned()).with_empty_span()
+            )),
+            trim_where: None,
+            trim_what: None,
+            trim_characters: Some(vec![Expr::Value(
+                Value::SingleQuotedString("a".to_owned()).with_empty_span()
+            )]),
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    // dialects without comma-style TRIM syntax should fail
+    let unsupported_dialects = all_dialects_where(|d| !d.supports_comma_separated_trim());
+    assert_eq!(
+        ParserError::ParserError("Expected: ), found: ,".to_owned()),
+        unsupported_dialects
             .parse_sql_statements("SELECT TRIM('xyz', 'a')")
             .unwrap_err()
     );
@@ -8269,6 +8317,7 @@ fn parse_create_view() {
             params,
             name_before_not_exists: _,
             secure: _,
+            copy_grants: _,
         }) => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
@@ -8387,6 +8436,7 @@ fn parse_create_view_temporary() {
             params,
             name_before_not_exists: _,
             secure: _,
+            copy_grants: _,
         }) => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
@@ -8428,6 +8478,7 @@ fn parse_create_or_replace_view() {
             params,
             name_before_not_exists: _,
             secure: _,
+            copy_grants: _,
         }) => {
             assert_eq!(or_alter, false);
             assert_eq!("v", name.to_string());
@@ -8473,6 +8524,7 @@ fn parse_create_or_replace_materialized_view() {
             params,
             name_before_not_exists: _,
             secure: _,
+            copy_grants: _,
         }) => {
             assert_eq!(or_alter, false);
             assert_eq!("v", name.to_string());
@@ -8514,6 +8566,7 @@ fn parse_create_materialized_view() {
             params,
             name_before_not_exists: _,
             secure: _,
+            copy_grants: _,
         }) => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
@@ -8555,6 +8608,7 @@ fn parse_create_materialized_view_with_cluster_by() {
             params,
             name_before_not_exists: _,
             secure: _,
+            copy_grants: _,
         }) => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
@@ -8929,7 +8983,7 @@ fn lateral_function() {
     let actual_select_only = verified_only_select(sql);
     let expected = Select {
         select_token: AttachedToken::empty(),
-        optimizer_hint: None,
+        optimizer_hints: vec![],
         distinct: None,
         select_modifiers: None,
         top: None,
@@ -9932,7 +9986,7 @@ fn parse_merge() {
                         with: None,
                         body: Box::new(SetExpr::Select(Box::new(Select {
                             select_token: AttachedToken::empty(),
-                            optimizer_hint: None,
+                            optimizer_hints: vec![],
                             distinct: None,
                             select_modifiers: None,
                             top: None,
@@ -12356,7 +12410,7 @@ fn parse_unload() {
             query: Some(Box::new(Query {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
-                    optimizer_hint: None,
+                    optimizer_hints: vec![],
                     distinct: None,
                     select_modifiers: None,
                     top: None,
@@ -12677,7 +12731,7 @@ fn parse_connect_by() {
         dialects.verified_only_select(connect_by_1),
         Select {
             select_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -12744,7 +12798,7 @@ fn parse_connect_by() {
         dialects.verified_only_select(connect_by_2),
         Select {
             select_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -12812,7 +12866,7 @@ fn parse_connect_by() {
         dialects.verified_only_select(connect_by_3),
         Select {
             select_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -12900,7 +12954,7 @@ fn parse_connect_by() {
         dialects.verified_only_select(connect_by_5),
         Select {
             select_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -13863,7 +13917,7 @@ fn test_extract_seconds_ok() {
         with: None,
         body: Box::new(SetExpr::Select(Box::new(Select {
             select_token: AttachedToken::empty(),
-            optimizer_hint: None,
+            optimizer_hints: vec![],
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -15185,14 +15239,23 @@ fn parse_comments() {
         _ => unreachable!(),
     }
 
+    // https://www.postgresql.org/docs/current/sql-comment.html
     let object_types = [
         ("COLUMN", CommentObject::Column),
-        ("EXTENSION", CommentObject::Extension),
-        ("TABLE", CommentObject::Table),
-        ("SCHEMA", CommentObject::Schema),
         ("DATABASE", CommentObject::Database),
-        ("USER", CommentObject::User),
+        ("DOMAIN", CommentObject::Domain),
+        ("EXTENSION", CommentObject::Extension),
+        ("FUNCTION", CommentObject::Function),
+        ("INDEX", CommentObject::Index),
+        ("MATERIALIZED VIEW", CommentObject::MaterializedView),
+        ("PROCEDURE", CommentObject::Procedure),
         ("ROLE", CommentObject::Role),
+        ("SCHEMA", CommentObject::Schema),
+        ("SEQUENCE", CommentObject::Sequence),
+        ("TABLE", CommentObject::Table),
+        ("TYPE", CommentObject::Type),
+        ("USER", CommentObject::User),
+        ("VIEW", CommentObject::View),
     ];
     for (keyword, expected_object_type) in object_types.iter() {
         match all_dialects_where(|d| d.supports_comment_on())
@@ -16019,7 +16082,7 @@ fn test_select_from_first() {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
-                optimizer_hint: None,
+                optimizer_hints: vec![],
                 distinct: None,
                 select_modifiers: None,
                 top: None,
@@ -17291,7 +17354,9 @@ fn test_select_exclude() {
         SelectItem::Wildcard(WildcardAdditionalOptions { opt_exclude, .. }) => {
             assert_eq!(
                 *opt_exclude,
-                Some(ExcludeSelectItem::Single(Ident::new("c1")))
+                Some(ExcludeSelectItem::Single(ObjectName::from(Ident::new(
+                    "c1"
+                ))))
             );
         }
         _ => unreachable!(),
@@ -17304,8 +17369,8 @@ fn test_select_exclude() {
             assert_eq!(
                 *opt_exclude,
                 Some(ExcludeSelectItem::Multiple(vec![
-                    Ident::new("c1"),
-                    Ident::new("c2")
+                    ObjectName::from(Ident::new("c1")),
+                    ObjectName::from(Ident::new("c2")),
                 ]))
             );
         }
@@ -17316,7 +17381,9 @@ fn test_select_exclude() {
         SelectItem::Wildcard(WildcardAdditionalOptions { opt_exclude, .. }) => {
             assert_eq!(
                 *opt_exclude,
-                Some(ExcludeSelectItem::Single(Ident::new("c1")))
+                Some(ExcludeSelectItem::Single(ObjectName::from(Ident::new(
+                    "c1"
+                ))))
             );
         }
         _ => unreachable!(),
@@ -17338,7 +17405,9 @@ fn test_select_exclude() {
     }
     assert_eq!(
         select.exclude,
-        Some(ExcludeSelectItem::Single(Ident::new("c1")))
+        Some(ExcludeSelectItem::Single(ObjectName::from(Ident::new(
+            "c1"
+        ))))
     );
 
     let dialects = all_dialects_where(|d| {
@@ -17349,7 +17418,9 @@ fn test_select_exclude() {
         SelectItem::Wildcard(WildcardAdditionalOptions { opt_exclude, .. }) => {
             assert_eq!(
                 *opt_exclude,
-                Some(ExcludeSelectItem::Single(Ident::new("c1")))
+                Some(ExcludeSelectItem::Single(ObjectName::from(Ident::new(
+                    "c1"
+                ))))
             );
         }
         _ => unreachable!(),
@@ -17384,6 +17455,32 @@ fn test_select_exclude() {
             .unwrap(),
         ParserError::ParserError("Expected: end of statement, found: EXCLUDE".to_string())
     );
+}
+
+#[test]
+fn test_select_exclude_qualified_names() {
+    // EXCLUDE should accept qualified names like `f.col` parsed as ObjectName.
+    let dialects = all_dialects_where(|d| d.supports_select_wildcard_exclude());
+
+    // Qualified name in multi-column EXCLUDE list: f.* EXCLUDE (f.col1, f.col2)
+    let select = dialects
+        .verified_only_select("SELECT f.* EXCLUDE (f.account_canonical_id, f.amount) FROM t AS f");
+    match &select.projection[0] {
+        SelectItem::QualifiedWildcard(_, WildcardAdditionalOptions { opt_exclude, .. }) => {
+            assert_eq!(
+                *opt_exclude,
+                Some(ExcludeSelectItem::Multiple(vec![
+                    ObjectName::from(vec![Ident::new("f"), Ident::new("account_canonical_id")]),
+                    ObjectName::from(vec![Ident::new("f"), Ident::new("amount")]),
+                ]))
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // Plain identifiers must still parse successfully.
+    dialects.verified_only_select("SELECT f.* EXCLUDE (account_canonical_id) FROM t AS f");
+    dialects.verified_only_select("SELECT f.* EXCLUDE (col1, col2) FROM t AS f");
 }
 
 #[test]
@@ -18553,4 +18650,20 @@ fn parse_array_subscript() {
 
     dialects.verified_stmt("SELECT arr[1][2]");
     dialects.verified_stmt("SELECT arr[:][:]");
+}
+
+#[test]
+fn test_wildcard_func_arg() {
+    // Wildcard (*) and wildcard with EXCLUDE as a function argument.
+    // Documented for Snowflake's HASH function but parsed for any dialect that
+    // supports the wildcard-EXCLUDE select syntax.
+    let dialects = all_dialects_where(|d| d.supports_select_wildcard_exclude());
+
+    // Wildcard with EXCLUDE — canonical form has a space before the parenthesised column list.
+    dialects.one_statement_parses_to(
+        "SELECT HASH(* EXCLUDE(col1)) FROM t",
+        "SELECT HASH(* EXCLUDE (col1)) FROM t",
+    );
+    dialects.verified_expr("HASH(* EXCLUDE (col1))");
+    dialects.verified_expr("HASH(* EXCLUDE (col1, col2))");
 }

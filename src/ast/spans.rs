@@ -582,6 +582,9 @@ impl Spanned for CreateTable {
             refresh_mode: _,
             initialize: _,
             require_user: _,
+            diststyle: _,
+            distkey: _,
+            sortkey: _,
         } = self;
 
         union_spans(
@@ -898,12 +901,13 @@ impl Spanned for Delete {
     fn span(&self) -> Span {
         let Delete {
             delete_token,
-            optimizer_hint: _,
+            optimizer_hints: _,
             tables,
             from,
             using,
             selection,
             returning,
+            output,
             order_by,
             limit,
         } = self;
@@ -921,6 +925,7 @@ impl Spanned for Delete {
                     )
                     .chain(selection.iter().map(|i| i.span()))
                     .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
+                    .chain(output.iter().map(|i| i.span()))
                     .chain(order_by.iter().map(|i| i.span()))
                     .chain(limit.iter().map(|i| i.span())),
             ),
@@ -932,12 +937,13 @@ impl Spanned for Update {
     fn span(&self) -> Span {
         let Update {
             update_token,
-            optimizer_hint: _,
+            optimizer_hints: _,
             table,
             assignments,
             from,
             selection,
             returning,
+            output,
             or: _,
             limit,
         } = self;
@@ -949,6 +955,7 @@ impl Spanned for Update {
                 .chain(from.iter().map(|i| i.span()))
                 .chain(selection.iter().map(|i| i.span()))
                 .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
+                .chain(output.iter().map(|i| i.span()))
                 .chain(limit.iter().map(|i| i.span())),
         )
     }
@@ -1185,6 +1192,7 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::OwnerTo { .. } => Span::empty(),
             AlterTableOperation::ClusterBy { exprs } => union_spans(exprs.iter().map(|e| e.span())),
             AlterTableOperation::DropClusteringKey => Span::empty(),
+            AlterTableOperation::AlterSortKey { .. } => Span::empty(),
             AlterTableOperation::SuspendRecluster => Span::empty(),
             AlterTableOperation::ResumeRecluster => Span::empty(),
             AlterTableOperation::Refresh { .. } => Span::empty(),
@@ -1296,7 +1304,7 @@ impl Spanned for Insert {
     fn span(&self) -> Span {
         let Insert {
             insert_token,
-            optimizer_hint: _,
+            optimizer_hints: _,
             or: _,     // enum, sqlite specific
             ignore: _, // bool
             into: _,   // bool
@@ -1310,6 +1318,7 @@ impl Spanned for Insert {
             has_table_keyword: _, // bool
             on,
             returning,
+            output,
             replace_into: _, // bool
             priority: _,     // todo, mysql specific
             insert_alias: _, // todo, mysql specific
@@ -1325,14 +1334,15 @@ impl Spanned for Insert {
         union_spans(
             core::iter::once(insert_token.0.span)
                 .chain(core::iter::once(table.span()))
-                .chain(table_alias.as_ref().map(|i| i.span))
-                .chain(columns.iter().map(|i| i.span))
+                .chain(table_alias.iter().map(|k| k.alias.span))
+                .chain(columns.iter().map(|i| i.span()))
                 .chain(source.as_ref().map(|q| q.span()))
                 .chain(assignments.iter().map(|i| i.span()))
                 .chain(partitioned.iter().flat_map(|i| i.iter().map(|k| k.span())))
                 .chain(after_columns.iter().map(|i| i.span))
                 .chain(on.as_ref().map(|i| i.span()))
-                .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span()))),
+                .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
+                .chain(output.iter().map(|i| i.span())),
         )
     }
 }
@@ -1822,6 +1832,7 @@ impl Spanned for WildcardAdditionalOptions {
             opt_except,
             opt_replace,
             opt_rename,
+            opt_alias,
         } = self;
 
         union_spans(
@@ -1830,7 +1841,8 @@ impl Spanned for WildcardAdditionalOptions {
                 .chain(opt_exclude.as_ref().map(|i| i.span()))
                 .chain(opt_rename.as_ref().map(|i| i.span()))
                 .chain(opt_replace.as_ref().map(|i| i.span()))
-                .chain(opt_except.as_ref().map(|i| i.span())),
+                .chain(opt_except.as_ref().map(|i| i.span()))
+                .chain(opt_alias.as_ref().map(|i| i.span)),
         )
     }
 }
@@ -1845,8 +1857,8 @@ impl Spanned for IlikeSelectItem {
 impl Spanned for ExcludeSelectItem {
     fn span(&self) -> Span {
         match self {
-            ExcludeSelectItem::Single(ident) => ident.span,
-            ExcludeSelectItem::Multiple(vec) => union_spans(vec.iter().map(|i| i.span)),
+            ExcludeSelectItem::Single(name) => name.span(),
+            ExcludeSelectItem::Multiple(vec) => union_spans(vec.iter().map(|i| i.span())),
         }
     }
 }
@@ -2126,6 +2138,7 @@ impl Spanned for FunctionArg {
 ///
 /// Missing spans:
 /// - [FunctionArgExpr::Wildcard]
+/// - [FunctionArgExpr::WildcardWithOptions]
 impl Spanned for FunctionArgExpr {
     fn span(&self) -> Span {
         match self {
@@ -2134,6 +2147,7 @@ impl Spanned for FunctionArgExpr {
                 union_spans(object_name.0.iter().map(|i| i.span()))
             }
             FunctionArgExpr::Wildcard => Span::empty(),
+            FunctionArgExpr::WildcardWithOptions(_) => Span::empty(),
         }
     }
 }
@@ -2244,7 +2258,7 @@ impl Spanned for Select {
     fn span(&self) -> Span {
         let Select {
             select_token,
-            optimizer_hint: _,
+            optimizer_hints: _,
             distinct: _, // todo
             select_modifiers: _,
             top: _, // todo, mysql specific
@@ -2838,7 +2852,7 @@ WHERE id = 1
         // ~ individual tokens within the statement
         let Statement::Merge(Merge {
             merge_token,
-            optimizer_hint: _,
+            optimizer_hints: _,
             into: _,
             table: _,
             source: _,

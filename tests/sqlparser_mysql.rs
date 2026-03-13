@@ -945,6 +945,15 @@ fn parse_create_table_primary_and_unique_key_characteristic_test() {
 }
 
 #[test]
+fn parse_create_table_column_key_options() {
+    mysql_and_generic().verified_stmt("CREATE TABLE foo (x INT UNIQUE KEY)");
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (x INT KEY)",
+        "CREATE TABLE foo (x INT PRIMARY KEY)",
+    );
+}
+
+#[test]
 fn parse_create_table_comment() {
     let without_equal = "CREATE TABLE foo (bar INT) COMMENT 'baz'";
     let with_equal = "CREATE TABLE foo (bar INT) COMMENT = 'baz'";
@@ -1435,7 +1444,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
-                optimizer_hint: None,
+                optimizer_hints: vec![],
                 distinct: None,
                 select_modifiers: None,
                 top: None,
@@ -1492,7 +1501,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
-                optimizer_hint: None,
+                optimizer_hints: vec![],
                 distinct: None,
                 select_modifiers: None,
                 top: None,
@@ -1541,7 +1550,7 @@ fn parse_escaped_backticks_with_escape() {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
-                optimizer_hint: None,
+                optimizer_hints: vec![],
                 distinct: None,
                 select_modifiers: None,
                 top: None,
@@ -1594,7 +1603,7 @@ fn parse_escaped_backticks_with_no_escape() {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
-                optimizer_hint: None,
+                optimizer_hints: vec![],
                 distinct: None,
                 select_modifiers: None,
                 top: None,
@@ -1904,7 +1913,13 @@ fn parse_simple_insert() {
                 TableObject::TableName(ObjectName::from(vec![Ident::new("tasks")])),
                 table_name
             );
-            assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
+            assert_eq!(
+                vec![
+                    ObjectName::from(Ident::new("title")),
+                    ObjectName::from(Ident::new("priority"))
+                ],
+                columns
+            );
             assert!(on.is_none());
             assert_eq!(
                 Some(Box::new(Query {
@@ -1969,7 +1984,13 @@ fn parse_ignore_insert() {
                 TableObject::TableName(ObjectName::from(vec![Ident::new("tasks")])),
                 table_name
             );
-            assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
+            assert_eq!(
+                vec![
+                    ObjectName::from(Ident::new("title")),
+                    ObjectName::from(Ident::new("priority"))
+                ],
+                columns
+            );
             assert!(on.is_none());
             assert!(ignore);
             assert_eq!(
@@ -2019,7 +2040,13 @@ fn parse_priority_insert() {
                 TableObject::TableName(ObjectName::from(vec![Ident::new("tasks")])),
                 table_name
             );
-            assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
+            assert_eq!(
+                vec![
+                    ObjectName::from(Ident::new("title")),
+                    ObjectName::from(Ident::new("priority"))
+                ],
+                columns
+            );
             assert!(on.is_none());
             assert_eq!(priority, Some(HighPriority));
             assert_eq!(
@@ -2066,7 +2093,13 @@ fn parse_priority_insert() {
                 TableObject::TableName(ObjectName::from(vec![Ident::new("tasks")])),
                 table_name
             );
-            assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
+            assert_eq!(
+                vec![
+                    ObjectName::from(Ident::new("title")),
+                    ObjectName::from(Ident::new("priority"))
+                ],
+                columns
+            );
             assert!(on.is_none());
             assert_eq!(priority, Some(LowPriority));
             assert_eq!(
@@ -2114,7 +2147,10 @@ fn parse_insert_as() {
                 TableObject::TableName(ObjectName::from(vec![Ident::with_quote('`', "table")])),
                 table_name
             );
-            assert_eq!(vec![Ident::with_quote('`', "date")], columns);
+            assert_eq!(
+                vec![ObjectName::from(Ident::with_quote('`', "date"))],
+                columns
+            );
             let insert_alias = insert_alias.unwrap();
 
             assert_eq!(
@@ -2167,7 +2203,10 @@ fn parse_insert_as() {
                 table_name
             );
             assert_eq!(
-                vec![Ident::with_quote('`', "id"), Ident::with_quote('`', "date")],
+                vec![
+                    ObjectName::from(Ident::with_quote('`', "id")),
+                    ObjectName::from(Ident::with_quote('`', "date"))
+                ],
                 columns
             );
             let insert_alias = insert_alias.unwrap();
@@ -2229,7 +2268,13 @@ fn parse_replace_insert() {
                 TableObject::TableName(ObjectName::from(vec![Ident::new("tasks")])),
                 table_name
             );
-            assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
+            assert_eq!(
+                vec![
+                    ObjectName::from(Ident::new("title")),
+                    ObjectName::from(Ident::new("priority"))
+                ],
+                columns
+            );
             assert!(on.is_none());
             assert!(replace_into);
             assert_eq!(priority, Some(Delayed));
@@ -2323,12 +2368,12 @@ fn parse_insert_with_on_duplicate_update() {
             );
             assert_eq!(
                 vec![
-                    Ident::new("name"),
-                    Ident::new("description"),
-                    Ident::new("perm_create"),
-                    Ident::new("perm_read"),
-                    Ident::new("perm_update"),
-                    Ident::new("perm_delete")
+                    ObjectName::from(Ident::new("name")),
+                    ObjectName::from(Ident::new("description")),
+                    ObjectName::from(Ident::new("perm_create")),
+                    ObjectName::from(Ident::new("perm_read")),
+                    ObjectName::from(Ident::new("perm_update")),
+                    ObjectName::from(Ident::new("perm_delete"))
                 ],
                 columns
             );
@@ -2415,7 +2460,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                 q.body,
                 Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
-                    optimizer_hint: None,
+                    optimizer_hints: vec![],
                     distinct: None,
                     select_modifiers: None,
                     top: None,
@@ -2591,7 +2636,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                 q.body,
                 Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
-                    optimizer_hint: None,
+                    optimizer_hints: vec![],
                     distinct: None,
                     select_modifiers: None,
                     top: None,
@@ -2642,7 +2687,10 @@ fn parse_insert_with_numeric_prefix_column_name() {
                 TableObject::TableName(ObjectName::from(vec![Ident::new("s1"), Ident::new("t1")])),
                 table_name
             );
-            assert_eq!(vec![Ident::new("123col_$@length123")], columns);
+            assert_eq!(
+                vec![ObjectName::from(Ident::new("123col_$@length123"))],
+                columns
+            );
         }
         _ => unreachable!(),
     }
@@ -2660,9 +2708,10 @@ fn parse_update_with_joins() {
             returning,
             or: None,
             limit: None,
-            optimizer_hint: None,
+            optimizer_hints,
             update_token: _,
-        }) => {
+            output: _,
+        }) if optimizer_hints.is_empty() => {
             assert_eq!(
                 TableWithJoins {
                     relation: TableFactor::Table {
@@ -3226,7 +3275,7 @@ fn parse_substring_in_select() {
                     with: None,
                     body: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
-                        optimizer_hint: None,
+                        optimizer_hints: vec![],
                         distinct: Some(Distinct::Distinct),
                         select_modifiers: None,
                         top: None,
@@ -3572,7 +3621,7 @@ fn parse_hex_string_introducer() {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
-                optimizer_hint: None,
+                optimizer_hints: vec![],
                 distinct: None,
                 select_modifiers: None,
                 top: None,
@@ -4649,6 +4698,36 @@ fn test_optimizer_hints() {
         "\
        DELETE /*+ foobar */ FROM table_name",
     );
+
+    // prefixed hints: any alphanumeric prefix before `+` is captured
+    let select = mysql_dialect.verified_only_select("SELECT /*abc+ text */ 1");
+    assert_eq!(select.optimizer_hints.len(), 1);
+    assert_eq!(select.optimizer_hints[0].prefix, "abc");
+    assert_eq!(select.optimizer_hints[0].text, " text ");
+
+    // multiple hints with different prefixes
+    let select = mysql_dialect.verified_only_select("SELECT /*+ A */ /*x2+ B */ 1");
+    assert_eq!(select.optimizer_hints.len(), 2);
+    assert_eq!(select.optimizer_hints[0].prefix, "");
+    assert_eq!(select.optimizer_hints[0].text, " A ");
+    assert_eq!(select.optimizer_hints[1].prefix, "x2");
+    assert_eq!(select.optimizer_hints[1].text, " B ");
+
+    // hints mixed with regular comments: regular comments are skipped
+    let select = mysql_dialect.verified_only_select_with_canonical(
+        "SELECT /*+ A */ /* Regular comment */ /*x2+ B */ 1",
+        "SELECT /*+ A */ /*x2+ B */ 1",
+    );
+    assert_eq!(select.optimizer_hints.len(), 2);
+    assert_eq!(select.optimizer_hints[0].prefix, "");
+    assert_eq!(select.optimizer_hints[0].text, " A ");
+    assert_eq!(select.optimizer_hints[1].prefix, "x2");
+    assert_eq!(select.optimizer_hints[1].text, " B ");
+
+    // prefixed hints in INSERT/UPDATE/DELETE
+    mysql_dialect.verified_stmt("INSERT /*abc+ append */ INTO t2 VALUES (2)");
+    mysql_dialect.verified_stmt("UPDATE /*abc+ PARALLEL */ table_name SET column1 = 1");
+    mysql_dialect.verified_stmt("DELETE /*abc+ ENABLE_DML */ FROM table_name");
 }
 
 #[test]

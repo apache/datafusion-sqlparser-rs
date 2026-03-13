@@ -457,6 +457,12 @@ pub enum AlterTableOperation {
     },
     /// Remove the clustering key from the table.
     DropClusteringKey,
+    /// Redshift `ALTER SORTKEY (column_list)`
+    /// <https://docs.aws.amazon.com/redshift/latest/dg/r_ALTER_TABLE.html>
+    AlterSortKey {
+        /// Column references in the sort key.
+        columns: Vec<Expr>,
+    },
     /// Suspend background reclustering operations.
     SuspendRecluster,
     /// Resume background reclustering operations.
@@ -991,6 +997,10 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::DropClusteringKey => {
                 write!(f, "DROP CLUSTERING KEY")?;
+                Ok(())
+            }
+            AlterTableOperation::AlterSortKey { columns } => {
+                write!(f, "ALTER SORTKEY({})", display_comma_separated(columns))?;
                 Ok(())
             }
             AlterTableOperation::SuspendRecluster => {
@@ -2040,7 +2050,7 @@ impl fmt::Display for ColumnOption {
                 Ok(())
             }
             Unique(constraint) => {
-                write!(f, "UNIQUE")?;
+                write!(f, "UNIQUE{:>}", constraint.index_type_display)?;
                 if let Some(characteristics) = &constraint.characteristics {
                     write!(f, " {characteristics}")?;
                 }
@@ -3032,6 +3042,15 @@ pub struct CreateTable {
     /// Snowflake "REQUIRE USER" clause for dybamic tables
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-dynamic-table>
     pub require_user: bool,
+    /// Redshift `DISTSTYLE` option
+    /// <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html>
+    pub diststyle: Option<DistStyle>,
+    /// Redshift `DISTKEY` option
+    /// <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html>
+    pub distkey: Option<Expr>,
+    /// Redshift `SORTKEY` option
+    /// <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html>
+    pub sortkey: Option<Vec<Expr>>,
 }
 
 impl fmt::Display for CreateTable {
@@ -3330,6 +3349,15 @@ impl fmt::Display for CreateTable {
         if self.strict {
             write!(f, " STRICT")?;
         }
+        if let Some(diststyle) = &self.diststyle {
+            write!(f, " DISTSTYLE {diststyle}")?;
+        }
+        if let Some(distkey) = &self.distkey {
+            write!(f, " DISTKEY({distkey})")?;
+        }
+        if let Some(sortkey) = &self.sortkey {
+            write!(f, " SORTKEY({})", display_comma_separated(sortkey))?;
+        }
         if let Some(query) = &self.query {
             write!(f, " AS {query}")?;
         }
@@ -3413,6 +3441,34 @@ impl fmt::Display for PartitionBoundValue {
             PartitionBoundValue::Expr(expr) => write!(f, "{expr}"),
             PartitionBoundValue::MinValue => write!(f, "MINVALUE"),
             PartitionBoundValue::MaxValue => write!(f, "MAXVALUE"),
+        }
+    }
+}
+
+/// Redshift distribution style for `CREATE TABLE`.
+///
+/// See [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DistStyle {
+    /// `DISTSTYLE AUTO`
+    Auto,
+    /// `DISTSTYLE EVEN`
+    Even,
+    /// `DISTSTYLE KEY`
+    Key,
+    /// `DISTSTYLE ALL`
+    All,
+}
+
+impl fmt::Display for DistStyle {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DistStyle::Auto => write!(f, "AUTO"),
+            DistStyle::Even => write!(f, "EVEN"),
+            DistStyle::Key => write!(f, "KEY"),
+            DistStyle::All => write!(f, "ALL"),
         }
     }
 }
@@ -4259,6 +4315,9 @@ pub struct CreateView {
     pub if_not_exists: bool,
     /// if true, has SQLite `TEMP` or `TEMPORARY` clause <https://www.sqlite.org/lang_createview.html>
     pub temporary: bool,
+    /// Snowflake: `COPY GRANTS` clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-view>
+    pub copy_grants: bool,
     /// if not None, has Clickhouse `TO` clause, specify the table into which to insert results
     /// <https://clickhouse.com/docs/en/sql-reference/statements/create/view#materialized-view>
     pub to: Option<ObjectName>,
@@ -4302,6 +4361,9 @@ impl fmt::Display for CreateView {
                 .map(|to| format!(" TO {to}"))
                 .unwrap_or_default()
         )?;
+        if self.copy_grants {
+            write!(f, " COPY GRANTS")?;
+        }
         if !self.columns.is_empty() {
             write!(f, " ({})", display_comma_separated(&self.columns))?;
         }

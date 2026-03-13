@@ -592,6 +592,16 @@ fn parse_create_table_with_options() {
 }
 
 #[test]
+fn parse_create_external_table_with_options() {
+    bigquery().verified_stmt(
+        "CREATE EXTERNAL TABLE dataset_id.table1 (hvr_tx_seq STRING) OPTIONS(format = 'CSV')",
+    );
+    bigquery().verified_stmt(
+        "CREATE EXTERNAL TABLE dataset_id.table1 (hvr_tx_seq STRING) OPTIONS(format = 'CSV', allow_quoted_newlines = true, encoding = 'UTF8')",
+    );
+}
+
+#[test]
 fn parse_nested_data_types() {
     let sql = "CREATE TABLE table (x STRUCT<a ARRAY<INT64>, b BYTES(42)>, y ARRAY<STRUCT<INT64>>)";
     match bigquery_and_generic().one_statement_parses_to(sql, sql) {
@@ -2681,7 +2691,7 @@ fn test_export_data() {
                         }),
                         Span::empty()
                     )),
-                    optimizer_hint: None,
+                    optimizer_hints: vec![],
                     distinct: None,
                     select_modifiers: None,
                     top: None,
@@ -2787,7 +2797,7 @@ fn test_export_data() {
                         }),
                         Span::empty()
                     )),
-                    optimizer_hint: None,
+                    optimizer_hints: vec![],
                     distinct: None,
                     select_modifiers: None,
                     top: None,

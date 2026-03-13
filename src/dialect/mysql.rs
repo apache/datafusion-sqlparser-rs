@@ -206,6 +206,11 @@ impl Dialect for MySqlDialect {
     fn supports_constraint_keyword_without_name(&self) -> bool {
         true
     }
+
+    /// See: <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
+    fn supports_key_column_option(&self) -> bool {
+        true
+    }
 }
 
 /// `LOCK TABLES`
@@ -244,7 +249,7 @@ fn parse_lock_tables_type(parser: &mut Parser) -> Result<LockTableType, ParserEr
     } else if parser.parse_keywords(&[Keyword::LOW_PRIORITY, Keyword::WRITE]) {
         Ok(LockTableType::Write { low_priority: true })
     } else {
-        parser.expected("an lock type in LOCK TABLES", parser.peek_token())
+        parser.expected_ref("an lock type in LOCK TABLES", parser.peek_token_ref())
     }
 }
 

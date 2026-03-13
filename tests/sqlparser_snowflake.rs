@@ -1474,7 +1474,9 @@ fn snowflake_and_generic() -> TestedDialects {
 fn test_select_wildcard_with_exclude() {
     let select = snowflake_and_generic().verified_only_select("SELECT * EXCLUDE (col_a) FROM data");
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
-        opt_exclude: Some(ExcludeSelectItem::Multiple(vec![Ident::new("col_a")])),
+        opt_exclude: Some(ExcludeSelectItem::Multiple(vec![ObjectName::from(
+            Ident::new("col_a"),
+        )])),
         ..Default::default()
     });
     assert_eq!(expected, select.projection[0]);
@@ -1484,7 +1486,9 @@ fn test_select_wildcard_with_exclude() {
     let expected = SelectItem::QualifiedWildcard(
         SelectItemQualifiedWildcardKind::ObjectName(ObjectName::from(vec![Ident::new("name")])),
         WildcardAdditionalOptions {
-            opt_exclude: Some(ExcludeSelectItem::Single(Ident::new("department_id"))),
+            opt_exclude: Some(ExcludeSelectItem::Single(ObjectName::from(Ident::new(
+                "department_id",
+            )))),
             ..Default::default()
         },
     );
@@ -1494,8 +1498,8 @@ fn test_select_wildcard_with_exclude() {
         .verified_only_select("SELECT * EXCLUDE (department_id, employee_id) FROM employee_table");
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
         opt_exclude: Some(ExcludeSelectItem::Multiple(vec![
-            Ident::new("department_id"),
-            Ident::new("employee_id"),
+            ObjectName::from(Ident::new("department_id")),
+            ObjectName::from(Ident::new("employee_id")),
         ])),
         ..Default::default()
     });
@@ -1580,7 +1584,9 @@ fn test_select_wildcard_with_exclude_and_rename() {
     let select = snowflake_and_generic()
         .verified_only_select("SELECT * EXCLUDE col_z RENAME col_a AS col_b FROM data");
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
-        opt_exclude: Some(ExcludeSelectItem::Single(Ident::new("col_z"))),
+        opt_exclude: Some(ExcludeSelectItem::Single(ObjectName::from(Ident::new(
+            "col_z",
+        )))),
         opt_rename: Some(RenameSelectItem::Single(IdentWithAlias {
             ident: Ident::new("col_a"),
             alias: Ident::new("col_b"),
@@ -4605,6 +4611,27 @@ END
 }
 
 #[test]
+fn test_begin_transaction() {
+    snowflake().verified_stmt("BEGIN TRANSACTION");
+    snowflake().verified_stmt("BEGIN WORK");
+
+    // BEGIN TRANSACTION with statements
+    let stmts = snowflake()
+        .parse_sql_statements("BEGIN TRANSACTION; DROP TABLE IF EXISTS bla; COMMIT")
+        .unwrap();
+    assert_eq!(3, stmts.len());
+
+    // Bare BEGIN (no TRANSACTION keyword) with statements
+    let stmts = snowflake()
+        .parse_sql_statements("BEGIN; DROP TABLE IF EXISTS bla; COMMIT")
+        .unwrap();
+    assert_eq!(3, stmts.len());
+
+    // Bare BEGIN at EOF (no semicolon, no TRANSACTION keyword)
+    snowflake().verified_stmt("BEGIN");
+}
+
+#[test]
 fn test_snowflake_fetch_clause_syntax() {
     let canonical = "SELECT c1 FROM fetch_test FETCH FIRST 2 ROWS ONLY";
     snowflake().verified_only_select_with_canonical("SELECT c1 FROM fetch_test FETCH 2", canonical);
@@ -4642,6 +4669,17 @@ fn test_snowflake_create_view_with_composite_policy_name() {
     let create_view_with_tag =
         r#"CREATE VIEW X (COL WITH MASKING POLICY foo.bar.baz) AS SELECT * FROM Y"#;
     snowflake().verified_stmt(create_view_with_tag);
+}
+
+#[test]
+fn test_snowflake_create_view_copy_grants() {
+    snowflake().verified_stmt("CREATE OR REPLACE VIEW bla COPY GRANTS AS (SELECT * FROM source)");
+    snowflake()
+        .verified_stmt("CREATE OR REPLACE SECURE VIEW bla COPY GRANTS AS (SELECT * FROM source)");
+    // COPY GRANTS with column list
+    snowflake().verified_stmt(
+        "CREATE OR REPLACE VIEW bla COPY GRANTS (a, b) AS (SELECT a, b FROM source)",
+    );
 }
 
 #[test]

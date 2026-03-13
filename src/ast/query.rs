@@ -156,12 +156,12 @@ pub enum SetExpr {
     /// UNION/EXCEPT/INTERSECT of two queries
     /// A set operation combining two query expressions.
     SetOperation {
+        /// Left operand of the set operation.
+        left: Box<SetExpr>,
         /// The set operator used (e.g. `UNION`, `EXCEPT`).
         op: SetOperator,
         /// Optional quantifier (`ALL`, `DISTINCT`, etc.).
         set_quantifier: SetQuantifier,
-        /// Left operand of the set operation.
-        left: Box<SetExpr>,
         /// Right operand of the set operation.
         right: Box<SetExpr>,
     },
@@ -442,14 +442,15 @@ impl SelectModifiers {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "visitor", visit(with = "visit_select"))]
 pub struct Select {
     /// Token for the `SELECT` keyword
     pub select_token: AttachedToken,
-    /// A query optimizer hint
+    /// Query optimizer hints
     ///
     /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
     /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
-    pub optimizer_hint: Option<OptimizerHint>,
+    pub optimizer_hints: Vec<OptimizerHint>,
     /// `SELECT [DISTINCT] ...`
     pub distinct: Option<Distinct>,
     /// MySQL-specific SELECT modifiers.
@@ -521,7 +522,7 @@ impl fmt::Display for Select {
             }
         }
 
-        if let Some(hint) = self.optimizer_hint.as_ref() {
+        for hint in &self.optimizer_hints {
             f.write_str(" ")?;
             hint.fmt(f)?;
         }
@@ -933,6 +934,9 @@ pub struct WildcardAdditionalOptions {
     pub opt_replace: Option<ReplaceSelectItem>,
     /// `[RENAME ...]`.
     pub opt_rename: Option<RenameSelectItem>,
+    /// `[AS <alias>]`.
+    ///  Redshift syntax: <https://docs.aws.amazon.com/redshift/latest/dg/r_SELECT_list.html>
+    pub opt_alias: Option<Ident>,
 }
 
 impl Default for WildcardAdditionalOptions {
@@ -944,6 +948,7 @@ impl Default for WildcardAdditionalOptions {
             opt_except: None,
             opt_replace: None,
             opt_rename: None,
+            opt_alias: None,
         }
     }
 }
@@ -964,6 +969,9 @@ impl fmt::Display for WildcardAdditionalOptions {
         }
         if let Some(rename) = &self.opt_rename {
             write!(f, " {rename}")?;
+        }
+        if let Some(alias) = &self.opt_alias {
+            write!(f, " AS {alias}")?;
         }
         Ok(())
     }
@@ -1010,13 +1018,13 @@ pub enum ExcludeSelectItem {
     /// ```plaintext
     /// <col_name>
     /// ```
-    Single(Ident),
+    Single(ObjectName),
     /// Multiple column names inside parenthesis.
     /// # Syntax
     /// ```plaintext
     /// (<col_name>, <col_name>, ...)
     /// ```
-    Multiple(Vec<Ident>),
+    Multiple(Vec<ObjectName>),
 }
 
 impl fmt::Display for ExcludeSelectItem {

@@ -17613,10 +17613,22 @@ impl<'a> Parser<'a> {
     /// beginning of a subquery possibly preceded by CTEs;
     /// i.e. `(WITH ...` or `(SELECT ...`.
     fn peek_subquery_or_cte_start(&mut self) -> bool {
-        matches!(self.peek_tokens_ref(), [
-            TokenWithSpan { token: Token::LParen, .. },
-            TokenWithSpan { token: Token::Word(Word { keyword: Keyword::SELECT | Keyword::WITH, .. }), .. },
-        ])
+        matches!(
+            self.peek_tokens_ref(),
+            [
+                TokenWithSpan {
+                    token: Token::LParen,
+                    ..
+                },
+                TokenWithSpan {
+                    token: Token::Word(Word {
+                        keyword: Keyword::SELECT | Keyword::WITH,
+                        ..
+                    }),
+                    ..
+                },
+            ]
+        )
     }
 
     fn parse_conflict_clause(&mut self) -> Option<SqliteOnConflict> {

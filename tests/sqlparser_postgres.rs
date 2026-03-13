@@ -8703,3 +8703,63 @@ fn parse_pg_analyze() {
         _ => panic!("Expected Analyze, got: {stmt:?}"),
     }
 }
+
+#[test]
+fn parse_lock_table() {
+    pg_and_generic().one_statement_parses_to(
+        "LOCK public.widgets IN EXCLUSIVE MODE",
+        "LOCK TABLE public.widgets IN EXCLUSIVE MODE",
+    );
+    pg_and_generic().one_statement_parses_to(
+        "LOCK TABLE public.widgets NOWAIT",
+        "LOCK TABLE public.widgets NOWAIT",
+    );
+
+    let stmt = pg_and_generic().verified_stmt(
+        "LOCK TABLE ONLY public.widgets, analytics.events * IN SHARE ROW EXCLUSIVE MODE NOWAIT",
+    );
+    match stmt {
+        Statement::Lock(lock) => {
+            assert_eq!(lock.tables.len(), 2);
+            assert_eq!(lock.tables[0].name.to_string(), "public.widgets");
+            assert!(lock.tables[0].only);
+            assert!(!lock.tables[0].has_asterisk);
+            assert_eq!(lock.tables[1].name.to_string(), "analytics.events");
+            assert!(!lock.tables[1].only);
+            assert!(lock.tables[1].has_asterisk);
+            assert_eq!(lock.lock_mode, Some(LockTableMode::ShareRowExclusive));
+            assert!(lock.nowait);
+        }
+        _ => panic!("Expected Lock, got: {stmt:?}"),
+    }
+
+    let lock_modes = [
+        ("ACCESS SHARE", LockTableMode::AccessShare),
+        ("ROW SHARE", LockTableMode::RowShare),
+        ("ROW EXCLUSIVE", LockTableMode::RowExclusive),
+        (
+            "SHARE UPDATE EXCLUSIVE",
+            LockTableMode::ShareUpdateExclusive,
+        ),
+        ("SHARE", LockTableMode::Share),
+        ("SHARE ROW EXCLUSIVE", LockTableMode::ShareRowExclusive),
+        ("EXCLUSIVE", LockTableMode::Exclusive),
+        ("ACCESS EXCLUSIVE", LockTableMode::AccessExclusive),
+    ];
+
+    for (mode_sql, expected_mode) in lock_modes {
+        let stmt = pg_and_generic()
+            .verified_stmt(&format!("LOCK TABLE public.widgets IN {mode_sql} MODE"));
+        match stmt {
+            Statement::Lock(lock) => {
+                assert_eq!(lock.tables.len(), 1);
+                assert_eq!(lock.tables[0].name.to_string(), "public.widgets");
+                assert!(!lock.tables[0].only);
+                assert!(!lock.tables[0].has_asterisk);
+                assert_eq!(lock.lock_mode, Some(expected_mode));
+                assert!(!lock.nowait);
+            }
+            _ => panic!("Expected Lock, got: {stmt:?}"),
+        }
+    }
+}

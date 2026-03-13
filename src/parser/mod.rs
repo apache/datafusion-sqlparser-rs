@@ -939,6 +939,9 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::SEQUENCE => {
                 (CommentObject::Sequence, self.parse_object_name(false)?)
             }
+            Token::Word(w) if w.keyword == Keyword::SUBSCRIPTION => {
+                (CommentObject::Subscription, self.parse_subscription_name()?)
+            }
             Token::Word(w) if w.keyword == Keyword::TABLE => {
                 (CommentObject::Table, self.parse_object_name(false)?)
             }
@@ -5178,6 +5181,8 @@ impl<'a> Parser<'a> {
             }
         } else if self.parse_keyword(Keyword::SERVER) {
             self.parse_pg_create_server()
+        } else if self.parse_keyword(Keyword::SUBSCRIPTION) {
+            self.parse_create_subscription()
         } else {
             self.expected_ref("an object type after CREATE", self.peek_token_ref())
         }
@@ -7228,6 +7233,8 @@ impl<'a> Parser<'a> {
             ObjectType::Database
         } else if self.parse_keyword(Keyword::SEQUENCE) {
             ObjectType::Sequence
+        } else if self.parse_keyword(Keyword::SUBSCRIPTION) {
+            ObjectType::Subscription
         } else if self.parse_keyword(Keyword::STAGE) {
             ObjectType::Stage
         } else if self.parse_keyword(Keyword::TYPE) {
@@ -7263,14 +7270,18 @@ impl<'a> Parser<'a> {
             };
         } else {
             return self.expected_ref(
-                "CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW or USER after DROP",
+                "CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, SUBSCRIPTION, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW or USER after DROP",
                 self.peek_token_ref(),
             );
         };
         // Many dialects support the non-standard `IF EXISTS` clause and allow
         // specifying multiple objects to delete in a single statement
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-        let names = self.parse_comma_separated(|p| p.parse_object_name(false))?;
+        let names = if object_type == ObjectType::Subscription {
+            self.parse_comma_separated(|p| p.parse_subscription_name())?
+        } else {
+            self.parse_comma_separated(|p| p.parse_object_name(false))?
+        };
 
         let loc = self.peek_token_ref().span.start;
         let cascade = self.parse_keyword(Keyword::CASCADE);
@@ -10535,6 +10546,7 @@ impl<'a> Parser<'a> {
             Keyword::SCHEMA,
             Keyword::USER,
             Keyword::OPERATOR,
+            Keyword::SUBSCRIPTION,
         ])?;
         match object_type {
             Keyword::SCHEMA => {
@@ -10577,12 +10589,13 @@ impl<'a> Parser<'a> {
                 }
             }
             Keyword::ROLE => self.parse_alter_role(),
+            Keyword::SUBSCRIPTION => self.parse_alter_subscription(),
             Keyword::POLICY => self.parse_alter_policy().map(Into::into),
             Keyword::CONNECTOR => self.parse_alter_connector(),
             Keyword::USER => self.parse_alter_user().map(Into::into),
             // unreachable because expect_one_of_keywords used above
             unexpected_keyword => Err(ParserError::ParserError(
-                format!("Internal parser error: expected any of {{VIEW, TYPE, TABLE, INDEX, ROLE, POLICY, CONNECTOR, ICEBERG, SCHEMA, USER, OPERATOR}}, got {unexpected_keyword:?}"),
+                format!("Internal parser error: expected any of {{VIEW, TYPE, TABLE, INDEX, ROLE, POLICY, CONNECTOR, ICEBERG, SCHEMA, USER, OPERATOR, SUBSCRIPTION}}, got {unexpected_keyword:?}"),
             )),
         }
     }
@@ -16612,9 +16625,18 @@ impl<'a> Parser<'a> {
 
     /// Parse a GRANT statement.
     pub fn parse_grant(&mut self) -> Result<Grant, ParserError> {
-        let (privileges, objects) = self.parse_grant_deny_revoke_privileges_objects()?;
+        let (privileges, objects, to_parsed) = if let Some(privileges) =
+            self.maybe_parse_postgres_predefined_role_privileges(Keyword::TO)?
+        {
+            (privileges, None, true)
+        } else {
+            let (privileges, objects) = self.parse_grant_deny_revoke_privileges_objects()?;
+            (privileges, objects, false)
+        };
 
-        self.expect_keyword_is(Keyword::TO)?;
+        if !to_parsed {
+            self.expect_keyword_is(Keyword::TO)?;
+        }
         let grantees = self.parse_grantees()?;
 
         let with_grant_option =
@@ -16649,6 +16671,34 @@ impl<'a> Parser<'a> {
             as_grantor,
             granted_by,
             current_grants,
+        })
+    }
+
+    fn parse_postgres_predefined_role_privilege(&mut self) -> Result<Action, ParserError> {
+        let ident = self.parse_identifier()?;
+        if ident.quote_style.is_none() && ident.value.to_ascii_lowercase().starts_with("pg_") {
+            Ok(Action::Custom { name: ident })
+        } else {
+            self.expected_ref(
+                "a PostgreSQL predefined role name (starting with pg_)",
+                self.peek_token_ref(),
+            )
+        }
+    }
+
+    fn maybe_parse_postgres_predefined_role_privileges(
+        &mut self,
+        target_keyword: Keyword,
+    ) -> Result<Option<Privileges>, ParserError> {
+        if !dialect_of!(self is PostgreSqlDialect) {
+            return Ok(None);
+        }
+
+        self.maybe_parse(|parser| {
+            let actions =
+                parser.parse_comma_separated(Parser::parse_postgres_predefined_role_privilege)?;
+            parser.expect_keyword_is(target_keyword)?;
+            Ok(Privileges::Actions(actions))
         })
     }
 
@@ -17237,9 +17287,18 @@ impl<'a> Parser<'a> {
 
     /// Parse a REVOKE statement
     pub fn parse_revoke(&mut self) -> Result<Revoke, ParserError> {
-        let (privileges, objects) = self.parse_grant_deny_revoke_privileges_objects()?;
+        let (privileges, objects, from_parsed) = if let Some(privileges) =
+            self.maybe_parse_postgres_predefined_role_privileges(Keyword::FROM)?
+        {
+            (privileges, None, true)
+        } else {
+            let (privileges, objects) = self.parse_grant_deny_revoke_privileges_objects()?;
+            (privileges, objects, false)
+        };
 
-        self.expect_keyword_is(Keyword::FROM)?;
+        if !from_parsed {
+            self.expect_keyword_is(Keyword::FROM)?;
+        }
         let grantees = self.parse_grantees()?;
 
         let granted_by = if self.parse_keywords(&[Keyword::GRANTED, Keyword::BY]) {
@@ -19176,6 +19235,125 @@ impl<'a> Parser<'a> {
         }))
     }
 
+    fn parse_subscription_option(&mut self) -> Result<SubscriptionOption, ParserError> {
+        let name = self.parse_identifier()?;
+        let value = if self.consume_token(&Token::Eq) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+        Ok(SubscriptionOption { name, value })
+    }
+
+    fn parse_subscription_name(&mut self) -> Result<ObjectName, ParserError> {
+        let name = self.parse_object_name(false)?;
+        if name.0.len() == 1 && name.0[0].as_ident().is_some() {
+            Ok(name)
+        } else {
+            parser_err!(
+                format!("Expected: subscription name (single identifier), found: {name}"),
+                self.peek_token_ref().span.start
+            )
+        }
+    }
+
+    fn parse_subscription_options(&mut self) -> Result<Vec<SubscriptionOption>, ParserError> {
+        if self.parse_keyword(Keyword::WITH) {
+            self.expect_token(&Token::LParen)?;
+            let options = self.parse_comma_separated(Parser::parse_subscription_option)?;
+            self.expect_token(&Token::RParen)?;
+            Ok(options)
+        } else {
+            Ok(vec![])
+        }
+    }
+
+    fn parse_subscription_publications(&mut self) -> Result<Vec<Ident>, ParserError> {
+        self.parse_comma_separated(|p| p.parse_identifier())
+    }
+
+    /// Parse a `CREATE SUBSCRIPTION` statement.
+    ///
+    /// See [Statement::CreateSubscription].
+    pub fn parse_create_subscription(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_subscription_name()?;
+        self.expect_keyword_is(Keyword::CONNECTION)?;
+        let connection = self.parse_literal_string()?;
+        self.expect_keyword_is(Keyword::PUBLICATION)?;
+        let publications = self.parse_subscription_publications()?;
+        let with_options = self.parse_subscription_options()?;
+
+        Ok(Statement::CreateSubscription(CreateSubscription {
+            name,
+            connection,
+            publications,
+            with_options,
+        }))
+    }
+
+    /// Parse an `ALTER SUBSCRIPTION` statement.
+    ///
+    /// See [Statement::AlterSubscription].
+    pub fn parse_alter_subscription(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_subscription_name()?;
+        let operation = if self.parse_keyword(Keyword::CONNECTION) {
+            AlterSubscriptionOperation::Connection {
+                connection: self.parse_literal_string()?,
+            }
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::PUBLICATION]) {
+            let publications = self.parse_subscription_publications()?;
+            let with_options = self.parse_subscription_options()?;
+            AlterSubscriptionOperation::SetPublication {
+                publications,
+                with_options,
+            }
+        } else if self.parse_keywords(&[Keyword::ADD, Keyword::PUBLICATION]) {
+            let publications = self.parse_subscription_publications()?;
+            let with_options = self.parse_subscription_options()?;
+            AlterSubscriptionOperation::AddPublication {
+                publications,
+                with_options,
+            }
+        } else if self.parse_keywords(&[Keyword::DROP, Keyword::PUBLICATION]) {
+            let publications = self.parse_subscription_publications()?;
+            let with_options = self.parse_subscription_options()?;
+            AlterSubscriptionOperation::DropPublication {
+                publications,
+                with_options,
+            }
+        } else if self.parse_keywords(&[Keyword::REFRESH, Keyword::PUBLICATION]) {
+            let with_options = self.parse_subscription_options()?;
+            AlterSubscriptionOperation::RefreshPublication { with_options }
+        } else if self.parse_keyword(Keyword::ENABLE) {
+            AlterSubscriptionOperation::Enable
+        } else if self.parse_keyword(Keyword::DISABLE) {
+            AlterSubscriptionOperation::Disable
+        } else if self.parse_keyword(Keyword::SET) {
+            self.expect_token(&Token::LParen)?;
+            let options = self.parse_comma_separated(Parser::parse_subscription_option)?;
+            self.expect_token(&Token::RParen)?;
+            AlterSubscriptionOperation::SetOptions { options }
+        } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            AlterSubscriptionOperation::OwnerTo {
+                owner: self.parse_owner()?,
+            }
+        } else if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            AlterSubscriptionOperation::RenameTo {
+                new_name: self.parse_subscription_name()?,
+            }
+        } else {
+            return self.expected_ref(
+                "CONNECTION, SET PUBLICATION, ADD PUBLICATION, DROP PUBLICATION, REFRESH PUBLICATION, ENABLE, DISABLE, SET, OWNER TO, or RENAME TO after ALTER SUBSCRIPTION",
+                self.peek_token_ref(),
+            );
+        };
+
+        Ok(Statement::AlterSubscription(AlterSubscription {
+            name,
+            operation,
+        }))
+    }
+
     /// The index of the first unprocessed token.
     pub fn index(&self) -> usize {
         self.index
@@ -19959,6 +20137,13 @@ impl<'a> Parser<'a> {
     fn parse_reset(&mut self) -> Result<ResetStatement, ParserError> {
         if self.parse_keyword(Keyword::ALL) {
             return Ok(ResetStatement { reset: Reset::ALL });
+        }
+        if dialect_of!(self is PostgreSqlDialect)
+            && self.parse_keywords(&[Keyword::SESSION, Keyword::AUTHORIZATION])
+        {
+            return Ok(ResetStatement {
+                reset: Reset::SessionAuthorization,
+            });
         }
 
         let obj = self.parse_object_name(false)?;

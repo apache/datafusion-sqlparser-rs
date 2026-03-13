@@ -15241,26 +15241,31 @@ fn parse_comments() {
 
     // https://www.postgresql.org/docs/current/sql-comment.html
     let object_types = [
-        ("COLUMN", CommentObject::Column),
-        ("DATABASE", CommentObject::Database),
-        ("DOMAIN", CommentObject::Domain),
-        ("EXTENSION", CommentObject::Extension),
-        ("FUNCTION", CommentObject::Function),
-        ("INDEX", CommentObject::Index),
-        ("MATERIALIZED VIEW", CommentObject::MaterializedView),
-        ("PROCEDURE", CommentObject::Procedure),
-        ("ROLE", CommentObject::Role),
-        ("SCHEMA", CommentObject::Schema),
-        ("SEQUENCE", CommentObject::Sequence),
-        ("TABLE", CommentObject::Table),
-        ("TYPE", CommentObject::Type),
-        ("USER", CommentObject::User),
-        ("VIEW", CommentObject::View),
+        ("COLUMN", CommentObject::Column, "db.t0"),
+        ("DATABASE", CommentObject::Database, "db.t0"),
+        ("DOMAIN", CommentObject::Domain, "db.t0"),
+        ("EXTENSION", CommentObject::Extension, "db.t0"),
+        ("FUNCTION", CommentObject::Function, "db.t0"),
+        ("INDEX", CommentObject::Index, "db.t0"),
+        (
+            "MATERIALIZED VIEW",
+            CommentObject::MaterializedView,
+            "db.t0",
+        ),
+        ("PROCEDURE", CommentObject::Procedure, "db.t0"),
+        ("ROLE", CommentObject::Role, "db.t0"),
+        ("SCHEMA", CommentObject::Schema, "db.t0"),
+        ("SEQUENCE", CommentObject::Sequence, "db.t0"),
+        ("SUBSCRIPTION", CommentObject::Subscription, "t0"),
+        ("TABLE", CommentObject::Table, "db.t0"),
+        ("TYPE", CommentObject::Type, "db.t0"),
+        ("USER", CommentObject::User, "db.t0"),
+        ("VIEW", CommentObject::View, "db.t0"),
     ];
-    for (keyword, expected_object_type) in object_types.iter() {
-        match all_dialects_where(|d| d.supports_comment_on())
-            .verified_stmt(format!("COMMENT IF EXISTS ON {keyword} db.t0 IS 'comment'").as_str())
-        {
+    for (keyword, expected_object_type, object_name_sql) in object_types.iter() {
+        match all_dialects_where(|d| d.supports_comment_on()).verified_stmt(
+            format!("COMMENT IF EXISTS ON {keyword} {object_name_sql} IS 'comment'").as_str(),
+        ) {
             Statement::Comment {
                 object_type,
                 object_name,
@@ -15268,7 +15273,7 @@ fn parse_comments() {
                 if_exists,
             } => {
                 assert_eq!("comment", comment);
-                assert_eq!("db.t0", object_name.to_string());
+                assert_eq!(*object_name_sql, object_name.to_string());
                 assert_eq!(*expected_object_type, object_type);
                 assert!(if_exists);
             }
@@ -18431,6 +18436,18 @@ fn parse_reset_statement() {
         Statement::Reset(ResetStatement { reset }) => assert_eq!(reset, Reset::ALL),
         _ => unreachable!(),
     }
+    let postgres = TestedDialects::new(vec![Box::new(PostgreSqlDialect {})]);
+    match postgres.verified_stmt("RESET SESSION AUTHORIZATION") {
+        Statement::Reset(ResetStatement { reset }) => {
+            assert_eq!(reset, Reset::SessionAuthorization)
+        }
+        _ => unreachable!(),
+    }
+
+    let non_pg = all_dialects_where(|d| !d.is::<PostgreSqlDialect>());
+    assert!(non_pg
+        .parse_sql_statements("RESET SESSION AUTHORIZATION")
+        .is_err());
 }
 
 #[test]

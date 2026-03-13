@@ -4334,6 +4334,9 @@ pub struct CreateView {
     pub to: Option<ObjectName>,
     /// MySQL: Optional parameters for the view algorithm, definer, and security context
     pub params: Option<CreateViewParams>,
+    /// Redshift: `AUTO REFRESH { YES | NO }`
+    /// <https://docs.aws.amazon.com/redshift/latest/dg/materialized-view-create-sql-command.html>
+    pub auto_refresh: Option<bool>,
 }
 
 impl fmt::Display for CreateView {
@@ -4393,6 +4396,13 @@ impl fmt::Display for CreateView {
         }
         if matches!(self.options, CreateTableOptions::Options(_)) {
             write!(f, " {}", self.options)?;
+        }
+        if let Some(auto_refresh) = self.auto_refresh {
+            write!(
+                f,
+                " AUTO REFRESH {}",
+                if auto_refresh { "YES" } else { "NO" }
+            )?;
         }
         f.write_str(" AS")?;
         SpaceOrNewline.fmt(f)?;

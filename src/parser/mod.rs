@@ -6474,6 +6474,17 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let auto_refresh = if self.parse_keywords(&[Keyword::AUTO, Keyword::REFRESH]) {
+            if self.parse_keyword(Keyword::YES) {
+                Some(true)
+            } else {
+                self.expect_keyword_is(Keyword::NO)?;
+                Some(false)
+            }
+        } else {
+            None
+        };
+
         self.expect_keyword_is(Keyword::AS)?;
         let query = self.parse_query()?;
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
@@ -6504,6 +6515,7 @@ impl<'a> Parser<'a> {
             to,
             params: create_view_params,
             name_before_not_exists,
+            auto_refresh,
         })
     }
 

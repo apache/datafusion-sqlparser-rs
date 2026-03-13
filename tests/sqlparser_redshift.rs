@@ -500,3 +500,15 @@ fn test_alter_table_alter_sortkey() {
     redshift().verified_stmt("ALTER TABLE users ALTER SORTKEY(created_at)");
     redshift().verified_stmt("ALTER TABLE users ALTER SORTKEY(c1, c2)");
 }
+
+#[test]
+fn test_create_materialized_view_auto_refresh() {
+    redshift().verified_stmt(
+        r#"CREATE MATERIALIZED VIEW mview AUTO REFRESH YES AS (SELECT MAX("a"."b") AS "max" FROM "table1")"#,
+    );
+
+    redshift().verified_stmt("CREATE MATERIALIZED VIEW mv1 AUTO REFRESH NO AS SELECT 1");
+
+    // Without AUTO REFRESH
+    redshift().verified_stmt("CREATE MATERIALIZED VIEW mv1 AS SELECT 1");
+}

@@ -8486,7 +8486,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a single [PartitionBoundValue].
+    /// Parse a single partition bound value (MINVALUE, MAXVALUE, or expression).
     fn parse_partition_bound_value(&mut self) -> Result<PartitionBoundValue, ParserError> {
         if self.parse_keyword(Keyword::MINVALUE) {
             Ok(PartitionBoundValue::MinValue)

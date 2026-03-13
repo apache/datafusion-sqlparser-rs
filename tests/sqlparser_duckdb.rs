@@ -791,6 +791,7 @@ fn test_duckdb_union_datatype() {
             diststyle: Default::default(),
             distkey: Default::default(),
             sortkey: Default::default(),
+            backup: Default::default(),
         }),
         stmt
     );

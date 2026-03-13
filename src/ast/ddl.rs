@@ -3051,6 +3051,9 @@ pub struct CreateTable {
     /// Redshift `SORTKEY` option
     /// <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html>
     pub sortkey: Option<Vec<Expr>>,
+    /// Redshift `BACKUP` option: `BACKUP { YES | NO }`
+    /// <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html>
+    pub backup: Option<bool>,
 }
 
 impl fmt::Display for CreateTable {
@@ -3348,6 +3351,9 @@ impl fmt::Display for CreateTable {
         }
         if self.strict {
             write!(f, " STRICT")?;
+        }
+        if let Some(backup) = self.backup {
+            write!(f, " BACKUP {}", if backup { "YES" } else { "NO" })?;
         }
         if let Some(diststyle) = &self.diststyle {
             write!(f, " DISTSTYLE {diststyle}")?;

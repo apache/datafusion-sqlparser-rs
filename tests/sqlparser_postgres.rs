@@ -1845,27 +1845,27 @@ fn parse_execute() {
             has_parentheses: false,
             using: vec![
                 ExprWithAlias {
-                    expr: Expr::Cast {
+                    expr: Expr::Cast(CastExpr {
                         kind: CastKind::Cast,
-                        expr: Box::new(Expr::Value(
+                        expr: Expr::Value(
                             (Value::Number("1337".parse().unwrap(), false)).with_empty_span()
-                        )),
+                        ),
                         data_type: DataType::SmallInt(None),
                         array: false,
                         format: None
-                    },
+                    }.into()),
                     alias: None
                 },
                 ExprWithAlias {
-                    expr: Expr::Cast {
+                    expr: Expr::Cast(CastExpr {
                         kind: CastKind::Cast,
-                        expr: Box::new(Expr::Value(
+                        expr: Expr::Value(
                             (Value::Number("7331".parse().unwrap(), false)).with_empty_span()
-                        )),
+                        ),
                         data_type: DataType::SmallInt(None),
                         array: false,
                         format: None
-                    },
+                    }.into()),
                     alias: None
                 },
             ],
@@ -2474,15 +2474,15 @@ fn parse_array_index_expr() {
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
         &Expr::CompoundFieldAccess {
-            root: Box::new(Expr::Nested(Box::new(Expr::Cast {
+            root: Box::new(Expr::Nested(Box::new(Expr::Cast(CastExpr {
                 kind: CastKind::Cast,
-                expr: Box::new(Expr::Array(Array {
+                expr: Expr::Array(Array {
                     elem: vec![Expr::Array(Array {
                         elem: vec![num[2].clone(), num[3].clone(),],
                         named: true,
                     })],
                     named: true,
-                })),
+                }),
                 data_type: DataType::Array(ArrayElemTypeDef::SquareBracket(
                     Box::new(DataType::Array(ArrayElemTypeDef::SquareBracket(
                         Box::new(DataType::Int(None)),
@@ -2492,7 +2492,7 @@ fn parse_array_index_expr() {
                 )),
                 array: false,
                 format: None,
-            }))),
+            }.into())))),
             access_chain: vec![
                 AccessExpr::Subscript(Subscript::Index {
                     index: num[1].clone()
@@ -5859,27 +5859,27 @@ fn parse_at_time_zone() {
                     span: Span::empty(),
                 },
                 uses_odbc_syntax: false,
-            })),
-            time_zone: Box::new(Expr::Cast {
+            }.into())),
+            time_zone: Box::new(Expr::Cast(CastExpr {
                 kind: CastKind::DoubleColon,
-                expr: Box::new(Expr::Value(
+                expr: Expr::Value(
                     Value::SingleQuotedString("America/Los_Angeles".to_owned()).with_empty_span(),
-                )),
+                ),
                 data_type: DataType::Text,
                 array: false,
                 format: None,
-            }),
+            }.into())),
         }),
         op: BinaryOperator::Plus,
         right: Box::new(Expr::Interval(Interval {
-            value: Box::new(Expr::Value(
+            value: Expr::Value(
                 Value::SingleQuotedString("23 hours".to_owned()).with_empty_span(),
-            )),
+            ),
             leading_field: None,
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        })),
+        }.into())),
     };
     pretty_assertions::assert_eq!(
         pg_and_generic().verified_expr(
@@ -6688,15 +6688,15 @@ fn arrow_cast_precedence() {
                 span: Span::empty(),
             })),
             op: BinaryOperator::Arrow,
-            right: Box::new(Expr::Cast {
+            right: Box::new(Expr::Cast(CastExpr {
                 kind: CastKind::DoubleColon,
-                expr: Box::new(Expr::Value(
+                expr: Expr::Value(
                     (Value::SingleQuotedString("bar".to_string())).with_empty_span()
-                )),
+                ),
                 data_type: DataType::Text,
                 array: false,
                 format: None,
-            }),
+            }.into())),
         }
     )
 }

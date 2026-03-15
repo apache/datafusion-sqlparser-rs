@@ -76,9 +76,9 @@ fn test_databricks_exists() {
                         name: Ident::new("x"),
                         data_type: None
                     }),
-                    body: Box::new(Expr::IsNull(Box::new(Expr::Identifier(Ident::new("x"))))),
+                    body: Expr::IsNull(Box::new(Expr::Identifier(Ident::new("x")))),
                     syntax: LambdaSyntax::Arrow,
-                })
+                }.into())
             ]
         ),
     );
@@ -122,7 +122,7 @@ fn test_databricks_lambdas() {
                             data_type: None
                         }
                     ]),
-                    body: Box::new(Expr::Case {
+                    body: Expr::Case(CaseExpr {
                         case_token: AttachedToken::empty(),
                         end_token: AttachedToken::empty(),
                         operand: None,
@@ -154,9 +154,9 @@ fn test_databricks_lambdas() {
                             },
                         ],
                         else_result: Some(Box::new(Expr::value(number("1"))))
-                    }),
+                    }.into()),
                     syntax: LambdaSyntax::Arrow,
-                })
+                }.into())
             ]
         )),
         databricks().verified_only_select(sql).projection[0]
@@ -349,21 +349,21 @@ fn data_type_timestamp_ntz() {
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
-        })
+        }.into())
     );
 
     // Cast
     assert_eq!(
         databricks().verified_expr("(created_at)::TIMESTAMP_NTZ"),
-        Expr::Cast {
+        Expr::Cast(CastExpr {
             kind: CastKind::DoubleColon,
-            expr: Box::new(Expr::Nested(Box::new(Expr::Identifier(
+            expr: Expr::Nested(Box::new(Expr::Identifier(
                 "created_at".into()
-            )))),
+            ))),
             data_type: DataType::TimestampNtz(None),
             array: false,
             format: None
-        }
+        }.into())
     );
 
     // Column definition

@@ -923,7 +923,7 @@ fn parse_typed_struct_syntax_bigquery() {
                     span: Span::empty(),
                 },
                 uses_odbc_syntax: false
-            })],
+            }.into())],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Datetime(None),
@@ -961,14 +961,14 @@ fn parse_typed_struct_syntax_bigquery() {
     assert_eq!(
         &Expr::Struct {
             values: vec![Expr::Interval(Interval {
-                value: Box::new(Expr::Value(
+                value: Expr::Value(
                     Value::SingleQuotedString("2".into()).with_empty_span()
-                )),
+                ),
                 leading_field: Some(DateTimeField::Hour),
                 leading_precision: None,
                 last_field: None,
                 fractional_seconds_precision: None
-            })],
+            }.into())],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Interval {
@@ -991,7 +991,7 @@ fn parse_typed_struct_syntax_bigquery() {
                     span: Span::empty(),
                 },
                 uses_odbc_syntax: false
-            })],
+            }.into())],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::JSON,
@@ -1028,7 +1028,7 @@ fn parse_typed_struct_syntax_bigquery() {
                     span: Span::empty(),
                 },
                 uses_odbc_syntax: false
-            })],
+            }.into())],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Timestamp(None, TimezoneInfo::None),
@@ -1047,7 +1047,7 @@ fn parse_typed_struct_syntax_bigquery() {
                     span: Span::empty(),
                 },
                 uses_odbc_syntax: false
-            })],
+            }.into())],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Time(None, TimezoneInfo::None),
@@ -1069,7 +1069,7 @@ fn parse_typed_struct_syntax_bigquery() {
                     span: Span::empty(),
                 },
                 uses_odbc_syntax: false
-            })],
+            }.into())],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Numeric(ExactNumberInfo::None),
@@ -1087,7 +1087,7 @@ fn parse_typed_struct_syntax_bigquery() {
                     span: Span::empty(),
                 },
                 uses_odbc_syntax: false
-            })],
+            }.into())],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::BigNumeric(ExactNumberInfo::None),
@@ -1265,7 +1265,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                     span: Span::empty(),
                 },
                 uses_odbc_syntax: false
-            })],
+            }.into())],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Datetime(None),
@@ -1303,14 +1303,14 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
     assert_eq!(
         &Expr::Struct {
             values: vec![Expr::Interval(Interval {
-                value: Box::new(Expr::Value(
+                value: Expr::Value(
                     Value::SingleQuotedString("1".into()).with_empty_span()
-                )),
+                ),
                 leading_field: Some(DateTimeField::Month),
                 leading_precision: None,
                 last_field: None,
                 fractional_seconds_precision: None
-            })],
+            }.into())],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Interval {
@@ -1333,7 +1333,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                     span: Span::empty(),
                 },
                 uses_odbc_syntax: false
-            })],
+            }.into())],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::JSON,
@@ -1370,7 +1370,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                     span: Span::empty(),
                 },
                 uses_odbc_syntax: false
-            })],
+            }.into())],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Timestamp(None, TimezoneInfo::None),
@@ -1389,7 +1389,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                     span: Span::empty(),
                 },
                 uses_odbc_syntax: false
-            })],
+            }.into())],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Time(None, TimezoneInfo::None),
@@ -1411,7 +1411,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                     span: Span::empty(),
                 },
                 uses_odbc_syntax: false
-            })],
+            }.into())],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Numeric(ExactNumberInfo::None),
@@ -1429,7 +1429,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                     span: Span::empty(),
                 },
                 uses_odbc_syntax: false
-            })],
+            }.into())],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::BigNumeric(ExactNumberInfo::None),
@@ -2520,7 +2520,7 @@ fn test_triple_quote_typed_strings() {
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
-        }),
+        }.into()),
         expr
     );
 }

@@ -1275,13 +1275,13 @@ fn parse_array() {
     let sql = "SELECT CAST(a AS ARRAY) FROM customer";
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
-        &Expr::Cast {
+        &Expr::Cast(CastExpr {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("a"))),
+            expr: Expr::Identifier(Ident::new("a")),
             data_type: DataType::Array(ArrayElemTypeDef::None),
             array: false,
             format: None,
-        },
+        }.into()),
         expr_from_projection(only(&select.projection))
     );
 }
@@ -1377,9 +1377,9 @@ fn parse_semi_structured_data_traversal() {
     assert_eq!(
         snowflake().verified_expr("a:b::ARRAY[1]"),
         Expr::JsonAccess {
-            value: Box::new(Expr::Cast {
+            value: Box::new(Expr::Cast(CastExpr {
                 kind: CastKind::DoubleColon,
-                expr: Box::new(Expr::JsonAccess {
+                expr: Expr::JsonAccess {
                     value: Box::new(Expr::Identifier(Ident::new("a"))),
                     path: JsonPath {
                         path: vec![JsonPathElem::Dot {
@@ -1387,11 +1387,11 @@ fn parse_semi_structured_data_traversal() {
                             quoted: false
                         }]
                     }
-                }),
+                },
                 data_type: DataType::Array(ArrayElemTypeDef::None),
                 array: false,
                 format: None,
-            }),
+            }.into())),
             path: JsonPath {
                 path: vec![JsonPathElem::Bracket {
                     key: Expr::value(number("1"))
@@ -4947,8 +4947,8 @@ fn test_timestamp_ntz_with_precision() {
     let select =
         snowflake().verified_only_select("SELECT CAST('2024-01-01 01:00:00' AS TIMESTAMP_NTZ(9))");
     match expr_from_projection(only(&select.projection)) {
-        Expr::Cast { data_type, .. } => {
-            assert_eq!(*data_type, DataType::TimestampNtz(Some(9)));
+        Expr::Cast(cast) => {
+            assert_eq!(cast.data_type, DataType::TimestampNtz(Some(9)));
         }
         _ => unreachable!(),
     }

@@ -3087,26 +3087,26 @@ fn parse_cast() {
     let sql = "SELECT CAST(id AS BIGINT) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Cast {
+        &Expr::Cast(CastExpr {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            expr: Expr::Identifier(Ident::new("id")),
             data_type: DataType::BigInt(None),
             array: false,
             format: None,
-        },
+        }.into()),
         expr_from_projection(only(&select.projection))
     );
 
     let sql = "SELECT CAST(id AS TINYINT) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Cast {
+        &Expr::Cast(CastExpr {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            expr: Expr::Identifier(Ident::new("id")),
             data_type: DataType::TinyInt(None),
             array: false,
             format: None,
-        },
+        }.into()),
         expr_from_projection(only(&select.projection))
     );
 
@@ -3129,107 +3129,107 @@ fn parse_cast() {
     let sql = "SELECT CAST(id AS NVARCHAR(50)) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Cast {
+        &Expr::Cast(CastExpr {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            expr: Expr::Identifier(Ident::new("id")),
             data_type: DataType::Nvarchar(Some(CharacterLength::IntegerLength {
                 length: 50,
                 unit: None,
             })),
             array: false,
             format: None,
-        },
+        }.into()),
         expr_from_projection(only(&select.projection))
     );
 
     let sql = "SELECT CAST(id AS CLOB) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Cast {
+        &Expr::Cast(CastExpr {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            expr: Expr::Identifier(Ident::new("id")),
             data_type: DataType::Clob(None),
             array: false,
             format: None,
-        },
+        }.into()),
         expr_from_projection(only(&select.projection))
     );
 
     let sql = "SELECT CAST(id AS CLOB(50)) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Cast {
+        &Expr::Cast(CastExpr {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            expr: Expr::Identifier(Ident::new("id")),
             data_type: DataType::Clob(Some(50)),
             array: false,
             format: None,
-        },
+        }.into()),
         expr_from_projection(only(&select.projection))
     );
 
     let sql = "SELECT CAST(id AS BINARY(50)) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Cast {
+        &Expr::Cast(CastExpr {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            expr: Expr::Identifier(Ident::new("id")),
             data_type: DataType::Binary(Some(50)),
             array: false,
             format: None,
-        },
+        }.into()),
         expr_from_projection(only(&select.projection))
     );
 
     let sql = "SELECT CAST(id AS VARBINARY(50)) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Cast {
+        &Expr::Cast(CastExpr {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            expr: Expr::Identifier(Ident::new("id")),
             data_type: DataType::Varbinary(Some(BinaryLength::IntegerLength { length: 50 })),
             array: false,
             format: None,
-        },
+        }.into()),
         expr_from_projection(only(&select.projection))
     );
 
     let sql = "SELECT CAST(id AS BLOB) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Cast {
+        &Expr::Cast(CastExpr {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            expr: Expr::Identifier(Ident::new("id")),
             data_type: DataType::Blob(None),
             array: false,
             format: None,
-        },
+        }.into()),
         expr_from_projection(only(&select.projection))
     );
 
     let sql = "SELECT CAST(id AS BLOB(50)) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Cast {
+        &Expr::Cast(CastExpr {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            expr: Expr::Identifier(Ident::new("id")),
             data_type: DataType::Blob(Some(50)),
             array: false,
             format: None,
-        },
+        }.into()),
         expr_from_projection(only(&select.projection))
     );
 
     let sql = "SELECT CAST(details AS JSONB) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Cast {
+        &Expr::Cast(CastExpr {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("details"))),
+            expr: Expr::Identifier(Ident::new("details")),
             data_type: DataType::JSONB,
             array: false,
             format: None,
-        },
+        }.into()),
         expr_from_projection(only(&select.projection))
     );
 }
@@ -3239,13 +3239,13 @@ fn parse_try_cast() {
     let sql = "SELECT TRY_CAST(id AS BIGINT) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Cast {
+        &Expr::Cast(CastExpr {
             kind: CastKind::TryCast,
-            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            expr: Expr::Identifier(Ident::new("id")),
             data_type: DataType::BigInt(None),
             array: false,
             format: None,
-        },
+        }.into()),
         expr_from_projection(only(&select.projection))
     );
     verified_stmt("SELECT TRY_CAST(id AS BIGINT) FROM customer");
@@ -6161,7 +6161,7 @@ fn parse_literal_date() {
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -6178,7 +6178,7 @@ fn parse_literal_time() {
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -6195,7 +6195,7 @@ fn parse_literal_datetime() {
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -6212,7 +6212,7 @@ fn parse_literal_timestamp_without_time_zone() {
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
 
@@ -6231,7 +6231,7 @@ fn parse_literal_timestamp_with_time_zone() {
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
 
@@ -6246,14 +6246,14 @@ fn parse_interval_all() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Interval(Interval {
-            value: Box::new(Expr::Value(
+            value: Expr::Value(
                 (Value::SingleQuotedString(String::from("1-1"))).with_empty_span()
-            )),
+            ),
             leading_field: Some(DateTimeField::Year),
             leading_precision: None,
             last_field: Some(DateTimeField::Month),
             fractional_seconds_precision: None,
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
 
@@ -6261,14 +6261,14 @@ fn parse_interval_all() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Interval(Interval {
-            value: Box::new(Expr::Value(
+            value: Expr::Value(
                 (Value::SingleQuotedString(String::from("01:01.01"))).with_empty_span()
-            )),
+            ),
             leading_field: Some(DateTimeField::Minute),
             leading_precision: Some(5),
             last_field: Some(DateTimeField::Second),
             fractional_seconds_precision: Some(5),
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
 
@@ -6276,14 +6276,14 @@ fn parse_interval_all() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Interval(Interval {
-            value: Box::new(Expr::Value(
+            value: Expr::Value(
                 (Value::SingleQuotedString(String::from("1"))).with_empty_span()
-            )),
+            ),
             leading_field: Some(DateTimeField::Second),
             leading_precision: Some(5),
             last_field: None,
             fractional_seconds_precision: Some(4),
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
 
@@ -6291,14 +6291,14 @@ fn parse_interval_all() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Interval(Interval {
-            value: Box::new(Expr::Value(
+            value: Expr::Value(
                 (Value::SingleQuotedString(String::from("10"))).with_empty_span()
-            )),
+            ),
             leading_field: Some(DateTimeField::Hour),
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
 
@@ -6306,12 +6306,12 @@ fn parse_interval_all() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Interval(Interval {
-            value: Box::new(Expr::value(number("5"))),
+            value: Expr::value(number("5")),
             leading_field: Some(DateTimeField::Day),
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
 
@@ -6319,12 +6319,12 @@ fn parse_interval_all() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Interval(Interval {
-            value: Box::new(Expr::value(number("5"))),
+            value: Expr::value(number("5")),
             leading_field: Some(DateTimeField::Days),
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
 
@@ -6332,14 +6332,14 @@ fn parse_interval_all() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Interval(Interval {
-            value: Box::new(Expr::Value(
+            value: Expr::Value(
                 (Value::SingleQuotedString(String::from("10"))).with_empty_span()
-            )),
+            ),
             leading_field: Some(DateTimeField::Hour),
             leading_precision: Some(1),
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
 
@@ -6403,14 +6403,14 @@ fn parse_interval_dont_require_unit() {
     let select = dialects.verified_only_select(sql);
     assert_eq!(
         &Expr::Interval(Interval {
-            value: Box::new(Expr::Value(
+            value: Expr::Value(
                 (Value::SingleQuotedString(String::from("1 DAY"))).with_empty_span()
-            )),
+            ),
             leading_field: None,
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
     dialects.verified_only_select("SELECT INTERVAL '1 YEAR'");
@@ -6441,16 +6441,16 @@ fn parse_interval_require_qualifier() {
     assert_eq!(
         expr_from_projection(only(&select.projection)),
         &Expr::Interval(Interval {
-            value: Box::new(Expr::BinaryOp {
+            value: Expr::BinaryOp {
                 left: Box::new(Expr::value(number("1"))),
                 op: BinaryOperator::Plus,
                 right: Box::new(Expr::value(number("1"))),
-            }),
+            },
             leading_field: Some(DateTimeField::Day),
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        }.into()),
     );
 
     let sql = "SELECT INTERVAL '1' + '1' DAY";
@@ -6458,7 +6458,7 @@ fn parse_interval_require_qualifier() {
     assert_eq!(
         expr_from_projection(only(&select.projection)),
         &Expr::Interval(Interval {
-            value: Box::new(Expr::BinaryOp {
+            value: Expr::BinaryOp {
                 left: Box::new(Expr::Value(
                     (Value::SingleQuotedString("1".to_string())).with_empty_span()
                 )),
@@ -6466,12 +6466,12 @@ fn parse_interval_require_qualifier() {
                 right: Box::new(Expr::Value(
                     (Value::SingleQuotedString("1".to_string())).with_empty_span()
                 )),
-            }),
+            },
             leading_field: Some(DateTimeField::Day),
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        }.into()),
     );
 
     let sql = "SELECT INTERVAL '1' + '2' - '3' DAY";
@@ -6479,7 +6479,7 @@ fn parse_interval_require_qualifier() {
     assert_eq!(
         expr_from_projection(only(&select.projection)),
         &Expr::Interval(Interval {
-            value: Box::new(Expr::BinaryOp {
+            value: Expr::BinaryOp {
                 left: Box::new(Expr::BinaryOp {
                     left: Box::new(Expr::Value(
                         (Value::SingleQuotedString("1".to_string())).with_empty_span()
@@ -6493,12 +6493,12 @@ fn parse_interval_require_qualifier() {
                 right: Box::new(Expr::Value(
                     (Value::SingleQuotedString("3".to_string())).with_empty_span()
                 )),
-            }),
+            },
             leading_field: Some(DateTimeField::Day),
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        }.into()),
     );
 }
 
@@ -6511,14 +6511,14 @@ fn parse_interval_disallow_interval_expr() {
     assert_eq!(
         expr_from_projection(only(&select.projection)),
         &Expr::Interval(Interval {
-            value: Box::new(Expr::Value(
+            value: Expr::Value(
                 (Value::SingleQuotedString(String::from("1 DAY"))).with_empty_span()
-            )),
+            ),
             leading_field: None,
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        }.into()),
     );
 
     dialects.verified_only_select("SELECT INTERVAL '1 YEAR'");
@@ -6534,24 +6534,24 @@ fn parse_interval_disallow_interval_expr() {
         expr_from_projection(only(&select.projection)),
         &Expr::BinaryOp {
             left: Box::new(Expr::Interval(Interval {
-                value: Box::new(Expr::Value(
+                value: Expr::Value(
                     (Value::SingleQuotedString(String::from("1 DAY"))).with_empty_span()
-                )),
+                ),
                 leading_field: None,
                 leading_precision: None,
                 last_field: None,
                 fractional_seconds_precision: None,
-            })),
+            }.into())),
             op: BinaryOperator::Gt,
             right: Box::new(Expr::Interval(Interval {
-                value: Box::new(Expr::Value(
+                value: Expr::Value(
                     (Value::SingleQuotedString(String::from("1 SECOND"))).with_empty_span()
-                )),
+                ),
                 leading_field: None,
                 leading_precision: None,
                 last_field: None,
                 fractional_seconds_precision: None,
-            }))
+            }.into()))
         }
     );
 }
@@ -6564,14 +6564,14 @@ fn interval_disallow_interval_expr_gt() {
         expr,
         Expr::BinaryOp {
             left: Box::new(Expr::Interval(Interval {
-                value: Box::new(Expr::Value(
+                value: Expr::Value(
                     (Value::SingleQuotedString("1 second".to_string())).with_empty_span()
-                )),
+                ),
                 leading_field: None,
                 leading_precision: None,
                 last_field: None,
                 fractional_seconds_precision: None,
-            },)),
+            }.into(),)),
             op: BinaryOperator::Gt,
             right: Box::new(Expr::Identifier(Ident {
                 value: "x".to_string(),
@@ -6588,21 +6588,21 @@ fn interval_disallow_interval_expr_double_colon() {
     let expr = dialects.verified_expr("INTERVAL '1 second'::TEXT");
     assert_eq!(
         expr,
-        Expr::Cast {
+        Expr::Cast(CastExpr {
             kind: CastKind::DoubleColon,
-            expr: Box::new(Expr::Interval(Interval {
-                value: Box::new(Expr::Value(
+            expr: Expr::Interval(Interval {
+                value: Expr::Value(
                     (Value::SingleQuotedString("1 second".to_string())).with_empty_span()
-                )),
+                ),
                 leading_field: None,
                 leading_precision: None,
                 last_field: None,
                 fractional_seconds_precision: None,
-            })),
+            }.into()),
             data_type: DataType::Text,
             array: false,
             format: None,
-        }
+        }.into())
     )
 }
 
@@ -6657,14 +6657,14 @@ fn parse_interval_and_or_xor() {
                         })),
                         op: BinaryOperator::Plus,
                         right: Box::new(Expr::Interval(Interval {
-                            value: Box::new(Expr::Value(
+                            value: Expr::Value(
                                 (Value::SingleQuotedString("5 days".to_string())).with_empty_span(),
-                            )),
+                            ),
                             leading_field: None,
                             leading_precision: None,
                             last_field: None,
                             fractional_seconds_precision: None,
-                        })),
+                        }.into())),
                     }),
                 }),
                 op: BinaryOperator::And,
@@ -6683,14 +6683,14 @@ fn parse_interval_and_or_xor() {
                         })),
                         op: BinaryOperator::Plus,
                         right: Box::new(Expr::Interval(Interval {
-                            value: Box::new(Expr::Value(
+                            value: Expr::Value(
                                 (Value::SingleQuotedString("3 days".to_string())).with_empty_span(),
-                            )),
+                            ),
                             leading_field: None,
                             leading_precision: None,
                             last_field: None,
                             fractional_seconds_precision: None,
-                        })),
+                        }.into())),
                     }),
                 }),
             }),
@@ -6833,7 +6833,7 @@ fn parse_json_keyword() {
                 span: Span::empty(),
             },
             uses_odbc_syntax: false,
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -6849,16 +6849,17 @@ fn parse_typed_strings() {
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
-        }),
+        }.into()),
         expr
     );
 
-    if let Expr::TypedString(TypedString {
-        data_type,
-        value,
-        uses_odbc_syntax: false,
-    }) = expr
-    {
+    if let Expr::TypedString(s) = expr {
+        let TypedString {
+            data_type,
+            value,
+            uses_odbc_syntax,
+        } = *s;
+        assert_eq!(false, uses_odbc_syntax);
         assert_eq!(DataType::JSON, data_type);
         assert_eq!(r#"{"foo":"bar"}"#, value.into_string().unwrap());
     }
@@ -6876,7 +6877,7 @@ fn parse_bignumeric_keyword() {
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '0'");
@@ -6891,7 +6892,7 @@ fn parse_bignumeric_keyword() {
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '123456'");
@@ -6906,7 +6907,7 @@ fn parse_bignumeric_keyword() {
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '-3.14'");
@@ -6921,7 +6922,7 @@ fn parse_bignumeric_keyword() {
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '-0.54321'");
@@ -6936,7 +6937,7 @@ fn parse_bignumeric_keyword() {
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '1.23456e05'");
@@ -6951,7 +6952,7 @@ fn parse_bignumeric_keyword() {
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
-        }),
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
     verified_stmt("SELECT BIGNUMERIC '-9.876e-3'");
@@ -7232,7 +7233,7 @@ fn parse_searched_case_expr() {
     use self::Expr::{BinaryOp, Case, Identifier, IsNull};
     let select = verified_only_select(sql);
     assert_eq!(
-        &Case {
+        &Case(CaseExpr {
             case_token: AttachedToken::empty(),
             end_token: AttachedToken::empty(),
             operand: None,
@@ -7261,7 +7262,7 @@ fn parse_searched_case_expr() {
             else_result: Some(Box::new(Expr::value(Value::SingleQuotedString(
                 "<0".to_string()
             )))),
-        },
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -7273,7 +7274,7 @@ fn parse_simple_case_expr() {
     let select = verified_only_select(sql);
     use self::Expr::{Case, Identifier};
     assert_eq!(
-        &Case {
+        &Case(CaseExpr {
             case_token: AttachedToken::empty(),
             end_token: AttachedToken::empty(),
             operand: Some(Box::new(Identifier(Ident::new("foo")))),
@@ -7284,7 +7285,7 @@ fn parse_simple_case_expr() {
             else_result: Some(Box::new(Expr::value(Value::SingleQuotedString(
                 "N".to_string()
             )))),
-        },
+        }.into()),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -9344,16 +9345,16 @@ fn parse_double_colon_cast_at_timezone() {
 
     assert_eq!(
         &Expr::AtTimeZone {
-            timestamp: Box::new(Expr::Cast {
+            timestamp: Box::new(Expr::Cast(CastExpr {
                 kind: CastKind::DoubleColon,
-                expr: Box::new(Expr::Value(
+                expr: Expr::Value(
                     (Value::SingleQuotedString("2001-01-01T00:00:00.000Z".to_string()))
                         .with_empty_span()
-                )),
+                ),
                 data_type: DataType::Timestamp(None, TimezoneInfo::None),
                 array: false,
                 format: None
-            }),
+            }.into())),
             time_zone: Box::new(Expr::Value(
                 (Value::SingleQuotedString("Europe/Brussels".to_string())).with_empty_span()
             )),
@@ -13639,27 +13640,27 @@ fn test_dictionary_syntax() {
         Expr::Dictionary(vec![
             DictionaryField {
                 key: Ident::with_quote('\'', "start"),
-                value: Box::new(Expr::Cast {
+                value: Box::new(Expr::Cast(CastExpr {
                     kind: CastKind::Cast,
-                    expr: Box::new(Expr::Value(
+                    expr: Expr::Value(
                         (Value::SingleQuotedString("2023-04-01".to_owned())).with_empty_span(),
-                    )),
+                    ),
                     data_type: DataType::Timestamp(None, TimezoneInfo::None),
                     array: false,
                     format: None,
-                }),
+                }.into())),
             },
             DictionaryField {
                 key: Ident::with_quote('\'', "end"),
-                value: Box::new(Expr::Cast {
+                value: Box::new(Expr::Cast(CastExpr {
                     kind: CastKind::Cast,
-                    expr: Box::new(Expr::Value(
+                    expr: Expr::Value(
                         (Value::SingleQuotedString("2023-04-05".to_owned())).with_empty_span(),
-                    )),
+                    ),
                     data_type: DataType::Timestamp(None, TimezoneInfo::None),
                     array: false,
                     format: None,
-                }),
+                }.into())),
             },
         ]),
     )
@@ -13945,18 +13946,18 @@ fn test_extract_seconds_ok() {
         Expr::Extract {
             field: Seconds,
             syntax: ExtractSyntax::From,
-            expr: Box::new(Expr::Cast {
+            expr: Box::new(Expr::Cast(CastExpr {
                 kind: CastKind::DoubleColon,
-                expr: Box::new(Expr::Value(
+                expr: Expr::Value(
                     (Value::SingleQuotedString("2 seconds".to_string())).with_empty_span()
-                )),
+                ),
                 data_type: DataType::Interval {
                     fields: None,
                     precision: None
                 },
                 array: false,
                 format: None,
-            }),
+            }.into())),
         }
     );
 
@@ -13976,18 +13977,18 @@ fn test_extract_seconds_ok() {
             projection: vec![UnnamedExpr(Expr::Extract {
                 field: Seconds,
                 syntax: ExtractSyntax::From,
-                expr: Box::new(Expr::Cast {
+                expr: Box::new(Expr::Cast(CastExpr {
                     kind: CastKind::DoubleColon,
-                    expr: Box::new(Expr::Value(
+                    expr: Expr::Value(
                         (Value::SingleQuotedString("2 seconds".to_string())).with_empty_span(),
-                    )),
+                    ),
                     data_type: DataType::Interval {
                         fields: None,
                         precision: None,
                     },
                     array: false,
                     format: None,
-                }),
+                }.into())),
             })],
             exclude: None,
             into: None,
@@ -14034,18 +14035,18 @@ fn test_extract_seconds_single_quote_ok() {
                 span: Span::empty(),
             }),
             syntax: ExtractSyntax::From,
-            expr: Box::new(Expr::Cast {
+            expr: Box::new(Expr::Cast(CastExpr {
                 kind: CastKind::DoubleColon,
-                expr: Box::new(Expr::Value(
+                expr: Expr::Value(
                     (Value::SingleQuotedString("2 seconds".to_string())).with_empty_span()
-                )),
+                ),
                 data_type: DataType::Interval {
                     fields: None,
                     precision: None
                 },
                 array: false,
                 format: None,
-            }),
+            }.into())),
         }
     )
 }
@@ -16071,7 +16072,7 @@ fn test_lambdas() {
                             data_type: None
                         }
                     ]),
-                    body: Box::new(Expr::Case {
+                    body: Expr::Case(CaseExpr {
                         case_token: AttachedToken::empty(),
                         end_token: AttachedToken::empty(),
                         operand: None,
@@ -16103,9 +16104,9 @@ fn test_lambdas() {
                             },
                         ],
                         else_result: Some(Box::new(Expr::value(number("1")))),
-                    }),
+                    }.into()),
                     syntax: LambdaSyntax::Arrow,
-                })
+                }.into())
             ]
         )),
         dialects.verified_only_select(sql).projection[0]
@@ -16251,7 +16252,7 @@ fn test_geometry_type() {
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
-        })
+        }.into())
     );
 
     let sql = "line '1,2,3,4'";
@@ -16264,7 +16265,7 @@ fn test_geometry_type() {
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
-        })
+        }.into())
     );
 
     let sql = "path '1,2,3,4'";
@@ -16277,7 +16278,7 @@ fn test_geometry_type() {
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
-        })
+        }.into())
     );
     let sql = "box '1,2,3,4'";
     assert_eq!(
@@ -16289,7 +16290,7 @@ fn test_geometry_type() {
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
-        })
+        }.into())
     );
 
     let sql = "circle '1,2,3'";
@@ -16302,7 +16303,7 @@ fn test_geometry_type() {
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
-        })
+        }.into())
     );
 
     let sql = "polygon '1,2,3,4'";
@@ -16315,7 +16316,7 @@ fn test_geometry_type() {
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
-        })
+        }.into())
     );
     let sql = "lseg '1,2,3,4'";
     assert_eq!(
@@ -16327,7 +16328,7 @@ fn test_geometry_type() {
                 span: Span::empty(),
             },
             uses_odbc_syntax: false
-        })
+        }.into())
     );
 }
 #[test]

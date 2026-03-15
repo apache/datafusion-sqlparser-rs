@@ -1284,19 +1284,20 @@ fn parse_cast_varchar_max() {
 #[test]
 fn parse_convert() {
     let sql = "CONVERT(INT, 1, 2, 3, NULL)";
-    let Expr::Convert {
+    let Expr::Convert(convert) = ms().verified_expr(sql)
+    else {
+        unreachable!()
+    };
+    let ConvertExpr {
         is_try,
         expr,
         data_type,
         charset,
         target_before_value,
         styles,
-    } = ms().verified_expr(sql)
-    else {
-        unreachable!()
-    };
+    } = *convert;
     assert!(!is_try);
-    assert_eq!(Expr::value(number("1")), *expr);
+    assert_eq!(Expr::value(number("1")), expr);
     assert_eq!(Some(DataType::Int(None)), data_type);
     assert!(charset.is_none());
     assert!(target_before_value);

@@ -382,15 +382,15 @@ fn test_duckdb_specific_int_types() {
         let sql = format!("SELECT 123::{dtype_string}");
         let select = duckdb().verified_only_select(&sql);
         assert_eq!(
-            &Expr::Cast {
+            &Expr::Cast(CastExpr {
                 kind: CastKind::DoubleColon,
-                expr: Box::new(Expr::Value(
+                expr: Expr::Value(
                     Value::Number("123".parse().unwrap(), false).with_empty_span()
-                )),
+                ),
                 data_type: data_type.clone(),
                 array: false,
                 format: None,
-            },
+            }.into()),
             expr_from_projection(&select.projection[0])
         );
     }

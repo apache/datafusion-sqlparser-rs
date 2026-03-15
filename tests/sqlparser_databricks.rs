@@ -71,14 +71,17 @@ fn test_databricks_exists() {
                         Expr::value(number("3"))
                     ]
                 ),
-                Expr::Lambda(LambdaFunction {
-                    params: OneOrManyWithParens::One(LambdaFunctionParameter {
-                        name: Ident::new("x"),
-                        data_type: None
-                    }),
-                    body: Expr::IsNull(Box::new(Expr::Identifier(Ident::new("x")))),
-                    syntax: LambdaSyntax::Arrow,
-                }.into())
+                Expr::Lambda(
+                    LambdaFunction {
+                        params: OneOrManyWithParens::One(LambdaFunctionParameter {
+                            name: Ident::new("x"),
+                            data_type: None
+                        }),
+                        body: Expr::IsNull(Box::new(Expr::Identifier(Ident::new("x")))),
+                        syntax: LambdaSyntax::Arrow,
+                    }
+                    .into()
+                )
             ]
         ),
     );
@@ -111,52 +114,58 @@ fn test_databricks_lambdas() {
                         Expr::value(Value::SingleQuotedString("World".to_owned()))
                     ]
                 ),
-                Expr::Lambda(LambdaFunction {
-                    params: OneOrManyWithParens::Many(vec![
-                        LambdaFunctionParameter {
-                            name: Ident::new("p1"),
-                            data_type: None
-                        },
-                        LambdaFunctionParameter {
-                            name: Ident::new("p2"),
-                            data_type: None
-                        }
-                    ]),
-                    body: Expr::Case(CaseExpr {
-                        case_token: AttachedToken::empty(),
-                        end_token: AttachedToken::empty(),
-                        operand: None,
-                        conditions: vec![
-                            CaseWhen {
-                                condition: Expr::BinaryOp {
-                                    left: Box::new(Expr::Identifier(Ident::new("p1"))),
-                                    op: BinaryOperator::Eq,
-                                    right: Box::new(Expr::Identifier(Ident::new("p2")))
-                                },
-                                result: Expr::value(number("0"))
+                Expr::Lambda(
+                    LambdaFunction {
+                        params: OneOrManyWithParens::Many(vec![
+                            LambdaFunctionParameter {
+                                name: Ident::new("p1"),
+                                data_type: None
                             },
-                            CaseWhen {
-                                condition: Expr::BinaryOp {
-                                    left: Box::new(call(
-                                        "reverse",
-                                        [Expr::Identifier(Ident::new("p1"))]
-                                    )),
-                                    op: BinaryOperator::Lt,
-                                    right: Box::new(call(
-                                        "reverse",
-                                        [Expr::Identifier(Ident::new("p2"))]
-                                    )),
-                                },
-                                result: Expr::UnaryOp {
-                                    op: UnaryOperator::Minus,
-                                    expr: Box::new(Expr::value(number("1")))
-                                }
-                            },
-                        ],
-                        else_result: Some(Box::new(Expr::value(number("1"))))
-                    }.into()),
-                    syntax: LambdaSyntax::Arrow,
-                }.into())
+                            LambdaFunctionParameter {
+                                name: Ident::new("p2"),
+                                data_type: None
+                            }
+                        ]),
+                        body: Expr::Case(
+                            CaseExpr {
+                                case_token: AttachedToken::empty(),
+                                end_token: AttachedToken::empty(),
+                                operand: None,
+                                conditions: vec![
+                                    CaseWhen {
+                                        condition: Expr::BinaryOp {
+                                            left: Box::new(Expr::Identifier(Ident::new("p1"))),
+                                            op: BinaryOperator::Eq,
+                                            right: Box::new(Expr::Identifier(Ident::new("p2")))
+                                        },
+                                        result: Expr::value(number("0"))
+                                    },
+                                    CaseWhen {
+                                        condition: Expr::BinaryOp {
+                                            left: Box::new(call(
+                                                "reverse",
+                                                [Expr::Identifier(Ident::new("p1"))]
+                                            )),
+                                            op: BinaryOperator::Lt,
+                                            right: Box::new(call(
+                                                "reverse",
+                                                [Expr::Identifier(Ident::new("p2"))]
+                                            )),
+                                        },
+                                        result: Expr::UnaryOp {
+                                            op: UnaryOperator::Minus,
+                                            expr: Box::new(Expr::value(number("1")))
+                                        }
+                                    },
+                                ],
+                                else_result: Some(Box::new(Expr::value(number("1"))))
+                            }
+                            .into()
+                        ),
+                        syntax: LambdaSyntax::Arrow,
+                    }
+                    .into()
+                )
             ]
         )),
         databricks().verified_only_select(sql).projection[0]
@@ -342,28 +351,32 @@ fn data_type_timestamp_ntz() {
     // Literal
     assert_eq!(
         databricks().verified_expr("TIMESTAMP_NTZ '2025-03-29T18:52:00'"),
-        Expr::TypedString(TypedString {
-            data_type: DataType::TimestampNtz(None),
-            value: ValueWithSpan {
-                value: Value::SingleQuotedString("2025-03-29T18:52:00".to_owned()),
-                span: Span::empty(),
-            },
-            uses_odbc_syntax: false
-        }.into())
+        Expr::TypedString(
+            TypedString {
+                data_type: DataType::TimestampNtz(None),
+                value: ValueWithSpan {
+                    value: Value::SingleQuotedString("2025-03-29T18:52:00".to_owned()),
+                    span: Span::empty(),
+                },
+                uses_odbc_syntax: false
+            }
+            .into()
+        )
     );
 
     // Cast
     assert_eq!(
         databricks().verified_expr("(created_at)::TIMESTAMP_NTZ"),
-        Expr::Cast(CastExpr {
-            kind: CastKind::DoubleColon,
-            expr: Expr::Nested(Box::new(Expr::Identifier(
-                "created_at".into()
-            ))),
-            data_type: DataType::TimestampNtz(None),
-            array: false,
-            format: None
-        }.into())
+        Expr::Cast(
+            CastExpr {
+                kind: CastKind::DoubleColon,
+                expr: Expr::Nested(Box::new(Expr::Identifier("created_at".into()))),
+                data_type: DataType::TimestampNtz(None),
+                array: false,
+                format: None
+            }
+            .into()
+        )
     );
 
     // Column definition

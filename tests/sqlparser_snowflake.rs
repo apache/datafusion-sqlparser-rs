@@ -1275,13 +1275,16 @@ fn parse_array() {
     let sql = "SELECT CAST(a AS ARRAY) FROM customer";
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
-        &Expr::Cast(CastExpr {
-            kind: CastKind::Cast,
-            expr: Expr::Identifier(Ident::new("a")),
-            data_type: DataType::Array(ArrayElemTypeDef::None),
-            array: false,
-            format: None,
-        }.into()),
+        &Expr::Cast(
+            CastExpr {
+                kind: CastKind::Cast,
+                expr: Expr::Identifier(Ident::new("a")),
+                data_type: DataType::Array(ArrayElemTypeDef::None),
+                array: false,
+                format: None,
+            }
+            .into()
+        ),
         expr_from_projection(only(&select.projection))
     );
 }
@@ -1377,21 +1380,24 @@ fn parse_semi_structured_data_traversal() {
     assert_eq!(
         snowflake().verified_expr("a:b::ARRAY[1]"),
         Expr::JsonAccess {
-            value: Box::new(Expr::Cast(CastExpr {
-                kind: CastKind::DoubleColon,
-                expr: Expr::JsonAccess {
-                    value: Box::new(Expr::Identifier(Ident::new("a"))),
-                    path: JsonPath {
-                        path: vec![JsonPathElem::Dot {
-                            key: "b".to_string(),
-                            quoted: false
-                        }]
-                    }
-                },
-                data_type: DataType::Array(ArrayElemTypeDef::None),
-                array: false,
-                format: None,
-            }.into())),
+            value: Box::new(Expr::Cast(
+                CastExpr {
+                    kind: CastKind::DoubleColon,
+                    expr: Expr::JsonAccess {
+                        value: Box::new(Expr::Identifier(Ident::new("a"))),
+                        path: JsonPath {
+                            path: vec![JsonPathElem::Dot {
+                                key: "b".to_string(),
+                                quoted: false
+                            }]
+                        }
+                    },
+                    data_type: DataType::Array(ArrayElemTypeDef::None),
+                    array: false,
+                    format: None,
+                }
+                .into()
+            )),
             path: JsonPath {
                 path: vec![JsonPathElem::Bracket {
                     key: Expr::value(number("1"))

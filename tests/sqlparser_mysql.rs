@@ -860,19 +860,22 @@ fn test_functional_key_part() {
         index_column(mysql_and_generic().verified_stmt(
             r#"CREATE TABLE t (jsoncol JSON, PRIMARY KEY ((CAST(col ->> '$.id' AS UNSIGNED)) ASC))"#
         )),
-        Expr::Nested(Box::new(Expr::Cast(CastExpr {
-            kind: CastKind::Cast,
-            expr: Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("col"))),
-                op: BinaryOperator::LongArrow,
-                right: Box::new(Expr::Value(
-                    Value::SingleQuotedString("$.id".to_string()).with_empty_span()
-                )),
-            },
-            data_type: DataType::Unsigned,
-            array: false,
-            format: None,
-        }.into()))),
+        Expr::Nested(Box::new(Expr::Cast(
+            CastExpr {
+                kind: CastKind::Cast,
+                expr: Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("col"))),
+                    op: BinaryOperator::LongArrow,
+                    right: Box::new(Expr::Value(
+                        Value::SingleQuotedString("$.id".to_string()).with_empty_span()
+                    )),
+                },
+                data_type: DataType::Unsigned,
+                array: false,
+                format: None,
+            }
+            .into()
+        ))),
     );
     assert_eq!(
         index_column(mysql_and_generic().verified_stmt(

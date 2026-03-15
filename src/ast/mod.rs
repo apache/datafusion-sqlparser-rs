@@ -1949,7 +1949,7 @@ impl fmt::Display for Expr {
                 write!(f, ")")
             }
             Expr::Cast(cast) => {
-                let CastExpr  {
+                let CastExpr {
                     kind,
                     expr,
                     data_type,
@@ -1985,7 +1985,7 @@ impl fmt::Display for Expr {
                         write!(f, "{expr}::{data_type}")
                     }
                 }
-            },
+            }
             Expr::Extract {
                 field,
                 syntax,
@@ -12358,29 +12358,33 @@ mod tests {
 
     #[test]
     fn test_interval_display() {
-        let interval = Expr::Interval(Interval {
-            value: Expr::Value(
-                Value::SingleQuotedString(String::from("123:45.67")).with_empty_span(),
-            ),
-            leading_field: Some(DateTimeField::Minute),
-            leading_precision: Some(10),
-            last_field: Some(DateTimeField::Second),
-            fractional_seconds_precision: Some(9),
-        }.into());
+        let interval = Expr::Interval(
+            Interval {
+                value: Expr::Value(
+                    Value::SingleQuotedString(String::from("123:45.67")).with_empty_span(),
+                ),
+                leading_field: Some(DateTimeField::Minute),
+                leading_precision: Some(10),
+                last_field: Some(DateTimeField::Second),
+                fractional_seconds_precision: Some(9),
+            }
+            .into(),
+        );
         assert_eq!(
             "INTERVAL '123:45.67' MINUTE (10) TO SECOND (9)",
             format!("{interval}"),
         );
 
-        let interval = Expr::Interval(Interval {
-            value: Expr::Value(
-                Value::SingleQuotedString(String::from("5")).with_empty_span(),
-            ),
-            leading_field: Some(DateTimeField::Second),
-            leading_precision: Some(1),
-            last_field: None,
-            fractional_seconds_precision: Some(3),
-        }.into());
+        let interval = Expr::Interval(
+            Interval {
+                value: Expr::Value(Value::SingleQuotedString(String::from("5")).with_empty_span()),
+                leading_field: Some(DateTimeField::Second),
+                leading_precision: Some(1),
+                last_field: None,
+                fractional_seconds_precision: Some(3),
+            }
+            .into(),
+        );
         assert_eq!("INTERVAL '5' SECOND (1, 3)", format!("{interval}"));
     }
 

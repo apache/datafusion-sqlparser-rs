@@ -1284,8 +1284,7 @@ fn parse_cast_varchar_max() {
 #[test]
 fn parse_convert() {
     let sql = "CONVERT(INT, 1, 2, 3, NULL)";
-    let Expr::Convert(convert) = ms().verified_expr(sql)
-    else {
+    let Expr::Convert(convert) = ms().verified_expr(sql) else {
         unreachable!()
     };
     let ConvertExpr {

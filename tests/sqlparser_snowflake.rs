@@ -533,22 +533,25 @@ fn test_snowflake_create_table_cluster_by() {
                 Some(WrappedCollection::Parentheses(vec![
                     Expr::Identifier(Ident::new("a")),
                     Expr::Identifier(Ident::new("b")),
-                    Expr::Function(Function {
-                        name: ObjectName::from(vec![Ident::new("my_func")]),
-                        uses_odbc_syntax: false,
-                        parameters: FunctionArguments::None,
-                        args: FunctionArguments::List(FunctionArgumentList {
-                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("c"))
-                            ))],
-                            duplicate_treatment: None,
-                            clauses: vec![],
-                        }),
-                        filter: None,
-                        null_treatment: None,
-                        over: None,
-                        within_group: vec![],
-                    }),
+                    Expr::Function(
+                        Function {
+                            name: ObjectName::from(vec![Ident::new("my_func")]),
+                            uses_odbc_syntax: false,
+                            parameters: FunctionArguments::None,
+                            args: FunctionArguments::List(FunctionArgumentList {
+                                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                    Expr::Identifier(Ident::new("c"))
+                                ))],
+                                duplicate_treatment: None,
+                                clauses: vec![],
+                            }),
+                            filter: None,
+                            null_treatment: None,
+                            over: None,
+                            within_group: vec![],
+                        }
+                        .into()
+                    ),
                 ])),
                 cluster_by
             )
@@ -1272,13 +1275,16 @@ fn parse_array() {
     let sql = "SELECT CAST(a AS ARRAY) FROM customer";
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
-        &Expr::Cast {
-            kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("a"))),
-            data_type: DataType::Array(ArrayElemTypeDef::None),
-            array: false,
-            format: None,
-        },
+        &Expr::Cast(
+            CastExpr {
+                kind: CastKind::Cast,
+                expr: Expr::Identifier(Ident::new("a")),
+                data_type: DataType::Array(ArrayElemTypeDef::None),
+                array: false,
+                format: None,
+            }
+            .into()
+        ),
         expr_from_projection(only(&select.projection))
     );
 }
@@ -1374,21 +1380,24 @@ fn parse_semi_structured_data_traversal() {
     assert_eq!(
         snowflake().verified_expr("a:b::ARRAY[1]"),
         Expr::JsonAccess {
-            value: Box::new(Expr::Cast {
-                kind: CastKind::DoubleColon,
-                expr: Box::new(Expr::JsonAccess {
-                    value: Box::new(Expr::Identifier(Ident::new("a"))),
-                    path: JsonPath {
-                        path: vec![JsonPathElem::Dot {
-                            key: "b".to_string(),
-                            quoted: false
-                        }]
-                    }
-                }),
-                data_type: DataType::Array(ArrayElemTypeDef::None),
-                array: false,
-                format: None,
-            }),
+            value: Box::new(Expr::Cast(
+                CastExpr {
+                    kind: CastKind::DoubleColon,
+                    expr: Expr::JsonAccess {
+                        value: Box::new(Expr::Identifier(Ident::new("a"))),
+                        path: JsonPath {
+                            path: vec![JsonPathElem::Dot {
+                                key: "b".to_string(),
+                                quoted: false
+                            }]
+                        }
+                    },
+                    data_type: DataType::Array(ArrayElemTypeDef::None),
+                    array: false,
+                    format: None,
+                }
+                .into()
+            )),
             path: JsonPath {
                 path: vec![JsonPathElem::Bracket {
                     key: Expr::value(number("1"))
@@ -1435,7 +1444,7 @@ fn parse_delimited_identifiers() {
         expr_from_projection(&select.projection[0]),
     );
     assert_eq!(
-        &Expr::Function(Function {
+        Some(&Function {
             name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
@@ -1449,7 +1458,7 @@ fn parse_delimited_identifiers() {
             over: None,
             within_group: vec![],
         }),
-        expr_from_projection(&select.projection[1]),
+        expr_from_projection(&select.projection[1]).as_function(),
     );
     match &select.projection[2] {
         SelectItem::ExprWithAlias { expr, alias } => {
@@ -1653,22 +1662,25 @@ fn test_alter_table_clustering() {
                 [
                     Expr::Identifier(Ident::new("c1")),
                     Expr::Identifier(Ident::with_quote('"', "c2")),
-                    Expr::Function(Function {
-                        name: ObjectName::from(vec![Ident::new("TO_DATE")]),
-                        uses_odbc_syntax: false,
-                        parameters: FunctionArguments::None,
-                        args: FunctionArguments::List(FunctionArgumentList {
-                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("c3"))
-                            ))],
-                            duplicate_treatment: None,
-                            clauses: vec![],
-                        }),
-                        filter: None,
-                        null_treatment: None,
-                        over: None,
-                        within_group: vec![]
-                    })
+                    Expr::Function(
+                        Function {
+                            name: ObjectName::from(vec![Ident::new("TO_DATE")]),
+                            uses_odbc_syntax: false,
+                            parameters: FunctionArguments::None,
+                            args: FunctionArguments::List(FunctionArgumentList {
+                                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                    Expr::Identifier(Ident::new("c3"))
+                                ))],
+                                duplicate_treatment: None,
+                                clauses: vec![],
+                            }),
+                            filter: None,
+                            null_treatment: None,
+                            over: None,
+                            within_group: vec![]
+                        }
+                        .into()
+                    )
                 ],
             );
         }
@@ -4755,70 +4767,65 @@ fn test_snowflake_create_view_copy_grants() {
 #[test]
 fn test_snowflake_identifier_function() {
     // Using IDENTIFIER to reference a column
-    match &snowflake()
+    let SelectItem::UnnamedExpr(expr) = &snowflake()
         .verified_only_select("SELECT identifier('email') FROM customers")
         .projection[0]
-    {
-        SelectItem::UnnamedExpr(Expr::Function(Function { name, args, .. })) => {
-            assert_eq!(*name, ObjectName::from(vec![Ident::new("identifier")]));
-            assert_eq!(
-                *args,
-                FunctionArguments::List(FunctionArgumentList {
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        Value::SingleQuotedString("email".to_string()).into()
-                    )))],
-                    clauses: vec![],
-                    duplicate_treatment: None
-                })
-            );
-        }
-        _ => unreachable!(),
-    }
+    else {
+        panic!("not an unnamed expression");
+    };
+    let Function { name, args, .. } = expr.as_function().expect("not a function");
+    assert_eq!(*name, ObjectName::from(vec![Ident::new("identifier")]));
+    assert_eq!(
+        *args,
+        FunctionArguments::List(FunctionArgumentList {
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                Value::SingleQuotedString("email".to_string()).into()
+            )))],
+            clauses: vec![],
+            duplicate_treatment: None
+        })
+    );
 
     // Using IDENTIFIER to reference a case-sensitive column
-    match &snowflake()
+    let SelectItem::UnnamedExpr(expr) = &snowflake()
         .verified_only_select(r#"SELECT identifier('"Email"') FROM customers"#)
         .projection[0]
-    {
-        SelectItem::UnnamedExpr(Expr::Function(Function { name, args, .. })) => {
-            assert_eq!(*name, ObjectName::from(vec![Ident::new("identifier")]));
-            assert_eq!(
-                *args,
-                FunctionArguments::List(FunctionArgumentList {
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        Value::SingleQuotedString("\"Email\"".to_string()).into()
-                    )))],
-                    clauses: vec![],
-                    duplicate_treatment: None
-                })
-            );
-        }
-        _ => unreachable!(),
-    }
+    else {
+        panic!("not an unnamed expression");
+    };
+    let Function { name, args, .. } = expr.as_function().expect("not a function");
+    assert_eq!(*name, ObjectName::from(vec![Ident::new("identifier")]));
+    assert_eq!(
+        *args,
+        FunctionArguments::List(FunctionArgumentList {
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                Value::SingleQuotedString("\"Email\"".to_string()).into()
+            )))],
+            clauses: vec![],
+            duplicate_treatment: None
+        })
+    );
 
     // Using IDENTIFIER to reference an alias of a table
-    match &snowflake()
-        .verified_only_select("SELECT identifier('alias1').* FROM tbl AS alias1")
-        .projection[0]
-    {
-        SelectItem::QualifiedWildcard(
-            SelectItemQualifiedWildcardKind::Expr(Expr::Function(Function { name, args, .. })),
-            _,
-        ) => {
-            assert_eq!(*name, ObjectName::from(vec![Ident::new("identifier")]));
-            assert_eq!(
-                *args,
-                FunctionArguments::List(FunctionArgumentList {
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        Value::SingleQuotedString("alias1".to_string()).into()
-                    )))],
-                    clauses: vec![],
-                    duplicate_treatment: None
-                })
-            );
-        }
-        _ => unreachable!(),
-    }
+    let SelectItem::QualifiedWildcard(SelectItemQualifiedWildcardKind::Expr(expr), _) =
+        &snowflake()
+            .verified_only_select("SELECT identifier('alias1').* FROM tbl AS alias1")
+            .projection[0]
+    else {
+        panic!("not a qualified wildcard");
+    };
+    let Function { name, args, .. } = expr.as_function().expect("not a function");
+    assert_eq!(*name, ObjectName::from(vec![Ident::new("identifier")]));
+    assert_eq!(
+        *args,
+        FunctionArguments::List(FunctionArgumentList {
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                Value::SingleQuotedString("alias1".to_string()).into()
+            )))],
+            clauses: vec![],
+            duplicate_treatment: None
+        })
+    );
 
     // Using IDENTIFIER to reference a database
     match snowflake().verified_stmt("CREATE DATABASE IDENTIFIER('tbl')") {
@@ -4946,8 +4953,8 @@ fn test_timestamp_ntz_with_precision() {
     let select =
         snowflake().verified_only_select("SELECT CAST('2024-01-01 01:00:00' AS TIMESTAMP_NTZ(9))");
     match expr_from_projection(only(&select.projection)) {
-        Expr::Cast { data_type, .. } => {
-            assert_eq!(*data_type, DataType::TimestampNtz(Some(9)));
+        Expr::Cast(cast) => {
+            assert_eq!(cast.data_type, DataType::TimestampNtz(Some(9)));
         }
         _ => unreachable!(),
     }

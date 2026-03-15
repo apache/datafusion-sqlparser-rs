@@ -1520,7 +1520,7 @@ impl<'a> Parser<'a> {
                         filter: None,
                         over: None,
                         within_group: vec![],
-                    })))
+                    }.into())))
                 }
             Keyword::CURRENT_TIMESTAMP
             | Keyword::CURRENT_TIME
@@ -1582,7 +1582,7 @@ impl<'a> Parser<'a> {
                         null_treatment: None,
                         over: None,
                         within_group: vec![],
-                    })))
+                    }.into())))
                 }
             Keyword::NOT => Ok(Some(self.parse_not()?)),
             Keyword::MATCH if self.dialect.supports_match_against() => {
@@ -1655,14 +1655,17 @@ impl<'a> Parser<'a> {
             // For example: `a -> a * 2`.
             Token::Arrow if self.dialect.supports_lambda_functions() => {
                 self.expect_token(&Token::Arrow)?;
-                Ok(Expr::Lambda(LambdaFunction {
-                    params: OneOrManyWithParens::One(LambdaFunctionParameter {
-                        name: w.to_ident(w_span),
-                        data_type: None,
-                    }),
-                    body: Box::new(self.parse_expr()?),
-                    syntax: LambdaSyntax::Arrow,
-                }))
+                Ok(Expr::Lambda(
+                    LambdaFunction {
+                        params: OneOrManyWithParens::One(LambdaFunctionParameter {
+                            name: w.to_ident(w_span),
+                            data_type: None,
+                        }),
+                        body: self.parse_expr()?,
+                        syntax: LambdaSyntax::Arrow,
+                    }
+                    .into(),
+                ))
             }
             // An unreserved word (likely an identifier) that is followed by another word (likley a data type)
             // which is then followed by an arrow, which indicates a lambda function with a single, typed parameter.
@@ -1673,14 +1676,17 @@ impl<'a> Parser<'a> {
             {
                 let data_type = self.parse_data_type()?;
                 self.expect_token(&Token::Arrow)?;
-                Ok(Expr::Lambda(LambdaFunction {
-                    params: OneOrManyWithParens::One(LambdaFunctionParameter {
-                        name: w.to_ident(w_span),
-                        data_type: Some(data_type),
-                    }),
-                    body: Box::new(self.parse_expr()?),
-                    syntax: LambdaSyntax::Arrow,
-                }))
+                Ok(Expr::Lambda(
+                    LambdaFunction {
+                        params: OneOrManyWithParens::One(LambdaFunctionParameter {
+                            name: w.to_ident(w_span),
+                            data_type: Some(data_type),
+                        }),
+                        body: self.parse_expr()?,
+                        syntax: LambdaSyntax::Arrow,
+                    }
+                    .into(),
+                ))
             }
             _ => Ok(Expr::Identifier(w.to_ident(w_span))),
         }
@@ -1723,19 +1729,25 @@ impl<'a> Parser<'a> {
                 DataType::Custom(..) => parser_err!("dummy", loc),
                 // MySQL supports using the `BINARY` keyword as a cast to binary type.
                 DataType::Binary(..) if self.dialect.supports_binary_kw_as_cast() => {
-                    Ok(Expr::Cast {
-                        kind: CastKind::Cast,
-                        expr: Box::new(parser.parse_expr()?),
-                        data_type: DataType::Binary(None),
-                        array: false,
-                        format: None,
-                    })
+                    Ok(Expr::Cast(
+                        CastExpr {
+                            kind: CastKind::Cast,
+                            expr: parser.parse_expr()?,
+                            data_type: DataType::Binary(None),
+                            array: false,
+                            format: None,
+                        }
+                        .into(),
+                    ))
                 }
-                data_type => Ok(Expr::TypedString(TypedString {
-                    data_type,
-                    value: parser.parse_value()?,
-                    uses_odbc_syntax: false,
-                })),
+                data_type => Ok(Expr::TypedString(
+                    TypedString {
+                        data_type,
+                        value: parser.parse_value()?,
+                        uses_odbc_syntax: false,
+                    }
+                    .into(),
+                )),
             }
         })?;
 
@@ -1945,11 +1957,14 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_geometric_type(&mut self, kind: GeometricTypeKind) -> Result<Expr, ParserError> {
-        Ok(Expr::TypedString(TypedString {
-            data_type: DataType::GeometricType(kind),
-            value: self.parse_value()?,
-            uses_odbc_syntax: false,
-        }))
+        Ok(Expr::TypedString(
+            TypedString {
+                data_type: DataType::GeometricType(kind),
+                value: self.parse_value()?,
+                uses_odbc_syntax: false,
+            }
+            .into(),
+        ))
     }
 
     /// Try to parse an [Expr::CompoundFieldAccess] like `a.b.c` or `a.b[1].c`.
@@ -2278,11 +2293,14 @@ impl<'a> Parser<'a> {
             p.expect_token(&Token::RParen)?;
             p.expect_token(&Token::Arrow)?;
             let expr = p.parse_expr()?;
-            Ok(Expr::Lambda(LambdaFunction {
-                params: OneOrManyWithParens::Many(params),
-                body: Box::new(expr),
-                syntax: LambdaSyntax::Arrow,
-            }))
+            Ok(Expr::Lambda(
+                LambdaFunction {
+                    params: OneOrManyWithParens::Many(params),
+                    body: expr,
+                    syntax: LambdaSyntax::Arrow,
+                }
+                .into(),
+            ))
         })
     }
 
@@ -2302,11 +2320,14 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::Colon)?;
         // Parse the body expression
         let body = self.parse_expr()?;
-        Ok(Expr::Lambda(LambdaFunction {
-            params,
-            body: Box::new(body),
-            syntax: LambdaSyntax::LambdaKeyword,
-        }))
+        Ok(Expr::Lambda(
+            LambdaFunction {
+                params,
+                body,
+                syntax: LambdaSyntax::LambdaKeyword,
+            }
+            .into(),
+        ))
     }
 
     /// Parses the parameters of a lambda function with optional typing.
@@ -2377,11 +2398,14 @@ impl<'a> Parser<'a> {
                 _ => return p.expected("ODBC datetime keyword (t, d, or ts)", token),
             };
             let value = p.parse_value()?;
-            Ok(Expr::TypedString(TypedString {
-                data_type,
-                value,
-                uses_odbc_syntax: true,
-            }))
+            Ok(Expr::TypedString(
+                TypedString {
+                    data_type,
+                    value,
+                    uses_odbc_syntax: true,
+                }
+                .into(),
+            ))
         })
     }
 
@@ -2408,7 +2432,7 @@ impl<'a> Parser<'a> {
         self.parse_function_call(name).map(Expr::Function)
     }
 
-    fn parse_function_call(&mut self, name: ObjectName) -> Result<Function, ParserError> {
+    fn parse_function_call(&mut self, name: ObjectName) -> Result<Box<Function>, ParserError> {
         self.expect_token(&Token::LParen)?;
 
         // Snowflake permits a subquery to be passed as an argument without
@@ -2425,7 +2449,8 @@ impl<'a> Parser<'a> {
                 null_treatment: None,
                 over: None,
                 within_group: vec![],
-            });
+            }
+            .into());
         }
 
         let mut args = self.parse_function_argument_list()?;
@@ -2493,7 +2518,8 @@ impl<'a> Parser<'a> {
             filter,
             over,
             within_group,
-        })
+        }
+        .into())
     }
 
     /// Optionally parses a null treatment clause.
@@ -2519,16 +2545,19 @@ impl<'a> Parser<'a> {
         } else {
             FunctionArguments::None
         };
-        Ok(Expr::Function(Function {
-            name,
-            uses_odbc_syntax: false,
-            parameters: FunctionArguments::None,
-            args,
-            filter: None,
-            over: None,
-            null_treatment: None,
-            within_group: vec![],
-        }))
+        Ok(Expr::Function(
+            Function {
+                name,
+                uses_odbc_syntax: false,
+                parameters: FunctionArguments::None,
+                args,
+                filter: None,
+                over: None,
+                null_treatment: None,
+                within_group: vec![],
+            }
+            .into(),
+        ))
     }
 
     /// Parse window frame `UNITS` clause: `ROWS`, `RANGE`, or `GROUPS`.
@@ -2676,13 +2705,16 @@ impl<'a> Parser<'a> {
             None
         };
         let end_token = AttachedToken(self.expect_keyword(Keyword::END)?);
-        Ok(Expr::Case {
-            case_token,
-            end_token,
-            operand,
-            conditions,
-            else_result,
-        })
+        Ok(Expr::Case(
+            CaseExpr {
+                case_token,
+                end_token,
+                operand,
+                conditions,
+                else_result,
+            }
+            .into(),
+        ))
     }
 
     /// Parse an optional `FORMAT` clause for `CAST` expressions.
@@ -2719,14 +2751,17 @@ impl<'a> Parser<'a> {
             Default::default()
         };
         self.expect_token(&Token::RParen)?;
-        Ok(Expr::Convert {
-            is_try,
-            expr: Box::new(expr),
-            data_type: Some(data_type),
-            charset: None,
-            target_before_value: true,
-            styles,
-        })
+        Ok(Expr::Convert(
+            ConvertExpr {
+                is_try,
+                expr,
+                data_type: Some(data_type),
+                charset: None,
+                target_before_value: true,
+                styles,
+            }
+            .into(),
+        ))
     }
 
     /// Parse a SQL CONVERT function:
@@ -2742,14 +2777,17 @@ impl<'a> Parser<'a> {
         if self.parse_keyword(Keyword::USING) {
             let charset = self.parse_object_name(false)?;
             self.expect_token(&Token::RParen)?;
-            return Ok(Expr::Convert {
-                is_try,
-                expr: Box::new(expr),
-                data_type: None,
-                charset: Some(charset),
-                target_before_value: false,
-                styles: vec![],
-            });
+            return Ok(Expr::Convert(
+                ConvertExpr {
+                    is_try,
+                    expr,
+                    data_type: None,
+                    charset: Some(charset),
+                    target_before_value: false,
+                    styles: vec![],
+                }
+                .into(),
+            ));
         }
         self.expect_token(&Token::Comma)?;
         let data_type = self.parse_data_type()?;
@@ -2759,14 +2797,17 @@ impl<'a> Parser<'a> {
             None
         };
         self.expect_token(&Token::RParen)?;
-        Ok(Expr::Convert {
-            is_try,
-            expr: Box::new(expr),
-            data_type: Some(data_type),
-            charset,
-            target_before_value: false,
-            styles: vec![],
-        })
+        Ok(Expr::Convert(
+            ConvertExpr {
+                is_try,
+                expr,
+                data_type: Some(data_type),
+                charset,
+                target_before_value: false,
+                styles: vec![],
+            }
+            .into(),
+        ))
     }
 
     /// Parse a SQL CAST function e.g. `CAST(expr AS FLOAT)`
@@ -2778,13 +2819,16 @@ impl<'a> Parser<'a> {
         let array = self.parse_keyword(Keyword::ARRAY);
         let format = self.parse_optional_cast_format()?;
         self.expect_token(&Token::RParen)?;
-        Ok(Expr::Cast {
-            kind,
-            expr: Box::new(expr),
-            data_type,
-            array,
-            format,
-        })
+        Ok(Expr::Cast(
+            CastExpr {
+                kind,
+                expr,
+                data_type,
+                array,
+                format,
+            }
+            .into(),
+        ))
     }
 
     /// Parse a SQL EXISTS expression e.g. `WHERE EXISTS(SELECT ...)`.
@@ -3301,13 +3345,16 @@ impl<'a> Parser<'a> {
                 }
             };
 
-        Ok(Expr::Interval(Interval {
-            value: Box::new(value),
-            leading_field,
-            leading_precision,
-            last_field,
-            fractional_seconds_precision: fsec_precision,
-        }))
+        Ok(Expr::Interval(
+            Interval {
+                value,
+                leading_field,
+                leading_precision,
+                last_field,
+                fractional_seconds_precision: fsec_precision,
+            }
+            .into(),
+        ))
     }
 
     /// Peek at the next token and determine if it is a temporal unit
@@ -4060,13 +4107,16 @@ impl<'a> Parser<'a> {
                 ),
             }
         } else if Token::DoubleColon == *tok {
-            Ok(Expr::Cast {
-                kind: CastKind::DoubleColon,
-                expr: Box::new(expr),
-                data_type: self.parse_data_type()?,
-                array: false,
-                format: None,
-            })
+            Ok(Expr::Cast(
+                CastExpr {
+                    kind: CastKind::DoubleColon,
+                    expr,
+                    data_type: self.parse_data_type()?,
+                    array: false,
+                    format: None,
+                }
+                .into(),
+            ))
         } else if Token::ExclamationMark == *tok && self.dialect.supports_factorial_operator() {
             Ok(Expr::UnaryOp {
                 op: UnaryOperator::PGPostfixFactorial,
@@ -4308,13 +4358,16 @@ impl<'a> Parser<'a> {
 
     /// Parse a PostgreSQL casting style which is in the form of `expr::datatype`.
     pub fn parse_pg_cast(&mut self, expr: Expr) -> Result<Expr, ParserError> {
-        Ok(Expr::Cast {
-            kind: CastKind::DoubleColon,
-            expr: Box::new(expr),
-            data_type: self.parse_data_type()?,
-            array: false,
-            format: None,
-        })
+        Ok(Expr::Cast(
+            CastExpr {
+                kind: CastKind::DoubleColon,
+                expr,
+                data_type: self.parse_data_type()?,
+                array: false,
+                format: None,
+            }
+            .into(),
+        ))
     }
 
     /// Get the precedence of the next token
@@ -11095,7 +11148,7 @@ impl<'a> Parser<'a> {
         let object_name = self.parse_object_name(false)?;
         if self.peek_token_ref().token == Token::LParen {
             match self.parse_function(object_name)? {
-                Expr::Function(f) => Ok(Statement::Call(f)),
+                Expr::Function(f) => Ok(Statement::Call(*f)),
                 other => parser_err!(
                     format!("Expected a simple procedure call but found: {other}"),
                     self.peek_token_ref().span.start
@@ -13839,7 +13892,10 @@ impl<'a> Parser<'a> {
                     let function_expr = self.parse_function(function_name)?;
                     if let Expr::Function(function) = function_expr {
                         let alias = self.parse_identifier_optional_alias()?;
-                        pipe_operators.push(PipeOperator::Call { function, alias });
+                        pipe_operators.push(PipeOperator::Call {
+                            function: *function,
+                            alias,
+                        });
                     } else {
                         return Err(ParserError::ParserError(
                             "Expected function call after CALL".to_string(),

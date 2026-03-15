@@ -30,24 +30,24 @@ use crate::tokenizer::Span;
 use super::{
     comments, dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation,
     AlterIndexOperation, AlterTableOperation, Analyze, Array, Assignment, AssignmentTarget,
-    AttachedToken, BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef,
-    ColumnOption, ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements,
-    ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
-    CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr,
-    ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr,
-    FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
-    IfStatement, IlikeSelectItem, IndexColumn, Insert, Interpolate, InterpolateExpr, Join,
-    JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
-    MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
-    MergeInsertKind, MergeUpdateExpr, NamedParenthesizedList, NamedWindowDefinition, ObjectName,
-    ObjectNamePart, Offset, OnConflict, OnConflictAction, OnInsert, OpenStatement, OrderBy,
-    OrderByExpr, OrderByKind, OutputClause, Partition, PartitionBoundValue, PivotValueSource,
-    ProjectionSelect, Query, RaiseStatement, RaiseStatementValue, ReferentialAction,
-    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
-    SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
-    TableConstraint, TableFactor, TableObject, TableOptionsClustered, TableWithJoins, Update,
-    UpdateTableFromKind, Use, Value, Values, ViewColumnDef, WhileStatement,
-    WildcardAdditionalOptions, With, WithFill,
+    AttachedToken, BeginEndStatements, CaseExpr, CaseStatement, CastExpr, CloseCursor,
+    ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConditionalStatementBlock,
+    ConditionalStatements, ConflictTarget, ConnectByKind, ConstraintCharacteristics, ConvertExpr,
+    CopySource, CreateIndex, CreateTable, CreateTableOptions, Cte, Delete, DoUpdate,
+    ExceptSelectItem, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, ForValues, FromTable,
+    Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
+    FunctionArguments, GroupByExpr, HavingBound, IfStatement, IlikeSelectItem, IndexColumn, Insert,
+    Interpolate, InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem,
+    LateralView, LimitClause, MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause,
+    MergeInsertExpr, MergeInsertKind, MergeUpdateExpr, NamedParenthesizedList,
+    NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
+    OnInsert, OpenStatement, OrderBy, OrderByExpr, OrderByKind, OutputClause, Partition,
+    PartitionBoundValue, PivotValueSource, ProjectionSelect, Query, RaiseStatement,
+    RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
+    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
+    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
+    TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Value, Values,
+    ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -1530,7 +1530,10 @@ impl Spanned for Expr {
                 .union(&union_spans(collation.0.iter().map(|i| i.span()))),
             Expr::Nested(expr) => expr.span(),
             Expr::Value(value) => value.span(),
-            Expr::TypedString(TypedString { value, .. }) => value.span(),
+            Expr::TypedString(s) => {
+                let TypedString { value, .. } = &**s;
+                value.span()
+            }
             Expr::Function(function) => function.span(),
             Expr::GroupingSets(vec) => {
                 union_spans(vec.iter().flat_map(|i| i.iter().map(|k| k.span())))
@@ -1553,25 +1556,31 @@ impl Spanned for Expr {
                 right,
             } => left.span().union(&right.span()),
             Expr::UnaryOp { op: _, expr } => expr.span(),
-            Expr::Convert {
-                expr,
-                data_type: _,
-                charset,
-                target_before_value: _,
-                styles,
-                is_try: _,
-            } => union_spans(
-                core::iter::once(expr.span())
-                    .chain(charset.as_ref().map(|i| i.span()))
-                    .chain(styles.iter().map(|i| i.span())),
-            ),
-            Expr::Cast {
-                kind: _,
-                expr,
-                data_type: _,
-                array: _,
-                format: _,
-            } => expr.span(),
+            Expr::Convert(convert) => {
+                let ConvertExpr {
+                    expr,
+                    data_type: _,
+                    charset,
+                    target_before_value: _,
+                    styles,
+                    is_try: _,
+                } = &**convert;
+                union_spans(
+                    core::iter::once(expr.span())
+                        .chain(charset.as_ref().map(|i| i.span()))
+                        .chain(styles.iter().map(|i| i.span())),
+                )
+            }
+            Expr::Cast(cast) => {
+                let CastExpr {
+                    kind: _,
+                    expr,
+                    data_type: _,
+                    array: _,
+                    format: _,
+                } = &**cast;
+                expr.span()
+            }
             Expr::AtTimeZone {
                 timestamp,
                 time_zone,
@@ -1607,26 +1616,29 @@ impl Spanned for Expr {
                     ),
             ),
             Expr::Prefixed { value, .. } => value.span(),
-            Expr::Case {
-                case_token,
-                end_token,
-                operand,
-                conditions,
-                else_result,
-            } => union_spans(
-                iter::once(case_token.0.span)
-                    .chain(
-                        operand
-                            .as_ref()
-                            .map(|i| i.span())
-                            .into_iter()
-                            .chain(conditions.iter().flat_map(|case_when| {
-                                [case_when.condition.span(), case_when.result.span()]
-                            }))
-                            .chain(else_result.as_ref().map(|i| i.span())),
-                    )
-                    .chain(iter::once(end_token.0.span)),
-            ),
+            Expr::Case(case) => {
+                let CaseExpr {
+                    case_token,
+                    end_token,
+                    operand,
+                    conditions,
+                    else_result,
+                } = &**case;
+                union_spans(
+                    iter::once(case_token.0.span)
+                        .chain(
+                            operand
+                                .as_ref()
+                                .map(|i| i.span())
+                                .into_iter()
+                                .chain(conditions.iter().flat_map(|case_when| {
+                                    [case_when.condition.span(), case_when.result.span()]
+                                }))
+                                .chain(else_result.as_ref().map(|i| i.span())),
+                        )
+                        .chain(iter::once(end_token.0.span)),
+                )
+            }
             Expr::Exists { subquery, .. } => subquery.span(),
             Expr::Subquery(query) => query.span(),
             Expr::Struct { .. } => Span::empty(),

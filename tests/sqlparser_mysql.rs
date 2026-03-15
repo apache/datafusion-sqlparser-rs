@@ -832,17 +832,13 @@ fn parse_prefix_key_part() {
         "ALTER TABLE tab ADD FULLTEXT INDEX (textcol(10))",
         "CREATE TABLE t (textcol TEXT, INDEX idx_index (textcol(10)))",
     ] {
-        match index_column(mysql_and_generic().verified_stmt(sql)) {
-            Expr::Function(Function {
-                name,
-                args: FunctionArguments::List(FunctionArgumentList { args, .. }),
-                ..
-            }) => {
-                assert_eq!(name.to_string(), "textcol");
-                assert_eq!(args, expected);
-            }
-            expr => panic!("unexpected expression {expr} for {sql}"),
-        }
+        let expr = index_column(mysql_and_generic().verified_stmt(sql));
+        let Function { name, args, .. } = expr.as_function().expect("not a function");
+        assert_eq!(name.to_string(), "textcol");
+        let FunctionArguments::List(FunctionArgumentList { args, .. }) = args else {
+            panic!("not a function arg list");
+        };
+        assert_eq!(args, &expected);
     }
 }
 
@@ -864,37 +860,40 @@ fn test_functional_key_part() {
         index_column(mysql_and_generic().verified_stmt(
             r#"CREATE TABLE t (jsoncol JSON, PRIMARY KEY ((CAST(col ->> '$.id' AS UNSIGNED)) ASC))"#
         )),
-        Expr::Nested(Box::new(Expr::Cast {
-            kind: CastKind::Cast,
-            expr: Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("col"))),
-                op: BinaryOperator::LongArrow,
-                right: Box::new(Expr::Value(
-                    Value::SingleQuotedString("$.id".to_string()).with_empty_span()
-                )),
-            }),
-            data_type: DataType::Unsigned,
-            array: false,
-            format: None,
-        })),
+        Expr::Nested(Box::new(Expr::Cast(
+            CastExpr {
+                kind: CastKind::Cast,
+                expr: Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("col"))),
+                    op: BinaryOperator::LongArrow,
+                    right: Box::new(Expr::Value(
+                        Value::SingleQuotedString("$.id".to_string()).with_empty_span()
+                    )),
+                },
+                data_type: DataType::Unsigned,
+                array: false,
+                format: None,
+            }
+            .into()
+        ))),
     );
     assert_eq!(
         index_column(mysql_and_generic().verified_stmt(
             r#"CREATE TABLE t (jsoncol JSON, PRIMARY KEY ((CAST(col ->> '$.fields' AS UNSIGNED ARRAY)) ASC))"#
         )),
-        Expr::Nested(Box::new(Expr::Cast {
+        Expr::Nested(Box::new(Expr::Cast(CastExpr {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::BinaryOp {
+            expr: Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("col"))),
                 op: BinaryOperator::LongArrow,
                 right: Box::new(Expr::Value(
                     Value::SingleQuotedString("$.fields".to_string()).with_empty_span()
                 )),
-            }),
+            },
             data_type: DataType::Unsigned,
             array: true,
             format: None,
-        })),
+        }.into()))),
     );
 }
 

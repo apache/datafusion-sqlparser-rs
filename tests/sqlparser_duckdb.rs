@@ -382,15 +382,18 @@ fn test_duckdb_specific_int_types() {
         let sql = format!("SELECT 123::{dtype_string}");
         let select = duckdb().verified_only_select(&sql);
         assert_eq!(
-            &Expr::Cast {
-                kind: CastKind::DoubleColon,
-                expr: Box::new(Expr::Value(
-                    Value::Number("123".parse().unwrap(), false).with_empty_span()
-                )),
-                data_type: data_type.clone(),
-                array: false,
-                format: None,
-            },
+            &Expr::Cast(
+                CastExpr {
+                    kind: CastKind::DoubleColon,
+                    expr: Expr::Value(
+                        Value::Number("123".parse().unwrap(), false).with_empty_span()
+                    ),
+                    data_type: data_type.clone(),
+                    array: false,
+                    format: None,
+                }
+                .into()
+            ),
             expr_from_projection(&select.projection[0])
         );
     }
@@ -634,7 +637,7 @@ fn test_duckdb_named_argument_function_with_assignment_operator() {
     let sql = "SELECT FUN(a := '1', b := '2') FROM foo";
     let select = duckdb_and_generic().verified_only_select(sql);
     assert_eq!(
-        &Expr::Function(Function {
+        Some(&Function {
             name: ObjectName::from(vec![Ident::new("FUN")]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
@@ -663,7 +666,7 @@ fn test_duckdb_named_argument_function_with_assignment_operator() {
             over: None,
             within_group: vec![],
         }),
-        expr_from_projection(only(&select.projection))
+        expr_from_projection(only(&select.projection)).as_function()
     );
 }
 

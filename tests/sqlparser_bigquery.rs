@@ -916,14 +916,17 @@ fn parse_typed_struct_syntax_bigquery() {
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::TypedString(TypedString {
-                data_type: DataType::Datetime(None),
-                value: ValueWithSpan {
-                    value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into()),
-                    span: Span::empty(),
-                },
-                uses_odbc_syntax: false
-            })],
+            values: vec![Expr::TypedString(
+                TypedString {
+                    data_type: DataType::Datetime(None),
+                    value: ValueWithSpan {
+                        value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into()),
+                        span: Span::empty(),
+                    },
+                    uses_odbc_syntax: false
+                }
+                .into()
+            )],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Datetime(None),
@@ -960,15 +963,16 @@ fn parse_typed_struct_syntax_bigquery() {
     assert_eq!(2, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Interval(Interval {
-                value: Box::new(Expr::Value(
-                    Value::SingleQuotedString("2".into()).with_empty_span()
-                )),
-                leading_field: Some(DateTimeField::Hour),
-                leading_precision: None,
-                last_field: None,
-                fractional_seconds_precision: None
-            })],
+            values: vec![Expr::Interval(
+                Interval {
+                    value: Expr::Value(Value::SingleQuotedString("2".into()).with_empty_span()),
+                    leading_field: Some(DateTimeField::Hour),
+                    leading_precision: None,
+                    last_field: None,
+                    fractional_seconds_precision: None
+                }
+                .into()
+            )],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Interval {
@@ -982,16 +986,19 @@ fn parse_typed_struct_syntax_bigquery() {
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::TypedString(TypedString {
-                data_type: DataType::JSON,
-                value: ValueWithSpan {
-                    value: Value::SingleQuotedString(
-                        r#"{"class" : {"students" : [{"name" : "Jane"}]}}"#.into()
-                    ),
-                    span: Span::empty(),
-                },
-                uses_odbc_syntax: false
-            })],
+            values: vec![Expr::TypedString(
+                TypedString {
+                    data_type: DataType::JSON,
+                    value: ValueWithSpan {
+                        value: Value::SingleQuotedString(
+                            r#"{"class" : {"students" : [{"name" : "Jane"}]}}"#.into()
+                        ),
+                        span: Span::empty(),
+                    },
+                    uses_odbc_syntax: false
+                }
+                .into()
+            )],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::JSON,
@@ -1019,16 +1026,19 @@ fn parse_typed_struct_syntax_bigquery() {
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::TypedString(TypedString {
-                data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                value: ValueWithSpan {
-                    value: Value::SingleQuotedString(
-                        "2008-12-25 15:30:00 America/Los_Angeles".into()
-                    ),
-                    span: Span::empty(),
-                },
-                uses_odbc_syntax: false
-            })],
+            values: vec![Expr::TypedString(
+                TypedString {
+                    data_type: DataType::Timestamp(None, TimezoneInfo::None),
+                    value: ValueWithSpan {
+                        value: Value::SingleQuotedString(
+                            "2008-12-25 15:30:00 America/Los_Angeles".into()
+                        ),
+                        span: Span::empty(),
+                    },
+                    uses_odbc_syntax: false
+                }
+                .into()
+            )],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Timestamp(None, TimezoneInfo::None),
@@ -1040,14 +1050,17 @@ fn parse_typed_struct_syntax_bigquery() {
 
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::TypedString(TypedString {
-                data_type: DataType::Time(None, TimezoneInfo::None),
-                value: ValueWithSpan {
-                    value: Value::SingleQuotedString("15:30:00".into()),
-                    span: Span::empty(),
-                },
-                uses_odbc_syntax: false
-            })],
+            values: vec![Expr::TypedString(
+                TypedString {
+                    data_type: DataType::Time(None, TimezoneInfo::None),
+                    value: ValueWithSpan {
+                        value: Value::SingleQuotedString("15:30:00".into()),
+                        span: Span::empty(),
+                    },
+                    uses_odbc_syntax: false
+                }
+                .into()
+            )],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Time(None, TimezoneInfo::None),
@@ -1062,14 +1075,17 @@ fn parse_typed_struct_syntax_bigquery() {
     assert_eq!(2, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::TypedString(TypedString {
-                data_type: DataType::Numeric(ExactNumberInfo::None),
-                value: ValueWithSpan {
-                    value: Value::SingleQuotedString("1".into()),
-                    span: Span::empty(),
-                },
-                uses_odbc_syntax: false
-            })],
+            values: vec![Expr::TypedString(
+                TypedString {
+                    data_type: DataType::Numeric(ExactNumberInfo::None),
+                    value: ValueWithSpan {
+                        value: Value::SingleQuotedString("1".into()),
+                        span: Span::empty(),
+                    },
+                    uses_odbc_syntax: false
+                }
+                .into()
+            )],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Numeric(ExactNumberInfo::None),
@@ -1080,14 +1096,17 @@ fn parse_typed_struct_syntax_bigquery() {
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::TypedString(TypedString {
-                data_type: DataType::BigNumeric(ExactNumberInfo::None),
-                value: ValueWithSpan {
-                    value: Value::SingleQuotedString("1".into()),
-                    span: Span::empty(),
-                },
-                uses_odbc_syntax: false
-            })],
+            values: vec![Expr::TypedString(
+                TypedString {
+                    data_type: DataType::BigNumeric(ExactNumberInfo::None),
+                    value: ValueWithSpan {
+                        value: Value::SingleQuotedString("1".into()),
+                        span: Span::empty(),
+                    },
+                    uses_odbc_syntax: false
+                }
+                .into()
+            )],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::BigNumeric(ExactNumberInfo::None),
@@ -1258,14 +1277,17 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::TypedString(TypedString {
-                data_type: DataType::Datetime(None),
-                value: ValueWithSpan {
-                    value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into()),
-                    span: Span::empty(),
-                },
-                uses_odbc_syntax: false
-            })],
+            values: vec![Expr::TypedString(
+                TypedString {
+                    data_type: DataType::Datetime(None),
+                    value: ValueWithSpan {
+                        value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into()),
+                        span: Span::empty(),
+                    },
+                    uses_odbc_syntax: false
+                }
+                .into()
+            )],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Datetime(None),
@@ -1302,15 +1324,16 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
     assert_eq!(2, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Interval(Interval {
-                value: Box::new(Expr::Value(
-                    Value::SingleQuotedString("1".into()).with_empty_span()
-                )),
-                leading_field: Some(DateTimeField::Month),
-                leading_precision: None,
-                last_field: None,
-                fractional_seconds_precision: None
-            })],
+            values: vec![Expr::Interval(
+                Interval {
+                    value: Expr::Value(Value::SingleQuotedString("1".into()).with_empty_span()),
+                    leading_field: Some(DateTimeField::Month),
+                    leading_precision: None,
+                    last_field: None,
+                    fractional_seconds_precision: None
+                }
+                .into()
+            )],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Interval {
@@ -1324,16 +1347,19 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::TypedString(TypedString {
-                data_type: DataType::JSON,
-                value: ValueWithSpan {
-                    value: Value::SingleQuotedString(
-                        r#"{"class" : {"students" : [{"name" : "Jane"}]}}"#.into()
-                    ),
-                    span: Span::empty(),
-                },
-                uses_odbc_syntax: false
-            })],
+            values: vec![Expr::TypedString(
+                TypedString {
+                    data_type: DataType::JSON,
+                    value: ValueWithSpan {
+                        value: Value::SingleQuotedString(
+                            r#"{"class" : {"students" : [{"name" : "Jane"}]}}"#.into()
+                        ),
+                        span: Span::empty(),
+                    },
+                    uses_odbc_syntax: false
+                }
+                .into()
+            )],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::JSON,
@@ -1361,16 +1387,19 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::TypedString(TypedString {
-                data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                value: ValueWithSpan {
-                    value: Value::SingleQuotedString(
-                        "2008-12-25 15:30:00 America/Los_Angeles".into()
-                    ),
-                    span: Span::empty(),
-                },
-                uses_odbc_syntax: false
-            })],
+            values: vec![Expr::TypedString(
+                TypedString {
+                    data_type: DataType::Timestamp(None, TimezoneInfo::None),
+                    value: ValueWithSpan {
+                        value: Value::SingleQuotedString(
+                            "2008-12-25 15:30:00 America/Los_Angeles".into()
+                        ),
+                        span: Span::empty(),
+                    },
+                    uses_odbc_syntax: false
+                }
+                .into()
+            )],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Timestamp(None, TimezoneInfo::None),
@@ -1382,14 +1411,17 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
 
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::TypedString(TypedString {
-                data_type: DataType::Time(None, TimezoneInfo::None),
-                value: ValueWithSpan {
-                    value: Value::SingleQuotedString("15:30:00".into()),
-                    span: Span::empty(),
-                },
-                uses_odbc_syntax: false
-            })],
+            values: vec![Expr::TypedString(
+                TypedString {
+                    data_type: DataType::Time(None, TimezoneInfo::None),
+                    value: ValueWithSpan {
+                        value: Value::SingleQuotedString("15:30:00".into()),
+                        span: Span::empty(),
+                    },
+                    uses_odbc_syntax: false
+                }
+                .into()
+            )],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Time(None, TimezoneInfo::None),
@@ -1404,14 +1436,17 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
     assert_eq!(2, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::TypedString(TypedString {
-                data_type: DataType::Numeric(ExactNumberInfo::None),
-                value: ValueWithSpan {
-                    value: Value::SingleQuotedString("1".into()),
-                    span: Span::empty(),
-                },
-                uses_odbc_syntax: false
-            })],
+            values: vec![Expr::TypedString(
+                TypedString {
+                    data_type: DataType::Numeric(ExactNumberInfo::None),
+                    value: ValueWithSpan {
+                        value: Value::SingleQuotedString("1".into()),
+                        span: Span::empty(),
+                    },
+                    uses_odbc_syntax: false
+                }
+                .into()
+            )],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Numeric(ExactNumberInfo::None),
@@ -1422,14 +1457,17 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::TypedString(TypedString {
-                data_type: DataType::BigNumeric(ExactNumberInfo::None),
-                value: ValueWithSpan {
-                    value: Value::SingleQuotedString("1".into()),
-                    span: Span::empty(),
-                },
-                uses_odbc_syntax: false
-            })],
+            values: vec![Expr::TypedString(
+                TypedString {
+                    data_type: DataType::BigNumeric(ExactNumberInfo::None),
+                    value: ValueWithSpan {
+                        value: Value::SingleQuotedString("1".into()),
+                        span: Span::empty(),
+                    },
+                    uses_odbc_syntax: false
+                }
+                .into()
+            )],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::BigNumeric(ExactNumberInfo::None),
@@ -2229,25 +2267,28 @@ fn parse_map_access_expr() {
                 },
             }),
             AccessExpr::Subscript(Subscript::Index {
-                index: Expr::Function(Function {
-                    name: ObjectName::from(vec![Ident::with_span(
-                        Span::new(Location::of(1, 11), Location::of(1, 22)),
-                        "safe_offset",
-                    )]),
-                    parameters: FunctionArguments::None,
-                    args: FunctionArguments::List(FunctionArgumentList {
-                        duplicate_treatment: None,
-                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                            number("2").with_empty_span(),
-                        )))],
-                        clauses: vec![],
-                    }),
-                    filter: None,
-                    null_treatment: None,
-                    over: None,
-                    within_group: vec![],
-                    uses_odbc_syntax: false,
-                }),
+                index: Expr::Function(
+                    Function {
+                        name: ObjectName::from(vec![Ident::with_span(
+                            Span::new(Location::of(1, 11), Location::of(1, 22)),
+                            "safe_offset",
+                        )]),
+                        parameters: FunctionArguments::None,
+                        args: FunctionArguments::List(FunctionArgumentList {
+                            duplicate_treatment: None,
+                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                                number("2").with_empty_span(),
+                            )))],
+                            clauses: vec![],
+                        }),
+                        filter: None,
+                        null_treatment: None,
+                        over: None,
+                        within_group: vec![],
+                        uses_odbc_syntax: false,
+                    }
+                    .into(),
+                ),
             }),
             AccessExpr::Dot(Expr::Identifier(Ident::with_span(
                 Span::new(Location::of(1, 24), Location::of(1, 25)),
@@ -2510,14 +2551,17 @@ fn test_triple_quote_typed_strings() {
 
     let expr = bigquery().verified_expr(r#"JSON """{"foo":"bar's"}""""#);
     assert_eq!(
-        Expr::TypedString(TypedString {
-            data_type: DataType::JSON,
-            value: ValueWithSpan {
-                value: Value::TripleDoubleQuotedString(r#"{"foo":"bar's"}"#.into()),
-                span: Span::empty(),
-            },
-            uses_odbc_syntax: false
-        }),
+        Expr::TypedString(
+            TypedString {
+                data_type: DataType::JSON,
+                value: ValueWithSpan {
+                    value: Value::TripleDoubleQuotedString(r#"{"foo":"bar's"}"#.into()),
+                    span: Span::empty(),
+                },
+                uses_odbc_syntax: false
+            }
+            .into()
+        ),
         expr
     );
 }

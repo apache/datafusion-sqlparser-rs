@@ -1627,6 +1627,8 @@ impl<'a> Tokenizer<'a> {
                             chars.next();
                             match chars.peek() {
                                 Some('>') => self.consume_for_binop(chars, "<=>", Token::Spaceship),
+                                Some('+') => Ok(Some(Token::LtEq)),
+                                Some('-') => Ok(Some(Token::LtEq)),
                                 _ => self.start_binop(chars, "<=", Token::LtEq),
                             }
                         }
@@ -1646,13 +1648,13 @@ impl<'a> Tokenizer<'a> {
                             }
                         }
                         Some('<') => self.consume_for_binop(chars, "<<", Token::ShiftLeft),
+                        Some('+') => Ok(Some(Token::Lt)),
                         Some('-') if self.dialect.supports_geometric_types() => {
-                            chars.next(); // consume
-                            match chars.peek() {
-                                Some('>') => {
-                                    self.consume_for_binop(chars, "<->", Token::TwoWayArrow)
-                                }
-                                _ => self.start_binop_opt(chars, "<-", None),
+                            if chars.peekable.clone().nth(1) == Some('>') {
+                                chars.next(); // consume
+                                self.consume_for_binop(chars, "<->", Token::TwoWayArrow)
+                            } else {
+                                Ok(Some(Token::Lt))
                             }
                         }
                         Some('^') if self.dialect.supports_geometric_types() => {
@@ -2628,9 +2630,10 @@ fn take_char_from_hex_digits(
 mod tests {
     use super::*;
     use crate::dialect::{
-        BigQueryDialect, ClickHouseDialect, HiveDialect, MsSqlDialect, MySqlDialect, SQLiteDialect,
+        BigQueryDialect, ClickHouseDialect, HiveDialect, MsSqlDialect, MySqlDialect,
+        PostgreSqlDialect, SQLiteDialect,
     };
-    use crate::test_utils::{all_dialects_except, all_dialects_where};
+    use crate::test_utils::{all_dialects, all_dialects_except, all_dialects_where};
     use core::fmt::Debug;
 
     #[test]
@@ -4418,6 +4421,94 @@ mod tests {
                 Token::Number("1".to_string(), false),
             ],
             tokens,
+        );
+    }
+
+    #[test]
+    fn tokenize_lt() {
+        all_dialects().tokenizes_to(
+            "select a <-50",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("a", None),
+                Token::Whitespace(Whitespace::Space),
+                Token::Lt,
+                Token::Minus,
+                Token::Number("50".to_string(), false),
+            ],
+        );
+        all_dialects().tokenizes_to(
+            "select a <+50",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("a", None),
+                Token::Whitespace(Whitespace::Space),
+                Token::Lt,
+                Token::Plus,
+                Token::Number("50".to_string(), false),
+            ],
+        );
+        all_dialects().tokenizes_to(
+            "select a <=-50",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("a", None),
+                Token::Whitespace(Whitespace::Space),
+                Token::LtEq,
+                Token::Minus,
+                Token::Number("50".to_string(), false),
+            ],
+        );
+        all_dialects().tokenizes_to(
+            "select a <=+50",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("a", None),
+                Token::Whitespace(Whitespace::Space),
+                Token::LtEq,
+                Token::Plus,
+                Token::Number("50".to_string(), false),
+            ],
+        );
+        all_dialects_where(|d| d.supports_geometric_types()).tokenizes_to(
+            "select a <->b",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("a", None),
+                Token::Whitespace(Whitespace::Space),
+                Token::TwoWayArrow,
+                Token::make_word("b", None),
+            ],
+        );
+
+        all_dialects().tokenizes_to(
+            "select a <-b",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("a", None),
+                Token::Whitespace(Whitespace::Space),
+                Token::Lt,
+                Token::Minus,
+                Token::make_word("b", None),
+            ],
+        );
+        all_dialects().tokenizes_to(
+            "select a <+b",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("a", None),
+                Token::Whitespace(Whitespace::Space),
+                Token::Lt,
+                Token::Plus,
+                Token::make_word("b", None),
+            ],
         );
     }
 }

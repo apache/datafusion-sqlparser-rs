@@ -18,11 +18,11 @@ use alloc::{string::ToString, vec};
 use super::{Parser, ParserError};
 use crate::{
     ast::{
-        helpers::key_value_options::{KeyValueOptions, KeyValueOptionsDelimiter},
         AlterConnectorOwner, AlterPolicy, AlterPolicyOperation, AlterRoleOperation, AlterUser,
         AlterUserAddMfaMethodOtp, AlterUserAddRoleDelegation, AlterUserModifyMfaMethod,
         AlterUserPassword, AlterUserRemoveRoleDelegation, AlterUserSetPolicy, Expr, MfaMethodKind,
         Password, ResetConfig, RoleOption, SetConfigValue, Statement, UserPolicyKind,
+        helpers::key_value_options::{KeyValueOptions, KeyValueOptionsDelimiter},
     },
     dialect::{MsSqlDialect, PostgreSqlDialect},
     keywords::Keyword,
@@ -219,7 +219,7 @@ impl Parser<'_> {
             if self.parse_keywords(&[Keyword::ADD, Keyword::MFA, Keyword::METHOD, Keyword::OTP]) {
                 let count = if self.parse_keyword(Keyword::COUNT) {
                     self.expect_token(&Token::Eq)?;
-                    Some(self.parse_value()?.into())
+                    Some(self.parse_value()?)
                 } else {
                     None
                 };

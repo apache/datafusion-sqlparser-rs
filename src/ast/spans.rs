@@ -46,7 +46,7 @@ use super::{
     RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
     SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
     TableConstraint, TableFactor, TableObject, TableOptionsClustered, TableWithJoins, Update,
-    UpdateTableFromKind, Use, Value, Values, ViewColumnDef, WhileStatement,
+    UpdateTableFromKind, Use, Values, ViewColumnDef, WhileStatement,
     WildcardAdditionalOptions, With, WithFill,
 };
 
@@ -2185,13 +2185,6 @@ impl Spanned for ValueWithSpan {
     }
 }
 
-/// The span is stored in the `ValueWrapper` struct
-impl Spanned for Value {
-    fn span(&self) -> Span {
-        Span::empty() // # todo: Value needs to store spans before this is possible
-    }
-}
-
 impl Spanned for Join {
     fn span(&self) -> Span {
         let Join {
@@ -2565,6 +2558,7 @@ impl Spanned for comments::CommentWithSpan {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::ast::Value;
     use crate::dialect::{Dialect, GenericDialect, SnowflakeDialect};
     use crate::parser::Parser;
     use crate::tokenizer::{Location, Span};

@@ -3287,7 +3287,7 @@ fn test_transaction_statement() {
         statement,
         Statement::Set(Set::SetTransaction {
             modes: vec![],
-            snapshot: Some(Value::SingleQuotedString(String::from("000003A1-1"))),
+            snapshot: Some(Value::SingleQuotedString(String::from("000003A1-1")).with_empty_span()),
             session: false
         })
     );

@@ -3810,14 +3810,14 @@ fn parse_json_table() {
             .relation,
         TableFactor::JsonTable {
             json_expr: Expr::Value((Value::SingleQuotedString("[1,2]".to_string())).with_empty_span()),
-            json_path: Value::SingleQuotedString("$[*]".to_string()),
+            json_path: Value::SingleQuotedString("$[*]".to_string()).with_empty_span(),
             columns: vec![
                 JsonTableColumn::Named(JsonTableNamedColumn {
                     name: Ident::new("x"),
                     r#type: DataType::Int(None),
-                    path: Value::SingleQuotedString("$".to_string()),
+                    path: Value::SingleQuotedString("$".to_string()).with_empty_span(),
                     exists: false,
-                    on_empty: Some(JsonTableColumnErrorHandling::Default(Value::SingleQuotedString("0".to_string()))),
+                    on_empty: Some(JsonTableColumnErrorHandling::Default(Value::SingleQuotedString("0".to_string()).with_empty_span())),
                     on_error: Some(JsonTableColumnErrorHandling::Null),
                 }),
             ],
@@ -4233,7 +4233,7 @@ fn parse_match_against_with_alias() {
                             Ident::new("ReferenceID")
                         ])]
                     );
-                    assert_eq!(match_value, Value::SingleQuotedString("AAA".to_owned()));
+                    assert_eq!(match_value, Value::SingleQuotedString("AAA".to_owned()).with_empty_span());
                     assert_eq!(opt_search_modifier, Some(SearchModifier::InBooleanMode));
                 }
                 _ => unreachable!(),

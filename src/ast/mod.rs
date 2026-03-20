@@ -624,9 +624,9 @@ impl fmt::Display for MapEntry {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CastFormat {
     /// A simple cast format specified by a `Value`.
-    Value(Value),
+    Value(ValueWithSpan),
     /// A cast format with an explicit time zone: `(format, timezone)`.
-    ValueAtTimeZone(Value, Value),
+    ValueAtTimeZone(ValueWithSpan, ValueWithSpan),
 }
 
 /// An element of a JSON path.
@@ -778,7 +778,7 @@ pub enum CeilFloorKind {
     /// `CEIL( <expr> TO <DateTimeField>)`
     DateTimeField(DateTimeField),
     /// `CEIL( <expr> [, <scale>])`
-    Scale(Value),
+    Scale(ValueWithSpan),
 }
 
 /// A WHEN clause in a CASE expression containing both
@@ -956,7 +956,7 @@ pub enum Expr {
         /// Pattern expression.
         pattern: Box<Expr>,
         /// Optional escape character.
-        escape_char: Option<Value>,
+        escape_char: Option<ValueWithSpan>,
     },
     /// `ILIKE` (case-insensitive `LIKE`)
     ILike {
@@ -970,7 +970,7 @@ pub enum Expr {
         /// Pattern expression.
         pattern: Box<Expr>,
         /// Optional escape character.
-        escape_char: Option<Value>,
+        escape_char: Option<ValueWithSpan>,
     },
     /// `SIMILAR TO` regex
     SimilarTo {
@@ -981,7 +981,7 @@ pub enum Expr {
         /// Pattern expression.
         pattern: Box<Expr>,
         /// Optional escape character.
-        escape_char: Option<Value>,
+        escape_char: Option<ValueWithSpan>,
     },
     /// MySQL: `RLIKE` regex or `REGEXP` regex
     RLike {
@@ -1292,7 +1292,7 @@ pub enum Expr {
         /// `(<col>, <col>, ...)`.
         columns: Vec<ObjectName>,
         /// `<expr>`.
-        match_value: Value,
+        match_value: ValueWithSpan,
         /// `<search modifier>`
         opt_search_modifier: Option<SearchModifier>,
     },
@@ -3295,7 +3295,7 @@ pub enum Set {
         /// Transaction modes (e.g., ISOLATION LEVEL, READ ONLY).
         modes: Vec<TransactionMode>,
         /// Optional snapshot value for transaction snapshot control.
-        snapshot: Option<Value>,
+        snapshot: Option<ValueWithSpan>,
         /// `true` when the `SESSION` keyword was used.
         session: bool,
     },
@@ -4630,7 +4630,7 @@ pub enum Statement {
         /// Pragma name (possibly qualified).
         name: ObjectName,
         /// Optional pragma value.
-        value: Option<Value>,
+        value: Option<ValueWithSpan>,
         /// Whether the pragma used `=`.
         is_eq: bool,
     },
@@ -6752,7 +6752,7 @@ pub enum FetchDirection {
     /// Fetch a specific count of rows.
     Count {
         /// The limit value for the count.
-        limit: Value,
+        limit: ValueWithSpan,
     },
     /// Fetch the next row.
     Next,
@@ -6765,12 +6765,12 @@ pub enum FetchDirection {
     /// Fetch an absolute row by index.
     Absolute {
         /// The absolute index value.
-        limit: Value,
+        limit: ValueWithSpan,
     },
     /// Fetch a row relative to the current position.
     Relative {
         /// The relative offset value.
-        limit: Value,
+        limit: ValueWithSpan,
     },
     /// Fetch all rows.
     All,
@@ -6779,7 +6779,7 @@ pub enum FetchDirection {
     /// Fetch forward by an optional limit.
     Forward {
         /// Optional forward limit.
-        limit: Option<Value>,
+        limit: Option<ValueWithSpan>,
     },
     /// Fetch all forward rows.
     ForwardAll,
@@ -6788,7 +6788,7 @@ pub enum FetchDirection {
     /// Fetch backward by an optional limit.
     Backward {
         /// Optional backward limit.
-        limit: Option<Value>,
+        limit: Option<ValueWithSpan>,
     },
     /// Fetch all backward rows.
     BackwardAll,
@@ -8116,7 +8116,7 @@ pub enum FunctionArgumentClause {
     /// The `SEPARATOR` clause to the [`GROUP_CONCAT`] function in MySQL.
     ///
     /// [`GROUP_CONCAT`]: https://dev.mysql.com/doc/refman/8.0/en/aggregate-functions.html#function_group-concat
-    Separator(Value),
+    Separator(ValueWithSpan),
     /// The `ON NULL` clause for some JSON functions.
     ///
     /// [MSSQL `JSON_ARRAY`](https://learn.microsoft.com/en-us/sql/t-sql/functions/json-array-transact-sql?view=sql-server-ver16)
@@ -9465,7 +9465,7 @@ impl fmt::Display for CopyLegacyOption {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct FileSize {
     /// Numeric size value.
-    pub size: Value,
+    pub size: ValueWithSpan,
     /// Optional unit for the size (MB or GB).
     pub unit: Option<FileSizeUnit>,
 }
@@ -10654,11 +10654,11 @@ pub struct ShowStatementOptions {
     /// Optional scope to show in (for example: TABLE, SCHEMA).
     pub show_in: Option<ShowStatementIn>,
     /// Optional `STARTS WITH` filter value.
-    pub starts_with: Option<Value>,
+    pub starts_with: Option<ValueWithSpan>,
     /// Optional `LIMIT` expression.
     pub limit: Option<Expr>,
     /// Optional `FROM` value used with `LIMIT`.
-    pub limit_from: Option<Value>,
+    pub limit_from: Option<ValueWithSpan>,
     /// Optional filter position (infix or suffix) for `LIKE`/`FILTER`.
     pub filter_position: Option<ShowStatementFilterPosition>,
 }
@@ -11474,7 +11474,7 @@ pub struct AlterUserRemoveRoleDelegation {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct AlterUserAddMfaMethodOtp {
     /// Optional OTP count parameter.
-    pub count: Option<Value>,
+    pub count: Option<ValueWithSpan>,
 }
 
 /// ```sql
@@ -11795,7 +11795,7 @@ pub struct VacuumStatement {
     /// Optional table to run `VACUUM` on.
     pub table_name: Option<ObjectName>,
     /// Optional threshold value (percent) for `TO threshold PERCENT`.
-    pub threshold: Option<Value>,
+    pub threshold: Option<ValueWithSpan>,
     /// Whether `BOOST` was specified.
     pub boost: bool,
 }

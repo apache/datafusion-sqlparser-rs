@@ -1247,6 +1247,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Does the dialect support table queries in insertion?
+    ///
+    /// e.g. `SELECT INTO (<query>) ...`
+    fn supports_insert_table_query(&self) -> bool {
+        false
+    }
+
     /// Does the dialect support insert formats, e.g. `INSERT INTO ... FORMAT <format>`
     fn supports_insert_format(&self) -> bool {
         false

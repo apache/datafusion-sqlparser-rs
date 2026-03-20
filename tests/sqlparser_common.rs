@@ -3324,7 +3324,9 @@ fn parse_ceil_scale() {
     assert_eq!(
         &Expr::Ceil {
             expr: Box::new(Expr::Identifier(Ident::new("d"))),
-            field: CeilFloorKind::Scale(Value::Number(bigdecimal::BigDecimal::from(2), false).with_empty_span()),
+            field: CeilFloorKind::Scale(
+                Value::Number(bigdecimal::BigDecimal::from(2), false).with_empty_span()
+            ),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -3348,7 +3350,9 @@ fn parse_floor_scale() {
     assert_eq!(
         &Expr::Floor {
             expr: Box::new(Expr::Identifier(Ident::new("d"))),
-            field: CeilFloorKind::Scale(Value::Number(bigdecimal::BigDecimal::from(2), false).with_empty_span()),
+            field: CeilFloorKind::Scale(
+                Value::Number(bigdecimal::BigDecimal::from(2), false).with_empty_span()
+            ),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -17666,19 +17670,21 @@ fn parse_create_user() {
                     options: vec![
                         KeyValueOption {
                             option_name: "PASSWORD".to_string(),
-                            option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                                "secret".to_string()
-                            ).with_empty_span()),
+                            option_value: KeyValueOptionKind::Single(
+                                Value::SingleQuotedString("secret".to_string()).with_empty_span()
+                            ),
                         },
                         KeyValueOption {
                             option_name: "MUST_CHANGE_PASSWORD".to_string(),
-                            option_value: KeyValueOptionKind::Single(Value::Boolean(false).with_empty_span()),
+                            option_value: KeyValueOptionKind::Single(
+                                Value::Boolean(false).with_empty_span()
+                            ),
                         },
                         KeyValueOption {
                             option_name: "TYPE".to_string(),
-                            option_value: KeyValueOptionKind::Single(Value::Placeholder(
-                                "SERVICE".to_string()
-                            ).with_empty_span()),
+                            option_value: KeyValueOptionKind::Single(
+                                Value::Placeholder("SERVICE".to_string()).with_empty_span()
+                            ),
                         },
                     ],
                 },
@@ -17691,15 +17697,15 @@ fn parse_create_user() {
                     options: vec![
                         KeyValueOption {
                             option_name: "t1".to_string(),
-                            option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                                "v1".to_string()
-                            ).with_empty_span()),
+                            option_value: KeyValueOptionKind::Single(
+                                Value::SingleQuotedString("v1".to_string()).with_empty_span()
+                            ),
                         },
                         KeyValueOption {
                             option_name: "t2".to_string(),
-                            option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                                "v2".to_string()
-                            ).with_empty_span()),
+                            option_value: KeyValueOptionKind::Single(
+                                Value::SingleQuotedString("v2".to_string()).with_empty_span()
+                            ),
                         },
                     ]
                 }
@@ -18325,9 +18331,9 @@ fn test_parse_alter_user() {
                 alter.set_tag.options,
                 vec![KeyValueOption {
                     option_name: "k1".to_string(),
-                    option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                        "v1".to_string()
-                    ).with_empty_span()),
+                    option_value: KeyValueOptionKind::Single(
+                        Value::SingleQuotedString("v1".to_string()).with_empty_span()
+                    ),
                 },]
             );
         }
@@ -18361,17 +18367,21 @@ fn test_parse_alter_user() {
                     options: vec![
                         KeyValueOption {
                             option_name: "PASSWORD".to_string(),
-                            option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                                "secret".to_string()
-                            ).with_empty_span()),
+                            option_value: KeyValueOptionKind::Single(
+                                Value::SingleQuotedString("secret".to_string()).with_empty_span()
+                            ),
                         },
                         KeyValueOption {
                             option_name: "MUST_CHANGE_PASSWORD".to_string(),
-                            option_value: KeyValueOptionKind::Single(Value::Boolean(true).with_empty_span()),
+                            option_value: KeyValueOptionKind::Single(
+                                Value::Boolean(true).with_empty_span()
+                            ),
                         },
                         KeyValueOption {
                             option_name: "MINS_TO_UNLOCK".to_string(),
-                            option_value: KeyValueOptionKind::Single(number("10").with_empty_span()),
+                            option_value: KeyValueOptionKind::Single(
+                                number("10").with_empty_span()
+                            ),
                         },
                     ]
                 }
@@ -18398,7 +18408,8 @@ fn test_parse_alter_user() {
                     option_name: "DEFAULT_SECONDARY_ROLES".to_string(),
                     option_value: KeyValueOptionKind::Multi(vec![Value::SingleQuotedString(
                         "ALL".to_string()
-                    ).with_empty_span()])
+                    )
+                    .with_empty_span()])
                 }]
             );
         }
@@ -18422,16 +18433,17 @@ fn test_parse_alter_user() {
                         options: vec![
                             KeyValueOption {
                                 option_name: "TYPE".to_string(),
-                                option_value: KeyValueOptionKind::Single(Value::Placeholder(
-                                    "AWS".to_string()
-                                ).with_empty_span()),
+                                option_value: KeyValueOptionKind::Single(
+                                    Value::Placeholder("AWS".to_string()).with_empty_span()
+                                ),
                             },
                             KeyValueOption {
                                 option_name: "ARN".to_string(),
                                 option_value: KeyValueOptionKind::Single(
                                     Value::SingleQuotedString(
                                         "arn:aws:iam::123456789:r1/".to_string()
-                                    ).with_empty_span()
+                                    )
+                                    .with_empty_span()
                                 ),
                             },
                         ]

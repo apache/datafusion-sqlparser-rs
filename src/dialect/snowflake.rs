@@ -39,8 +39,8 @@ use crate::ast::{
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{IsOptional, Parser, ParserError};
-use crate::tokenizer::{Span, Token};
 use crate::tokenizer::TokenWithSpan;
+use crate::tokenizer::{Span, Token};
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
 #[cfg(not(feature = "std"))]
@@ -1653,7 +1653,8 @@ fn parse_session_options(
                             Value::Placeholder(empty()).with_span(Span {
                                 start: peeked_token.span.end,
                                 end: peeked_token.span.end,
-                            })),
+                            }),
+                        ),
                     });
                 }
             }

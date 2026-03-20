@@ -18,7 +18,10 @@
 #[cfg(not(feature = "std"))]
 use alloc::string::String;
 
-use core::{fmt, ops::{Deref, DerefMut}};
+use core::{
+    fmt,
+    ops::{Deref, DerefMut},
+};
 
 #[cfg(feature = "bigdecimal")]
 use bigdecimal::BigDecimal;
@@ -67,7 +70,11 @@ use sqlparser_derive::{Visit, VisitMut};
 /// A `Value` paired with its source `Span` location.
 #[derive(Debug, Clone, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut), visit(with = "visit_value"))]
+#[cfg_attr(
+    feature = "visitor",
+    derive(Visit, VisitMut),
+    visit(with = "visit_value")
+)]
 pub struct ValueWithSpan {
     /// The wrapped `Value`.
     pub value: Value,

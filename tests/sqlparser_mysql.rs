@@ -4233,7 +4233,10 @@ fn parse_match_against_with_alias() {
                             Ident::new("ReferenceID")
                         ])]
                     );
-                    assert_eq!(match_value, Value::SingleQuotedString("AAA".to_owned()).with_empty_span());
+                    assert_eq!(
+                        match_value,
+                        Value::SingleQuotedString("AAA".to_owned()).with_empty_span()
+                    );
                     assert_eq!(opt_search_modifier, Some(SearchModifier::InBooleanMode));
                 }
                 _ => unreachable!(),

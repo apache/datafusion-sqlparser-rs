@@ -2840,7 +2840,7 @@ impl<'a> Parser<'a> {
             } else {
                 return Err(ParserError::ParserError(
                     "Scale field can only be of number type".to_string(),
-                ))
+                ));
             }
         } else {
             CeilFloorKind::DateTimeField(DateTimeField::NoDateTime)
@@ -20041,9 +20041,9 @@ impl<'a> Parser<'a> {
                 self.next_token();
                 Ok(KeyValueOption {
                     option_name: key.value.clone(),
-                    option_value: KeyValueOptionKind::Single(Value::Placeholder(
-                        word.value.clone(),
-                    ).with_span(peeked_token.span)),
+                    option_value: KeyValueOptionKind::Single(
+                        Value::Placeholder(word.value.clone()).with_span(peeked_token.span),
+                    ),
                 })
             }
             Token::LParen => {
@@ -20056,12 +20056,10 @@ impl<'a> Parser<'a> {
                     parser.expect_token(&Token::RParen)?;
                     values
                 })? {
-                    Some(values) => {
-                        Ok(KeyValueOption {
-                            option_name: key.value.clone(),
-                            option_value: KeyValueOptionKind::Multi(values),
-                        })
-                    }
+                    Some(values) => Ok(KeyValueOption {
+                        option_name: key.value.clone(),
+                        option_value: KeyValueOptionKind::Multi(values),
+                    }),
                     None => Ok(KeyValueOption {
                         option_name: key.value.clone(),
                         option_value: KeyValueOptionKind::KeyValueOptions(Box::new(

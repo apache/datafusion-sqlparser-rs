@@ -18,11 +18,11 @@ use alloc::{string::ToString, vec};
 use super::{Parser, ParserError};
 use crate::{
     ast::{
+        helpers::key_value_options::{KeyValueOptions, KeyValueOptionsDelimiter},
         AlterConnectorOwner, AlterPolicy, AlterPolicyOperation, AlterRoleOperation, AlterUser,
         AlterUserAddMfaMethodOtp, AlterUserAddRoleDelegation, AlterUserModifyMfaMethod,
         AlterUserPassword, AlterUserRemoveRoleDelegation, AlterUserSetPolicy, Expr, MfaMethodKind,
         Password, ResetConfig, RoleOption, SetConfigValue, Statement, UserPolicyKind,
-        helpers::key_value_options::{KeyValueOptions, KeyValueOptionsDelimiter},
     },
     dialect::{MsSqlDialect, PostgreSqlDialect},
     keywords::Keyword,

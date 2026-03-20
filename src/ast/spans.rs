@@ -46,8 +46,8 @@ use super::{
     RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
     SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
     TableConstraint, TableFactor, TableObject, TableOptionsClustered, TableWithJoins, Update,
-    UpdateTableFromKind, Use, Values, ViewColumnDef, WhileStatement,
-    WildcardAdditionalOptions, With, WithFill,
+    UpdateTableFromKind, Use, Values, ViewColumnDef, WhileStatement, WildcardAdditionalOptions,
+    With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.

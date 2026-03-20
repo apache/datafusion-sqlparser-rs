@@ -145,6 +145,7 @@ define_keywords!(
     AVG,
     AVG_ROW_LENGTH,
     AVRO,
+    BACKUP,
     BACKWARD,
     BASE64,
     BASE_LOCATION,
@@ -1171,6 +1172,7 @@ define_keywords!(
     XOR,
     YEAR,
     YEARS,
+    YES,
     ZONE,
     ZORDER,
     ZSTD

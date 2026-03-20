@@ -8443,6 +8443,14 @@ impl<'a> Parser<'a> {
 
         let strict = self.parse_keyword(Keyword::STRICT);
 
+        // Redshift: BACKUP YES|NO
+        let backup = if self.parse_keyword(Keyword::BACKUP) {
+            let keyword = self.expect_one_of_keywords(&[Keyword::YES, Keyword::NO])?;
+            Some(keyword == Keyword::YES)
+        } else {
+            None
+        };
+
         // Redshift: DISTSTYLE, DISTKEY, SORTKEY
         let diststyle = if self.parse_keyword(Keyword::DISTSTYLE) {
             Some(self.parse_dist_style()?)
@@ -8505,6 +8513,7 @@ impl<'a> Parser<'a> {
             .table_options(create_table_config.table_options)
             .primary_key(primary_key)
             .strict(strict)
+            .backup(backup)
             .diststyle(diststyle)
             .distkey(distkey)
             .sortkey(sortkey)

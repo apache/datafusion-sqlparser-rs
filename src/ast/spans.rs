@@ -589,6 +589,7 @@ impl Spanned for CreateTable {
             diststyle: _,
             distkey: _,
             sortkey: _,
+            backup: _,
         } = self;
 
         union_spans(

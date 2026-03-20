@@ -500,3 +500,14 @@ fn test_alter_table_alter_sortkey() {
     redshift().verified_stmt("ALTER TABLE users ALTER SORTKEY(created_at)");
     redshift().verified_stmt("ALTER TABLE users ALTER SORTKEY(c1, c2)");
 }
+
+#[test]
+fn test_create_table_backup() {
+    redshift().verified_stmt("CREATE TABLE public.users (id INT, name VARCHAR(255)) BACKUP YES");
+
+    redshift().verified_stmt("CREATE TABLE staging.events (event_id INT) BACKUP NO");
+
+    redshift().verified_stmt(
+        "CREATE TABLE public.users_backup_test BACKUP YES DISTSTYLE AUTO AS SELECT id, name, email FROM public.users",
+    );
+}

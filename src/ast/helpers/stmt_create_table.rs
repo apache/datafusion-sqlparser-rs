@@ -181,6 +181,8 @@ pub struct CreateTableBuilder {
     pub distkey: Option<Expr>,
     /// Redshift `SORTKEY` option.
     pub sortkey: Option<Vec<Expr>>,
+    /// Redshift `BACKUP` option.
+    pub backup: Option<bool>,
 }
 
 impl CreateTableBuilder {
@@ -245,6 +247,7 @@ impl CreateTableBuilder {
             diststyle: None,
             distkey: None,
             sortkey: None,
+            backup: None,
         }
     }
     /// Set `OR REPLACE` for the CREATE TABLE statement.
@@ -548,6 +551,11 @@ impl CreateTableBuilder {
         self.sortkey = sortkey;
         self
     }
+    /// Set the Redshift `BACKUP` option.
+    pub fn backup(mut self, backup: Option<bool>) -> Self {
+        self.backup = backup;
+        self
+    }
     /// Consume the builder and produce a `CreateTable`.
     pub fn build(self) -> CreateTable {
         CreateTable {
@@ -609,6 +617,7 @@ impl CreateTableBuilder {
             diststyle: self.diststyle,
             distkey: self.distkey,
             sortkey: self.sortkey,
+            backup: self.backup,
         }
     }
 }
@@ -689,6 +698,7 @@ impl From<CreateTable> for CreateTableBuilder {
             diststyle: table.diststyle,
             distkey: table.distkey,
             sortkey: table.sortkey,
+            backup: table.backup,
         }
     }
 }

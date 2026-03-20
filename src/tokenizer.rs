@@ -1627,8 +1627,9 @@ impl<'a> Tokenizer<'a> {
                             chars.next();
                             match chars.peek() {
                                 Some('>') => self.consume_for_binop(chars, "<=>", Token::Spaceship),
-                                Some('+') => Ok(Some(Token::LtEq)),
-                                Some('-') => Ok(Some(Token::LtEq)),
+                                // `<=+` and `<=-` are not valid combined operators; treat `<=` as
+                                // the operator and leave `+`/`-` to be tokenized separately.
+                                Some('+') | Some('-') => Ok(Some(Token::LtEq)),
                                 _ => self.start_binop(chars, "<=", Token::LtEq),
                             }
                         }
@@ -1648,10 +1649,12 @@ impl<'a> Tokenizer<'a> {
                             }
                         }
                         Some('<') => self.consume_for_binop(chars, "<<", Token::ShiftLeft),
+                        // `<+` is not a valid combined operator; treat `<` as the operator
+                        // and leave `+` to be tokenized separately.
                         Some('+') => Ok(Some(Token::Lt)),
                         Some('-') if self.dialect.supports_geometric_types() => {
                             if chars.peekable.clone().nth(1) == Some('>') {
-                                chars.next(); // consume
+                                chars.next(); // consume `-`
                                 self.consume_for_binop(chars, "<->", Token::TwoWayArrow)
                             } else {
                                 Ok(Some(Token::Lt))

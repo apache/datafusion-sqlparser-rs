@@ -1386,6 +1386,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse tokens until the precedence changes.
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     pub fn parse_subexpr(&mut self, precedence: u8) -> Result<Expr, ParserError> {
         let _guard = self.recursion_counter.try_decrease()?;
         debug!("parsing expr");

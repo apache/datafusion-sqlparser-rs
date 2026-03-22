@@ -1146,12 +1146,12 @@ pub enum Expr {
     /// TRIM(<expr>, [, characters]) -- PostgreSQL, DuckDB, Snowflake, BigQuery, Generic
     /// ```
     Trim {
-        /// The expression to trim from.
-        expr: Box<Expr>,
         /// Which side to trim: `BOTH`, `LEADING`, or `TRAILING`.
         trim_where: Option<TrimWhereField>,
-        /// Optional expression specifying what to trim from the value.
+        /// Optional expression specifying what to trim from the value `expr`.
         trim_what: Option<Box<Expr>>,
+        /// The expression to trim from.
+        expr: Box<Expr>,
         /// Optional list of characters to trim (dialect-specific).
         trim_characters: Option<Vec<Expr>>,
     },

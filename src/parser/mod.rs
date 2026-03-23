@@ -15779,6 +15779,33 @@ impl<'a> Parser<'a> {
                         constraint: self.parse_join_constraint(false)?,
                     },
                 }
+            } else if dialect_of!(self is ClickHouseDialect | GenericDialect)
+                && self.parse_keywords(&[Keyword::INNER, Keyword::ARRAY, Keyword::JOIN])
+            {
+                // ClickHouse: INNER ARRAY JOIN
+                Join {
+                    relation: self.parse_table_factor()?,
+                    global,
+                    join_operator: JoinOperator::InnerArrayJoin,
+                }
+            } else if dialect_of!(self is ClickHouseDialect | GenericDialect)
+                && self.parse_keywords(&[Keyword::LEFT, Keyword::ARRAY, Keyword::JOIN])
+            {
+                // ClickHouse: LEFT ARRAY JOIN
+                Join {
+                    relation: self.parse_table_factor()?,
+                    global,
+                    join_operator: JoinOperator::LeftArrayJoin,
+                }
+            } else if dialect_of!(self is ClickHouseDialect | GenericDialect)
+                && self.parse_keywords(&[Keyword::ARRAY, Keyword::JOIN])
+            {
+                // ClickHouse: ARRAY JOIN
+                Join {
+                    relation: self.parse_table_factor()?,
+                    global,
+                    join_operator: JoinOperator::ArrayJoin,
+                }
             } else {
                 let natural = self.parse_keyword(Keyword::NATURAL);
                 let peek_keyword = if let Token::Word(w) = &self.peek_token_ref().token {

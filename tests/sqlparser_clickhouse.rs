@@ -253,6 +253,43 @@ fn parse_create_table_partition_by_after_order_by() {
             "PARTITION BY col1 % 64"
         ),
     );
+
+    // PARTITION BY after ORDER BY works with both ClickHouseDialect and GenericDialect
+    clickhouse_and_generic()
+        .verified_stmt("CREATE TABLE t (a INT) ENGINE = MergeTree ORDER BY a PARTITION BY a");
+
+    // Arithmetic expression in PARTITION BY (roundtrip)
+    clickhouse_and_generic()
+        .verified_stmt("CREATE TABLE t (a INT) ENGINE = MergeTree ORDER BY a PARTITION BY a % 64");
+
+    // AST: partition_by is populated with the correct expression
+    match clickhouse_and_generic()
+        .verified_stmt("CREATE TABLE t (a INT) ENGINE = MergeTree ORDER BY a PARTITION BY a % 64")
+    {
+        Statement::CreateTable(CreateTable { partition_by, .. }) => {
+            assert_eq!(
+                partition_by,
+                Some(Box::new(BinaryOp {
+                    left: Box::new(Identifier(Ident::new("a"))),
+                    op: BinaryOperator::Modulo,
+                    right: Box::new(Expr::Value(
+                        Value::Number("64".parse().unwrap(), false).with_empty_span(),
+                    )),
+                }))
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // Function call expression in PARTITION BY (ClickHouse-specific function)
+    clickhouse().verified_stmt(
+        "CREATE TABLE t (d DATE) ENGINE = MergeTree ORDER BY d PARTITION BY toYYYYMM(d)",
+    );
+
+    // Negative: PARTITION BY with no expression should fail
+    clickhouse_and_generic()
+        .parse_sql_statements("CREATE TABLE t (a INT) ENGINE = MergeTree ORDER BY a PARTITION BY")
+        .expect_err("PARTITION BY with no expression should fail");
 }
 
 #[test]
@@ -1749,6 +1786,63 @@ fn test_parse_not_null_in_column_options() {
         ),
         canonical,
     );
+}
+
+#[test]
+fn parse_array_join() {
+    // ARRAY JOIN works with both ClickHouseDialect and GenericDialect (roundtrip)
+    clickhouse_and_generic().verified_stmt("SELECT x FROM t ARRAY JOIN arr AS x");
+
+    // AST: join_operator is the unit variant ArrayJoin (no constraint)
+    match clickhouse_and_generic().verified_stmt("SELECT x FROM t ARRAY JOIN arr AS x") {
+        Statement::Query(query) => {
+            let select = query.body.as_select().unwrap();
+            let join = &select.from[0].joins[0];
+            assert_eq!(join.join_operator, JoinOperator::ArrayJoin);
+        }
+        _ => unreachable!(),
+    }
+
+    // Combined: regular JOIN followed by ARRAY JOIN
+    clickhouse_and_generic()
+        .verified_stmt("SELECT x FROM t JOIN u ON t.id = u.id ARRAY JOIN arr AS x");
+
+    // Negative: ARRAY JOIN with no table expression should fail
+    clickhouse_and_generic()
+        .parse_sql_statements("SELECT x FROM t ARRAY JOIN")
+        .expect_err("ARRAY JOIN requires a table expression");
+}
+
+#[test]
+fn parse_left_array_join() {
+    // LEFT ARRAY JOIN preserves rows with empty/null arrays (roundtrip)
+    clickhouse_and_generic().verified_stmt("SELECT x FROM t LEFT ARRAY JOIN arr AS x");
+
+    // AST: join_operator is LeftArrayJoin
+    match clickhouse_and_generic().verified_stmt("SELECT x FROM t LEFT ARRAY JOIN arr AS x") {
+        Statement::Query(query) => {
+            let select = query.body.as_select().unwrap();
+            let join = &select.from[0].joins[0];
+            assert_eq!(join.join_operator, JoinOperator::LeftArrayJoin);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_inner_array_join() {
+    // INNER ARRAY JOIN filters rows with empty/null arrays (roundtrip)
+    clickhouse_and_generic().verified_stmt("SELECT x FROM t INNER ARRAY JOIN arr AS x");
+
+    // AST: join_operator is InnerArrayJoin
+    match clickhouse_and_generic().verified_stmt("SELECT x FROM t INNER ARRAY JOIN arr AS x") {
+        Statement::Query(query) => {
+            let select = query.body.as_select().unwrap();
+            let join = &select.from[0].joins[0];
+            assert_eq!(join.join_operator, JoinOperator::InnerArrayJoin);
+        }
+        _ => unreachable!(),
+    }
 }
 
 fn clickhouse() -> TestedDialects {

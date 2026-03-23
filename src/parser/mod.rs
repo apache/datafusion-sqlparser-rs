@@ -8564,6 +8564,17 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // ClickHouse allows PARTITION BY after ORDER BY
+        // https://clickhouse.com/docs/en/sql-reference/statements/create/table#partition-by
+        let partition_by = if create_table_config.partition_by.is_none()
+            && dialect_of!(self is ClickHouseDialect | GenericDialect)
+            && self.parse_keywords(&[Keyword::PARTITION, Keyword::BY])
+        {
+            Some(Box::new(self.parse_expr()?))
+        } else {
+            create_table_config.partition_by
+        };
+
         let on_commit = if self.parse_keywords(&[Keyword::ON, Keyword::COMMIT]) {
             Some(self.parse_create_table_on_commit()?)
         } else {
@@ -8634,7 +8645,7 @@ impl<'a> Parser<'a> {
             .on_commit(on_commit)
             .on_cluster(on_cluster)
             .clustered_by(clustered_by)
-            .partition_by(create_table_config.partition_by)
+            .partition_by(partition_by)
             .cluster_by(create_table_config.cluster_by)
             .inherits(create_table_config.inherits)
             .partition_of(partition_of)

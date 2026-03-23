@@ -234,6 +234,28 @@ fn parse_create_table() {
 }
 
 #[test]
+fn parse_create_table_partition_by_after_order_by() {
+    // ClickHouse DDL places PARTITION BY after ORDER BY.
+    // MergeTree() is canonicalized to MergeTree and type names are uppercased.
+    clickhouse().one_statement_parses_to(
+        concat!(
+            "CREATE TABLE IF NOT EXISTS \"MyTable\" (`col1` Int64, `col2` Int32) ",
+            "ENGINE = MergeTree() ",
+            "PRIMARY KEY (toDate(toDateTime(`col2`)), `col1`, `col2`) ",
+            "ORDER BY (toDate(toDateTime(`col2`)), `col1`, `col2`) ",
+            "PARTITION BY col1 % 64"
+        ),
+        concat!(
+            "CREATE TABLE IF NOT EXISTS \"MyTable\" (`col1` INT64, `col2` Int32) ",
+            "ENGINE = MergeTree ",
+            "PRIMARY KEY (toDate(toDateTime(`col2`)), `col1`, `col2`) ",
+            "ORDER BY (toDate(toDateTime(`col2`)), `col1`, `col2`) ",
+            "PARTITION BY col1 % 64"
+        ),
+    );
+}
+
+#[test]
 fn parse_insert_into_function() {
     clickhouse().verified_stmt(r#"INSERT INTO TABLE FUNCTION remote('localhost', default.simple_table) VALUES (100, 'inserted via remote()')"#);
     clickhouse().verified_stmt(r#"INSERT INTO FUNCTION remote('localhost', default.simple_table) VALUES (100, 'inserted via remote()')"#);

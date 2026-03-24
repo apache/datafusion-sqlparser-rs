@@ -15687,6 +15687,34 @@ fn overflow() {
     let statement = statements.pop().unwrap();
     assert_eq!(statement.to_string(), sql);
 }
+
+#[test]
+fn parse_deeply_nested_boolean_expr_does_not_stackoverflow() {
+    fn build_nested_expr(depth: usize) -> String {
+        if depth == 0 {
+            return "x = 1".to_string();
+        }
+        format!(
+            "({} OR {} AND ({}))",
+            build_nested_expr(0),
+            build_nested_expr(0),
+            build_nested_expr(depth - 1)
+        )
+    }
+
+    let depth = 200;
+    let where_clause = build_nested_expr(depth);
+    let sql = format!("SELECT pk FROM tab0 WHERE {where_clause}");
+
+    let mut statements = Parser::new(&GenericDialect {})
+        .try_with_sql(&sql)
+        .expect("tokenize to work")
+        .with_recursion_limit(depth * 10)
+        .parse_statements()
+        .unwrap();
+    let statement = statements.pop().unwrap();
+    assert_eq!(statement.to_string(), sql);
+}
 #[test]
 fn parse_select_without_projection() {
     let dialects = all_dialects_where(|d| d.supports_empty_projections());

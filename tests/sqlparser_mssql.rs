@@ -496,7 +496,7 @@ fn parse_mssql_openjson() {
                     json_expr: Expr::CompoundIdentifier(
                         vec![Ident::new("A"), Ident::new("param"),]
                     ),
-                    json_path: Some(Value::SingleQuotedString("$.config".into())),
+                    json_path: Some(Value::SingleQuotedString("$.config".into()).with_empty_span()),
                     columns: vec![
                         OpenJsonTableColumn {
                             name: Ident::new("kind"),
@@ -658,7 +658,7 @@ fn parse_mssql_openjson() {
                     json_expr: Expr::CompoundIdentifier(
                         vec![Ident::new("A"), Ident::new("param"),]
                     ),
-                    json_path: Some(Value::SingleQuotedString("$.config".into())),
+                    json_path: Some(Value::SingleQuotedString("$.config".into()).with_empty_span()),
                     columns: vec![],
                     alias: table_alias(true, "B")
                 },

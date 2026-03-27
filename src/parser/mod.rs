@@ -2689,7 +2689,7 @@ impl<'a> Parser<'a> {
     /// Parse an optional `FORMAT` clause for `CAST` expressions.
     pub fn parse_optional_cast_format(&mut self) -> Result<Option<CastFormat>, ParserError> {
         if self.parse_keyword(Keyword::FORMAT) {
-            let value = self.parse_value()?.value;
+            let value = self.parse_value()?;
             match self.parse_optional_time_zone()? {
                 Some(tz) => Ok(Some(CastFormat::ValueAtTimeZone(value, tz))),
                 None => Ok(Some(CastFormat::Value(value))),
@@ -2700,9 +2700,9 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse an optional `AT TIME ZONE` clause.
-    pub fn parse_optional_time_zone(&mut self) -> Result<Option<Value>, ParserError> {
+    pub fn parse_optional_time_zone(&mut self) -> Result<Option<ValueWithSpan>, ParserError> {
         if self.parse_keywords(&[Keyword::AT, Keyword::TIME, Keyword::ZONE]) {
-            self.parse_value().map(|v| Some(v.value))
+            self.parse_value().map(Some)
         } else {
             Ok(None)
         }
@@ -2834,13 +2834,13 @@ impl<'a> Parser<'a> {
             CeilFloorKind::DateTimeField(self.parse_date_time_field()?)
         } else if self.consume_token(&Token::Comma) {
             // Parse `CEIL/FLOOR(expr, scale)`
-            match self.parse_value()?.value {
-                Value::Number(n, s) => CeilFloorKind::Scale(Value::Number(n, s)),
-                _ => {
-                    return Err(ParserError::ParserError(
-                        "Scale field can only be of number type".to_string(),
-                    ))
-                }
+            let v = self.parse_value()?;
+            if matches!(v.value, Value::Number(_, _)) {
+                CeilFloorKind::Scale(v)
+            } else {
+                return Err(ParserError::ParserError(
+                    "Scale field can only be of number type".to_string(),
+                ));
             }
         } else {
             CeilFloorKind::DateTimeField(DateTimeField::NoDateTime)
@@ -3192,7 +3192,7 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
 
         // MySQL is too permissive about the value, IMO we can't validate it perfectly on syntax level.
-        let match_value = self.parse_value()?.value;
+        let match_value = self.parse_value()?;
 
         let in_natural_language_mode_keywords = &[
             Keyword::IN,
@@ -4088,9 +4088,9 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse the `ESCAPE CHAR` portion of `LIKE`, `ILIKE`, and `SIMILAR TO`
-    pub fn parse_escape_char(&mut self) -> Result<Option<Value>, ParserError> {
+    pub fn parse_escape_char(&mut self) -> Result<Option<ValueWithSpan>, ParserError> {
         if self.parse_keyword(Keyword::ESCAPE) {
-            Ok(Some(self.parse_value()?.into()))
+            Ok(Some(self.parse_value()?))
         } else {
             Ok(None)
         }
@@ -7846,11 +7846,11 @@ impl<'a> Parser<'a> {
             FetchDirection::Last
         } else if self.parse_keyword(Keyword::ABSOLUTE) {
             FetchDirection::Absolute {
-                limit: self.parse_number_value()?.value,
+                limit: self.parse_number_value()?,
             }
         } else if self.parse_keyword(Keyword::RELATIVE) {
             FetchDirection::Relative {
-                limit: self.parse_number_value()?.value,
+                limit: self.parse_number_value()?,
             }
         } else if self.parse_keyword(Keyword::FORWARD) {
             if self.parse_keyword(Keyword::ALL) {
@@ -7858,7 +7858,7 @@ impl<'a> Parser<'a> {
             } else {
                 FetchDirection::Forward {
                     // TODO: Support optional
-                    limit: Some(self.parse_number_value()?.value),
+                    limit: Some(self.parse_number_value()?),
                 }
             }
         } else if self.parse_keyword(Keyword::BACKWARD) {
@@ -7867,14 +7867,14 @@ impl<'a> Parser<'a> {
             } else {
                 FetchDirection::Backward {
                     // TODO: Support optional
-                    limit: Some(self.parse_number_value()?.value),
+                    limit: Some(self.parse_number_value()?),
                 }
             }
         } else if self.parse_keyword(Keyword::ALL) {
             FetchDirection::All
         } else {
             FetchDirection::Count {
-                limit: self.parse_number_value()?.value,
+                limit: self.parse_number_value()?,
             }
         };
 
@@ -11392,7 +11392,7 @@ impl<'a> Parser<'a> {
             }
             Some(Keyword::MAXFILESIZE) => {
                 let _ = self.parse_keyword(Keyword::AS);
-                let size = self.parse_number_value()?.value;
+                let size = self.parse_number_value()?;
                 let unit = match self.parse_one_of_keywords(&[Keyword::MB, Keyword::GB]) {
                     Some(Keyword::MB) => Some(FileSizeUnit::MB),
                     Some(Keyword::GB) => Some(FileSizeUnit::GB),
@@ -11465,7 +11465,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_file_size(&mut self) -> Result<FileSize, ParserError> {
-        let size = self.parse_number_value()?.value;
+        let size = self.parse_number_value()?;
         let unit = self.maybe_parse_file_size_unit();
         Ok(FileSize { size, unit })
     }
@@ -14847,7 +14847,7 @@ impl<'a> Parser<'a> {
             .into());
         } else if self.parse_keyword(Keyword::TRANSACTION) {
             if self.parse_keyword(Keyword::SNAPSHOT) {
-                let snapshot_id = self.parse_value()?.value;
+                let snapshot_id = self.parse_value()?;
                 return Ok(Set::SetTransaction {
                     modes: vec![],
                     snapshot: Some(snapshot_id),
@@ -15682,7 +15682,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword_with_tokens(Keyword::JSON_TABLE, &[Token::LParen]) {
             let json_expr = self.parse_expr()?;
             self.expect_token(&Token::Comma)?;
-            let json_path = self.parse_value()?.value;
+            let json_path = self.parse_value()?;
             self.expect_keyword_is(Keyword::COLUMNS)?;
             self.expect_token(&Token::LParen)?;
             let columns = self.parse_comma_separated(Parser::parse_json_table_column_def)?;
@@ -15866,9 +15866,9 @@ impl<'a> Parser<'a> {
         let parenthesized = self.consume_token(&Token::LParen);
 
         let (quantity, bucket) = if parenthesized && self.parse_keyword(Keyword::BUCKET) {
-            let selected_bucket = self.parse_number_value()?.value;
+            let selected_bucket = self.parse_number_value()?;
             self.expect_keywords(&[Keyword::OUT, Keyword::OF])?;
-            let total = self.parse_number_value()?.value;
+            let total = self.parse_number_value()?;
             let on = if self.parse_keyword(Keyword::ON) {
                 Some(self.parse_expr()?)
             } else {
@@ -15946,7 +15946,7 @@ impl<'a> Parser<'a> {
         modifier: TableSampleSeedModifier,
     ) -> Result<TableSampleSeed, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let value = self.parse_number_value()?.value;
+        let value = self.parse_number_value()?;
         self.expect_token(&Token::RParen)?;
         Ok(TableSampleSeed { modifier, value })
     }
@@ -15957,7 +15957,7 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let json_expr = self.parse_expr()?;
         let json_path = if self.consume_token(&Token::Comma) {
-            Some(self.parse_value()?.value)
+            Some(self.parse_value()?)
         } else {
             None
         };
@@ -16419,7 +16419,7 @@ impl<'a> Parser<'a> {
     pub fn parse_json_table_column_def(&mut self) -> Result<JsonTableColumn, ParserError> {
         if self.parse_keyword(Keyword::NESTED) {
             let _has_path_keyword = self.parse_keyword(Keyword::PATH);
-            let path = self.parse_value()?.value;
+            let path = self.parse_value()?;
             self.expect_keyword_is(Keyword::COLUMNS)?;
             let columns = self.parse_parenthesized(|p| {
                 p.parse_comma_separated(Self::parse_json_table_column_def)
@@ -16437,7 +16437,7 @@ impl<'a> Parser<'a> {
         let r#type = self.parse_data_type()?;
         let exists = self.parse_keyword(Keyword::EXISTS);
         self.expect_keyword_is(Keyword::PATH)?;
-        let path = self.parse_value()?.value;
+        let path = self.parse_value()?;
         let mut on_empty = None;
         let mut on_error = None;
         while let Some(error_handling) = self.parse_json_table_column_error_handling()? {
@@ -16494,7 +16494,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::ERROR) {
             JsonTableColumnErrorHandling::Error
         } else if self.parse_keyword(Keyword::DEFAULT) {
-            JsonTableColumnErrorHandling::Default(self.parse_value()?.value)
+            JsonTableColumnErrorHandling::Default(self.parse_value()?)
         } else {
             return Ok(None);
         };
@@ -17965,7 +17965,7 @@ impl<'a> Parser<'a> {
         if dialect_of!(self is GenericDialect | MySqlDialect)
             && self.parse_keyword(Keyword::SEPARATOR)
         {
-            clauses.push(FunctionArgumentClause::Separator(self.parse_value()?.value));
+            clauses.push(FunctionArgumentClause::Separator(self.parse_value()?));
         }
 
         if let Some(on_overflow) = self.parse_listagg_on_overflow()? {
@@ -19024,12 +19024,13 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_pragma_value(&mut self) -> Result<Value, ParserError> {
-        match self.parse_value()?.value {
-            v @ Value::SingleQuotedString(_) => Ok(v),
-            v @ Value::DoubleQuotedString(_) => Ok(v),
-            v @ Value::Number(_, _) => Ok(v),
-            v @ Value::Placeholder(_) => Ok(v),
+    fn parse_pragma_value(&mut self) -> Result<ValueWithSpan, ParserError> {
+        let v = self.parse_value()?;
+        match &v.value {
+            Value::SingleQuotedString(_) => Ok(v),
+            Value::DoubleQuotedString(_) => Ok(v),
+            Value::Number(_, _) => Ok(v),
+            Value::Placeholder(_) => Ok(v),
             _ => {
                 self.prev_token();
                 self.expected_ref("number or string or ? placeholder", self.peek_token_ref())
@@ -19809,7 +19810,7 @@ impl<'a> Parser<'a> {
                     let threshold = if self.parse_keyword(Keyword::TO) {
                         let value = self.parse_value()?;
                         self.expect_keyword(Keyword::PERCENT)?;
-                        Some(value.value)
+                        Some(value)
                     } else {
                         None
                     };
@@ -19937,9 +19938,9 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    fn maybe_parse_show_stmt_starts_with(&mut self) -> Result<Option<Value>, ParserError> {
+    fn maybe_parse_show_stmt_starts_with(&mut self) -> Result<Option<ValueWithSpan>, ParserError> {
         if self.parse_keywords(&[Keyword::STARTS, Keyword::WITH]) {
-            Ok(Some(self.parse_value()?.value))
+            Ok(Some(self.parse_value()?))
         } else {
             Ok(None)
         }
@@ -19953,9 +19954,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn maybe_parse_show_stmt_from(&mut self) -> Result<Option<Value>, ParserError> {
+    fn maybe_parse_show_stmt_from(&mut self) -> Result<Option<ValueWithSpan>, ParserError> {
         if self.parse_keyword(Keyword::FROM) {
-            Ok(Some(self.parse_value()?.value))
+            Ok(Some(self.parse_value()?))
         } else {
             Ok(None)
         }
@@ -20018,30 +20019,31 @@ impl<'a> Parser<'a> {
         key: &Word,
     ) -> Result<KeyValueOption, ParserError> {
         self.expect_token(&Token::Eq)?;
-        match self.peek_token().token {
+        let peeked_token = self.peek_token();
+        match peeked_token.token {
             Token::SingleQuotedString(_) => Ok(KeyValueOption {
                 option_name: key.value.clone(),
-                option_value: KeyValueOptionKind::Single(self.parse_value()?.into()),
+                option_value: KeyValueOptionKind::Single(self.parse_value()?),
             }),
             Token::Word(word)
                 if word.keyword == Keyword::TRUE || word.keyword == Keyword::FALSE =>
             {
                 Ok(KeyValueOption {
                     option_name: key.value.clone(),
-                    option_value: KeyValueOptionKind::Single(self.parse_value()?.into()),
+                    option_value: KeyValueOptionKind::Single(self.parse_value()?),
                 })
             }
             Token::Number(..) => Ok(KeyValueOption {
                 option_name: key.value.clone(),
-                option_value: KeyValueOptionKind::Single(self.parse_value()?.into()),
+                option_value: KeyValueOptionKind::Single(self.parse_value()?),
             }),
             Token::Word(word) => {
                 self.next_token();
                 Ok(KeyValueOption {
                     option_name: key.value.clone(),
-                    option_value: KeyValueOptionKind::Single(Value::Placeholder(
-                        word.value.clone(),
-                    )),
+                    option_value: KeyValueOptionKind::Single(
+                        Value::Placeholder(word.value.clone()).with_span(peeked_token.span),
+                    ),
                 })
             }
             Token::LParen => {
@@ -20054,13 +20056,10 @@ impl<'a> Parser<'a> {
                     parser.expect_token(&Token::RParen)?;
                     values
                 })? {
-                    Some(values) => {
-                        let values = values.into_iter().map(|v| v.value).collect();
-                        Ok(KeyValueOption {
-                            option_name: key.value.clone(),
-                            option_value: KeyValueOptionKind::Multi(values),
-                        })
-                    }
+                    Some(values) => Ok(KeyValueOption {
+                        option_name: key.value.clone(),
+                        option_value: KeyValueOptionKind::Multi(values),
+                    }),
                     None => Ok(KeyValueOption {
                         option_name: key.value.clone(),
                         option_value: KeyValueOptionKind::KeyValueOptions(Box::new(

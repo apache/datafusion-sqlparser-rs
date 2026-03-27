@@ -39,8 +39,8 @@ use crate::ast::{
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{IsOptional, Parser, ParserError};
-use crate::tokenizer::Token;
 use crate::tokenizer::TokenWithSpan;
+use crate::tokenizer::{Span, Token};
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
 #[cfg(not(feature = "std"))]
@@ -1634,8 +1634,8 @@ fn parse_session_options(
     let mut options: Vec<KeyValueOption> = Vec::new();
     let empty = String::new;
     loop {
-        let next_token = parser.peek_token();
-        match next_token.token {
+        let peeked_token = parser.peek_token();
+        match peeked_token.token {
             Token::SemiColon | Token::EOF => break,
             Token::Comma => {
                 parser.advance_token();
@@ -1649,12 +1649,17 @@ fn parse_session_options(
                 } else {
                     options.push(KeyValueOption {
                         option_name: key.value,
-                        option_value: KeyValueOptionKind::Single(Value::Placeholder(empty())),
+                        option_value: KeyValueOptionKind::Single(
+                            Value::Placeholder(empty()).with_span(Span {
+                                start: peeked_token.span.end,
+                                end: peeked_token.span.end,
+                            }),
+                        ),
                     });
                 }
             }
             _ => {
-                return parser.expected("another option or end of statement", next_token);
+                return parser.expected("another option or end of statement", peeked_token);
             }
         }
     }

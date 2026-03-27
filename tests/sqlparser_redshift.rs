@@ -446,7 +446,7 @@ fn parse_vacuum() {
                     Ident::new("tbl1"),
                 ]))
             );
-            assert_eq!(v.threshold, Some(number("20")));
+            assert_eq!(v.threshold, Some(number("20").with_empty_span()));
             assert!(v.boost);
         }
         _ => unreachable!(),

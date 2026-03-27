@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::{display_comma_separated, display_separated, Value};
+use crate::ast::{display_comma_separated, display_separated, ValueWithSpan};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -75,9 +75,9 @@ pub struct KeyValueOption {
 /// The kind of value for a key-value option.
 pub enum KeyValueOptionKind {
     /// A single value.
-    Single(Value),
+    Single(ValueWithSpan),
     /// Multiple values.
-    Multi(Vec<Value>),
+    Multi(Vec<ValueWithSpan>),
     /// A nested list of key-value options.
     KeyValueOptions(Box<KeyValueOptions>),
 }

@@ -2043,27 +2043,27 @@ fn test_create_stage_with_stage_params() {
             );
             assert!(stage_params.credentials.options.contains(&KeyValueOption {
                 option_name: "AWS_KEY_ID".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "1a2b3c".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("1a2b3c".to_string()).with_empty_span()
+                ),
             }));
             assert!(stage_params.credentials.options.contains(&KeyValueOption {
                 option_name: "AWS_SECRET_KEY".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "4x5y6z".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("4x5y6z".to_string()).with_empty_span()
+                ),
             }));
             assert!(stage_params.encryption.options.contains(&KeyValueOption {
                 option_name: "MASTER_KEY".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "key".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("key".to_string()).with_empty_span()
+                ),
             }));
             assert!(stage_params.encryption.options.contains(&KeyValueOption {
                 option_name: "TYPE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "AWS_SSE_KMS".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("AWS_SSE_KMS".to_string()).with_empty_span()
+                ),
             }));
         }
         _ => unreachable!(),
@@ -2087,17 +2087,17 @@ fn test_create_stage_with_directory_table_params() {
         } => {
             assert!(directory_table_params.options.contains(&KeyValueOption {
                 option_name: "ENABLE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Boolean(true)),
+                option_value: KeyValueOptionKind::Single(Value::Boolean(true).with_empty_span()),
             }));
             assert!(directory_table_params.options.contains(&KeyValueOption {
                 option_name: "REFRESH_ON_CREATE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Boolean(false)),
+                option_value: KeyValueOptionKind::Single(Value::Boolean(false).with_empty_span()),
             }));
             assert!(directory_table_params.options.contains(&KeyValueOption {
                 option_name: "NOTIFICATION_INTEGRATION".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "some-string".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("some-string".to_string()).with_empty_span()
+                ),
             }));
         }
         _ => unreachable!(),
@@ -2117,17 +2117,21 @@ fn test_create_stage_with_file_format() {
         Statement::CreateStage { file_format, .. } => {
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "COMPRESSION".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder("AUTO".to_string())),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("AUTO".to_string()).with_empty_span()
+                ),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "BINARY_FORMAT".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder("HEX".to_string())),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("HEX".to_string()).with_empty_span()
+                ),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "ESCAPE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    r#"\\"#.to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString(r#"\\"#.to_string()).with_empty_span()
+                ),
             }));
         }
         _ => unreachable!(),
@@ -2149,13 +2153,13 @@ fn test_create_stage_with_copy_options() {
         Statement::CreateStage { copy_options, .. } => {
             assert!(copy_options.options.contains(&KeyValueOption {
                 option_name: "ON_ERROR".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder(
-                    "CONTINUE".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("CONTINUE".to_string()).with_empty_span()
+                ),
             }));
             assert!(copy_options.options.contains(&KeyValueOption {
                 option_name: "FORCE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Boolean(true)),
+                option_value: KeyValueOptionKind::Single(Value::Boolean(true).with_empty_span()),
             }));
         }
         _ => unreachable!(),
@@ -2286,27 +2290,27 @@ fn test_copy_into_with_stage_params() {
             );
             assert!(stage_params.credentials.options.contains(&KeyValueOption {
                 option_name: "AWS_KEY_ID".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "1a2b3c".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("1a2b3c".to_string()).with_empty_span()
+                ),
             }));
             assert!(stage_params.credentials.options.contains(&KeyValueOption {
                 option_name: "AWS_SECRET_KEY".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "4x5y6z".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("4x5y6z".to_string()).with_empty_span()
+                ),
             }));
             assert!(stage_params.encryption.options.contains(&KeyValueOption {
                 option_name: "MASTER_KEY".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "key".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("key".to_string()).with_empty_span()
+                ),
             }));
             assert!(stage_params.encryption.options.contains(&KeyValueOption {
                 option_name: "TYPE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "AWS_SSE_KMS".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("AWS_SSE_KMS".to_string()).with_empty_span()
+                ),
             }));
         }
         _ => unreachable!(),
@@ -2457,17 +2461,21 @@ fn test_copy_into_file_format() {
         Statement::CopyIntoSnowflake { file_format, .. } => {
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "COMPRESSION".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder("AUTO".to_string())),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("AUTO".to_string()).with_empty_span()
+                ),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "BINARY_FORMAT".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder("HEX".to_string())),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("HEX".to_string()).with_empty_span()
+                ),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "ESCAPE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    r#"\\"#.to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString(r#"\\"#.to_string()).with_empty_span()
+                ),
             }));
         }
         _ => unreachable!(),
@@ -2495,17 +2503,21 @@ fn test_copy_into_file_format() {
         Statement::CopyIntoSnowflake { file_format, .. } => {
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "COMPRESSION".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder("AUTO".to_string())),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("AUTO".to_string()).with_empty_span()
+                ),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "BINARY_FORMAT".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder("HEX".to_string())),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("HEX".to_string()).with_empty_span()
+                ),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "ESCAPE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    r#"\\"#.to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString(r#"\\"#.to_string()).with_empty_span()
+                ),
             }));
         }
         _ => unreachable!(),
@@ -2526,13 +2538,13 @@ fn test_copy_into_copy_options() {
         Statement::CopyIntoSnowflake { copy_options, .. } => {
             assert!(copy_options.options.contains(&KeyValueOption {
                 option_name: "ON_ERROR".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder(
-                    "CONTINUE".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("CONTINUE".to_string()).with_empty_span()
+                ),
             }));
             assert!(copy_options.options.contains(&KeyValueOption {
                 option_name: "FORCE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Boolean(true)),
+                option_value: KeyValueOptionKind::Single(Value::Boolean(true).with_empty_span()),
             }));
         }
         _ => unreachable!(),

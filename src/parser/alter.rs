@@ -219,7 +219,7 @@ impl Parser<'_> {
             if self.parse_keywords(&[Keyword::ADD, Keyword::MFA, Keyword::METHOD, Keyword::OTP]) {
                 let count = if self.parse_keyword(Keyword::COUNT) {
                     self.expect_token(&Token::Eq)?;
-                    Some(self.parse_value()?.into())
+                    Some(self.parse_value()?)
                 } else {
                     None
                 };

@@ -18,7 +18,10 @@
 #[cfg(not(feature = "std"))]
 use alloc::string::String;
 
-use core::fmt;
+use core::{
+    fmt,
+    ops::{Deref, DerefMut},
+};
 
 #[cfg(feature = "bigdecimal")]
 use bigdecimal::BigDecimal;
@@ -67,7 +70,11 @@ use sqlparser_derive::{Visit, VisitMut};
 /// A `Value` paired with its source `Span` location.
 #[derive(Debug, Clone, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(
+    feature = "visitor",
+    derive(Visit, VisitMut),
+    visit(with = "visit_value")
+)]
 pub struct ValueWithSpan {
     /// The wrapped `Value`.
     pub value: Value,
@@ -111,14 +118,24 @@ impl From<ValueWithSpan> for Value {
     }
 }
 
+impl Deref for ValueWithSpan {
+    type Target = Value;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+
+impl DerefMut for ValueWithSpan {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.value
+    }
+}
+
 /// Primitive SQL values such as number and string
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(
-    feature = "visitor",
-    derive(Visit, VisitMut),
-    visit(with = "visit_value")
-)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum Value {
     /// Numeric literal
     #[cfg(not(feature = "bigdecimal"))]

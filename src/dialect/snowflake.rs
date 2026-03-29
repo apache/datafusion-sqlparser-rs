@@ -33,14 +33,14 @@ use crate::ast::{
     IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, InitializeKind,
     Insert, MultiTableInsertIntoClause, MultiTableInsertType, MultiTableInsertValue,
     MultiTableInsertValues, MultiTableInsertWhenClause, ObjectName, ObjectNamePart,
-    RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement,
+    RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement, StorageLifecyclePolicy,
     StorageSerializationPolicy, TableObject, TagsColumnOption, Value, WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{IsOptional, Parser, ParserError};
-use crate::tokenizer::Token;
 use crate::tokenizer::TokenWithSpan;
+use crate::tokenizer::{Span, Token};
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
 #[cfg(not(feature = "std"))]
@@ -247,6 +247,17 @@ impl Dialect for SnowflakeDialect {
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
         if parser.parse_keyword(Keyword::BEGIN) {
+            // Snowflake supports both `BEGIN TRANSACTION` and `BEGIN ... END` blocks.
+            // If the next keyword indicates a transaction statement, let the
+            // standard parse_begin() handle it.
+            if parser
+                .peek_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK, Keyword::NAME])
+                .is_some()
+                || matches!(parser.peek_token_ref().token, Token::SemiColon | Token::EOF)
+            {
+                parser.prev_token();
+                return None;
+            }
             return Some(parser.parse_begin_exception_end());
         }
 
@@ -906,6 +917,7 @@ pub fn parse_create_table(
                 Keyword::WITH => {
                     parser.expect_one_of_keywords(&[
                         Keyword::AGGREGATION,
+                        Keyword::STORAGE,
                         Keyword::TAG,
                         Keyword::ROW,
                     ])?;
@@ -926,6 +938,19 @@ pub fn parse_create_table(
 
                     builder =
                         builder.with_row_access_policy(Some(RowAccessPolicy::new(policy, columns)))
+                }
+                Keyword::STORAGE => {
+                    parser.expect_keywords(&[Keyword::LIFECYCLE, Keyword::POLICY])?;
+                    let policy = parser.parse_object_name(false)?;
+                    parser.expect_keyword_is(Keyword::ON)?;
+                    parser.expect_token(&Token::LParen)?;
+                    let columns = parser.parse_comma_separated(|p| p.parse_identifier())?;
+                    parser.expect_token(&Token::RParen)?;
+
+                    builder = builder.with_storage_lifecycle_policy(Some(StorageLifecyclePolicy {
+                        policy,
+                        on: columns,
+                    }))
                 }
                 Keyword::TAG => {
                     parser.expect_token(&Token::LParen)?;
@@ -1247,6 +1272,8 @@ pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserE
             Token::Div => ident.push('/'),
             Token::Plus => ident.push('+'),
             Token::Minus => ident.push('-'),
+            Token::Eq => ident.push('='),
+            Token::Colon => ident.push(':'),
             Token::Number(n, _) => ident.push_str(n),
             Token::Word(w) => ident.push_str(&w.to_string()),
             _ => return parser.expected_ref("stage name identifier", parser.peek_token_ref()),
@@ -1607,8 +1634,8 @@ fn parse_session_options(
     let mut options: Vec<KeyValueOption> = Vec::new();
     let empty = String::new;
     loop {
-        let next_token = parser.peek_token();
-        match next_token.token {
+        let peeked_token = parser.peek_token();
+        match peeked_token.token {
             Token::SemiColon | Token::EOF => break,
             Token::Comma => {
                 parser.advance_token();
@@ -1622,12 +1649,17 @@ fn parse_session_options(
                 } else {
                     options.push(KeyValueOption {
                         option_name: key.value,
-                        option_value: KeyValueOptionKind::Single(Value::Placeholder(empty())),
+                        option_value: KeyValueOptionKind::Single(
+                            Value::Placeholder(empty()).with_span(Span {
+                                start: peeked_token.span.end,
+                                end: peeked_token.span.end,
+                            }),
+                        ),
                     });
                 }
             }
             _ => {
-                return parser.expected("another option or end of statement", next_token);
+                return parser.expected("another option or end of statement", peeked_token);
             }
         }
     }

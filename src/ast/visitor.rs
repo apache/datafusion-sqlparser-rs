@@ -17,7 +17,7 @@
 
 //! Recursive visitors for ast Nodes. See [`Visitor`] for more details.
 
-use crate::ast::{Expr, ObjectName, Query, Select, Statement, TableFactor, Value};
+use crate::ast::{Expr, ObjectName, Query, Select, Statement, TableFactor, ValueWithSpan};
 use core::ops::ControlFlow;
 
 /// A type that can be visited by a [`Visitor`]. See [`Visitor`] for
@@ -258,12 +258,12 @@ pub trait Visitor {
     }
 
     /// Invoked for any Value that appear in the AST before visiting children
-    fn pre_visit_value(&mut self, _value: &Value) -> ControlFlow<Self::Break> {
+    fn pre_visit_value(&mut self, _value: &ValueWithSpan) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
     }
 
     /// Invoked for any Value that appear in the AST after visiting children
-    fn post_visit_value(&mut self, _value: &Value) -> ControlFlow<Self::Break> {
+    fn post_visit_value(&mut self, _value: &ValueWithSpan) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
     }
 }
@@ -386,12 +386,12 @@ pub trait VisitorMut {
     }
 
     /// Invoked for any value that appear in the AST before visiting children
-    fn pre_visit_value(&mut self, _value: &mut Value) -> ControlFlow<Self::Break> {
+    fn pre_visit_value(&mut self, _value: &mut ValueWithSpan) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
     }
 
     /// Invoked for any statements that appear in the AST after visiting children
-    fn post_visit_value(&mut self, _value: &mut Value) -> ControlFlow<Self::Break> {
+    fn post_visit_value(&mut self, _value: &mut ValueWithSpan) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
     }
 }
@@ -1015,7 +1015,7 @@ mod tests {
 
 #[cfg(test)]
 mod visit_mut_tests {
-    use crate::ast::{Statement, Value, VisitMut, VisitorMut};
+    use crate::ast::{Statement, Value, ValueWithSpan, VisitMut, VisitorMut};
     use crate::dialect::GenericDialect;
     use crate::parser::Parser;
     use crate::tokenizer::Tokenizer;
@@ -1029,13 +1029,13 @@ mod visit_mut_tests {
     impl VisitorMut for MutatorVisitor {
         type Break = ();
 
-        fn pre_visit_value(&mut self, value: &mut Value) -> ControlFlow<Self::Break> {
+        fn pre_visit_value(&mut self, value: &mut ValueWithSpan) -> ControlFlow<Self::Break> {
             self.index += 1;
-            *value = Value::SingleQuotedString(format!("REDACTED_{}", self.index));
+            value.value = Value::SingleQuotedString(format!("REDACTED_{}", self.index));
             ControlFlow::Continue(())
         }
 
-        fn post_visit_value(&mut self, _value: &mut Value) -> ControlFlow<Self::Break> {
+        fn post_visit_value(&mut self, _value: &mut ValueWithSpan) -> ControlFlow<Self::Break> {
             ControlFlow::Continue(())
         }
     }

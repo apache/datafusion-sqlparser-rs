@@ -72,13 +72,13 @@ pub use self::ddl::{
     CreatePolicyCommand, CreatePolicyType, CreateTable, CreateTrigger, CreateView, Deduplicate,
     DeferrableInitial, DistStyle, DropBehavior, DropExtension, DropFunction, DropOperator,
     DropOperatorClass, DropOperatorFamily, DropOperatorSignature, DropPolicy, DropTrigger,
-    ForValues, GeneratedAs, GeneratedExpressionMode, IdentityParameters, IdentityProperty,
-    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, IndexColumn,
-    IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes,
-    OperatorClassItem, OperatorFamilyDropItem, OperatorFamilyItem, OperatorOption, OperatorPurpose,
-    Owner, Partition, PartitionBoundValue, ProcedureParam, ReferentialAction, RenameTableNameKind,
-    ReplicaIdentity, TagsColumnOption, TriggerObjectKind, Truncate,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
+    ForValues, FunctionReturnType, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
+    IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
+    IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption,
+    OperatorArgTypes, OperatorClassItem, OperatorFamilyDropItem, OperatorFamilyItem,
+    OperatorOption, OperatorPurpose, Owner, Partition, PartitionBoundValue, ProcedureParam,
+    ReferentialAction, RenameTableNameKind, ReplicaIdentity, TagsColumnOption, TriggerObjectKind,
+    Truncate, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
     UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
     UserDefinedTypeStorage, ViewColumnDef,
 };
@@ -624,9 +624,9 @@ impl fmt::Display for MapEntry {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CastFormat {
     /// A simple cast format specified by a `Value`.
-    Value(Value),
+    Value(ValueWithSpan),
     /// A cast format with an explicit time zone: `(format, timezone)`.
-    ValueAtTimeZone(Value, Value),
+    ValueAtTimeZone(ValueWithSpan, ValueWithSpan),
 }
 
 /// An element of a JSON path.
@@ -648,6 +648,14 @@ pub enum JsonPathElem {
     ///
     /// See <https://docs.snowflake.com/en/user-guide/querying-semistructured#bracket-notation>.
     Bracket {
+        /// The expression used as the bracket key (string or numeric expression).
+        key: Expr,
+    },
+    /// Access an object field using colon bracket notation
+    /// e.g. `obj:['foo']`
+    ///
+    /// See <https://docs.databricks.com/en/sql/language-manual/functions/colonsign.html>
+    ColonBracket {
         /// The expression used as the bracket key (string or numeric expression).
         key: Expr,
     },
@@ -684,6 +692,9 @@ impl fmt::Display for JsonPath {
                 }
                 JsonPathElem::Bracket { key } => {
                     write!(f, "[{key}]")?;
+                }
+                JsonPathElem::ColonBracket { key } => {
+                    write!(f, ":[{key}]")?;
                 }
             }
         }
@@ -767,7 +778,7 @@ pub enum CeilFloorKind {
     /// `CEIL( <expr> TO <DateTimeField>)`
     DateTimeField(DateTimeField),
     /// `CEIL( <expr> [, <scale>])`
-    Scale(Value),
+    Scale(ValueWithSpan),
 }
 
 /// A WHEN clause in a CASE expression containing both
@@ -945,7 +956,7 @@ pub enum Expr {
         /// Pattern expression.
         pattern: Box<Expr>,
         /// Optional escape character.
-        escape_char: Option<Value>,
+        escape_char: Option<ValueWithSpan>,
     },
     /// `ILIKE` (case-insensitive `LIKE`)
     ILike {
@@ -959,7 +970,7 @@ pub enum Expr {
         /// Pattern expression.
         pattern: Box<Expr>,
         /// Optional escape character.
-        escape_char: Option<Value>,
+        escape_char: Option<ValueWithSpan>,
     },
     /// `SIMILAR TO` regex
     SimilarTo {
@@ -970,7 +981,7 @@ pub enum Expr {
         /// Pattern expression.
         pattern: Box<Expr>,
         /// Optional escape character.
-        escape_char: Option<Value>,
+        escape_char: Option<ValueWithSpan>,
     },
     /// MySQL: `RLIKE` regex or `REGEXP` regex
     RLike {
@@ -1135,12 +1146,12 @@ pub enum Expr {
     /// TRIM(<expr>, [, characters]) -- PostgreSQL, DuckDB, Snowflake, BigQuery, Generic
     /// ```
     Trim {
-        /// The expression to trim from.
-        expr: Box<Expr>,
         /// Which side to trim: `BOTH`, `LEADING`, or `TRAILING`.
         trim_where: Option<TrimWhereField>,
-        /// Optional expression specifying what to trim from the value.
+        /// Optional expression specifying what to trim from the value `expr`.
         trim_what: Option<Box<Expr>>,
+        /// The expression to trim from.
+        expr: Box<Expr>,
         /// Optional list of characters to trim (dialect-specific).
         trim_characters: Option<Vec<Expr>>,
     },
@@ -1281,7 +1292,7 @@ pub enum Expr {
         /// `(<col>, <col>, ...)`.
         columns: Vec<ObjectName>,
         /// `<expr>`.
-        match_value: Value,
+        match_value: ValueWithSpan,
         /// `<search modifier>`
         opt_search_modifier: Option<SearchModifier>,
     },
@@ -3284,7 +3295,7 @@ pub enum Set {
         /// Transaction modes (e.g., ISOLATION LEVEL, READ ONLY).
         modes: Vec<TransactionMode>,
         /// Optional snapshot value for transaction snapshot control.
-        snapshot: Option<Value>,
+        snapshot: Option<ValueWithSpan>,
         /// `true` when the `SESSION` keyword was used.
         session: bool,
     },
@@ -4619,10 +4630,16 @@ pub enum Statement {
         /// Pragma name (possibly qualified).
         name: ObjectName,
         /// Optional pragma value.
-        value: Option<Value>,
+        value: Option<ValueWithSpan>,
         /// Whether the pragma used `=`.
         is_eq: bool,
     },
+    /// ```sql
+    /// LOCK [ TABLE ] [ ONLY ] name [ * ] [, ...] [ IN lockmode MODE ] [ NOWAIT ]
+    /// ```
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-lock.html>
+    Lock(Lock),
     /// ```sql
     /// LOCK TABLES <table_name> [READ [LOCAL] | [LOW_PRIORITY] WRITE]
     /// ```
@@ -4844,6 +4861,12 @@ impl From<Analyze> for Statement {
 impl From<ddl::Truncate> for Statement {
     fn from(truncate: ddl::Truncate) -> Self {
         Statement::Truncate(truncate)
+    }
+}
+
+impl From<Lock> for Statement {
+    fn from(lock: Lock) -> Self {
+        Statement::Lock(lock)
     }
 }
 
@@ -6141,6 +6164,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::Lock(lock) => lock.fmt(f),
             Statement::LockTables { tables } => {
                 write!(f, "LOCK TABLES {}", display_comma_separated(tables))
             }
@@ -6387,6 +6411,104 @@ impl fmt::Display for TruncateTableTarget {
     }
 }
 
+/// A `LOCK` statement.
+///
+/// See <https://www.postgresql.org/docs/current/sql-lock.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Lock {
+    /// List of tables to lock.
+    pub tables: Vec<LockTableTarget>,
+    /// Lock mode.
+    pub lock_mode: Option<LockTableMode>,
+    /// Whether `NOWAIT` was specified.
+    pub nowait: bool,
+}
+
+impl fmt::Display for Lock {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "LOCK TABLE {}", display_comma_separated(&self.tables))?;
+        if let Some(lock_mode) = &self.lock_mode {
+            write!(f, " IN {lock_mode} MODE")?;
+        }
+        if self.nowait {
+            write!(f, " NOWAIT")?;
+        }
+        Ok(())
+    }
+}
+
+/// Target of a `LOCK TABLE` command
+///
+/// See <https://www.postgresql.org/docs/current/sql-lock.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct LockTableTarget {
+    /// Name of the table being locked.
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub name: ObjectName,
+    /// Whether `ONLY` was specified to exclude descendant tables.
+    pub only: bool,
+    /// Whether `*` was specified to explicitly include descendant tables.
+    pub has_asterisk: bool,
+}
+
+impl fmt::Display for LockTableTarget {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.only {
+            write!(f, "ONLY ")?;
+        }
+        write!(f, "{}", self.name)?;
+        if self.has_asterisk {
+            write!(f, " *")?;
+        }
+        Ok(())
+    }
+}
+
+/// PostgreSQL lock modes for `LOCK TABLE`.
+///
+/// See <https://www.postgresql.org/docs/current/sql-lock.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum LockTableMode {
+    /// `ACCESS SHARE`
+    AccessShare,
+    /// `ROW SHARE`
+    RowShare,
+    /// `ROW EXCLUSIVE`
+    RowExclusive,
+    /// `SHARE UPDATE EXCLUSIVE`
+    ShareUpdateExclusive,
+    /// `SHARE`
+    Share,
+    /// `SHARE ROW EXCLUSIVE`
+    ShareRowExclusive,
+    /// `EXCLUSIVE`
+    Exclusive,
+    /// `ACCESS EXCLUSIVE`
+    AccessExclusive,
+}
+
+impl fmt::Display for LockTableMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let text = match self {
+            Self::AccessShare => "ACCESS SHARE",
+            Self::RowShare => "ROW SHARE",
+            Self::RowExclusive => "ROW EXCLUSIVE",
+            Self::ShareUpdateExclusive => "SHARE UPDATE EXCLUSIVE",
+            Self::Share => "SHARE",
+            Self::ShareRowExclusive => "SHARE ROW EXCLUSIVE",
+            Self::Exclusive => "EXCLUSIVE",
+            Self::AccessExclusive => "ACCESS EXCLUSIVE",
+        };
+        write!(f, "{text}")
+    }
+}
+
 /// PostgreSQL identity option for TRUNCATE table
 /// [ RESTART IDENTITY | CONTINUE IDENTITY ]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -6630,7 +6752,7 @@ pub enum FetchDirection {
     /// Fetch a specific count of rows.
     Count {
         /// The limit value for the count.
-        limit: Value,
+        limit: ValueWithSpan,
     },
     /// Fetch the next row.
     Next,
@@ -6643,12 +6765,12 @@ pub enum FetchDirection {
     /// Fetch an absolute row by index.
     Absolute {
         /// The absolute index value.
-        limit: Value,
+        limit: ValueWithSpan,
     },
     /// Fetch a row relative to the current position.
     Relative {
         /// The relative offset value.
-        limit: Value,
+        limit: ValueWithSpan,
     },
     /// Fetch all rows.
     All,
@@ -6657,7 +6779,7 @@ pub enum FetchDirection {
     /// Fetch forward by an optional limit.
     Forward {
         /// Optional forward limit.
-        limit: Option<Value>,
+        limit: Option<ValueWithSpan>,
     },
     /// Fetch all forward rows.
     ForwardAll,
@@ -6666,7 +6788,7 @@ pub enum FetchDirection {
     /// Fetch backward by an optional limit.
     Backward {
         /// Optional backward limit.
-        limit: Option<Value>,
+        limit: Option<ValueWithSpan>,
     },
     /// Fetch all backward rows.
     BackwardAll,
@@ -7994,7 +8116,7 @@ pub enum FunctionArgumentClause {
     /// The `SEPARATOR` clause to the [`GROUP_CONCAT`] function in MySQL.
     ///
     /// [`GROUP_CONCAT`]: https://dev.mysql.com/doc/refman/8.0/en/aggregate-functions.html#function_group-concat
-    Separator(Value),
+    Separator(ValueWithSpan),
     /// The `ON NULL` clause for some JSON functions.
     ///
     /// [MSSQL `JSON_ARRAY`](https://learn.microsoft.com/en-us/sql/t-sql/functions/json-array-transact-sql?view=sql-server-ver16)
@@ -9217,6 +9339,9 @@ pub enum CopyLegacyOption {
     TruncateColumns,
     /// ZSTD
     Zstd,
+    /// Redshift `CREDENTIALS 'auth-args'`
+    /// <https://docs.aws.amazon.com/redshift/latest/dg/copy-parameters-authorization.html>
+    Credentials(String),
 }
 
 impl fmt::Display for CopyLegacyOption {
@@ -9327,6 +9452,7 @@ impl fmt::Display for CopyLegacyOption {
             }
             TruncateColumns => write!(f, "TRUNCATECOLUMNS"),
             Zstd => write!(f, "ZSTD"),
+            Credentials(s) => write!(f, "CREDENTIALS '{}'", value::escape_single_quote_string(s)),
         }
     }
 }
@@ -9339,7 +9465,7 @@ impl fmt::Display for CopyLegacyOption {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct FileSize {
     /// Numeric size value.
-    pub size: Value,
+    pub size: ValueWithSpan,
     /// Optional unit for the size (MB or GB).
     pub unit: Option<FileSizeUnit>,
 }
@@ -10346,6 +10472,30 @@ impl Display for RowAccessPolicy {
     }
 }
 
+/// Snowflake `[ WITH ] STORAGE LIFECYCLE POLICY <policy_name> ON ( <col_name> [ , ... ] )`
+///
+/// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct StorageLifecyclePolicy {
+    /// The fully-qualified policy object name.
+    pub policy: ObjectName,
+    /// Column names the policy applies to.
+    pub on: Vec<Ident>,
+}
+
+impl Display for StorageLifecyclePolicy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "WITH STORAGE LIFECYCLE POLICY {} ON ({})",
+            self.policy,
+            display_comma_separated(self.on.as_slice())
+        )
+    }
+}
+
 /// Snowflake `WITH TAG ( tag_name = '<tag_value>', ...)`
 ///
 /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
@@ -10504,11 +10654,11 @@ pub struct ShowStatementOptions {
     /// Optional scope to show in (for example: TABLE, SCHEMA).
     pub show_in: Option<ShowStatementIn>,
     /// Optional `STARTS WITH` filter value.
-    pub starts_with: Option<Value>,
+    pub starts_with: Option<ValueWithSpan>,
     /// Optional `LIMIT` expression.
     pub limit: Option<Expr>,
     /// Optional `FROM` value used with `LIMIT`.
-    pub limit_from: Option<Value>,
+    pub limit_from: Option<ValueWithSpan>,
     /// Optional filter position (infix or suffix) for `LIKE`/`FILTER`.
     pub filter_position: Option<ShowStatementFilterPosition>,
 }
@@ -10738,6 +10888,16 @@ pub enum TableObject {
     /// ```
     /// [Clickhouse](https://clickhouse.com/docs/en/sql-reference/table-functions)
     TableFunction(Function),
+
+    /// Table specified through a sub-query
+    /// Example:
+    /// ```sql
+    /// INSERT INTO
+    /// (SELECT employee_id, last_name, email, hire_date, job_id,  salary, commission_pct FROM employees)
+    /// VALUES (207, 'Gregory', 'pgregory@example.com', sysdate, 'PU_CLERK', 1.2E3, NULL);
+    /// ```
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/INSERT.html#GUID-903F8043-0254-4EE9-ACC1-CB8AC0AF3423__I2126242)
+    TableQuery(Box<Query>),
 }
 
 impl fmt::Display for TableObject {
@@ -10745,6 +10905,7 @@ impl fmt::Display for TableObject {
         match self {
             Self::TableName(table_name) => write!(f, "{table_name}"),
             Self::TableFunction(func) => write!(f, "FUNCTION {func}"),
+            Self::TableQuery(table_query) => write!(f, "({table_query})"),
         }
     }
 }
@@ -11313,7 +11474,7 @@ pub struct AlterUserRemoveRoleDelegation {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct AlterUserAddMfaMethodOtp {
     /// Optional OTP count parameter.
-    pub count: Option<Value>,
+    pub count: Option<ValueWithSpan>,
 }
 
 /// ```sql
@@ -11634,7 +11795,7 @@ pub struct VacuumStatement {
     /// Optional table to run `VACUUM` on.
     pub table_name: Option<ObjectName>,
     /// Optional threshold value (percent) for `TO threshold PERCENT`.
-    pub threshold: Option<Value>,
+    pub threshold: Option<ValueWithSpan>,
     /// Whether `BOOST` was specified.
     pub boost: bool,
 }

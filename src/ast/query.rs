@@ -1552,7 +1552,7 @@ pub enum TableFactor {
         json_expr: Expr,
         /// The path to the array or object to be iterated over.
         /// It must evaluate to a json array or object.
-        json_path: Value,
+        json_path: ValueWithSpan,
         /// The columns to be extracted from each element of the array or object.
         /// Each column must have a name and a type.
         columns: Vec<JsonTableColumn>,
@@ -1573,7 +1573,7 @@ pub enum TableFactor {
         json_expr: Expr,
         /// The path to the array or object to be iterated over.
         /// It must evaluate to a json array or object.
-        json_path: Option<Value>,
+        json_path: Option<ValueWithSpan>,
         /// The columns to be extracted from each element of the array or object.
         /// Each column must have a name and a type.
         columns: Vec<OpenJsonTableColumn>,
@@ -1833,7 +1833,7 @@ pub struct TableSampleSeed {
     /// Seed modifier (e.g. `REPEATABLE` or `SEED`).
     pub modifier: TableSampleSeedModifier,
     /// The seed value expression.
-    pub value: Value,
+    pub value: ValueWithSpan,
 }
 
 impl fmt::Display for TableSampleSeed {
@@ -1889,9 +1889,9 @@ impl fmt::Display for TableSampleUnit {
 /// Bucket-based sampling clause: `BUCKET <bucket> OUT OF <total> [ON <expr>]`.
 pub struct TableSampleBucket {
     /// The bucket index expression.
-    pub bucket: Value,
+    pub bucket: ValueWithSpan,
     /// The total number of buckets expression.
-    pub total: Value,
+    pub total: ValueWithSpan,
     /// Optional `ON <expr>` specification.
     pub on: Option<Expr>,
 }
@@ -2578,6 +2578,23 @@ pub enum TableVersion {
     /// When the table version is defined using a function.
     /// For example: `SELECT * FROM tbl AT(TIMESTAMP => '2020-08-14 09:30:00')`
     Function(Expr),
+    /// Snowflake `CHANGES` clause for change tracking queries.
+    /// For example:
+    /// ```sql
+    /// SELECT * FROM t
+    ///   CHANGES(INFORMATION => DEFAULT)
+    ///   AT(TIMESTAMP => TO_TIMESTAMP_TZ('...'))
+    ///   END(TIMESTAMP => TO_TIMESTAMP_TZ('...'))
+    /// ```
+    /// <https://docs.snowflake.com/en/sql-reference/constructs/changes>
+    Changes {
+        /// The `CHANGES(INFORMATION => ...)` function-call expression.
+        changes: Expr,
+        /// The `AT(TIMESTAMP => ...)` function-call expression.
+        at: Expr,
+        /// The optional `END(TIMESTAMP => ...)` function-call expression.
+        end: Option<Expr>,
+    },
 }
 
 impl Display for TableVersion {
@@ -2587,6 +2604,12 @@ impl Display for TableVersion {
             TableVersion::TimestampAsOf(e) => write!(f, "TIMESTAMP AS OF {e}")?,
             TableVersion::VersionAsOf(e) => write!(f, "VERSION AS OF {e}")?,
             TableVersion::Function(func) => write!(f, "{func}")?,
+            TableVersion::Changes { changes, at, end } => {
+                write!(f, "{changes} {at}")?;
+                if let Some(end) = end {
+                    write!(f, " {end}")?;
+                }
+            }
         }
         Ok(())
     }
@@ -3967,7 +3990,7 @@ impl fmt::Display for JsonTableColumn {
 /// A nested column in a `JSON_TABLE` column list.
 pub struct JsonTableNestedColumn {
     /// JSON path expression (must be a literal `Value`).
-    pub path: Value,
+    pub path: ValueWithSpan,
     /// Columns extracted from the matched nested array.
     pub columns: Vec<JsonTableColumn>,
 }
@@ -3999,7 +4022,7 @@ pub struct JsonTableNamedColumn {
     /// The type of the column to be extracted.
     pub r#type: DataType,
     /// The path to the column to be extracted. Must be a literal string.
-    pub path: Value,
+    pub path: ValueWithSpan,
     /// true if the column is a boolean set to true if the given path exists
     pub exists: bool,
     /// The empty handling clause of the column
@@ -4038,7 +4061,7 @@ pub enum JsonTableColumnErrorHandling {
     /// `NULL` — return NULL when the path does not match.
     Null,
     /// `DEFAULT <value>` — use the provided `Value` as a default.
-    Default(Value),
+    Default(ValueWithSpan),
     /// `ERROR` — raise an error.
     Error,
 }

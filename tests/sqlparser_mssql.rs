@@ -255,7 +255,7 @@ fn parse_create_function() {
                     default_expr: None,
                 },
             ]),
-            return_type: Some(DataType::Int(None)),
+            return_type: Some(FunctionReturnType::DataType(DataType::Int(None))),
             function_body: Some(CreateFunctionBody::AsBeginEnd(BeginEndStatements {
                 begin_token: AttachedToken::empty(),
                 statements: vec![Statement::Return(ReturnStatement {
@@ -430,7 +430,7 @@ fn parse_create_function_parameter_default_values() {
                 data_type: DataType::Int(None),
                 default_expr: Some(Expr::Value((number("42")).with_empty_span())),
             },]),
-            return_type: Some(DataType::Int(None)),
+            return_type: Some(FunctionReturnType::DataType(DataType::Int(None))),
             function_body: Some(CreateFunctionBody::AsBeginEnd(BeginEndStatements {
                 begin_token: AttachedToken::empty(),
                 statements: vec![Statement::Return(ReturnStatement {
@@ -496,7 +496,7 @@ fn parse_mssql_openjson() {
                     json_expr: Expr::CompoundIdentifier(
                         vec![Ident::new("A"), Ident::new("param"),]
                     ),
-                    json_path: Some(Value::SingleQuotedString("$.config".into())),
+                    json_path: Some(Value::SingleQuotedString("$.config".into()).with_empty_span()),
                     columns: vec![
                         OpenJsonTableColumn {
                             name: Ident::new("kind"),
@@ -658,7 +658,7 @@ fn parse_mssql_openjson() {
                     json_expr: Expr::CompoundIdentifier(
                         vec![Ident::new("A"), Ident::new("param"),]
                     ),
-                    json_path: Some(Value::SingleQuotedString("$.config".into())),
+                    json_path: Some(Value::SingleQuotedString("$.config".into()).with_empty_span()),
                     columns: vec![],
                     alias: table_alias(true, "B")
                 },
@@ -1985,6 +1985,7 @@ fn parse_create_table_with_valid_options() {
                 for_values: None,
                 strict: false,
                 iceberg: false,
+                snapshot: false,
                 copy_grants: false,
                 enable_schema_evolution: None,
                 change_tracking: None,
@@ -1993,6 +1994,7 @@ fn parse_create_table_with_valid_options() {
                 default_ddl_collation: None,
                 with_aggregation_policy: None,
                 with_row_access_policy: None,
+                with_storage_lifecycle_policy: None,
                 with_tags: None,
                 base_location: None,
                 external_volume: None,
@@ -2008,6 +2010,8 @@ fn parse_create_table_with_valid_options() {
                 require_user: false,
                 diststyle: None,
                 distkey: None,
+                sortkey: None,
+                backup: None,
             })
         );
     }
@@ -2119,6 +2123,7 @@ fn parse_create_table_with_identity_column() {
                 transient: false,
                 volatile: false,
                 iceberg: false,
+                snapshot: false,
                 name: ObjectName::from(vec![Ident {
                     value: "mytable".to_string(),
                     quote_style: None,
@@ -2163,6 +2168,7 @@ fn parse_create_table_with_identity_column() {
                 default_ddl_collation: None,
                 with_aggregation_policy: None,
                 with_row_access_policy: None,
+                with_storage_lifecycle_policy: None,
                 with_tags: None,
                 base_location: None,
                 external_volume: None,
@@ -2178,6 +2184,8 @@ fn parse_create_table_with_identity_column() {
                 require_user: false,
                 diststyle: None,
                 distkey: None,
+                sortkey: None,
+                backup: None,
             }),
         );
     }

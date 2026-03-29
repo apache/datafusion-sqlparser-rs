@@ -48,9 +48,9 @@ use crate::ast::{
     HiveFormat, HiveIOFormat, HiveRowFormat, HiveSetLocation, Ident, InitializeKind,
     MySQLColumnPosition, ObjectName, OnCommit, OneOrManyWithParens, OperateFunctionArg,
     OrderByExpr, ProjectionSelect, Query, RefreshModeKind, RowAccessPolicy, SequenceOptions,
-    Spanned, SqlOption, StorageSerializationPolicy, TableVersion, Tag, TriggerEvent,
-    TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value, ValueWithSpan,
-    WrappedCollection,
+    Spanned, SqlOption, StorageLifecyclePolicy, StorageSerializationPolicy, TableVersion, Tag,
+    TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value,
+    ValueWithSpan, WrappedCollection,
 };
 use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
 use crate::keywords::Keyword;
@@ -457,6 +457,12 @@ pub enum AlterTableOperation {
     },
     /// Remove the clustering key from the table.
     DropClusteringKey,
+    /// Redshift `ALTER SORTKEY (column_list)`
+    /// <https://docs.aws.amazon.com/redshift/latest/dg/r_ALTER_TABLE.html>
+    AlterSortKey {
+        /// Column references in the sort key.
+        columns: Vec<Expr>,
+    },
     /// Suspend background reclustering operations.
     SuspendRecluster,
     /// Resume background reclustering operations.
@@ -991,6 +997,10 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::DropClusteringKey => {
                 write!(f, "DROP CLUSTERING KEY")?;
+                Ok(())
+            }
+            AlterTableOperation::AlterSortKey { columns } => {
+                write!(f, "ALTER SORTKEY({})", display_comma_separated(columns))?;
                 Ok(())
             }
             AlterTableOperation::SuspendRecluster => {
@@ -2903,6 +2913,9 @@ pub struct CreateTable {
     pub volatile: bool,
     /// `ICEBERG` clause
     pub iceberg: bool,
+    /// `SNAPSHOT` clause
+    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_snapshot_table_statement>
+    pub snapshot: bool,
     /// Table name
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     pub name: ObjectName,
@@ -2999,6 +3012,9 @@ pub struct CreateTable {
     /// Snowflake "WITH ROW ACCESS POLICY" clause
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
     pub with_row_access_policy: Option<RowAccessPolicy>,
+    /// Snowflake `WITH STORAGE LIFECYCLE POLICY` clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
+    pub with_storage_lifecycle_policy: Option<StorageLifecyclePolicy>,
     /// Snowflake "WITH TAG" clause
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
     pub with_tags: Option<Vec<Tag>>,
@@ -3037,7 +3053,13 @@ pub struct CreateTable {
     pub diststyle: Option<DistStyle>,
     /// Redshift `DISTKEY` option
     /// <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html>
-    pub distkey: Option<Ident>,
+    pub distkey: Option<Expr>,
+    /// Redshift `SORTKEY` option
+    /// <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html>
+    pub sortkey: Option<Vec<Expr>>,
+    /// Redshift `BACKUP` option: `BACKUP { YES | NO }`
+    /// <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html>
+    pub backup: Option<bool>,
 }
 
 impl fmt::Display for CreateTable {
@@ -3051,9 +3073,10 @@ impl fmt::Display for CreateTable {
         //   `CREATE TABLE t (a INT) AS SELECT a from t2`
         write!(
             f,
-            "CREATE {or_replace}{external}{global}{temporary}{transient}{volatile}{dynamic}{iceberg}TABLE {if_not_exists}{name}",
+            "CREATE {or_replace}{external}{global}{temporary}{transient}{volatile}{dynamic}{iceberg}{snapshot}TABLE {if_not_exists}{name}",
             or_replace = if self.or_replace { "OR REPLACE " } else { "" },
             external = if self.external { "EXTERNAL " } else { "" },
+            snapshot = if self.snapshot { "SNAPSHOT " } else { "" },
             global = self.global
                 .map(|global| {
                     if global {
@@ -3300,6 +3323,10 @@ impl fmt::Display for CreateTable {
             write!(f, " {row_access_policy}",)?;
         }
 
+        if let Some(storage_lifecycle_policy) = &self.with_storage_lifecycle_policy {
+            write!(f, " {storage_lifecycle_policy}",)?;
+        }
+
         if let Some(tag) = &self.with_tags {
             write!(f, " WITH TAG ({})", display_comma_separated(tag.as_slice()))?;
         }
@@ -3336,11 +3363,17 @@ impl fmt::Display for CreateTable {
         if self.strict {
             write!(f, " STRICT")?;
         }
+        if let Some(backup) = self.backup {
+            write!(f, " BACKUP {}", if backup { "YES" } else { "NO" })?;
+        }
         if let Some(diststyle) = &self.diststyle {
             write!(f, " DISTSTYLE {diststyle}")?;
         }
         if let Some(distkey) = &self.distkey {
             write!(f, " DISTKEY({distkey})")?;
+        }
+        if let Some(sortkey) = &self.sortkey {
+            write!(f, " SORTKEY({})", display_comma_separated(sortkey))?;
         }
         if let Some(query) = &self.query {
             write!(f, " AS {query}")?;
@@ -3506,6 +3539,28 @@ impl fmt::Display for CreateDomain {
     }
 }
 
+/// The return type of a `CREATE FUNCTION` statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FunctionReturnType {
+    /// `RETURNS <type>`
+    DataType(DataType),
+    /// `RETURNS SETOF <type>`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    SetOf(DataType),
+}
+
+impl fmt::Display for FunctionReturnType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FunctionReturnType::DataType(data_type) => write!(f, "{data_type}"),
+            FunctionReturnType::SetOf(data_type) => write!(f, "SETOF {data_type}"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -3526,7 +3581,7 @@ pub struct CreateFunction {
     /// List of arguments for the function.
     pub args: Option<Vec<OperateFunctionArg>>,
     /// The return type of the function.
-    pub return_type: Option<DataType>,
+    pub return_type: Option<FunctionReturnType>,
     /// The expression that defines the function.
     ///
     /// Examples:
@@ -4277,6 +4332,9 @@ pub struct CreateView {
     pub if_not_exists: bool,
     /// if true, has SQLite `TEMP` or `TEMPORARY` clause <https://www.sqlite.org/lang_createview.html>
     pub temporary: bool,
+    /// Snowflake: `COPY GRANTS` clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-view>
+    pub copy_grants: bool,
     /// if not None, has Clickhouse `TO` clause, specify the table into which to insert results
     /// <https://clickhouse.com/docs/en/sql-reference/statements/create/view#materialized-view>
     pub to: Option<ObjectName>,
@@ -4320,6 +4378,9 @@ impl fmt::Display for CreateView {
                 .map(|to| format!(" TO {to}"))
                 .unwrap_or_default()
         )?;
+        if self.copy_grants {
+            write!(f, " COPY GRANTS")?;
+        }
         if !self.columns.is_empty() {
             write!(f, " ({})", display_comma_separated(&self.columns))?;
         }

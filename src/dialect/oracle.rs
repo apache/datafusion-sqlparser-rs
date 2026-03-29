@@ -114,4 +114,9 @@ impl Dialect for OracleDialect {
     fn supports_insert_table_alias(&self) -> bool {
         true
     }
+
+    /// See <https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/INSERT.html#GUID-903F8043-0254-4EE9-ACC1-CB8AC0AF3423__I2126242>
+    fn supports_insert_table_query(&self) -> bool {
+        true
+    }
 }

@@ -1914,7 +1914,13 @@ fn parse_simple_insert() {
                 TableObject::TableName(ObjectName::from(vec![Ident::new("tasks")])),
                 table_name
             );
-            assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
+            assert_eq!(
+                vec![
+                    ObjectName::from(Ident::new("title")),
+                    ObjectName::from(Ident::new("priority"))
+                ],
+                columns
+            );
             assert!(on.is_none());
             assert_eq!(
                 Some(Box::new(Query {
@@ -1979,7 +1985,13 @@ fn parse_ignore_insert() {
                 TableObject::TableName(ObjectName::from(vec![Ident::new("tasks")])),
                 table_name
             );
-            assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
+            assert_eq!(
+                vec![
+                    ObjectName::from(Ident::new("title")),
+                    ObjectName::from(Ident::new("priority"))
+                ],
+                columns
+            );
             assert!(on.is_none());
             assert!(ignore);
             assert_eq!(
@@ -2029,7 +2041,13 @@ fn parse_priority_insert() {
                 TableObject::TableName(ObjectName::from(vec![Ident::new("tasks")])),
                 table_name
             );
-            assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
+            assert_eq!(
+                vec![
+                    ObjectName::from(Ident::new("title")),
+                    ObjectName::from(Ident::new("priority"))
+                ],
+                columns
+            );
             assert!(on.is_none());
             assert_eq!(priority, Some(HighPriority));
             assert_eq!(
@@ -2076,7 +2094,13 @@ fn parse_priority_insert() {
                 TableObject::TableName(ObjectName::from(vec![Ident::new("tasks")])),
                 table_name
             );
-            assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
+            assert_eq!(
+                vec![
+                    ObjectName::from(Ident::new("title")),
+                    ObjectName::from(Ident::new("priority"))
+                ],
+                columns
+            );
             assert!(on.is_none());
             assert_eq!(priority, Some(LowPriority));
             assert_eq!(
@@ -2124,7 +2148,10 @@ fn parse_insert_as() {
                 TableObject::TableName(ObjectName::from(vec![Ident::with_quote('`', "table")])),
                 table_name
             );
-            assert_eq!(vec![Ident::with_quote('`', "date")], columns);
+            assert_eq!(
+                vec![ObjectName::from(Ident::with_quote('`', "date"))],
+                columns
+            );
             let insert_alias = insert_alias.unwrap();
 
             assert_eq!(
@@ -2177,7 +2204,10 @@ fn parse_insert_as() {
                 table_name
             );
             assert_eq!(
-                vec![Ident::with_quote('`', "id"), Ident::with_quote('`', "date")],
+                vec![
+                    ObjectName::from(Ident::with_quote('`', "id")),
+                    ObjectName::from(Ident::with_quote('`', "date"))
+                ],
                 columns
             );
             let insert_alias = insert_alias.unwrap();
@@ -2239,7 +2269,13 @@ fn parse_replace_insert() {
                 TableObject::TableName(ObjectName::from(vec![Ident::new("tasks")])),
                 table_name
             );
-            assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
+            assert_eq!(
+                vec![
+                    ObjectName::from(Ident::new("title")),
+                    ObjectName::from(Ident::new("priority"))
+                ],
+                columns
+            );
             assert!(on.is_none());
             assert!(replace_into);
             assert_eq!(priority, Some(Delayed));
@@ -2333,12 +2369,12 @@ fn parse_insert_with_on_duplicate_update() {
             );
             assert_eq!(
                 vec![
-                    Ident::new("name"),
-                    Ident::new("description"),
-                    Ident::new("perm_create"),
-                    Ident::new("perm_read"),
-                    Ident::new("perm_update"),
-                    Ident::new("perm_delete")
+                    ObjectName::from(Ident::new("name")),
+                    ObjectName::from(Ident::new("description")),
+                    ObjectName::from(Ident::new("perm_create")),
+                    ObjectName::from(Ident::new("perm_read")),
+                    ObjectName::from(Ident::new("perm_update")),
+                    ObjectName::from(Ident::new("perm_delete"))
                 ],
                 columns
             );
@@ -2652,7 +2688,10 @@ fn parse_insert_with_numeric_prefix_column_name() {
                 TableObject::TableName(ObjectName::from(vec![Ident::new("s1"), Ident::new("t1")])),
                 table_name
             );
-            assert_eq!(vec![Ident::new("123col_$@length123")], columns);
+            assert_eq!(
+                vec![ObjectName::from(Ident::new("123col_$@length123"))],
+                columns
+            );
         }
         _ => unreachable!(),
     }
@@ -3773,14 +3812,14 @@ fn parse_json_table() {
             .relation,
         TableFactor::JsonTable {
             json_expr: Expr::Value((Value::SingleQuotedString("[1,2]".to_string())).with_empty_span()),
-            json_path: Value::SingleQuotedString("$[*]".to_string()),
+            json_path: Value::SingleQuotedString("$[*]".to_string()).with_empty_span(),
             columns: vec![
                 JsonTableColumn::Named(JsonTableNamedColumn {
                     name: Ident::new("x"),
                     r#type: DataType::Int(None),
-                    path: Value::SingleQuotedString("$".to_string()),
+                    path: Value::SingleQuotedString("$".to_string()).with_empty_span(),
                     exists: false,
-                    on_empty: Some(JsonTableColumnErrorHandling::Default(Value::SingleQuotedString("0".to_string()))),
+                    on_empty: Some(JsonTableColumnErrorHandling::Default(Value::SingleQuotedString("0".to_string()).with_empty_span())),
                     on_error: Some(JsonTableColumnErrorHandling::Null),
                 }),
             ],
@@ -4196,7 +4235,10 @@ fn parse_match_against_with_alias() {
                             Ident::new("ReferenceID")
                         ])]
                     );
-                    assert_eq!(match_value, Value::SingleQuotedString("AAA".to_owned()));
+                    assert_eq!(
+                        match_value,
+                        Value::SingleQuotedString("AAA".to_owned()).with_empty_span()
+                    );
                     assert_eq!(opt_search_modifier, Some(SearchModifier::InBooleanMode));
                 }
                 _ => unreachable!(),

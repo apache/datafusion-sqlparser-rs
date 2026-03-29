@@ -46,8 +46,8 @@ use super::{
     RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
     SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
     TableConstraint, TableFactor, TableObject, TableOptionsClustered, TableWithJoins, Update,
-    UpdateTableFromKind, Use, Value, Values, ViewColumnDef, WhileStatement,
-    WildcardAdditionalOptions, With, WithFill,
+    UpdateTableFromKind, Use, Values, ViewColumnDef, WhileStatement, WildcardAdditionalOptions,
+    With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -304,6 +304,7 @@ impl Spanned for Values {
 /// - [Statement::CreateSequence]
 /// - [Statement::CreateType]
 /// - [Statement::Pragma]
+/// - [Statement::Lock]
 /// - [Statement::LockTables]
 /// - [Statement::UnlockTables]
 /// - [Statement::Unload]
@@ -462,6 +463,7 @@ impl Spanned for Statement {
             Statement::CreateSequence { .. } => Span::empty(),
             Statement::CreateType { .. } => Span::empty(),
             Statement::Pragma { .. } => Span::empty(),
+            Statement::Lock(_) => Span::empty(),
             Statement::LockTables { .. } => Span::empty(),
             Statement::UnlockTables => Span::empty(),
             Statement::Unload { .. } => Span::empty(),
@@ -538,6 +540,7 @@ impl Spanned for CreateTable {
             transient: _,     // bool
             volatile: _,      // bool
             iceberg: _,       // bool, Snowflake specific
+            snapshot: _,      // bool, BigQuery specific
             name,
             columns,
             constraints,
@@ -569,6 +572,7 @@ impl Spanned for CreateTable {
             default_ddl_collation: _,           // string, no span
             with_aggregation_policy: _,         // todo, Snowflake specific
             with_row_access_policy: _,          // todo, Snowflake specific
+            with_storage_lifecycle_policy: _,   // todo, Snowflake specific
             with_tags: _,                       // todo, Snowflake specific
             external_volume: _,                 // todo, Snowflake specific
             base_location: _,                   // todo, Snowflake specific
@@ -582,8 +586,10 @@ impl Spanned for CreateTable {
             refresh_mode: _,
             initialize: _,
             require_user: _,
-            diststyle: _, // enum, no span
-            distkey: _,   // Ident, todo
+            diststyle: _,
+            distkey: _,
+            sortkey: _,
+            backup: _,
         } = self;
 
         union_spans(
@@ -1193,6 +1199,7 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::OwnerTo { .. } => Span::empty(),
             AlterTableOperation::ClusterBy { exprs } => union_spans(exprs.iter().map(|e| e.span())),
             AlterTableOperation::DropClusteringKey => Span::empty(),
+            AlterTableOperation::AlterSortKey { .. } => Span::empty(),
             AlterTableOperation::SuspendRecluster => Span::empty(),
             AlterTableOperation::ResumeRecluster => Span::empty(),
             AlterTableOperation::Refresh { .. } => Span::empty(),
@@ -1335,7 +1342,7 @@ impl Spanned for Insert {
             core::iter::once(insert_token.0.span)
                 .chain(core::iter::once(table.span()))
                 .chain(table_alias.iter().map(|k| k.alias.span))
-                .chain(columns.iter().map(|i| i.span))
+                .chain(columns.iter().map(|i| i.span()))
                 .chain(source.as_ref().map(|q| q.span()))
                 .chain(assignments.iter().map(|i| i.span()))
                 .chain(partitioned.iter().flat_map(|i| i.iter().map(|k| k.span())))
@@ -1795,6 +1802,7 @@ impl Spanned for JsonPathElem {
         match self {
             JsonPathElem::Dot { .. } => Span::empty(),
             JsonPathElem::Bracket { key } => key.span(),
+            JsonPathElem::ColonBracket { key } => key.span(),
         }
     }
 }
@@ -2178,13 +2186,6 @@ impl Spanned for ValueWithSpan {
     }
 }
 
-/// The span is stored in the `ValueWrapper` struct
-impl Spanned for Value {
-    fn span(&self) -> Span {
-        Span::empty() // # todo: Value needs to store spans before this is possible
-    }
-}
-
 impl Spanned for Join {
     fn span(&self) -> Span {
         let Join {
@@ -2381,6 +2382,7 @@ impl Spanned for TableObject {
                 union_spans(segments.iter().map(|i| i.span()))
             }
             TableObject::TableFunction(func) => func.span(),
+            TableObject::TableQuery(query) => query.span(),
         }
     }
 }
@@ -2557,6 +2559,7 @@ impl Spanned for comments::CommentWithSpan {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::ast::Value;
     use crate::dialect::{Dialect, GenericDialect, SnowflakeDialect};
     use crate::parser::Parser;
     use crate::tokenizer::{Location, Span};

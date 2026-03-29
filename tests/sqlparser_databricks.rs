@@ -600,3 +600,47 @@ fn parse_databricks_struct_type() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn parse_databricks_json_accessor() {
+    // Basic colon accessor — unquoted field names are case-insensitive
+    databricks().verified_only_select("SELECT raw:owner, RAW:owner FROM store_data");
+
+    // Unquoted field access is case-insensitive; bracket notation is case-sensitive.
+    databricks().verified_only_select(
+        "SELECT raw:OWNER AS case_insensitive, raw:['OWNER'] AS case_sensitive FROM store_data",
+    );
+
+    // Backtick-quoted keys (Databricks delimited identifiers) normalise to double-quoted output.
+    databricks().one_statement_parses_to(
+        "SELECT raw:`zip code`, raw:`Zip Code`, raw:['fb:testid'] FROM store_data",
+        r#"SELECT raw:"zip code", raw:"Zip Code", raw:['fb:testid'] FROM store_data"#,
+    );
+
+    // Dot notation
+    databricks().verified_only_select("SELECT raw:store.bicycle FROM store_data");
+
+    // String-key bracket notation after a dot segment
+    databricks()
+        .verified_only_select("SELECT raw:store['bicycle'], raw:store['BICYCLE'] FROM store_data");
+
+    // Integer-index bracket notation
+    databricks()
+        .verified_only_select("SELECT raw:store.fruit[0], raw:store.fruit[1] FROM store_data");
+
+    // Wildcard [*] — including chained and mixed positions
+    databricks().verified_only_select(
+        "SELECT raw:store.basket[*], raw:store.basket[*][0] AS first_of_baskets, \
+         raw:store.basket[0][*] AS first_basket, raw:store.basket[*][*] AS all_elements_flattened, \
+         raw:store.basket[0][2].b AS subfield FROM store_data",
+    );
+
+    // Dot access following a wildcard bracket
+    databricks().verified_only_select("SELECT raw:store.book[*].isbn FROM store_data");
+
+    // Double-colon cast — type keyword normalises to upper case
+    databricks().one_statement_parses_to(
+        "SELECT raw:store.bicycle.price::double FROM store_data",
+        "SELECT raw:store.bicycle.price::DOUBLE FROM store_data",
+    );
+}

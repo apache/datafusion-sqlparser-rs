@@ -709,6 +709,7 @@ fn test_duckdb_union_datatype() {
             transient: Default::default(),
             volatile: Default::default(),
             iceberg: Default::default(),
+            snapshot: false,
             dynamic: Default::default(),
             name: ObjectName::from(vec!["tbl1".into()]),
             columns: vec![
@@ -775,6 +776,7 @@ fn test_duckdb_union_datatype() {
             default_ddl_collation: Default::default(),
             with_aggregation_policy: Default::default(),
             with_row_access_policy: Default::default(),
+            with_storage_lifecycle_policy: Default::default(),
             with_tags: Default::default(),
             base_location: Default::default(),
             external_volume: Default::default(),
@@ -790,6 +792,8 @@ fn test_duckdb_union_datatype() {
             require_user: Default::default(),
             diststyle: Default::default(),
             distkey: Default::default(),
+            sortkey: Default::default(),
+            backup: Default::default(),
         }),
         stmt
     );

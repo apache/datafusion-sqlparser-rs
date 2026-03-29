@@ -287,6 +287,32 @@ fn test_snowflake_create_table_with_row_access_policy() {
 }
 
 #[test]
+fn test_snowflake_create_table_with_storage_lifecycle_policy() {
+    // WITH keyword
+    match snowflake().verified_stmt(
+        "CREATE TABLE IF NOT EXISTS my_table (a NUMBER(38, 0), b VARIANT) WITH STORAGE LIFECYCLE POLICY dba.global_settings.my_policy ON (a)",
+    ) {
+        Statement::CreateTable(CreateTable {
+            name,
+            with_storage_lifecycle_policy,
+            ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            let policy = with_storage_lifecycle_policy.unwrap();
+            assert_eq!("dba.global_settings.my_policy", policy.policy.to_string());
+            assert_eq!(vec![Ident::new("a")], policy.on);
+        }
+        _ => unreachable!(),
+    }
+
+    // Without WITH keyword — canonicalizes to WITH form
+    snowflake().one_statement_parses_to(
+        "CREATE TABLE my_table (a NUMBER(38, 0)) STORAGE LIFECYCLE POLICY my_policy ON (a, b)",
+        "CREATE TABLE my_table (a NUMBER(38, 0)) WITH STORAGE LIFECYCLE POLICY my_policy ON (a, b)",
+    );
+}
+
+#[test]
 fn test_snowflake_create_table_with_tag() {
     match snowflake()
         .verified_stmt("CREATE TABLE my_table (a number) WITH TAG (A='TAG A', B='TAG B')")
@@ -2017,27 +2043,27 @@ fn test_create_stage_with_stage_params() {
             );
             assert!(stage_params.credentials.options.contains(&KeyValueOption {
                 option_name: "AWS_KEY_ID".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "1a2b3c".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("1a2b3c".to_string()).with_empty_span()
+                ),
             }));
             assert!(stage_params.credentials.options.contains(&KeyValueOption {
                 option_name: "AWS_SECRET_KEY".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "4x5y6z".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("4x5y6z".to_string()).with_empty_span()
+                ),
             }));
             assert!(stage_params.encryption.options.contains(&KeyValueOption {
                 option_name: "MASTER_KEY".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "key".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("key".to_string()).with_empty_span()
+                ),
             }));
             assert!(stage_params.encryption.options.contains(&KeyValueOption {
                 option_name: "TYPE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "AWS_SSE_KMS".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("AWS_SSE_KMS".to_string()).with_empty_span()
+                ),
             }));
         }
         _ => unreachable!(),
@@ -2061,17 +2087,17 @@ fn test_create_stage_with_directory_table_params() {
         } => {
             assert!(directory_table_params.options.contains(&KeyValueOption {
                 option_name: "ENABLE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Boolean(true)),
+                option_value: KeyValueOptionKind::Single(Value::Boolean(true).with_empty_span()),
             }));
             assert!(directory_table_params.options.contains(&KeyValueOption {
                 option_name: "REFRESH_ON_CREATE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Boolean(false)),
+                option_value: KeyValueOptionKind::Single(Value::Boolean(false).with_empty_span()),
             }));
             assert!(directory_table_params.options.contains(&KeyValueOption {
                 option_name: "NOTIFICATION_INTEGRATION".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "some-string".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("some-string".to_string()).with_empty_span()
+                ),
             }));
         }
         _ => unreachable!(),
@@ -2091,17 +2117,21 @@ fn test_create_stage_with_file_format() {
         Statement::CreateStage { file_format, .. } => {
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "COMPRESSION".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder("AUTO".to_string())),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("AUTO".to_string()).with_empty_span()
+                ),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "BINARY_FORMAT".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder("HEX".to_string())),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("HEX".to_string()).with_empty_span()
+                ),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "ESCAPE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    r#"\\"#.to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString(r#"\\"#.to_string()).with_empty_span()
+                ),
             }));
         }
         _ => unreachable!(),
@@ -2123,13 +2153,13 @@ fn test_create_stage_with_copy_options() {
         Statement::CreateStage { copy_options, .. } => {
             assert!(copy_options.options.contains(&KeyValueOption {
                 option_name: "ON_ERROR".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder(
-                    "CONTINUE".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("CONTINUE".to_string()).with_empty_span()
+                ),
             }));
             assert!(copy_options.options.contains(&KeyValueOption {
                 option_name: "FORCE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Boolean(true)),
+                option_value: KeyValueOptionKind::Single(Value::Boolean(true).with_empty_span()),
             }));
         }
         _ => unreachable!(),
@@ -2260,27 +2290,27 @@ fn test_copy_into_with_stage_params() {
             );
             assert!(stage_params.credentials.options.contains(&KeyValueOption {
                 option_name: "AWS_KEY_ID".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "1a2b3c".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("1a2b3c".to_string()).with_empty_span()
+                ),
             }));
             assert!(stage_params.credentials.options.contains(&KeyValueOption {
                 option_name: "AWS_SECRET_KEY".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "4x5y6z".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("4x5y6z".to_string()).with_empty_span()
+                ),
             }));
             assert!(stage_params.encryption.options.contains(&KeyValueOption {
                 option_name: "MASTER_KEY".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "key".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("key".to_string()).with_empty_span()
+                ),
             }));
             assert!(stage_params.encryption.options.contains(&KeyValueOption {
                 option_name: "TYPE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "AWS_SSE_KMS".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("AWS_SSE_KMS".to_string()).with_empty_span()
+                ),
             }));
         }
         _ => unreachable!(),
@@ -2431,17 +2461,21 @@ fn test_copy_into_file_format() {
         Statement::CopyIntoSnowflake { file_format, .. } => {
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "COMPRESSION".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder("AUTO".to_string())),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("AUTO".to_string()).with_empty_span()
+                ),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "BINARY_FORMAT".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder("HEX".to_string())),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("HEX".to_string()).with_empty_span()
+                ),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "ESCAPE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    r#"\\"#.to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString(r#"\\"#.to_string()).with_empty_span()
+                ),
             }));
         }
         _ => unreachable!(),
@@ -2469,17 +2503,21 @@ fn test_copy_into_file_format() {
         Statement::CopyIntoSnowflake { file_format, .. } => {
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "COMPRESSION".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder("AUTO".to_string())),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("AUTO".to_string()).with_empty_span()
+                ),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "BINARY_FORMAT".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder("HEX".to_string())),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("HEX".to_string()).with_empty_span()
+                ),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "ESCAPE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    r#"\\"#.to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString(r#"\\"#.to_string()).with_empty_span()
+                ),
             }));
         }
         _ => unreachable!(),
@@ -2500,13 +2538,13 @@ fn test_copy_into_copy_options() {
         Statement::CopyIntoSnowflake { copy_options, .. } => {
             assert!(copy_options.options.contains(&KeyValueOption {
                 option_name: "ON_ERROR".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder(
-                    "CONTINUE".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("CONTINUE".to_string()).with_empty_span()
+                ),
             }));
             assert!(copy_options.options.contains(&KeyValueOption {
                 option_name: "FORCE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Boolean(true)),
+                option_value: KeyValueOptionKind::Single(Value::Boolean(true).with_empty_span()),
             }));
         }
         _ => unreachable!(),
@@ -2638,6 +2676,21 @@ fn test_snowflake_copy_into_stage_name_ends_with_parens() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn test_snowflake_stage_name_with_special_chars() {
+    // Stage path with '=' (Hive-style partitioning)
+    snowflake().verified_stmt("SELECT * FROM @stage/day=18/23.parquet");
+
+    // Stage path with ':' (time-based partitioning)
+    snowflake().verified_stmt("SELECT * FROM @stage/0:18:23/23.parquet");
+
+    // COPY INTO with '=' in stage path
+    snowflake().verified_stmt("COPY INTO my_table FROM @stage/day=18/file.parquet");
+
+    // COPY INTO with ':' in stage path
+    snowflake().verified_stmt("COPY INTO my_table FROM @stage/0:18:23/file.parquet");
 }
 
 #[test]
@@ -3208,7 +3261,10 @@ fn parse_view_column_descriptions() {
 
 #[test]
 fn test_parentheses_overflow() {
-    let max_nesting_level: usize = 25;
+    // Use a modest nesting level to avoid actual stack overflow on
+    // CI runners with small thread stacks (debug builds use large frames
+    // and each nesting level adds extra depth via maybe_parse).
+    let max_nesting_level: usize = 20;
 
     // Verify the recursion check is not too wasteful (num of parentheses within budget)
     let slack = 3;
@@ -3964,6 +4020,32 @@ fn test_timetravel_at_before() {
 }
 
 #[test]
+fn test_changes_clause() {
+    // CHANGES with AT and END
+    snowflake().verified_stmt(
+        r#"SELECT a FROM "PCH_ODS_FIDELIO"."SRC_VW_SYS_ACC_MASTER" CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP_TZ('2026-02-18 11:23:19.660000000')) END(TIMESTAMP => TO_TIMESTAMP_TZ('2026-02-18 11:38:30.211000000'))"#,
+    );
+
+    // CHANGES with AT only (no END)
+    snowflake().verified_stmt(
+        "SELECT a FROM t CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP_TZ('2026-02-18 11:23:19.660000000'))",
+    );
+
+    // CHANGES with APPEND_ONLY
+    snowflake().verified_stmt(
+        "SELECT a FROM t CHANGES(INFORMATION => APPEND_ONLY) AT(TIMESTAMP => TO_TIMESTAMP_TZ('2026-01-01 00:00:00'))",
+    );
+
+    // CHANGES with OFFSET
+    snowflake().verified_stmt("SELECT a FROM t CHANGES(INFORMATION => DEFAULT) AT(OFFSET => -60)");
+
+    // CHANGES with STATEMENT
+    snowflake().verified_stmt(
+        "SELECT a FROM t CHANGES(INFORMATION => DEFAULT) AT(STATEMENT => '8e5d0ca9-005e-44e6-b858-a8f5b37c5726')",
+    );
+}
+
+#[test]
 fn test_grant_account_global_privileges() {
     let privileges = vec![
         "ALL",
@@ -4611,6 +4693,27 @@ END
 }
 
 #[test]
+fn test_begin_transaction() {
+    snowflake().verified_stmt("BEGIN TRANSACTION");
+    snowflake().verified_stmt("BEGIN WORK");
+
+    // BEGIN TRANSACTION with statements
+    let stmts = snowflake()
+        .parse_sql_statements("BEGIN TRANSACTION; DROP TABLE IF EXISTS bla; COMMIT")
+        .unwrap();
+    assert_eq!(3, stmts.len());
+
+    // Bare BEGIN (no TRANSACTION keyword) with statements
+    let stmts = snowflake()
+        .parse_sql_statements("BEGIN; DROP TABLE IF EXISTS bla; COMMIT")
+        .unwrap();
+    assert_eq!(3, stmts.len());
+
+    // Bare BEGIN at EOF (no semicolon, no TRANSACTION keyword)
+    snowflake().verified_stmt("BEGIN");
+}
+
+#[test]
 fn test_snowflake_fetch_clause_syntax() {
     let canonical = "SELECT c1 FROM fetch_test FETCH FIRST 2 ROWS ONLY";
     snowflake().verified_only_select_with_canonical("SELECT c1 FROM fetch_test FETCH 2", canonical);
@@ -4648,6 +4751,17 @@ fn test_snowflake_create_view_with_composite_policy_name() {
     let create_view_with_tag =
         r#"CREATE VIEW X (COL WITH MASKING POLICY foo.bar.baz) AS SELECT * FROM Y"#;
     snowflake().verified_stmt(create_view_with_tag);
+}
+
+#[test]
+fn test_snowflake_create_view_copy_grants() {
+    snowflake().verified_stmt("CREATE OR REPLACE VIEW bla COPY GRANTS AS (SELECT * FROM source)");
+    snowflake()
+        .verified_stmt("CREATE OR REPLACE SECURE VIEW bla COPY GRANTS AS (SELECT * FROM source)");
+    // COPY GRANTS with column list
+    snowflake().verified_stmt(
+        "CREATE OR REPLACE VIEW bla COPY GRANTS (a, b) AS (SELECT a, b FROM source)",
+    );
 }
 
 #[test]

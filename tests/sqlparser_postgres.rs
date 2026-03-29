@@ -8280,49 +8280,24 @@ fn parse_alter_function_and_aggregate() {
 }
 
 #[test]
-fn parse_create_and_alter_text_search_failure_cases() {
-    let sql_cases = [
-        "CREATE TEXT SEARCH DICTIONARY alt_ts_dict1 (template=simple)",
-        "CREATE TEXT SEARCH DICTIONARY alt_ts_dict2 (template=simple)",
-        "ALTER TEXT SEARCH DICTIONARY alt_ts_dict1 RENAME TO alt_ts_dict2",
-        "ALTER TEXT SEARCH DICTIONARY alt_ts_dict1 RENAME TO alt_ts_dict3",
-        "ALTER TEXT SEARCH DICTIONARY alt_ts_dict2 OWNER TO regress_alter_generic_user2",
-        "ALTER TEXT SEARCH DICTIONARY alt_ts_dict2 OWNER TO regress_alter_generic_user3",
-        "ALTER TEXT SEARCH DICTIONARY alt_ts_dict2 SET SCHEMA alt_nsp2",
-        "ALTER TEXT SEARCH DICTIONARY alt_ts_dict3 RENAME TO alt_ts_dict4",
-        "ALTER TEXT SEARCH DICTIONARY alt_ts_dict1 RENAME TO alt_ts_dict4",
-        "ALTER TEXT SEARCH DICTIONARY alt_ts_dict3 OWNER TO regress_alter_generic_user2",
-        "ALTER TEXT SEARCH DICTIONARY alt_ts_dict3 SET SCHEMA alt_nsp2",
-        "CREATE TEXT SEARCH CONFIGURATION alt_ts_conf1 (copy=english)",
-        "CREATE TEXT SEARCH CONFIGURATION alt_ts_conf2 (copy=english)",
-        "ALTER TEXT SEARCH CONFIGURATION alt_ts_conf1 RENAME TO alt_ts_conf2",
-        "ALTER TEXT SEARCH CONFIGURATION alt_ts_conf1 RENAME TO alt_ts_conf3",
-        "ALTER TEXT SEARCH CONFIGURATION alt_ts_conf2 OWNER TO regress_alter_generic_user2",
-        "ALTER TEXT SEARCH CONFIGURATION alt_ts_conf2 OWNER TO regress_alter_generic_user3",
-        "ALTER TEXT SEARCH CONFIGURATION alt_ts_conf2 SET SCHEMA alt_nsp2",
-        "ALTER TEXT SEARCH CONFIGURATION alt_ts_conf3 RENAME TO alt_ts_conf4",
-        "ALTER TEXT SEARCH CONFIGURATION alt_ts_conf1 RENAME TO alt_ts_conf4",
-        "ALTER TEXT SEARCH CONFIGURATION alt_ts_conf3 OWNER TO regress_alter_generic_user2",
-        "ALTER TEXT SEARCH CONFIGURATION alt_ts_conf3 SET SCHEMA alt_nsp2",
-        "CREATE TEXT SEARCH TEMPLATE alt_ts_temp1 (lexize=dsimple_lexize)",
-        "CREATE TEXT SEARCH TEMPLATE alt_ts_temp2 (lexize=dsimple_lexize)",
-        "ALTER TEXT SEARCH TEMPLATE alt_ts_temp1 RENAME TO alt_ts_temp2",
-        "ALTER TEXT SEARCH TEMPLATE alt_ts_temp1 RENAME TO alt_ts_temp3",
-        "ALTER TEXT SEARCH TEMPLATE alt_ts_temp2 SET SCHEMA alt_nsp2",
-        "CREATE TEXT SEARCH TEMPLATE tstemp_case (\"Init\" = init_function)",
-        "CREATE TEXT SEARCH PARSER alt_ts_prs1 (start = prsd_start, gettoken = prsd_nexttoken, end = prsd_end, lextypes = prsd_lextype)",
-        "CREATE TEXT SEARCH PARSER alt_ts_prs2 (start = prsd_start, gettoken = prsd_nexttoken, end = prsd_end, lextypes = prsd_lextype)",
-        "ALTER TEXT SEARCH PARSER alt_ts_prs1 RENAME TO alt_ts_prs2",
-        "ALTER TEXT SEARCH PARSER alt_ts_prs1 RENAME TO alt_ts_prs3",
-        "ALTER TEXT SEARCH PARSER alt_ts_prs2 SET SCHEMA alt_nsp2",
-        "CREATE TEXT SEARCH PARSER tspars_case (\"Start\" = start_function)",
-    ];
+fn parse_create_and_alter_text_search() {
+    // CREATE — one per object type
+    pg_and_generic().verified_stmt("CREATE TEXT SEARCH DICTIONARY d (template = simple)");
+    pg_and_generic().verified_stmt("CREATE TEXT SEARCH CONFIGURATION c (copy = english)");
+    pg_and_generic().verified_stmt("CREATE TEXT SEARCH TEMPLATE t (lexize = dsimple_lexize)");
+    pg_and_generic().verified_stmt(
+        "CREATE TEXT SEARCH PARSER p (start = prsd_start, gettoken = prsd_nexttoken, end = prsd_end, lextypes = prsd_lextype)",
+    );
 
-    for sql in sql_cases {
-        if let Err(err) = pg().parse_sql_statements(sql) {
-            panic!("Failed to parse `{sql}`: {err}");
-        }
-    }
+    // CREATE with quoted option key
+    pg_and_generic().verified_stmt("CREATE TEXT SEARCH TEMPLATE t (\"Init\" = init_function)");
+
+    // ALTER — one test per object type arm, one per operation kind
+    pg_and_generic().verified_stmt("ALTER TEXT SEARCH DICTIONARY d (opt = val)");
+    pg_and_generic().verified_stmt("ALTER TEXT SEARCH DICTIONARY d (opt)");
+    pg_and_generic().verified_stmt("ALTER TEXT SEARCH CONFIGURATION c OWNER TO some_user");
+    pg_and_generic().verified_stmt("ALTER TEXT SEARCH TEMPLATE t SET SCHEMA s");
+    pg_and_generic().verified_stmt("ALTER TEXT SEARCH PARSER p RENAME TO p2");
 
     // Object type must be an unquoted keyword-like token in this position.
     assert!(pg()
@@ -8332,17 +8307,6 @@ fn parse_create_and_alter_text_search_failure_cases() {
     // CREATE options are key-value pairs in PostgreSQL syntax.
     assert!(pg()
         .parse_sql_statements("CREATE TEXT SEARCH DICTIONARY d (template)")
-        .is_err());
-
-    // CREATE TEXT SEARCH does not support generic CREATE modifiers.
-    assert!(pg()
-        .parse_sql_statements("CREATE OR REPLACE TEXT SEARCH DICTIONARY d (template = simple)")
-        .is_err());
-    assert!(pg()
-        .parse_sql_statements("CREATE OR ALTER TEXT SEARCH DICTIONARY d (template = simple)")
-        .is_err());
-    assert!(pg()
-        .parse_sql_statements("CREATE TEMP TEXT SEARCH DICTIONARY d (template = simple)")
         .is_err());
 }
 

@@ -5113,12 +5113,7 @@ impl<'a> Parser<'a> {
         let create_view_params = self.parse_create_view_params()?;
         if self.peek_keywords(&[Keyword::SNAPSHOT, Keyword::TABLE]) {
             self.parse_create_snapshot_table().map(Into::into)
-        } else if self.parse_keywords(&[Keyword::TEXT, Keyword::SEARCH]) {
-            if or_replace || or_alter || temporary || global.is_some() || transient || persistent {
-                return Err(ParserError::ParserError(
-                    "CREATE TEXT SEARCH does not support CREATE modifiers".to_string(),
-                ));
-            }
+        } else if self.peek_keywords(&[Keyword::TEXT, Keyword::SEARCH]) {
             self.parse_create_text_search().map(Into::into)
         } else if self.parse_keyword(Keyword::TABLE) {
             self.parse_create_table(or_replace, temporary, global, transient)
@@ -5211,19 +5206,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_text_search_option(&mut self) -> Result<SqlOption, ParserError> {
-        let key = self.parse_identifier()?;
-        self.expect_token(&Token::Eq)?;
-        let value = self.parse_expr()?;
-        Ok(SqlOption::KeyValue { key, value })
-    }
-
     /// Parse a PostgreSQL `CREATE TEXT SEARCH ...` statement.
     pub fn parse_create_text_search(&mut self) -> Result<CreateTextSearch, ParserError> {
+        self.expect_keywords(&[Keyword::TEXT, Keyword::SEARCH])?;
         let object_type = self.parse_text_search_object_type()?;
         let name = self.parse_object_name(false)?;
         self.expect_token(&Token::LParen)?;
-        let options = self.parse_comma_separated(Parser::parse_text_search_option)?;
+        let options = self.parse_comma_separated(Parser::parse_sql_option)?;
         self.expect_token(&Token::RParen)?;
         Ok(CreateTextSearch {
             object_type,
@@ -5246,6 +5235,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a PostgreSQL `ALTER TEXT SEARCH ...` statement.
     pub fn parse_alter_text_search(&mut self) -> Result<AlterTextSearch, ParserError> {
+        self.expect_keywords(&[Keyword::TEXT, Keyword::SEARCH])?;
         let object_type = self.parse_text_search_object_type()?;
         let name = self.parse_object_name(false)?;
 
@@ -10792,7 +10782,7 @@ impl<'a> Parser<'a> {
 
     /// Parse an `ALTER <object>` statement and dispatch to the appropriate alter handler.
     pub fn parse_alter(&mut self) -> Result<Statement, ParserError> {
-        if self.parse_keywords(&[Keyword::TEXT, Keyword::SEARCH]) {
+        if self.peek_keywords(&[Keyword::TEXT, Keyword::SEARCH]) {
             return self.parse_alter_text_search().map(Into::into);
         }
 

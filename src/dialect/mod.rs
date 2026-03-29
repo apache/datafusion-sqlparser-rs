@@ -1047,6 +1047,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect supports `$` as a prefix for money literals
+    /// e.g. `SELECT $123.45` (T-SQL)
+    fn supports_dollar_as_money_prefix(&self) -> bool {
+        false
+    }
+
     /// Does the dialect support with clause in create index statement?
     /// e.g. `CREATE INDEX idx ON t WITH (key = value, key2)`
     fn supports_create_index_with_clause(&self) -> bool {

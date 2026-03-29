@@ -2860,3 +2860,15 @@ fn parse_mssql_update_with_output_into() {
         "UPDATE employees SET salary = salary * 1.1 OUTPUT INSERTED.id, DELETED.salary, INSERTED.salary INTO @changes WHERE department = 'Engineering'",
     );
 }
+
+#[test]
+fn parse_mssql_money_constants() {
+    ms().verified_only_select("SELECT CEILING($123.45)");
+
+    ms().verified_only_select("SELECT $123.45");
+    ms().verified_only_select("SELECT $0.99");
+    ms().verified_only_select("SELECT $0.0");
+
+    ms().verified_only_select("SELECT $123");
+    ms().verified_only_select("SELECT $0");
+}

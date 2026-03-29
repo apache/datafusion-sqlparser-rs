@@ -98,7 +98,7 @@ pub use self::query::{
     JsonTableNestedColumn, LateralView, LimitClause, LockClause, LockType, MatchRecognizePattern,
     MatchRecognizeSymbol, Measure, NamedWindowDefinition, NamedWindowExpr, NonBlock, Offset,
     OffsetRows, OpenJsonTableColumn, OrderBy, OrderByExpr, OrderByKind, OrderByOptions,
-    PipeOperator, PivotValueSource, ProjectionSelect, Query, RenameSelectItem,
+    OrderBySort, PipeOperator, PivotValueSource, ProjectionSelect, Query, RenameSelectItem,
     RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select,
     SelectFlavor, SelectInto, SelectItem, SelectItemQualifiedWildcardKind, SelectModifiers,
     SetExpr, SetOperator, SetQuantifier, Setting, SymbolDefinition, Table, TableAlias,

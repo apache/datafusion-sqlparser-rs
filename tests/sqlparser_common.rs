@@ -2577,28 +2577,25 @@ fn parse_select_order_by() {
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("lname")),
                     options: OrderByOptions {
-                        asc: Some(true),
+                        sort: Some(OrderBySort::Asc),
                         nulls_first: None,
                     },
-                    using_operator: None,
                     with_fill: None,
                 },
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("fname")),
                     options: OrderByOptions {
-                        asc: Some(false),
+                        sort: Some(OrderBySort::Desc),
                         nulls_first: None,
                     },
-                    using_operator: None,
                     with_fill: None,
                 },
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("id")),
                     options: OrderByOptions {
-                        asc: None,
+                        sort: None,
                         nulls_first: None,
                     },
-                    using_operator: None,
                     with_fill: None,
                 },
             ]),
@@ -2621,19 +2618,17 @@ fn parse_select_order_by_limit() {
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("lname")),
                 options: OrderByOptions {
-                    asc: Some(true),
+                    sort: Some(OrderBySort::Asc),
                     nulls_first: None,
                 },
-                using_operator: None,
                 with_fill: None,
             },
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("fname")),
                 options: OrderByOptions {
-                    asc: Some(false),
+                    sort: Some(OrderBySort::Desc),
                     nulls_first: None,
                 },
-                using_operator: None,
                 with_fill: None,
             },
         ]),
@@ -2661,63 +2656,63 @@ fn parse_select_order_by_all() {
         (
             "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL",
             OrderByKind::All(OrderByOptions {
-                asc: None,
+                sort: None,
                 nulls_first: None,
             }),
         ),
         (
             "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL NULLS FIRST",
             OrderByKind::All(OrderByOptions {
-                asc: None,
+                sort: None,
                 nulls_first: Some(true),
             }),
         ),
         (
             "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL NULLS LAST",
             OrderByKind::All(OrderByOptions {
-                asc: None,
+                sort: None,
                 nulls_first: Some(false),
             }),
         ),
         (
             "SELECT id, fname, lname FROM customer ORDER BY ALL ASC",
             OrderByKind::All(OrderByOptions {
-                asc: Some(true),
+                sort: Some(OrderBySort::Asc),
                 nulls_first: None,
             }),
         ),
         (
             "SELECT id, fname, lname FROM customer ORDER BY ALL ASC NULLS FIRST",
             OrderByKind::All(OrderByOptions {
-                asc: Some(true),
+                sort: Some(OrderBySort::Asc),
                 nulls_first: Some(true),
             }),
         ),
         (
             "SELECT id, fname, lname FROM customer ORDER BY ALL ASC NULLS LAST",
             OrderByKind::All(OrderByOptions {
-                asc: Some(true),
+                sort: Some(OrderBySort::Asc),
                 nulls_first: Some(false),
             }),
         ),
         (
             "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL DESC",
             OrderByKind::All(OrderByOptions {
-                asc: Some(false),
+                sort: Some(OrderBySort::Desc),
                 nulls_first: None,
             }),
         ),
         (
             "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL DESC NULLS FIRST",
             OrderByKind::All(OrderByOptions {
-                asc: Some(false),
+                sort: Some(OrderBySort::Desc),
                 nulls_first: Some(true),
             }),
         ),
         (
             "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL DESC NULLS LAST",
             OrderByKind::All(OrderByOptions {
-                asc: Some(false),
+                sort: Some(OrderBySort::Desc),
                 nulls_first: Some(false),
             }),
         ),
@@ -2744,10 +2739,9 @@ fn parse_select_order_by_not_support_all() {
             OrderByKind::Expressions(vec![OrderByExpr {
                 expr: Expr::Identifier(Ident::new("ALL")),
                 options: OrderByOptions {
-                    asc: None,
+                    sort: None,
                     nulls_first: None,
                 },
-                using_operator: None,
                 with_fill: None,
             }]),
         ),
@@ -2756,10 +2750,9 @@ fn parse_select_order_by_not_support_all() {
             OrderByKind::Expressions(vec![OrderByExpr {
                 expr: Expr::Identifier(Ident::new("ALL")),
                 options: OrderByOptions {
-                    asc: Some(true),
+                    sort: Some(OrderBySort::Asc),
                     nulls_first: Some(true),
                 },
-                using_operator: None,
                 with_fill: None,
             }]),
         ),
@@ -2768,10 +2761,9 @@ fn parse_select_order_by_not_support_all() {
             OrderByKind::Expressions(vec![OrderByExpr {
                 expr: Expr::Identifier(Ident::new("ALL")),
                 options: OrderByOptions {
-                    asc: Some(false),
+                    sort: Some(OrderBySort::Desc),
                     nulls_first: Some(false),
                 },
-                using_operator: None,
                 with_fill: None,
             }]),
         ),
@@ -2792,19 +2784,17 @@ fn parse_select_order_by_nulls_order() {
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("lname")),
                 options: OrderByOptions {
-                    asc: Some(true),
+                    sort: Some(OrderBySort::Asc),
                     nulls_first: Some(true),
                 },
-                using_operator: None,
                 with_fill: None,
             },
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("fname")),
                 options: OrderByOptions {
-                    asc: Some(false),
+                    sort: Some(OrderBySort::Desc),
                     nulls_first: Some(false),
                 },
-                using_operator: None,
                 with_fill: None,
             },
         ]),
@@ -2816,6 +2806,67 @@ fn parse_select_order_by_nulls_order() {
         limit_by: vec![],
     };
     assert_eq!(Some(expected_limit_clause), select.limit_clause);
+}
+
+#[test]
+fn parse_aggregate_order_by_using_operator() {
+    let sql = "SELECT aggfns(DISTINCT a, a, c ORDER BY c USING ~<~, a) FROM t";
+    let dialects = all_dialects_where(|d| d.supports_order_by_using_operator());
+    let select = dialects.verified_only_select(sql);
+    let SelectItem::UnnamedExpr(Expr::Function(Function {
+        args: FunctionArguments::List(FunctionArgumentList { clauses, .. }),
+        ..
+    })) = &select.projection[0]
+    else {
+        unreachable!("expected aggregate function in projection");
+    };
+
+    let Some(FunctionArgumentClause::OrderBy(order_by_exprs)) = clauses
+        .iter()
+        .find(|clause| matches!(clause, FunctionArgumentClause::OrderBy(_)))
+    else {
+        unreachable!("expected ORDER BY clause in aggregate function argument list");
+    };
+
+    assert_eq!(
+        order_by_exprs[0].options.sort,
+        Some(OrderBySort::Using(ObjectName::from(vec!["~<~".into()])))
+    );
+    assert_eq!(order_by_exprs[1].options.sort, None);
+}
+
+#[test]
+fn parse_order_by_using_operator_syntax() {
+    let dialects = all_dialects_where(|d| d.supports_order_by_using_operator());
+    dialects.one_statement_parses_to(
+        "SELECT a FROM t ORDER BY a USING OPERATOR(<)",
+        "SELECT a FROM t ORDER BY a USING <",
+    );
+
+    let query = dialects
+        .verified_query("SELECT a FROM t ORDER BY a USING OPERATOR(pg_catalog.<) NULLS LAST");
+    let order_by = query.order_by.expect("expected ORDER BY clause");
+    let OrderByKind::Expressions(exprs) = order_by.kind else {
+        unreachable!("expected ORDER BY expressions");
+    };
+
+    assert_eq!(
+        exprs[0].options.sort,
+        Some(OrderBySort::Using(ObjectName::from(vec![
+            Ident::new("pg_catalog"),
+            Ident::new("<"),
+        ])))
+    );
+    assert_eq!(exprs[0].options.nulls_first, Some(false));
+}
+
+#[test]
+fn parse_order_by_using_operator_invalid_cases() {
+    let dialects = all_dialects_where(|d| d.supports_order_by_using_operator());
+    let err = dialects
+        .parse_sql_statements("SELECT a FROM t ORDER BY a USING OPERATOR();")
+        .unwrap_err();
+    assert!(matches!(err, ParserError::ParserError(_)));
 }
 
 #[test]
@@ -3024,10 +3075,9 @@ fn parse_select_qualify() {
                     order_by: vec![OrderByExpr {
                         expr: Expr::Identifier(Ident::new("o")),
                         options: OrderByOptions {
-                            asc: None,
+                            sort: None,
                             nulls_first: None,
                         },
-                        using_operator: None,
                         with_fill: None,
                     }],
                     window_frame: None,
@@ -3474,10 +3524,9 @@ fn parse_listagg() {
                         span: Span::empty(),
                     }),
                     options: OrderByOptions {
-                        asc: None,
+                        sort: None,
                         nulls_first: None,
                     },
-                    using_operator: None,
                     with_fill: None,
                 },
                 OrderByExpr {
@@ -3487,10 +3536,9 @@ fn parse_listagg() {
                         span: Span::empty(),
                     }),
                     options: OrderByOptions {
-                        asc: None,
+                        sort: None,
                         nulls_first: None,
                     },
-                    using_operator: None,
                     with_fill: None,
                 },
             ]
@@ -5747,10 +5795,9 @@ fn parse_window_functions() {
                 order_by: vec![OrderByExpr {
                     expr: Expr::Identifier(Ident::new("dt")),
                     options: OrderByOptions {
-                        asc: Some(false),
+                        sort: Some(OrderBySort::Desc),
                         nulls_first: None,
                     },
-                    using_operator: None,
                     with_fill: None,
                 }],
                 window_frame: None,
@@ -5974,10 +6021,9 @@ fn test_parse_named_window() {
                             span: Span::empty(),
                         }),
                         options: OrderByOptions {
-                            asc: None,
+                            sort: None,
                             nulls_first: None,
                         },
-                        using_operator: None,
                         with_fill: None,
                     }],
                     window_frame: None,
@@ -9468,10 +9514,9 @@ fn parse_create_index() {
             operator_class: None,
             column: OrderByExpr {
                 expr: Expr::Identifier(Ident::new("name")),
-                using_operator: None,
                 with_fill: None,
                 options: OrderByOptions {
-                    asc: None,
+                    sort: None,
                     nulls_first: None,
                 },
             },
@@ -9480,10 +9525,9 @@ fn parse_create_index() {
             operator_class: None,
             column: OrderByExpr {
                 expr: Expr::Identifier(Ident::new("age")),
-                using_operator: None,
                 with_fill: None,
                 options: OrderByOptions {
-                    asc: Some(false),
+                    sort: Some(OrderBySort::Desc),
                     nulls_first: None,
                 },
             },
@@ -9516,10 +9560,9 @@ fn test_create_index_with_using_function() {
             operator_class: None,
             column: OrderByExpr {
                 expr: Expr::Identifier(Ident::new("name")),
-                using_operator: None,
                 with_fill: None,
                 options: OrderByOptions {
-                    asc: None,
+                    sort: None,
                     nulls_first: None,
                 },
             },
@@ -9528,10 +9571,9 @@ fn test_create_index_with_using_function() {
             operator_class: None,
             column: OrderByExpr {
                 expr: Expr::Identifier(Ident::new("age")),
-                using_operator: None,
                 with_fill: None,
                 options: OrderByOptions {
-                    asc: Some(false),
+                    sort: Some(OrderBySort::Desc),
                     nulls_first: None,
                 },
             },
@@ -9576,10 +9618,9 @@ fn test_create_index_with_with_clause() {
         column: OrderByExpr {
             expr: Expr::Identifier(Ident::new("title")),
             options: OrderByOptions {
-                asc: None,
+                sort: None,
                 nulls_first: None,
             },
-            using_operator: None,
             with_fill: None,
         },
         operator_class: None,
@@ -13203,10 +13244,9 @@ fn test_match_recognize() {
             order_by: vec![OrderByExpr {
                 expr: Expr::Identifier(Ident::new("price_date")),
                 options: OrderByOptions {
-                    asc: None,
+                    sort: None,
                     nulls_first: None,
                 },
-                using_operator: None,
                 with_fill: None,
             }],
             measures: vec![

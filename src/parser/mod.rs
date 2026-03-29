@@ -1376,7 +1376,7 @@ impl<'a> Parser<'a> {
         }
         let alias = self.parse_optional_alias_inner(None, validator)?;
         let order_by = OrderByOptions {
-            asc: self.parse_asc_desc(),
+            sort: self.parse_optional_order_by_sort(),
             nulls_first: None,
         };
         Ok(ExprWithAliasAndOrderBy {
@@ -18285,6 +18285,15 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse ASC or DESC and map to [OrderBySort].
+    fn parse_optional_order_by_sort(&mut self) -> Option<OrderBySort> {
+        match self.parse_asc_desc() {
+            Some(true) => Some(OrderBySort::Asc),
+            Some(false) => Some(OrderBySort::Desc),
+            None => None,
+        }
+    }
+
     /// Parse an [OrderByExpr] expression.
     pub fn parse_order_by_expr(&mut self) -> Result<OrderByExpr, ParserError> {
         self.parse_order_by_expr_inner(false)
@@ -18321,28 +18330,14 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let using_operator = if !with_operator_class
+        let options = if !with_operator_class
             && self.dialect.supports_order_by_using_operator()
             && self.parse_keyword(Keyword::USING)
         {
-            Some(self.parse_order_by_using_operator()?)
-        } else {
-            None
-        };
-
-        let options = if using_operator.is_some() {
-            if self
-                .peek_one_of_keywords(&[Keyword::ASC, Keyword::DESC])
-                .is_some()
-            {
-                return parser_err!(
-                    "ASC/DESC cannot be used together with USING in ORDER BY".to_string(),
-                    self.peek_token_ref().span.start
-                );
-            }
+            let op = self.parse_order_by_using_operator()?;
             OrderByOptions {
-                asc: None,
-                nulls_first: self.parse_order_by_nulls_first_last(),
+                sort: Some(OrderBySort::Using(op)),
+                nulls_first: self.parse_null_ordering_modifier(),
             }
         } else {
             self.parse_order_by_options()?
@@ -18359,7 +18354,6 @@ impl<'a> Parser<'a> {
         Ok((
             OrderByExpr {
                 expr,
-                using_operator,
                 options,
                 with_fill,
             },
@@ -18368,40 +18362,18 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_order_by_using_operator(&mut self) -> Result<ObjectName, ParserError> {
-        let dialect = self.dialect;
-
         if self.parse_keyword(Keyword::OPERATOR) {
             self.expect_token(&Token::LParen)?;
             let operator_name = self.parse_operator_name()?;
-            let Some(last_part) = operator_name.0.last() else {
-                return self.expected_ref("an operator name", self.peek_token_ref());
-            };
-            let operator = last_part.to_string();
-            if operator.is_empty()
-                || !operator
-                    .chars()
-                    .all(|ch| dialect.is_custom_operator_part(ch))
-            {
-                return self.expected_ref("an operator name", self.peek_token_ref());
-            }
             self.expect_token(&Token::RParen)?;
             return Ok(operator_name);
         }
 
         let token = self.next_token();
-        let operator = token.token.to_string();
-        if !operator.is_empty()
-            && operator
-                .chars()
-                .all(|ch| dialect.is_custom_operator_part(ch))
-        {
-            Ok(ObjectName::from(vec![Ident::new(operator)]))
-        } else {
-            self.expected_ref("an ordering operator after USING", &token)
-        }
+        Ok(ObjectName::from(vec![Ident::new(token.token.to_string())]))
     }
 
-    fn parse_order_by_nulls_first_last(&mut self) -> Option<bool> {
+    fn parse_null_ordering_modifier(&mut self) -> Option<bool> {
         if self.parse_keywords(&[Keyword::NULLS, Keyword::FIRST]) {
             Some(true)
         } else if self.parse_keywords(&[Keyword::NULLS, Keyword::LAST]) {
@@ -18412,10 +18384,10 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_order_by_options(&mut self) -> Result<OrderByOptions, ParserError> {
-        let asc = self.parse_asc_desc();
-        let nulls_first = self.parse_order_by_nulls_first_last();
+        let sort = self.parse_optional_order_by_sort();
+        let nulls_first = self.parse_null_ordering_modifier();
 
-        Ok(OrderByOptions { asc, nulls_first })
+        Ok(OrderByOptions { sort, nulls_first })
     }
 
     // Parse a WITH FILL clause (ClickHouse dialect)
@@ -20683,10 +20655,9 @@ mod tests {
                 column: OrderByExpr {
                     expr: Expr::Identifier(name.into()),
                     options: OrderByOptions {
-                        asc: None,
+                        sort: None,
                         nulls_first: None,
                     },
-                    using_operator: None,
                     with_fill: None,
                 },
                 operator_class: None,

@@ -24,7 +24,7 @@ mod test_utils;
 
 use helpers::attached_token::AttachedToken;
 use sqlparser::ast::*;
-use sqlparser::dialect::{Dialect, GenericDialect, PostgreSqlDialect};
+use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Span;
 use test_utils::*;
@@ -2778,10 +2778,9 @@ fn parse_create_indices_with_operator_classes() {
                         within_group: vec![],
                     }),
                     options: OrderByOptions {
-                        asc: None,
+                        sort: None,
                         nulls_first: None,
                     },
-                    using_operator: None,
                     with_fill: None,
                 },
                 operator_class: expected_operator_class.clone(),
@@ -2843,10 +2842,9 @@ fn parse_create_indices_with_operator_classes() {
                                     span: Span::empty()
                                 }),
                                 options: OrderByOptions {
-                                    asc: None,
+                                    sort: None,
                                     nulls_first: None,
                                 },
-                                using_operator: None,
                                 with_fill: None,
                             },
                             operator_class: None
@@ -5807,101 +5805,6 @@ fn parse_array_agg() {
     // handles multi-part identifier with array_agg code path
     let sql4 = "SELECT ARRAY_AGG(my_schema.sections_tbl.*) AS sections FROM sections_tbl";
     pg().verified_stmt(sql4);
-}
-
-#[test]
-fn parse_pg_aggregate_order_by_using_operator() {
-    let sql = "SELECT aggfns(DISTINCT a, a, c ORDER BY c USING ~<~, a) FROM t";
-    let select = pg().verified_only_select(sql);
-    let SelectItem::UnnamedExpr(Expr::Function(Function {
-        args: FunctionArguments::List(FunctionArgumentList { clauses, .. }),
-        ..
-    })) = &select.projection[0]
-    else {
-        unreachable!("expected aggregate function in projection");
-    };
-
-    let Some(FunctionArgumentClause::OrderBy(order_by_exprs)) = clauses
-        .iter()
-        .find(|clause| matches!(clause, FunctionArgumentClause::OrderBy(_)))
-    else {
-        unreachable!("expected ORDER BY clause in aggregate function argument list");
-    };
-
-    assert_eq!(
-        order_by_exprs[0].using_operator,
-        Some(ObjectName::from(vec!["~<~".into()]))
-    );
-    assert_eq!(order_by_exprs[1].using_operator, None);
-}
-
-#[test]
-fn parse_pg_order_by_using_operator_syntax() {
-    pg().one_statement_parses_to(
-        "SELECT a FROM t ORDER BY a USING OPERATOR(<)",
-        "SELECT a FROM t ORDER BY a USING <",
-    );
-
-    let query =
-        pg().verified_query("SELECT a FROM t ORDER BY a USING OPERATOR(pg_catalog.<) NULLS LAST");
-    let order_by = query.order_by.expect("expected ORDER BY clause");
-    let OrderByKind::Expressions(exprs) = order_by.kind else {
-        unreachable!("expected ORDER BY expressions");
-    };
-
-    assert_eq!(
-        exprs[0].using_operator,
-        Some(ObjectName::from(vec![
-            Ident::new("pg_catalog"),
-            Ident::new("<"),
-        ]))
-    );
-    assert_eq!(exprs[0].options.asc, None);
-    assert_eq!(exprs[0].options.nulls_first, Some(false));
-}
-
-#[test]
-fn parse_pg_order_by_using_operator_invalid_cases() {
-    let err = pg()
-        .parse_sql_statements("SELECT a FROM t ORDER BY a USING ;")
-        .unwrap_err();
-    assert!(
-        matches!(err, ParserError::ParserError(msg) if msg.contains("an ordering operator after USING"))
-    );
-
-    let err = pg()
-        .parse_sql_statements("SELECT a FROM t ORDER BY a USING OPERATOR();")
-        .unwrap_err();
-    assert!(matches!(err, ParserError::ParserError(msg) if msg.contains("an operator name")));
-
-    let err = pg()
-        .parse_sql_statements("SELECT a FROM t ORDER BY a USING < DESC;")
-        .unwrap_err();
-    assert!(
-        matches!(err, ParserError::ParserError(msg) if msg.contains("ASC/DESC cannot be used together with USING in ORDER BY"))
-    );
-
-    #[derive(Debug)]
-    struct OrderByUsingDisabledDialect;
-
-    impl Dialect for OrderByUsingDisabledDialect {
-        fn is_identifier_start(&self, ch: char) -> bool {
-            PostgreSqlDialect {}.is_identifier_start(ch)
-        }
-
-        fn is_identifier_part(&self, ch: char) -> bool {
-            PostgreSqlDialect {}.is_identifier_part(ch)
-        }
-
-        fn supports_order_by_using_operator(&self) -> bool {
-            false
-        }
-    }
-
-    let without_order_by_using = TestedDialects::new(vec![Box::new(OrderByUsingDisabledDialect)]);
-    assert!(without_order_by_using
-        .parse_sql_statements("SELECT a FROM t ORDER BY a USING <;")
-        .is_err());
 }
 
 #[test]

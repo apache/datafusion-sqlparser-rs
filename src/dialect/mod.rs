@@ -1048,7 +1048,7 @@ pub trait Dialect: Debug + Any {
     }
 
     /// Returns true if this dialect supports `$` as a prefix for money literals
-    /// e.g. `SELECT $123.45` (T-SQL)
+    /// e.g. `SELECT $123.45` (SQL Server)
     fn supports_dollar_as_money_prefix(&self) -> bool {
         false
     }

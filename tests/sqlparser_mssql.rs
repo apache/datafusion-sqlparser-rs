@@ -2865,10 +2865,33 @@ fn parse_mssql_update_with_output_into() {
 fn parse_mssql_money_constants() {
     ms().verified_only_select("SELECT CEILING($123.45)");
 
-    ms().verified_only_select("SELECT $123.45");
-    ms().verified_only_select("SELECT $0.99");
-    ms().verified_only_select("SELECT $0.0");
+    let select = ms().verified_only_select("SELECT $123.45");
+    assert_eq!(
+        &Expr::Value(Value::Placeholder("$123.45".to_string()).with_empty_span()),
+        expr_from_projection(only(&select.projection)),
+    );
 
-    ms().verified_only_select("SELECT $123");
-    ms().verified_only_select("SELECT $0");
+    let select = ms().verified_only_select("SELECT $0.99");
+    assert_eq!(
+        &Expr::Value(Value::Placeholder("$0.99".to_string()).with_empty_span()),
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let select = ms().verified_only_select("SELECT $0.0");
+    assert_eq!(
+        &Expr::Value(Value::Placeholder("$0.0".to_string()).with_empty_span()),
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let select = ms().verified_only_select("SELECT $123");
+    assert_eq!(
+        &Expr::Value(Value::Placeholder("$123".to_string()).with_empty_span()),
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let select = ms().verified_only_select("SELECT $0");
+    assert_eq!(
+        &Expr::Value(Value::Placeholder("$0".to_string()).with_empty_span()),
+        expr_from_projection(only(&select.projection)),
+    );
 }

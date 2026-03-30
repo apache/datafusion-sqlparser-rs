@@ -18,7 +18,7 @@
 [package]
 name = "pgmold-sqlparser"
 description = "Fork of sqlparser with additional PostgreSQL features (PARTITION OF, SECURITY DEFINER/INVOKER, SET params)"
-version = "0.60.1"
+version = "0.60.2"
 authors = ["Filipe Guerreiro <filipe.m.guerreiro@gmail.com>"]
 homepage = "https://github.com/fmguerreiro/datafusion-sqlparser-rs"
 documentation = "https://docs.rs/pgmold-sqlparser/"

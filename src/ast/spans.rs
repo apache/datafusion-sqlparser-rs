@@ -1081,6 +1081,8 @@ impl Spanned for AlterTableOperation {
                 partition,
             } => name.span.union_opt(&partition.as_ref().map(|i| i.span)),
             AlterTableOperation::DisableRowLevelSecurity => Span::empty(),
+            AlterTableOperation::ForceRowLevelSecurity => Span::empty(),
+            AlterTableOperation::NoForceRowLevelSecurity => Span::empty(),
             AlterTableOperation::DisableRule { name } => name.span,
             AlterTableOperation::DisableTrigger { name } => name.span,
             AlterTableOperation::DropConstraint {

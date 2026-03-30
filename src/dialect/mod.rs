@@ -1670,6 +1670,17 @@ pub trait Dialect: Debug + Any {
     fn supports_comma_separated_trim(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect supports the `AS` keyword being
+    /// optional in a CTE definition. For example:
+    /// ```sql
+    /// WITH cte_name (SELECT ...)
+    /// ```
+    ///
+    /// [Databricks](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-select-cte)
+    fn supports_cte_without_as(&self) -> bool {
+        false
+    }
 }
 
 /// Operators for which precedence must be defined.

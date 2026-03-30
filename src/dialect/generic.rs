@@ -288,4 +288,8 @@ impl Dialect for GenericDialect {
     fn supports_comma_separated_trim(&self) -> bool {
         true
     }
+
+    fn supports_cte_without_as(&self) -> bool {
+        true
+    }
 }

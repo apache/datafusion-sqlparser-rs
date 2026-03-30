@@ -478,6 +478,11 @@ pub enum DataType {
     ///
     /// [PostgreSQL]: https://www.postgresql.org/docs/current/plpgsql-trigger.html
     Trigger,
+    /// SETOF type modifier for [PostgreSQL] function return types,
+    /// e.g. `CREATE FUNCTION ... RETURNS SETOF text`.
+    ///
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createfunction.html
+    SetOf(Box<DataType>),
     /// Any data type, used in BigQuery UDF definitions for templated parameters, see [BigQuery].
     ///
     /// [BigQuery]: https://cloud.google.com/bigquery/docs/user-defined-functions#templated-sql-udf-parameters
@@ -794,6 +799,7 @@ impl fmt::Display for DataType {
             }
             DataType::Unspecified => Ok(()),
             DataType::Trigger => write!(f, "TRIGGER"),
+            DataType::SetOf(inner) => write!(f, "SETOF {inner}"),
             DataType::AnyType => write!(f, "ANY TYPE"),
             DataType::Table(fields) => match fields {
                 Some(fields) => {

@@ -11354,6 +11354,10 @@ impl<'a> Parser<'a> {
                     Ok(DataType::Tuple(field_defs))
                 }
                 Keyword::TRIGGER => Ok(DataType::Trigger),
+                Keyword::SETOF => {
+                    let inner = self.parse_data_type()?;
+                    Ok(DataType::SetOf(Box::new(inner)))
+                }
                 Keyword::ANY if self.peek_keyword(Keyword::TYPE) => {
                     let _ = self.parse_keyword(Keyword::TYPE);
                     Ok(DataType::AnyType)

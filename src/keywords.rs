@@ -921,6 +921,7 @@ define_keywords!(
     SESSION_USER,
     SET,
     SETERROR,
+    SETOF,
     SETS,
     SETTINGS,
     SHARE,

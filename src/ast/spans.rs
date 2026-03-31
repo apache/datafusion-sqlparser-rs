@@ -28,26 +28,7 @@ use core::iter;
 use crate::tokenizer::Span;
 
 use super::{
-    comments, dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation,
-    AlterIndexOperation, AlterTableOperation, Analyze, Array, Assignment, AssignmentTarget,
-    AttachedToken, BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef,
-    ColumnOption, ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements,
-    ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
-    CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr,
-    ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr,
-    FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
-    IfStatement, IlikeSelectItem, IndexColumn, Insert, Interpolate, InterpolateExpr, Join,
-    JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
-    MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
-    MergeInsertKind, MergeUpdateExpr, NamedParenthesizedList, NamedWindowDefinition, ObjectName,
-    ObjectNamePart, Offset, OnConflict, OnConflictAction, OnInsert, OpenStatement, OrderBy,
-    OrderByExpr, OrderByKind, OutputClause, Partition, PartitionBoundValue, PivotValueSource,
-    ProjectionSelect, Query, RaiseStatement, RaiseStatementValue, ReferentialAction,
-    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
-    SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
-    TableConstraint, TableFactor, TableObject, TableOptionsClustered, TableWithJoins, Update,
-    UpdateTableFromKind, Use, Values, ViewColumnDef, WhileStatement, WildcardAdditionalOptions,
-    With, WithFill,
+    AccessExpr, AlterColumnOperation, AlterIndexOperation, AlterTableOperation, Analyze, Array, Assignment, AssignmentTarget, AttachedToken, BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements, ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable, CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound, IfStatement, IlikeSelectItem, IndexColumn, Insert, Interpolate, InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause, MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr, MergeInsertKind, MergeUpdateExpr, NamedParenthesizedList, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction, OnInsert, OpenStatement, OrderBy, OrderByExpr, OrderByKind, OutputClause, Parens, Partition, PartitionBoundValue, PivotValueSource, ProjectionSelect, Query, RaiseStatement, RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject, TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Values, ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With, WithFill, comments, dcl::SecondaryRoles, value::ValueWithSpan
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -103,6 +84,12 @@ pub trait Spanned {
 impl Spanned for TokenWithSpan {
     fn span(&self) -> Span {
         self.span
+    }
+}
+
+impl<T> Spanned for Parens<T> {
+    fn span(&self) -> Span {
+        union_spans([self.opening_token.0.span, self.closing_token.0.span].into_iter())
     }
 }
 
@@ -239,10 +226,11 @@ impl Spanned for Values {
             rows,
         } = self;
 
-        union_spans(
-            rows.iter()
-                .map(|row| union_spans(row.iter().map(|expr| expr.span()))),
-        )
+        match &rows[..] {
+            [] => Span::empty(),
+            [f] => f.span(),
+            [f, .., l] => union_spans([f.span(), l.span()].into_iter()),
+        }
     }
 }
 

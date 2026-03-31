@@ -19027,14 +19027,22 @@ impl<'a> Parser<'a> {
                 explicit_row = true;
             }
 
-            parser.expect_token(&Token::LParen)?;
+            let opening_paren = parser.expect_token(&Token::LParen)?;
             if allow_empty && parser.peek_token().token == Token::RParen {
-                parser.next_token();
-                Ok(vec![])
+                let closing_paren = parser.next_token();
+                Ok(Parens {
+                    opening_token: opening_paren.into(),
+                    content: vec![],
+                    closing_token: closing_paren.into()
+                })
             } else {
                 let exprs = parser.parse_comma_separated(Parser::parse_expr)?;
-                parser.expect_token(&Token::RParen)?;
-                Ok(exprs)
+                let closing_paren = parser.expect_token(&Token::RParen)?;
+                Ok(Parens {
+                    opening_token: opening_paren.into(),
+                    content: exprs,
+                    closing_token: closing_paren.into(),
+                })
             }
         })?;
         Ok(Values {

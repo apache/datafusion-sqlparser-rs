@@ -30,12 +30,11 @@ use helpers::{
 };
 
 use core::cmp::Ordering;
-use core::ops::Deref;
+use core::ops::{Deref, DerefMut};
 use core::{
     fmt::{self, Display},
     hash,
 };
-use std::ops::DerefMut;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};

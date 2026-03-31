@@ -108,7 +108,7 @@ impl Spanned for TokenWithSpan {
 
 impl<T> Spanned for Parens<T> {
     fn span(&self) -> Span {
-        union_spans([self.opening_token.0.span, self.closing_token.0.span].into_iter())
+        self.opening_token.0.span.union(&self.closing_token.0.span)
     }
 }
 
@@ -248,7 +248,7 @@ impl Spanned for Values {
         match &rows[..] {
             [] => Span::empty(),
             [f] => f.span(),
-            [f, .., l] => union_spans([f.span(), l.span()].into_iter()),
+            [f, .., l] => f.span().union(&l.span()),
         }
     }
 }

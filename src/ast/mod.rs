@@ -217,7 +217,6 @@ pub struct Parens<T> {
 impl<T> Parens<T> {
     /// Constructor wrapping `content` into `Parens` with an empty span;
     /// useful for testing purposes.
-    #[inline]
     pub fn with_empty_span(content: T) -> Self {
         Self {
             opening_token: AttachedToken::empty(),

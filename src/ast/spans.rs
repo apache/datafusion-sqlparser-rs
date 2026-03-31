@@ -1821,6 +1821,9 @@ impl Spanned for SelectItem {
         match self {
             SelectItem::UnnamedExpr(expr) => expr.span(),
             SelectItem::ExprWithAlias { expr, alias } => expr.span().union(&alias.span),
+            SelectItem::ExprWithAliases { expr, aliases } => {
+                union_spans(iter::once(expr.span()).chain(aliases.iter().map(|i| i.span)))
+            }
             SelectItem::QualifiedWildcard(kind, wildcard_additional_options) => union_spans(
                 [kind.span()]
                     .into_iter()

@@ -18754,3 +18754,18 @@ fn test_wildcard_func_arg() {
     dialects.verified_expr("HASH(* EXCLUDE (col1))");
     dialects.verified_expr("HASH(* EXCLUDE (col1, col2))");
 }
+
+#[test]
+fn parse_select_item_multi_column_alias() {
+    all_dialects_where(|d| d.supports_select_item_multi_column_alias())
+        .verified_stmt("SELECT stack(2, 'a', 'b', 'c', 'd') AS (col1, col2)");
+
+    all_dialects_where(|d| d.supports_select_item_multi_column_alias())
+        .verified_stmt("SELECT stack(2, 'a', 'b', 'c', 'd') AS (col1, col2) FROM t");
+
+    assert!(
+        all_dialects_where(|d| !d.supports_select_item_multi_column_alias())
+            .parse_sql_statements("SELECT stack(2, 'a', 'b') AS (col1, col2)")
+            .is_err()
+    );
+}

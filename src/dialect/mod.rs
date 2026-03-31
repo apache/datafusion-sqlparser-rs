@@ -1670,6 +1670,17 @@ pub trait Dialect: Debug + Any {
     fn supports_comma_separated_trim(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect supports parenthesized multi-column
+    /// aliases in SELECT items. For example:
+    /// ```sql
+    /// SELECT stack(2, 'a', 'b') AS (col1, col2)
+    /// ```
+    ///
+    /// [Spark SQL](https://spark.apache.org/docs/latest/sql-ref-syntax-qry-select.html)
+    fn supports_select_item_multi_column_alias(&self) -> bool {
+        false
+    }
 }
 
 /// Operators for which precedence must be defined.

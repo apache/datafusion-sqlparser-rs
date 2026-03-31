@@ -644,3 +644,10 @@ fn parse_databricks_json_accessor() {
         "SELECT raw:store.bicycle.price::DOUBLE FROM store_data",
     );
 }
+
+#[test]
+fn parse_numeric_prefix_identifier() {
+    databricks().verified_stmt("SELECT * FROM catalog.schema.1st_table");
+
+    databricks().verified_stmt("SELECT * FROM a.b.1c");
+}

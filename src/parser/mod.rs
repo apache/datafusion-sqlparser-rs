@@ -19033,7 +19033,7 @@ impl<'a> Parser<'a> {
                 } else {
                     parser.parse_comma_separated(Parser::parse_expr)?
                 },
-                closing_token: parser.expect_token(&Token::RParen)?.into()
+                closing_token: parser.expect_token(&Token::RParen)?.into(),
             })
         })?;
         Ok(Values {

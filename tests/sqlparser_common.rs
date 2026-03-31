@@ -13110,6 +13110,19 @@ fn test_group_by_grouping_sets() {
 }
 
 #[test]
+fn test_group_by_grouping_sets_bare_columns() {
+    all_dialects_where(|d| d.supports_group_by_expr()).one_statement_parses_to(
+        "SELECT a, b FROM t GROUP BY GROUPING SETS (a, b, c)",
+        "SELECT a, b FROM t GROUP BY GROUPING SETS ((a), (b), (c))",
+    );
+
+    all_dialects_where(|d| d.supports_group_by_expr()).one_statement_parses_to(
+        "SELECT a, b FROM t GROUP BY GROUPING SETS ((a, b), c)",
+        "SELECT a, b FROM t GROUP BY GROUPING SETS ((a, b), (c))",
+    );
+}
+
+#[test]
 fn test_xmltable() {
     all_dialects()
         .verified_only_select("SELECT * FROM XMLTABLE('/root' PASSING data COLUMNS element TEXT)");

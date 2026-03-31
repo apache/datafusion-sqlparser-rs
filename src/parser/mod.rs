@@ -19033,7 +19033,7 @@ impl<'a> Parser<'a> {
                 Ok(Parens {
                     opening_token: opening_paren.into(),
                     content: vec![],
-                    closing_token: closing_paren.into()
+                    closing_token: closing_paren.into(),
                 })
             } else {
                 let exprs = parser.parse_comma_separated(Parser::parse_expr)?;

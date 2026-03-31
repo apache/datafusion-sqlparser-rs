@@ -28,7 +28,26 @@ use core::iter;
 use crate::tokenizer::Span;
 
 use super::{
-    AccessExpr, AlterColumnOperation, AlterIndexOperation, AlterTableOperation, Analyze, Array, Assignment, AssignmentTarget, AttachedToken, BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements, ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable, CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound, IfStatement, IlikeSelectItem, IndexColumn, Insert, Interpolate, InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause, MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr, MergeInsertKind, MergeUpdateExpr, NamedParenthesizedList, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction, OnInsert, OpenStatement, OrderBy, OrderByExpr, OrderByKind, OutputClause, Parens, Partition, PartitionBoundValue, PivotValueSource, ProjectionSelect, Query, RaiseStatement, RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject, TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Values, ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With, WithFill, comments, dcl::SecondaryRoles, value::ValueWithSpan
+    comments, dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation,
+    AlterIndexOperation, AlterTableOperation, Analyze, Array, Assignment, AssignmentTarget,
+    AttachedToken, BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef,
+    ColumnOption, ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements,
+    ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
+    CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr,
+    ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr,
+    FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
+    IfStatement, IlikeSelectItem, IndexColumn, Insert, Interpolate, InterpolateExpr, Join,
+    JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
+    MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
+    MergeInsertKind, MergeUpdateExpr, NamedParenthesizedList, NamedWindowDefinition, ObjectName,
+    ObjectNamePart, Offset, OnConflict, OnConflictAction, OnInsert, OpenStatement, OrderBy,
+    OrderByExpr, OrderByKind, OutputClause, Parens, Partition, PartitionBoundValue,
+    PivotValueSource, ProjectionSelect, Query, RaiseStatement, RaiseStatementValue,
+    ReferentialAction, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
+    SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias,
+    TableAliasColumnDef, TableConstraint, TableFactor, TableObject, TableOptionsClustered,
+    TableWithJoins, Update, UpdateTableFromKind, Use, Values, ViewColumnDef, WhileStatement,
+    WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.

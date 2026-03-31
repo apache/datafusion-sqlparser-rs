@@ -1821,7 +1821,10 @@ fn parse_merge() {
         kind: MergeInsertKind::Values(Values {
             value_keyword: false,
             explicit_row: false,
-            rows: vec![Parens::with_empty_span(vec![Expr::value(number("1")), Expr::value(number("2"))])],
+            rows: vec![Parens::with_empty_span(vec![
+                Expr::value(number("1")),
+                Expr::value(number("2")),
+            ])],
         }),
         insert_predicate: None,
     });

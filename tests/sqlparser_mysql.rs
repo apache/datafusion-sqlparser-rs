@@ -2344,7 +2344,10 @@ fn parse_empty_row_insert() {
                     body: Box::new(SetExpr::Values(Values {
                         value_keyword: false,
                         explicit_row: false,
-                        rows: vec![Parens::with_empty_span(vec![]), Parens::with_empty_span(vec![])]
+                        rows: vec![
+                            Parens::with_empty_span(vec![]),
+                            Parens::with_empty_span(vec![])
+                        ]
                     })),
                     order_by: None,
                     limit_clause: None,

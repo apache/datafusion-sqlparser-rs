@@ -101,7 +101,10 @@ fn parse_insert_values() {
         Expr::value(number("3")),
     ];
     let rows1 = vec![Parens::with_empty_span(row.clone())];
-    let rows2 = vec![Parens::with_empty_span(row.clone()), Parens::with_empty_span(row)];
+    let rows2 = vec![
+        Parens::with_empty_span(row.clone()),
+        Parens::with_empty_span(row),
+    ];
 
     let sql = "INSERT customer VALUES (1, 2, 3)";
     check_one(sql, "customer", &[], &rows1, false);

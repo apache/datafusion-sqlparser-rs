@@ -90,4 +90,9 @@ impl Dialect for DatabricksDialect {
     fn supports_optimize_table(&self) -> bool {
         true
     }
+
+    /// See <https://docs.databricks.com/aws/en/sql/language-manual/functions/bangsign>
+    fn supports_bang_not_operator(&self) -> bool {
+        true
+    }
 }

@@ -5762,6 +5762,13 @@ fn parse_create_unlogged_table() {
         }
         _ => unreachable!(),
     }
+
+    // Negative test: UNLOGGED without TABLE should error
+    let res = pg().parse_sql_statements("CREATE UNLOGGED VIEW v AS SELECT 1");
+    assert!(
+        res.is_err(),
+        "CREATE UNLOGGED should only be followed by TABLE"
+    );
 }
 
 #[test]

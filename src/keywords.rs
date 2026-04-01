@@ -810,6 +810,7 @@ define_keywords!(
     PRIOR,
     PRIVILEGES,
     PROCEDURE,
+    PROCESSLIST,
     PROFILE,
     PROGRAM,
     PROJECTION,

@@ -370,6 +370,18 @@ fn parse_show_columns() {
 }
 
 #[test]
+fn parse_show_process_list() {
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW PROCESSLIST"),
+        Statement::ShowProcessList { full: false }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW FULL PROCESSLIST"),
+        Statement::ShowProcessList { full: true }
+    );
+}
+
+#[test]
 fn parse_show_status() {
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW SESSION STATUS LIKE 'ssl_cipher'"),

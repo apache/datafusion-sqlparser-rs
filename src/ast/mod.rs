@@ -4456,7 +4456,7 @@ pub enum Statement {
         name: Option<ObjectName>,
         /// Parameter expressions passed to execute.
         parameters: Vec<Expr>,
-        /// Whether parentheses were present.
+        /// Whether parentheses were present around `parameters`.
         has_parentheses: bool,
         /// Is this an `EXECUTE IMMEDIATE`.
         immediate: bool,
@@ -5911,7 +5911,8 @@ impl fmt::Display for Statement {
                 default,
             } => {
                 let (open, close) = if *has_parentheses {
-                    ("(", ")")
+                    // Space before `(` only when there is no name directly preceding it.
+                    (if name.is_some() { "(" } else { " (" }, ")")
                 } else {
                     (if parameters.is_empty() { "" } else { " " }, "")
                 };

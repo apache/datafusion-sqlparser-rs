@@ -2860,3 +2860,8 @@ fn parse_mssql_update_with_output_into() {
         "UPDATE employees SET salary = salary * 1.1 OUTPUT INSERTED.id, DELETED.salary, INSERTED.salary INTO @changes WHERE department = 'Engineering'",
     );
 }
+
+#[test]
+fn test_collate_on_compound_identifier() {
+    tsql().verified_stmt("SELECT t1.a COLLATE Latin1_General_CI_AS FROM t1");
+}

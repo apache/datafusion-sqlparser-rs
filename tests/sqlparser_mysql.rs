@@ -2788,7 +2788,7 @@ fn parse_update_with_joins() {
 #[test]
 fn parse_update_with_order_by() {
     let sql = "UPDATE foo SET bar = false WHERE foo = true ORDER BY foo ASC";
-    match mysql().verified_stmt(sql) {
+    match mysql_and_generic().verified_stmt(sql) {
         Statement::Update(Update { order_by, .. }) => {
             assert_eq!(
                 vec![OrderByExpr {
@@ -2813,7 +2813,7 @@ fn parse_update_with_order_by() {
 #[test]
 fn parse_update_with_order_by_and_limit() {
     let sql = "UPDATE foo SET bar = false WHERE foo = true ORDER BY foo ASC LIMIT 10";
-    match mysql().verified_stmt(sql) {
+    match mysql_and_generic().verified_stmt(sql) {
         Statement::Update(Update { order_by, limit, .. }) => {
             assert_eq!(
                 vec![OrderByExpr {

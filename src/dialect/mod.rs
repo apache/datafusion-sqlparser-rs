@@ -1451,6 +1451,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports parenthesized modifiers for the `TEXT` data type.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT col::TEXT(16777216)
+    /// ```
+    fn supports_text_type_modifiers(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports the `INTERVAL` data type with [Postgres]-style options.
     ///
     /// Examples:

@@ -156,4 +156,8 @@ impl Dialect for RedshiftSqlDialect {
     fn supports_string_literal_concatenation_with_newline(&self) -> bool {
         true
     }
+
+    fn supports_window_function_null_treatment_arg(&self) -> bool {
+        true
+    }
 }

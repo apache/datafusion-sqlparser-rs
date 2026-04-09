@@ -535,6 +535,7 @@ fn parse_update_set_from() {
             returning: None,
             output: None,
             or: None,
+            order_by: vec![],
             limit: None
         })
     );
@@ -554,6 +555,7 @@ fn parse_update_with_table_alias() {
             selection,
             returning,
             or: None,
+            order_by: _,
             limit: None,
             optimizer_hints,
             update_token: _,

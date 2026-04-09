@@ -133,6 +133,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_update_order_by(&self) -> bool {
+        true
+    }
+
     fn supports_from_first_select(&self) -> bool {
         true
     }

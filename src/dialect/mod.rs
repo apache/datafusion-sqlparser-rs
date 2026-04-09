@@ -520,6 +520,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `ORDER BY` in `UPDATE` statements.
+    ///
+    /// ```sql
+    /// UPDATE foo SET bar = false WHERE foo = true ORDER BY foo ASC;
+    /// ```
+    /// See <https://dev.mysql.com/doc/refman/8.4/en/update.html>
+    fn supports_update_order_by(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports an `EXCEPT` clause following a
     /// wildcard in a select list.
     ///

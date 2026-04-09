@@ -2592,7 +2592,7 @@ impl<'a> Parser<'a> {
         if self.dialect.supports_group_by_expr() {
             if self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS]) {
                 self.expect_token(&Token::LParen)?;
-                let result = self.parse_comma_separated(|p| p.parse_tuple(false, true))?;
+                let result = self.parse_comma_separated(|p| p.parse_tuple(true, true))?;
                 self.expect_token(&Token::RParen)?;
                 Ok(Expr::GroupingSets(result))
             } else if self.parse_keyword(Keyword::CUBE) {

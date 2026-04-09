@@ -14064,93 +14064,70 @@ impl<'a> Parser<'a> {
     pub fn parse_cte(&mut self) -> Result<Cte, ParserError> {
         let name = self.parse_identifier()?;
 
-        let mut cte = if self.parse_keyword(Keyword::AS) {
-            let mut is_materialized = None;
-            if dialect_of!(self is PostgreSqlDialect) {
-                if self.parse_keyword(Keyword::MATERIALIZED) {
-                    is_materialized = Some(CteAsMaterialized::Materialized);
-                } else if self.parse_keywords(&[Keyword::NOT, Keyword::MATERIALIZED]) {
-                    is_materialized = Some(CteAsMaterialized::NotMaterialized);
-                }
-            }
-            self.expect_token(&Token::LParen)?;
+        let as_optional = self.dialect.supports_cte_without_as();
 
-            let query = self.parse_query()?;
-            let closing_paren_token = self.expect_token(&Token::RParen)?;
-
-            let alias = TableAlias {
-                explicit: false,
-                name,
-                columns: vec![],
-            };
-            Cte {
-                alias,
-                query,
-                from: None,
-                materialized: is_materialized,
-                closing_paren_token: closing_paren_token.into(),
-            }
-        } else {
-            let as_optional = self.dialect.supports_cte_without_as();
-            let opt_query = if as_optional {
-                self.maybe_parse(|p| {
-                    p.expect_token(&Token::LParen)?;
-                    let query = p.parse_query()?;
-                    let closing_paren_token = p.expect_token(&Token::RParen)?;
-                    Ok((query, closing_paren_token))
-                })?
-            } else {
-                None
-            };
-            match opt_query {
-                Some((query, closing_paren_token)) => {
-                    let alias = TableAlias {
+        // If AS is optional, first try to parse `name (query)` directly
+        if as_optional && !self.peek_keyword(Keyword::AS) {
+            if let Some((query, closing_paren_token)) = self.maybe_parse(|p| {
+                p.expect_token(&Token::LParen)?;
+                let query = p.parse_query()?;
+                let closing_paren_token = p.expect_token(&Token::RParen)?;
+                Ok((query, closing_paren_token))
+            })? {
+                let mut cte = Cte {
+                    alias: TableAlias {
                         explicit: false,
                         name,
                         columns: vec![],
-                    };
-                    Cte {
-                        alias,
-                        query,
-                        from: None,
-                        materialized: None,
-                        closing_paren_token: closing_paren_token.into(),
-                    }
+                    },
+                    query,
+                    from: None,
+                    materialized: None,
+                    closing_paren_token: closing_paren_token.into(),
+                };
+                if self.parse_keyword(Keyword::FROM) {
+                    cte.from = Some(self.parse_identifier()?);
                 }
-                None => {
-                    let columns = self.parse_table_alias_column_defs()?;
-                    if as_optional {
-                        let _ = self.parse_keyword(Keyword::AS);
-                    } else {
-                        self.expect_keyword_is(Keyword::AS)?;
-                    }
-                    let mut is_materialized = None;
-                    if dialect_of!(self is PostgreSqlDialect) {
-                        if self.parse_keyword(Keyword::MATERIALIZED) {
-                            is_materialized = Some(CteAsMaterialized::Materialized);
-                        } else if self.parse_keywords(&[Keyword::NOT, Keyword::MATERIALIZED]) {
-                            is_materialized = Some(CteAsMaterialized::NotMaterialized);
-                        }
-                    }
-                    self.expect_token(&Token::LParen)?;
-
-                    let query = self.parse_query()?;
-                    let closing_paren_token = self.expect_token(&Token::RParen)?;
-
-                    let alias = TableAlias {
-                        explicit: false,
-                        name,
-                        columns,
-                    };
-                    Cte {
-                        alias,
-                        query,
-                        from: None,
-                        materialized: is_materialized,
-                        closing_paren_token: closing_paren_token.into(),
-                    }
-                }
+                return Ok(cte);
             }
+        }
+
+        // Determine column definitions and consume AS
+        let columns = if self.parse_keyword(Keyword::AS) {
+            vec![]
+        } else {
+            let columns = self.parse_table_alias_column_defs()?;
+            if as_optional {
+                let _ = self.parse_keyword(Keyword::AS);
+            } else {
+                self.expect_keyword_is(Keyword::AS)?;
+            }
+            columns
+        };
+
+        let mut is_materialized = None;
+        if dialect_of!(self is PostgreSqlDialect) {
+            if self.parse_keyword(Keyword::MATERIALIZED) {
+                is_materialized = Some(CteAsMaterialized::Materialized);
+            } else if self.parse_keywords(&[Keyword::NOT, Keyword::MATERIALIZED]) {
+                is_materialized = Some(CteAsMaterialized::NotMaterialized);
+            }
+        }
+
+        self.expect_token(&Token::LParen)?;
+        let query = self.parse_query()?;
+        let closing_paren_token = self.expect_token(&Token::RParen)?;
+
+        let mut cte = Cte {
+            alias: TableAlias {
+                explicit: false,
+                name,
+                columns,
+            },
+            query,
+            from: None,
+            materialized: is_materialized,
+            closing_paren_token: closing_paren_token.into(),
         };
         if self.parse_keyword(Keyword::FROM) {
             cte.from = Some(self.parse_identifier()?);

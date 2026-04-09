@@ -100,6 +100,11 @@ impl Dialect for DatabricksDialect {
         true
     }
 
+    /// See <https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-select-cte>
+    fn supports_cte_without_as(&self) -> bool {
+        true
+    }
+
     fn supports_select_item_multi_column_alias(&self) -> bool {
         true
     }

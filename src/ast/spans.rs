@@ -952,6 +952,7 @@ impl Spanned for Update {
             returning,
             output,
             or: _,
+            order_by,
             limit,
         } = self;
 
@@ -963,6 +964,7 @@ impl Spanned for Update {
                 .chain(selection.iter().map(|i| i.span()))
                 .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
                 .chain(output.iter().map(|i| i.span()))
+                .chain(order_by.iter().map(|i| i.span()))
                 .chain(limit.iter().map(|i| i.span())),
         )
     }

@@ -2814,7 +2814,9 @@ fn parse_update_with_order_by() {
 fn parse_update_with_order_by_and_limit() {
     let sql = "UPDATE foo SET bar = false WHERE foo = true ORDER BY foo ASC LIMIT 10";
     match mysql_and_generic().verified_stmt(sql) {
-        Statement::Update(Update { order_by, limit, .. }) => {
+        Statement::Update(Update {
+            order_by, limit, ..
+        }) => {
             assert_eq!(
                 vec![OrderByExpr {
                     expr: Expr::Identifier(Ident {

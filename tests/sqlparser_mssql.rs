@@ -2860,3 +2860,38 @@ fn parse_mssql_update_with_output_into() {
         "UPDATE employees SET salary = salary * 1.1 OUTPUT INSERTED.id, DELETED.salary, INSERTED.salary INTO @changes WHERE department = 'Engineering'",
     );
 }
+
+#[test]
+fn parse_mssql_money_constants() {
+    ms().verified_only_select("SELECT CEILING($123.45)");
+
+    let select = ms().verified_only_select("SELECT $123.45");
+    assert_eq!(
+        &Expr::Value(Value::Placeholder("$123.45".to_string()).with_empty_span()),
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let select = ms().verified_only_select("SELECT $0.99");
+    assert_eq!(
+        &Expr::Value(Value::Placeholder("$0.99".to_string()).with_empty_span()),
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let select = ms().verified_only_select("SELECT $0.0");
+    assert_eq!(
+        &Expr::Value(Value::Placeholder("$0.0".to_string()).with_empty_span()),
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let select = ms().verified_only_select("SELECT $123");
+    assert_eq!(
+        &Expr::Value(Value::Placeholder("$123".to_string()).with_empty_span()),
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let select = ms().verified_only_select("SELECT $0");
+    assert_eq!(
+        &Expr::Value(Value::Placeholder("$0".to_string()).with_empty_span()),
+        expr_from_projection(only(&select.projection)),
+    );
+}

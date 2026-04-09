@@ -387,6 +387,9 @@ pub struct Update {
     pub output: Option<OutputClause>,
     /// SQLite-specific conflict resolution clause
     pub or: Option<SqliteOnConflict>,
+    /// ORDER BY (MySQL extension for single-table UPDATE)
+    /// See <https://dev.mysql.com/doc/refman/8.4/en/update.html>
+    pub order_by: Vec<OrderByExpr>,
     /// LIMIT
     pub limit: Option<Expr>,
 }
@@ -433,6 +436,11 @@ impl Display for Update {
             SpaceOrNewline.fmt(f)?;
             f.write_str("RETURNING")?;
             indented_list(f, returning)?;
+        }
+        if !self.order_by.is_empty() {
+            SpaceOrNewline.fmt(f)?;
+            f.write_str("ORDER BY")?;
+            indented_list(f, &self.order_by)?;
         }
         if let Some(limit) = &self.limit {
             SpaceOrNewline.fmt(f)?;

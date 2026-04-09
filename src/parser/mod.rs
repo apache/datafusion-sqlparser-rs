@@ -17755,6 +17755,13 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+        let order_by = if self.dialect.supports_update_order_by()
+            && self.parse_keywords(&[Keyword::ORDER, Keyword::BY])
+        {
+            self.parse_comma_separated(Parser::parse_order_by_expr)?
+        } else {
+            vec![]
+        };
         let limit = if self.parse_keyword(Keyword::LIMIT) {
             Some(self.parse_expr()?)
         } else {
@@ -17770,6 +17777,7 @@ impl<'a> Parser<'a> {
             returning,
             output,
             or,
+            order_by,
             limit,
         }
         .into())

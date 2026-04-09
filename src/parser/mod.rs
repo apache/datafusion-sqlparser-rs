@@ -1687,6 +1687,16 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Returns true if the given [ObjectName] is a single unquoted
+    /// identifier matching `expected` (case-insensitive).
+    fn is_simple_unquoted_object_name(name: &ObjectName, expected: &str) -> bool {
+        if let [ObjectNamePart::Identifier(ident)] = name.0.as_slice() {
+            ident.quote_style.is_none() && ident.value.eq_ignore_ascii_case(expected)
+        } else {
+            false
+        }
+    }
+
     /// Parse an expression prefix.
     pub fn parse_prefix(&mut self) -> Result<Expr, ParserError> {
         // allow the dialect to override prefix parsing
@@ -1720,7 +1730,21 @@ impl<'a> Parser<'a> {
                 // so given `NOT 'a' LIKE 'b'`, we'd accept `NOT` as a possible custom data type
                 // name, resulting in `NOT 'a'` being recognized as a `TypedString` instead of
                 // an unary negation `NOT ('a' LIKE 'b')`. To solve this, we don't accept the
-                // `type 'string'` syntax for the custom data types at all.
+                // `type 'string'` syntax for the custom data types at all ...
+                //
+                // ... with the exception of `xml '...'` on dialects that support XML
+                // expressions, which is a valid PostgreSQL typed string literal.
+                DataType::Custom(ref name, ref modifiers)
+                    if modifiers.is_empty()
+                        && Self::is_simple_unquoted_object_name(name, "xml")
+                        && parser.dialect.supports_xml_expressions() =>
+                {
+                    Ok(Expr::TypedString(TypedString {
+                        data_type: DataType::Custom(name.clone(), modifiers.clone()),
+                        value: parser.parse_value()?,
+                        uses_odbc_syntax: false,
+                    }))
+                }
                 DataType::Custom(..) => parser_err!("dummy", loc),
                 // MySQL supports using the `BINARY` keyword as a cast to binary type.
                 DataType::Binary(..) if self.dialect.supports_binary_kw_as_cast() => {

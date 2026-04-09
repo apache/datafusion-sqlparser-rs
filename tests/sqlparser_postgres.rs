@@ -3750,6 +3750,28 @@ fn parse_on_commit() {
     pg_and_generic().verified_stmt("CREATE TEMPORARY TABLE table (COL INT) ON COMMIT DROP");
 }
 
+#[test]
+fn parse_xml_typed_string() {
+    // xml '...' should parse as a TypedString on PostgreSQL and Generic
+    let sql = "SELECT xml '<foo/>'";
+    let select = pg_and_generic().verified_only_select(sql);
+    match expr_from_projection(&select.projection[0]) {
+        Expr::TypedString(TypedString {
+            data_type: DataType::Custom(name, modifiers),
+            value,
+            uses_odbc_syntax: false,
+        }) => {
+            assert_eq!(name.to_string(), "xml");
+            assert!(modifiers.is_empty());
+            assert_eq!(
+                value.value,
+                Value::SingleQuotedString("<foo/>".to_string())
+            );
+        }
+        other => panic!("Expected TypedString, got: {other:?}"),
+    }
+}
+
 fn pg() -> TestedDialects {
     TestedDialects::new(vec![Box::new(PostgreSqlDialect {})])
 }

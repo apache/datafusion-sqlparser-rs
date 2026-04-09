@@ -18754,3 +18754,11 @@ fn test_wildcard_func_arg() {
     dialects.verified_expr("HASH(* EXCLUDE (col1))");
     dialects.verified_expr("HASH(* EXCLUDE (col1, col2))");
 }
+
+#[test]
+fn parse_non_pg_dialects_keep_xml_names_as_regular_identifiers() {
+    // On dialects that do NOT support XML expressions, bare `xml` should
+    // be treated as a regular column identifier, not a typed-string prefix.
+    let dialects = all_dialects_except(|d| d.supports_xml_expressions());
+    dialects.verified_only_select("SELECT xml FROM t");
+}

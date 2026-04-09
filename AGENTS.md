@@ -1,6 +1,13 @@
-# SQL Parser in Rust
+# Extensible SQL Lexer and Parser for Rust Agents Guidelines
 
-## Agent Workflow
+## General Agent Workflow
+1. You will receive a coding task from your operator.
+2. You will analyze the task and come up with a code change to complete it.
+3. You will write unit tests to ensure your code change is working as expected.
+4. You will run the commands in the Pre Commit Checks section below to ensure your change is ready for a pull request.
+5. When instructed to open a PR, you will follow the instructions in the Pull Request Guidelines section below.
+
+## Agent Workflow for Fixing Parsing Issues in SQL Statements
 1. You will receive a SQL statement that is not parsed correctly by the project. Typically parsing will fail with an error.
 2. You will add a unit test to check that the SQL statement is indeed unparsed. Follow the instructions in the "Unit Tests" section below.
 3. You will analyze why the SQL statement is not parsed correctly, pointing to the code section that you think is faulty. See more info in the Analyzing Parsing Issues and General Coding Guidelines below.

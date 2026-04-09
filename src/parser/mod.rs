@@ -18116,6 +18116,19 @@ impl<'a> Parser<'a> {
                     self.parse_wildcard_additional_options(wildcard_token)?,
                 ))
             }
+            expr if self.dialect.supports_select_item_multi_column_alias()
+                && self.peek_keyword(Keyword::AS)
+                && self.peek_nth_token(1).token == Token::LParen =>
+            {
+                self.expect_keyword(Keyword::AS)?;
+                self.expect_token(&Token::LParen)?;
+                let aliases = self.parse_comma_separated(|p| p.parse_identifier())?;
+                self.expect_token(&Token::RParen)?;
+                Ok(SelectItem::ExprWithAliases {
+                    expr: maybe_prefixed_expr(expr, prefix),
+                    aliases,
+                })
+            }
             expr => self
                 .maybe_parse_select_item_alias()
                 .map(|alias| match alias {

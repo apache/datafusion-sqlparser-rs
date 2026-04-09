@@ -18758,6 +18758,21 @@ fn test_wildcard_func_arg() {
 }
 
 #[test]
+fn parse_select_item_multi_column_alias() {
+    all_dialects_where(|d| d.supports_select_item_multi_column_alias())
+        .verified_stmt("SELECT stack(2, 'a', 'b', 'c', 'd') AS (col1, col2)");
+
+    all_dialects_where(|d| d.supports_select_item_multi_column_alias())
+        .verified_stmt("SELECT stack(2, 'a', 'b', 'c', 'd') AS (col1, col2) FROM t");
+
+    assert!(
+        all_dialects_where(|d| !d.supports_select_item_multi_column_alias())
+            .parse_sql_statements("SELECT stack(2, 'a', 'b') AS (col1, col2)")
+            .is_err()
+    );
+}
+
+#[test]
 fn parse_non_pg_dialects_keep_xml_names_as_regular_identifiers() {
     // On dialects that do NOT support XML expressions, bare `xml` should
     // be treated as a regular column identifier, not a typed-string prefix.

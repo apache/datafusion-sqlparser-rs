@@ -10714,16 +10714,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_unreserved_keyword(&mut self, expected: &str) -> bool {
-        match &self.peek_token_ref().token {
-            Token::Word(w) if w.quote_style.is_none() && w.value.eq_ignore_ascii_case(expected) => {
-                self.advance_token();
-                true
-            }
-            _ => false,
-        }
-    }
-
     fn parse_alter_aggregate_signature(
         &mut self,
     ) -> Result<(FunctionDesc, bool, Option<Vec<OperateFunctionArg>>), ParserError> {
@@ -10838,7 +10828,7 @@ impl<'a> Parser<'a> {
                     .expected_ref("one of UNSAFE | RESTRICTED | SAFE", self.peek_token_ref());
             };
             Some(AlterFunctionAction::Parallel(parallel))
-        } else if self.parse_unreserved_keyword("COST") {
+        } else if self.parse_keyword(Keyword::COST) {
             Some(AlterFunctionAction::Cost(self.parse_number()?))
         } else if self.parse_keyword(Keyword::ROWS) {
             Some(AlterFunctionAction::Rows(self.parse_number()?))
@@ -10910,7 +10900,7 @@ impl<'a> Parser<'a> {
                 schema_name: self.parse_object_name(false)?,
             }
         } else if matches!(kind, AlterFunctionKind::Function) && self.parse_keyword(Keyword::NO) {
-            if !self.parse_unreserved_keyword("DEPENDS") {
+            if !self.parse_keyword(Keyword::DEPENDS) {
                 return self.expected_ref("DEPENDS after NO", self.peek_token_ref());
             }
             self.expect_keywords(&[Keyword::ON, Keyword::EXTENSION])?;
@@ -10919,7 +10909,7 @@ impl<'a> Parser<'a> {
                 extension_name: self.parse_object_name(false)?,
             }
         } else if matches!(kind, AlterFunctionKind::Function)
-            && self.parse_unreserved_keyword("DEPENDS")
+            && self.parse_keyword(Keyword::DEPENDS)
         {
             self.expect_keywords(&[Keyword::ON, Keyword::EXTENSION])?;
             AlterFunctionOperation::DependsOnExtension {

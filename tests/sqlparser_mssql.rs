@@ -2819,6 +2819,20 @@ fn test_exec_dynamic_sql() {
     assert_eq!(stmts.len(), 2);
 }
 
+#[test]
+fn test_exec_dynamic_sql_string_concat() {
+    // EXEC with string concatenation: EXEC ('...' + @var + '...')
+    let stmts = tsql()
+        .parse_sql_statements("EXEC ('SELECT * FROM ' + @TableName + ' WHERE 1=1')")
+        .expect("EXEC with string concatenation should parse");
+    assert_eq!(stmts.len(), 1);
+    assert!(
+        matches!(&stmts[0], Statement::Execute { .. }),
+        "expected Execute, got: {:?}",
+        stmts[0]
+    );
+}
+
 // MSSQL OUTPUT clause on INSERT/UPDATE/DELETE
 // https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql
 #[test]

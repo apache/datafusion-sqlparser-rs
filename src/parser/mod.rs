@@ -18881,31 +18881,21 @@ impl<'a> Parser<'a> {
 
     /// Parse a SQL `EXECUTE` statement
     pub fn parse_execute(&mut self) -> Result<Statement, ParserError> {
-        // Track whether the procedure/expression name itself was wrapped in parens,
-        // i.e. `EXEC (@sql)` (dynamic string execution) vs `EXEC sp_name`.
-        // When the name has parens there are no additional parameters.
-        let name = if self.dialect.supports_execute_immediate()
-            && self.parse_keyword(Keyword::IMMEDIATE)
-        {
+        let immediate =
+            self.dialect.supports_execute_immediate() && self.parse_keyword(Keyword::IMMEDIATE);
+
+        // When `EXEC` is immediately followed by `(`, the content is a dynamic-SQL
+        // expression — e.g. `EXEC (@sql)`, `EXEC ('SELECT ...')`, or
+        // `EXEC ('SELECT ... FROM ' + @tbl + ' WHERE ...')`.
+        // Skip name parsing; the expression ends up in `parameters` via the
+        // `has_parentheses` path below, consistent with `EXECUTE IMMEDIATE <expr>`.
+        let name = if immediate || matches!(self.peek_token_ref().token, Token::LParen) {
             None
         } else {
-            let has_parentheses = self.consume_token(&Token::LParen);
-            let name = self.parse_object_name(false)?;
-            if has_parentheses {
-                self.expect_token(&Token::RParen)?;
-            }
-            Some((name, has_parentheses))
+            Some(self.parse_object_name(false)?)
         };
 
-        let name_had_parentheses = name.as_ref().map(|(_, p)| *p).unwrap_or(false);
-
-        // Only look for a parameter list when the name was NOT wrapped in parens.
-        // `EXEC (@sql)` is dynamic SQL execution and takes no parameters here.
-        let has_parentheses = if name_had_parentheses {
-            false
-        } else {
-            self.consume_token(&Token::LParen)
-        };
+        let has_parentheses = self.consume_token(&Token::LParen);
 
         let end_kws = &[Keyword::USING, Keyword::OUTPUT, Keyword::DEFAULT];
         let end_token = match (has_parentheses, self.peek_token().token) {
@@ -18915,17 +18905,11 @@ impl<'a> Parser<'a> {
             (false, _) => Token::SemiColon,
         };
 
-        let parameters = if name_had_parentheses {
-            vec![]
-        } else {
-            self.parse_comma_separated0(Parser::parse_expr, end_token)?
-        };
+        let parameters = self.parse_comma_separated0(Parser::parse_expr, end_token)?;
 
         if has_parentheses {
             self.expect_token(&Token::RParen)?;
         }
-
-        let name = name.map(|(n, _)| n);
 
         let into = if self.parse_keyword(Keyword::INTO) {
             self.parse_comma_separated(Self::parse_identifier)?
@@ -18944,7 +18928,7 @@ impl<'a> Parser<'a> {
         let default = self.parse_keyword(Keyword::DEFAULT);
 
         Ok(Statement::Execute {
-            immediate: name.is_none(),
+            immediate,
             name,
             parameters,
             has_parentheses,

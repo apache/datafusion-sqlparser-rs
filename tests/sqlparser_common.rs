@@ -12294,8 +12294,8 @@ fn parse_execute_stored_procedure() {
         }
         _ => unreachable!(),
     }
-    // Test optional parentheses around procedure name
-    ms_and_generic().one_statement_parses_to("EXEC ('name')", "EXECUTE 'name'");
+    // Parenthesised form is dynamic SQL; the expression ends up in parameters.
+    ms_and_generic().one_statement_parses_to("EXEC ('name')", "EXECUTE ('name')");
 }
 
 #[test]

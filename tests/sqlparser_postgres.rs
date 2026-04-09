@@ -3763,10 +3763,7 @@ fn parse_xml_typed_string() {
         }) => {
             assert_eq!(name.to_string(), "xml");
             assert!(modifiers.is_empty());
-            assert_eq!(
-                value.value,
-                Value::SingleQuotedString("<foo/>".to_string())
-            );
+            assert_eq!(value.value, Value::SingleQuotedString("<foo/>".to_string()));
         }
         other => panic!("Expected TypedString, got: {other:?}"),
     }

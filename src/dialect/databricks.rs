@@ -39,6 +39,10 @@ impl Dialect for DatabricksDialect {
         matches!(ch, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_')
     }
 
+    fn supports_numeric_prefix(&self) -> bool {
+        true
+    }
+
     fn supports_filter_during_aggregation(&self) -> bool {
         true
     }

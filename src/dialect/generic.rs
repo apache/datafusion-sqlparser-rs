@@ -296,4 +296,8 @@ impl Dialect for GenericDialect {
     fn supports_cte_without_as(&self) -> bool {
         true
     }
+
+    fn supports_select_item_multi_column_alias(&self) -> bool {
+        true
+    }
 }

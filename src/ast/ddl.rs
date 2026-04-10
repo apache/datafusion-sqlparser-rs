@@ -47,10 +47,10 @@ use crate::ast::{
     FunctionDeterminismSpecifier, FunctionParallel, FunctionSecurity, HiveDistributionStyle,
     HiveFormat, HiveIOFormat, HiveRowFormat, HiveSetLocation, Ident, InitializeKind,
     MySQLColumnPosition, ObjectName, OnCommit, OneOrManyWithParens, OperateFunctionArg,
-    OrderByExpr, ProjectionSelect, Query, RefreshModeKind, RowAccessPolicy, SequenceOptions,
-    Spanned, SqlOption, StorageLifecyclePolicy, StorageSerializationPolicy, TableVersion, Tag,
-    TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing, Value,
-    ValueWithSpan, WrappedCollection,
+    OrderByExpr, ProjectionSelect, Query, RefreshModeKind, ResetConfig, RowAccessPolicy,
+    SequenceOptions, Spanned, SqlOption, StorageLifecyclePolicy, StorageSerializationPolicy,
+    TableVersion, Tag, TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod,
+    TriggerReferencing, Value, ValueWithSpan, WrappedCollection,
 };
 use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
 use crate::keywords::Keyword;
@@ -5217,6 +5217,214 @@ impl fmt::Display for AlterOperatorClassOperation {
 }
 
 impl Spanned for AlterOperatorClass {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}
+
+/// `ALTER FUNCTION` / `ALTER AGGREGATE` statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterFunction {
+    /// Object type being altered.
+    pub kind: AlterFunctionKind,
+    /// Function or aggregate signature.
+    pub function: FunctionDesc,
+    /// `ORDER BY` argument list for aggregate signatures.
+    ///
+    /// This is only used for `ALTER AGGREGATE`.
+    pub aggregate_order_by: Option<Vec<OperateFunctionArg>>,
+    /// Whether the aggregate signature uses `*`.
+    ///
+    /// This is only used for `ALTER AGGREGATE`.
+    pub aggregate_star: bool,
+    /// Operation applied to the object.
+    pub operation: AlterFunctionOperation,
+}
+
+/// Function-like object type used by [`AlterFunction`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterFunctionKind {
+    /// `FUNCTION`
+    Function,
+    /// `AGGREGATE`
+    Aggregate,
+}
+
+impl fmt::Display for AlterFunctionKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Function => write!(f, "FUNCTION"),
+            Self::Aggregate => write!(f, "AGGREGATE"),
+        }
+    }
+}
+
+/// Operation for `ALTER FUNCTION` / `ALTER AGGREGATE`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterFunctionOperation {
+    /// `RENAME TO new_name`
+    RenameTo {
+        /// New unqualified function or aggregate name.
+        new_name: Ident,
+    },
+    /// `OWNER TO { new_owner | CURRENT_ROLE | CURRENT_USER | SESSION_USER }`
+    OwnerTo(Owner),
+    /// `SET SCHEMA schema_name`
+    SetSchema {
+        /// The target schema name.
+        schema_name: ObjectName,
+    },
+    /// `[ NO ] DEPENDS ON EXTENSION extension_name`
+    DependsOnExtension {
+        /// `true` when `NO DEPENDS ON EXTENSION`.
+        no: bool,
+        /// Extension name.
+        extension_name: ObjectName,
+    },
+    /// `action [ ... ] [ RESTRICT ]` (function only).
+    Actions {
+        /// One or more function actions.
+        actions: Vec<AlterFunctionAction>,
+        /// Whether `RESTRICT` is present.
+        restrict: bool,
+    },
+}
+
+/// Function action in `ALTER FUNCTION ... action [ ... ] [ RESTRICT ]`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterFunctionAction {
+    /// `CALLED ON NULL INPUT` / `RETURNS NULL ON NULL INPUT` / `STRICT`
+    CalledOnNull(FunctionCalledOnNull),
+    /// `IMMUTABLE` / `STABLE` / `VOLATILE`
+    Behavior(FunctionBehavior),
+    /// `[ NOT ] LEAKPROOF`
+    Leakproof(bool),
+    /// `[ EXTERNAL ] SECURITY { DEFINER | INVOKER }`
+    Security {
+        /// Whether the optional `EXTERNAL` keyword was present.
+        external: bool,
+        /// Security mode.
+        security: FunctionSecurity,
+    },
+    /// `PARALLEL { UNSAFE | RESTRICTED | SAFE }`
+    Parallel(FunctionParallel),
+    /// `COST execution_cost`
+    Cost(Expr),
+    /// `ROWS result_rows`
+    Rows(Expr),
+    /// `SUPPORT support_function`
+    Support(ObjectName),
+    /// `SET configuration_parameter { TO | = } { value | DEFAULT }`
+    /// or `SET configuration_parameter FROM CURRENT`
+    Set(FunctionDefinitionSetParam),
+    /// `RESET configuration_parameter` or `RESET ALL`
+    Reset(ResetConfig),
+}
+
+impl fmt::Display for AlterFunction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ALTER {} ", self.kind)?;
+        match self.kind {
+            AlterFunctionKind::Function => {
+                write!(f, "{} ", self.function)?;
+            }
+            AlterFunctionKind::Aggregate => {
+                write!(f, "{}(", self.function.name)?;
+                if self.aggregate_star {
+                    write!(f, "*")?;
+                } else {
+                    if let Some(args) = &self.function.args {
+                        write!(f, "{}", display_comma_separated(args))?;
+                    }
+                    if let Some(order_by_args) = &self.aggregate_order_by {
+                        if self
+                            .function
+                            .args
+                            .as_ref()
+                            .is_some_and(|args| !args.is_empty())
+                        {
+                            write!(f, " ")?;
+                        }
+                        write!(f, "ORDER BY {}", display_comma_separated(order_by_args))?;
+                    }
+                }
+                write!(f, ") ")?;
+            }
+        }
+        write!(f, "{}", self.operation)
+    }
+}
+
+impl fmt::Display for AlterFunctionOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterFunctionOperation::RenameTo { new_name } => {
+                write!(f, "RENAME TO {new_name}")
+            }
+            AlterFunctionOperation::OwnerTo(owner) => write!(f, "OWNER TO {owner}"),
+            AlterFunctionOperation::SetSchema { schema_name } => {
+                write!(f, "SET SCHEMA {schema_name}")
+            }
+            AlterFunctionOperation::DependsOnExtension { no, extension_name } => {
+                if *no {
+                    write!(f, "NO DEPENDS ON EXTENSION {extension_name}")
+                } else {
+                    write!(f, "DEPENDS ON EXTENSION {extension_name}")
+                }
+            }
+            AlterFunctionOperation::Actions { actions, restrict } => {
+                write!(f, "{}", display_separated(actions, " "))?;
+                if *restrict {
+                    write!(f, " RESTRICT")?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl fmt::Display for AlterFunctionAction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterFunctionAction::CalledOnNull(called_on_null) => write!(f, "{called_on_null}"),
+            AlterFunctionAction::Behavior(behavior) => write!(f, "{behavior}"),
+            AlterFunctionAction::Leakproof(leakproof) => {
+                if *leakproof {
+                    write!(f, "LEAKPROOF")
+                } else {
+                    write!(f, "NOT LEAKPROOF")
+                }
+            }
+            AlterFunctionAction::Security { external, security } => {
+                if *external {
+                    write!(f, "EXTERNAL ")?;
+                }
+                write!(f, "{security}")
+            }
+            AlterFunctionAction::Parallel(parallel) => write!(f, "{parallel}"),
+            AlterFunctionAction::Cost(execution_cost) => write!(f, "COST {execution_cost}"),
+            AlterFunctionAction::Rows(result_rows) => write!(f, "ROWS {result_rows}"),
+            AlterFunctionAction::Support(support_function) => {
+                write!(f, "SUPPORT {support_function}")
+            }
+            AlterFunctionAction::Set(set_param) => write!(f, "{set_param}"),
+            AlterFunctionAction::Reset(reset_config) => match reset_config {
+                ResetConfig::ALL => write!(f, "RESET ALL"),
+                ResetConfig::ConfigName(name) => write!(f, "RESET {name}"),
+            },
+        }
+    }
+}
+
+impl Spanned for AlterFunction {
     fn span(&self) -> Span {
         Span::empty()
     }

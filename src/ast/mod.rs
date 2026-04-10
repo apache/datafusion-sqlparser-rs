@@ -60,7 +60,8 @@ pub use self::dcl::{
     SetConfigValue, Use,
 };
 pub use self::ddl::{
-    Alignment, AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterOperator,
+    Alignment, AlterColumnOperation, AlterConnectorOwner, AlterFunction, AlterFunctionAction,
+    AlterFunctionKind, AlterFunctionOperation, AlterIndexOperation, AlterOperator,
     AlterOperatorClass, AlterOperatorClassOperation, AlterOperatorFamily,
     AlterOperatorFamilyOperation, AlterOperatorOperation, AlterPolicy, AlterPolicyOperation,
     AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm, AlterTableLock,
@@ -3751,6 +3752,13 @@ pub enum Statement {
         with_options: Vec<SqlOption>,
     },
     /// ```sql
+    /// ALTER FUNCTION
+    /// ALTER AGGREGATE
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterfunction.html)
+    /// and [PostgreSQL](https://www.postgresql.org/docs/current/sql-alteraggregate.html)
+    AlterFunction(AlterFunction),
+    /// ```sql
     /// ALTER TYPE
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertype.html)
     /// ```
@@ -5495,6 +5503,7 @@ impl fmt::Display for Statement {
                 }
                 write!(f, " AS {query}")
             }
+            Statement::AlterFunction(alter_function) => write!(f, "{alter_function}"),
             Statement::AlterType(AlterType { name, operation }) => {
                 write!(f, "ALTER TYPE {name} {operation}")
             }
@@ -9832,6 +9841,8 @@ pub enum ArgMode {
     Out,
     /// `INOUT` mode.
     InOut,
+    /// `VARIADIC` mode.
+    Variadic,
 }
 
 impl fmt::Display for ArgMode {
@@ -9840,6 +9851,7 @@ impl fmt::Display for ArgMode {
             ArgMode::In => write!(f, "IN"),
             ArgMode::Out => write!(f, "OUT"),
             ArgMode::InOut => write!(f, "INOUT"),
+            ArgMode::Variadic => write!(f, "VARIADIC"),
         }
     }
 }
@@ -9896,6 +9908,8 @@ impl fmt::Display for FunctionSecurity {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum FunctionSetValue {
+    /// SET param = DEFAULT / SET param TO DEFAULT
+    Default,
     /// SET param = value1, value2, ...
     Values(Vec<Expr>),
     /// SET param FROM CURRENT
@@ -9910,7 +9924,7 @@ pub enum FunctionSetValue {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct FunctionDefinitionSetParam {
     /// The name of the configuration parameter.
-    pub name: Ident,
+    pub name: ObjectName,
     /// The value to set for the parameter.
     pub value: FunctionSetValue,
 }
@@ -9919,6 +9933,7 @@ impl fmt::Display for FunctionDefinitionSetParam {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "SET {} ", self.name)?;
         match &self.value {
+            FunctionSetValue::Default => write!(f, "= DEFAULT"),
             FunctionSetValue::Values(values) => {
                 write!(f, "= {}", display_comma_separated(values))
             }
@@ -12095,6 +12110,12 @@ impl From<CreateOperatorClass> for Statement {
 impl From<AlterSchema> for Statement {
     fn from(a: AlterSchema) -> Self {
         Self::AlterSchema(a)
+    }
+}
+
+impl From<AlterFunction> for Statement {
+    fn from(a: AlterFunction) -> Self {
+        Self::AlterFunction(a)
     }
 }
 

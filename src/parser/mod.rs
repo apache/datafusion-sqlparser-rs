@@ -2443,10 +2443,7 @@ impl<'a> Parser<'a> {
     /// Returns `Ok(None)` when the name is not an XML function or the
     /// dialect does not support XML expressions, in which case the
     /// caller should fall back to the regular function-call parser.
-    fn maybe_parse_xml_function(
-        &mut self,
-        name: &ObjectName,
-    ) -> Result<Option<Expr>, ParserError> {
+    fn maybe_parse_xml_function(&mut self, name: &ObjectName) -> Result<Option<Expr>, ParserError> {
         if !self.dialect.supports_xml_expressions() {
             return Ok(None);
         }

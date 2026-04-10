@@ -18779,3 +18779,20 @@ fn parse_non_pg_dialects_keep_xml_names_as_regular_identifiers() {
     let dialects = all_dialects_except(|d| d.supports_xml_expressions());
     dialects.verified_only_select("SELECT xml FROM t");
 }
+
+#[test]
+fn parse_non_pg_dialects_keep_xml_names_as_regular_functions() {
+    // On dialects that do NOT support XML expressions, `xmlconcat(...)`
+    // should parse as a plain function call, not as `Expr::XmlConcat`.
+    let dialects = all_dialects_except(|d| d.supports_xml_expressions());
+    for fn_name in ["xmlconcat"] {
+        let sql = format!("SELECT {fn_name}(1, 2)");
+        let select = dialects.verified_only_select(&sql);
+        match expr_from_projection(&select.projection[0]) {
+            Expr::Function(func) => {
+                assert_eq!(func.name.to_string(), fn_name);
+            }
+            other => panic!("Expected Expr::Function for {fn_name}, got: {other:?}"),
+        }
+    }
+}

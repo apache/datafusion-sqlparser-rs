@@ -1394,6 +1394,9 @@ impl<'a> Parser<'a> {
 
         expr = self.parse_compound_expr(expr, vec![])?;
 
+        // Parse an optional collation cast operator following `expr`.
+        //
+        // For example (MSSQL): t1.a COLLATE Latin1_General_CI_AS
         if !self.in_column_definition_state() && self.parse_keyword(Keyword::COLLATE) {
             expr = Expr::Collate {
                 expr: Box::new(expr),

@@ -1295,16 +1295,29 @@ fn parse_select_wildcard_with_alias() {
     dialects
         .parse_sql_statements("SELECT t.* AS all_cols FROM t")
         .unwrap();
+    dialects.one_statement_parses_to(
+        "SELECT t.* all_cols FROM t",
+        "SELECT t.* AS all_cols FROM t",
+    );
+    dialects.one_statement_parses_to(
+        "SELECT t.* all_cols, other_col FROM t",
+        "SELECT t.* AS all_cols, other_col FROM t",
+    );
 
     // unqualified wildcard with alias
     dialects
         .parse_sql_statements("SELECT * AS all_cols FROM t")
         .unwrap();
+    dialects.one_statement_parses_to("SELECT * all_cols FROM t", "SELECT * AS all_cols FROM t");
 
     // mixed: regular column + qualified wildcard with alias
     dialects
         .parse_sql_statements("SELECT a.id, b.* AS b_cols FROM a JOIN b ON (a.id = b.a_id)")
         .unwrap();
+    dialects.one_statement_parses_to(
+        "SELECT a.id, b.* b_cols FROM a JOIN b ON (a.id = b.a_id)",
+        "SELECT a.id, b.* AS b_cols FROM a JOIN b ON (a.id = b.a_id)",
+    );
 }
 
 #[test]

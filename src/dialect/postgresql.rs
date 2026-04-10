@@ -307,6 +307,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_select_wildcard_with_alias(&self) -> bool {
+        true
+    }
+
     fn supports_comma_separated_trim(&self) -> bool {
         true
     }

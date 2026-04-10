@@ -1702,6 +1702,17 @@ pub trait Dialect: Debug + Any {
     fn supports_select_item_multi_column_alias(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect supports XML-related expressions
+    /// such as `xml '<foo/>'` typed strings, XML functions like
+    /// `XMLCONCAT`, `XMLELEMENT`, etc.
+    ///
+    /// When this returns false, `xml` is treated as a regular identifier.
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/functions-xml.html)
+    fn supports_xml_expressions(&self) -> bool {
+        false
+    }
 }
 
 /// Operators for which precedence must be defined.

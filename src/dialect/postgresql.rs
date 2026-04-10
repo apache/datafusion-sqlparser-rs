@@ -310,4 +310,8 @@ impl Dialect for PostgreSqlDialect {
     fn supports_comma_separated_trim(&self) -> bool {
         true
     }
+
+    fn supports_xml_expressions(&self) -> bool {
+        true
+    }
 }

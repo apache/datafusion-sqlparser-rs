@@ -18771,3 +18771,11 @@ fn parse_select_item_multi_column_alias() {
             .is_err()
     );
 }
+
+#[test]
+fn parse_non_pg_dialects_keep_xml_names_as_regular_identifiers() {
+    // On dialects that do NOT support XML expressions, bare `xml` should
+    // be treated as a regular column identifier, not a typed-string prefix.
+    let dialects = all_dialects_except(|d| d.supports_xml_expressions());
+    dialects.verified_only_select("SELECT xml FROM t");
+}

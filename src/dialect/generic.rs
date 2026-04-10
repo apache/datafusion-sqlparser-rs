@@ -300,4 +300,8 @@ impl Dialect for GenericDialect {
     fn supports_select_item_multi_column_alias(&self) -> bool {
         true
     }
+
+    fn supports_xml_expressions(&self) -> bool {
+        true
+    }
 }

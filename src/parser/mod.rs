@@ -2430,7 +2430,45 @@ impl<'a> Parser<'a> {
 
     /// Parse a function call expression named by `name` and return it as an `Expr`.
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
+        if let Some(expr) = self.maybe_parse_xml_function(&name)? {
+            return Ok(expr);
+        }
         self.parse_function_call(name).map(Expr::Function)
+    }
+
+    /// If `name` is a PostgreSQL XML function and the current dialect
+    /// supports XML expressions, parse it as a dedicated [`Expr`]
+    /// variant rather than a generic function call.
+    ///
+    /// Returns `Ok(None)` when the name is not an XML function or the
+    /// dialect does not support XML expressions, in which case the
+    /// caller should fall back to the regular function-call parser.
+    fn maybe_parse_xml_function(
+        &mut self,
+        name: &ObjectName,
+    ) -> Result<Option<Expr>, ParserError> {
+        if !self.dialect.supports_xml_expressions() {
+            return Ok(None);
+        }
+        let [ObjectNamePart::Identifier(ident)] = name.0.as_slice() else {
+            return Ok(None);
+        };
+        if ident.quote_style.is_some() {
+            return Ok(None);
+        }
+        if ident.value.eq_ignore_ascii_case("xmlconcat") {
+            return Ok(Some(self.parse_xmlconcat_expr()?));
+        }
+        Ok(None)
+    }
+
+    /// Parse the argument list of a PostgreSQL `XMLCONCAT` expression:
+    /// `(expr [, expr]...)`.
+    fn parse_xmlconcat_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let exprs = self.parse_comma_separated(Parser::parse_expr)?;
+        self.expect_token(&Token::RParen)?;
+        Ok(Expr::XmlConcat(exprs))
     }
 
     fn parse_function_call(&mut self, name: ObjectName) -> Result<Function, ParserError> {

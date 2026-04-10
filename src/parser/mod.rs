@@ -15057,6 +15057,8 @@ impl<'a> Parser<'a> {
             Ok(self.parse_show_views(terse, false)?)
         } else if self.parse_keyword(Keyword::FUNCTIONS) {
             Ok(self.parse_show_functions()?)
+        } else if self.parse_keyword(Keyword::PROCESSLIST) {
+            Ok(Statement::ShowProcessList { full })
         } else if extended || full {
             Err(ParserError::ParserError(
                 "EXTENDED/FULL are not supported with this type of SHOW query".to_string(),

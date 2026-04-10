@@ -4098,6 +4098,15 @@ pub enum Statement {
         show_options: ShowStatementOptions,
     },
     /// ```sql
+    /// SHOW [FULL] PROCESSLIST
+    /// ```
+    ///
+    /// Note: this is a MySQL-specific statement.
+    ShowProcessList {
+        /// `true` when full process information was requested.
+        full: bool,
+    },
+    /// ```sql
     /// SHOW SCHEMAS
     /// ```
     ShowSchemas {
@@ -5707,6 +5716,14 @@ impl fmt::Display for Statement {
                     "SHOW {terse}DATABASES{history}{show_options}",
                     terse = if *terse { "TERSE " } else { "" },
                     history = if *history { " HISTORY" } else { "" },
+                )?;
+                Ok(())
+            }
+            Statement::ShowProcessList { full } => {
+                write!(
+                    f,
+                    "SHOW {full}PROCESSLIST",
+                    full = if *full { "FULL " } else { "" },
                 )?;
                 Ok(())
             }

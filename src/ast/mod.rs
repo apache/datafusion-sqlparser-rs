@@ -4095,6 +4095,17 @@ pub enum Statement {
         show_options: ShowStatementOptions,
     },
     /// ```sql
+    /// SHOW CATALOGS
+    /// ```
+    ShowCatalogs {
+        /// `true` when terse output format was requested.
+        terse: bool,
+        /// `true` when history information was requested.
+        history: bool,
+        /// Additional options for `SHOW CATALOGS`.
+        show_options: ShowStatementOptions,
+    },
+    /// ```sql
     /// SHOW DATABASES
     /// ```
     ShowDatabases {
@@ -5728,14 +5739,24 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
+            Statement::ShowCatalogs {
+                terse,
+                history,
+                show_options,
+            } => {
+                write!(
+                    f,
+                    "SHOW {terse}CATALOGS{history}{show_options}",
+                    terse = if *terse { "TERSE " } else { "" },
+                    history = if *history { " HISTORY" } else { "" },
+                )?;
+                Ok(())
+            }
             Statement::ShowProcessList { full } => {
                 write!(
                     f,
                     "SHOW {full}PROCESSLIST",
                     full = if *full { "FULL " } else { "" },
-                )?;
-                Ok(())
-            }
             Statement::ShowSchemas {
                 terse,
                 history,

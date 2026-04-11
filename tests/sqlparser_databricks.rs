@@ -300,6 +300,66 @@ fn parse_use() {
 }
 
 #[test]
+fn parse_show_catalogs() {
+    databricks().verified_stmt("SHOW CATALOGS");
+    databricks().verified_stmt("SHOW TERSE CATALOGS");
+    databricks().verified_stmt("SHOW CATALOGS HISTORY");
+    databricks().verified_stmt("SHOW CATALOGS LIKE 'pay*'");
+    databricks().verified_stmt("SHOW CATALOGS 'pay*'");
+    databricks().verified_stmt("SHOW CATALOGS STARTS WITH 'pay'");
+    databricks().verified_stmt("SHOW CATALOGS LIMIT 10");
+    databricks().verified_stmt("SHOW CATALOGS HISTORY STARTS WITH 'pay'");
+
+    match databricks().verified_stmt("SHOW CATALOGS LIKE 'pay*'") {
+        Statement::ShowCatalogs {
+            terse,
+            history,
+            show_options,
+        } => {
+            assert!(!terse);
+            assert!(!history);
+            assert_eq!(show_options.show_in, None);
+            assert_eq!(show_options.starts_with, None);
+            assert_eq!(show_options.limit, None);
+            assert_eq!(show_options.limit_from, None);
+            assert_eq!(
+                show_options.filter_position,
+                Some(ShowStatementFilterPosition::Suffix(
+                    ShowStatementFilter::Like("pay*".to_string())
+                ))
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_show_catalogs_with_show_options() {
+    databricks().verified_stmt("SHOW TERSE CATALOGS HISTORY IN ACCOUNT");
+
+    match databricks().verified_stmt("SHOW TERSE CATALOGS HISTORY IN ACCOUNT") {
+        Statement::ShowCatalogs {
+            terse,
+            history,
+            show_options,
+        } => {
+            assert!(terse);
+            assert!(history);
+            assert_eq!(show_options.filter_position, None);
+            assert!(matches!(
+                show_options.show_in,
+                Some(ShowStatementIn {
+                    parent_type: Some(ShowStatementInParentType::Account),
+                    parent_name: None,
+                    ..
+                })
+            ));
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_databricks_struct_function() {
     assert_eq!(
         databricks_and_generic()

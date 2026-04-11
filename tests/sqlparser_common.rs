@@ -14759,6 +14759,7 @@ fn parse_method_expr() {
 fn test_show_dbs_schemas_tables_views() {
     // These statements are parsed the same by all dialects
     let stmts = vec![
+        "SHOW CATALOGS",
         "SHOW DATABASES",
         "SHOW SCHEMAS",
         "SHOW TABLES",
@@ -14776,7 +14777,11 @@ fn test_show_dbs_schemas_tables_views() {
     // These statements are parsed the same by all dialects
     // except for how the parser interprets the location of
     // LIKE option (infix/suffix)
-    let stmts = vec!["SHOW DATABASES LIKE '%abc'", "SHOW SCHEMAS LIKE '%abc'"];
+    let stmts = vec![
+        "SHOW CATALOGS LIKE '%abc'",
+        "SHOW DATABASES LIKE '%abc'",
+        "SHOW SCHEMAS LIKE '%abc'",
+    ];
     for stmt in stmts {
         all_dialects_where(|d| d.supports_show_like_before_in()).verified_stmt(stmt);
         all_dialects_where(|d| !d.supports_show_like_before_in()).verified_stmt(stmt);

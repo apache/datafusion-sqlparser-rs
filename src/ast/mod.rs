@@ -5757,6 +5757,9 @@ impl fmt::Display for Statement {
                     f,
                     "SHOW {full}PROCESSLIST",
                     full = if *full { "FULL " } else { "" },
+                )?;
+                Ok(())
+            }
             Statement::ShowSchemas {
                 terse,
                 history,

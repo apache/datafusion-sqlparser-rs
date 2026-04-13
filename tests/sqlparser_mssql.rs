@@ -2876,6 +2876,11 @@ fn parse_mssql_update_with_output_into() {
 }
 
 #[test]
+fn test_collate_on_compound_identifier() {
+    ms_and_generic().verified_stmt("SELECT t1.a COLLATE Latin1_General_CI_AS FROM t1");
+}
+
+#[test]
 fn parse_mssql_money_constants() {
     ms().verified_only_select("SELECT CEILING($123.45)");
 

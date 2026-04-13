@@ -1397,6 +1397,16 @@ impl<'a> Parser<'a> {
 
         expr = self.parse_compound_expr(expr, vec![])?;
 
+        // Parse an optional collation cast operator following `expr`.
+        //
+        // For example (MSSQL): t1.a COLLATE Latin1_General_CI_AS
+        if !self.in_column_definition_state() && self.parse_keyword(Keyword::COLLATE) {
+            expr = Expr::Collate {
+                expr: Box::new(expr),
+                collation: self.parse_object_name(false)?,
+            };
+        }
+
         debug!("prefix: {expr:?}");
         loop {
             let next_precedence = self.get_next_precedence()?;
@@ -1962,14 +1972,7 @@ impl<'a> Parser<'a> {
             _ => self.expected_at("an expression", next_token_index),
         }?;
 
-        if !self.in_column_definition_state() && self.parse_keyword(Keyword::COLLATE) {
-            Ok(Expr::Collate {
-                expr: Box::new(expr),
-                collation: self.parse_object_name(false)?,
-            })
-        } else {
-            Ok(expr)
-        }
+        Ok(expr)
     }
 
     fn parse_geometric_type(&mut self, kind: GeometricTypeKind) -> Result<Expr, ParserError> {

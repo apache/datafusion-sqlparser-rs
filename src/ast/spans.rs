@@ -264,6 +264,8 @@ impl Spanned for Values {
 /// - [Statement::DropSecret]
 /// - [Statement::Declare]
 /// - [Statement::CreateExtension]
+/// - [Statement::CreateCollation]
+/// - [Statement::AlterCollation]
 /// - [Statement::Fetch]
 /// - [Statement::Flush]
 /// - [Statement::Discard]
@@ -377,6 +379,7 @@ impl Spanned for Statement {
             Statement::CreateIndex(create_index) => create_index.span(),
             Statement::CreateRole(create_role) => create_role.span(),
             Statement::CreateExtension(create_extension) => create_extension.span(),
+            Statement::CreateCollation(create_collation) => create_collation.span(),
             Statement::DropExtension(drop_extension) => drop_extension.span(),
             Statement::DropOperator(drop_operator) => drop_operator.span(),
             Statement::DropOperatorFamily(drop_operator_family) => drop_operator_family.span(),
@@ -405,6 +408,7 @@ impl Spanned for Statement {
             // These statements need to be implemented
             Statement::AlterFunction { .. } => Span::empty(),
             Statement::AlterType { .. } => Span::empty(),
+            Statement::AlterCollation { .. } => Span::empty(),
             Statement::AlterOperator { .. } => Span::empty(),
             Statement::AlterOperatorFamily { .. } => Span::empty(),
             Statement::AlterOperatorClass { .. } => Span::empty(),

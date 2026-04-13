@@ -15294,6 +15294,7 @@ fn parse_comments() {
 
     // https://www.postgresql.org/docs/current/sql-comment.html
     let object_types = [
+        ("COLLATION", CommentObject::Collation),
         ("COLUMN", CommentObject::Column),
         ("DATABASE", CommentObject::Database),
         ("DOMAIN", CommentObject::Domain),

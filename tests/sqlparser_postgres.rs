@@ -851,6 +851,171 @@ fn parse_drop_extension() {
 }
 
 #[test]
+fn parse_create_collation() {
+    assert_eq!(
+        pg_and_generic()
+            .verified_stmt("CREATE COLLATION test3 (provider = icu, lc_collate = 'en_US.utf8')",),
+        Statement::CreateCollation(CreateCollation {
+            if_not_exists: false,
+            name: ObjectName::from(vec![Ident::new("test3")]),
+            definition: CreateCollationDefinition::Options(vec![
+                SqlOption::KeyValue {
+                    key: Ident::new("provider"),
+                    value: Expr::Identifier(Ident::new("icu")),
+                },
+                SqlOption::KeyValue {
+                    key: Ident::new("lc_collate"),
+                    value: Expr::Value(
+                        Value::SingleQuotedString("en_US.utf8".to_string()).with_empty_span(),
+                    ),
+                },
+            ]),
+        })
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("CREATE COLLATION test4 FROM nonsense"),
+        Statement::CreateCollation(CreateCollation {
+            if_not_exists: false,
+            name: ObjectName::from(vec![Ident::new("test4")]),
+            definition: CreateCollationDefinition::From(ObjectName::from(vec![Ident::new(
+                "nonsense",
+            )])),
+        })
+    );
+
+    assert_eq!(
+        pg_and_generic()
+            .verified_stmt("CREATE COLLATION testx (provider = icu, locale = 'nonsense-nowhere')"),
+        Statement::CreateCollation(CreateCollation {
+            if_not_exists: false,
+            name: ObjectName::from(vec![Ident::new("testx")]),
+            definition: CreateCollationDefinition::Options(vec![
+                SqlOption::KeyValue {
+                    key: Ident::new("provider"),
+                    value: Expr::Identifier(Ident::new("icu")),
+                },
+                SqlOption::KeyValue {
+                    key: Ident::new("locale"),
+                    value: Expr::Value(
+                        Value::SingleQuotedString("nonsense-nowhere".to_string()).with_empty_span(),
+                    ),
+                },
+            ]),
+        })
+    );
+}
+
+#[test]
+fn parse_alter_collation() {
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER COLLATION test1 RENAME TO test11"),
+        Statement::AlterCollation(AlterCollation {
+            name: ObjectName::from(vec![Ident::new("test1")]),
+            operation: AlterCollationOperation::RenameTo {
+                new_name: Ident::new("test11"),
+            },
+        })
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER COLLATION test11 OWNER TO regress_test_role"),
+        Statement::AlterCollation(AlterCollation {
+            name: ObjectName::from(vec![Ident::new("test11")]),
+            operation: AlterCollationOperation::OwnerTo(Owner::Ident(Ident::new(
+                "regress_test_role",
+            ))),
+        })
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER COLLATION test11 SET SCHEMA test_schema"),
+        Statement::AlterCollation(AlterCollation {
+            name: ObjectName::from(vec![Ident::new("test11")]),
+            operation: AlterCollationOperation::SetSchema {
+                schema_name: ObjectName::from(vec![Ident::new("test_schema")]),
+            },
+        })
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER COLLATION \"en-x-icu\" REFRESH VERSION"),
+        Statement::AlterCollation(AlterCollation {
+            name: ObjectName::from(vec![Ident::with_quote('"', "en-x-icu")]),
+            operation: AlterCollationOperation::RefreshVersion,
+        })
+    );
+}
+
+#[test]
+fn parse_drop_and_comment_collation_ast() {
+    assert_eq!(
+        pg_and_generic().verified_stmt("DROP COLLATION test0"),
+        Statement::Drop {
+            object_type: ObjectType::Collation,
+            if_exists: false,
+            names: vec![ObjectName::from(vec![Ident::new("test0")])],
+            cascade: false,
+            restrict: false,
+            purge: false,
+            temporary: false,
+            table: None,
+        }
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("DROP COLLATION IF EXISTS test0"),
+        Statement::Drop {
+            object_type: ObjectType::Collation,
+            if_exists: true,
+            names: vec![ObjectName::from(vec![Ident::new("test0")])],
+            cascade: false,
+            restrict: false,
+            purge: false,
+            temporary: false,
+            table: None,
+        }
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("COMMENT ON COLLATION test0 IS 'US English'"),
+        Statement::Comment {
+            object_type: CommentObject::Collation,
+            object_name: ObjectName::from(vec![Ident::new("test0")]),
+            comment: Some("US English".to_string()),
+            if_exists: false,
+        }
+    );
+}
+
+#[test]
+fn parse_collation_statements_roundtrip() {
+    let statements = [
+        "CREATE COLLATION test3 (provider = icu, lc_collate = 'en_US.utf8')",
+        "CREATE COLLATION testx (provider = icu, locale = 'nonsense-nowhere')",
+        "CREATE COLLATION testx (provider = icu, locale = '@colStrength=primary;nonsense=yes')",
+        "DROP COLLATION testx",
+        "CREATE COLLATION test4 FROM nonsense",
+        "CREATE COLLATION test5 FROM test0",
+        "ALTER COLLATION test1 RENAME TO test11",
+        "ALTER COLLATION test0 RENAME TO test11",
+        "ALTER COLLATION test1 RENAME TO test22",
+        "ALTER COLLATION test11 OWNER TO regress_test_role",
+        "ALTER COLLATION test11 OWNER TO nonsense",
+        "ALTER COLLATION test11 SET SCHEMA test_schema",
+        "COMMENT ON COLLATION test0 IS 'US English'",
+        "DROP COLLATION test0, test_schema.test11, test5",
+        "DROP COLLATION test0",
+        "DROP COLLATION IF EXISTS test0",
+        "ALTER COLLATION \"en-x-icu\" REFRESH VERSION",
+    ];
+
+    for sql in statements {
+        pg_and_generic().verified_stmt(sql);
+    }
+}
+
+#[test]
 fn parse_alter_table_alter_column() {
     pg().verified_stmt("ALTER TABLE tab ALTER COLUMN is_active TYPE TEXT USING 'text'");
 

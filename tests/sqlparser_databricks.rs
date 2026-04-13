@@ -644,3 +644,37 @@ fn parse_databricks_json_accessor() {
         "SELECT raw:store.bicycle.price::DOUBLE FROM store_data",
     );
 }
+
+#[test]
+fn parse_numeric_prefix_identifier() {
+    databricks().verified_stmt("SELECT * FROM catalog.schema.1st_table");
+
+    databricks().verified_stmt("SELECT * FROM a.b.1c");
+}
+
+#[test]
+fn parse_cte_without_as() {
+    databricks_and_generic().one_statement_parses_to(
+        "WITH cte (SELECT 1) SELECT * FROM cte",
+        "WITH cte AS (SELECT 1) SELECT * FROM cte",
+    );
+
+    databricks_and_generic().one_statement_parses_to(
+        "WITH a AS (SELECT 1), b (SELECT 2) SELECT * FROM a, b",
+        "WITH a AS (SELECT 1), b AS (SELECT 2) SELECT * FROM a, b",
+    );
+
+    databricks_and_generic().one_statement_parses_to(
+        "WITH cte (col1, col2) (SELECT 1, 2) SELECT * FROM cte",
+        "WITH cte (col1, col2) AS (SELECT 1, 2) SELECT * FROM cte",
+    );
+
+    databricks_and_generic().verified_query("WITH cte AS (SELECT 1) SELECT * FROM cte");
+
+    databricks_and_generic()
+        .verified_query("WITH cte (col1, col2) AS (SELECT 1, 2) SELECT * FROM cte");
+
+    assert!(all_dialects_where(|d| !d.supports_cte_without_as())
+        .parse_sql_statements("WITH cte (SELECT 1) SELECT * FROM cte")
+        .is_err());
+}

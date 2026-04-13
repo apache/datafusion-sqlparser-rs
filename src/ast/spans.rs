@@ -264,6 +264,8 @@ impl Spanned for Values {
 /// - [Statement::DropSecret]
 /// - [Statement::Declare]
 /// - [Statement::CreateExtension]
+/// - [Statement::CreateCollation]
+/// - [Statement::AlterCollation]
 /// - [Statement::Fetch]
 /// - [Statement::Flush]
 /// - [Statement::Discard]
@@ -377,6 +379,7 @@ impl Spanned for Statement {
             Statement::CreateIndex(create_index) => create_index.span(),
             Statement::CreateRole(create_role) => create_role.span(),
             Statement::CreateExtension(create_extension) => create_extension.span(),
+            Statement::CreateCollation(create_collation) => create_collation.span(),
             Statement::DropExtension(drop_extension) => drop_extension.span(),
             Statement::DropOperator(drop_operator) => drop_operator.span(),
             Statement::DropOperatorFamily(drop_operator_family) => drop_operator_family.span(),
@@ -403,7 +406,9 @@ impl Spanned for Statement {
                     .chain(with_options.iter().map(|i| i.span())),
             ),
             // These statements need to be implemented
+            Statement::AlterFunction { .. } => Span::empty(),
             Statement::AlterType { .. } => Span::empty(),
+            Statement::AlterCollation { .. } => Span::empty(),
             Statement::AlterOperator { .. } => Span::empty(),
             Statement::AlterOperatorFamily { .. } => Span::empty(),
             Statement::AlterOperatorClass { .. } => Span::empty(),
@@ -474,6 +479,7 @@ impl Spanned for Statement {
             Statement::DropPolicy { .. } => Span::empty(),
             Statement::DropConnector { .. } => Span::empty(),
             Statement::ShowDatabases { .. } => Span::empty(),
+            Statement::ShowProcessList { .. } => Span::empty(),
             Statement::ShowSchemas { .. } => Span::empty(),
             Statement::ShowObjects { .. } => Span::empty(),
             Statement::ShowViews { .. } => Span::empty(),
@@ -952,6 +958,7 @@ impl Spanned for Update {
             returning,
             output,
             or: _,
+            order_by,
             limit,
         } = self;
 
@@ -963,6 +970,7 @@ impl Spanned for Update {
                 .chain(selection.iter().map(|i| i.span()))
                 .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
                 .chain(output.iter().map(|i| i.span()))
+                .chain(order_by.iter().map(|i| i.span()))
                 .chain(limit.iter().map(|i| i.span())),
         )
     }
@@ -1821,6 +1829,9 @@ impl Spanned for SelectItem {
         match self {
             SelectItem::UnnamedExpr(expr) => expr.span(),
             SelectItem::ExprWithAlias { expr, alias } => expr.span().union(&alias.span),
+            SelectItem::ExprWithAliases { expr, aliases } => {
+                union_spans(iter::once(expr.span()).chain(aliases.iter().map(|i| i.span)))
+            }
             SelectItem::QualifiedWildcard(kind, wildcard_additional_options) => union_spans(
                 [kind.span()]
                     .into_iter()

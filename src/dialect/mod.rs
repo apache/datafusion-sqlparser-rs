@@ -520,6 +520,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `ORDER BY` in `UPDATE` statements.
+    ///
+    /// ```sql
+    /// UPDATE foo SET bar = false WHERE foo = true ORDER BY foo ASC;
+    /// ```
+    /// See <https://dev.mysql.com/doc/refman/8.4/en/update.html>
+    fn supports_update_order_by(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports an `EXCEPT` clause following a
     /// wildcard in a select list.
     ///
@@ -1044,6 +1054,12 @@ pub trait Dialect: Debug + Any {
     /// Returns true if this dialect allows dollar placeholders
     /// e.g. `SELECT $var` (SQLite)
     fn supports_dollar_placeholder(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports `$` as a prefix for money literals
+    /// e.g. `SELECT $123.45` (SQL Server)
+    fn supports_dollar_as_money_prefix(&self) -> bool {
         false
     }
 
@@ -1662,6 +1678,39 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports the two-argument comma-separated
     /// form of the `TRIM` function: `TRIM(expr, characters)`.
     fn supports_comma_separated_trim(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports the `AS` keyword being
+    /// optional in a CTE definition. For example:
+    /// ```sql
+    /// WITH cte_name (SELECT ...)
+    /// ```
+    ///
+    /// [Databricks](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-select-cte)
+    fn supports_cte_without_as(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports parenthesized multi-column
+    /// aliases in SELECT items. For example:
+    /// ```sql
+    /// SELECT stack(2, 'a', 'b') AS (col1, col2)
+    /// ```
+    ///
+    /// [Spark SQL](https://spark.apache.org/docs/latest/sql-ref-syntax-qry-select.html)
+    fn supports_select_item_multi_column_alias(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports XML-related expressions
+    /// such as `xml '<foo/>'` typed strings, XML functions like
+    /// `XMLCONCAT`, `XMLELEMENT`, etc.
+    ///
+    /// When this returns false, `xml` is treated as a regular identifier.
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/functions-xml.html)
+    fn supports_xml_expressions(&self) -> bool {
         false
     }
 }

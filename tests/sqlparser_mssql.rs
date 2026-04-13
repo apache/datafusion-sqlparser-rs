@@ -2819,6 +2819,20 @@ fn test_exec_dynamic_sql() {
     assert_eq!(stmts.len(), 2);
 }
 
+#[test]
+fn test_exec_dynamic_sql_string_concat() {
+    // EXEC with string concatenation: EXEC ('...' + @var + '...')
+    let stmts = tsql()
+        .parse_sql_statements("EXEC ('SELECT * FROM ' + @TableName + ' WHERE 1=1')")
+        .expect("EXEC with string concatenation should parse");
+    assert_eq!(stmts.len(), 1);
+    assert!(
+        matches!(&stmts[0], Statement::Execute { .. }),
+        "expected Execute, got: {:?}",
+        stmts[0]
+    );
+}
+
 // MSSQL OUTPUT clause on INSERT/UPDATE/DELETE
 // https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql
 #[test]
@@ -2863,5 +2877,40 @@ fn parse_mssql_update_with_output_into() {
 
 #[test]
 fn test_collate_on_compound_identifier() {
-    tsql().verified_stmt("SELECT t1.a COLLATE Latin1_General_CI_AS FROM t1");
+    ms_and_generic().verified_stmt("SELECT t1.a COLLATE Latin1_General_CI_AS FROM t1");
+}
+
+#[test]
+fn parse_mssql_money_constants() {
+    ms().verified_only_select("SELECT CEILING($123.45)");
+
+    let select = ms().verified_only_select("SELECT $123.45");
+    assert_eq!(
+        &Expr::Value(Value::Placeholder("$123.45".to_string()).with_empty_span()),
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let select = ms().verified_only_select("SELECT $0.99");
+    assert_eq!(
+        &Expr::Value(Value::Placeholder("$0.99".to_string()).with_empty_span()),
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let select = ms().verified_only_select("SELECT $0.0");
+    assert_eq!(
+        &Expr::Value(Value::Placeholder("$0.0".to_string()).with_empty_span()),
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let select = ms().verified_only_select("SELECT $123");
+    assert_eq!(
+        &Expr::Value(Value::Placeholder("$123".to_string()).with_empty_span()),
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let select = ms().verified_only_select("SELECT $0");
+    assert_eq!(
+        &Expr::Value(Value::Placeholder("$0".to_string()).with_empty_span()),
+        expr_from_projection(only(&select.projection)),
+    );
 }

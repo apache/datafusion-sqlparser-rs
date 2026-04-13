@@ -535,6 +535,7 @@ fn parse_update_set_from() {
             returning: None,
             output: None,
             or: None,
+            order_by: vec![],
             limit: None
         })
     );
@@ -554,6 +555,7 @@ fn parse_update_with_table_alias() {
             selection,
             returning,
             or: None,
+            order_by: _,
             limit: None,
             optimizer_hints,
             update_token: _,
@@ -12294,8 +12296,8 @@ fn parse_execute_stored_procedure() {
         }
         _ => unreachable!(),
     }
-    // Test optional parentheses around procedure name
-    ms_and_generic().one_statement_parses_to("EXEC ('name')", "EXECUTE 'name'");
+    // Parenthesised form is dynamic SQL; the expression ends up in parameters.
+    ms_and_generic().one_statement_parses_to("EXEC ('name')", "EXECUTE ('name')");
 }
 
 #[test]
@@ -13106,6 +13108,19 @@ fn test_group_by_grouping_sets() {
             ])],
             vec![]
         )
+    );
+}
+
+#[test]
+fn test_group_by_grouping_sets_bare_columns() {
+    all_dialects_where(|d| d.supports_group_by_expr()).one_statement_parses_to(
+        "SELECT a, b FROM t GROUP BY GROUPING SETS (a, b, c)",
+        "SELECT a, b FROM t GROUP BY GROUPING SETS ((a), (b), (c))",
+    );
+
+    all_dialects_where(|d| d.supports_group_by_expr()).one_statement_parses_to(
+        "SELECT a, b FROM t GROUP BY GROUPING SETS ((a, b), c)",
+        "SELECT a, b FROM t GROUP BY GROUPING SETS ((a, b), (c))",
     );
 }
 
@@ -15279,6 +15294,7 @@ fn parse_comments() {
 
     // https://www.postgresql.org/docs/current/sql-comment.html
     let object_types = [
+        ("COLLATION", CommentObject::Collation),
         ("COLUMN", CommentObject::Column),
         ("DATABASE", CommentObject::Database),
         ("DOMAIN", CommentObject::Domain),
@@ -18740,4 +18756,27 @@ fn test_wildcard_func_arg() {
     );
     dialects.verified_expr("HASH(* EXCLUDE (col1))");
     dialects.verified_expr("HASH(* EXCLUDE (col1, col2))");
+}
+
+#[test]
+fn parse_select_item_multi_column_alias() {
+    all_dialects_where(|d| d.supports_select_item_multi_column_alias())
+        .verified_stmt("SELECT stack(2, 'a', 'b', 'c', 'd') AS (col1, col2)");
+
+    all_dialects_where(|d| d.supports_select_item_multi_column_alias())
+        .verified_stmt("SELECT stack(2, 'a', 'b', 'c', 'd') AS (col1, col2) FROM t");
+
+    assert!(
+        all_dialects_where(|d| !d.supports_select_item_multi_column_alias())
+            .parse_sql_statements("SELECT stack(2, 'a', 'b') AS (col1, col2)")
+            .is_err()
+    );
+}
+
+#[test]
+fn parse_non_pg_dialects_keep_xml_names_as_regular_identifiers() {
+    // On dialects that do NOT support XML expressions, bare `xml` should
+    // be treated as a regular column identifier, not a typed-string prefix.
+    let dialects = all_dialects_except(|d| d.supports_xml_expressions());
+    dialects.verified_only_select("SELECT xml FROM t");
 }

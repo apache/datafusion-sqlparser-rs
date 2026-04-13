@@ -1966,6 +1966,19 @@ impl<'a> Tokenizer<'a> {
                     || matches!(ch, '$' if self.dialect.supports_dollar_placeholder())
             }));
 
+            // If the dialect supports a dollar sign as a money prefix (e.g. SQL Server),
+            // and the value so far is all digits, check for a decimal part, e.g. `$123.45`
+            if matches!(chars.peek(), Some('.'))
+                && self.dialect.supports_dollar_as_money_prefix()
+                && !value.is_empty()
+                && value.chars().all(|c| c.is_ascii_digit())
+            {
+                value.push('.');
+                chars.next();
+                value.push_str(&peeking_take_while(chars, |ch| ch.is_ascii_digit()));
+                return Ok(Token::Placeholder(format!("${value}")));
+            }
+
             // If the dialect does not support dollar-quoted strings, don't look for the end delimiter.
             if matches!(chars.peek(), Some('$')) && !self.dialect.supports_dollar_placeholder() {
                 chars.next();

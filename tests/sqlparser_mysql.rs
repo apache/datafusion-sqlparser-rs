@@ -370,6 +370,18 @@ fn parse_show_columns() {
 }
 
 #[test]
+fn parse_show_process_list() {
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW PROCESSLIST"),
+        Statement::ShowProcessList { full: false }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW FULL PROCESSLIST"),
+        Statement::ShowProcessList { full: true }
+    );
+}
+
+#[test]
 fn parse_show_status() {
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW SESSION STATUS LIKE 'ssl_cipher'"),
@@ -2707,6 +2719,7 @@ fn parse_update_with_joins() {
             selection,
             returning,
             or: None,
+            order_by: _,
             limit: None,
             optimizer_hints,
             update_token: _,
@@ -2779,6 +2792,59 @@ fn parse_update_with_joins() {
                 selection
             );
             assert_eq!(None, returning);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_update_with_order_by() {
+    let sql = "UPDATE foo SET bar = false WHERE foo = true ORDER BY foo ASC";
+    match mysql_and_generic().verified_stmt(sql) {
+        Statement::Update(Update { order_by, .. }) => {
+            assert_eq!(
+                vec![OrderByExpr {
+                    expr: Expr::Identifier(Ident {
+                        value: "foo".to_owned(),
+                        quote_style: None,
+                        span: Span::empty(),
+                    }),
+                    options: OrderByOptions {
+                        asc: Some(true),
+                        nulls_first: None,
+                    },
+                    with_fill: None,
+                }],
+                order_by
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_update_with_order_by_and_limit() {
+    let sql = "UPDATE foo SET bar = false WHERE foo = true ORDER BY foo ASC LIMIT 10";
+    match mysql_and_generic().verified_stmt(sql) {
+        Statement::Update(Update {
+            order_by, limit, ..
+        }) => {
+            assert_eq!(
+                vec![OrderByExpr {
+                    expr: Expr::Identifier(Ident {
+                        value: "foo".to_owned(),
+                        quote_style: None,
+                        span: Span::empty(),
+                    }),
+                    options: OrderByOptions {
+                        asc: Some(true),
+                        nulls_first: None,
+                    },
+                    with_fill: None,
+                }],
+                order_by
+            );
+            assert_eq!(Some(Expr::value(number("10"))), limit);
         }
         _ => unreachable!(),
     }

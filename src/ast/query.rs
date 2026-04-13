@@ -872,6 +872,15 @@ pub enum SelectItem {
         /// The alias for the expression.
         alias: Ident,
     },
+    /// An expression, followed by `[ AS ] (alias1, alias2, ...)`
+    ///
+    /// [Spark SQL](https://spark.apache.org/docs/latest/sql-ref-syntax-qry-select.html)
+    ExprWithAliases {
+        /// The expression being projected.
+        expr: Expr,
+        /// The list of aliases for the expression.
+        aliases: Vec<Ident>,
+    },
     /// An expression, followed by a wildcard expansion.
     /// e.g. `alias.*`, `STRUCT<STRING>('foo').*`
     QualifiedWildcard(SelectItemQualifiedWildcardKind, WildcardAdditionalOptions),
@@ -1174,6 +1183,12 @@ impl fmt::Display for SelectItem {
                 expr.fmt(f)?;
                 f.write_str(" AS ")?;
                 alias.fmt(f)
+            }
+            SelectItem::ExprWithAliases { expr, aliases } => {
+                expr.fmt(f)?;
+                f.write_str(" AS (")?;
+                display_comma_separated(aliases).fmt(f)?;
+                f.write_str(")")
             }
             SelectItem::QualifiedWildcard(kind, additional_options) => {
                 kind.fmt(f)?;

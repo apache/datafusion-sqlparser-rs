@@ -851,6 +851,171 @@ fn parse_drop_extension() {
 }
 
 #[test]
+fn parse_create_collation() {
+    assert_eq!(
+        pg_and_generic()
+            .verified_stmt("CREATE COLLATION test3 (provider = icu, lc_collate = 'en_US.utf8')",),
+        Statement::CreateCollation(CreateCollation {
+            if_not_exists: false,
+            name: ObjectName::from(vec![Ident::new("test3")]),
+            definition: CreateCollationDefinition::Options(vec![
+                SqlOption::KeyValue {
+                    key: Ident::new("provider"),
+                    value: Expr::Identifier(Ident::new("icu")),
+                },
+                SqlOption::KeyValue {
+                    key: Ident::new("lc_collate"),
+                    value: Expr::Value(
+                        Value::SingleQuotedString("en_US.utf8".to_string()).with_empty_span(),
+                    ),
+                },
+            ]),
+        })
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("CREATE COLLATION test4 FROM nonsense"),
+        Statement::CreateCollation(CreateCollation {
+            if_not_exists: false,
+            name: ObjectName::from(vec![Ident::new("test4")]),
+            definition: CreateCollationDefinition::From(ObjectName::from(vec![Ident::new(
+                "nonsense",
+            )])),
+        })
+    );
+
+    assert_eq!(
+        pg_and_generic()
+            .verified_stmt("CREATE COLLATION testx (provider = icu, locale = 'nonsense-nowhere')"),
+        Statement::CreateCollation(CreateCollation {
+            if_not_exists: false,
+            name: ObjectName::from(vec![Ident::new("testx")]),
+            definition: CreateCollationDefinition::Options(vec![
+                SqlOption::KeyValue {
+                    key: Ident::new("provider"),
+                    value: Expr::Identifier(Ident::new("icu")),
+                },
+                SqlOption::KeyValue {
+                    key: Ident::new("locale"),
+                    value: Expr::Value(
+                        Value::SingleQuotedString("nonsense-nowhere".to_string()).with_empty_span(),
+                    ),
+                },
+            ]),
+        })
+    );
+}
+
+#[test]
+fn parse_alter_collation() {
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER COLLATION test1 RENAME TO test11"),
+        Statement::AlterCollation(AlterCollation {
+            name: ObjectName::from(vec![Ident::new("test1")]),
+            operation: AlterCollationOperation::RenameTo {
+                new_name: Ident::new("test11"),
+            },
+        })
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER COLLATION test11 OWNER TO regress_test_role"),
+        Statement::AlterCollation(AlterCollation {
+            name: ObjectName::from(vec![Ident::new("test11")]),
+            operation: AlterCollationOperation::OwnerTo(Owner::Ident(Ident::new(
+                "regress_test_role",
+            ))),
+        })
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER COLLATION test11 SET SCHEMA test_schema"),
+        Statement::AlterCollation(AlterCollation {
+            name: ObjectName::from(vec![Ident::new("test11")]),
+            operation: AlterCollationOperation::SetSchema {
+                schema_name: ObjectName::from(vec![Ident::new("test_schema")]),
+            },
+        })
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER COLLATION \"en-x-icu\" REFRESH VERSION"),
+        Statement::AlterCollation(AlterCollation {
+            name: ObjectName::from(vec![Ident::with_quote('"', "en-x-icu")]),
+            operation: AlterCollationOperation::RefreshVersion,
+        })
+    );
+}
+
+#[test]
+fn parse_drop_and_comment_collation_ast() {
+    assert_eq!(
+        pg_and_generic().verified_stmt("DROP COLLATION test0"),
+        Statement::Drop {
+            object_type: ObjectType::Collation,
+            if_exists: false,
+            names: vec![ObjectName::from(vec![Ident::new("test0")])],
+            cascade: false,
+            restrict: false,
+            purge: false,
+            temporary: false,
+            table: None,
+        }
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("DROP COLLATION IF EXISTS test0"),
+        Statement::Drop {
+            object_type: ObjectType::Collation,
+            if_exists: true,
+            names: vec![ObjectName::from(vec![Ident::new("test0")])],
+            cascade: false,
+            restrict: false,
+            purge: false,
+            temporary: false,
+            table: None,
+        }
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("COMMENT ON COLLATION test0 IS 'US English'"),
+        Statement::Comment {
+            object_type: CommentObject::Collation,
+            object_name: ObjectName::from(vec![Ident::new("test0")]),
+            comment: Some("US English".to_string()),
+            if_exists: false,
+        }
+    );
+}
+
+#[test]
+fn parse_collation_statements_roundtrip() {
+    let statements = [
+        "CREATE COLLATION test3 (provider = icu, lc_collate = 'en_US.utf8')",
+        "CREATE COLLATION testx (provider = icu, locale = 'nonsense-nowhere')",
+        "CREATE COLLATION testx (provider = icu, locale = '@colStrength=primary;nonsense=yes')",
+        "DROP COLLATION testx",
+        "CREATE COLLATION test4 FROM nonsense",
+        "CREATE COLLATION test5 FROM test0",
+        "ALTER COLLATION test1 RENAME TO test11",
+        "ALTER COLLATION test0 RENAME TO test11",
+        "ALTER COLLATION test1 RENAME TO test22",
+        "ALTER COLLATION test11 OWNER TO regress_test_role",
+        "ALTER COLLATION test11 OWNER TO nonsense",
+        "ALTER COLLATION test11 SET SCHEMA test_schema",
+        "COMMENT ON COLLATION test0 IS 'US English'",
+        "DROP COLLATION test0, test_schema.test11, test5",
+        "DROP COLLATION test0",
+        "DROP COLLATION IF EXISTS test0",
+        "ALTER COLLATION \"en-x-icu\" REFRESH VERSION",
+    ];
+
+    for sql in statements {
+        pg_and_generic().verified_stmt(sql);
+    }
+}
+
+#[test]
 fn parse_alter_table_alter_column() {
     pg().verified_stmt("ALTER TABLE tab ALTER COLUMN is_active TYPE TEXT USING 'text'");
 
@@ -3748,6 +3913,25 @@ fn parse_on_commit() {
     pg_and_generic().verified_stmt("CREATE TEMPORARY TABLE table (COL INT) ON COMMIT DELETE ROWS");
 
     pg_and_generic().verified_stmt("CREATE TEMPORARY TABLE table (COL INT) ON COMMIT DROP");
+}
+
+#[test]
+fn parse_xml_typed_string() {
+    // xml '...' should parse as a TypedString on PostgreSQL and Generic
+    let sql = "SELECT xml '<foo/>'";
+    let select = pg_and_generic().verified_only_select(sql);
+    match expr_from_projection(&select.projection[0]) {
+        Expr::TypedString(TypedString {
+            data_type: DataType::Custom(name, modifiers),
+            value,
+            uses_odbc_syntax: false,
+        }) => {
+            assert_eq!(name.to_string(), "xml");
+            assert!(modifiers.is_empty());
+            assert_eq!(value.value, Value::SingleQuotedString("<foo/>".to_string()));
+        }
+        other => panic!("Expected TypedString, got: {other:?}"),
+    }
 }
 
 fn pg() -> TestedDialects {
@@ -8057,6 +8241,225 @@ fn parse_alter_operator_class() {
         .parse_sql_statements(
             "ALTER OPERATOR CLASS int_ops USING btree DROP OPERATOR 1 (INT4, INT2)"
         )
+        .is_err());
+}
+
+#[test]
+fn parse_alter_function_and_aggregate() {
+    for (sql, expected) in [
+        (
+            "ALTER AGGREGATE alt_func1(int) RENAME TO alt_func3",
+            "ALTER AGGREGATE alt_func1(INT) RENAME TO alt_func3",
+        ),
+        (
+            "ALTER AGGREGATE alt_func1(int) OWNER TO regress_alter_generic_user3",
+            "ALTER AGGREGATE alt_func1(INT) OWNER TO regress_alter_generic_user3",
+        ),
+        (
+            "ALTER AGGREGATE alt_func1(int) SET SCHEMA alt_nsp2",
+            "ALTER AGGREGATE alt_func1(INT) SET SCHEMA alt_nsp2",
+        ),
+        (
+            "ALTER AGGREGATE alt_agg1(int) RENAME TO alt_agg2",
+            "ALTER AGGREGATE alt_agg1(INT) RENAME TO alt_agg2",
+        ),
+        (
+            "ALTER AGGREGATE alt_agg1(int) RENAME TO alt_agg3",
+            "ALTER AGGREGATE alt_agg1(INT) RENAME TO alt_agg3",
+        ),
+        (
+            "ALTER AGGREGATE alt_agg2(int) OWNER TO regress_alter_generic_user2",
+            "ALTER AGGREGATE alt_agg2(INT) OWNER TO regress_alter_generic_user2",
+        ),
+        (
+            "ALTER AGGREGATE alt_agg2(int) OWNER TO regress_alter_generic_user3",
+            "ALTER AGGREGATE alt_agg2(INT) OWNER TO regress_alter_generic_user3",
+        ),
+        (
+            "ALTER AGGREGATE alt_agg2(int) SET SCHEMA alt_nsp2",
+            "ALTER AGGREGATE alt_agg2(INT) SET SCHEMA alt_nsp2",
+        ),
+        (
+            "ALTER AGGREGATE alt_order(int ORDER BY text) RENAME TO alt_order2",
+            "ALTER AGGREGATE alt_order(INT ORDER BY TEXT) RENAME TO alt_order2",
+        ),
+        (
+            "ALTER AGGREGATE alt_order_only(ORDER BY int) SET SCHEMA alt_nsp2",
+            "ALTER AGGREGATE alt_order_only(ORDER BY INT) SET SCHEMA alt_nsp2",
+        ),
+        (
+            "ALTER AGGREGATE alt_star(*) OWNER TO regress_alter_generic_user2",
+            "ALTER AGGREGATE alt_star(*) OWNER TO regress_alter_generic_user2",
+        ),
+    ] {
+        let statement = pg_and_generic().one_statement_parses_to(sql, expected);
+        assert!(matches!(
+            statement,
+            Statement::AlterFunction(AlterFunction {
+                kind: AlterFunctionKind::Aggregate,
+                ..
+            })
+        ));
+    }
+
+    for (sql, expected) in [
+        (
+            "ALTER FUNCTION alt_func1(int) RENAME TO alt_func2",
+            "ALTER FUNCTION alt_func1(INT) RENAME TO alt_func2",
+        ),
+        (
+            "ALTER FUNCTION alt_func1(int) RENAME TO alt_func3",
+            "ALTER FUNCTION alt_func1(INT) RENAME TO alt_func3",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) OWNER TO regress_alter_generic_user2",
+            "ALTER FUNCTION alt_func2(INT) OWNER TO regress_alter_generic_user2",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) OWNER TO regress_alter_generic_user3",
+            "ALTER FUNCTION alt_func2(INT) OWNER TO regress_alter_generic_user3",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) SET SCHEMA alt_nsp1",
+            "ALTER FUNCTION alt_func2(INT) SET SCHEMA alt_nsp1",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) SET SCHEMA alt_nsp2",
+            "ALTER FUNCTION alt_func2(INT) SET SCHEMA alt_nsp2",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) DEPENDS ON EXTENSION ext1",
+            "ALTER FUNCTION alt_func2(INT) DEPENDS ON EXTENSION ext1",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) NO DEPENDS ON EXTENSION ext1",
+            "ALTER FUNCTION alt_func2(INT) NO DEPENDS ON EXTENSION ext1",
+        ),
+        (
+            "ALTER FUNCTION alt_func2 IMMUTABLE",
+            "ALTER FUNCTION alt_func2 IMMUTABLE",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) IMMUTABLE",
+            "ALTER FUNCTION alt_func2(INT) IMMUTABLE",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) STABLE",
+            "ALTER FUNCTION alt_func2(INT) STABLE",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) VOLATILE",
+            "ALTER FUNCTION alt_func2(INT) VOLATILE",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) CALLED ON NULL INPUT",
+            "ALTER FUNCTION alt_func2(INT) CALLED ON NULL INPUT",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) RETURNS NULL ON NULL INPUT",
+            "ALTER FUNCTION alt_func2(INT) RETURNS NULL ON NULL INPUT",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) STRICT",
+            "ALTER FUNCTION alt_func2(INT) STRICT",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) LEAKPROOF",
+            "ALTER FUNCTION alt_func2(INT) LEAKPROOF",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) NOT LEAKPROOF",
+            "ALTER FUNCTION alt_func2(INT) NOT LEAKPROOF",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) SECURITY DEFINER",
+            "ALTER FUNCTION alt_func2(INT) SECURITY DEFINER",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) EXTERNAL SECURITY INVOKER",
+            "ALTER FUNCTION alt_func2(INT) EXTERNAL SECURITY INVOKER",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) PARALLEL SAFE",
+            "ALTER FUNCTION alt_func2(INT) PARALLEL SAFE",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) PARALLEL RESTRICTED",
+            "ALTER FUNCTION alt_func2(INT) PARALLEL RESTRICTED",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) PARALLEL UNSAFE",
+            "ALTER FUNCTION alt_func2(INT) PARALLEL UNSAFE",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) COST 3.5",
+            "ALTER FUNCTION alt_func2(INT) COST 3.5",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) ROWS 42",
+            "ALTER FUNCTION alt_func2(INT) ROWS 42",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) SUPPORT pg_catalog.alt_support",
+            "ALTER FUNCTION alt_func2(INT) SUPPORT pg_catalog.alt_support",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) SET work_mem TO DEFAULT",
+            "ALTER FUNCTION alt_func2(INT) SET work_mem = DEFAULT",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) SET work_mem FROM CURRENT",
+            "ALTER FUNCTION alt_func2(INT) SET work_mem FROM CURRENT",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) SET search_path = pg_catalog, public",
+            "ALTER FUNCTION alt_func2(INT) SET search_path = pg_catalog, public",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) RESET work_mem",
+            "ALTER FUNCTION alt_func2(INT) RESET work_mem",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) RESET ALL",
+            "ALTER FUNCTION alt_func2(INT) RESET ALL",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) IMMUTABLE STRICT PARALLEL SAFE RESTRICT",
+            "ALTER FUNCTION alt_func2(INT) IMMUTABLE STRICT PARALLEL SAFE RESTRICT",
+        ),
+        (
+            "ALTER FUNCTION alt_variadic(VARIADIC int[]) STABLE",
+            "ALTER FUNCTION alt_variadic(VARIADIC INT[]) STABLE",
+        ),
+    ] {
+        let statement = pg_and_generic().one_statement_parses_to(sql, expected);
+        assert!(matches!(
+            statement,
+            Statement::AlterFunction(AlterFunction {
+                kind: AlterFunctionKind::Function,
+                ..
+            })
+        ));
+    }
+
+    assert!(pg()
+        .parse_sql_statements("ALTER AGGREGATE alt_func1(INT) DEPENDS ON EXTENSION ext1")
+        .is_err());
+    assert!(pg()
+        .parse_sql_statements("ALTER AGGREGATE alt_func1(INT) NO DEPENDS ON EXTENSION ext1")
+        .is_err());
+    assert!(pg()
+        .parse_sql_statements("ALTER AGGREGATE alt_func1(OUT INT) OWNER TO joe")
+        .is_err());
+    assert!(pg()
+        .parse_sql_statements("ALTER AGGREGATE alt_func1(INOUT INT) OWNER TO joe")
+        .is_err());
+    assert!(pg()
+        .parse_sql_statements("ALTER AGGREGATE alt_func1(INT = 1) OWNER TO joe")
+        .is_err());
+
+    assert!(pg()
+        .parse_sql_statements("ALTER AGGREGATE alt_func1(INT) IMMUTABLE")
         .is_err());
 }
 

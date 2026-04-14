@@ -2818,6 +2818,8 @@ pub struct CreateIndex {
     pub unique: bool,
     /// whether the index is created concurrently
     pub concurrently: bool,
+    /// whether the index is created asynchronously
+    pub r#async: bool,
     /// IF NOT EXISTS clause
     pub if_not_exists: bool,
     /// INCLUDE clause: <https://www.postgresql.org/docs/current/sql-createindex.html>
@@ -2843,13 +2845,14 @@ impl fmt::Display for CreateIndex {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "CREATE {unique}INDEX {concurrently}{if_not_exists}",
+            "CREATE {unique}INDEX {concurrently}{async_}{if_not_exists}",
             unique = if self.unique { "UNIQUE " } else { "" },
             concurrently = if self.concurrently {
                 "CONCURRENTLY "
             } else {
                 ""
             },
+            async_ = if self.r#async { "ASYNC " } else { "" },
             if_not_exists = if self.if_not_exists {
                 "IF NOT EXISTS "
             } else {

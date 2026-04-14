@@ -682,6 +682,7 @@ impl Spanned for CreateIndex {
             columns,
             unique: _,        // bool
             concurrently: _,  // bool
+            r#async: _,       // bool
             if_not_exists: _, // bool
             include,
             nulls_distinct: _, // bool

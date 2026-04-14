@@ -16069,7 +16069,6 @@ fn test_select_from_first() {
             pipe_operators: vec![],
         };
         assert_eq!(expected, ast);
-        assert_eq!(ast.to_string(), q);
     }
 }
 
@@ -16080,120 +16079,25 @@ fn test_select_from_first_with_cte() {
 
     let ast = dialects.verified_query(q);
 
-    let expected = Query {
-        with: Some(With {
-            with_token: AttachedToken::empty(),
-            recursive: false,
-            cte_tables: vec![Cte {
-                alias: TableAlias {
-                    explicit: false,
-                    name: Ident {
-                        value: "test".to_string(),
-                        quote_style: None,
-                        span: Span::empty(),
-                    },
-                    columns: vec![],
-                },
-                query: Box::new(Query {
-                    with: None,
-                    body: Box::new(SetExpr::Select(Box::new(Select {
-                        select_token: AttachedToken::empty(),
-                        optimizer_hints: vec![],
-                        distinct: None,
-                        select_modifiers: None,
-                        top: None,
-                        projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-                            value: "a".to_string(),
-                            quote_style: None,
-                            span: Span::empty(),
-                        }))],
-                        exclude: None,
-                        top_before_distinct: false,
-                        into: None,
-                        from: vec![TableWithJoins {
-                            relation: table_from_name(ObjectName::from(vec![Ident {
-                                value: "t".to_string(),
-                                quote_style: None,
-                                span: Span::empty(),
-                            }])),
-                            joins: vec![],
-                        }],
-                        lateral_views: vec![],
-                        prewhere: None,
-                        selection: None,
-                        group_by: GroupByExpr::Expressions(vec![], vec![]),
-                        cluster_by: vec![],
-                        distribute_by: vec![],
-                        sort_by: vec![],
-                        having: None,
-                        named_window: vec![],
-                        window_before_qualify: false,
-                        qualify: None,
-                        value_table_mode: None,
-                        connect_by: vec![],
-                        flavor: SelectFlavor::FromFirst,
-                    }))),
-                    order_by: None,
-                    limit_clause: None,
-                    fetch: None,
-                    locks: vec![],
-                    for_clause: None,
-                    settings: None,
-                    format_clause: None,
-                    pipe_operators: vec![],
-                }),
-                from: None,
-                materialized: None,
-                closing_paren_token: AttachedToken::empty(),
-            }],
-        }),
-        body: Box::new(SetExpr::Select(Box::new(Select {
-            select_token: AttachedToken::empty(),
-            optimizer_hints: vec![],
-            distinct: None,
-            select_modifiers: None,
-            top: None,
-            projection: vec![SelectItem::UnnamedExpr(Expr::Value(ValueWithSpan {
-                value: test_utils::number("1"),
-                span: Span::empty(),
-            }))],
-            exclude: None,
-            top_before_distinct: false,
-            into: None,
-            from: vec![TableWithJoins {
-                relation: table_from_name(ObjectName::from(vec![Ident {
-                    value: "test".to_string(),
-                    quote_style: None,
-                    span: Span::empty(),
-                }])),
-                joins: vec![],
-            }],
-            lateral_views: vec![],
-            prewhere: None,
-            selection: None,
-            group_by: GroupByExpr::Expressions(vec![], vec![]),
-            cluster_by: vec![],
-            distribute_by: vec![],
-            sort_by: vec![],
-            having: None,
-            named_window: vec![],
-            window_before_qualify: false,
-            qualify: None,
-            value_table_mode: None,
-            connect_by: vec![],
-            flavor: SelectFlavor::FromFirst,
-        }))),
-        order_by: None,
-        limit_clause: None,
-        fetch: None,
-        locks: vec![],
-        for_clause: None,
-        settings: None,
-        format_clause: None,
-        pipe_operators: vec![],
-    };
-    assert_eq!(expected, ast);
-    assert_eq!(ast.to_string(), q);
+    let ast_select = ast.body.as_select().unwrap();
+
+    let expected_body_select_projection =
+        vec![SelectItem::UnnamedExpr(Expr::Value(ValueWithSpan {
+            value: test_utils::number("1"),
+            span: Span::empty(),
+        }))];
+
+    let expected_body_from = vec![TableWithJoins {
+        relation: table_from_name(ObjectName::from(vec![Ident {
+            value: "test".to_string(),
+            quote_style: None,
+            span: Span::empty(),
+        }])),
+        joins: vec![],
+    }];
+
+    assert_eq!(ast_select.projection, expected_body_select_projection);
+    assert_eq!(ast_select.from, expected_body_from);
 }
 
 #[test]

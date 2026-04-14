@@ -13958,7 +13958,7 @@ impl<'a> Parser<'a> {
                 closing_paren_token: closing_paren_token.into(),
             }
         };
-        if dialect_of!(self is HiveDialect) && self.parse_keyword(Keyword::FROM) {
+        if self.dialect.supports_from_first_insert() && self.parse_keyword(Keyword::FROM) {
             cte.from = Some(self.parse_identifier()?);
         }
         Ok(cte)

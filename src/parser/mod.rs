@@ -18536,11 +18536,7 @@ impl<'a> Parser<'a> {
         };
 
         let opt_alias = if self.dialect.supports_select_wildcard_with_alias() {
-            if self.parse_keyword(Keyword::AS) {
-                Some(self.parse_identifier()?)
-            } else {
-                None
-            }
+            self.maybe_parse_select_item_alias()?
         } else {
             None
         };

@@ -141,6 +141,8 @@ impl Dialect for RedshiftSqlDialect {
         true
     }
 
+    /// Redshift supports aliasing wildcard expressions:
+    /// <https://docs.aws.amazon.com/redshift/latest/dg/r_SELECT_list.html>
     fn supports_select_wildcard_with_alias(&self) -> bool {
         true
     }

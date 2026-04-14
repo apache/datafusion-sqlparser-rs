@@ -1556,10 +1556,9 @@ pub trait Dialect: Debug + Any {
     ///
     /// Example:
     /// ```sql
+    /// SELECT t.* alias FROM t
     /// SELECT t.* AS alias FROM t
     /// ```
-    ///
-    /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_SELECT_list.html)
     fn supports_select_wildcard_with_alias(&self) -> bool {
         false
     }

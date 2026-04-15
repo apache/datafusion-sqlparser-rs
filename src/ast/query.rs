@@ -2533,6 +2533,8 @@ pub struct TableAlias {
     pub name: Ident,
     /// Optional column aliases declared in parentheses after the table alias.
     pub columns: Vec<TableAliasColumnDef>,
+    /// Optional PartiQL index alias declared with `AT`.
+    pub at: Option<Ident>,
 }
 
 impl fmt::Display for TableAlias {
@@ -2540,6 +2542,9 @@ impl fmt::Display for TableAlias {
         write!(f, "{}{}", if self.explicit { "AS " } else { "" }, self.name)?;
         if !self.columns.is_empty() {
             write!(f, " ({})", display_comma_separated(&self.columns))?;
+        }
+        if let Some(at) = &self.at {
+            write!(f, " AT {at}")?;
         }
         Ok(())
     }

@@ -658,6 +658,21 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Return true if the dialect supports "FROM-first" inserts.
+    ///
+    /// Example:
+    /// ```sql
+    /// WITH cte AS (SELECT key FROM src)
+    /// FROM cte
+    /// INSERT OVERWRITE table my_table
+    /// SELECT *
+    ///
+    /// See <https://hive.apache.org/docs/latest/language/common-table-expression/>
+    /// ```
+    fn supports_from_first_insert(&self) -> bool {
+        false
+    }
+
     /// Return true if the dialect supports pipe operator.
     ///
     /// Example:

@@ -14511,7 +14511,7 @@ impl<'a> Parser<'a> {
             materialized: is_materialized,
             closing_paren_token: closing_paren_token.into(),
         };
-        if self.parse_keyword(Keyword::FROM) {
+        if self.dialect.supports_from_first_insert() && self.parse_keyword(Keyword::FROM) {
             cte.from = Some(self.parse_identifier()?);
         }
         Ok(cte)

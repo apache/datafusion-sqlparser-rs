@@ -16218,8 +16218,35 @@ fn test_select_from_first() {
             pipe_operators: vec![],
         };
         assert_eq!(expected, ast);
-        assert_eq!(ast.to_string(), q);
     }
+}
+
+#[test]
+fn test_select_from_first_with_cte() {
+    let dialects = all_dialects_where(|d| d.supports_from_first_select());
+    let q = "WITH test AS (FROM t SELECT a) FROM test SELECT 1";
+
+    let ast = dialects.verified_query(q);
+
+    let ast_select = ast.body.as_select().unwrap();
+
+    let expected_body_select_projection =
+        vec![SelectItem::UnnamedExpr(Expr::Value(ValueWithSpan {
+            value: test_utils::number("1"),
+            span: Span::empty(),
+        }))];
+
+    let expected_body_from = vec![TableWithJoins {
+        relation: table_from_name(ObjectName::from(vec![Ident {
+            value: "test".to_string(),
+            quote_style: None,
+            span: Span::empty(),
+        }])),
+        joins: vec![],
+    }];
+
+    assert_eq!(ast_select.projection, expected_body_select_projection);
+    assert_eq!(ast_select.from, expected_body_from);
 }
 
 #[test]

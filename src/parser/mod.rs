@@ -15465,6 +15465,8 @@ impl<'a> Parser<'a> {
                 session,
                 global,
             })
+        } else if self.parse_keyword(Keyword::CATALOGS) {
+            self.parse_show_catalogs(terse)
         } else if self.parse_keyword(Keyword::DATABASES) {
             self.parse_show_databases(terse)
         } else if self.parse_keyword(Keyword::SCHEMAS) {
@@ -15486,6 +15488,16 @@ impl<'a> Parser<'a> {
             is_shorthand,
             filter: self.parse_show_statement_filter()?,
         }))
+    }
+
+    fn parse_show_catalogs(&mut self, terse: bool) -> Result<Statement, ParserError> {
+        let history = self.parse_keyword(Keyword::HISTORY);
+        let show_options = self.parse_show_stmt_options()?;
+        Ok(Statement::ShowCatalogs {
+            terse,
+            history,
+            show_options,
+        })
     }
 
     fn parse_show_databases(&mut self, terse: bool) -> Result<Statement, ParserError> {

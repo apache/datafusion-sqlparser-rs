@@ -6137,6 +6137,34 @@ fn test_table_function_with_ordinality() {
 }
 
 #[test]
+fn test_lateral_function_with_ordinality_and_column_aliases() {
+    let from = pg()
+        .verified_only_select(
+            "SELECT * FROM tbl, \
+             LATERAL json_array_elements(c1::JSON) \
+             WITH ORDINALITY AS t (c1, index)",
+        )
+        .from;
+    assert_eq!(2, from.len());
+    match &from[1].relation {
+        TableFactor::Function {
+            lateral: true,
+            name,
+            with_ordinality: true,
+            alias: Some(alias),
+            ..
+        } => {
+            assert_eq!("json_array_elements", name.to_string().as_str());
+            assert_eq!("t", alias.name.value.as_str());
+            assert_eq!(2, alias.columns.len());
+            assert_eq!("c1", alias.columns[0].name.value.as_str());
+            assert_eq!("index", alias.columns[1].name.value.as_str());
+        }
+        _ => panic!("Expecting TableFactor::Function with ordinality and alias columns"),
+    }
+}
+
+#[test]
 fn test_table_unnest_with_ordinality() {
     let from = pg_and_generic()
         .verified_only_select("SELECT * FROM UNNEST([10, 20, 30]) WITH ORDINALITY AS t")

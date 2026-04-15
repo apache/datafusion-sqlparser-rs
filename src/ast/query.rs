@@ -1522,6 +1522,8 @@ pub enum TableFactor {
         name: ObjectName,
         /// Arguments passed to the function.
         args: Vec<FunctionArg>,
+        /// Whether `WITH ORDINALITY` was specified to include ordinality.
+        with_ordinality: bool,
         /// Optional alias for the result of the function.
         alias: Option<TableAlias>,
     },
@@ -2277,6 +2279,7 @@ impl fmt::Display for TableFactor {
                 lateral,
                 name,
                 args,
+                with_ordinality,
                 alias,
             } => {
                 if *lateral {
@@ -2284,6 +2287,9 @@ impl fmt::Display for TableFactor {
                 }
                 write!(f, "{name}")?;
                 write!(f, "({})", display_comma_separated(args))?;
+                if *with_ordinality {
+                    write!(f, " WITH ORDINALITY")?;
+                }
                 if let Some(alias) = alias {
                     write!(f, " {alias}")?;
                 }

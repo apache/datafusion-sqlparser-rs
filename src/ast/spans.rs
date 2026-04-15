@@ -1990,6 +1990,7 @@ impl Spanned for TableFactor {
                 lateral: _,
                 name,
                 args,
+                with_ordinality: _,
                 alias,
             } => union_spans(
                 name.0

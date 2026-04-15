@@ -10,14 +10,20 @@
 2. Make targeted code changes and refrain from refactoring, unless it's absolutely required.
 
 ## Unit Tests Guidelines
-- When testing a multi-line SQL statement, use a raw string literal, i.e. `r#"..."#` to preserve formatting.
-- You can use the following template for simple unit tests:
-```rust
-<dialect>().parse_sql_statements(r#"..."#).unwrap();
-```
-For example: `snowflake().parse_sql_statements(r#"SELECT * FROM my_table"#).unwrap();`
 - New unit tests should be added to the `tests` module in the corresponding dialect file (e.g., `tests/sqlparser_redshift.rs` for Redshift), and should be placed at the end of the file.
 - If the new functionality is gated using a dialect function, and the SQL is likely relevant in most dialects, tests should be placed under `tests/sqlparser_common.rs`.
+- When testing a multi-line SQL statement, use a raw string literal, i.e. `r#"..."#` to preserve formatting.
+- The parser builds an abstract syntax tree (AST) from the SQL statement and has functionality to display the tree as SQL. Use the following template for simple unit tests where you expect the SQL created from the AST to be the same as the input SQL:
+```rust
+<dialect>().verified_stmt(r#"..."#);
+```
+For example: `snowflake().verified_stmt(r#"SELECT * FROM my_table"#)`. Use `one_statement_parses_to` instead of `verified_stmt` when you expect the SQL created by the AST to differ than the input SQL. For example:
+```rust
+snowflake().one_statement_parses_to(
+    "SELECT * FROM my_table t",
+    "SELECT * FROM my_table AS t",
+)
+```
 
 ## Analyzing Parsing Issues
 You can try to simplify the SQL statement to identify the root cause of the parsing issue. This may involve removing certain clauses or components of the SQL statement to see if it can be parsed successfully. Additionally, you can compare the problematic SQL statement with similar statements that are parsed correctly to identify any differences that may be causing the issue.

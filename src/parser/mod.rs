@@ -9915,6 +9915,50 @@ impl<'a> Parser<'a> {
                     .into(),
                 ))
             }
+            Token::Word(w) if w.keyword == Keyword::EXCLUDE => {
+                let index_method = if self.parse_keyword(Keyword::USING) {
+                    Some(self.parse_identifier()?)
+                } else {
+                    None
+                };
+
+                self.expect_token(&Token::LParen)?;
+                let elements =
+                    self.parse_comma_separated(|p| p.parse_exclusion_element())?;
+                self.expect_token(&Token::RParen)?;
+
+                let include = if self.parse_keyword(Keyword::INCLUDE) {
+                    self.expect_token(&Token::LParen)?;
+                    let cols = self.parse_comma_separated(|p| p.parse_identifier())?;
+                    self.expect_token(&Token::RParen)?;
+                    cols
+                } else {
+                    vec![]
+                };
+
+                let where_clause = if self.parse_keyword(Keyword::WHERE) {
+                    self.expect_token(&Token::LParen)?;
+                    let predicate = self.parse_expr()?;
+                    self.expect_token(&Token::RParen)?;
+                    Some(Box::new(predicate))
+                } else {
+                    None
+                };
+
+                let characteristics = self.parse_constraint_characteristics()?;
+
+                Ok(Some(
+                    ExclusionConstraint {
+                        name,
+                        index_method,
+                        elements,
+                        include,
+                        where_clause,
+                        characteristics,
+                    }
+                    .into(),
+                ))
+            }
             _ => {
                 if name.is_some() {
                     self.expected("PRIMARY, UNIQUE, FOREIGN, or CHECK", next_token)
@@ -9924,6 +9968,14 @@ impl<'a> Parser<'a> {
                 }
             }
         }
+    }
+
+    fn parse_exclusion_element(&mut self) -> Result<ExclusionElement, ParserError> {
+        let expr = self.parse_expr()?;
+        self.expect_keyword_is(Keyword::WITH)?;
+        let operator_token = self.next_token();
+        let operator = operator_token.token.to_string();
+        Ok(ExclusionElement { expr, operator })
     }
 
     fn parse_optional_nulls_distinct(&mut self) -> Result<NullsDistinctOption, ParserError> {

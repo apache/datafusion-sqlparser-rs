@@ -101,6 +101,9 @@ pub enum TableConstraint {
     /// [1]: https://dev.mysql.com/doc/refman/8.0/en/fulltext-natural-language.html
     /// [2]: https://dev.mysql.com/doc/refman/8.0/en/spatial-types.html
     FulltextOrSpatial(FullTextOrSpatialConstraint),
+    /// PostgreSQL `EXCLUDE` constraint:
+    /// `[ CONSTRAINT <name> ] EXCLUDE [ USING <index_method> ] ( <element> WITH <operator> [, ...] ) [ INCLUDE (<cols>) ] [ WHERE (<predicate>) ]`
+    Exclusion(ExclusionConstraint),
 }
 
 impl From<UniqueConstraint> for TableConstraint {
@@ -139,6 +142,12 @@ impl From<FullTextOrSpatialConstraint> for TableConstraint {
     }
 }
 
+impl From<ExclusionConstraint> for TableConstraint {
+    fn from(constraint: ExclusionConstraint) -> Self {
+        TableConstraint::Exclusion(constraint)
+    }
+}
+
 impl fmt::Display for TableConstraint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -148,6 +157,7 @@ impl fmt::Display for TableConstraint {
             TableConstraint::Check(constraint) => constraint.fmt(f),
             TableConstraint::Index(constraint) => constraint.fmt(f),
             TableConstraint::FulltextOrSpatial(constraint) => constraint.fmt(f),
+            TableConstraint::Exclusion(constraint) => constraint.fmt(f),
         }
     }
 }
@@ -515,6 +525,75 @@ impl crate::ast::Spanned for UniqueConstraint {
                 .chain(self.index_name.iter().map(|i| i.span))
                 .chain(self.columns.iter().map(|i| i.span()))
                 .chain(self.characteristics.iter().map(|i| i.span())),
+        )
+    }
+}
+
+/// One element in an `EXCLUDE` constraint's element list:
+/// `<expr> WITH <operator>`
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ExclusionElement {
+    pub expr: Expr,
+    pub operator: String,
+}
+
+impl fmt::Display for ExclusionElement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} WITH {}", self.expr, self.operator)
+    }
+}
+
+/// PostgreSQL `EXCLUDE` constraint:
+/// `[ CONSTRAINT <name> ] EXCLUDE [ USING <index_method> ] ( <element> WITH <operator> [, ...] ) [ INCLUDE (<cols>) ] [ WHERE (<predicate>) ]`
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ExclusionConstraint {
+    pub name: Option<Ident>,
+    pub index_method: Option<Ident>,
+    pub elements: Vec<ExclusionElement>,
+    pub include: Vec<Ident>,
+    pub where_clause: Option<Box<Expr>>,
+    pub characteristics: Option<ConstraintCharacteristics>,
+}
+
+impl fmt::Display for ExclusionConstraint {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use crate::ast::ddl::display_constraint_name;
+        write!(f, "{}EXCLUDE", display_constraint_name(&self.name))?;
+        if let Some(method) = &self.index_method {
+            write!(f, " USING {method}")?;
+        }
+        write!(f, " ({})", display_comma_separated(&self.elements))?;
+        if !self.include.is_empty() {
+            write!(f, " INCLUDE ({})", display_comma_separated(&self.include))?;
+        }
+        if let Some(predicate) = &self.where_clause {
+            write!(f, " WHERE ({predicate})")?;
+        }
+        if let Some(characteristics) = &self.characteristics {
+            write!(f, " {characteristics}")?;
+        }
+        Ok(())
+    }
+}
+
+impl crate::ast::Spanned for ExclusionConstraint {
+    fn span(&self) -> Span {
+        fn union_spans<I: Iterator<Item = Span>>(iter: I) -> Span {
+            Span::union_iter(iter)
+        }
+
+        union_spans(
+            self.name
+                .iter()
+                .map(|i| i.span)
+                .chain(self.index_method.iter().map(|i| i.span))
+                .chain(self.include.iter().map(|i| i.span))
+                .chain(self.where_clause.iter().map(|e| e.span()))
+                .chain(self.characteristics.iter().map(|c| c.span())),
         )
     }
 }

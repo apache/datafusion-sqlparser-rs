@@ -640,6 +640,7 @@ impl fmt::Display for ExclusionElement {
 
 impl crate::ast::Spanned for ExclusionElement {
     fn span(&self) -> Span {
+        // Operator is stored as a plain String with no source span; only expr contributes.
         self.expr.span()
     }
 }

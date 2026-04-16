@@ -9974,6 +9974,15 @@ impl<'a> Parser<'a> {
         let expr = self.parse_expr()?;
         self.expect_keyword_is(Keyword::WITH)?;
         let operator_token = self.next_token();
+        match &operator_token.token {
+            Token::EOF
+            | Token::RParen
+            | Token::Comma
+            | Token::SemiColon => {
+                return self.expected("exclusion operator", operator_token);
+            }
+            _ => {}
+        }
         let operator = operator_token.token.to_string();
         Ok(ExclusionElement { expr, operator })
     }

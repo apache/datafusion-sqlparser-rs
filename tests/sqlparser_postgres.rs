@@ -9170,7 +9170,15 @@ fn parse_exclude_constraint_multi_element() {
                     assert_eq!(c.index_method, Some(Ident::new("gist")));
                     assert_eq!(c.elements.len(), 2);
                     assert_eq!(c.elements[0].operator, "=");
+                    assert_eq!(
+                        c.elements[0].expr,
+                        Expr::Identifier(Ident::new("room"))
+                    );
                     assert_eq!(c.elements[1].operator, "&&");
+                    assert_eq!(
+                        c.elements[1].expr,
+                        Expr::Identifier(Ident::new("during"))
+                    );
                 }
                 other => panic!("Expected Exclusion, got {other:?}"),
             }
@@ -9249,6 +9257,23 @@ fn parse_exclude_constraint_with_where() {
             match &create_table.constraints[0] {
                 TableConstraint::Exclusion(c) => {
                     assert!(c.where_clause.is_some());
+                    match c.where_clause.as_ref().unwrap().as_ref() {
+                        Expr::BinaryOp { left, op, right } => {
+                            assert_eq!(
+                                **left,
+                                Expr::Identifier(Ident::new("col"))
+                            );
+                            assert_eq!(*op, BinaryOperator::Gt);
+                            assert_eq!(
+                                **right,
+                                Expr::Value(
+                                    (Value::Number("0".to_string(), false))
+                                        .with_empty_span()
+                                )
+                            );
+                        }
+                        other => panic!("Expected BinaryOp, got {other:?}"),
+                    }
                 }
                 other => panic!("Expected Exclusion, got {other:?}"),
             }
@@ -9319,11 +9344,34 @@ fn parse_exclude_constraint_deferrable() {
 fn parse_exclude_constraint_in_alter_table() {
     let sql =
         "ALTER TABLE t ADD CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =)";
-    pg().verified_stmt(sql);
+    match pg().verified_stmt(sql) {
+        Statement::AlterTable { operations, .. } => {
+            match &operations[0] {
+                AlterTableOperation::AddConstraint(TableConstraint::Exclusion(c)) => {
+                    assert_eq!(c.name, Some(Ident::new("no_overlap")));
+                    assert_eq!(c.elements[0].operator, "=");
+                }
+                other => panic!("Expected AddConstraint(Exclusion), got {other:?}"),
+            }
+        }
+        _ => panic!("Expected AlterTable"),
+    }
 }
 
 #[test]
 fn roundtrip_exclude_constraint() {
     let sql = "CREATE TABLE t (CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =, during WITH &&) INCLUDE (id) WHERE (active = true))";
     pg().verified_stmt(sql);
+}
+
+#[test]
+fn exclude_missing_with_keyword_errors() {
+    let sql = "CREATE TABLE t (CONSTRAINT c EXCLUDE USING gist (col))";
+    assert!(pg().parse_sql_statements(sql).is_err());
+}
+
+#[test]
+fn exclude_empty_element_list_errors() {
+    let sql = "CREATE TABLE t (CONSTRAINT c EXCLUDE USING gist ())";
+    assert!(pg().parse_sql_statements(sql).is_err());
 }

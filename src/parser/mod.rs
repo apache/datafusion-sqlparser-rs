@@ -9973,18 +9973,16 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_exclusion_element(&mut self) -> Result<ExclusionElement, ParserError> {
-        let expr = self.parse_expr()?;
-
-        // `index_elem` grammar: [ opclass ] [ ASC | DESC ] [ NULLS FIRST | LAST ]
-        let operator_class: Option<ObjectName> = if self
-            .peek_one_of_keywords(&[Keyword::ASC, Keyword::DESC, Keyword::NULLS, Keyword::WITH])
-            .is_some()
-        {
-            None
-        } else {
-            self.maybe_parse(|p| p.parse_object_name(false))?
-        };
-        let order = self.parse_order_by_options()?;
+        // `index_elem` grammar: { col | (expr) } [ opclass ] [ ASC | DESC ] [ NULLS FIRST | LAST ].
+        // Shared with `CREATE INDEX` columns.
+        let (
+            OrderByExpr {
+                expr,
+                options: order,
+                ..
+            },
+            operator_class,
+        ) = self.parse_order_by_expr_inner(true)?;
 
         self.expect_keyword_is(Keyword::WITH)?;
         let operator = self.parse_exclusion_operator()?;

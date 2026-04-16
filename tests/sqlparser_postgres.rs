@@ -9376,6 +9376,7 @@ fn parse_exclude_constraint_operator_class() {
         Statement::CreateTable(create_table) => match &create_table.constraints[0] {
             TableConstraint::Exclusion(c) => {
                 assert_eq!(c.elements.len(), 1);
+                assert_eq!(c.elements[0].expr, Expr::Identifier(Ident::new("col")));
                 assert_eq!(
                     c.elements[0].operator_class,
                     Some(ObjectName::from(vec![Ident::new("text_pattern_ops")]))
@@ -9405,9 +9406,17 @@ fn parse_exclude_constraint_asc_nulls_last() {
 
 #[test]
 fn parse_exclude_constraint_desc_nulls_first() {
-    pg().verified_stmt(
-        "CREATE TABLE t (col INT, EXCLUDE USING btree (col DESC NULLS FIRST WITH =))",
-    );
+    let sql = "CREATE TABLE t (col INT, EXCLUDE USING btree (col DESC NULLS FIRST WITH =))";
+    match pg().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => match &create_table.constraints[0] {
+            TableConstraint::Exclusion(c) => {
+                assert_eq!(c.elements[0].order.asc, Some(false));
+                assert_eq!(c.elements[0].order.nulls_first, Some(true));
+            }
+            other => panic!("Expected Exclusion, got {other:?}"),
+        },
+        _ => panic!("Expected CreateTable"),
+    }
 }
 
 #[test]
@@ -9418,11 +9427,20 @@ fn parse_exclude_constraint_function_expression() {
         Statement::CreateTable(create_table) => match &create_table.constraints[0] {
             TableConstraint::Exclusion(c) => {
                 assert_eq!(c.elements.len(), 1);
-                assert!(matches!(c.elements[0].expr, Expr::Nested(_)));
+                match &c.elements[0].expr {
+                    Expr::Nested(inner) => match inner.as_ref() {
+                        Expr::Function(func) => {
+                            assert_eq!(func.name.to_string(), "lower");
+                        }
+                        other => panic!("Expected Function inside Nested, got {other:?}"),
+                    },
+                    other => panic!("Expected Nested expr, got {other:?}"),
+                }
                 assert_eq!(
                     c.elements[0].operator_class,
                     Some(ObjectName::from(vec![Ident::new("text_pattern_ops")]))
                 );
+                assert_eq!(c.elements[0].operator, "=");
             }
             other => panic!("Expected Exclusion, got {other:?}"),
         },
@@ -9457,7 +9475,11 @@ fn exclude_missing_with_keyword_errors() {
 #[test]
 fn exclude_empty_element_list_errors() {
     let sql = "CREATE TABLE t (CONSTRAINT c EXCLUDE USING gist ())";
-    assert!(pg().parse_sql_statements(sql).is_err());
+    let err = pg().parse_sql_statements(sql).unwrap_err();
+    assert!(
+        err.to_string().contains("Expected"),
+        "unexpected error: {err}"
+    );
 }
 
 #[test]
@@ -9472,6 +9494,8 @@ fn exclude_missing_operator_errors() {
 
 #[test]
 fn exclude_rejected_in_non_postgres_dialects() {
+    // `GenericDialect` is intentionally excluded — it opts in to the
+    // Postgres EXCLUDE syntax alongside `PostgreSqlDialect`.
     let sql = "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =))";
     for dialect in
         all_dialects_except(|d| d.is::<PostgreSqlDialect>() || d.is::<GenericDialect>()).dialects
@@ -9495,9 +9519,15 @@ fn exclude_as_column_name_parses_in_mysql_and_sqlite() {
     ] {
         let type_name = format!("{dialect:?}");
         let parser = TestedDialects::new(vec![dialect]);
-        assert!(
-            parser.parse_sql_statements(sql).is_ok(),
-            "dialect {type_name} failed to parse `exclude` as column name"
-        );
+        let stmts = parser
+            .parse_sql_statements(sql)
+            .unwrap_or_else(|e| panic!("{type_name} failed to parse {sql}: {e}"));
+        match &stmts[0] {
+            Statement::CreateTable(create_table) => {
+                assert_eq!(create_table.columns.len(), 1);
+                assert_eq!(create_table.columns[0].name.value, "exclude");
+            }
+            other => panic!("{type_name}: expected CreateTable, got {other:?}"),
+        }
     }
 }

@@ -638,6 +638,12 @@ impl fmt::Display for ExclusionElement {
     }
 }
 
+impl crate::ast::Spanned for ExclusionElement {
+    fn span(&self) -> Span {
+        self.expr.span()
+    }
+}
+
 /// A PostgreSQL `EXCLUDE` constraint.
 ///
 /// `[ CONSTRAINT <name> ] EXCLUDE [ USING <index_method> ] ( <element> WITH <operator> [, ...] ) [ INCLUDE (<cols>) ] [ WHERE (<predicate>) ]`
@@ -693,6 +699,7 @@ impl crate::ast::Spanned for ExclusionConstraint {
                 .iter()
                 .map(|i| i.span)
                 .chain(self.index_method.iter().map(|i| i.span))
+                .chain(self.elements.iter().map(|e| e.span()))
                 .chain(self.include.iter().map(|i| i.span))
                 .chain(self.where_clause.iter().map(|e| e.span()))
                 .chain(self.characteristics.iter().map(|c| c.span())),

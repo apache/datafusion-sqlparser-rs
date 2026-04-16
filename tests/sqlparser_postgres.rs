@@ -9135,6 +9135,51 @@ fn parse_pg_analyze() {
 }
 
 #[test]
+fn parse_exclude_constraint_basic() {
+    let sql =
+        "CREATE TABLE t (room INT, CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =))";
+    match pg().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!(1, create_table.constraints.len());
+            match &create_table.constraints[0] {
+                TableConstraint::Exclusion(c) => {
+                    assert_eq!(c.name, Some(Ident::new("no_overlap")));
+                    assert_eq!(c.index_method, Some(Ident::new("gist")));
+                    assert_eq!(c.elements.len(), 1);
+                    assert_eq!(c.elements[0].operator, "=");
+                    assert_eq!(c.include.len(), 0);
+                    assert!(c.where_clause.is_none());
+                }
+                other => panic!("Expected Exclusion, got {other:?}"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_exclude_constraint_multi_element() {
+    let sql =
+        "CREATE TABLE t (room INT, during INT, EXCLUDE USING gist (room WITH =, during WITH &&))";
+    match pg().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!(1, create_table.constraints.len());
+            match &create_table.constraints[0] {
+                TableConstraint::Exclusion(c) => {
+                    assert!(c.name.is_none());
+                    assert_eq!(c.index_method, Some(Ident::new("gist")));
+                    assert_eq!(c.elements.len(), 2);
+                    assert_eq!(c.elements[0].operator, "=");
+                    assert_eq!(c.elements[1].operator, "&&");
+                }
+                other => panic!("Expected Exclusion, got {other:?}"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
 fn parse_lock_table() {
     pg_and_generic().one_statement_parses_to(
         "LOCK public.widgets IN EXCLUSIVE MODE",
@@ -9192,4 +9237,93 @@ fn parse_lock_table() {
             _ => panic!("Expected Lock, got: {stmt:?}"),
         }
     }
+}
+
+#[test]
+fn parse_exclude_constraint_with_where() {
+    let sql =
+        "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =) WHERE (col > 0))";
+    match pg().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!(1, create_table.constraints.len());
+            match &create_table.constraints[0] {
+                TableConstraint::Exclusion(c) => {
+                    assert!(c.where_clause.is_some());
+                }
+                other => panic!("Expected Exclusion, got {other:?}"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_exclude_constraint_with_include() {
+    let sql =
+        "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =) INCLUDE (col))";
+    match pg().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!(1, create_table.constraints.len());
+            match &create_table.constraints[0] {
+                TableConstraint::Exclusion(c) => {
+                    assert_eq!(c.include, vec![Ident::new("col")]);
+                }
+                other => panic!("Expected Exclusion, got {other:?}"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_exclude_constraint_no_using() {
+    let sql = "CREATE TABLE t (col INT, EXCLUDE (col WITH =))";
+    match pg().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!(1, create_table.constraints.len());
+            match &create_table.constraints[0] {
+                TableConstraint::Exclusion(c) => {
+                    assert!(c.index_method.is_none());
+                }
+                other => panic!("Expected Exclusion, got {other:?}"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_exclude_constraint_deferrable() {
+    let sql =
+        "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =) DEFERRABLE INITIALLY DEFERRED)";
+    match pg().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!(1, create_table.constraints.len());
+            match &create_table.constraints[0] {
+                TableConstraint::Exclusion(c) => {
+                    let characteristics = c.characteristics.as_ref().unwrap();
+                    assert_eq!(characteristics.deferrable, Some(true));
+                    assert_eq!(
+                        characteristics.initially,
+                        Some(DeferrableInitial::Deferred)
+                    );
+                }
+                other => panic!("Expected Exclusion, got {other:?}"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_exclude_constraint_in_alter_table() {
+    let sql =
+        "ALTER TABLE t ADD CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =)";
+    pg().verified_stmt(sql);
+}
+
+#[test]
+fn roundtrip_exclude_constraint() {
+    let sql = "CREATE TABLE t (CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =, during WITH &&) INCLUDE (id) WHERE (active = true))";
+    pg().verified_stmt(sql);
 }

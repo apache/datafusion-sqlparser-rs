@@ -117,6 +117,12 @@ pub enum TableConstraint {
     ///
     /// [1]: https://www.postgresql.org/docs/current/sql-altertable.html
     UniqueUsingIndex(ConstraintUsingIndex),
+    /// PostgreSQL `EXCLUDE` constraint.
+    ///
+    /// `[ CONSTRAINT <name> ] EXCLUDE [ USING <index_method> ] ( <element> WITH <operator> [, ...] ) [ INCLUDE (<cols>) ] [ WHERE (<predicate>) ]`
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE>
+    Exclusion(ExclusionConstraint),
 }
 
 impl From<UniqueConstraint> for TableConstraint {
@@ -155,6 +161,12 @@ impl From<FullTextOrSpatialConstraint> for TableConstraint {
     }
 }
 
+impl From<ExclusionConstraint> for TableConstraint {
+    fn from(constraint: ExclusionConstraint) -> Self {
+        TableConstraint::Exclusion(constraint)
+    }
+}
+
 impl fmt::Display for TableConstraint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -166,6 +178,7 @@ impl fmt::Display for TableConstraint {
             TableConstraint::FulltextOrSpatial(constraint) => constraint.fmt(f),
             TableConstraint::PrimaryKeyUsingIndex(c) => c.fmt_with_keyword(f, "PRIMARY KEY"),
             TableConstraint::UniqueUsingIndex(c) => c.fmt_with_keyword(f, "UNIQUE"),
+            TableConstraint::Exclusion(constraint) => constraint.fmt(f),
         }
     }
 }
@@ -601,5 +614,88 @@ impl crate::ast::Spanned for ConstraintUsingIndex {
             .map(|c| c.span())
             .unwrap_or(self.index_name.span);
         start.union(&end)
+    }
+}
+
+/// One element in an `EXCLUDE` constraint's element list.
+///
+/// `<expr> WITH <operator>`
+///
+/// See <https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ExclusionElement {
+    /// The index expression or column name.
+    pub expr: Expr,
+    /// The exclusion operator (e.g. `&&`, `<->`, `=`).
+    pub operator: String,
+}
+
+impl fmt::Display for ExclusionElement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} WITH {}", self.expr, self.operator)
+    }
+}
+
+/// A PostgreSQL `EXCLUDE` constraint.
+///
+/// `[ CONSTRAINT <name> ] EXCLUDE [ USING <index_method> ] ( <element> WITH <operator> [, ...] ) [ INCLUDE (<cols>) ] [ WHERE (<predicate>) ]`
+///
+/// See <https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ExclusionConstraint {
+    /// Optional constraint name.
+    pub name: Option<Ident>,
+    /// Optional index method (e.g. `gist`, `spgist`).
+    pub index_method: Option<Ident>,
+    /// The list of index expressions with their exclusion operators.
+    pub elements: Vec<ExclusionElement>,
+    /// Optional list of additional columns to include in the index.
+    pub include: Vec<Ident>,
+    /// Optional `WHERE` predicate to restrict the constraint to a subset of rows.
+    pub where_clause: Option<Box<Expr>>,
+    /// Optional constraint characteristics like `DEFERRABLE`.
+    pub characteristics: Option<ConstraintCharacteristics>,
+}
+
+impl fmt::Display for ExclusionConstraint {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use crate::ast::ddl::display_constraint_name;
+        write!(f, "{}EXCLUDE", display_constraint_name(&self.name))?;
+        if let Some(method) = &self.index_method {
+            write!(f, " USING {method}")?;
+        }
+        write!(f, " ({})", display_comma_separated(&self.elements))?;
+        if !self.include.is_empty() {
+            write!(f, " INCLUDE ({})", display_comma_separated(&self.include))?;
+        }
+        if let Some(predicate) = &self.where_clause {
+            write!(f, " WHERE ({predicate})")?;
+        }
+        if let Some(characteristics) = &self.characteristics {
+            write!(f, " {characteristics}")?;
+        }
+        Ok(())
+    }
+}
+
+impl crate::ast::Spanned for ExclusionConstraint {
+    fn span(&self) -> Span {
+        fn union_spans<I: Iterator<Item = Span>>(iter: I) -> Span {
+            Span::union_iter(iter)
+        }
+
+        union_spans(
+            self.name
+                .iter()
+                .map(|i| i.span)
+                .chain(self.index_method.iter().map(|i| i.span))
+                .chain(self.include.iter().map(|i| i.span))
+                .chain(self.where_clause.iter().map(|e| e.span()))
+                .chain(self.characteristics.iter().map(|c| c.span())),
+        )
     }
 }

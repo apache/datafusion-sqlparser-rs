@@ -64,6 +64,14 @@ impl Dialect for ClickHouseDialect {
         true
     }
 
+    fn supports_partition_by_after_order_by(&self) -> bool {
+        true
+    }
+
+    fn supports_array_join_syntax(&self) -> bool {
+        true
+    }
+
     // ClickHouse uses this for some FORMAT expressions in `INSERT` context, e.g. when inserting
     // with FORMAT JSONEachRow a raw JSON key-value expression is valid and expected.
     //

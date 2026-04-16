@@ -8567,7 +8567,7 @@ impl<'a> Parser<'a> {
         // ClickHouse allows PARTITION BY after ORDER BY
         // https://clickhouse.com/docs/en/sql-reference/statements/create/table#partition-by
         let partition_by = if create_table_config.partition_by.is_none()
-            && dialect_of!(self is ClickHouseDialect | GenericDialect)
+            && self.dialect.supports_partition_by_after_order_by()
             && self.parse_keywords(&[Keyword::PARTITION, Keyword::BY])
         {
             Some(Box::new(self.parse_expr()?))
@@ -15779,7 +15779,7 @@ impl<'a> Parser<'a> {
                         constraint: self.parse_join_constraint(false)?,
                     },
                 }
-            } else if dialect_of!(self is ClickHouseDialect | GenericDialect)
+            } else if self.dialect.supports_array_join_syntax()
                 && self.parse_keywords(&[Keyword::INNER, Keyword::ARRAY, Keyword::JOIN])
             {
                 // ClickHouse: INNER ARRAY JOIN
@@ -15788,7 +15788,7 @@ impl<'a> Parser<'a> {
                     global,
                     join_operator: JoinOperator::InnerArrayJoin,
                 }
-            } else if dialect_of!(self is ClickHouseDialect | GenericDialect)
+            } else if self.dialect.supports_array_join_syntax()
                 && self.parse_keywords(&[Keyword::LEFT, Keyword::ARRAY, Keyword::JOIN])
             {
                 // ClickHouse: LEFT ARRAY JOIN
@@ -15797,7 +15797,7 @@ impl<'a> Parser<'a> {
                     global,
                     join_operator: JoinOperator::LeftArrayJoin,
                 }
-            } else if dialect_of!(self is ClickHouseDialect | GenericDialect)
+            } else if self.dialect.supports_array_join_syntax()
                 && self.parse_keywords(&[Keyword::ARRAY, Keyword::JOIN])
             {
                 // ClickHouse: ARRAY JOIN

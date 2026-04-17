@@ -139,8 +139,8 @@ pub mod helpers;
 pub mod table_constraints;
 pub use table_constraints::{
     CheckConstraint, ConstraintUsingIndex, ExclusionConstraint, ExclusionElement,
-    ForeignKeyConstraint, FullTextOrSpatialConstraint, IndexConstraint, PrimaryKeyConstraint,
-    TableConstraint, UniqueConstraint,
+    ExclusionOperator, ForeignKeyConstraint, FullTextOrSpatialConstraint, IndexConstraint,
+    PrimaryKeyConstraint, TableConstraint, UniqueConstraint,
 };
 mod operator;
 mod query;

@@ -32,8 +32,9 @@ use crate::{
 use super::{
     display_comma_separated, helpers::attached_token::AttachedToken, query::InputFormatClause,
     Assignment, Expr, FromTable, Ident, InsertAliases, MysqlInsertPriority, ObjectName, OnInsert,
-    OrderByExpr, Query, SelectInto, SelectItem, Setting, SqliteOnConflict, TableFactor,
-    TableObject, TableWithJoins, UpdateTableFromKind, Values,
+    OptimizerHint, OrderByExpr, Query, SelectInto, SelectItem, Setting, SqliteOnConflict,
+    TableAliasWithoutColumns, TableFactor, TableObject, TableWithJoins, UpdateTableFromKind,
+    Values,
 };
 
 /// INSERT statement.
@@ -43,6 +44,11 @@ use super::{
 pub struct Insert {
     /// Token for the `INSERT` keyword (or its substitutes)
     pub insert_token: AttachedToken,
+    /// Query optimizer hints
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
+    pub optimizer_hints: Vec<OptimizerHint>,
     /// Only for Sqlite
     pub or: Option<SqliteOnConflict>,
     /// Only for mysql
@@ -51,10 +57,11 @@ pub struct Insert {
     pub into: bool,
     /// TABLE
     pub table: TableObject,
-    /// table_name as foo (for PostgreSQL)
-    pub table_alias: Option<Ident>,
+    /// `table_name as foo` (for PostgreSQL)
+    /// `table_name foo` (for Oracle)
+    pub table_alias: Option<TableAliasWithoutColumns>,
     /// COLUMNS
-    pub columns: Vec<Ident>,
+    pub columns: Vec<ObjectName>,
     /// Overwrite (Hive)
     pub overwrite: bool,
     /// A SQL query that specifies what to insert
@@ -68,9 +75,13 @@ pub struct Insert {
     pub after_columns: Vec<Ident>,
     /// whether the insert has the table keyword (Hive)
     pub has_table_keyword: bool,
+    /// ON INSERT
     pub on: Option<OnInsert>,
     /// RETURNING
     pub returning: Option<Vec<SelectItem>>,
+    /// OUTPUT (MSSQL)
+    /// See <https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql>
+    pub output: Option<OutputClause>,
     /// Only for mysql
     pub replace_into: bool,
     /// Only for mysql
@@ -90,18 +101,52 @@ pub struct Insert {
     ///
     /// [ClickHouse formats JSON insert](https://clickhouse.com/docs/en/interfaces/formats#json-inserting-data)
     pub format_clause: Option<InputFormatClause>,
+    /// For Snowflake multi-table insert: specifies the type (`ALL` or `FIRST`)
+    ///
+    /// - `None` means this is a regular single-table INSERT
+    /// - `Some(All)` means `INSERT ALL` (all matching WHEN clauses are executed)
+    /// - `Some(First)` means `INSERT FIRST` (only the first matching WHEN clause is executed)
+    ///
+    /// See: <https://docs.snowflake.com/en/sql-reference/sql/insert-multi-table>
+    pub multi_table_insert_type: Option<MultiTableInsertType>,
+    /// For multi-table insert: additional INTO clauses (unconditional)
+    ///
+    /// Used for `INSERT ALL INTO t1 INTO t2 ... SELECT ...`
+    ///
+    /// See: <https://docs.snowflake.com/en/sql-reference/sql/insert-multi-table>
+    pub multi_table_into_clauses: Vec<MultiTableInsertIntoClause>,
+    /// For conditional multi-table insert: WHEN clauses
+    ///
+    /// Used for `INSERT ALL/FIRST WHEN cond THEN INTO t1 ... SELECT ...`
+    ///
+    /// See: <https://docs.snowflake.com/en/sql-reference/sql/insert-multi-table>
+    pub multi_table_when_clauses: Vec<MultiTableInsertWhenClause>,
+    /// For conditional multi-table insert: ELSE clause
+    ///
+    /// See: <https://docs.snowflake.com/en/sql-reference/sql/insert-multi-table>
+    pub multi_table_else_clause: Option<Vec<MultiTableInsertIntoClause>>,
 }
 
 impl Display for Insert {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let table_name = if let Some(alias) = &self.table_alias {
-            format!("{0} AS {alias}", self.table)
+        // SQLite OR conflict has a special format: INSERT OR ... INTO table_name
+        let table_name = if let Some(table_alias) = &self.table_alias {
+            format!(
+                "{table} {as_keyword}{alias}",
+                table = self.table,
+                as_keyword = if table_alias.explicit { "AS " } else { "" },
+                alias = table_alias.alias
+            )
         } else {
             self.table.to_string()
         };
 
         if let Some(on_conflict) = self.or {
-            write!(f, "INSERT {on_conflict} INTO {table_name} ")?;
+            f.write_str("INSERT")?;
+            for hint in &self.optimizer_hints {
+                write!(f, " {hint}")?;
+            }
+            write!(f, " {on_conflict} INTO {table_name} ")?;
         } else {
             write!(
                 f,
@@ -110,34 +155,59 @@ impl Display for Insert {
                     "REPLACE"
                 } else {
                     "INSERT"
-                },
+                }
             )?;
+            for hint in &self.optimizer_hints {
+                write!(f, " {hint}")?;
+            }
             if let Some(priority) = self.priority {
-                write!(f, " {priority}",)?;
+                write!(f, " {priority}")?;
             }
 
-            write!(
-                f,
-                "{ignore}{over}{int}{tbl} {table_name} ",
-                table_name = table_name,
-                ignore = if self.ignore { " IGNORE" } else { "" },
-                over = if self.overwrite { " OVERWRITE" } else { "" },
-                int = if self.into { " INTO" } else { "" },
-                tbl = if self.has_table_keyword { " TABLE" } else { "" },
-            )?;
+            if self.ignore {
+                write!(f, " IGNORE")?;
+            }
+
+            if self.overwrite {
+                write!(f, " OVERWRITE")?;
+            }
+
+            if let Some(insert_type) = &self.multi_table_insert_type {
+                write!(f, " {}", insert_type)?;
+            }
+
+            if self.into {
+                write!(f, " INTO")?;
+            }
+
+            if self.has_table_keyword {
+                write!(f, " TABLE")?;
+            }
+
+            if !table_name.is_empty() {
+                write!(f, " {table_name} ")?;
+            }
         }
+
         if !self.columns.is_empty() {
             write!(f, "({})", display_comma_separated(&self.columns))?;
             SpaceOrNewline.fmt(f)?;
         }
+
         if let Some(ref parts) = self.partitioned {
             if !parts.is_empty() {
                 write!(f, "PARTITION ({})", display_comma_separated(parts))?;
                 SpaceOrNewline.fmt(f)?;
             }
         }
+
         if !self.after_columns.is_empty() {
             write!(f, "({})", display_comma_separated(&self.after_columns))?;
+            SpaceOrNewline.fmt(f)?;
+        }
+
+        if let Some(output) = &self.output {
+            write!(f, "{output}")?;
             SpaceOrNewline.fmt(f)?;
         }
 
@@ -146,7 +216,31 @@ impl Display for Insert {
             SpaceOrNewline.fmt(f)?;
         }
 
+        for into_clause in &self.multi_table_into_clauses {
+            SpaceOrNewline.fmt(f)?;
+            write!(f, "{}", into_clause)?;
+        }
+
+        for when_clause in &self.multi_table_when_clauses {
+            SpaceOrNewline.fmt(f)?;
+            write!(f, "{}", when_clause)?;
+        }
+
+        if let Some(else_clauses) = &self.multi_table_else_clause {
+            SpaceOrNewline.fmt(f)?;
+            write!(f, "ELSE")?;
+            for into_clause in else_clauses {
+                SpaceOrNewline.fmt(f)?;
+                write!(f, "{}", into_clause)?;
+            }
+        }
+
         if let Some(source) = &self.source {
+            if !self.multi_table_into_clauses.is_empty()
+                || !self.multi_table_when_clauses.is_empty()
+            {
+                SpaceOrNewline.fmt(f)?;
+            }
             source.fmt(f)?;
         } else if !self.assignments.is_empty() {
             write!(f, "SET")?;
@@ -176,6 +270,7 @@ impl Display for Insert {
             f.write_str("RETURNING")?;
             indented_list(f, returning)?;
         }
+
         Ok(())
     }
 }
@@ -187,6 +282,11 @@ impl Display for Insert {
 pub struct Delete {
     /// Token for the `DELETE` keyword
     pub delete_token: AttachedToken,
+    /// Query optimizer hints
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
+    pub optimizer_hints: Vec<OptimizerHint>,
     /// Multi tables delete are supported in mysql
     pub tables: Vec<ObjectName>,
     /// FROM
@@ -197,6 +297,9 @@ pub struct Delete {
     pub selection: Option<Expr>,
     /// RETURNING
     pub returning: Option<Vec<SelectItem>>,
+    /// OUTPUT (MSSQL)
+    /// See <https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql>
+    pub output: Option<OutputClause>,
     /// ORDER BY (MySQL)
     pub order_by: Vec<OrderByExpr>,
     /// LIMIT (MySQL)
@@ -206,6 +309,10 @@ pub struct Delete {
 impl Display for Delete {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("DELETE")?;
+        for hint in &self.optimizer_hints {
+            f.write_str(" ")?;
+            hint.fmt(f)?;
+        }
         if !self.tables.is_empty() {
             indented_list(f, &self.tables)?;
         }
@@ -217,6 +324,10 @@ impl Display for Delete {
             FromTable::WithoutKeyword(from) => {
                 indented_list(f, from)?;
             }
+        }
+        if let Some(output) = &self.output {
+            SpaceOrNewline.fmt(f)?;
+            write!(f, "{output}")?;
         }
         if let Some(using) = &self.using {
             SpaceOrNewline.fmt(f)?;
@@ -256,6 +367,11 @@ impl Display for Delete {
 pub struct Update {
     /// Token for the `UPDATE` keyword
     pub update_token: AttachedToken,
+    /// Query optimizer hints
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
+    pub optimizer_hints: Vec<OptimizerHint>,
     /// TABLE
     pub table: TableWithJoins,
     /// Column assignments
@@ -266,15 +382,26 @@ pub struct Update {
     pub selection: Option<Expr>,
     /// RETURNING
     pub returning: Option<Vec<SelectItem>>,
+    /// OUTPUT (MSSQL)
+    /// See <https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql>
+    pub output: Option<OutputClause>,
     /// SQLite-specific conflict resolution clause
     pub or: Option<SqliteOnConflict>,
+    /// ORDER BY (MySQL extension for single-table UPDATE)
+    /// See <https://dev.mysql.com/doc/refman/8.4/en/update.html>
+    pub order_by: Vec<OrderByExpr>,
     /// LIMIT
     pub limit: Option<Expr>,
 }
 
 impl Display for Update {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("UPDATE ")?;
+        f.write_str("UPDATE")?;
+        for hint in &self.optimizer_hints {
+            f.write_str(" ")?;
+            hint.fmt(f)?;
+        }
+        f.write_str(" ")?;
         if let Some(or) = &self.or {
             or.fmt(f)?;
             f.write_str(" ")?;
@@ -289,6 +416,10 @@ impl Display for Update {
             SpaceOrNewline.fmt(f)?;
             f.write_str("SET")?;
             indented_list(f, &self.assignments)?;
+        }
+        if let Some(output) = &self.output {
+            SpaceOrNewline.fmt(f)?;
+            write!(f, "{output}")?;
         }
         if let Some(UpdateTableFromKind::AfterSet(from)) = &self.from {
             SpaceOrNewline.fmt(f)?;
@@ -306,6 +437,11 @@ impl Display for Update {
             f.write_str("RETURNING")?;
             indented_list(f, returning)?;
         }
+        if !self.order_by.is_empty() {
+            SpaceOrNewline.fmt(f)?;
+            f.write_str("ORDER BY")?;
+            indented_list(f, &self.order_by)?;
+        }
         if let Some(limit) = &self.limit {
             SpaceOrNewline.fmt(f)?;
             write!(f, "LIMIT {limit}")?;
@@ -321,6 +457,10 @@ impl Display for Update {
 pub struct Merge {
     /// The `MERGE` token that starts the statement.
     pub merge_token: AttachedToken,
+    /// Query optimizer hints
+    ///
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
+    pub optimizer_hints: Vec<OptimizerHint>,
     /// optional INTO keyword
     pub into: bool,
     /// Specifies the table to merge
@@ -331,18 +471,24 @@ pub struct Merge {
     pub on: Box<Expr>,
     /// Specifies the actions to perform when values match or do not match.
     pub clauses: Vec<MergeClause>,
-    // Specifies the output to save changes in MSSQL
+    /// Specifies the output to save changes in MSSQL
     pub output: Option<OutputClause>,
 }
 
 impl Display for Merge {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("MERGE")?;
+        for hint in &self.optimizer_hints {
+            write!(f, " {hint}")?;
+        }
+        if self.into {
+            write!(f, " INTO")?;
+        }
         write!(
             f,
-            "MERGE{int} {table} USING {source} ",
-            int = if self.into { " INTO" } else { "" },
+            " {table} USING {source} ",
             table = self.table,
-            source = self.source,
+            source = self.source
         )?;
         write!(f, "ON {on} ", on = self.on)?;
         write!(f, "{}", display_separated(&self.clauses, " "))?;
@@ -367,8 +513,11 @@ impl Display for Merge {
 pub struct MergeClause {
     /// The `WHEN` token that starts the sub-expression.
     pub when_token: AttachedToken,
+    /// The type of `WHEN` clause.
     pub clause_kind: MergeClauseKind,
+    /// An optional predicate to further restrict the clause.
     pub predicate: Option<Expr>,
+    /// The action to perform when the clause is matched.
     pub action: MergeAction,
 }
 
@@ -397,7 +546,7 @@ impl Display for MergeClause {
 /// ```
 /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/merge)
 /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum MergeClauseKind {
@@ -598,22 +747,29 @@ impl Display for MergeUpdateExpr {
     }
 }
 
-/// A `OUTPUT` Clause in the end of a `MERGE` Statement
+/// An `OUTPUT` clause on `MERGE`, `INSERT`, `UPDATE`, or `DELETE` (MSSQL).
 ///
 /// Example:
 /// OUTPUT $action, deleted.* INTO dbo.temp_products;
-/// [mssql](https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql)
+/// <https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum OutputClause {
+    /// `OUTPUT` clause
     Output {
+        /// The `OUTPUT` token that starts the sub-expression.
         output_token: AttachedToken,
+        /// The select items to output
         select_items: Vec<SelectItem>,
+        /// Optional `INTO` table to direct the output
         into_table: Option<SelectInto>,
     },
+    /// `RETURNING` clause
     Returning {
+        /// The `RETURNING` token that starts the sub-expression.
         returning_token: AttachedToken,
+        /// The select items to return
         select_items: Vec<SelectItem>,
     },
 }
@@ -641,6 +797,117 @@ impl fmt::Display for OutputClause {
                 f.write_str("RETURNING ")?;
                 display_comma_separated(select_items).fmt(f)
             }
+        }
+    }
+}
+
+/// A WHEN clause in a conditional multi-table INSERT.
+///
+/// Syntax:
+/// ```sql
+/// WHEN n1 > 100 THEN
+///   INTO t1
+///   INTO t2 (c1, c2) VALUES (n1, n2)
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct MultiTableInsertWhenClause {
+    /// The condition for this WHEN clause
+    pub condition: Expr,
+    /// The INTO clauses to execute when the condition is true
+    pub into_clauses: Vec<MultiTableInsertIntoClause>,
+}
+
+impl Display for MultiTableInsertWhenClause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "WHEN {} THEN", self.condition)?;
+        for into_clause in &self.into_clauses {
+            SpaceOrNewline.fmt(f)?;
+            write!(f, "{}", into_clause)?;
+        }
+        Ok(())
+    }
+}
+
+/// An INTO clause in a multi-table INSERT.
+///
+/// Syntax:
+/// ```sql
+/// INTO <target_table> [ ( <target_col_name> [ , ... ] ) ] [ VALUES ( { <source_col_name> | DEFAULT | NULL } [ , ... ] ) ]
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct MultiTableInsertIntoClause {
+    /// The target table
+    pub table_name: ObjectName,
+    /// The target columns (optional)
+    pub columns: Vec<Ident>,
+    /// The VALUES clause (optional)
+    pub values: Option<MultiTableInsertValues>,
+}
+
+impl Display for MultiTableInsertIntoClause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "INTO {}", self.table_name)?;
+        if !self.columns.is_empty() {
+            write!(f, " ({})", display_comma_separated(&self.columns))?;
+        }
+        if let Some(values) = &self.values {
+            write!(f, " VALUES ({})", display_comma_separated(&values.values))?;
+        }
+        Ok(())
+    }
+}
+
+/// The VALUES clause in a multi-table INSERT INTO clause.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct MultiTableInsertValues {
+    /// The values to insert (can be column references, DEFAULT, or NULL)
+    pub values: Vec<MultiTableInsertValue>,
+}
+
+/// A value in a multi-table INSERT VALUES clause.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum MultiTableInsertValue {
+    /// A column reference or expression from the source
+    Expr(Expr),
+    /// The DEFAULT keyword
+    Default,
+}
+
+impl Display for MultiTableInsertValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MultiTableInsertValue::Expr(expr) => write!(f, "{}", expr),
+            MultiTableInsertValue::Default => write!(f, "DEFAULT"),
+        }
+    }
+}
+
+/// The type of multi-table INSERT statement(Snowflake).
+///
+/// See: <https://docs.snowflake.com/en/sql-reference/sql/insert-multi-table>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum MultiTableInsertType {
+    /// `INSERT ALL` - all matching WHEN clauses are executed
+    All,
+    /// `INSERT FIRST` - only the first matching WHEN clause is executed
+    First,
+}
+
+impl Display for MultiTableInsertType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MultiTableInsertType::All => write!(f, "ALL"),
+            MultiTableInsertType::First => write!(f, "FIRST"),
         }
     }
 }

@@ -19,10 +19,10 @@ use super::{Parser, ParserError};
 use crate::{
     ast::{
         helpers::key_value_options::{KeyValueOptions, KeyValueOptionsDelimiter},
-        AlterConnectorOwner, AlterPolicyOperation, AlterRoleOperation, AlterUser,
+        AlterConnectorOwner, AlterPolicy, AlterPolicyOperation, AlterRoleOperation, AlterUser,
         AlterUserAddMfaMethodOtp, AlterUserAddRoleDelegation, AlterUserModifyMfaMethod,
-        AlterUserRemoveRoleDelegation, AlterUserSetPolicy, Expr, MfaMethodKind, Password,
-        ResetConfig, RoleOption, SetConfigValue, Statement, UserPolicyKind,
+        AlterUserPassword, AlterUserRemoveRoleDelegation, AlterUserSetPolicy, Expr, MfaMethodKind,
+        Password, ResetConfig, RoleOption, SetConfigValue, Statement, UserPolicyKind,
     },
     dialect::{MsSqlDialect, PostgreSqlDialect},
     keywords::Keyword,
@@ -30,6 +30,7 @@ use crate::{
 };
 
 impl Parser<'_> {
+    /// Parse `ALTER ROLE` statement
     pub fn parse_alter_role(&mut self) -> Result<Statement, ParserError> {
         if dialect_of!(self is PostgreSqlDialect) {
             return self.parse_pg_alter_role();
@@ -53,7 +54,7 @@ impl Parser<'_> {
     /// ```
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterpolicy.html)
-    pub fn parse_alter_policy(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_alter_policy(&mut self) -> Result<AlterPolicy, ParserError> {
         let name = self.parse_identifier()?;
         self.expect_keyword_is(Keyword::ON)?;
         let table_name = self.parse_object_name(false)?;
@@ -61,7 +62,7 @@ impl Parser<'_> {
         if self.parse_keyword(Keyword::RENAME) {
             self.expect_keyword_is(Keyword::TO)?;
             let new_name = self.parse_identifier()?;
-            Ok(Statement::AlterPolicy {
+            Ok(AlterPolicy {
                 name,
                 table_name,
                 operation: AlterPolicyOperation::Rename { new_name },
@@ -90,7 +91,7 @@ impl Parser<'_> {
             } else {
                 None
             };
-            Ok(Statement::AlterPolicy {
+            Ok(AlterPolicy {
                 name,
                 table_name,
                 operation: AlterPolicyOperation::Apply {
@@ -147,9 +148,10 @@ impl Parser<'_> {
     /// ```sql
     /// ALTER USER [ IF EXISTS ] [ <name> ] [ OPTIONS ]
     /// ```
-    pub fn parse_alter_user(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_alter_user(&mut self) -> Result<AlterUser, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let name = self.parse_identifier()?;
+        let _ = self.parse_keyword(Keyword::WITH);
         let rename_to = if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
             Some(self.parse_identifier()?)
         } else {
@@ -180,9 +182,9 @@ impl Parser<'_> {
             } else if self.parse_keyword(Keyword::AUTHORIZATIONS) {
                 None
             } else {
-                return self.expected(
+                return self.expected_ref(
                     "REMOVE DELEGATED AUTHORIZATION OF ROLE | REMOVE DELEGATED AUTHORIZATIONS",
-                    self.peek_token(),
+                    self.peek_token_ref(),
                 );
             };
             self.expect_keywords(&[Keyword::FROM, Keyword::SECURITY, Keyword::INTEGRATION])?;
@@ -217,7 +219,7 @@ impl Parser<'_> {
             if self.parse_keywords(&[Keyword::ADD, Keyword::MFA, Keyword::METHOD, Keyword::OTP]) {
                 let count = if self.parse_keyword(Keyword::COUNT) {
                     self.expect_token(&Token::Eq)?;
-                    Some(self.parse_value()?.into())
+                    Some(self.parse_value()?)
                 } else {
                     None
                 };
@@ -292,7 +294,22 @@ impl Parser<'_> {
             vec![]
         };
 
-        Ok(Statement::AlterUser(AlterUser {
+        let encrypted = self.parse_keyword(Keyword::ENCRYPTED);
+        let password = if self.parse_keyword(Keyword::PASSWORD) {
+            let password = if self.parse_keyword(Keyword::NULL) {
+                None
+            } else {
+                Some(self.parse_literal_string()?)
+            };
+            Some(AlterUserPassword {
+                encrypted,
+                password,
+            })
+        } else {
+            None
+        };
+
+        Ok(AlterUser {
             if_exists,
             name,
             rename_to,
@@ -311,7 +328,8 @@ impl Parser<'_> {
             unset_tag,
             set_props,
             unset_props,
-        }))
+            password,
+        })
     }
 
     fn parse_mfa_method(&mut self) -> Result<MfaMethodKind, ParserError> {
@@ -322,7 +340,7 @@ impl Parser<'_> {
         } else if self.parse_keyword(Keyword::DUO) {
             Ok(MfaMethodKind::Duo)
         } else {
-            self.expected("PASSKEY, TOTP or DUO", self.peek_token())
+            self.expected_ref("PASSKEY, TOTP or DUO", self.peek_token_ref())
         }
     }
 
@@ -340,10 +358,10 @@ impl Parser<'_> {
                 let role_name = self.parse_identifier()?;
                 AlterRoleOperation::RenameRole { role_name }
             } else {
-                return self.expected("= after WITH NAME ", self.peek_token());
+                return self.expected_ref("= after WITH NAME ", self.peek_token_ref());
             }
         } else {
-            return self.expected("'ADD' or 'DROP' or 'WITH NAME'", self.peek_token());
+            return self.expected_ref("'ADD' or 'DROP' or 'WITH NAME'", self.peek_token_ref());
         };
 
         Ok(Statement::AlterRole {
@@ -367,7 +385,7 @@ impl Parser<'_> {
                 let role_name = self.parse_identifier()?;
                 AlterRoleOperation::RenameRole { role_name }
             } else {
-                return self.expected("TO after RENAME", self.peek_token());
+                return self.expected_ref("TO after RENAME", self.peek_token_ref());
             }
         // SET
         } else if self.parse_keyword(Keyword::SET) {
@@ -394,10 +412,10 @@ impl Parser<'_> {
                         in_database,
                     }
                 } else {
-                    self.expected("config value", self.peek_token())?
+                    self.expected_ref("config value", self.peek_token_ref())?
                 }
             } else {
-                self.expected("'TO' or '=' or 'FROM CURRENT'", self.peek_token())?
+                self.expected_ref("'TO' or '=' or 'FROM CURRENT'", self.peek_token_ref())?
             }
         // RESET
         } else if self.parse_keyword(Keyword::RESET) {
@@ -424,7 +442,7 @@ impl Parser<'_> {
             }
             // check option
             if options.is_empty() {
-                return self.expected("option", self.peek_token())?;
+                return self.expected_ref("option", self.peek_token_ref())?;
             }
 
             AlterRoleOperation::WithOptions { options }
@@ -486,7 +504,7 @@ impl Parser<'_> {
                 self.expect_keyword_is(Keyword::UNTIL)?;
                 RoleOption::ValidUntil(Expr::Value(self.parse_value()?))
             }
-            _ => self.expected("option", self.peek_token())?,
+            _ => self.expected_ref("option", self.peek_token_ref())?,
         };
 
         Ok(option)

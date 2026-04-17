@@ -104,6 +104,22 @@ pub enum TableConstraint {
     /// PostgreSQL `EXCLUDE` constraint:
     /// `[ CONSTRAINT <name> ] EXCLUDE [ USING <index_method> ] ( <element> WITH <operator> [, ...] ) [ INCLUDE (<cols>) ] [ WHERE (<predicate>) ]`
     Exclusion(ExclusionConstraint),
+    /// PostgreSQL [definition][1] for promoting an existing unique index to a
+    /// `PRIMARY KEY` constraint:
+    ///
+    /// `[ CONSTRAINT constraint_name ] PRIMARY KEY USING INDEX index_name
+    ///   [ DEFERRABLE | NOT DEFERRABLE ] [ INITIALLY DEFERRED | INITIALLY IMMEDIATE ]`
+    ///
+    /// [1]: https://www.postgresql.org/docs/current/sql-altertable.html
+    PrimaryKeyUsingIndex(ConstraintUsingIndex),
+    /// PostgreSQL [definition][1] for promoting an existing unique index to a
+    /// `UNIQUE` constraint:
+    ///
+    /// `[ CONSTRAINT constraint_name ] UNIQUE USING INDEX index_name
+    ///   [ DEFERRABLE | NOT DEFERRABLE ] [ INITIALLY DEFERRED | INITIALLY IMMEDIATE ]`
+    ///
+    /// [1]: https://www.postgresql.org/docs/current/sql-altertable.html
+    UniqueUsingIndex(ConstraintUsingIndex),
 }
 
 impl From<UniqueConstraint> for TableConstraint {
@@ -158,6 +174,8 @@ impl fmt::Display for TableConstraint {
             TableConstraint::Index(constraint) => constraint.fmt(f),
             TableConstraint::FulltextOrSpatial(constraint) => constraint.fmt(f),
             TableConstraint::Exclusion(constraint) => constraint.fmt(f),
+            TableConstraint::PrimaryKeyUsingIndex(c) => c.fmt_with_keyword(f, "PRIMARY KEY"),
+            TableConstraint::UniqueUsingIndex(c) => c.fmt_with_keyword(f, "UNIQUE"),
         }
     }
 }
@@ -165,10 +183,13 @@ impl fmt::Display for TableConstraint {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// A `CHECK` constraint (`[ CONSTRAINT <name> ] CHECK (<expr>) [[NOT] ENFORCED]`).
 pub struct CheckConstraint {
+    /// Optional constraint name.
     pub name: Option<Ident>,
+    /// The boolean expression the CHECK constraint enforces.
     pub expr: Box<Expr>,
-    /// MySQL-specific syntax
+    /// MySQL-specific `ENFORCED` / `NOT ENFORCED` flag.
     /// <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
     pub enforced: Option<bool>,
 }
@@ -207,16 +228,24 @@ impl crate::ast::Spanned for CheckConstraint {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ForeignKeyConstraint {
+    /// Optional constraint name.
     pub name: Option<Ident>,
-    /// MySQL-specific field
+    /// MySQL-specific index name associated with the foreign key.
     /// <https://dev.mysql.com/doc/refman/8.4/en/create-table-foreign-keys.html>
     pub index_name: Option<Ident>,
+    /// Columns in the local table that participate in the foreign key.
     pub columns: Vec<Ident>,
+    /// Referenced foreign table name.
     pub foreign_table: ObjectName,
+    /// Columns in the referenced table.
     pub referred_columns: Vec<Ident>,
+    /// Action to perform `ON DELETE`.
     pub on_delete: Option<ReferentialAction>,
+    /// Action to perform `ON UPDATE`.
     pub on_update: Option<ReferentialAction>,
+    /// Optional `MATCH` kind (FULL | PARTIAL | SIMPLE).
     pub match_kind: Option<ConstraintReferenceMatchKind>,
+    /// Optional characteristics (e.g., `DEFERRABLE`).
     pub characteristics: Option<ConstraintCharacteristics>,
 }
 
@@ -354,6 +383,7 @@ pub struct IndexConstraint {
     /// Referred column identifier list.
     pub columns: Vec<IndexColumn>,
     /// Optional index options such as `USING`; see [`IndexOption`].
+    /// Options applied to the index (e.g., `COMMENT`, `WITH` options).
     pub index_options: Vec<IndexOption>,
 }
 
@@ -423,7 +453,9 @@ pub struct PrimaryKeyConstraint {
     pub index_type: Option<IndexType>,
     /// Identifiers of the columns that form the primary key.
     pub columns: Vec<IndexColumn>,
+    /// Optional index options such as `USING`.
     pub index_options: Vec<IndexOption>,
+    /// Optional characteristics like `DEFERRABLE`.
     pub characteristics: Option<ConstraintCharacteristics>,
 }
 
@@ -468,6 +500,7 @@ impl crate::ast::Spanned for PrimaryKeyConstraint {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Unique constraint definition.
 pub struct UniqueConstraint {
     /// Constraint name.
     ///
@@ -483,7 +516,9 @@ pub struct UniqueConstraint {
     pub index_type: Option<IndexType>,
     /// Identifiers of the columns that are unique.
     pub columns: Vec<IndexColumn>,
+    /// Optional index options such as `USING`.
     pub index_options: Vec<IndexOption>,
+    /// Optional characteristics like `DEFERRABLE`.
     pub characteristics: Option<ConstraintCharacteristics>,
     /// Optional Postgres nulls handling: `[ NULLS [ NOT ] DISTINCT ]`
     pub nulls_distinct: NullsDistinctOption,
@@ -595,5 +630,55 @@ impl crate::ast::Spanned for ExclusionConstraint {
                 .chain(self.where_clause.iter().map(|e| e.span()))
                 .chain(self.characteristics.iter().map(|c| c.span())),
         )
+    }
+}
+
+/// PostgreSQL constraint that promotes an existing unique index to a table constraint.
+///
+/// `[ CONSTRAINT constraint_name ] { UNIQUE | PRIMARY KEY } USING INDEX index_name
+///   [ DEFERRABLE | NOT DEFERRABLE ] [ INITIALLY DEFERRED | INITIALLY IMMEDIATE ]`
+///
+/// See <https://www.postgresql.org/docs/current/sql-altertable.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ConstraintUsingIndex {
+    /// Optional constraint name.
+    pub name: Option<Ident>,
+    /// The name of the existing unique index to promote.
+    pub index_name: Ident,
+    /// Optional characteristics like `DEFERRABLE`.
+    pub characteristics: Option<ConstraintCharacteristics>,
+}
+
+impl ConstraintUsingIndex {
+    /// Format as `[CONSTRAINT name] <keyword> USING INDEX index_name [characteristics]`.
+    pub fn fmt_with_keyword(&self, f: &mut fmt::Formatter, keyword: &str) -> fmt::Result {
+        use crate::ast::ddl::{display_constraint_name, display_option_spaced};
+        write!(
+            f,
+            "{}{} USING INDEX {}",
+            display_constraint_name(&self.name),
+            keyword,
+            self.index_name,
+        )?;
+        write!(f, "{}", display_option_spaced(&self.characteristics))?;
+        Ok(())
+    }
+}
+
+impl crate::ast::Spanned for ConstraintUsingIndex {
+    fn span(&self) -> Span {
+        let start = self
+            .name
+            .as_ref()
+            .map(|i| i.span)
+            .unwrap_or(self.index_name.span);
+        let end = self
+            .characteristics
+            .as_ref()
+            .map(|c| c.span())
+            .unwrap_or(self.index_name.span);
+        start.union(&end)
     }
 }

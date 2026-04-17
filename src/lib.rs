@@ -154,6 +154,7 @@
 // would bloat the API and hide intent. Extra memory is a worthwhile tradeoff.
 #![allow(clippy::large_enum_variant)]
 #![forbid(clippy::unreachable)]
+#![forbid(missing_docs)]
 
 // Allow proc-macros to find this crate
 extern crate self as sqlparser;
@@ -167,7 +168,11 @@ extern crate pretty_assertions;
 
 pub mod ast;
 #[macro_use]
+/// Submodules for SQL dialects.
 pub mod dialect;
+
+#[cfg(feature = "derive-dialect")]
+pub use dialect::derive_dialect;
 mod display_utils;
 pub mod keywords;
 pub mod parser;

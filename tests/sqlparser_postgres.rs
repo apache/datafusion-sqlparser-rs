@@ -23,15 +23,11 @@
 mod test_utils;
 
 use helpers::attached_token::AttachedToken;
-use sqlparser::ast::{
-    DataType, DropBehavior, DropOperator, DropOperatorClass, DropOperatorSignature,
-};
-use sqlparser::tokenizer::Span;
-use test_utils::*;
-
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
+use sqlparser::tokenizer::Span;
+use test_utils::*;
 
 #[test]
 fn parse_create_table_generated_always_as_identity() {
@@ -517,6 +513,13 @@ fn parse_create_table_with_defaults() {
 }
 
 #[test]
+fn parse_cast_in_default_expr() {
+    pg().verified_stmt("CREATE TABLE t (c TEXT DEFAULT (foo())::TEXT)");
+    pg().verified_stmt("CREATE TABLE t (c TEXT DEFAULT (foo())::INT::TEXT)");
+    pg().verified_stmt("CREATE TABLE t (c TEXT DEFAULT (foo())::TEXT NOT NULL)");
+}
+
+#[test]
 fn parse_create_table_from_pg_dump() {
     let sql = "CREATE TABLE public.customer (
             customer_id integer DEFAULT nextval('public.customer_customer_id_seq'::regclass) NOT NULL,
@@ -591,6 +594,45 @@ fn parse_create_table_constraints_only() {
 }
 
 #[test]
+fn parse_create_table_like_with_defaults() {
+    let sql = "CREATE TABLE new (LIKE old INCLUDING DEFAULTS)";
+    match pg().verified_stmt(sql) {
+        Statement::CreateTable(stmt) => {
+            assert_eq!(
+                stmt.name,
+                ObjectName::from(vec![Ident::new("new".to_string())])
+            );
+            assert_eq!(
+                stmt.like,
+                Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
+                    name: ObjectName::from(vec![Ident::new("old".to_string())]),
+                    defaults: Some(CreateTableLikeDefaults::Including),
+                }))
+            )
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "CREATE TABLE new (LIKE old EXCLUDING DEFAULTS)";
+    match pg().verified_stmt(sql) {
+        Statement::CreateTable(stmt) => {
+            assert_eq!(
+                stmt.name,
+                ObjectName::from(vec![Ident::new("new".to_string())])
+            );
+            assert_eq!(
+                stmt.like,
+                Some(CreateTableLikeKind::Parenthesized(CreateTableLike {
+                    name: ObjectName::from(vec![Ident::new("old".to_string())]),
+                    defaults: Some(CreateTableLikeDefaults::Excluding),
+                }))
+            )
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_alter_table_constraints_rename() {
     match alter_table_op(
         pg().verified_stmt("ALTER TABLE tab RENAME CONSTRAINT old_name TO new_name"),
@@ -625,6 +667,45 @@ fn parse_alter_table_constraints_unique_nulls_distinct() {
 }
 
 #[test]
+fn parse_alter_table_constraint_using_index() {
+    // PRIMARY KEY USING INDEX
+    // https://www.postgresql.org/docs/current/sql-altertable.html
+    let sql = "ALTER TABLE tab ADD CONSTRAINT c PRIMARY KEY USING INDEX my_index";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::AlterTable(alter_table) => match &alter_table.operations[0] {
+            AlterTableOperation::AddConstraint {
+                constraint: TableConstraint::PrimaryKeyUsingIndex(c),
+                ..
+            } => {
+                assert_eq!(c.name.as_ref().unwrap().to_string(), "c");
+                assert_eq!(c.index_name.to_string(), "my_index");
+                assert!(c.characteristics.is_none());
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+
+    // UNIQUE USING INDEX
+    pg_and_generic().verified_stmt("ALTER TABLE tab ADD CONSTRAINT c UNIQUE USING INDEX my_index");
+
+    // Without constraint name
+    pg_and_generic().verified_stmt("ALTER TABLE tab ADD PRIMARY KEY USING INDEX my_index");
+    pg_and_generic().verified_stmt("ALTER TABLE tab ADD UNIQUE USING INDEX my_index");
+
+    // With DEFERRABLE
+    pg_and_generic().verified_stmt(
+        "ALTER TABLE tab ADD CONSTRAINT c PRIMARY KEY USING INDEX my_index DEFERRABLE",
+    );
+    pg_and_generic().verified_stmt(
+        "ALTER TABLE tab ADD CONSTRAINT c UNIQUE USING INDEX my_index NOT DEFERRABLE INITIALLY IMMEDIATE",
+    );
+    pg_and_generic().verified_stmt(
+        "ALTER TABLE tab ADD CONSTRAINT c PRIMARY KEY USING INDEX my_index DEFERRABLE INITIALLY DEFERRED",
+    );
+}
+
+#[test]
 fn parse_alter_table_disable() {
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE ROW LEVEL SECURITY");
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE RULE rule_name");
@@ -644,6 +725,8 @@ fn parse_alter_table_enable() {
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE REPLICA TRIGGER trigger_name");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE REPLICA RULE rule_name");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE ROW LEVEL SECURITY");
+    pg_and_generic().verified_stmt("ALTER TABLE tab FORCE ROW LEVEL SECURITY");
+    pg_and_generic().verified_stmt("ALTER TABLE tab NO FORCE ROW LEVEL SECURITY");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE RULE rule_name");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE TRIGGER ALL");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE TRIGGER USER");
@@ -765,6 +848,171 @@ fn parse_drop_extension() {
             cascade_or_restrict: Some(ReferentialAction::Restrict),
         })
     );
+}
+
+#[test]
+fn parse_create_collation() {
+    assert_eq!(
+        pg_and_generic()
+            .verified_stmt("CREATE COLLATION test3 (provider = icu, lc_collate = 'en_US.utf8')",),
+        Statement::CreateCollation(CreateCollation {
+            if_not_exists: false,
+            name: ObjectName::from(vec![Ident::new("test3")]),
+            definition: CreateCollationDefinition::Options(vec![
+                SqlOption::KeyValue {
+                    key: Ident::new("provider"),
+                    value: Expr::Identifier(Ident::new("icu")),
+                },
+                SqlOption::KeyValue {
+                    key: Ident::new("lc_collate"),
+                    value: Expr::Value(
+                        Value::SingleQuotedString("en_US.utf8".to_string()).with_empty_span(),
+                    ),
+                },
+            ]),
+        })
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("CREATE COLLATION test4 FROM nonsense"),
+        Statement::CreateCollation(CreateCollation {
+            if_not_exists: false,
+            name: ObjectName::from(vec![Ident::new("test4")]),
+            definition: CreateCollationDefinition::From(ObjectName::from(vec![Ident::new(
+                "nonsense",
+            )])),
+        })
+    );
+
+    assert_eq!(
+        pg_and_generic()
+            .verified_stmt("CREATE COLLATION testx (provider = icu, locale = 'nonsense-nowhere')"),
+        Statement::CreateCollation(CreateCollation {
+            if_not_exists: false,
+            name: ObjectName::from(vec![Ident::new("testx")]),
+            definition: CreateCollationDefinition::Options(vec![
+                SqlOption::KeyValue {
+                    key: Ident::new("provider"),
+                    value: Expr::Identifier(Ident::new("icu")),
+                },
+                SqlOption::KeyValue {
+                    key: Ident::new("locale"),
+                    value: Expr::Value(
+                        Value::SingleQuotedString("nonsense-nowhere".to_string()).with_empty_span(),
+                    ),
+                },
+            ]),
+        })
+    );
+}
+
+#[test]
+fn parse_alter_collation() {
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER COLLATION test1 RENAME TO test11"),
+        Statement::AlterCollation(AlterCollation {
+            name: ObjectName::from(vec![Ident::new("test1")]),
+            operation: AlterCollationOperation::RenameTo {
+                new_name: Ident::new("test11"),
+            },
+        })
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER COLLATION test11 OWNER TO regress_test_role"),
+        Statement::AlterCollation(AlterCollation {
+            name: ObjectName::from(vec![Ident::new("test11")]),
+            operation: AlterCollationOperation::OwnerTo(Owner::Ident(Ident::new(
+                "regress_test_role",
+            ))),
+        })
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER COLLATION test11 SET SCHEMA test_schema"),
+        Statement::AlterCollation(AlterCollation {
+            name: ObjectName::from(vec![Ident::new("test11")]),
+            operation: AlterCollationOperation::SetSchema {
+                schema_name: ObjectName::from(vec![Ident::new("test_schema")]),
+            },
+        })
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("ALTER COLLATION \"en-x-icu\" REFRESH VERSION"),
+        Statement::AlterCollation(AlterCollation {
+            name: ObjectName::from(vec![Ident::with_quote('"', "en-x-icu")]),
+            operation: AlterCollationOperation::RefreshVersion,
+        })
+    );
+}
+
+#[test]
+fn parse_drop_and_comment_collation_ast() {
+    assert_eq!(
+        pg_and_generic().verified_stmt("DROP COLLATION test0"),
+        Statement::Drop {
+            object_type: ObjectType::Collation,
+            if_exists: false,
+            names: vec![ObjectName::from(vec![Ident::new("test0")])],
+            cascade: false,
+            restrict: false,
+            purge: false,
+            temporary: false,
+            table: None,
+        }
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("DROP COLLATION IF EXISTS test0"),
+        Statement::Drop {
+            object_type: ObjectType::Collation,
+            if_exists: true,
+            names: vec![ObjectName::from(vec![Ident::new("test0")])],
+            cascade: false,
+            restrict: false,
+            purge: false,
+            temporary: false,
+            table: None,
+        }
+    );
+
+    assert_eq!(
+        pg_and_generic().verified_stmt("COMMENT ON COLLATION test0 IS 'US English'"),
+        Statement::Comment {
+            object_type: CommentObject::Collation,
+            object_name: ObjectName::from(vec![Ident::new("test0")]),
+            comment: Some("US English".to_string()),
+            if_exists: false,
+        }
+    );
+}
+
+#[test]
+fn parse_collation_statements_roundtrip() {
+    let statements = [
+        "CREATE COLLATION test3 (provider = icu, lc_collate = 'en_US.utf8')",
+        "CREATE COLLATION testx (provider = icu, locale = 'nonsense-nowhere')",
+        "CREATE COLLATION testx (provider = icu, locale = '@colStrength=primary;nonsense=yes')",
+        "DROP COLLATION testx",
+        "CREATE COLLATION test4 FROM nonsense",
+        "CREATE COLLATION test5 FROM test0",
+        "ALTER COLLATION test1 RENAME TO test11",
+        "ALTER COLLATION test0 RENAME TO test11",
+        "ALTER COLLATION test1 RENAME TO test22",
+        "ALTER COLLATION test11 OWNER TO regress_test_role",
+        "ALTER COLLATION test11 OWNER TO nonsense",
+        "ALTER COLLATION test11 SET SCHEMA test_schema",
+        "COMMENT ON COLLATION test0 IS 'US English'",
+        "DROP COLLATION test0, test_schema.test11, test5",
+        "DROP COLLATION test0",
+        "DROP COLLATION IF EXISTS test0",
+        "ALTER COLLATION \"en-x-icu\" REFRESH VERSION",
+    ];
+
+    for sql in statements {
+        pg_and_generic().verified_stmt(sql);
+    }
 }
 
 #[test]
@@ -1041,6 +1289,62 @@ PHP	₱ USD $
 }
 
 #[test]
+fn parse_copy_from_stdin_without_semicolon() {
+    let stmt = pg().verified_stmt("COPY bitwise_test FROM STDIN NULL 'null'");
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            source: CopySource::Table {
+                table_name: ObjectName::from(vec!["bitwise_test".into()]),
+                columns: vec![],
+            },
+            to: false,
+            target: CopyTarget::Stdin,
+            options: vec![],
+            legacy_options: vec![CopyLegacyOption::Null("null".into())],
+            values: vec![],
+        }
+    );
+}
+
+#[test]
+fn parse_copy_from_stdin_without_semicolon_variants() {
+    // This covers additional COPY ... FROM STDIN shapes without inline payload.
+    // `parse_copy_from_stdin_without_semicolon` asserts the legacy NULL option details.
+    let cases = [
+        "COPY varbit_table FROM STDIN",
+        "COPY bit_table FROM STDIN",
+        "COPY copytest2 (test) FROM STDIN",
+        "COPY copytest3 FROM STDIN CSV HEADER",
+        "COPY copytest4 FROM STDIN (HEADER)",
+        "COPY parted_copytest FROM STDIN",
+        "COPY tab_progress_reporting FROM STDIN",
+        "COPY oversized_column_default FROM STDIN",
+        "COPY x (a, b, c, d, e) FROM STDIN",
+        "COPY header_copytest (c, a) FROM STDIN",
+        "COPY atest5 (two) FROM STDIN",
+        "COPY main_table (a, b) FROM STDIN",
+    ];
+
+    for sql in cases {
+        match pg().verified_stmt(sql) {
+            Statement::Copy {
+                to: false,
+                target: CopyTarget::Stdin,
+                values,
+                ..
+            } => {
+                assert!(
+                    values.is_empty(),
+                    "expected no inline COPY payload for `{sql}`"
+                );
+            }
+            _ => panic!("expected COPY ... FROM STDIN statement for `{sql}`"),
+        }
+    }
+}
+
+#[test]
 fn test_copy_from() {
     let stmt = pg().verified_stmt("COPY users FROM 'data.csv'");
     assert_eq!(
@@ -1286,7 +1590,9 @@ fn parse_copy_to() {
                 with: None,
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
+                    optimizer_hints: vec![],
                     distinct: None,
+                    select_modifiers: None,
                     top: None,
                     top_before_distinct: false,
                     projection: vec![
@@ -1324,7 +1630,7 @@ fn parse_copy_to() {
                     sort_by: vec![],
                     qualify: None,
                     value_table_mode: None,
-                    connect_by: None,
+                    connect_by: vec![],
                     flavor: SelectFlavor::Standard,
                 }))),
                 order_by: None,
@@ -1710,6 +2016,7 @@ fn parse_execute() {
                             (Value::Number("1337".parse().unwrap(), false)).with_empty_span()
                         )),
                         data_type: DataType::SmallInt(None),
+                        array: false,
                         format: None
                     },
                     alias: None
@@ -1721,6 +2028,7 @@ fn parse_execute() {
                             (Value::Number("7331".parse().unwrap(), false)).with_empty_span()
                         )),
                         data_type: DataType::SmallInt(None),
+                        array: false,
                         format: None
                     },
                     alias: None
@@ -2347,6 +2655,7 @@ fn parse_array_index_expr() {
                     ))),
                     None
                 )),
+                array: false,
                 format: None,
             }))),
             access_chain: vec![
@@ -2572,11 +2881,17 @@ fn parse_create_indices_with_operator_classes() {
         IndexType::SPGiST,
         IndexType::Custom("CustomIndexType".into()),
     ];
-    let operator_classes: [Option<Ident>; 4] = [
+    let operator_classes: [Option<ObjectName>; 4] = [
         None,
-        Some("gin_trgm_ops".into()),
-        Some("gist_trgm_ops".into()),
-        Some("totally_not_valid".into()),
+        Some(ObjectName(vec![ObjectNamePart::Identifier(Ident::new(
+            "gin_trgm_ops",
+        ))])),
+        Some(ObjectName(vec![ObjectNamePart::Identifier(Ident::new(
+            "gist_trgm_ops",
+        ))])),
+        Some(ObjectName(vec![ObjectNamePart::Identifier(Ident::new(
+            "totally_not_valid",
+        ))])),
     ];
 
     for expected_index_type in indices {
@@ -2710,6 +3025,36 @@ fn parse_create_indices_with_operator_classes() {
                 _ => unreachable!(),
             }
         }
+    }
+}
+
+#[test]
+fn parse_create_index_with_schema_qualified_operator_class() {
+    let sql = "CREATE INDEX my_index ON my_table USING HNSW (embedding public.vector_cosine_ops)";
+
+    match pg().verified_stmt(sql) {
+        Statement::CreateIndex(CreateIndex { columns, .. }) => {
+            assert_eq!(1, columns.len());
+            let idx_col = &columns[0];
+
+            // Verify the column name
+            match &idx_col.column.expr {
+                Expr::Identifier(ident) => {
+                    assert_eq!("embedding", ident.value);
+                }
+                _ => panic!("Expected identifier expression"),
+            }
+
+            // Verify the schema-qualified operator class
+            assert_eq!(
+                Some(ObjectName(vec![
+                    ObjectNamePart::Identifier(Ident::new("public")),
+                    ObjectNamePart::Identifier(Ident::new("vector_cosine_ops")),
+                ])),
+                idx_col.operator_class
+            );
+        }
+        _ => unreachable!(),
     }
 }
 
@@ -3027,7 +3372,9 @@ fn parse_array_subquery_expr() {
                     set_quantifier: SetQuantifier::None,
                     left: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
+                        optimizer_hints: vec![],
                         distinct: None,
+                        select_modifiers: None,
                         top: None,
                         top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Value(
@@ -3048,12 +3395,14 @@ fn parse_array_subquery_expr() {
                         qualify: None,
                         window_before_qualify: false,
                         value_table_mode: None,
-                        connect_by: None,
+                        connect_by: vec![],
                         flavor: SelectFlavor::Standard,
                     }))),
                     right: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
+                        optimizer_hints: vec![],
                         distinct: None,
+                        select_modifiers: None,
                         top: None,
                         top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Value(
@@ -3074,7 +3423,7 @@ fn parse_array_subquery_expr() {
                         qualify: None,
                         window_before_qualify: false,
                         value_table_mode: None,
-                        connect_by: None,
+                        connect_by: vec![],
                         flavor: SelectFlavor::Standard,
                     }))),
                 }),
@@ -3103,7 +3452,7 @@ fn test_transaction_statement() {
         statement,
         Statement::Set(Set::SetTransaction {
             modes: vec![],
-            snapshot: Some(Value::SingleQuotedString(String::from("000003A1-1"))),
+            snapshot: Some(Value::SingleQuotedString(String::from("000003A1-1")).with_empty_span()),
             session: false
         })
     );
@@ -3564,6 +3913,25 @@ fn parse_on_commit() {
     pg_and_generic().verified_stmt("CREATE TEMPORARY TABLE table (COL INT) ON COMMIT DELETE ROWS");
 
     pg_and_generic().verified_stmt("CREATE TEMPORARY TABLE table (COL INT) ON COMMIT DROP");
+}
+
+#[test]
+fn parse_xml_typed_string() {
+    // xml '...' should parse as a TypedString on PostgreSQL and Generic
+    let sql = "SELECT xml '<foo/>'";
+    let select = pg_and_generic().verified_only_select(sql);
+    match expr_from_projection(&select.projection[0]) {
+        Expr::TypedString(TypedString {
+            data_type: DataType::Custom(name, modifiers),
+            value,
+            uses_odbc_syntax: false,
+        }) => {
+            assert_eq!(name.to_string(), "xml");
+            assert!(modifiers.is_empty());
+            assert_eq!(value.value, Value::SingleQuotedString("<foo/>".to_string()));
+        }
+        other => panic!("Expected TypedString, got: {other:?}"),
+    }
 }
 
 fn pg() -> TestedDialects {
@@ -4257,7 +4625,7 @@ $$"#;
                     DataType::Varchar(None),
                 ),
             ]),
-            return_type: Some(DataType::Boolean),
+            return_type: Some(FunctionReturnType::DataType(DataType::Boolean)),
             language: Some("plpgsql".into()),
             behavior: None,
             called_on_null: None,
@@ -4300,7 +4668,7 @@ $$"#;
                     DataType::Int(None)
                 )
             ]),
-            return_type: Some(DataType::Boolean),
+            return_type: Some(FunctionReturnType::DataType(DataType::Boolean)),
             language: Some("plpgsql".into()),
             behavior: None,
             called_on_null: None,
@@ -4347,7 +4715,7 @@ $$"#;
                     DataType::Int(None)
                 ),
             ]),
-            return_type: Some(DataType::Boolean),
+            return_type: Some(FunctionReturnType::DataType(DataType::Boolean)),
             language: Some("plpgsql".into()),
             behavior: None,
             called_on_null: None,
@@ -4394,7 +4762,7 @@ $$"#;
                     DataType::Int(None)
                 ),
             ]),
-            return_type: Some(DataType::Boolean),
+            return_type: Some(FunctionReturnType::DataType(DataType::Boolean)),
             language: Some("plpgsql".into()),
             behavior: None,
             called_on_null: None,
@@ -4434,7 +4802,7 @@ $$"#;
                 ),
                 OperateFunctionArg::with_name("b", DataType::Varchar(None)),
             ]),
-            return_type: Some(DataType::Boolean),
+            return_type: Some(FunctionReturnType::DataType(DataType::Boolean)),
             language: Some("plpgsql".into()),
             behavior: None,
             called_on_null: None,
@@ -4477,7 +4845,7 @@ fn parse_create_function() {
                 OperateFunctionArg::unnamed(DataType::Integer(None)),
                 OperateFunctionArg::unnamed(DataType::Integer(None)),
             ]),
-            return_type: Some(DataType::Integer(None)),
+            return_type: Some(FunctionReturnType::DataType(DataType::Integer(None))),
             language: Some("SQL".into()),
             behavior: Some(FunctionBehavior::Immutable),
             called_on_null: Some(FunctionCalledOnNull::Strict),
@@ -4512,6 +4880,30 @@ fn parse_create_function_detailed() {
         "CREATE FUNCTION add(INTEGER, INTEGER DEFAULT 1) RETURNS INTEGER AS 'select $1 + $2;'",
         "CREATE FUNCTION add(INTEGER, INTEGER = 1) RETURNS INTEGER AS 'select $1 + $2;'",
     );
+}
+
+#[test]
+fn parse_create_function_returns_setof() {
+    pg_and_generic().verified_stmt(
+        "CREATE FUNCTION get_users() RETURNS SETOF TEXT LANGUAGE sql AS 'SELECT name FROM users'",
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE FUNCTION get_ids() RETURNS SETOF INTEGER LANGUAGE sql AS 'SELECT id FROM users'",
+    );
+    pg_and_generic().verified_stmt(
+        r#"CREATE FUNCTION get_all() RETURNS SETOF my_schema."MyType" LANGUAGE sql AS 'SELECT * FROM t'"#,
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE FUNCTION get_rows() RETURNS SETOF RECORD LANGUAGE sql AS 'SELECT * FROM t'",
+    );
+
+    let sql = "CREATE FUNCTION get_names() RETURNS SETOF TEXT LANGUAGE sql AS 'SELECT name FROM t'";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateFunction(CreateFunction { return_type, .. }) => {
+            assert_eq!(return_type, Some(FunctionReturnType::SetOf(DataType::Text)));
+        }
+        _ => panic!("Expected CreateFunction"),
+    }
 }
 
 #[test]
@@ -4589,10 +4981,10 @@ fn parse_create_function_c_with_module_pathname() {
                 "input",
                 DataType::Custom(ObjectName::from(vec![Ident::new("cstring")]), vec![]),
             ),]),
-            return_type: Some(DataType::Custom(
+            return_type: Some(FunctionReturnType::DataType(DataType::Custom(
                 ObjectName::from(vec![Ident::new("cas")]),
                 vec![]
-            )),
+            ))),
             language: Some("c".into()),
             behavior: Some(FunctionBehavior::Immutable),
             called_on_null: None,
@@ -5051,12 +5443,14 @@ fn parse_truncate() {
     let table_names = vec![TruncateTableTarget {
         name: table_name.clone(),
         only: false,
+        has_asterisk: false,
     }];
     assert_eq!(
         Statement::Truncate(Truncate {
             table_names,
             partitions: None,
             table: false,
+            if_exists: false,
             identity: None,
             cascade: None,
             on_cluster: None,
@@ -5074,6 +5468,7 @@ fn parse_truncate_with_options() {
     let table_names = vec![TruncateTableTarget {
         name: table_name.clone(),
         only: true,
+        has_asterisk: false,
     }];
 
     assert_eq!(
@@ -5081,6 +5476,7 @@ fn parse_truncate_with_options() {
             table_names,
             partitions: None,
             table: true,
+            if_exists: false,
             identity: Some(TruncateIdentityOption::Restart),
             cascade: Some(CascadeOption::Cascade),
             on_cluster: None,
@@ -5102,10 +5498,12 @@ fn parse_truncate_with_table_list() {
         TruncateTableTarget {
             name: table_name_a.clone(),
             only: false,
+            has_asterisk: false,
         },
         TruncateTableTarget {
             name: table_name_b.clone(),
             only: false,
+            has_asterisk: false,
         },
     ];
 
@@ -5114,8 +5512,67 @@ fn parse_truncate_with_table_list() {
             table_names,
             partitions: None,
             table: true,
+            if_exists: false,
             identity: Some(TruncateIdentityOption::Restart),
             cascade: Some(CascadeOption::Cascade),
+            on_cluster: None,
+        }),
+        truncate
+    );
+}
+
+#[test]
+fn parse_truncate_with_descendant() {
+    let truncate = pg_and_generic().verified_stmt("TRUNCATE TABLE t *");
+
+    let table_names = vec![TruncateTableTarget {
+        name: ObjectName::from(vec![Ident::new("t")]),
+        only: false,
+        has_asterisk: true,
+    }];
+
+    assert_eq!(
+        Statement::Truncate(Truncate {
+            table_names,
+            partitions: None,
+            table: true,
+            if_exists: false,
+            identity: None,
+            cascade: None,
+            on_cluster: None,
+        }),
+        truncate
+    );
+
+    let truncate = pg_and_generic()
+        .verified_stmt("TRUNCATE TABLE ONLY parent, child *, grandchild RESTART IDENTITY");
+
+    let table_names = vec![
+        TruncateTableTarget {
+            name: ObjectName::from(vec![Ident::new("parent")]),
+            only: true,
+            has_asterisk: false,
+        },
+        TruncateTableTarget {
+            name: ObjectName::from(vec![Ident::new("child")]),
+            only: false,
+            has_asterisk: true,
+        },
+        TruncateTableTarget {
+            name: ObjectName::from(vec![Ident::new("grandchild")]),
+            only: false,
+            has_asterisk: false,
+        },
+    ];
+
+    assert_eq!(
+        Statement::Truncate(Truncate {
+            table_names,
+            partitions: None,
+            table: true,
+            if_exists: false,
+            identity: Some(TruncateIdentityOption::Restart),
+            cascade: None,
             on_cluster: None,
         }),
         truncate
@@ -5282,6 +5739,7 @@ fn test_simple_postgres_insert_with_alias() {
         statement,
         Statement::Insert(Insert {
             insert_token: AttachedToken::empty(),
+            optimizer_hints: vec![],
             or: None,
             ignore: false,
             into: true,
@@ -5290,22 +5748,25 @@ fn test_simple_postgres_insert_with_alias() {
                 quote_style: None,
                 span: Span::empty(),
             }])),
-            table_alias: Some(Ident {
-                value: "test_table".to_string(),
-                quote_style: None,
-                span: Span::empty(),
-            }),
-            columns: vec![
-                Ident {
-                    value: "id".to_string(),
-                    quote_style: None,
-                    span: Span::empty(),
-                },
-                Ident {
-                    value: "a".to_string(),
+            table_alias: Some(TableAliasWithoutColumns {
+                explicit: true,
+                alias: Ident {
+                    value: "test_table".to_string(),
                     quote_style: None,
                     span: Span::empty(),
                 }
+            }),
+            columns: vec![
+                ObjectName::from(Ident {
+                    value: "id".to_string(),
+                    quote_style: None,
+                    span: Span::empty(),
+                }),
+                ObjectName::from(Ident {
+                    value: "a".to_string(),
+                    quote_style: None,
+                    span: Span::empty(),
+                })
             ],
             overwrite: false,
             source: Some(Box::new(Query {
@@ -5333,11 +5794,16 @@ fn test_simple_postgres_insert_with_alias() {
             has_table_keyword: false,
             on: None,
             returning: None,
+            output: None,
             replace_into: false,
             priority: None,
             insert_alias: None,
             settings: None,
             format_clause: None,
+            multi_table_insert_type: None,
+            multi_table_into_clauses: vec![],
+            multi_table_when_clauses: vec![],
+            multi_table_else_clause: None,
         })
     )
 }
@@ -5353,6 +5819,7 @@ fn test_simple_postgres_insert_with_alias() {
         statement,
         Statement::Insert(Insert {
             insert_token: AttachedToken::empty(),
+            optimizer_hints: vec![],
             or: None,
             ignore: false,
             into: true,
@@ -5361,22 +5828,25 @@ fn test_simple_postgres_insert_with_alias() {
                 quote_style: None,
                 span: Span::empty(),
             }])),
-            table_alias: Some(Ident {
-                value: "test_table".to_string(),
-                quote_style: None,
-                span: Span::empty(),
-            }),
-            columns: vec![
-                Ident {
-                    value: "id".to_string(),
-                    quote_style: None,
-                    span: Span::empty(),
-                },
-                Ident {
-                    value: "a".to_string(),
+            table_alias: Some(TableAliasWithoutColumns {
+                explicit: true,
+                alias: Ident {
+                    value: "test_table".to_string(),
                     quote_style: None,
                     span: Span::empty(),
                 }
+            }),
+            columns: vec![
+                ObjectName::from(Ident {
+                    value: "id".to_string(),
+                    quote_style: None,
+                    span: Span::empty(),
+                }),
+                ObjectName::from(Ident {
+                    value: "a".to_string(),
+                    quote_style: None,
+                    span: Span::empty(),
+                })
             ],
             overwrite: false,
             source: Some(Box::new(Query {
@@ -5407,11 +5877,16 @@ fn test_simple_postgres_insert_with_alias() {
             has_table_keyword: false,
             on: None,
             returning: None,
+            output: None,
             replace_into: false,
             priority: None,
             insert_alias: None,
             settings: None,
             format_clause: None,
+            multi_table_insert_type: None,
+            multi_table_into_clauses: vec![],
+            multi_table_when_clauses: vec![],
+            multi_table_else_clause: None,
         })
     )
 }
@@ -5426,6 +5901,7 @@ fn test_simple_insert_with_quoted_alias() {
         statement,
         Statement::Insert(Insert {
             insert_token: AttachedToken::empty(),
+            optimizer_hints: vec![],
             or: None,
             ignore: false,
             into: true,
@@ -5434,22 +5910,25 @@ fn test_simple_insert_with_quoted_alias() {
                 quote_style: None,
                 span: Span::empty(),
             }])),
-            table_alias: Some(Ident {
-                value: "Test_Table".to_string(),
-                quote_style: Some('"'),
-                span: Span::empty(),
+            table_alias: Some(TableAliasWithoutColumns {
+                explicit: true,
+                alias: Ident {
+                    value: "Test_Table".to_string(),
+                    quote_style: Some('"'),
+                    span: Span::empty(),
+                }
             }),
             columns: vec![
-                Ident {
+                ObjectName::from(Ident {
                     value: "id".to_string(),
                     quote_style: None,
                     span: Span::empty(),
-                },
-                Ident {
+                }),
+                ObjectName::from(Ident {
                     value: "a".to_string(),
                     quote_style: None,
                     span: Span::empty(),
-                }
+                })
             ],
             overwrite: false,
             source: Some(Box::new(Query {
@@ -5479,11 +5958,16 @@ fn test_simple_insert_with_quoted_alias() {
             has_table_keyword: false,
             on: None,
             returning: None,
+            output: None,
             replace_into: false,
             priority: None,
             insert_alias: None,
             settings: None,
             format_clause: None,
+            multi_table_insert_type: None,
+            multi_table_into_clauses: vec![],
+            multi_table_when_clauses: vec![],
+            multi_table_else_clause: None,
         })
     )
 }
@@ -5538,6 +6022,7 @@ fn parse_at_time_zone() {
                     Value::SingleQuotedString("America/Los_Angeles".to_owned()).with_empty_span(),
                 )),
                 data_type: DataType::Text,
+                array: false,
                 format: None,
             }),
         }),
@@ -5596,6 +6081,12 @@ fn parse_interval_data_type() {
                 .verified_stmt(&format!("SELECT CAST('1 second' AS INTERVAL {field}({p}))"));
         }
     }
+}
+
+#[test]
+fn parse_interval_keyword_as_unquoted_identifier() {
+    pg().verified_stmt("SELECT MAX(interval) FROM tbl");
+    pg().verified_expr("INTERVAL '1 day'");
 }
 
 #[test]
@@ -6126,6 +6617,7 @@ fn parse_trigger_related_functions() {
             transient: false,
             volatile: false,
             iceberg: false,
+            snapshot: false,
             name: ObjectName::from(vec![Ident::new("emp")]),
             columns: vec![
                 ColumnDef {
@@ -6178,6 +6670,7 @@ fn parse_trigger_related_functions() {
             default_ddl_collation: None,
             with_aggregation_policy: None,
             with_row_access_policy: None,
+            with_storage_lifecycle_policy: None,
             with_tags: None,
             base_location: None,
             external_volume: None,
@@ -6191,6 +6684,10 @@ fn parse_trigger_related_functions() {
             refresh_mode: None,
             initialize: None,
             require_user: false,
+            diststyle: None,
+            distkey: None,
+            sortkey: None,
+            backup: None,
         }
     );
 
@@ -6205,7 +6702,7 @@ fn parse_trigger_related_functions() {
             if_not_exists: false,
             name: ObjectName::from(vec![Ident::new("emp_stamp")]),
             args: Some(vec![]),
-            return_type: Some(DataType::Trigger),
+            return_type: Some(FunctionReturnType::DataType(DataType::Trigger)),
             function_body: Some(
                 CreateFunctionBody::AsBeforeOptions {
                     body: Expr::Value((
@@ -6354,6 +6851,7 @@ fn arrow_cast_precedence() {
                     (Value::SingleQuotedString("bar".to_string())).with_empty_span()
                 )),
                 data_type: DataType::Text,
+                array: false,
                 format: None,
             }),
         }
@@ -6528,6 +7026,30 @@ fn parse_alter_table_replica_identity() {
                 operations,
                 vec![AlterTableOperation::ReplicaIdentity {
                     identity: ReplicaIdentity::Index("foo_idx".into())
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match pg_and_generic().verified_stmt("ALTER TABLE foo REPLICA IDENTITY NOTHING") {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::ReplicaIdentity {
+                    identity: ReplicaIdentity::Nothing
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match pg_and_generic().verified_stmt("ALTER TABLE foo REPLICA IDENTITY DEFAULT") {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::ReplicaIdentity {
+                    identity: ReplicaIdentity::Default
                 }]
             );
         }
@@ -7183,6 +7705,765 @@ fn parse_alter_operator() {
 }
 
 #[test]
+fn parse_alter_operator_family() {
+    // Test ALTER OPERATOR FAMILY ... ADD OPERATOR
+    let sql = "ALTER OPERATOR FAMILY integer_ops USING btree ADD OPERATOR 1 < (INT4, INT2)";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorFamily(AlterOperatorFamily {
+            name: ObjectName::from(vec![Ident::new("integer_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorFamilyOperation::Add {
+                items: vec![OperatorFamilyItem::Operator {
+                    strategy_number: 1,
+                    operator_name: ObjectName::from(vec![Ident::new("<")]),
+                    op_types: vec![DataType::Int4(None), DataType::Int2(None)],
+                    purpose: None,
+                }],
+            },
+        })
+    );
+
+    // Test ALTER OPERATOR FAMILY ... ADD OPERATOR with FOR SEARCH
+    let sql =
+        "ALTER OPERATOR FAMILY text_ops USING btree ADD OPERATOR 1 @@ (TEXT, TEXT) FOR SEARCH";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorFamily(AlterOperatorFamily {
+            name: ObjectName::from(vec![Ident::new("text_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorFamilyOperation::Add {
+                items: vec![OperatorFamilyItem::Operator {
+                    strategy_number: 1,
+                    operator_name: ObjectName::from(vec![Ident::new("@@")]),
+                    op_types: vec![DataType::Text, DataType::Text],
+                    purpose: Some(OperatorPurpose::ForSearch),
+                }],
+            },
+        })
+    );
+
+    // Test ALTER OPERATOR FAMILY ... ADD FUNCTION
+    let sql = "ALTER OPERATOR FAMILY integer_ops USING btree ADD FUNCTION 1 btint42cmp(INT4, INT2)";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorFamily(AlterOperatorFamily {
+            name: ObjectName::from(vec![Ident::new("integer_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorFamilyOperation::Add {
+                items: vec![OperatorFamilyItem::Function {
+                    support_number: 1,
+                    op_types: None,
+                    function_name: ObjectName::from(vec![Ident::new("btint42cmp")]),
+                    argument_types: vec![DataType::Int4(None), DataType::Int2(None)],
+                }],
+            },
+        })
+    );
+
+    // Test ALTER OPERATOR FAMILY ... DROP OPERATOR
+    let sql = "ALTER OPERATOR FAMILY integer_ops USING btree DROP OPERATOR 1 (INT4, INT2)";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorFamily(AlterOperatorFamily {
+            name: ObjectName::from(vec![Ident::new("integer_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorFamilyOperation::Drop {
+                items: vec![OperatorFamilyDropItem::Operator {
+                    strategy_number: 1,
+                    op_types: vec![DataType::Int4(None), DataType::Int2(None)],
+                }],
+            },
+        })
+    );
+
+    // Test ALTER OPERATOR FAMILY ... DROP FUNCTION
+    let sql = "ALTER OPERATOR FAMILY integer_ops USING btree DROP FUNCTION 1 (INT4, INT2)";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorFamily(AlterOperatorFamily {
+            name: ObjectName::from(vec![Ident::new("integer_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorFamilyOperation::Drop {
+                items: vec![OperatorFamilyDropItem::Function {
+                    support_number: 1,
+                    op_types: vec![DataType::Int4(None), DataType::Int2(None)],
+                }],
+            },
+        })
+    );
+
+    // Test ALTER OPERATOR FAMILY ... RENAME TO
+    let sql = "ALTER OPERATOR FAMILY old_ops USING btree RENAME TO new_ops";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorFamily(AlterOperatorFamily {
+            name: ObjectName::from(vec![Ident::new("old_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorFamilyOperation::RenameTo {
+                new_name: ObjectName::from(vec![Ident::new("new_ops")]),
+            },
+        })
+    );
+
+    // Test ALTER OPERATOR FAMILY ... OWNER TO
+    let sql = "ALTER OPERATOR FAMILY my_ops USING btree OWNER TO joe";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorFamily(AlterOperatorFamily {
+            name: ObjectName::from(vec![Ident::new("my_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorFamilyOperation::OwnerTo(Owner::Ident(Ident::new("joe"))),
+        })
+    );
+
+    // Test ALTER OPERATOR FAMILY ... SET SCHEMA
+    let sql = "ALTER OPERATOR FAMILY my_ops USING btree SET SCHEMA new_schema";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorFamily(AlterOperatorFamily {
+            name: ObjectName::from(vec![Ident::new("my_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorFamilyOperation::SetSchema {
+                schema_name: ObjectName::from(vec![Ident::new("new_schema")]),
+            },
+        })
+    );
+
+    // Test error cases
+    // Missing USING clause
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops ADD OPERATOR 1 < (INT4, INT2)")
+        .is_err());
+
+    // Invalid operation
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree INVALID_OPERATION")
+        .is_err());
+
+    // Missing operator name in ADD OPERATOR
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 (INT4, INT2)"
+        )
+        .is_err());
+
+    // Missing function name in ADD FUNCTION
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 (INT4, INT2)"
+        )
+        .is_err());
+
+    // Missing parentheses in DROP OPERATOR
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree DROP OPERATOR 1 INT4, INT2")
+        .is_err());
+
+    // Invalid operator name (empty)
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1  (INT4, INT2)"
+        )
+        .is_err());
+
+    // Invalid operator name (special characters)
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 @#$ (INT4, INT2)"
+        )
+        .is_err());
+
+    // Negative strategy number
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR -1 < (INT4, INT2)"
+        )
+        .is_err());
+
+    // Non-integer strategy number
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1.5 < (INT4, INT2)"
+        )
+        .is_err());
+
+    // Missing closing parenthesis in operator types
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2"
+        )
+        .is_err());
+
+    // Missing opening parenthesis in operator types
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < INT4, INT2)"
+        )
+        .is_err());
+
+    // Empty operator types
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < ()")
+        .is_err());
+
+    // Invalid data type (using punctuation)
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (@#$%, INT2)"
+        )
+        .is_err());
+
+    // Incomplete FOR clause
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR"
+        )
+        .is_err());
+
+    // Invalid FOR clause keyword
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR INVALID"
+        )
+        .is_err());
+
+    // FOR ORDER BY without sort family
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR ORDER BY"
+        )
+        .is_err());
+
+    // Missing function name in ADD FUNCTION
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 (INT4, INT2)"
+        )
+        .is_err());
+
+    // Invalid function name
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 123invalid(INT4, INT2)"
+        )
+        .is_err());
+
+    // Negative support number
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION -1 func(INT4, INT2)"
+        )
+        .is_err());
+
+    // Non-integer support number
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1.5 func(INT4, INT2)"
+        )
+        .is_err());
+
+    // Missing closing parenthesis in function operator types
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 (INT4, INT2 func()"
+        )
+        .is_err());
+
+    // Missing closing parenthesis in function arguments
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 func(INT4, INT2"
+        )
+        .is_err());
+
+    // Invalid data type in function arguments
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 func(@#$%, INT2)"
+        )
+        .is_err());
+
+    // DROP OPERATOR with FOR clause (not allowed)
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree DROP OPERATOR 1 (INT4, INT2) FOR SEARCH"
+        )
+        .is_err());
+
+    // DROP FUNCTION with function arguments (not allowed)
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree DROP FUNCTION 1 (INT4, INT2) func(INT4)"
+        )
+        .is_err());
+
+    // Multiple ADD items with error in middle
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2), INVALID_ITEM"
+        )
+        .is_err());
+
+    // Multiple DROP items with error in middle
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree DROP OPERATOR 1 (INT4, INT2), INVALID_ITEM"
+        )
+        .is_err());
+
+    // RENAME TO with invalid new name
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree RENAME TO 123invalid")
+        .is_err());
+
+    // OWNER TO with invalid owner
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree OWNER TO 123invalid")
+        .is_err());
+
+    // SET SCHEMA with invalid schema name
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree SET SCHEMA 123invalid")
+        .is_err());
+
+    // Schema-qualified operator family name with invalid schema
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY 123invalid.my_ops USING btree ADD OPERATOR 1 < (INT4, INT2)"
+        )
+        .is_err());
+
+    // Missing operator family name
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY USING btree ADD OPERATOR 1 < (INT4, INT2)")
+        .is_err());
+
+    // Extra tokens at end
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) EXTRA"
+        )
+        .is_err());
+
+    // Incomplete statement
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree ADD")
+        .is_err());
+
+    // Very long numbers
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 999999999999999999999 < (INT4, INT2)")
+        .is_err());
+
+    // Multiple FOR clauses
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR SEARCH FOR ORDER BY sort_family")
+        .is_err());
+
+    // FOR SEARCH with extra tokens
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR SEARCH EXTRA")
+        .is_err());
+
+    // FOR ORDER BY with invalid sort family
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree ADD OPERATOR 1 < (INT4, INT2) FOR ORDER BY 123invalid")
+        .is_err());
+
+    // Function with empty operator types but missing function args parens
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 () func")
+        .is_err());
+
+    // Function with mismatched parentheses
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR FAMILY my_ops USING btree ADD FUNCTION 1 (INT4 func(INT2"
+        )
+        .is_err());
+
+    // DROP with empty types
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree DROP OPERATOR 1 ()")
+        .is_err());
+
+    // DROP FUNCTION with empty types
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR FAMILY my_ops USING btree DROP FUNCTION 1 ()")
+        .is_err());
+}
+
+#[test]
+fn parse_alter_operator_class() {
+    // Test ALTER OPERATOR CLASS ... RENAME TO
+    let sql = "ALTER OPERATOR CLASS int_ops USING btree RENAME TO integer_ops";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorClass(AlterOperatorClass {
+            name: ObjectName::from(vec![Ident::new("int_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorClassOperation::RenameTo {
+                new_name: ObjectName::from(vec![Ident::new("integer_ops")]),
+            },
+        })
+    );
+
+    // Test ALTER OPERATOR CLASS ... OWNER TO
+    let sql = "ALTER OPERATOR CLASS int_ops USING btree OWNER TO joe";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorClass(AlterOperatorClass {
+            name: ObjectName::from(vec![Ident::new("int_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorClassOperation::OwnerTo(Owner::Ident(Ident::new("joe"))),
+        })
+    );
+
+    // Test ALTER OPERATOR CLASS ... OWNER TO CURRENT_USER
+    let sql = "ALTER OPERATOR CLASS int_ops USING btree OWNER TO CURRENT_USER";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorClass(AlterOperatorClass {
+            name: ObjectName::from(vec![Ident::new("int_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorClassOperation::OwnerTo(Owner::CurrentUser),
+        })
+    );
+
+    // Test ALTER OPERATOR CLASS ... SET SCHEMA
+    let sql = "ALTER OPERATOR CLASS int_ops USING btree SET SCHEMA new_schema";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorClass(AlterOperatorClass {
+            name: ObjectName::from(vec![Ident::new("int_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorClassOperation::SetSchema {
+                schema_name: ObjectName::from(vec![Ident::new("new_schema")]),
+            },
+        })
+    );
+
+    // Test with schema-qualified operator class name
+    let sql = "ALTER OPERATOR CLASS myschema.int_ops USING btree RENAME TO integer_ops";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::AlterOperatorClass(AlterOperatorClass {
+            name: ObjectName::from(vec![Ident::new("myschema"), Ident::new("int_ops")]),
+            using: Ident::new("btree"),
+            operation: AlterOperatorClassOperation::RenameTo {
+                new_name: ObjectName::from(vec![Ident::new("integer_ops")]),
+            },
+        })
+    );
+
+    // Test with different index methods
+    for index_method in &["hash", "gist", "gin", "spgist", "brin"] {
+        let sql = format!(
+            "ALTER OPERATOR CLASS int_ops USING {} RENAME TO integer_ops",
+            index_method
+        );
+        pg_and_generic().verified_stmt(&sql);
+    }
+
+    // Test error cases
+    // Missing USING clause
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR CLASS int_ops RENAME TO integer_ops")
+        .is_err());
+
+    // Invalid operation
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING btree INVALID_OPERATION")
+        .is_err());
+
+    // Missing new name for RENAME TO
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING btree RENAME TO")
+        .is_err());
+
+    // Missing owner for OWNER TO
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING btree OWNER TO")
+        .is_err());
+
+    // Missing schema for SET SCHEMA
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING btree SET SCHEMA")
+        .is_err());
+
+    // Invalid new name
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING btree RENAME TO 123invalid")
+        .is_err());
+
+    // Invalid owner
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING btree OWNER TO 123invalid")
+        .is_err());
+
+    // Invalid schema name
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING btree SET SCHEMA 123invalid")
+        .is_err());
+
+    // Missing operator class name
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR CLASS USING btree RENAME TO integer_ops")
+        .is_err());
+
+    // Extra tokens at end
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR CLASS int_ops USING btree RENAME TO integer_ops EXTRA"
+        )
+        .is_err());
+
+    // Missing index method
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR CLASS int_ops RENAME TO integer_ops")
+        .is_err());
+
+    // Invalid index method
+    assert!(pg()
+        .parse_sql_statements("ALTER OPERATOR CLASS int_ops USING 123invalid RENAME TO integer_ops")
+        .is_err());
+
+    // Trying to use ADD operation (only valid for OPERATOR FAMILY)
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR CLASS int_ops USING btree ADD OPERATOR 1 < (INT4, INT2)"
+        )
+        .is_err());
+
+    // Trying to use DROP operation (only valid for OPERATOR FAMILY)
+    assert!(pg()
+        .parse_sql_statements(
+            "ALTER OPERATOR CLASS int_ops USING btree DROP OPERATOR 1 (INT4, INT2)"
+        )
+        .is_err());
+}
+
+#[test]
+fn parse_alter_function_and_aggregate() {
+    for (sql, expected) in [
+        (
+            "ALTER AGGREGATE alt_func1(int) RENAME TO alt_func3",
+            "ALTER AGGREGATE alt_func1(INT) RENAME TO alt_func3",
+        ),
+        (
+            "ALTER AGGREGATE alt_func1(int) OWNER TO regress_alter_generic_user3",
+            "ALTER AGGREGATE alt_func1(INT) OWNER TO regress_alter_generic_user3",
+        ),
+        (
+            "ALTER AGGREGATE alt_func1(int) SET SCHEMA alt_nsp2",
+            "ALTER AGGREGATE alt_func1(INT) SET SCHEMA alt_nsp2",
+        ),
+        (
+            "ALTER AGGREGATE alt_agg1(int) RENAME TO alt_agg2",
+            "ALTER AGGREGATE alt_agg1(INT) RENAME TO alt_agg2",
+        ),
+        (
+            "ALTER AGGREGATE alt_agg1(int) RENAME TO alt_agg3",
+            "ALTER AGGREGATE alt_agg1(INT) RENAME TO alt_agg3",
+        ),
+        (
+            "ALTER AGGREGATE alt_agg2(int) OWNER TO regress_alter_generic_user2",
+            "ALTER AGGREGATE alt_agg2(INT) OWNER TO regress_alter_generic_user2",
+        ),
+        (
+            "ALTER AGGREGATE alt_agg2(int) OWNER TO regress_alter_generic_user3",
+            "ALTER AGGREGATE alt_agg2(INT) OWNER TO regress_alter_generic_user3",
+        ),
+        (
+            "ALTER AGGREGATE alt_agg2(int) SET SCHEMA alt_nsp2",
+            "ALTER AGGREGATE alt_agg2(INT) SET SCHEMA alt_nsp2",
+        ),
+        (
+            "ALTER AGGREGATE alt_order(int ORDER BY text) RENAME TO alt_order2",
+            "ALTER AGGREGATE alt_order(INT ORDER BY TEXT) RENAME TO alt_order2",
+        ),
+        (
+            "ALTER AGGREGATE alt_order_only(ORDER BY int) SET SCHEMA alt_nsp2",
+            "ALTER AGGREGATE alt_order_only(ORDER BY INT) SET SCHEMA alt_nsp2",
+        ),
+        (
+            "ALTER AGGREGATE alt_star(*) OWNER TO regress_alter_generic_user2",
+            "ALTER AGGREGATE alt_star(*) OWNER TO regress_alter_generic_user2",
+        ),
+    ] {
+        let statement = pg_and_generic().one_statement_parses_to(sql, expected);
+        assert!(matches!(
+            statement,
+            Statement::AlterFunction(AlterFunction {
+                kind: AlterFunctionKind::Aggregate,
+                ..
+            })
+        ));
+    }
+
+    for (sql, expected) in [
+        (
+            "ALTER FUNCTION alt_func1(int) RENAME TO alt_func2",
+            "ALTER FUNCTION alt_func1(INT) RENAME TO alt_func2",
+        ),
+        (
+            "ALTER FUNCTION alt_func1(int) RENAME TO alt_func3",
+            "ALTER FUNCTION alt_func1(INT) RENAME TO alt_func3",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) OWNER TO regress_alter_generic_user2",
+            "ALTER FUNCTION alt_func2(INT) OWNER TO regress_alter_generic_user2",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) OWNER TO regress_alter_generic_user3",
+            "ALTER FUNCTION alt_func2(INT) OWNER TO regress_alter_generic_user3",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) SET SCHEMA alt_nsp1",
+            "ALTER FUNCTION alt_func2(INT) SET SCHEMA alt_nsp1",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) SET SCHEMA alt_nsp2",
+            "ALTER FUNCTION alt_func2(INT) SET SCHEMA alt_nsp2",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) DEPENDS ON EXTENSION ext1",
+            "ALTER FUNCTION alt_func2(INT) DEPENDS ON EXTENSION ext1",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) NO DEPENDS ON EXTENSION ext1",
+            "ALTER FUNCTION alt_func2(INT) NO DEPENDS ON EXTENSION ext1",
+        ),
+        (
+            "ALTER FUNCTION alt_func2 IMMUTABLE",
+            "ALTER FUNCTION alt_func2 IMMUTABLE",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) IMMUTABLE",
+            "ALTER FUNCTION alt_func2(INT) IMMUTABLE",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) STABLE",
+            "ALTER FUNCTION alt_func2(INT) STABLE",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) VOLATILE",
+            "ALTER FUNCTION alt_func2(INT) VOLATILE",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) CALLED ON NULL INPUT",
+            "ALTER FUNCTION alt_func2(INT) CALLED ON NULL INPUT",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) RETURNS NULL ON NULL INPUT",
+            "ALTER FUNCTION alt_func2(INT) RETURNS NULL ON NULL INPUT",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) STRICT",
+            "ALTER FUNCTION alt_func2(INT) STRICT",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) LEAKPROOF",
+            "ALTER FUNCTION alt_func2(INT) LEAKPROOF",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) NOT LEAKPROOF",
+            "ALTER FUNCTION alt_func2(INT) NOT LEAKPROOF",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) SECURITY DEFINER",
+            "ALTER FUNCTION alt_func2(INT) SECURITY DEFINER",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) EXTERNAL SECURITY INVOKER",
+            "ALTER FUNCTION alt_func2(INT) EXTERNAL SECURITY INVOKER",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) PARALLEL SAFE",
+            "ALTER FUNCTION alt_func2(INT) PARALLEL SAFE",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) PARALLEL RESTRICTED",
+            "ALTER FUNCTION alt_func2(INT) PARALLEL RESTRICTED",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) PARALLEL UNSAFE",
+            "ALTER FUNCTION alt_func2(INT) PARALLEL UNSAFE",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) COST 3.5",
+            "ALTER FUNCTION alt_func2(INT) COST 3.5",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) ROWS 42",
+            "ALTER FUNCTION alt_func2(INT) ROWS 42",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) SUPPORT pg_catalog.alt_support",
+            "ALTER FUNCTION alt_func2(INT) SUPPORT pg_catalog.alt_support",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) SET work_mem TO DEFAULT",
+            "ALTER FUNCTION alt_func2(INT) SET work_mem = DEFAULT",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) SET work_mem FROM CURRENT",
+            "ALTER FUNCTION alt_func2(INT) SET work_mem FROM CURRENT",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) SET search_path = pg_catalog, public",
+            "ALTER FUNCTION alt_func2(INT) SET search_path = pg_catalog, public",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) RESET work_mem",
+            "ALTER FUNCTION alt_func2(INT) RESET work_mem",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) RESET ALL",
+            "ALTER FUNCTION alt_func2(INT) RESET ALL",
+        ),
+        (
+            "ALTER FUNCTION alt_func2(int) IMMUTABLE STRICT PARALLEL SAFE RESTRICT",
+            "ALTER FUNCTION alt_func2(INT) IMMUTABLE STRICT PARALLEL SAFE RESTRICT",
+        ),
+        (
+            "ALTER FUNCTION alt_variadic(VARIADIC int[]) STABLE",
+            "ALTER FUNCTION alt_variadic(VARIADIC INT[]) STABLE",
+        ),
+    ] {
+        let statement = pg_and_generic().one_statement_parses_to(sql, expected);
+        assert!(matches!(
+            statement,
+            Statement::AlterFunction(AlterFunction {
+                kind: AlterFunctionKind::Function,
+                ..
+            })
+        ));
+    }
+
+    assert!(pg()
+        .parse_sql_statements("ALTER AGGREGATE alt_func1(INT) DEPENDS ON EXTENSION ext1")
+        .is_err());
+    assert!(pg()
+        .parse_sql_statements("ALTER AGGREGATE alt_func1(INT) NO DEPENDS ON EXTENSION ext1")
+        .is_err());
+    assert!(pg()
+        .parse_sql_statements("ALTER AGGREGATE alt_func1(OUT INT) OWNER TO joe")
+        .is_err());
+    assert!(pg()
+        .parse_sql_statements("ALTER AGGREGATE alt_func1(INOUT INT) OWNER TO joe")
+        .is_err());
+    assert!(pg()
+        .parse_sql_statements("ALTER AGGREGATE alt_func1(INT = 1) OWNER TO joe")
+        .is_err());
+
+    assert!(pg()
+        .parse_sql_statements("ALTER AGGREGATE alt_func1(INT) IMMUTABLE")
+        .is_err());
+}
+
+#[test]
 fn parse_drop_operator_family() {
     for if_exists in [true, false] {
         for drop_behavior in [
@@ -7567,6 +8848,14 @@ fn parse_create_operator_class() {
 }
 
 #[test]
+fn parse_identifiers_semicolon_handling() {
+    let statement = "SHOW search_path; SELECT 1";
+    pg_and_generic().statements_parse_to(statement, statement);
+    let statement = "SHOW search_path; SHOW ALL; SHOW ALL";
+    pg_and_generic().statements_parse_to(statement, statement);
+}
+
+#[test]
 fn parse_create_table_partition_of_range() {
     // RANGE partition with FROM ... TO
     let sql = "CREATE TABLE measurement_y2006m02 PARTITION OF measurement FOR VALUES FROM ('2006-02-01') TO ('2006-03-01')";
@@ -7755,6 +9044,97 @@ CONSTRAINT check_date CHECK (order_date >= '2023-01-01')\
 }
 
 #[test]
+fn parse_create_table_partition_of_errors() {
+    let sql = "CREATE TABLE p PARTITION OF parent";
+    let result = pg_and_generic().parse_sql_statements(sql);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("FOR VALUES or DEFAULT"),
+        "Expected error about FOR VALUES, got: {err}"
+    );
+
+    let sql = "CREATE TABLE p PARTITION OF parent WITH (fillfactor = 70)";
+    let result = pg_and_generic().parse_sql_statements(sql);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("FOR VALUES or DEFAULT"),
+        "Expected error about FOR VALUES, got: {err}"
+    );
+
+    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES RANGE (1, 10)";
+    let result = pg_and_generic().parse_sql_statements(sql);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("IN, FROM, or WITH"),
+        "Expected error about invalid keyword after FOR VALUES, got: {err}"
+    );
+
+    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES FROM (1)";
+    let result = pg_and_generic().parse_sql_statements(sql);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("TO"),
+        "Expected error about missing TO clause, got: {err}"
+    );
+
+    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES IN ()";
+    let result = pg_and_generic().parse_sql_statements(sql);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("at least one value"),
+        "Expected error about empty value list in IN clause, got: {err}"
+    );
+
+    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES FROM () TO (10)";
+    let result = pg_and_generic().parse_sql_statements(sql);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("at least one value"),
+        "Expected error about empty FROM list, got: {err}"
+    );
+
+    let sql = "CREATE TABLE p PARTITION OF parent FOR VALUES FROM (1) TO ()";
+    let result = pg_and_generic().parse_sql_statements(sql);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("at least one value"),
+        "Expected error about empty TO list, got: {err}"
+    );
+}
+
+#[test]
+fn parse_pg_analyze() {
+    // Bare ANALYZE
+    pg_and_generic().verified_stmt("ANALYZE");
+
+    // ANALYZE with table name
+    pg_and_generic().verified_stmt("ANALYZE t");
+
+    // ANALYZE with column specification
+    pg_and_generic().verified_stmt("ANALYZE t (col1, col2)");
+
+    // Verify AST for column specification
+    let stmt = pg().verified_stmt("ANALYZE t (col1, col2)");
+    match &stmt {
+        Statement::Analyze(analyze) => {
+            assert_eq!(analyze.table_name.as_ref().unwrap().to_string(), "t");
+            assert_eq!(analyze.columns.len(), 2);
+            assert_eq!(analyze.columns[0].to_string(), "col1");
+            assert_eq!(analyze.columns[1].to_string(), "col2");
+            assert!(!analyze.for_columns);
+        }
+        _ => panic!("Expected Analyze, got: {stmt:?}"),
+    }
+}
+
+#[test]
 fn parse_exclude_constraint_basic() {
     let sql =
         "CREATE TABLE t (room INT, CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =))";
@@ -7886,4 +9266,64 @@ fn parse_exclude_constraint_in_alter_table() {
 fn roundtrip_exclude_constraint() {
     let sql = "CREATE TABLE t (CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =, during WITH &&) INCLUDE (id) WHERE (active = true))";
     pg().verified_stmt(sql);
+}
+
+#[test]
+fn parse_lock_table() {
+    pg_and_generic().one_statement_parses_to(
+        "LOCK public.widgets IN EXCLUSIVE MODE",
+        "LOCK TABLE public.widgets IN EXCLUSIVE MODE",
+    );
+    pg_and_generic().one_statement_parses_to(
+        "LOCK TABLE public.widgets NOWAIT",
+        "LOCK TABLE public.widgets NOWAIT",
+    );
+
+    let stmt = pg_and_generic().verified_stmt(
+        "LOCK TABLE ONLY public.widgets, analytics.events * IN SHARE ROW EXCLUSIVE MODE NOWAIT",
+    );
+    match stmt {
+        Statement::Lock(lock) => {
+            assert_eq!(lock.tables.len(), 2);
+            assert_eq!(lock.tables[0].name.to_string(), "public.widgets");
+            assert!(lock.tables[0].only);
+            assert!(!lock.tables[0].has_asterisk);
+            assert_eq!(lock.tables[1].name.to_string(), "analytics.events");
+            assert!(!lock.tables[1].only);
+            assert!(lock.tables[1].has_asterisk);
+            assert_eq!(lock.lock_mode, Some(LockTableMode::ShareRowExclusive));
+            assert!(lock.nowait);
+        }
+        _ => panic!("Expected Lock, got: {stmt:?}"),
+    }
+
+    let lock_modes = [
+        ("ACCESS SHARE", LockTableMode::AccessShare),
+        ("ROW SHARE", LockTableMode::RowShare),
+        ("ROW EXCLUSIVE", LockTableMode::RowExclusive),
+        (
+            "SHARE UPDATE EXCLUSIVE",
+            LockTableMode::ShareUpdateExclusive,
+        ),
+        ("SHARE", LockTableMode::Share),
+        ("SHARE ROW EXCLUSIVE", LockTableMode::ShareRowExclusive),
+        ("EXCLUSIVE", LockTableMode::Exclusive),
+        ("ACCESS EXCLUSIVE", LockTableMode::AccessExclusive),
+    ];
+
+    for (mode_sql, expected_mode) in lock_modes {
+        let stmt = pg_and_generic()
+            .verified_stmt(&format!("LOCK TABLE public.widgets IN {mode_sql} MODE"));
+        match stmt {
+            Statement::Lock(lock) => {
+                assert_eq!(lock.tables.len(), 1);
+                assert_eq!(lock.tables[0].name.to_string(), "public.widgets");
+                assert!(!lock.tables[0].only);
+                assert!(!lock.tables[0].has_asterisk);
+                assert_eq!(lock.lock_mode, Some(expected_mode));
+                assert!(!lock.nowait);
+            }
+            _ => panic!("Expected Lock, got: {stmt:?}"),
+        }
+    }
 }

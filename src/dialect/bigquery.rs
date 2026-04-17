@@ -42,7 +42,8 @@ const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
 ];
 
 /// A [`Dialect`] for [Google Bigquery](https://cloud.google.com/bigquery/)
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BigQueryDialect;
 
 impl Dialect for BigQueryDialect {
@@ -136,7 +137,7 @@ impl Dialect for BigQueryDialect {
     }
 
     // See <https://cloud.google.com/bigquery/docs/access-historical-data>
-    fn supports_timestamp_versioning(&self) -> bool {
+    fn supports_table_versioning(&self) -> bool {
         true
     }
 
@@ -154,6 +155,15 @@ impl Dialect for BigQueryDialect {
     }
 
     fn supports_create_table_multi_schema_info_sources(&self) -> bool {
+        true
+    }
+
+    /// See <https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#select_replace>
+    fn supports_select_wildcard_replace(&self) -> bool {
+        true
+    }
+
+    fn supports_comma_separated_trim(&self) -> bool {
         true
     }
 }

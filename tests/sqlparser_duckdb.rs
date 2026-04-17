@@ -156,7 +156,9 @@ fn column_defs(statement: Statement) -> Vec<ColumnDef> {
 fn test_select_wildcard_with_exclude() {
     let select = duckdb().verified_only_select("SELECT * EXCLUDE (col_a) FROM data");
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
-        opt_exclude: Some(ExcludeSelectItem::Multiple(vec![Ident::new("col_a")])),
+        opt_exclude: Some(ExcludeSelectItem::Multiple(vec![ObjectName::from(
+            Ident::new("col_a"),
+        )])),
         ..Default::default()
     });
     assert_eq!(expected, select.projection[0]);
@@ -166,7 +168,9 @@ fn test_select_wildcard_with_exclude() {
     let expected = SelectItem::QualifiedWildcard(
         SelectItemQualifiedWildcardKind::ObjectName(ObjectName::from(vec![Ident::new("name")])),
         WildcardAdditionalOptions {
-            opt_exclude: Some(ExcludeSelectItem::Single(Ident::new("department_id"))),
+            opt_exclude: Some(ExcludeSelectItem::Single(ObjectName::from(Ident::new(
+                "department_id",
+            )))),
             ..Default::default()
         },
     );
@@ -176,8 +180,8 @@ fn test_select_wildcard_with_exclude() {
         .verified_only_select("SELECT * EXCLUDE (department_id, employee_id) FROM employee_table");
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
         opt_exclude: Some(ExcludeSelectItem::Multiple(vec![
-            Ident::new("department_id"),
-            Ident::new("employee_id"),
+            ObjectName::from(Ident::new("department_id")),
+            ObjectName::from(Ident::new("employee_id")),
         ])),
         ..Default::default()
     });
@@ -266,7 +270,9 @@ fn test_select_union_by_name() {
             set_quantifier: *expected_quantifier,
             left: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
+                optimizer_hints: vec![],
                 distinct: None,
+                select_modifiers: None,
                 top: None,
                 projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
                 exclude: None,
@@ -292,12 +298,14 @@ fn test_select_union_by_name() {
                 window_before_qualify: false,
                 qualify: None,
                 value_table_mode: None,
-                connect_by: None,
+                connect_by: vec![],
                 flavor: SelectFlavor::Standard,
             }))),
             right: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
+                optimizer_hints: vec![],
                 distinct: None,
+                select_modifiers: None,
                 top: None,
                 projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
                 exclude: None,
@@ -323,7 +331,7 @@ fn test_select_union_by_name() {
                 window_before_qualify: false,
                 qualify: None,
                 value_table_mode: None,
-                connect_by: None,
+                connect_by: vec![],
                 flavor: SelectFlavor::Standard,
             }))),
         });
@@ -380,6 +388,7 @@ fn test_duckdb_specific_int_types() {
                     Value::Number("123".parse().unwrap(), false).with_empty_span()
                 )),
                 data_type: data_type.clone(),
+                array: false,
                 format: None,
             },
             expr_from_projection(&select.projection[0])
@@ -700,6 +709,7 @@ fn test_duckdb_union_datatype() {
             transient: Default::default(),
             volatile: Default::default(),
             iceberg: Default::default(),
+            snapshot: false,
             dynamic: Default::default(),
             name: ObjectName::from(vec!["tbl1".into()]),
             columns: vec![
@@ -766,6 +776,7 @@ fn test_duckdb_union_datatype() {
             default_ddl_collation: Default::default(),
             with_aggregation_policy: Default::default(),
             with_row_access_policy: Default::default(),
+            with_storage_lifecycle_policy: Default::default(),
             with_tags: Default::default(),
             base_location: Default::default(),
             external_volume: Default::default(),
@@ -779,6 +790,10 @@ fn test_duckdb_union_datatype() {
             refresh_mode: None,
             initialize: None,
             require_user: Default::default(),
+            diststyle: Default::default(),
+            distkey: Default::default(),
+            sortkey: Default::default(),
+            backup: Default::default(),
         }),
         stmt
     );
@@ -871,4 +886,23 @@ fn test_duckdb_trim() {
 fn parse_extract_single_quotes() {
     let sql = "SELECT EXTRACT('month' FROM my_timestamp) FROM my_table";
     duckdb().verified_stmt(sql);
+}
+
+#[test]
+fn test_duckdb_lambda_function() {
+    // Test basic lambda with list_filter
+    let sql = "SELECT [3, 4, 5, 6].list_filter(lambda x : x > 4)";
+    duckdb().verified_stmt(sql);
+
+    // Test lambda with arrow syntax (also supported by DuckDB)
+    let sql_arrow = "SELECT list_filter([1, 2, 3], x -> x > 1)";
+    duckdb().verified_stmt(sql_arrow);
+
+    // Test lambda with multiple parameters (with index)
+    let sql_multi = "SELECT list_filter([1, 3, 1, 5], lambda x, i : x > i)";
+    duckdb().verified_stmt(sql_multi);
+
+    // Test lambda in list_transform
+    let sql_transform = "SELECT list_transform([1, 2, 3], lambda x : x * 2)";
+    duckdb().verified_stmt(sql_transform);
 }

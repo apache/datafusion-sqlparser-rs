@@ -18,7 +18,10 @@
 #[cfg(not(feature = "std"))]
 use alloc::string::String;
 
-use core::fmt;
+use core::{
+    fmt,
+    ops::{Deref, DerefMut},
+};
 
 #[cfg(feature = "bigdecimal")]
 use bigdecimal::BigDecimal;
@@ -64,11 +67,18 @@ use sqlparser_derive::{Visit, VisitMut};
 /// // convert back to `Value`
 /// let value: Value = value_with_span.into();
 /// ```
+/// A `Value` paired with its source `Span` location.
 #[derive(Debug, Clone, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(
+    feature = "visitor",
+    derive(Visit, VisitMut),
+    visit(with = "visit_value")
+)]
 pub struct ValueWithSpan {
+    /// The wrapped `Value`.
     pub value: Value,
+    /// The source `Span` covering the token(s) that produced the value.
     pub span: Span,
 }
 
@@ -108,26 +118,37 @@ impl From<ValueWithSpan> for Value {
     }
 }
 
+impl Deref for ValueWithSpan {
+    type Target = Value;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+
+impl DerefMut for ValueWithSpan {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.value
+    }
+}
+
 /// Primitive SQL values such as number and string
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(
-    feature = "visitor",
-    derive(Visit, VisitMut),
-    visit(with = "visit_value")
-)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum Value {
     /// Numeric literal
     #[cfg(not(feature = "bigdecimal"))]
     Number(String, bool),
     #[cfg(feature = "bigdecimal")]
-    // HINT: use `test_utils::number` to make an instance of
-    // Value::Number This might help if you your tests pass locally
-    // but fail on CI with the `--all-features` flag enabled
+    /// HINT: use `test_utils::number` to make an instance of
+    /// Value::Number This might help if you your tests pass locally
+    /// but fail on CI with the `--all-features` flag enabled
+    /// Numeric literal (uses `BigDecimal` when the `bigdecimal` feature is enabled).
     Number(BigDecimal, bool),
     /// 'string value'
     SingleQuotedString(String),
-    // $<tag_name>$string value$<tag_name>$ (postgres syntax)
+    /// Dollar-quoted string literal, e.g. `$$...$$` or `$tag$...$tag$` (Postgres syntax).
     DollarQuotedString(DollarQuotedString),
     /// Triple single quoted strings: Example '''abc'''
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals)
@@ -167,9 +188,16 @@ pub enum Value {
     TripleDoubleQuotedRawStringLiteral(String),
     /// N'string value'
     NationalStringLiteral(String),
+    /// Quote delimited literal. Examples `Q'{ab'c}'`, `Q'|ab'c|'`, `Q'|ab|c|'`
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Literals.html#GUID-1824CBAA-6E16-4921-B2A6-112FB02248DA)
+    QuoteDelimitedStringLiteral(QuoteDelimitedString),
+    /// "National" quote delimited literal. Examples `Q'{ab'c}'`, `Q'|ab'c|'`, `Q'|ab|c|'`
+    /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Literals.html#GUID-1824CBAA-6E16-4921-B2A6-112FB02248DA)
+    NationalQuoteDelimitedStringLiteral(QuoteDelimitedString),
     /// X'hex value'
     HexStringLiteral(String),
 
+    /// Double quoted string literal, e.g. `"abc"`.
     DoubleQuotedString(String),
     /// Boolean value true or false
     Boolean(bool),
@@ -207,14 +235,18 @@ impl Value {
             | Value::NationalStringLiteral(s)
             | Value::HexStringLiteral(s) => Some(s),
             Value::DollarQuotedString(s) => Some(s.value),
+            Value::QuoteDelimitedStringLiteral(s) => Some(s.value),
+            Value::NationalQuoteDelimitedStringLiteral(s) => Some(s.value),
             _ => None,
         }
     }
 
+    /// Attach the provided `span` to this `Value` and return `ValueWithSpan`.
     pub fn with_span(self, span: Span) -> ValueWithSpan {
         ValueWithSpan { value: self, span }
     }
 
+    /// Convenience for attaching an empty span to this `Value`.
     pub fn with_empty_span(self) -> ValueWithSpan {
         self.with_span(Span::empty())
     }
@@ -242,6 +274,8 @@ impl fmt::Display for Value {
             Value::EscapedStringLiteral(v) => write!(f, "E'{}'", escape_escaped_string(v)),
             Value::UnicodeStringLiteral(v) => write!(f, "U&'{}'", escape_unicode_string(v)),
             Value::NationalStringLiteral(v) => write!(f, "N'{v}'"),
+            Value::QuoteDelimitedStringLiteral(v) => v.fmt(f),
+            Value::NationalQuoteDelimitedStringLiteral(v) => write!(f, "N{v}"),
             Value::HexStringLiteral(v) => write!(f, "X'{v}'"),
             Value::Boolean(v) => write!(f, "{v}"),
             Value::SingleQuotedByteStringLiteral(v) => write!(f, "B'{v}'"),
@@ -258,11 +292,14 @@ impl fmt::Display for Value {
     }
 }
 
+/// A dollar-quoted string literal, e.g. `$$...$$` or `$tag$...$tag$`.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct DollarQuotedString {
+    /// Inner string contents.
     pub value: String,
+    /// Optional tag used in the opening/closing delimiter.
     pub tag: Option<String>,
 }
 
@@ -279,59 +316,124 @@ impl fmt::Display for DollarQuotedString {
     }
 }
 
+/// A quote delimited string literal, e.g. `Q'_abc_'`.
+///
+/// See [Value::QuoteDelimitedStringLiteral] and/or
+/// [Value::NationalQuoteDelimitedStringLiteral].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct QuoteDelimitedString {
+    /// the quote start character; i.e. the character _after_ the opening `Q'`
+    pub start_quote: char,
+    /// the string literal value itself
+    pub value: String,
+    /// the quote end character; i.e. the character _before_ the closing `'`
+    pub end_quote: char,
+}
+
+impl fmt::Display for QuoteDelimitedString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Q'{}{}{}'", self.start_quote, self.value, self.end_quote)
+    }
+}
+
+/// Represents the date/time fields used by functions like `EXTRACT`.
+///
+/// Each variant corresponds to a supported date/time part (for example
+/// `YEAR`, `MONTH`, `DAY`, etc.). The `Custom` variant allows arbitrary
+/// identifiers (e.g. dialect-specific abbreviations).
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum DateTimeField {
+    /// `YEAR`
     Year,
+    /// `YEARS` (plural form)
     Years,
+    /// `MONTH`
     Month,
+    /// `MONTHS` (plural form)
     Months,
-    /// Week optionally followed by a WEEKDAY.
-    ///
-    /// ```sql
-    /// WEEK(MONDAY)
-    /// ```
+    /// `WEEK`, optionally followed by a weekday, e.g. `WEEK(MONDAY)`.
     ///
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#extract)
     Week(Option<Ident>),
+    /// `WEEKS` (plural form)
     Weeks,
+    /// `DAY`
     Day,
+    /// `DAYOFWEEK`
     DayOfWeek,
+    /// `DAYOFYEAR`
     DayOfYear,
+    /// `DAYS` (plural form)
     Days,
+    /// `DATE`
     Date,
+    /// `DATETIME`
     Datetime,
+    /// `HOUR`
     Hour,
+    /// `HOURS` (plural form)
     Hours,
+    /// `MINUTE`
     Minute,
+    /// `MINUTES` (plural form)
     Minutes,
+    /// `SECOND`
     Second,
+    /// `SECONDS` (plural form)
     Seconds,
+    /// `CENTURY`
     Century,
+    /// `DECADE`
     Decade,
+    /// `DOW` (day of week short form)
     Dow,
+    /// `DOY` (day of year short form)
     Doy,
+    /// `EPOCH`
     Epoch,
+    /// `ISODOW`
     Isodow,
-    IsoWeek,
+    /// `ISOYEAR`
     Isoyear,
+    /// `ISOWEEK`
+    IsoWeek,
+    /// `JULIAN`
     Julian,
+    /// `MICROSECOND`
     Microsecond,
+    /// `MICROSECONDS` (plural form)
     Microseconds,
+    /// `MILLENIUM` (alternate spelling)
     Millenium,
+    /// `MILLENNIUM` (alternate spelling)
     Millennium,
+    /// `MILLISECOND`
     Millisecond,
+    /// `MILLISECONDS` (plural form)
     Milliseconds,
+    /// `NANOSECOND`
     Nanosecond,
+    /// `NANOSECONDS` (plural form)
     Nanoseconds,
+    /// `QUARTER`
     Quarter,
+    /// `TIME`
     Time,
+    /// `TIMEZONE`
     Timezone,
+    /// `TIMEZONE_ABBR`
     TimezoneAbbr,
+    /// `TIMEZONE_HOUR`
     TimezoneHour,
+    /// `TIMEZONE_MINUTE`
     TimezoneMinute,
+    /// `TIMEZONE_REGION`
     TimezoneRegion,
+    /// `NODATETIME` indicates no date/time part
     NoDateTime,
     /// Arbitrary abbreviation or custom date-time part.
     ///
@@ -399,7 +501,7 @@ impl fmt::Display for DateTimeField {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// The Unicode Standard defines four normalization forms, which are intended to eliminate
@@ -491,14 +593,18 @@ impl fmt::Display for EscapeQuotedString<'_> {
     }
 }
 
+/// Return a helper which formats `string` for inclusion inside a quoted
+/// literal that uses `quote` as the delimiter.
 pub fn escape_quoted_string(string: &str, quote: char) -> EscapeQuotedString<'_> {
     EscapeQuotedString { string, quote }
 }
 
+/// Convenience wrapper for escaping strings for single-quoted literals (`'`).
 pub fn escape_single_quote_string(s: &str) -> EscapeQuotedString<'_> {
     escape_quoted_string(s, '\'')
 }
 
+/// Convenience wrapper for escaping strings for double-quoted literals (`").`
 pub fn escape_double_quote_string(s: &str) -> EscapeQuotedString<'_> {
     escape_quoted_string(s, '\"')
 }
@@ -533,6 +639,8 @@ impl fmt::Display for EscapeEscapedStringLiteral<'_> {
     }
 }
 
+/// Return a helper which escapes characters for string literals that use
+/// PostgreSQL-style escaped string literals (e.g. `E'...')`.
 pub fn escape_escaped_string(s: &str) -> EscapeEscapedStringLiteral<'_> {
     EscapeEscapedStringLiteral(s)
 }
@@ -568,16 +676,24 @@ impl fmt::Display for EscapeUnicodeStringLiteral<'_> {
     }
 }
 
+/// Return a helper which escapes non-ASCII characters using `\XXXX` or
+/// `\+XXXXXX` Unicode escape formats (used for `U&'...'` style literals).
 pub fn escape_unicode_string(s: &str) -> EscapeUnicodeStringLiteral<'_> {
     EscapeUnicodeStringLiteral(s)
 }
 
+/// The side on which `TRIM` should be applied.
+///
+/// Corresponds to `TRIM(BOTH|LEADING|TRAILING)` SQL syntax.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TrimWhereField {
+    /// `BOTH` (trim from both ends)
     Both,
+    /// `LEADING` (trim from start)
     Leading,
+    /// `TRAILING` (trim from end)
     Trailing,
 }
 

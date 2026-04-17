@@ -25,10 +25,11 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::{
-    ClusteredBy, ColumnDef, CommentDef, CreateTable, CreateTableLikeKind, CreateTableOptions, Expr,
-    FileFormat, ForValues, HiveDistributionStyle, HiveFormat, Ident, InitializeKind, ObjectName,
-    OnCommit, OneOrManyWithParens, Query, RefreshModeKind, RowAccessPolicy, Statement,
-    StorageSerializationPolicy, TableConstraint, TableVersion, Tag, WrappedCollection,
+    ClusteredBy, ColumnDef, CommentDef, CreateTable, CreateTableLikeKind, CreateTableOptions,
+    DistStyle, Expr, FileFormat, ForValues, HiveDistributionStyle, HiveFormat, Ident,
+    InitializeKind, ObjectName, OnCommit, OneOrManyWithParens, Query, RefreshModeKind,
+    RowAccessPolicy, Statement, StorageLifecyclePolicy, StorageSerializationPolicy,
+    TableConstraint, TableVersion, Tag, WrappedCollection,
 };
 
 use crate::parser::ParserError;
@@ -64,62 +65,128 @@ use crate::parser::ParserError;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct CreateTableBuilder {
+    /// Whether the statement uses `OR REPLACE`.
     pub or_replace: bool,
+    /// Whether the table is `TEMPORARY`.
     pub temporary: bool,
+    /// Whether the table is `EXTERNAL`.
     pub external: bool,
+    /// Optional `GLOBAL` flag for dialects that support it.
     pub global: Option<bool>,
+    /// Whether `IF NOT EXISTS` was specified.
     pub if_not_exists: bool,
+    /// Whether `TRANSIENT` was specified.
     pub transient: bool,
+    /// Whether `VOLATILE` was specified.
     pub volatile: bool,
+    /// Iceberg-specific table flag.
     pub iceberg: bool,
+    /// `SNAPSHOT` table flag.
+    pub snapshot: bool,
+    /// Whether `DYNAMIC` table option is set.
     pub dynamic: bool,
+    /// The table name.
     pub name: ObjectName,
+    /// Column definitions for the table.
     pub columns: Vec<ColumnDef>,
+    /// Table-level constraints.
     pub constraints: Vec<TableConstraint>,
+    /// Hive distribution style.
     pub hive_distribution: HiveDistributionStyle,
+    /// Optional Hive format settings.
     pub hive_formats: Option<HiveFormat>,
+    /// Optional file format for storage.
     pub file_format: Option<FileFormat>,
+    /// Optional storage location.
     pub location: Option<String>,
+    /// Optional `AS SELECT` query for the table.
     pub query: Option<Box<Query>>,
+    /// Whether `WITHOUT ROWID` is set.
     pub without_rowid: bool,
+    /// Optional `LIKE` clause kind.
     pub like: Option<CreateTableLikeKind>,
+    /// Optional `CLONE` source object name.
     pub clone: Option<ObjectName>,
+    /// Optional table version.
     pub version: Option<TableVersion>,
+    /// Optional table comment.
     pub comment: Option<CommentDef>,
+    /// Optional `ON COMMIT` behavior.
     pub on_commit: Option<OnCommit>,
+    /// Optional cluster identifier.
     pub on_cluster: Option<Ident>,
+    /// Optional primary key expression.
     pub primary_key: Option<Box<Expr>>,
+    /// Optional `ORDER BY` for clustering/sorting.
     pub order_by: Option<OneOrManyWithParens<Expr>>,
+    /// Optional `PARTITION BY` expression.
     pub partition_by: Option<Box<Expr>>,
+    /// Optional `CLUSTER BY` expressions.
     pub cluster_by: Option<WrappedCollection<Vec<Expr>>>,
+    /// Optional `CLUSTERED BY` clause.
     pub clustered_by: Option<ClusteredBy>,
+    /// Optional parent tables (`INHERITS`).
     pub inherits: Option<Vec<ObjectName>>,
+    /// Optional partitioned table (`PARTITION OF`)
     pub partition_of: Option<ObjectName>,
+    /// Range of values associated with the partition (`FOR VALUES`)
     pub for_values: Option<ForValues>,
+    /// `STRICT` table flag.
     pub strict: bool,
+    /// Whether to copy grants from the source.
     pub copy_grants: bool,
+    /// Optional flag for schema evolution support.
     pub enable_schema_evolution: Option<bool>,
+    /// Optional change tracking flag.
     pub change_tracking: Option<bool>,
+    /// Optional data retention time in days.
     pub data_retention_time_in_days: Option<u64>,
+    /// Optional max data extension time in days.
     pub max_data_extension_time_in_days: Option<u64>,
+    /// Optional default DDL collation.
     pub default_ddl_collation: Option<String>,
+    /// Optional aggregation policy object name.
     pub with_aggregation_policy: Option<ObjectName>,
+    /// Optional row access policy applied to the table.
     pub with_row_access_policy: Option<RowAccessPolicy>,
+    /// Optional storage lifecycle policy applied to the table.
+    pub with_storage_lifecycle_policy: Option<StorageLifecyclePolicy>,
+    /// Optional tags/labels attached to the table metadata.
     pub with_tags: Option<Vec<Tag>>,
+    /// Optional base location for staged data.
     pub base_location: Option<String>,
+    /// Optional external volume identifier.
     pub external_volume: Option<String>,
+    /// Optional catalog name.
     pub catalog: Option<String>,
+    /// Optional catalog synchronization option.
     pub catalog_sync: Option<String>,
+    /// Optional storage serialization policy.
     pub storage_serialization_policy: Option<StorageSerializationPolicy>,
+    /// Parsed table options from the statement.
     pub table_options: CreateTableOptions,
+    /// Optional target lag configuration.
     pub target_lag: Option<String>,
+    /// Optional warehouse identifier.
     pub warehouse: Option<Ident>,
+    /// Optional refresh mode for materialized tables.
     pub refresh_mode: Option<RefreshModeKind>,
+    /// Optional initialization kind for the table.
     pub initialize: Option<InitializeKind>,
+    /// Whether operations require a user identity.
     pub require_user: bool,
+    /// Redshift `DISTSTYLE` option.
+    pub diststyle: Option<DistStyle>,
+    /// Redshift `DISTKEY` option.
+    pub distkey: Option<Expr>,
+    /// Redshift `SORTKEY` option.
+    pub sortkey: Option<Vec<Expr>>,
+    /// Redshift `BACKUP` option.
+    pub backup: Option<bool>,
 }
 
 impl CreateTableBuilder {
+    /// Create a new `CreateTableBuilder` for the given table name.
     pub fn new(name: ObjectName) -> Self {
         Self {
             or_replace: false,
@@ -130,6 +197,7 @@ impl CreateTableBuilder {
             transient: false,
             volatile: false,
             iceberg: false,
+            snapshot: false,
             dynamic: false,
             name,
             columns: vec![],
@@ -163,6 +231,7 @@ impl CreateTableBuilder {
             default_ddl_collation: None,
             with_aggregation_policy: None,
             with_row_access_policy: None,
+            with_storage_lifecycle_policy: None,
             with_tags: None,
             base_location: None,
             external_volume: None,
@@ -175,187 +244,202 @@ impl CreateTableBuilder {
             refresh_mode: None,
             initialize: None,
             require_user: false,
+            diststyle: None,
+            distkey: None,
+            sortkey: None,
+            backup: None,
         }
     }
+    /// Set `OR REPLACE` for the CREATE TABLE statement.
     pub fn or_replace(mut self, or_replace: bool) -> Self {
         self.or_replace = or_replace;
         self
     }
-
+    /// Mark the table as `TEMPORARY`.
     pub fn temporary(mut self, temporary: bool) -> Self {
         self.temporary = temporary;
         self
     }
-
+    /// Mark the table as `EXTERNAL`.
     pub fn external(mut self, external: bool) -> Self {
         self.external = external;
         self
     }
-
+    /// Set optional `GLOBAL` flag (dialect-specific).
     pub fn global(mut self, global: Option<bool>) -> Self {
         self.global = global;
         self
     }
-
+    /// Set `IF NOT EXISTS`.
     pub fn if_not_exists(mut self, if_not_exists: bool) -> Self {
         self.if_not_exists = if_not_exists;
         self
     }
-
+    /// Set `TRANSIENT` flag.
     pub fn transient(mut self, transient: bool) -> Self {
         self.transient = transient;
         self
     }
-
+    /// Set `VOLATILE` flag.
     pub fn volatile(mut self, volatile: bool) -> Self {
         self.volatile = volatile;
         self
     }
-
+    /// Enable Iceberg table semantics.
     pub fn iceberg(mut self, iceberg: bool) -> Self {
         self.iceberg = iceberg;
         self
     }
-
+    /// Set `SNAPSHOT` table flag (BigQuery).
+    pub fn snapshot(mut self, snapshot: bool) -> Self {
+        self.snapshot = snapshot;
+        self
+    }
+    /// Set `DYNAMIC` table option.
     pub fn dynamic(mut self, dynamic: bool) -> Self {
         self.dynamic = dynamic;
         self
     }
-
+    /// Set the table column definitions.
     pub fn columns(mut self, columns: Vec<ColumnDef>) -> Self {
         self.columns = columns;
         self
     }
-
+    /// Set table-level constraints.
     pub fn constraints(mut self, constraints: Vec<TableConstraint>) -> Self {
         self.constraints = constraints;
         self
     }
-
+    /// Set Hive distribution style.
     pub fn hive_distribution(mut self, hive_distribution: HiveDistributionStyle) -> Self {
         self.hive_distribution = hive_distribution;
         self
     }
-
+    /// Set Hive-specific formats.
     pub fn hive_formats(mut self, hive_formats: Option<HiveFormat>) -> Self {
         self.hive_formats = hive_formats;
         self
     }
-
+    /// Set file format for the table (e.g., PARQUET).
     pub fn file_format(mut self, file_format: Option<FileFormat>) -> Self {
         self.file_format = file_format;
         self
     }
+    /// Set storage `location` for the table.
     pub fn location(mut self, location: Option<String>) -> Self {
         self.location = location;
         self
     }
-
+    /// Set an underlying `AS SELECT` query for the table.
     pub fn query(mut self, query: Option<Box<Query>>) -> Self {
         self.query = query;
         self
     }
+    /// Set `WITHOUT ROWID` option.
     pub fn without_rowid(mut self, without_rowid: bool) -> Self {
         self.without_rowid = without_rowid;
         self
     }
-
+    /// Set `LIKE` clause for the table.
     pub fn like(mut self, like: Option<CreateTableLikeKind>) -> Self {
         self.like = like;
         self
     }
-
     // Different name to allow the object to be cloned
+    /// Set `CLONE` source object name.
     pub fn clone_clause(mut self, clone: Option<ObjectName>) -> Self {
         self.clone = clone;
         self
     }
-
+    /// Set table `VERSION`.
     pub fn version(mut self, version: Option<TableVersion>) -> Self {
         self.version = version;
         self
     }
-
+    /// Set a comment for the table or following column definitions.
     pub fn comment_after_column_def(mut self, comment: Option<CommentDef>) -> Self {
         self.comment = comment;
         self
     }
-
+    /// Set `ON COMMIT` behavior for temporary tables.
     pub fn on_commit(mut self, on_commit: Option<OnCommit>) -> Self {
         self.on_commit = on_commit;
         self
     }
-
+    /// Set cluster identifier for the table.
     pub fn on_cluster(mut self, on_cluster: Option<Ident>) -> Self {
         self.on_cluster = on_cluster;
         self
     }
-
+    /// Set a primary key expression for the table.
     pub fn primary_key(mut self, primary_key: Option<Box<Expr>>) -> Self {
         self.primary_key = primary_key;
         self
     }
-
+    /// Set `ORDER BY` clause for clustered/sorted tables.
     pub fn order_by(mut self, order_by: Option<OneOrManyWithParens<Expr>>) -> Self {
         self.order_by = order_by;
         self
     }
-
+    /// Set `PARTITION BY` expression.
     pub fn partition_by(mut self, partition_by: Option<Box<Expr>>) -> Self {
         self.partition_by = partition_by;
         self
     }
-
+    /// Set `CLUSTER BY` expression(s).
     pub fn cluster_by(mut self, cluster_by: Option<WrappedCollection<Vec<Expr>>>) -> Self {
         self.cluster_by = cluster_by;
         self
     }
-
+    /// Set `CLUSTERED BY` clause.
     pub fn clustered_by(mut self, clustered_by: Option<ClusteredBy>) -> Self {
         self.clustered_by = clustered_by;
         self
     }
-
+    /// Set parent tables via `INHERITS`.
     pub fn inherits(mut self, inherits: Option<Vec<ObjectName>>) -> Self {
         self.inherits = inherits;
         self
     }
 
+    /// Sets the table which is partitioned to create the current table.
     pub fn partition_of(mut self, partition_of: Option<ObjectName>) -> Self {
         self.partition_of = partition_of;
         self
     }
 
+    /// Sets the range of values associated with the partition.
     pub fn for_values(mut self, for_values: Option<ForValues>) -> Self {
         self.for_values = for_values;
         self
     }
 
+    /// Set `STRICT` option.
     pub fn strict(mut self, strict: bool) -> Self {
         self.strict = strict;
         self
     }
-
+    /// Enable copying grants from source object.
     pub fn copy_grants(mut self, copy_grants: bool) -> Self {
         self.copy_grants = copy_grants;
         self
     }
-
+    /// Enable or disable schema evolution features.
     pub fn enable_schema_evolution(mut self, enable_schema_evolution: Option<bool>) -> Self {
         self.enable_schema_evolution = enable_schema_evolution;
         self
     }
-
+    /// Enable or disable change tracking.
     pub fn change_tracking(mut self, change_tracking: Option<bool>) -> Self {
         self.change_tracking = change_tracking;
         self
     }
-
+    /// Set data retention time (in days).
     pub fn data_retention_time_in_days(mut self, data_retention_time_in_days: Option<u64>) -> Self {
         self.data_retention_time_in_days = data_retention_time_in_days;
         self
     }
-
+    /// Set maximum data extension time (in days).
     pub fn max_data_extension_time_in_days(
         mut self,
         max_data_extension_time_in_days: Option<u64>,
@@ -363,17 +447,17 @@ impl CreateTableBuilder {
         self.max_data_extension_time_in_days = max_data_extension_time_in_days;
         self
     }
-
+    /// Set default DDL collation.
     pub fn default_ddl_collation(mut self, default_ddl_collation: Option<String>) -> Self {
         self.default_ddl_collation = default_ddl_collation;
         self
     }
-
+    /// Set aggregation policy object.
     pub fn with_aggregation_policy(mut self, with_aggregation_policy: Option<ObjectName>) -> Self {
         self.with_aggregation_policy = with_aggregation_policy;
         self
     }
-
+    /// Attach a row access policy to the table.
     pub fn with_row_access_policy(
         mut self,
         with_row_access_policy: Option<RowAccessPolicy>,
@@ -381,32 +465,40 @@ impl CreateTableBuilder {
         self.with_row_access_policy = with_row_access_policy;
         self
     }
-
+    /// Attach a storage lifecycle policy to the table.
+    pub fn with_storage_lifecycle_policy(
+        mut self,
+        with_storage_lifecycle_policy: Option<StorageLifecyclePolicy>,
+    ) -> Self {
+        self.with_storage_lifecycle_policy = with_storage_lifecycle_policy;
+        self
+    }
+    /// Attach tags/labels to the table metadata.
     pub fn with_tags(mut self, with_tags: Option<Vec<Tag>>) -> Self {
         self.with_tags = with_tags;
         self
     }
-
+    /// Set a base storage location for staged data.
     pub fn base_location(mut self, base_location: Option<String>) -> Self {
         self.base_location = base_location;
         self
     }
-
+    /// Set an external volume identifier.
     pub fn external_volume(mut self, external_volume: Option<String>) -> Self {
         self.external_volume = external_volume;
         self
     }
-
+    /// Set the catalog name for the table.
     pub fn catalog(mut self, catalog: Option<String>) -> Self {
         self.catalog = catalog;
         self
     }
-
+    /// Set catalog synchronization option.
     pub fn catalog_sync(mut self, catalog_sync: Option<String>) -> Self {
         self.catalog_sync = catalog_sync;
         self
     }
-
+    /// Set a storage serialization policy.
     pub fn storage_serialization_policy(
         mut self,
         storage_serialization_policy: Option<StorageSerializationPolicy>,
@@ -414,38 +506,58 @@ impl CreateTableBuilder {
         self.storage_serialization_policy = storage_serialization_policy;
         self
     }
-
+    /// Set arbitrary table options parsed from the statement.
     pub fn table_options(mut self, table_options: CreateTableOptions) -> Self {
         self.table_options = table_options;
         self
     }
-
+    /// Set a target lag configuration (dialect-specific).
     pub fn target_lag(mut self, target_lag: Option<String>) -> Self {
         self.target_lag = target_lag;
         self
     }
-
+    /// Associate the table with a warehouse identifier.
     pub fn warehouse(mut self, warehouse: Option<Ident>) -> Self {
         self.warehouse = warehouse;
         self
     }
-
+    /// Set refresh mode for materialized/managed tables.
     pub fn refresh_mode(mut self, refresh_mode: Option<RefreshModeKind>) -> Self {
         self.refresh_mode = refresh_mode;
         self
     }
-
+    /// Set initialization mode for the table.
     pub fn initialize(mut self, initialize: Option<InitializeKind>) -> Self {
         self.initialize = initialize;
         self
     }
-
+    /// Require a user identity for table operations.
     pub fn require_user(mut self, require_user: bool) -> Self {
         self.require_user = require_user;
         self
     }
-
-    pub fn build(self) -> Statement {
+    /// Set Redshift `DISTSTYLE` option.
+    pub fn diststyle(mut self, diststyle: Option<DistStyle>) -> Self {
+        self.diststyle = diststyle;
+        self
+    }
+    /// Set Redshift `DISTKEY` option.
+    pub fn distkey(mut self, distkey: Option<Expr>) -> Self {
+        self.distkey = distkey;
+        self
+    }
+    /// Set Redshift `SORTKEY` option.
+    pub fn sortkey(mut self, sortkey: Option<Vec<Expr>>) -> Self {
+        self.sortkey = sortkey;
+        self
+    }
+    /// Set the Redshift `BACKUP` option.
+    pub fn backup(mut self, backup: Option<bool>) -> Self {
+        self.backup = backup;
+        self
+    }
+    /// Consume the builder and produce a `CreateTable`.
+    pub fn build(self) -> CreateTable {
         CreateTable {
             or_replace: self.or_replace,
             temporary: self.temporary,
@@ -455,6 +567,7 @@ impl CreateTableBuilder {
             transient: self.transient,
             volatile: self.volatile,
             iceberg: self.iceberg,
+            snapshot: self.snapshot,
             dynamic: self.dynamic,
             name: self.name,
             columns: self.columns,
@@ -488,6 +601,7 @@ impl CreateTableBuilder {
             default_ddl_collation: self.default_ddl_collation,
             with_aggregation_policy: self.with_aggregation_policy,
             with_row_access_policy: self.with_row_access_policy,
+            with_storage_lifecycle_policy: self.with_storage_lifecycle_policy,
             with_tags: self.with_tags,
             base_location: self.base_location,
             external_volume: self.external_volume,
@@ -500,8 +614,11 @@ impl CreateTableBuilder {
             refresh_mode: self.refresh_mode,
             initialize: self.initialize,
             require_user: self.require_user,
+            diststyle: self.diststyle,
+            distkey: self.distkey,
+            sortkey: self.sortkey,
+            backup: self.backup,
         }
-        .into()
     }
 }
 
@@ -512,118 +629,76 @@ impl TryFrom<Statement> for CreateTableBuilder {
     // ownership.
     fn try_from(stmt: Statement) -> Result<Self, Self::Error> {
         match stmt {
-            Statement::CreateTable(CreateTable {
-                or_replace,
-                temporary,
-                external,
-                global,
-                if_not_exists,
-                transient,
-                volatile,
-                iceberg,
-                dynamic,
-                name,
-                columns,
-                constraints,
-                hive_distribution,
-                hive_formats,
-                file_format,
-                location,
-                query,
-                without_rowid,
-                like,
-                clone,
-                version,
-                comment,
-                on_commit,
-                on_cluster,
-                primary_key,
-                order_by,
-                partition_by,
-                cluster_by,
-                clustered_by,
-                inherits,
-                partition_of,
-                for_values,
-                strict,
-                copy_grants,
-                enable_schema_evolution,
-                change_tracking,
-                data_retention_time_in_days,
-                max_data_extension_time_in_days,
-                default_ddl_collation,
-                with_aggregation_policy,
-                with_row_access_policy,
-                with_tags,
-                base_location,
-                external_volume,
-                catalog,
-                catalog_sync,
-                storage_serialization_policy,
-                table_options,
-                target_lag,
-                warehouse,
-                refresh_mode,
-                initialize,
-                require_user,
-            }) => Ok(Self {
-                or_replace,
-                temporary,
-                external,
-                global,
-                if_not_exists,
-                transient,
-                dynamic,
-                name,
-                columns,
-                constraints,
-                hive_distribution,
-                hive_formats,
-                file_format,
-                location,
-                query,
-                without_rowid,
-                like,
-                clone,
-                version,
-                comment,
-                on_commit,
-                on_cluster,
-                primary_key,
-                order_by,
-                partition_by,
-                cluster_by,
-                clustered_by,
-                inherits,
-                partition_of,
-                for_values,
-                strict,
-                iceberg,
-                copy_grants,
-                enable_schema_evolution,
-                change_tracking,
-                data_retention_time_in_days,
-                max_data_extension_time_in_days,
-                default_ddl_collation,
-                with_aggregation_policy,
-                with_row_access_policy,
-                with_tags,
-                volatile,
-                base_location,
-                external_volume,
-                catalog,
-                catalog_sync,
-                storage_serialization_policy,
-                table_options,
-                target_lag,
-                warehouse,
-                refresh_mode,
-                initialize,
-                require_user,
-            }),
+            Statement::CreateTable(create_table) => Ok(create_table.into()),
             _ => Err(ParserError::ParserError(format!(
                 "Expected create table statement, but received: {stmt}"
             ))),
+        }
+    }
+}
+
+impl From<CreateTable> for CreateTableBuilder {
+    fn from(table: CreateTable) -> Self {
+        Self {
+            or_replace: table.or_replace,
+            temporary: table.temporary,
+            external: table.external,
+            global: table.global,
+            if_not_exists: table.if_not_exists,
+            transient: table.transient,
+            volatile: table.volatile,
+            iceberg: table.iceberg,
+            snapshot: table.snapshot,
+            dynamic: table.dynamic,
+            name: table.name,
+            columns: table.columns,
+            constraints: table.constraints,
+            hive_distribution: table.hive_distribution,
+            hive_formats: table.hive_formats,
+            file_format: table.file_format,
+            location: table.location,
+            query: table.query,
+            without_rowid: table.without_rowid,
+            like: table.like,
+            clone: table.clone,
+            version: table.version,
+            comment: table.comment,
+            on_commit: table.on_commit,
+            on_cluster: table.on_cluster,
+            primary_key: table.primary_key,
+            order_by: table.order_by,
+            partition_by: table.partition_by,
+            cluster_by: table.cluster_by,
+            clustered_by: table.clustered_by,
+            inherits: table.inherits,
+            partition_of: table.partition_of,
+            for_values: table.for_values,
+            strict: table.strict,
+            copy_grants: table.copy_grants,
+            enable_schema_evolution: table.enable_schema_evolution,
+            change_tracking: table.change_tracking,
+            data_retention_time_in_days: table.data_retention_time_in_days,
+            max_data_extension_time_in_days: table.max_data_extension_time_in_days,
+            default_ddl_collation: table.default_ddl_collation,
+            with_aggregation_policy: table.with_aggregation_policy,
+            with_row_access_policy: table.with_row_access_policy,
+            with_storage_lifecycle_policy: table.with_storage_lifecycle_policy,
+            with_tags: table.with_tags,
+            base_location: table.base_location,
+            external_volume: table.external_volume,
+            catalog: table.catalog,
+            catalog_sync: table.catalog_sync,
+            storage_serialization_policy: table.storage_serialization_policy,
+            table_options: table.table_options,
+            target_lag: table.target_lag,
+            warehouse: table.warehouse,
+            refresh_mode: table.refresh_mode,
+            initialize: table.initialize,
+            require_user: table.require_user,
+            diststyle: table.diststyle,
+            distkey: table.distkey,
+            sortkey: table.sortkey,
+            backup: table.backup,
         }
     }
 }
@@ -647,7 +722,8 @@ mod tests {
     pub fn test_from_valid_statement() {
         let builder = CreateTableBuilder::new(ObjectName::from(vec![Ident::new("table_name")]));
 
-        let stmt = builder.clone().build();
+        let create_table = builder.clone().build();
+        let stmt: Statement = create_table.into();
 
         assert_eq!(builder, CreateTableBuilder::try_from(stmt).unwrap());
     }

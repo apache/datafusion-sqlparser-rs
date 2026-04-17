@@ -72,8 +72,12 @@ fn test_databricks_exists() {
                     ]
                 ),
                 Expr::Lambda(LambdaFunction {
-                    params: OneOrManyWithParens::One(Ident::new("x")),
-                    body: Box::new(Expr::IsNull(Box::new(Expr::Identifier(Ident::new("x")))))
+                    params: OneOrManyWithParens::One(LambdaFunctionParameter {
+                        name: Ident::new("x"),
+                        data_type: None
+                    }),
+                    body: Box::new(Expr::IsNull(Box::new(Expr::Identifier(Ident::new("x"))))),
+                    syntax: LambdaSyntax::Arrow,
                 })
             ]
         ),
@@ -108,7 +112,16 @@ fn test_databricks_lambdas() {
                     ]
                 ),
                 Expr::Lambda(LambdaFunction {
-                    params: OneOrManyWithParens::Many(vec![Ident::new("p1"), Ident::new("p2")]),
+                    params: OneOrManyWithParens::Many(vec![
+                        LambdaFunctionParameter {
+                            name: Ident::new("p1"),
+                            data_type: None
+                        },
+                        LambdaFunctionParameter {
+                            name: Ident::new("p2"),
+                            data_type: None
+                        }
+                    ]),
                     body: Box::new(Expr::Case {
                         case_token: AttachedToken::empty(),
                         end_token: AttachedToken::empty(),
@@ -141,7 +154,8 @@ fn test_databricks_lambdas() {
                             },
                         ],
                         else_result: Some(Box::new(Expr::value(number("1"))))
-                    })
+                    }),
+                    syntax: LambdaSyntax::Arrow,
                 })
             ]
         )),
@@ -286,6 +300,66 @@ fn parse_use() {
 }
 
 #[test]
+fn parse_show_catalogs() {
+    databricks().verified_stmt("SHOW CATALOGS");
+    databricks().verified_stmt("SHOW TERSE CATALOGS");
+    databricks().verified_stmt("SHOW CATALOGS HISTORY");
+    databricks().verified_stmt("SHOW CATALOGS LIKE 'pay*'");
+    databricks().verified_stmt("SHOW CATALOGS 'pay*'");
+    databricks().verified_stmt("SHOW CATALOGS STARTS WITH 'pay'");
+    databricks().verified_stmt("SHOW CATALOGS LIMIT 10");
+    databricks().verified_stmt("SHOW CATALOGS HISTORY STARTS WITH 'pay'");
+
+    match databricks().verified_stmt("SHOW CATALOGS LIKE 'pay*'") {
+        Statement::ShowCatalogs {
+            terse,
+            history,
+            show_options,
+        } => {
+            assert!(!terse);
+            assert!(!history);
+            assert_eq!(show_options.show_in, None);
+            assert_eq!(show_options.starts_with, None);
+            assert_eq!(show_options.limit, None);
+            assert_eq!(show_options.limit_from, None);
+            assert_eq!(
+                show_options.filter_position,
+                Some(ShowStatementFilterPosition::Suffix(
+                    ShowStatementFilter::Like("pay*".to_string())
+                ))
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_show_catalogs_with_show_options() {
+    databricks().verified_stmt("SHOW TERSE CATALOGS HISTORY IN ACCOUNT");
+
+    match databricks().verified_stmt("SHOW TERSE CATALOGS HISTORY IN ACCOUNT") {
+        Statement::ShowCatalogs {
+            terse,
+            history,
+            show_options,
+        } => {
+            assert!(terse);
+            assert!(history);
+            assert_eq!(show_options.filter_position, None);
+            assert!(matches!(
+                show_options.show_in,
+                Some(ShowStatementIn {
+                    parent_type: Some(ShowStatementInParentType::Account),
+                    parent_name: None,
+                    ..
+                })
+            ));
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_databricks_struct_function() {
     assert_eq!(
         databricks_and_generic()
@@ -347,6 +421,7 @@ fn data_type_timestamp_ntz() {
                 "created_at".into()
             )))),
             data_type: DataType::TimestampNtz(None),
+            array: false,
             format: None
         }
     );
@@ -365,4 +440,301 @@ fn data_type_timestamp_ntz() {
         }
         s => panic!("Unexpected statement: {s:?}"),
     }
+}
+
+#[test]
+fn parse_table_time_travel() {
+    all_dialects_where(|d| d.supports_table_versioning())
+        .verified_only_select("SELECT 1 FROM t1 TIMESTAMP AS OF '2018-10-18T22:15:12.013Z'");
+
+    all_dialects_where(|d| d.supports_table_versioning()).verified_only_select(
+        "SELECT 1 FROM t1 TIMESTAMP AS OF CURRENT_TIMESTAMP() - INTERVAL 12 HOURS",
+    );
+
+    all_dialects_where(|d| d.supports_table_versioning())
+        .verified_only_select("SELECT 1 FROM t1 VERSION AS OF 1");
+
+    assert!(databricks()
+        .parse_sql_statements("SELECT 1 FROM t1 FOR TIMESTAMP AS OF 'some_timestamp'")
+        .is_err());
+
+    assert!(all_dialects_where(|d| d.supports_table_versioning())
+        .parse_sql_statements("SELECT 1 FROM t1 VERSION AS OF 1 - 2",)
+        .is_err())
+}
+
+#[test]
+fn parse_optimize_table() {
+    // Basic OPTIMIZE (Databricks style - no TABLE keyword)
+    databricks().verified_stmt("OPTIMIZE my_table");
+    databricks().verified_stmt("OPTIMIZE db.my_table");
+    databricks().verified_stmt("OPTIMIZE catalog.db.my_table");
+
+    // With WHERE clause
+    databricks().verified_stmt("OPTIMIZE my_table WHERE date = '2023-01-01'");
+    databricks()
+        .verified_stmt("OPTIMIZE my_table WHERE date >= '2023-01-01' AND date < '2023-02-01'");
+
+    // With ZORDER BY clause
+    databricks().verified_stmt("OPTIMIZE my_table ZORDER BY (col1)");
+    databricks().verified_stmt("OPTIMIZE my_table ZORDER BY (col1, col2)");
+    databricks().verified_stmt("OPTIMIZE my_table ZORDER BY (col1, col2, col3)");
+
+    // Combined WHERE and ZORDER BY
+    databricks().verified_stmt("OPTIMIZE my_table WHERE date = '2023-01-01' ZORDER BY (col1)");
+    databricks()
+        .verified_stmt("OPTIMIZE my_table WHERE date >= '2023-01-01' ZORDER BY (col1, col2)");
+
+    // Verify AST structure
+    match databricks()
+        .verified_stmt("OPTIMIZE my_table WHERE date = '2023-01-01' ZORDER BY (col1, col2)")
+    {
+        Statement::OptimizeTable {
+            name,
+            has_table_keyword,
+            on_cluster,
+            partition,
+            include_final,
+            deduplicate,
+            predicate,
+            zorder,
+        } => {
+            assert_eq!(name.to_string(), "my_table");
+            assert!(!has_table_keyword);
+            assert!(on_cluster.is_none());
+            assert!(partition.is_none());
+            assert!(!include_final);
+            assert!(deduplicate.is_none());
+            assert!(predicate.is_some());
+            assert_eq!(
+                zorder,
+                Some(vec![
+                    Expr::Identifier(Ident::new("col1")),
+                    Expr::Identifier(Ident::new("col2")),
+                ])
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // Negative cases
+    assert_eq!(
+        databricks()
+            .parse_sql_statements("OPTIMIZE my_table ZORDER BY")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: (, found: EOF".to_string())
+    );
+    assert_eq!(
+        databricks()
+            .parse_sql_statements("OPTIMIZE my_table ZORDER BY ()")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: an expression, found: )".to_string())
+    );
+}
+
+#[test]
+fn parse_create_table_partitioned_by() {
+    // Databricks allows PARTITIONED BY with just column names (referencing existing columns)
+    // https://docs.databricks.com/en/sql/language-manual/sql-ref-partition.html
+
+    // Single partition column without type
+    databricks().verified_stmt("CREATE TABLE t (col1 STRING, col2 INT) PARTITIONED BY (col1)");
+
+    // Multiple partition columns without types
+    databricks().verified_stmt(
+        "CREATE TABLE t (col1 STRING, col2 INT, col3 DATE) PARTITIONED BY (col1, col2)",
+    );
+
+    // Partition columns with types (new columns not in table spec)
+    databricks().verified_stmt("CREATE TABLE t (name STRING) PARTITIONED BY (year INT, month INT)");
+
+    // Mixed: some with types, some without
+    databricks()
+        .verified_stmt("CREATE TABLE t (id INT, name STRING) PARTITIONED BY (region, year INT)");
+
+    // Verify AST structure for column without type
+    match databricks().verified_stmt("CREATE TABLE t (col1 STRING) PARTITIONED BY (col1)") {
+        Statement::CreateTable(CreateTable {
+            name,
+            columns,
+            hive_distribution,
+            ..
+        }) => {
+            assert_eq!(name.to_string(), "t");
+            assert_eq!(columns.len(), 1);
+            assert_eq!(columns[0].name.to_string(), "col1");
+            match hive_distribution {
+                HiveDistributionStyle::PARTITIONED {
+                    columns: partition_cols,
+                } => {
+                    assert_eq!(partition_cols.len(), 1);
+                    assert_eq!(partition_cols[0].name.to_string(), "col1");
+                    assert_eq!(partition_cols[0].data_type, DataType::Unspecified);
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    }
+
+    // Verify AST structure for column with type
+    match databricks().verified_stmt("CREATE TABLE t (name STRING) PARTITIONED BY (year INT)") {
+        Statement::CreateTable(CreateTable {
+            hive_distribution:
+                HiveDistributionStyle::PARTITIONED {
+                    columns: partition_cols,
+                },
+            ..
+        }) => {
+            assert_eq!(partition_cols.len(), 1);
+            assert_eq!(partition_cols[0].name.to_string(), "year");
+            assert_eq!(partition_cols[0].data_type, DataType::Int(None));
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_databricks_struct_type() {
+    // Databricks uses colon-separated struct field syntax (colon is optional)
+    // https://docs.databricks.com/en/sql/language-manual/data-types/struct-type.html
+
+    // Basic struct with colon syntax - parses to canonical form without colons
+    databricks().one_statement_parses_to(
+        "CREATE TABLE t (col1 STRUCT<field1: STRING, field2: INT>)",
+        "CREATE TABLE t (col1 STRUCT<field1 STRING, field2 INT>)",
+    );
+
+    // Nested array of struct (the original issue case)
+    databricks().one_statement_parses_to(
+        "CREATE TABLE t (col1 ARRAY<STRUCT<finish_flag: STRING, survive_flag: STRING, score: INT>>)",
+        "CREATE TABLE t (col1 ARRAY<STRUCT<finish_flag STRING, survive_flag STRING, score INT>>)",
+    );
+
+    // Multiple struct columns
+    databricks().one_statement_parses_to(
+        "CREATE TABLE t (col1 STRUCT<a: INT, b: STRING>, col2 STRUCT<x: DOUBLE>)",
+        "CREATE TABLE t (col1 STRUCT<a INT, b STRING>, col2 STRUCT<x DOUBLE>)",
+    );
+
+    // Deeply nested structs
+    databricks().one_statement_parses_to(
+        "CREATE TABLE t (col1 STRUCT<outer: STRUCT<inner: STRING>>)",
+        "CREATE TABLE t (col1 STRUCT<outer STRUCT<inner STRING>>)",
+    );
+
+    // Struct with array field
+    databricks().one_statement_parses_to(
+        "CREATE TABLE t (col1 STRUCT<items: ARRAY<INT>, name: STRING>)",
+        "CREATE TABLE t (col1 STRUCT<items ARRAY<INT>, name STRING>)",
+    );
+
+    // Syntax without colons should also work (BigQuery compatible)
+    databricks().verified_stmt("CREATE TABLE t (col1 STRUCT<field1 STRING, field2 INT>)");
+
+    // Verify AST structure
+    match databricks().one_statement_parses_to(
+        "CREATE TABLE t (col1 STRUCT<field1: STRING, field2: INT>)",
+        "CREATE TABLE t (col1 STRUCT<field1 STRING, field2 INT>)",
+    ) {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(columns.len(), 1);
+            assert_eq!(columns[0].name.to_string(), "col1");
+            match &columns[0].data_type {
+                DataType::Struct(fields, StructBracketKind::AngleBrackets) => {
+                    assert_eq!(fields.len(), 2);
+                    assert_eq!(
+                        fields[0].field_name.as_ref().map(|i| i.to_string()),
+                        Some("field1".to_string())
+                    );
+                    assert_eq!(fields[0].field_type, DataType::String(None));
+                    assert_eq!(
+                        fields[1].field_name.as_ref().map(|i| i.to_string()),
+                        Some("field2".to_string())
+                    );
+                    assert_eq!(fields[1].field_type, DataType::Int(None));
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_databricks_json_accessor() {
+    // Basic colon accessor — unquoted field names are case-insensitive
+    databricks().verified_only_select("SELECT raw:owner, RAW:owner FROM store_data");
+
+    // Unquoted field access is case-insensitive; bracket notation is case-sensitive.
+    databricks().verified_only_select(
+        "SELECT raw:OWNER AS case_insensitive, raw:['OWNER'] AS case_sensitive FROM store_data",
+    );
+
+    // Backtick-quoted keys (Databricks delimited identifiers) normalise to double-quoted output.
+    databricks().one_statement_parses_to(
+        "SELECT raw:`zip code`, raw:`Zip Code`, raw:['fb:testid'] FROM store_data",
+        r#"SELECT raw:"zip code", raw:"Zip Code", raw:['fb:testid'] FROM store_data"#,
+    );
+
+    // Dot notation
+    databricks().verified_only_select("SELECT raw:store.bicycle FROM store_data");
+
+    // String-key bracket notation after a dot segment
+    databricks()
+        .verified_only_select("SELECT raw:store['bicycle'], raw:store['BICYCLE'] FROM store_data");
+
+    // Integer-index bracket notation
+    databricks()
+        .verified_only_select("SELECT raw:store.fruit[0], raw:store.fruit[1] FROM store_data");
+
+    // Wildcard [*] — including chained and mixed positions
+    databricks().verified_only_select(
+        "SELECT raw:store.basket[*], raw:store.basket[*][0] AS first_of_baskets, \
+         raw:store.basket[0][*] AS first_basket, raw:store.basket[*][*] AS all_elements_flattened, \
+         raw:store.basket[0][2].b AS subfield FROM store_data",
+    );
+
+    // Dot access following a wildcard bracket
+    databricks().verified_only_select("SELECT raw:store.book[*].isbn FROM store_data");
+
+    // Double-colon cast — type keyword normalises to upper case
+    databricks().one_statement_parses_to(
+        "SELECT raw:store.bicycle.price::double FROM store_data",
+        "SELECT raw:store.bicycle.price::DOUBLE FROM store_data",
+    );
+}
+
+#[test]
+fn parse_numeric_prefix_identifier() {
+    databricks().verified_stmt("SELECT * FROM catalog.schema.1st_table");
+
+    databricks().verified_stmt("SELECT * FROM a.b.1c");
+}
+
+#[test]
+fn parse_cte_without_as() {
+    databricks_and_generic().one_statement_parses_to(
+        "WITH cte (SELECT 1) SELECT * FROM cte",
+        "WITH cte AS (SELECT 1) SELECT * FROM cte",
+    );
+
+    databricks_and_generic().one_statement_parses_to(
+        "WITH a AS (SELECT 1), b (SELECT 2) SELECT * FROM a, b",
+        "WITH a AS (SELECT 1), b AS (SELECT 2) SELECT * FROM a, b",
+    );
+
+    databricks_and_generic().one_statement_parses_to(
+        "WITH cte (col1, col2) (SELECT 1, 2) SELECT * FROM cte",
+        "WITH cte (col1, col2) AS (SELECT 1, 2) SELECT * FROM cte",
+    );
+
+    databricks_and_generic().verified_query("WITH cte AS (SELECT 1) SELECT * FROM cte");
+
+    databricks_and_generic()
+        .verified_query("WITH cte (col1, col2) AS (SELECT 1, 2) SELECT * FROM cte");
+
+    assert!(all_dialects_where(|d| !d.supports_cte_without_as())
+        .parse_sql_statements("WITH cte (SELECT 1) SELECT * FROM cte")
+        .is_err());
 }

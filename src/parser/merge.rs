@@ -13,12 +13,12 @@
 //! SQL Parser for a `MERGE` statement
 
 #[cfg(not(feature = "std"))]
-use alloc::{boxed::Box, format, string::ToString, vec, vec::Vec};
+use alloc::{boxed::Box, format, vec, vec::Vec};
 
 use crate::{
     ast::{
         Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr, MergeInsertKind,
-        MergeUpdateExpr, ObjectName, OutputClause, SetExpr, Statement,
+        MergeUpdateExpr, ObjectName, OutputClause, SetExpr,
     },
     dialect::{BigQueryDialect, GenericDialect, MySqlDialect},
     keywords::Keyword,
@@ -36,10 +36,14 @@ impl Parser<'_> {
         &mut self,
         merge_token: TokenWithSpan,
     ) -> Result<Box<SetExpr>, ParserError> {
-        Ok(Box::new(SetExpr::Merge(self.parse_merge(merge_token)?)))
+        Ok(Box::new(SetExpr::Merge(
+            self.parse_merge(merge_token)?.into(),
+        )))
     }
 
-    pub fn parse_merge(&mut self, merge_token: TokenWithSpan) -> Result<Statement, ParserError> {
+    /// Parse a `MERGE` statement
+    pub fn parse_merge(&mut self, merge_token: TokenWithSpan) -> Result<Merge, ParserError> {
+        let optimizer_hints = self.maybe_parse_optimizer_hints()?;
         let into = self.parse_keyword(Keyword::INTO);
 
         let table = self.parse_table_factor()?;
@@ -54,15 +58,16 @@ impl Parser<'_> {
             None => None,
         };
 
-        Ok(Statement::Merge(Merge {
+        Ok(Merge {
             merge_token: merge_token.into(),
+            optimizer_hints,
             into,
             table,
             source,
             on: Box::new(on),
             clauses,
             output,
-        }))
+        })
     }
 
     fn parse_merge_clauses(&mut self) -> Result<Vec<MergeClause>, ParserError> {
@@ -213,7 +218,21 @@ impl Parser<'_> {
         self.parse_parenthesized_qualified_column_list(IsOptional::Optional, allow_empty)
     }
 
-    fn parse_output(
+    /// Parses an `OUTPUT` clause if present (MSSQL).
+    pub(super) fn maybe_parse_output_clause(
+        &mut self,
+    ) -> Result<Option<OutputClause>, ParserError> {
+        if self.parse_keyword(Keyword::OUTPUT) {
+            Ok(Some(self.parse_output(
+                Keyword::OUTPUT,
+                self.get_current_token().clone(),
+            )?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub(super) fn parse_output(
         &mut self,
         start_keyword: Keyword,
         start_token: TokenWithSpan,

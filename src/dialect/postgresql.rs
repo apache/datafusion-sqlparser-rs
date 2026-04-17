@@ -33,8 +33,11 @@ use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
 
+use super::keywords::RESERVED_FOR_IDENTIFIER;
+
 /// A [`Dialect`] for [PostgreSQL](https://www.postgresql.org/)
-#[derive(Debug)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PostgreSqlDialect {}
 
 const PERIOD_PREC: u8 = 200;
@@ -80,6 +83,14 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {
+        if matches!(kw, Keyword::INTERVAL) {
+            false
+        } else {
+            RESERVED_FOR_IDENTIFIER.contains(&kw)
+        }
+    }
+
     /// See <https://www.postgresql.org/docs/current/sql-createoperator.html>
     fn is_custom_operator_part(&self, ch: char) -> bool {
         matches!(
@@ -104,12 +115,12 @@ impl Dialect for PostgreSqlDialect {
     }
 
     fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
-        let token = parser.peek_token();
+        let token = parser.peek_token_ref();
         debug!("get_next_precedence() {token:?}");
 
         // we only return some custom value here when the behaviour (not merely the numeric value) differs
         // from the default implementation
-        match token.token {
+        match &token.token {
             Token::Word(w)
                 if w.keyword == Keyword::COLLATE && !parser.in_column_definition_state() =>
             {
@@ -136,6 +147,8 @@ impl Dialect for PostgreSqlDialect {
             | Token::ShiftRight
             | Token::ShiftLeft
             | Token::CustomBinaryOperator(_) => Some(Ok(PG_OTHER_PREC)),
+            // lowest prec to prevent it from turning into a binary op
+            Token::Colon => Some(Ok(self.prec_unknown())),
             _ => None,
         }
     }
@@ -159,6 +172,7 @@ impl Dialect for PostgreSqlDialect {
             Precedence::Ampersand => PG_OTHER_PREC,
             Precedence::Caret => CARET_PREC,
             Precedence::Pipe => PG_OTHER_PREC,
+            Precedence::Colon => PG_OTHER_PREC,
             Precedence::Between => BETWEEN_LIKE_PREC,
             Precedence::Eq => EQ_PREC,
             Precedence::Like => BETWEEN_LIKE_PREC,
@@ -196,6 +210,10 @@ impl Dialect for PostgreSqlDialect {
 
     /// see <https://www.postgresql.org/docs/13/functions-math.html>
     fn supports_factorial_operator(&self) -> bool {
+        true
+    }
+
+    fn supports_bitwise_shift_operators(&self) -> bool {
         true
     }
 
@@ -278,6 +296,26 @@ impl Dialect for PostgreSqlDialect {
     ///
     /// [Postgres]: https://www.postgresql.org/docs/17/datatype-datetime.html
     fn supports_interval_options(&self) -> bool {
+        true
+    }
+
+    fn supports_insert_table_alias(&self) -> bool {
+        true
+    }
+
+    fn supports_create_table_like_parenthesized(&self) -> bool {
+        true
+    }
+
+    fn supports_select_wildcard_with_alias(&self) -> bool {
+        true
+    }
+
+    fn supports_comma_separated_trim(&self) -> bool {
+        true
+    }
+
+    fn supports_xml_expressions(&self) -> bool {
         true
     }
 }

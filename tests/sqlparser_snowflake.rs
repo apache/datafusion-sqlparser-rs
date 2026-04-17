@@ -287,6 +287,32 @@ fn test_snowflake_create_table_with_row_access_policy() {
 }
 
 #[test]
+fn test_snowflake_create_table_with_storage_lifecycle_policy() {
+    // WITH keyword
+    match snowflake().verified_stmt(
+        "CREATE TABLE IF NOT EXISTS my_table (a NUMBER(38, 0), b VARIANT) WITH STORAGE LIFECYCLE POLICY dba.global_settings.my_policy ON (a)",
+    ) {
+        Statement::CreateTable(CreateTable {
+            name,
+            with_storage_lifecycle_policy,
+            ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            let policy = with_storage_lifecycle_policy.unwrap();
+            assert_eq!("dba.global_settings.my_policy", policy.policy.to_string());
+            assert_eq!(vec![Ident::new("a")], policy.on);
+        }
+        _ => unreachable!(),
+    }
+
+    // Without WITH keyword — canonicalizes to WITH form
+    snowflake().one_statement_parses_to(
+        "CREATE TABLE my_table (a NUMBER(38, 0)) STORAGE LIFECYCLE POLICY my_policy ON (a, b)",
+        "CREATE TABLE my_table (a NUMBER(38, 0)) WITH STORAGE LIFECYCLE POLICY my_policy ON (a, b)",
+    );
+}
+
+#[test]
 fn test_snowflake_create_table_with_tag() {
     match snowflake()
         .verified_stmt("CREATE TABLE my_table (a number) WITH TAG (A='TAG A', B='TAG B')")
@@ -1101,8 +1127,8 @@ fn parse_create_dynamic_table() {
         " EXTERNAL_VOLUME='my_external_volume'",
         " CATALOG='SNOWFLAKE'",
         " BASE_LOCATION='my_iceberg_table'",
-        " TARGET_LAG='20 minutes'", 
-        " WAREHOUSE=mywh",       
+        " TARGET_LAG='20 minutes'",
+        " WAREHOUSE=mywh",
         " AS SELECT product_id, product_name FROM staging_table"
     ));
 
@@ -1250,6 +1276,7 @@ fn parse_array() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("a"))),
             data_type: DataType::Array(ArrayElemTypeDef::None),
+            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -1265,37 +1292,8 @@ fn parse_lateral_flatten() {
 // https://docs.snowflake.com/en/user-guide/querying-semistructured
 #[test]
 fn parse_semi_structured_data_traversal() {
-    // most basic case
-    let sql = "SELECT a:b FROM t";
-    let select = snowflake().verified_only_select(sql);
-    assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonAccess {
-            value: Box::new(Expr::Identifier(Ident::new("a"))),
-            path: JsonPath {
-                path: vec![JsonPathElem::Dot {
-                    key: "b".to_owned(),
-                    quoted: false
-                }]
-            },
-        }),
-        select.projection[0]
-    );
-
-    // identifier can be quoted
-    let sql = r#"SELECT a:"my long object key name" FROM t"#;
-    let select = snowflake().verified_only_select(sql);
-    assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonAccess {
-            value: Box::new(Expr::Identifier(Ident::new("a"))),
-            path: JsonPath {
-                path: vec![JsonPathElem::Dot {
-                    key: "my long object key name".to_owned(),
-                    quoted: true
-                }]
-            },
-        }),
-        select.projection[0]
-    );
+    // see `tests/sqlparser_common.rs` -> `parse_semi_structured_data_traversal` for more test
+    // cases. This test only has Snowflake-specific syntax like array access.
 
     // expressions are allowed in bracket notation
     let sql = r#"SELECT a[2 + 2] FROM t"#;
@@ -1314,88 +1312,6 @@ fn parse_semi_structured_data_traversal() {
             },
         }),
         select.projection[0]
-    );
-
-    snowflake().verified_stmt("SELECT a:b::INT FROM t");
-
-    // unquoted keywords are permitted in the object key
-    let sql = "SELECT a:select, a:from FROM t";
-    let select = snowflake().verified_only_select(sql);
-    assert_eq!(
-        vec![
-            SelectItem::UnnamedExpr(Expr::JsonAccess {
-                value: Box::new(Expr::Identifier(Ident::new("a"))),
-                path: JsonPath {
-                    path: vec![JsonPathElem::Dot {
-                        key: "select".to_owned(),
-                        quoted: false
-                    }]
-                },
-            }),
-            SelectItem::UnnamedExpr(Expr::JsonAccess {
-                value: Box::new(Expr::Identifier(Ident::new("a"))),
-                path: JsonPath {
-                    path: vec![JsonPathElem::Dot {
-                        key: "from".to_owned(),
-                        quoted: false
-                    }]
-                },
-            })
-        ],
-        select.projection
-    );
-
-    // multiple levels can be traversed
-    // https://docs.snowflake.com/en/user-guide/querying-semistructured#dot-notation
-    let sql = r#"SELECT a:foo."bar".baz"#;
-    let select = snowflake().verified_only_select(sql);
-    assert_eq!(
-        vec![SelectItem::UnnamedExpr(Expr::JsonAccess {
-            value: Box::new(Expr::Identifier(Ident::new("a"))),
-            path: JsonPath {
-                path: vec![
-                    JsonPathElem::Dot {
-                        key: "foo".to_owned(),
-                        quoted: false,
-                    },
-                    JsonPathElem::Dot {
-                        key: "bar".to_owned(),
-                        quoted: true,
-                    },
-                    JsonPathElem::Dot {
-                        key: "baz".to_owned(),
-                        quoted: false,
-                    }
-                ]
-            },
-        })],
-        select.projection
-    );
-
-    // dot and bracket notation can be mixed (starting with : case)
-    // https://docs.snowflake.com/en/user-guide/querying-semistructured#dot-notation
-    let sql = r#"SELECT a:foo[0].bar"#;
-    let select = snowflake().verified_only_select(sql);
-    assert_eq!(
-        vec![SelectItem::UnnamedExpr(Expr::JsonAccess {
-            value: Box::new(Expr::Identifier(Ident::new("a"))),
-            path: JsonPath {
-                path: vec![
-                    JsonPathElem::Dot {
-                        key: "foo".to_owned(),
-                        quoted: false,
-                    },
-                    JsonPathElem::Bracket {
-                        key: Expr::value(number("0")),
-                    },
-                    JsonPathElem::Dot {
-                        key: "bar".to_owned(),
-                        quoted: false,
-                    }
-                ]
-            },
-        })],
-        select.projection
     );
 
     // dot and bracket notation can be mixed (starting with bracket case)
@@ -1460,8 +1376,6 @@ fn parse_semi_structured_data_traversal() {
         Expr::JsonAccess {
             value: Box::new(Expr::Cast {
                 kind: CastKind::DoubleColon,
-                data_type: DataType::Array(ArrayElemTypeDef::None),
-                format: None,
                 expr: Box::new(Expr::JsonAccess {
                     value: Box::new(Expr::Identifier(Ident::new("a"))),
                     path: JsonPath {
@@ -1470,7 +1384,10 @@ fn parse_semi_structured_data_traversal() {
                             quoted: false
                         }]
                     }
-                })
+                }),
+                data_type: DataType::Array(ArrayElemTypeDef::None),
+                array: false,
+                format: None,
             }),
             path: JsonPath {
                 path: vec![JsonPathElem::Bracket {
@@ -1583,7 +1500,9 @@ fn snowflake_and_generic() -> TestedDialects {
 fn test_select_wildcard_with_exclude() {
     let select = snowflake_and_generic().verified_only_select("SELECT * EXCLUDE (col_a) FROM data");
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
-        opt_exclude: Some(ExcludeSelectItem::Multiple(vec![Ident::new("col_a")])),
+        opt_exclude: Some(ExcludeSelectItem::Multiple(vec![ObjectName::from(
+            Ident::new("col_a"),
+        )])),
         ..Default::default()
     });
     assert_eq!(expected, select.projection[0]);
@@ -1593,7 +1512,9 @@ fn test_select_wildcard_with_exclude() {
     let expected = SelectItem::QualifiedWildcard(
         SelectItemQualifiedWildcardKind::ObjectName(ObjectName::from(vec![Ident::new("name")])),
         WildcardAdditionalOptions {
-            opt_exclude: Some(ExcludeSelectItem::Single(Ident::new("department_id"))),
+            opt_exclude: Some(ExcludeSelectItem::Single(ObjectName::from(Ident::new(
+                "department_id",
+            )))),
             ..Default::default()
         },
     );
@@ -1603,8 +1524,8 @@ fn test_select_wildcard_with_exclude() {
         .verified_only_select("SELECT * EXCLUDE (department_id, employee_id) FROM employee_table");
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
         opt_exclude: Some(ExcludeSelectItem::Multiple(vec![
-            Ident::new("department_id"),
-            Ident::new("employee_id"),
+            ObjectName::from(Ident::new("department_id")),
+            ObjectName::from(Ident::new("employee_id")),
         ])),
         ..Default::default()
     });
@@ -1689,7 +1610,9 @@ fn test_select_wildcard_with_exclude_and_rename() {
     let select = snowflake_and_generic()
         .verified_only_select("SELECT * EXCLUDE col_z RENAME col_a AS col_b FROM data");
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
-        opt_exclude: Some(ExcludeSelectItem::Single(Ident::new("col_z"))),
+        opt_exclude: Some(ExcludeSelectItem::Single(ObjectName::from(Ident::new(
+            "col_z",
+        )))),
         opt_rename: Some(RenameSelectItem::Single(IdentWithAlias {
             ident: Ident::new("col_a"),
             alias: Ident::new("col_b"),
@@ -2120,27 +2043,27 @@ fn test_create_stage_with_stage_params() {
             );
             assert!(stage_params.credentials.options.contains(&KeyValueOption {
                 option_name: "AWS_KEY_ID".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "1a2b3c".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("1a2b3c".to_string()).with_empty_span()
+                ),
             }));
             assert!(stage_params.credentials.options.contains(&KeyValueOption {
                 option_name: "AWS_SECRET_KEY".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "4x5y6z".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("4x5y6z".to_string()).with_empty_span()
+                ),
             }));
             assert!(stage_params.encryption.options.contains(&KeyValueOption {
                 option_name: "MASTER_KEY".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "key".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("key".to_string()).with_empty_span()
+                ),
             }));
             assert!(stage_params.encryption.options.contains(&KeyValueOption {
                 option_name: "TYPE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "AWS_SSE_KMS".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("AWS_SSE_KMS".to_string()).with_empty_span()
+                ),
             }));
         }
         _ => unreachable!(),
@@ -2164,17 +2087,17 @@ fn test_create_stage_with_directory_table_params() {
         } => {
             assert!(directory_table_params.options.contains(&KeyValueOption {
                 option_name: "ENABLE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Boolean(true)),
+                option_value: KeyValueOptionKind::Single(Value::Boolean(true).with_empty_span()),
             }));
             assert!(directory_table_params.options.contains(&KeyValueOption {
                 option_name: "REFRESH_ON_CREATE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Boolean(false)),
+                option_value: KeyValueOptionKind::Single(Value::Boolean(false).with_empty_span()),
             }));
             assert!(directory_table_params.options.contains(&KeyValueOption {
                 option_name: "NOTIFICATION_INTEGRATION".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "some-string".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("some-string".to_string()).with_empty_span()
+                ),
             }));
         }
         _ => unreachable!(),
@@ -2194,17 +2117,21 @@ fn test_create_stage_with_file_format() {
         Statement::CreateStage { file_format, .. } => {
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "COMPRESSION".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder("AUTO".to_string())),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("AUTO".to_string()).with_empty_span()
+                ),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "BINARY_FORMAT".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder("HEX".to_string())),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("HEX".to_string()).with_empty_span()
+                ),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "ESCAPE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    r#"\\"#.to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString(r#"\\"#.to_string()).with_empty_span()
+                ),
             }));
         }
         _ => unreachable!(),
@@ -2226,13 +2153,13 @@ fn test_create_stage_with_copy_options() {
         Statement::CreateStage { copy_options, .. } => {
             assert!(copy_options.options.contains(&KeyValueOption {
                 option_name: "ON_ERROR".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder(
-                    "CONTINUE".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("CONTINUE".to_string()).with_empty_span()
+                ),
             }));
             assert!(copy_options.options.contains(&KeyValueOption {
                 option_name: "FORCE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Boolean(true)),
+                option_value: KeyValueOptionKind::Single(Value::Boolean(true).with_empty_span()),
             }));
         }
         _ => unreachable!(),
@@ -2363,27 +2290,27 @@ fn test_copy_into_with_stage_params() {
             );
             assert!(stage_params.credentials.options.contains(&KeyValueOption {
                 option_name: "AWS_KEY_ID".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "1a2b3c".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("1a2b3c".to_string()).with_empty_span()
+                ),
             }));
             assert!(stage_params.credentials.options.contains(&KeyValueOption {
                 option_name: "AWS_SECRET_KEY".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "4x5y6z".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("4x5y6z".to_string()).with_empty_span()
+                ),
             }));
             assert!(stage_params.encryption.options.contains(&KeyValueOption {
                 option_name: "MASTER_KEY".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "key".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("key".to_string()).with_empty_span()
+                ),
             }));
             assert!(stage_params.encryption.options.contains(&KeyValueOption {
                 option_name: "TYPE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    "AWS_SSE_KMS".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString("AWS_SSE_KMS".to_string()).with_empty_span()
+                ),
             }));
         }
         _ => unreachable!(),
@@ -2534,17 +2461,21 @@ fn test_copy_into_file_format() {
         Statement::CopyIntoSnowflake { file_format, .. } => {
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "COMPRESSION".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder("AUTO".to_string())),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("AUTO".to_string()).with_empty_span()
+                ),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "BINARY_FORMAT".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder("HEX".to_string())),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("HEX".to_string()).with_empty_span()
+                ),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "ESCAPE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    r#"\\"#.to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString(r#"\\"#.to_string()).with_empty_span()
+                ),
             }));
         }
         _ => unreachable!(),
@@ -2572,17 +2503,21 @@ fn test_copy_into_file_format() {
         Statement::CopyIntoSnowflake { file_format, .. } => {
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "COMPRESSION".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder("AUTO".to_string())),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("AUTO".to_string()).with_empty_span()
+                ),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "BINARY_FORMAT".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder("HEX".to_string())),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("HEX".to_string()).with_empty_span()
+                ),
             }));
             assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "ESCAPE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::SingleQuotedString(
-                    r#"\\"#.to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::SingleQuotedString(r#"\\"#.to_string()).with_empty_span()
+                ),
             }));
         }
         _ => unreachable!(),
@@ -2603,13 +2538,13 @@ fn test_copy_into_copy_options() {
         Statement::CopyIntoSnowflake { copy_options, .. } => {
             assert!(copy_options.options.contains(&KeyValueOption {
                 option_name: "ON_ERROR".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Placeholder(
-                    "CONTINUE".to_string()
-                )),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("CONTINUE".to_string()).with_empty_span()
+                ),
             }));
             assert!(copy_options.options.contains(&KeyValueOption {
                 option_name: "FORCE".to_string(),
-                option_value: KeyValueOptionKind::Single(Value::Boolean(true)),
+                option_value: KeyValueOptionKind::Single(Value::Boolean(true).with_empty_span()),
             }));
         }
         _ => unreachable!(),
@@ -2741,6 +2676,21 @@ fn test_snowflake_copy_into_stage_name_ends_with_parens() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn test_snowflake_stage_name_with_special_chars() {
+    // Stage path with '=' (Hive-style partitioning)
+    snowflake().verified_stmt("SELECT * FROM @stage/day=18/23.parquet");
+
+    // Stage path with ':' (time-based partitioning)
+    snowflake().verified_stmt("SELECT * FROM @stage/0:18:23/23.parquet");
+
+    // COPY INTO with '=' in stage path
+    snowflake().verified_stmt("COPY INTO my_table FROM @stage/day=18/file.parquet");
+
+    // COPY INTO with ':' in stage path
+    snowflake().verified_stmt("COPY INTO my_table FROM @stage/0:18:23/file.parquet");
 }
 
 #[test]
@@ -3311,12 +3261,13 @@ fn parse_view_column_descriptions() {
 
 #[test]
 fn test_parentheses_overflow() {
-    // TODO: increase / improve after we fix the recursion limit
-    // for real (see https://github.com/apache/datafusion-sqlparser-rs/issues/984)
-    let max_nesting_level: usize = 25;
+    // Use a modest nesting level to avoid actual stack overflow on
+    // CI runners with small thread stacks (debug builds use large frames
+    // and each nesting level adds extra depth via maybe_parse).
+    let max_nesting_level: usize = 20;
 
-    // Verify the recursion check is not too wasteful... (num of parentheses - 2 is acceptable)
-    let slack = 2;
+    // Verify the recursion check is not too wasteful (num of parentheses within budget)
+    let slack = 3;
     let l_parens = "(".repeat(max_nesting_level - slack);
     let r_parens = ")".repeat(max_nesting_level - slack);
     let sql = format!("SELECT * FROM {l_parens}a.b.c{r_parens}");
@@ -3324,8 +3275,8 @@ fn test_parentheses_overflow() {
         snowflake_with_recursion_limit(max_nesting_level).parse_sql_statements(sql.as_str());
     assert_eq!(parsed.err(), None);
 
-    // Verify the recursion check triggers... (num of parentheses - 1 is acceptable)
-    let slack = 1;
+    // Verify the recursion check triggers (one more paren exceeds the budget)
+    let slack = 2;
     let l_parens = "(".repeat(max_nesting_level - slack);
     let r_parens = ")".repeat(max_nesting_level - slack);
     let sql = format!("SELECT * FROM {l_parens}a.b.c{r_parens}");
@@ -3513,6 +3464,344 @@ fn test_table_sample() {
         .verified_stmt("SELECT * FROM testtable TABLESAMPLE SYSTEM (3) REPEATABLE (82)");
     snowflake_and_generic().verified_stmt("SELECT id FROM mytable TABLESAMPLE (10) REPEATABLE (1)");
     snowflake_and_generic().verified_stmt("SELECT id FROM mytable TABLESAMPLE (10) SEED (1)");
+}
+
+#[test]
+fn test_subquery_sample() {
+    // Test SAMPLE clause on subqueries (derived tables)
+    snowflake_and_generic().verified_stmt("SELECT * FROM (SELECT * FROM mytable) SAMPLE (10)");
+    snowflake_and_generic()
+        .verified_stmt("SELECT * FROM (SELECT * FROM mytable) SAMPLE (10000 ROWS)");
+    snowflake_and_generic()
+        .verified_stmt("SELECT * FROM (SELECT * FROM mytable) AS t SAMPLE (50 PERCENT)");
+    // Nested subquery with SAMPLE
+    snowflake_and_generic().verified_stmt(
+        "SELECT * FROM (SELECT * FROM (SELECT report_from FROM mytable) SAMPLE (10000 ROWS)) AS anon_1",
+    );
+    // SAMPLE with SEED on subquery
+    snowflake_and_generic()
+        .verified_stmt("SELECT * FROM (SELECT * FROM mytable) SAMPLE (10) SEED (42)");
+}
+
+#[test]
+fn test_multi_table_insert_unconditional() {
+    // Basic unconditional multi-table insert
+    // See: https://docs.snowflake.com/en/sql-reference/sql/insert-multi-table
+    snowflake().verified_stmt("INSERT ALL INTO t1 SELECT n1, n2, n3 FROM src");
+
+    // Multiple INTO clauses
+    snowflake().verified_stmt("INSERT ALL INTO t1 INTO t2 SELECT n1, n2, n3 FROM src");
+
+    // With column list
+    snowflake().verified_stmt("INSERT ALL INTO t1 (c1, c2, c3) SELECT n1, n2, n3 FROM src");
+
+    // With VALUES clause
+    snowflake().verified_stmt(
+        "INSERT ALL INTO t1 (c1, c2, c3) VALUES (n2, n1, DEFAULT) SELECT n1, n2, n3 FROM src",
+    );
+
+    // Complex example from Snowflake docs
+    snowflake().verified_stmt(
+        "INSERT ALL INTO t1 INTO t1 (c1, c2, c3) VALUES (n2, n1, DEFAULT) INTO t2 (c1, c2, c3) INTO t2 VALUES (n3, n2, n1) SELECT n1, n2, n3 FROM src"
+    );
+
+    // With OVERWRITE
+    snowflake().verified_stmt("INSERT OVERWRITE ALL INTO t1 INTO t2 SELECT n1, n2, n3 FROM src");
+}
+
+#[test]
+fn test_multi_table_insert_conditional() {
+    // Basic conditional multi-table insert with WHEN clause
+    // See: https://docs.snowflake.com/en/sql-reference/sql/insert-multi-table
+    snowflake().verified_stmt("INSERT ALL WHEN n1 > 100 THEN INTO t1 SELECT n1 FROM src");
+
+    // Multiple WHEN clauses
+    snowflake().verified_stmt(
+        "INSERT ALL WHEN n1 > 100 THEN INTO t1 WHEN n1 > 10 THEN INTO t2 SELECT n1 FROM src",
+    );
+
+    // WHEN with multiple INTO clauses
+    snowflake().verified_stmt("INSERT ALL WHEN n1 > 10 THEN INTO t1 INTO t2 SELECT n1 FROM src");
+
+    // With ELSE clause
+    snowflake()
+        .verified_stmt("INSERT ALL WHEN n1 > 100 THEN INTO t1 ELSE INTO t2 SELECT n1 FROM src");
+
+    // Complex conditional insert from Snowflake docs
+    snowflake().verified_stmt(
+        "INSERT ALL WHEN n1 > 100 THEN INTO t1 WHEN n1 > 10 THEN INTO t1 INTO t2 ELSE INTO t2 SELECT n1 FROM src"
+    );
+
+    // INSERT FIRST - only first matching WHEN clause executes
+    snowflake().verified_stmt(
+        "INSERT FIRST WHEN n1 > 100 THEN INTO t1 WHEN n1 > 10 THEN INTO t1 INTO t2 ELSE INTO t2 SELECT n1 FROM src"
+    );
+
+    // With OVERWRITE
+    snowflake().verified_stmt(
+        "INSERT OVERWRITE ALL WHEN n1 > 100 THEN INTO t1 ELSE INTO t2 SELECT n1 FROM src",
+    );
+
+    // WHEN with always-true condition
+    snowflake().verified_stmt("INSERT ALL WHEN 1 = 1 THEN INTO t1 SELECT n1 FROM src");
+}
+
+#[test]
+fn test_multi_table_insert_with_values() {
+    // INTO clause with VALUES using column references
+    snowflake().verified_stmt("INSERT ALL INTO t1 VALUES (n1, n2) SELECT n1, n2 FROM src");
+
+    // INTO clause with VALUES using DEFAULT
+    snowflake().verified_stmt(
+        "INSERT ALL INTO t1 (c1, c2, c3) VALUES (n1, n2, DEFAULT) SELECT n1, n2 FROM src",
+    );
+
+    // INTO clause with VALUES using NULL
+    snowflake().verified_stmt(
+        "INSERT ALL INTO t1 (c1, c2, c3) VALUES (n1, NULL, n2) SELECT n1, n2 FROM src",
+    );
+
+    // Positional alias in VALUES
+    snowflake().verified_stmt("INSERT ALL INTO t1 VALUES ($1, $2) SELECT 1, 50 AS an_alias");
+}
+
+/// Unit tests for multi-table INSERT AST structure validation
+#[test]
+fn test_multi_table_insert_ast_unconditional() {
+    // Test basic unconditional multi-table insert AST
+    let sql = "INSERT ALL INTO t1 INTO t2 (c1, c2) SELECT n1, n2 FROM src";
+    let stmt = snowflake().verified_stmt(sql);
+
+    match stmt {
+        Statement::Insert(Insert {
+            multi_table_insert_type,
+            overwrite,
+            multi_table_into_clauses,
+            multi_table_when_clauses,
+            multi_table_else_clause,
+            source,
+            ..
+        }) => {
+            // Should be INSERT ALL (not FIRST)
+            assert_eq!(multi_table_insert_type, Some(MultiTableInsertType::All));
+            assert!(!overwrite);
+
+            // Should have 2 INTO clauses
+            assert_eq!(multi_table_into_clauses.len(), 2);
+
+            // First INTO clause: INTO t1
+            assert_eq!(multi_table_into_clauses[0].table_name.to_string(), "t1");
+            assert!(multi_table_into_clauses[0].columns.is_empty());
+            assert!(multi_table_into_clauses[0].values.is_none());
+
+            // Second INTO clause: INTO t2 (c1, c2)
+            assert_eq!(multi_table_into_clauses[1].table_name.to_string(), "t2");
+            assert_eq!(multi_table_into_clauses[1].columns.len(), 2);
+            assert_eq!(multi_table_into_clauses[1].columns[0].to_string(), "c1");
+            assert_eq!(multi_table_into_clauses[1].columns[1].to_string(), "c2");
+            assert!(multi_table_into_clauses[1].values.is_none());
+
+            // No WHEN clauses for unconditional insert
+            assert!(multi_table_when_clauses.is_empty());
+            assert!(multi_table_else_clause.is_none());
+
+            // Should have source query
+            assert!(source.is_some());
+        }
+        _ => panic!("Expected INSERT statement"),
+    }
+}
+
+#[test]
+fn test_multi_table_insert_ast_with_values() {
+    // Test INTO clause with VALUES
+    let sql = "INSERT ALL INTO t1 (c1, c2, c3) VALUES (n1, n2, DEFAULT) SELECT n1, n2 FROM src";
+    let stmt = snowflake().verified_stmt(sql);
+
+    match stmt {
+        Statement::Insert(Insert {
+            multi_table_into_clauses,
+            ..
+        }) => {
+            assert_eq!(multi_table_into_clauses.len(), 1);
+
+            let into_clause = &multi_table_into_clauses[0];
+            assert_eq!(into_clause.table_name.to_string(), "t1");
+            assert_eq!(into_clause.columns.len(), 3);
+
+            // Check VALUES clause
+            let values = into_clause.values.as_ref().expect("Expected VALUES clause");
+            assert_eq!(values.values.len(), 3);
+
+            // First value: n1 (expression)
+            match &values.values[0] {
+                MultiTableInsertValue::Expr(expr) => {
+                    assert_eq!(expr.to_string(), "n1");
+                }
+                _ => panic!("Expected Expr"),
+            }
+
+            // Second value: n2 (expression)
+            match &values.values[1] {
+                MultiTableInsertValue::Expr(expr) => {
+                    assert_eq!(expr.to_string(), "n2");
+                }
+                _ => panic!("Expected Expr"),
+            }
+
+            // Third value: DEFAULT
+            match &values.values[2] {
+                MultiTableInsertValue::Default => {}
+                _ => panic!("Expected DEFAULT"),
+            }
+        }
+        _ => panic!("Expected INSERT statement"),
+    }
+}
+
+#[test]
+fn test_multi_table_insert_ast_conditional() {
+    // Test conditional multi-table insert with WHEN clauses
+    let sql = "INSERT ALL WHEN n1 > 100 THEN INTO t1 WHEN n1 > 10 THEN INTO t2 INTO t3 ELSE INTO t4 SELECT n1 FROM src";
+    let stmt = snowflake().verified_stmt(sql);
+
+    match stmt {
+        Statement::Insert(Insert {
+            multi_table_insert_type,
+            multi_table_into_clauses,
+            multi_table_when_clauses,
+            multi_table_else_clause,
+            ..
+        }) => {
+            // Should be INSERT ALL (not FIRST)
+            assert_eq!(multi_table_insert_type, Some(MultiTableInsertType::All));
+
+            // Unconditional INTO clauses should be empty for conditional insert
+            assert!(multi_table_into_clauses.is_empty());
+
+            // Should have 2 WHEN clauses
+            assert_eq!(multi_table_when_clauses.len(), 2);
+
+            // First WHEN clause: WHEN n1 > 100 THEN INTO t1
+            assert_eq!(
+                multi_table_when_clauses[0].condition.to_string(),
+                "n1 > 100"
+            );
+            assert_eq!(multi_table_when_clauses[0].into_clauses.len(), 1);
+            assert_eq!(
+                multi_table_when_clauses[0].into_clauses[0]
+                    .table_name
+                    .to_string(),
+                "t1"
+            );
+
+            // Second WHEN clause: WHEN n1 > 10 THEN INTO t2 INTO t3
+            assert_eq!(multi_table_when_clauses[1].condition.to_string(), "n1 > 10");
+            assert_eq!(multi_table_when_clauses[1].into_clauses.len(), 2);
+            assert_eq!(
+                multi_table_when_clauses[1].into_clauses[0]
+                    .table_name
+                    .to_string(),
+                "t2"
+            );
+            assert_eq!(
+                multi_table_when_clauses[1].into_clauses[1]
+                    .table_name
+                    .to_string(),
+                "t3"
+            );
+
+            // ELSE clause: ELSE INTO t4
+            let else_clause = multi_table_else_clause.expect("Expected ELSE clause");
+            assert_eq!(else_clause.len(), 1);
+            assert_eq!(else_clause[0].table_name.to_string(), "t4");
+        }
+        _ => panic!("Expected INSERT statement"),
+    }
+}
+
+#[test]
+fn test_multi_table_insert_ast_first() {
+    // Test INSERT FIRST vs INSERT ALL
+    let sql =
+        "INSERT FIRST WHEN n1 > 100 THEN INTO t1 WHEN n1 > 10 THEN INTO t2 SELECT n1 FROM src";
+    let stmt = snowflake().verified_stmt(sql);
+
+    match stmt {
+        Statement::Insert(Insert {
+            multi_table_insert_type,
+            multi_table_when_clauses,
+            ..
+        }) => {
+            // Should be INSERT FIRST
+            assert_eq!(multi_table_insert_type, Some(MultiTableInsertType::First));
+            assert_eq!(multi_table_when_clauses.len(), 2);
+        }
+        _ => panic!("Expected INSERT statement"),
+    }
+}
+
+#[test]
+fn test_multi_table_insert_ast_overwrite() {
+    // Test INSERT OVERWRITE ALL
+    let sql = "INSERT OVERWRITE ALL INTO t1 INTO t2 SELECT n1 FROM src";
+    let stmt = snowflake().verified_stmt(sql);
+
+    match stmt {
+        Statement::Insert(Insert {
+            overwrite,
+            multi_table_insert_type,
+            multi_table_into_clauses,
+            ..
+        }) => {
+            assert!(overwrite);
+            assert_eq!(multi_table_insert_type, Some(MultiTableInsertType::All));
+            assert_eq!(multi_table_into_clauses.len(), 2);
+        }
+        _ => panic!("Expected INSERT statement"),
+    }
+}
+
+#[test]
+fn test_multi_table_insert_ast_complex_values() {
+    // Test complex VALUES with expressions
+    let sql = "INSERT ALL INTO t1 VALUES (n1 + n2, n3 * 2, DEFAULT) SELECT n1, n2, n3 FROM src";
+    let stmt = snowflake().verified_stmt(sql);
+
+    match stmt {
+        Statement::Insert(Insert {
+            multi_table_into_clauses,
+            ..
+        }) => {
+            assert_eq!(multi_table_into_clauses.len(), 1);
+
+            let values = multi_table_into_clauses[0]
+                .values
+                .as_ref()
+                .expect("Expected VALUES");
+            assert_eq!(values.values.len(), 3);
+
+            // First value: n1 + n2 (binary expression)
+            match &values.values[0] {
+                MultiTableInsertValue::Expr(Expr::BinaryOp { op, .. }) => {
+                    assert_eq!(*op, BinaryOperator::Plus);
+                }
+                _ => panic!("Expected BinaryOp expression"),
+            }
+
+            // Second value: n3 * 2 (binary expression)
+            match &values.values[1] {
+                MultiTableInsertValue::Expr(Expr::BinaryOp { op, .. }) => {
+                    assert_eq!(*op, BinaryOperator::Multiply);
+                }
+                _ => panic!("Expected BinaryOp expression"),
+            }
+
+            // Third value: DEFAULT
+            assert!(matches!(&values.values[2], MultiTableInsertValue::Default));
+        }
+        _ => panic!("Expected INSERT statement"),
+    }
 }
 
 #[test]
@@ -3728,6 +4017,32 @@ fn test_timetravel_at_before() {
     snowflake().verified_only_select("SELECT * FROM tbl AT(TIMESTAMP => '2024-12-15 00:00:00')");
     snowflake()
         .verified_only_select("SELECT * FROM tbl BEFORE(TIMESTAMP => '2024-12-15 00:00:00')");
+}
+
+#[test]
+fn test_changes_clause() {
+    // CHANGES with AT and END
+    snowflake().verified_stmt(
+        r#"SELECT a FROM "PCH_ODS_FIDELIO"."SRC_VW_SYS_ACC_MASTER" CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP_TZ('2026-02-18 11:23:19.660000000')) END(TIMESTAMP => TO_TIMESTAMP_TZ('2026-02-18 11:38:30.211000000'))"#,
+    );
+
+    // CHANGES with AT only (no END)
+    snowflake().verified_stmt(
+        "SELECT a FROM t CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP_TZ('2026-02-18 11:23:19.660000000'))",
+    );
+
+    // CHANGES with APPEND_ONLY
+    snowflake().verified_stmt(
+        "SELECT a FROM t CHANGES(INFORMATION => APPEND_ONLY) AT(TIMESTAMP => TO_TIMESTAMP_TZ('2026-01-01 00:00:00'))",
+    );
+
+    // CHANGES with OFFSET
+    snowflake().verified_stmt("SELECT a FROM t CHANGES(INFORMATION => DEFAULT) AT(OFFSET => -60)");
+
+    // CHANGES with STATEMENT
+    snowflake().verified_stmt(
+        "SELECT a FROM t CHANGES(INFORMATION => DEFAULT) AT(STATEMENT => '8e5d0ca9-005e-44e6-b858-a8f5b37c5726')",
+    );
 }
 
 #[test]
@@ -4378,6 +4693,27 @@ END
 }
 
 #[test]
+fn test_begin_transaction() {
+    snowflake().verified_stmt("BEGIN TRANSACTION");
+    snowflake().verified_stmt("BEGIN WORK");
+
+    // BEGIN TRANSACTION with statements
+    let stmts = snowflake()
+        .parse_sql_statements("BEGIN TRANSACTION; DROP TABLE IF EXISTS bla; COMMIT")
+        .unwrap();
+    assert_eq!(3, stmts.len());
+
+    // Bare BEGIN (no TRANSACTION keyword) with statements
+    let stmts = snowflake()
+        .parse_sql_statements("BEGIN; DROP TABLE IF EXISTS bla; COMMIT")
+        .unwrap();
+    assert_eq!(3, stmts.len());
+
+    // Bare BEGIN at EOF (no semicolon, no TRANSACTION keyword)
+    snowflake().verified_stmt("BEGIN");
+}
+
+#[test]
 fn test_snowflake_fetch_clause_syntax() {
     let canonical = "SELECT c1 FROM fetch_test FETCH FIRST 2 ROWS ONLY";
     snowflake().verified_only_select_with_canonical("SELECT c1 FROM fetch_test FETCH 2", canonical);
@@ -4415,6 +4751,17 @@ fn test_snowflake_create_view_with_composite_policy_name() {
     let create_view_with_tag =
         r#"CREATE VIEW X (COL WITH MASKING POLICY foo.bar.baz) AS SELECT * FROM Y"#;
     snowflake().verified_stmt(create_view_with_tag);
+}
+
+#[test]
+fn test_snowflake_create_view_copy_grants() {
+    snowflake().verified_stmt("CREATE OR REPLACE VIEW bla COPY GRANTS AS (SELECT * FROM source)");
+    snowflake()
+        .verified_stmt("CREATE OR REPLACE SECURE VIEW bla COPY GRANTS AS (SELECT * FROM source)");
+    // COPY GRANTS with column list
+    snowflake().verified_stmt(
+        "CREATE OR REPLACE VIEW bla COPY GRANTS (a, b) AS (SELECT a, b FROM source)",
+    );
 }
 
 #[test]
@@ -4634,4 +4981,32 @@ fn test_alter_dynamic_table() {
     snowflake().verified_stmt("ALTER DYNAMIC TABLE my_database.my_schema.my_dynamic_table REFRESH");
     snowflake().verified_stmt("ALTER DYNAMIC TABLE my_dyn_table SUSPEND");
     snowflake().verified_stmt("ALTER DYNAMIC TABLE my_dyn_table RESUME");
+}
+
+#[test]
+fn test_alter_external_table() {
+    snowflake().verified_stmt("ALTER EXTERNAL TABLE some_table REFRESH");
+    snowflake().verified_stmt("ALTER EXTERNAL TABLE some_table REFRESH 'year=2025/month=12/'");
+    snowflake().verified_stmt("ALTER EXTERNAL TABLE IF EXISTS some_table REFRESH");
+    snowflake()
+        .verified_stmt("ALTER EXTERNAL TABLE IF EXISTS some_table REFRESH 'year=2025/month=12/'");
+}
+
+#[test]
+fn test_truncate_table_if_exists() {
+    snowflake().verified_stmt("TRUNCATE TABLE IF EXISTS my_table");
+    snowflake().verified_stmt("TRUNCATE TABLE my_table");
+    snowflake().verified_stmt("TRUNCATE IF EXISTS my_table");
+}
+
+#[test]
+fn test_select_dollar_column_from_stage() {
+    // With table function args and alias
+    snowflake().verified_stmt("SELECT t.$1, t.$2 FROM @mystage1(file_format => 'myformat', pattern => '.*data.*[.]csv.gz') t");
+    // Without table function args, with alias
+    snowflake().verified_stmt("SELECT t.$1, t.$2 FROM @mystage1 t");
+    // Without table function args, without alias
+    snowflake().verified_stmt("SELECT $1, $2 FROM @mystage1");
+    // With table function args, without alias
+    snowflake().verified_stmt("SELECT $1, $2 FROM @mystage1(file_format => 'myformat')");
 }

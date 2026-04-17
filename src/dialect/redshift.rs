@@ -22,7 +22,8 @@ use core::str::Chars;
 use super::PostgreSqlDialect;
 
 /// A [`Dialect`] for [RedShift](https://aws.amazon.com/redshift/)
-#[derive(Debug)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RedshiftSqlDialect {}
 
 // In most cases the redshift dialect is identical to [`PostgresSqlDialect`].
@@ -120,6 +121,10 @@ impl Dialect for RedshiftSqlDialect {
         true
     }
 
+    fn supports_bitwise_shift_operators(&self) -> bool {
+        true
+    }
+
     fn supports_array_typedef_with_brackets(&self) -> bool {
         true
     }
@@ -136,11 +141,25 @@ impl Dialect for RedshiftSqlDialect {
         true
     }
 
+    /// Redshift supports aliasing wildcard expressions:
+    /// <https://docs.aws.amazon.com/redshift/latest/dg/r_SELECT_list.html>
+    fn supports_select_wildcard_with_alias(&self) -> bool {
+        true
+    }
+
     fn supports_select_exclude(&self) -> bool {
         true
     }
 
     fn supports_create_table_like_parenthesized(&self) -> bool {
+        true
+    }
+
+    fn supports_string_literal_concatenation_with_newline(&self) -> bool {
+        true
+    }
+
+    fn supports_window_function_null_treatment_arg(&self) -> bool {
         true
     }
 }

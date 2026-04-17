@@ -159,9 +159,9 @@ $ cargo run --features json_example --example cli FILENAME.sql [--dialectname]
 
 ## Users
 
-This parser is currently being used by the [DataFusion] query engine, [LocustDB],
-[Ballista], [GlueSQL], [Opteryx], [Polars], [PRQL], [Qrlew], [JumpWire], [ParadeDB], [CipherStash Proxy],
-and [GreptimeDB].
+This parser is currently being used by the [DataFusion] query engine,
+[LocustDB], [Ballista], [GlueSQL], [Opteryx], [Polars], [PRQL], [Qrlew],
+[JumpWire], [ParadeDB], [CipherStash Proxy], [Readyset] and [GreptimeDB].
 
 If your project is using sqlparser-rs feel free to make a PR to add it
 to this list.
@@ -282,3 +282,4 @@ licensed as above, without any additional terms or conditions.
 [`GenericDialect`]: https://docs.rs/sqlparser/latest/sqlparser/dialect/struct.GenericDialect.html
 [CipherStash Proxy]: https://github.com/cipherstash/proxy
 [GreptimeDB]: https://github.com/GreptimeTeam/greptimedb
+[Readyset]: https://github.com/readysettech/readyset

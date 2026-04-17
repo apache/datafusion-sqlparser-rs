@@ -28,16 +28,19 @@ use crate::ast::helpers::stmt_data_loading::{
 };
 use crate::ast::{
     AlterTable, AlterTableOperation, AlterTableType, CatalogSyncNamespaceMode, ColumnOption,
-    ColumnPolicy, ColumnPolicyProperty, ContactEntry, CopyIntoSnowflakeKind, CreateTableLikeKind,
-    DollarQuotedString, Ident, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
-    IdentityPropertyKind, IdentityPropertyOrder, InitializeKind, ObjectName, ObjectNamePart,
-    RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement,
-    StorageSerializationPolicy, TagsColumnOption, Value, WrappedCollection,
+    ColumnPolicy, ColumnPolicyProperty, ContactEntry, CopyIntoSnowflakeKind, CreateTable,
+    CreateTableLikeKind, DollarQuotedString, Ident, IdentityParameters, IdentityProperty,
+    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, InitializeKind,
+    Insert, MultiTableInsertIntoClause, MultiTableInsertType, MultiTableInsertValue,
+    MultiTableInsertValues, MultiTableInsertWhenClause, ObjectName, ObjectNamePart,
+    RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement, StorageLifecyclePolicy,
+    StorageSerializationPolicy, TableObject, TagsColumnOption, Value, WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{IsOptional, Parser, ParserError};
-use crate::tokenizer::Token;
+use crate::tokenizer::TokenWithSpan;
+use crate::tokenizer::{Span, Token};
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
 #[cfg(not(feature = "std"))]
@@ -127,7 +130,8 @@ const RESERVED_KEYWORDS_FOR_TABLE_FACTOR: &[Keyword] = &[
 ];
 
 /// A [`Dialect`] for [Snowflake](https://www.snowflake.com/)
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SnowflakeDialect;
 
 impl Dialect for SnowflakeDialect {
@@ -211,8 +215,49 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/functions/extract)
+    fn supports_extract_comma_syntax(&self) -> bool {
+        true
+    }
+
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/functions/flatten)
+    fn supports_subquery_as_function_arg(&self) -> bool {
+        true
+    }
+
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/sql/create-view#optional-parameters)
+    fn supports_create_view_comment_syntax(&self) -> bool {
+        true
+    }
+
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/data-types-semistructured#array)
+    fn supports_array_typedef_without_element_type(&self) -> bool {
+        true
+    }
+
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/constructs/from)
+    fn supports_parens_around_table_factor(&self) -> bool {
+        true
+    }
+
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/constructs/values)
+    fn supports_values_as_table_factor(&self) -> bool {
+        true
+    }
+
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
         if parser.parse_keyword(Keyword::BEGIN) {
+            // Snowflake supports both `BEGIN TRANSACTION` and `BEGIN ... END` blocks.
+            // If the next keyword indicates a transaction statement, let the
+            // standard parse_begin() handle it.
+            if parser
+                .peek_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK, Keyword::NAME])
+                .is_some()
+                || matches!(parser.peek_token_ref().token, Token::SemiColon | Token::EOF)
+            {
+                parser.prev_token();
+                return None;
+            }
             return Some(parser.parse_begin_exception_end());
         }
 
@@ -221,12 +266,17 @@ impl Dialect for SnowflakeDialect {
             return Some(parse_alter_dynamic_table(parser));
         }
 
+        if parser.parse_keywords(&[Keyword::ALTER, Keyword::EXTERNAL, Keyword::TABLE]) {
+            // ALTER EXTERNAL TABLE
+            return Some(parse_alter_external_table(parser));
+        }
+
         if parser.parse_keywords(&[Keyword::ALTER, Keyword::SESSION]) {
             // ALTER SESSION
             let set = match parser.parse_one_of_keywords(&[Keyword::SET, Keyword::UNSET]) {
                 Some(Keyword::SET) => true,
                 Some(Keyword::UNSET) => false,
-                _ => return Some(parser.expected("SET or UNSET", parser.peek_token())),
+                _ => return Some(parser.expected_ref("SET or UNSET", parser.peek_token_ref())),
             };
             return Some(parse_alter_session(parser, set));
         }
@@ -267,9 +317,13 @@ impl Dialect for SnowflakeDialect {
                 // OK - this is CREATE STAGE statement
                 return Some(parse_create_stage(or_replace, temporary, parser));
             } else if parser.parse_keyword(Keyword::TABLE) {
-                return Some(parse_create_table(
-                    or_replace, global, temporary, volatile, transient, iceberg, dynamic, parser,
-                ));
+                return Some(
+                    parse_create_table(
+                        or_replace, global, temporary, volatile, transient, iceberg, dynamic,
+                        parser,
+                    )
+                    .map(Into::into),
+                );
             } else if parser.parse_keyword(Keyword::DATABASE) {
                 return Some(parse_create_database(or_replace, transient, parser));
             } else {
@@ -313,6 +367,33 @@ impl Dialect for SnowflakeDialect {
             parser.prev_token();
         }
 
+        // Check for multi-table INSERT
+        // `INSERT [OVERWRITE] ALL ... or INSERT [OVERWRITE] FIRST ...`
+        if parser.parse_keyword(Keyword::INSERT) {
+            let insert_token = parser.get_current_token().clone();
+            let overwrite = parser.parse_keyword(Keyword::OVERWRITE);
+
+            // Check for ALL or FIRST keyword
+            if let Some(kw) = parser.parse_one_of_keywords(&[Keyword::ALL, Keyword::FIRST]) {
+                let multi_table_insert_type = match kw {
+                    Keyword::FIRST => MultiTableInsertType::First,
+                    _ => MultiTableInsertType::All,
+                };
+                return Some(parse_multi_table_insert(
+                    parser,
+                    insert_token,
+                    overwrite,
+                    multi_table_insert_type,
+                ));
+            }
+
+            // Not a multi-table insert, rewind
+            if overwrite {
+                parser.prev_token(); // rewind OVERWRITE
+            }
+            parser.prev_token(); // rewind INSERT
+        }
+
         None
     }
 
@@ -347,9 +428,9 @@ impl Dialect for SnowflakeDialect {
     }
 
     fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
-        let token = parser.peek_token();
+        let token = parser.peek_token_ref();
         // Snowflake supports the `:` cast operator unlike other dialects
-        match token.token {
+        match &token.token {
             Token::Colon => Some(Ok(self.prec_value(Precedence::DoubleColon))),
             _ => None,
         }
@@ -531,7 +612,7 @@ impl Dialect for SnowflakeDialect {
     }
 
     /// See: <https://docs.snowflake.com/en/sql-reference/constructs/at-before>
-    fn supports_timestamp_versioning(&self) -> bool {
+    fn supports_table_versioning(&self) -> bool {
         true
     }
 
@@ -577,6 +658,30 @@ impl Dialect for SnowflakeDialect {
     fn supports_semantic_view_table_factor(&self) -> bool {
         true
     }
+
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/select#parameters>
+    fn supports_select_wildcard_replace(&self) -> bool {
+        true
+    }
+
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/select#parameters>
+    fn supports_select_wildcard_ilike(&self) -> bool {
+        true
+    }
+
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/select#parameters>
+    fn supports_select_wildcard_rename(&self) -> bool {
+        true
+    }
+
+    /// See <https://docs.snowflake.com/en/user-guide/querying-semistructured#label-higher-order-functions>
+    fn supports_lambda_functions(&self) -> bool {
+        true
+    }
+
+    fn supports_comma_separated_trim(&self) -> bool {
+        true
+    }
 }
 
 // Peeks ahead to identify tokens that are expected after
@@ -619,15 +724,15 @@ fn parse_alter_dynamic_table(parser: &mut Parser) -> Result<Statement, ParserErr
 
     // Parse the operation (REFRESH, SUSPEND, or RESUME)
     let operation = if parser.parse_keyword(Keyword::REFRESH) {
-        AlterTableOperation::Refresh
+        AlterTableOperation::Refresh { subpath: None }
     } else if parser.parse_keyword(Keyword::SUSPEND) {
         AlterTableOperation::Suspend
     } else if parser.parse_keyword(Keyword::RESUME) {
         AlterTableOperation::Resume
     } else {
-        return parser.expected(
+        return parser.expected_ref(
             "REFRESH, SUSPEND, or RESUME after ALTER DYNAMIC TABLE",
-            parser.peek_token(),
+            parser.peek_token_ref(),
         );
     };
 
@@ -645,6 +750,48 @@ fn parse_alter_dynamic_table(parser: &mut Parser) -> Result<Statement, ParserErr
         location: None,
         on_cluster: None,
         table_type: Some(AlterTableType::Dynamic),
+        end_token: AttachedToken(end_token),
+    }))
+}
+
+/// Parse snowflake alter external table.
+/// <https://docs.snowflake.com/en/sql-reference/sql/alter-external-table>
+fn parse_alter_external_table(parser: &mut Parser) -> Result<Statement, ParserError> {
+    let if_exists = parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+    let table_name = parser.parse_object_name(true)?;
+
+    // Parse the operation (REFRESH for now)
+    let operation = if parser.parse_keyword(Keyword::REFRESH) {
+        // Optional subpath for refreshing specific partitions
+        let subpath = match parser.peek_token().token {
+            Token::SingleQuotedString(s) => {
+                parser.next_token();
+                Some(s)
+            }
+            _ => None,
+        };
+        AlterTableOperation::Refresh { subpath }
+    } else {
+        return parser.expected_ref(
+            "REFRESH after ALTER EXTERNAL TABLE",
+            parser.peek_token_ref(),
+        );
+    };
+
+    let end_token = if parser.peek_token_ref().token == Token::SemiColon {
+        parser.peek_token_ref().clone()
+    } else {
+        parser.get_current_token().clone()
+    };
+
+    Ok(Statement::AlterTable(AlterTable {
+        name: table_name,
+        if_exists,
+        only: false,
+        operations: vec![operation],
+        location: None,
+        on_cluster: None,
+        table_type: Some(AlterTableType::External),
         end_token: AttachedToken(end_token),
     }))
 }
@@ -675,7 +822,7 @@ pub fn parse_create_table(
     iceberg: bool,
     dynamic: bool,
     parser: &mut Parser,
-) -> Result<Statement, ParserError> {
+) -> Result<CreateTable, ParserError> {
     let if_not_exists = parser.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
     let table_name = parser.parse_object_name(false)?;
 
@@ -770,6 +917,7 @@ pub fn parse_create_table(
                 Keyword::WITH => {
                     parser.expect_one_of_keywords(&[
                         Keyword::AGGREGATION,
+                        Keyword::STORAGE,
                         Keyword::TAG,
                         Keyword::ROW,
                     ])?;
@@ -790,6 +938,19 @@ pub fn parse_create_table(
 
                     builder =
                         builder.with_row_access_policy(Some(RowAccessPolicy::new(policy, columns)))
+                }
+                Keyword::STORAGE => {
+                    parser.expect_keywords(&[Keyword::LIFECYCLE, Keyword::POLICY])?;
+                    let policy = parser.parse_object_name(false)?;
+                    parser.expect_keyword_is(Keyword::ON)?;
+                    parser.expect_token(&Token::LParen)?;
+                    let columns = parser.parse_comma_separated(|p| p.parse_identifier())?;
+                    parser.expect_token(&Token::RParen)?;
+
+                    builder = builder.with_storage_lifecycle_policy(Some(StorageLifecyclePolicy {
+                        policy,
+                        on: columns,
+                    }))
                 }
                 Keyword::TAG => {
                     parser.expect_token(&Token::LParen)?;
@@ -1101,7 +1262,7 @@ pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserE
                 parser.prev_token();
                 break;
             }
-            Token::RParen => {
+            Token::LParen | Token::RParen => {
                 parser.prev_token();
                 break;
             }
@@ -1111,14 +1272,18 @@ pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserE
             Token::Div => ident.push('/'),
             Token::Plus => ident.push('+'),
             Token::Minus => ident.push('-'),
+            Token::Eq => ident.push('='),
+            Token::Colon => ident.push(':'),
             Token::Number(n, _) => ident.push_str(n),
             Token::Word(w) => ident.push_str(&w.to_string()),
-            _ => return parser.expected("stage name identifier", parser.peek_token()),
+            _ => return parser.expected_ref("stage name identifier", parser.peek_token_ref()),
         }
     }
     Ok(Ident::new(ident))
 }
 
+/// Parses a Snowflake stage name, which may start with `@` for internal stages.
+/// Examples: `@mystage`, `@namespace.stage`, `schema.table`
 pub fn parse_snowflake_stage_name(parser: &mut Parser) -> Result<ObjectName, ParserError> {
     match parser.next_token().token {
         Token::AtSign => {
@@ -1142,7 +1307,7 @@ pub fn parse_snowflake_stage_name(parser: &mut Parser) -> Result<ObjectName, Par
 /// Parses a `COPY INTO` statement. Snowflake has two variants, `COPY INTO <table>`
 /// and `COPY INTO <location>` which have different syntax.
 pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
-    let kind = match parser.peek_token().token {
+    let kind = match &parser.peek_token_ref().token {
         // Indicates an internal stage
         Token::AtSign => CopyIntoSnowflakeKind::Location,
         // Indicates an external stage, i.e. s3://, gcs:// or azure://
@@ -1215,7 +1380,7 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
             from_stage_alias = if parser.parse_keyword(Keyword::AS) {
                 Some(match parser.next_token().token {
                     Token::Word(w) => Ok(Ident::new(w.value)),
-                    _ => parser.expected("stage alias", parser.peek_token()),
+                    _ => parser.expected_ref("stage alias", parser.peek_token_ref()),
                 }?)
             } else {
                 None
@@ -1273,7 +1438,10 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
                 // In `COPY INTO <location>` the copy options do not have a shared key
                 // like in `COPY INTO <table>`
                 Token::Word(key) => copy_options.push(parser.parse_key_value_option(&key)?),
-                _ => return parser.expected("another copy option, ; or EOF'", parser.peek_token()),
+                _ => {
+                    return parser
+                        .expected_ref("another copy option, ; or EOF'", parser.peek_token_ref())
+                }
             }
         }
     }
@@ -1368,7 +1536,7 @@ fn parse_select_item_for_data_load(
             // parse element
             element = Some(Ident::new(match parser.next_token().token {
                 Token::Word(w) => Ok(w.value),
-                _ => parser.expected("file_col_num", parser.peek_token()),
+                _ => parser.expected_ref("file_col_num", parser.peek_token_ref()),
             }?));
         }
         _ => {
@@ -1381,7 +1549,7 @@ fn parse_select_item_for_data_load(
     if parser.parse_keyword(Keyword::AS) {
         item_as = Some(match parser.next_token().token {
             Token::Word(w) => Ok(Ident::new(w.value)),
-            _ => parser.expected("column item alias", parser.peek_token()),
+            _ => parser.expected_ref("column item alias", parser.peek_token_ref()),
         }?);
     }
 
@@ -1409,7 +1577,7 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
         parser.expect_token(&Token::Eq)?;
         url = Some(match parser.next_token().token {
             Token::SingleQuotedString(word) => Ok(word),
-            _ => parser.expected("a URL statement", parser.peek_token()),
+            _ => parser.expected_ref("a URL statement", parser.peek_token_ref()),
         }?)
     }
 
@@ -1424,7 +1592,7 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
         parser.expect_token(&Token::Eq)?;
         endpoint = Some(match parser.next_token().token {
             Token::SingleQuotedString(word) => Ok(word),
-            _ => parser.expected("an endpoint statement", parser.peek_token()),
+            _ => parser.expected_ref("an endpoint statement", parser.peek_token_ref()),
         }?)
     }
 
@@ -1466,8 +1634,8 @@ fn parse_session_options(
     let mut options: Vec<KeyValueOption> = Vec::new();
     let empty = String::new;
     loop {
-        let next_token = parser.peek_token();
-        match next_token.token {
+        let peeked_token = parser.peek_token();
+        match peeked_token.token {
             Token::SemiColon | Token::EOF => break,
             Token::Comma => {
                 parser.advance_token();
@@ -1481,12 +1649,17 @@ fn parse_session_options(
                 } else {
                     options.push(KeyValueOption {
                         option_name: key.value,
-                        option_value: KeyValueOptionKind::Single(Value::Placeholder(empty())),
+                        option_value: KeyValueOptionKind::Single(
+                            Value::Placeholder(empty()).with_span(Span {
+                                start: peeked_token.span.end,
+                                end: peeked_token.span.end,
+                            }),
+                        ),
                     });
                 }
             }
             _ => {
-                return parser.expected("another option or end of statement", next_token);
+                return parser.expected("another option or end of statement", peeked_token);
             }
         }
     }
@@ -1583,4 +1756,172 @@ fn parse_show_objects(terse: bool, parser: &mut Parser) -> Result<Statement, Par
         terse,
         show_options,
     }))
+}
+
+/// Parse multi-table INSERT statement.
+///
+/// Syntax:
+/// ```sql
+/// -- Unconditional multi-table insert
+/// INSERT [ OVERWRITE ] ALL
+///   intoClause [ ... ]
+/// <subquery>
+///
+/// -- Conditional multi-table insert
+/// INSERT [ OVERWRITE ] { FIRST | ALL }
+///   { WHEN <condition> THEN intoClause [ ... ] }
+///   [ ... ]
+///   [ ELSE intoClause ]
+/// <subquery>
+/// ```
+///
+/// See: <https://docs.snowflake.com/en/sql-reference/sql/insert-multi-table>
+fn parse_multi_table_insert(
+    parser: &mut Parser,
+    insert_token: TokenWithSpan,
+    overwrite: bool,
+    multi_table_insert_type: MultiTableInsertType,
+) -> Result<Statement, ParserError> {
+    // Check if this is conditional (has WHEN clauses) or unconditional (direct INTO clauses)
+    let is_conditional = parser.peek_keyword(Keyword::WHEN);
+
+    let (multi_table_into_clauses, multi_table_when_clauses, multi_table_else_clause) =
+        if is_conditional {
+            // Conditional multi-table insert: WHEN clauses
+            let (when_clauses, else_clause) = parse_multi_table_insert_when_clauses(parser)?;
+            (vec![], when_clauses, else_clause)
+        } else {
+            // Unconditional multi-table insert: direct INTO clauses
+            let into_clauses = parse_multi_table_insert_into_clauses(parser)?;
+            (into_clauses, vec![], None)
+        };
+
+    // Parse the source query
+    let source = parser.parse_query()?;
+
+    Ok(Statement::Insert(Insert {
+        insert_token: insert_token.into(),
+        optimizer_hints: vec![],
+        or: None,
+        ignore: false,
+        into: false,
+        table: TableObject::TableName(ObjectName(vec![])), // Not used for multi-table insert
+        table_alias: None,
+        columns: vec![],
+        overwrite,
+        source: Some(source),
+        assignments: vec![],
+        partitioned: None,
+        after_columns: vec![],
+        has_table_keyword: false,
+        on: None,
+        returning: None,
+        output: None,
+        replace_into: false,
+        priority: None,
+        insert_alias: None,
+        settings: None,
+        format_clause: None,
+        multi_table_insert_type: Some(multi_table_insert_type),
+        multi_table_into_clauses,
+        multi_table_when_clauses,
+        multi_table_else_clause,
+    }))
+}
+
+/// Parse one or more INTO clauses for multi-table INSERT.
+fn parse_multi_table_insert_into_clauses(
+    parser: &mut Parser,
+) -> Result<Vec<MultiTableInsertIntoClause>, ParserError> {
+    let mut into_clauses = vec![];
+    while parser.parse_keyword(Keyword::INTO) {
+        into_clauses.push(parse_multi_table_insert_into_clause(parser)?);
+    }
+    if into_clauses.is_empty() {
+        return parser.expected_ref("INTO clause in multi-table INSERT", parser.peek_token_ref());
+    }
+    Ok(into_clauses)
+}
+
+/// Parse a single INTO clause for multi-table INSERT.
+///
+/// Syntax: `INTO <table> [ ( <columns> ) ] [ VALUES ( <values> ) ]`
+fn parse_multi_table_insert_into_clause(
+    parser: &mut Parser,
+) -> Result<MultiTableInsertIntoClause, ParserError> {
+    let table_name = parser.parse_object_name(false)?;
+
+    // Parse optional column list: ( <column_name> [, ...] )
+    let columns = parser
+        .maybe_parse(|p| p.parse_parenthesized_column_list(IsOptional::Mandatory, false))?
+        .unwrap_or_default();
+
+    // Parse optional VALUES clause
+    let values = if parser.parse_keyword(Keyword::VALUES) {
+        parser.expect_token(&Token::LParen)?;
+        let values = parser.parse_comma_separated(parse_multi_table_insert_value)?;
+        parser.expect_token(&Token::RParen)?;
+        Some(MultiTableInsertValues { values })
+    } else {
+        None
+    };
+
+    Ok(MultiTableInsertIntoClause {
+        table_name,
+        columns,
+        values,
+    })
+}
+
+/// Parse a single value in a multi-table INSERT VALUES clause.
+fn parse_multi_table_insert_value(
+    parser: &mut Parser,
+) -> Result<MultiTableInsertValue, ParserError> {
+    if parser.parse_keyword(Keyword::DEFAULT) {
+        Ok(MultiTableInsertValue::Default)
+    } else {
+        Ok(MultiTableInsertValue::Expr(parser.parse_expr()?))
+    }
+}
+
+/// Parse WHEN clauses for conditional multi-table INSERT.
+fn parse_multi_table_insert_when_clauses(
+    parser: &mut Parser,
+) -> Result<
+    (
+        Vec<MultiTableInsertWhenClause>,
+        Option<Vec<MultiTableInsertIntoClause>>,
+    ),
+    ParserError,
+> {
+    let mut when_clauses = vec![];
+    let mut else_clause = None;
+
+    // Parse WHEN clauses
+    while parser.parse_keyword(Keyword::WHEN) {
+        let condition = parser.parse_expr()?;
+        parser.expect_keyword(Keyword::THEN)?;
+
+        // Parse INTO clauses for this WHEN
+        let into_clauses = parse_multi_table_insert_into_clauses(parser)?;
+
+        when_clauses.push(MultiTableInsertWhenClause {
+            condition,
+            into_clauses,
+        });
+    }
+
+    // Parse optional ELSE clause
+    if parser.parse_keyword(Keyword::ELSE) {
+        else_clause = Some(parse_multi_table_insert_into_clauses(parser)?);
+    }
+
+    if when_clauses.is_empty() {
+        return parser.expected_ref(
+            "at least one WHEN clause in conditional multi-table INSERT",
+            parser.peek_token_ref(),
+        );
+    }
+
+    Ok((when_clauses, else_clause))
 }

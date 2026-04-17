@@ -570,7 +570,9 @@ impl crate::ast::Spanned for UniqueConstraint {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ExclusionElement {
+    /// The column or expression to exclude on.
     pub expr: Expr,
+    /// The operator to use for the exclusion check (e.g. `=`, `&&`).
     pub operator: String,
 }
 
@@ -586,11 +588,17 @@ impl fmt::Display for ExclusionElement {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ExclusionConstraint {
+    /// Optional constraint name.
     pub name: Option<Ident>,
+    /// Index access method (e.g. `gist`, `btree`). Defaults to `gist` if omitted.
     pub index_method: Option<Ident>,
+    /// The list of `(element WITH operator)` pairs.
     pub elements: Vec<ExclusionElement>,
+    /// Columns to include in the index via `INCLUDE (...)`.
     pub include: Vec<Ident>,
+    /// Optional `WHERE (predicate)` for a partial exclusion constraint.
     pub where_clause: Option<Box<Expr>>,
+    /// `DEFERRABLE` / `INITIALLY DEFERRED` characteristics.
     pub characteristics: Option<ConstraintCharacteristics>,
 }
 

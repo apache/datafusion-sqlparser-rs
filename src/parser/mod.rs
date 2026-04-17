@@ -508,10 +508,10 @@ impl<'a> Parser<'a> {
                 Token::EOF => break,
 
                 // end of statement
-                Token::Word(word) => {
-                    if expecting_statement_delimiter && word.keyword == Keyword::END {
-                        break;
-                    }
+                Token::Word(word)
+                    if expecting_statement_delimiter && word.keyword == Keyword::END =>
+                {
+                    break;
                 }
                 _ => {}
             }
@@ -1305,41 +1305,40 @@ impl<'a> Parser<'a> {
 
         let next_token = self.next_token();
         match next_token.token {
-            t @ (Token::Word(_) | Token::SingleQuotedString(_)) => {
-                if self.peek_token_ref().token == Token::Period {
-                    let mut id_parts: Vec<Ident> = vec![match t {
-                        Token::Word(w) => w.into_ident(next_token.span),
-                        Token::SingleQuotedString(s) => Ident::with_quote('\'', s),
-                        _ => {
-                            return Err(ParserError::ParserError(
-                                "Internal parser error: unexpected token type".to_string(),
-                            ))
-                        }
-                    }];
+            t @ (Token::Word(_) | Token::SingleQuotedString(_))
+                if self.peek_token_ref().token == Token::Period =>
+            {
+                let mut id_parts: Vec<Ident> = vec![match t {
+                    Token::Word(w) => w.into_ident(next_token.span),
+                    Token::SingleQuotedString(s) => Ident::with_quote('\'', s),
+                    _ => {
+                        return Err(ParserError::ParserError(
+                            "Internal parser error: unexpected token type".to_string(),
+                        ))
+                    }
+                }];
 
-                    while self.consume_token(&Token::Period) {
-                        let next_token = self.next_token();
-                        match next_token.token {
-                            Token::Word(w) => id_parts.push(w.into_ident(next_token.span)),
-                            Token::SingleQuotedString(s) => {
-                                // SQLite has single-quoted identifiers
-                                id_parts.push(Ident::with_quote('\'', s))
-                            }
-                            Token::Placeholder(s) => {
-                                // Snowflake uses $1, $2, etc. for positional column references
-                                // in staged data queries like: SELECT t.$1 FROM @stage t
-                                id_parts.push(Ident::new(s))
-                            }
-                            Token::Mul => {
-                                return Ok(Expr::QualifiedWildcard(
-                                    ObjectName::from(id_parts),
-                                    AttachedToken(next_token),
-                                ));
-                            }
-                            _ => {
-                                return self
-                                    .expected("an identifier or a '*' after '.'", next_token);
-                            }
+                while self.consume_token(&Token::Period) {
+                    let next_token = self.next_token();
+                    match next_token.token {
+                        Token::Word(w) => id_parts.push(w.into_ident(next_token.span)),
+                        Token::SingleQuotedString(s) => {
+                            // SQLite has single-quoted identifiers
+                            id_parts.push(Ident::with_quote('\'', s))
+                        }
+                        Token::Placeholder(s) => {
+                            // Snowflake uses $1, $2, etc. for positional column references
+                            // in staged data queries like: SELECT t.$1 FROM @stage t
+                            id_parts.push(Ident::new(s))
+                        }
+                        Token::Mul => {
+                            return Ok(Expr::QualifiedWildcard(
+                                ObjectName::from(id_parts),
+                                AttachedToken(next_token),
+                            ));
+                        }
+                        _ => {
+                            return self.expected("an identifier or a '*' after '.'", next_token);
                         }
                     }
                 }
@@ -5031,10 +5030,10 @@ impl<'a> Parser<'a> {
         loop {
             match &self.peek_nth_token_ref(0).token {
                 Token::EOF => break,
-                Token::Word(w) => {
-                    if w.quote_style.is_none() && terminal_keywords.contains(&w.keyword) {
-                        break;
-                    }
+                Token::Word(w)
+                    if w.quote_style.is_none() && terminal_keywords.contains(&w.keyword) =>
+                {
+                    break;
                 }
                 _ => {}
             }
@@ -8311,6 +8310,7 @@ impl<'a> Parser<'a> {
                 Keyword::STORED,
                 Keyword::LOCATION,
                 Keyword::WITH,
+                Keyword::USING,
             ]) {
                 Some(Keyword::ROW) => {
                     hive_format
@@ -8350,6 +8350,16 @@ impl<'a> Parser<'a> {
                         break;
                     }
                 }
+                Some(Keyword::USING) if self.dialect.supports_create_table_using() => {
+                    let format = self.parse_identifier()?;
+                    hive_format.get_or_insert_with(HiveFormat::default).storage =
+                        Some(HiveIOFormat::Using { format });
+                }
+                Some(Keyword::USING) => {
+                    // USING is not a table format keyword in this dialect; put it back
+                    self.prev_token();
+                    break;
+                }
                 None => break,
                 _ => break,
             }
@@ -8377,70 +8387,60 @@ impl<'a> Parser<'a> {
                         Keyword::LINES,
                         Keyword::NULL,
                     ]) {
-                        Some(Keyword::FIELDS) => {
-                            if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) {
+                        Some(Keyword::FIELDS)
+                            if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) =>
+                        {
+                            row_delimiters.push(HiveRowDelimiter {
+                                delimiter: HiveDelimiter::FieldsTerminatedBy,
+                                char: self.parse_identifier()?,
+                            });
+
+                            if self.parse_keywords(&[Keyword::ESCAPED, Keyword::BY]) {
                                 row_delimiters.push(HiveRowDelimiter {
-                                    delimiter: HiveDelimiter::FieldsTerminatedBy,
+                                    delimiter: HiveDelimiter::FieldsEscapedBy,
                                     char: self.parse_identifier()?,
                                 });
-
-                                if self.parse_keywords(&[Keyword::ESCAPED, Keyword::BY]) {
-                                    row_delimiters.push(HiveRowDelimiter {
-                                        delimiter: HiveDelimiter::FieldsEscapedBy,
-                                        char: self.parse_identifier()?,
-                                    });
-                                }
-                            } else {
-                                break;
                             }
                         }
-                        Some(Keyword::COLLECTION) => {
+                        Some(Keyword::COLLECTION)
                             if self.parse_keywords(&[
                                 Keyword::ITEMS,
                                 Keyword::TERMINATED,
                                 Keyword::BY,
-                            ]) {
-                                row_delimiters.push(HiveRowDelimiter {
-                                    delimiter: HiveDelimiter::CollectionItemsTerminatedBy,
-                                    char: self.parse_identifier()?,
-                                });
-                            } else {
-                                break;
-                            }
+                            ]) =>
+                        {
+                            row_delimiters.push(HiveRowDelimiter {
+                                delimiter: HiveDelimiter::CollectionItemsTerminatedBy,
+                                char: self.parse_identifier()?,
+                            });
                         }
-                        Some(Keyword::MAP) => {
+                        Some(Keyword::MAP)
                             if self.parse_keywords(&[
                                 Keyword::KEYS,
                                 Keyword::TERMINATED,
                                 Keyword::BY,
-                            ]) {
-                                row_delimiters.push(HiveRowDelimiter {
-                                    delimiter: HiveDelimiter::MapKeysTerminatedBy,
-                                    char: self.parse_identifier()?,
-                                });
-                            } else {
-                                break;
-                            }
+                            ]) =>
+                        {
+                            row_delimiters.push(HiveRowDelimiter {
+                                delimiter: HiveDelimiter::MapKeysTerminatedBy,
+                                char: self.parse_identifier()?,
+                            });
                         }
-                        Some(Keyword::LINES) => {
-                            if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) {
-                                row_delimiters.push(HiveRowDelimiter {
-                                    delimiter: HiveDelimiter::LinesTerminatedBy,
-                                    char: self.parse_identifier()?,
-                                });
-                            } else {
-                                break;
-                            }
+                        Some(Keyword::LINES)
+                            if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) =>
+                        {
+                            row_delimiters.push(HiveRowDelimiter {
+                                delimiter: HiveDelimiter::LinesTerminatedBy,
+                                char: self.parse_identifier()?,
+                            });
                         }
-                        Some(Keyword::NULL) => {
-                            if self.parse_keywords(&[Keyword::DEFINED, Keyword::AS]) {
-                                row_delimiters.push(HiveRowDelimiter {
-                                    delimiter: HiveDelimiter::NullDefinedAs,
-                                    char: self.parse_identifier()?,
-                                });
-                            } else {
-                                break;
-                            }
+                        Some(Keyword::NULL)
+                            if self.parse_keywords(&[Keyword::DEFINED, Keyword::AS]) =>
+                        {
+                            row_delimiters.push(HiveRowDelimiter {
+                                delimiter: HiveDelimiter::NullDefinedAs,
+                                char: self.parse_identifier()?,
+                            });
                         }
                         _ => {
                             break;
@@ -12475,6 +12475,9 @@ impl<'a> Parser<'a> {
                 Keyword::TINYBLOB => Ok(DataType::TinyBlob),
                 Keyword::MEDIUMBLOB => Ok(DataType::MediumBlob),
                 Keyword::LONGBLOB => Ok(DataType::LongBlob),
+                Keyword::LONG if self.dialect.supports_long_type_as_bigint() => {
+                    Ok(DataType::BigInt(None))
+                }
                 Keyword::BYTES => Ok(DataType::Bytes(self.parse_optional_precision()?)),
                 Keyword::BIT => {
                     if self.parse_keyword(Keyword::VARYING) {
@@ -12609,8 +12612,7 @@ impl<'a> Parser<'a> {
                     let field_defs = self.parse_duckdb_struct_type_def()?;
                     Ok(DataType::Struct(field_defs, StructBracketKind::Parentheses))
                 }
-                Keyword::STRUCT if dialect_is!(dialect is BigQueryDialect | DatabricksDialect | GenericDialect) =>
-                {
+                Keyword::STRUCT if self.dialect.supports_struct_literal() => {
                     self.prev_token();
                     let (field_defs, _trailing_bracket) =
                         self.parse_struct_type_def(Self::parse_struct_field_def)?;
@@ -12630,6 +12632,17 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::LOWCARDINALITY if dialect_is!(dialect is ClickHouseDialect | GenericDialect) => {
                     Ok(self.parse_sub_type(DataType::LowCardinality)?)
+                }
+                Keyword::MAP if self.dialect.supports_map_literal_with_angle_brackets() => {
+                    self.expect_token(&Token::Lt)?;
+                    let key_data_type = self.parse_data_type()?;
+                    self.expect_token(&Token::Comma)?;
+                    let (value_data_type, _trailing_bracket) = self.parse_data_type_helper()?;
+                    trailing_bracket = self.expect_closing_angle_bracket(_trailing_bracket)?;
+                    Ok(DataType::Map(
+                        Box::new(key_data_type),
+                        Box::new(value_data_type),
+                    ))
                 }
                 Keyword::MAP if dialect_is!(dialect is ClickHouseDialect | GenericDialect) => {
                     self.prev_token();

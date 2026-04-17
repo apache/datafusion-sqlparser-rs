@@ -8658,6 +8658,15 @@ pub enum HiveIOFormat {
         /// The file format used for storage.
         format: FileFormat,
     },
+    /// `USING <format>` syntax used by Spark SQL.
+    ///
+    /// Example: `CREATE TABLE t (i INT) USING PARQUET`
+    ///
+    /// See <https://spark.apache.org/docs/latest/sql-ref-syntax-ddl-create-table-datasource.html>
+    Using {
+        /// The data source or format name, e.g. `parquet`, `delta`, `csv`.
+        format: Ident,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]

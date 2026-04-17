@@ -20,13 +20,13 @@
 use crate::ast::{
     display_comma_separated, display_separated, ConstraintCharacteristics,
     ConstraintReferenceMatchKind, Expr, Ident, IndexColumn, IndexOption, IndexType,
-    KeyOrIndexDisplay, NullsDistinctOption, ObjectName, ReferentialAction,
+    KeyOrIndexDisplay, NullsDistinctOption, ObjectName, OrderByOptions, ReferentialAction,
 };
 use crate::tokenizer::Span;
 use core::fmt;
 
 #[cfg(not(feature = "std"))]
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -619,7 +619,7 @@ impl crate::ast::Spanned for ConstraintUsingIndex {
 
 /// One element in an `EXCLUDE` constraint's element list.
 ///
-/// `<expr> WITH <operator>`
+/// `{ column_name | ( expression ) } [ opclass ] [ ASC | DESC ] [ NULLS { FIRST | LAST } ] WITH <operator>`
 ///
 /// See <https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -628,20 +628,32 @@ impl crate::ast::Spanned for ConstraintUsingIndex {
 pub struct ExclusionElement {
     /// The index expression or column name.
     pub expr: Expr,
-    /// The exclusion operator (e.g. `&&`, `<->`, `=`).
+    /// Optional operator class (e.g. `gist_geometry_ops_nd`).
+    pub operator_class: Option<ObjectName>,
+    /// Ordering options (ASC/DESC, NULLS FIRST/LAST).
+    pub order: OrderByOptions,
+    /// The exclusion operator. Either a simple token (`&&`, `=`, `<->`) or the
+    /// Postgres schema-qualified form `OPERATOR(schema.op)`.
     pub operator: String,
 }
 
 impl fmt::Display for ExclusionElement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} WITH {}", self.expr, self.operator)
+        write!(f, "{}", self.expr)?;
+        if let Some(opclass) = &self.operator_class {
+            write!(f, " {opclass}")?;
+        }
+        write!(f, "{} WITH {}", self.order, self.operator)
     }
 }
 
 impl crate::ast::Spanned for ExclusionElement {
     fn span(&self) -> Span {
-        // Operator is stored as a plain String with no source span; only expr contributes.
-        self.expr.span()
+        let mut span = self.expr.span();
+        if let Some(opclass) = &self.operator_class {
+            span = span.union(&opclass.span());
+        }
+        span
     }
 }
 
@@ -691,11 +703,7 @@ impl fmt::Display for ExclusionConstraint {
 
 impl crate::ast::Spanned for ExclusionConstraint {
     fn span(&self) -> Span {
-        fn union_spans<I: Iterator<Item = Span>>(iter: I) -> Span {
-            Span::union_iter(iter)
-        }
-
-        union_spans(
+        Span::union_iter(
             self.name
                 .iter()
                 .map(|i| i.span)

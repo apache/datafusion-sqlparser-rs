@@ -9905,7 +9905,10 @@ impl<'a> Parser<'a> {
                     .into(),
                 ))
             }
-            Token::Word(w) if w.keyword == Keyword::EXCLUDE => {
+            Token::Word(w)
+                if w.keyword == Keyword::EXCLUDE
+                    && dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
+            {
                 let index_method = if self.parse_keyword(Keyword::USING) {
                     Some(self.parse_identifier()?)
                 } else {
@@ -9913,8 +9916,7 @@ impl<'a> Parser<'a> {
                 };
 
                 self.expect_token(&Token::LParen)?;
-                let elements =
-                    self.parse_comma_separated(|p| p.parse_exclusion_element())?;
+                let elements = self.parse_comma_separated(|p| p.parse_exclusion_element())?;
                 self.expect_token(&Token::RParen)?;
 
                 let include = if self.parse_keyword(Keyword::INCLUDE) {
@@ -9961,20 +9963,54 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_exclusion_element(&mut self) -> Result<ExclusionElement, ParserError> {
-        let expr = self.parse_expr()?;
+        // `index_elem` grammar: { col | (expr) } [ opclass ] [ ASC | DESC ] [ NULLS FIRST | LAST ].
+        // Shared with `CREATE INDEX` columns.
+        let (
+            OrderByExpr {
+                expr,
+                options: order,
+                ..
+            },
+            operator_class,
+        ) = self.parse_order_by_expr_inner(true)?;
+
         self.expect_keyword_is(Keyword::WITH)?;
+        let operator = self.parse_exclusion_operator()?;
+
+        Ok(ExclusionElement {
+            expr,
+            operator_class,
+            order,
+            operator,
+        })
+    }
+
+    /// Parse the operator that follows `WITH` in an `EXCLUDE` element.
+    ///
+    /// Accepts either a single operator token (e.g. `=`, `&&`, `<->`) or the
+    /// Postgres `OPERATOR(schema.op)` form for schema-qualified operators.
+    fn parse_exclusion_operator(&mut self) -> Result<String, ParserError> {
+        if self.parse_keyword(Keyword::OPERATOR) {
+            self.expect_token(&Token::LParen)?;
+            let mut parts = vec![];
+            loop {
+                self.advance_token();
+                parts.push(self.get_current_token().to_string());
+                if !self.consume_token(&Token::Period) {
+                    break;
+                }
+            }
+            self.expect_token(&Token::RParen)?;
+            return Ok(format!("OPERATOR({})", parts.join(".")));
+        }
+
         let operator_token = self.next_token();
         match &operator_token.token {
-            Token::EOF
-            | Token::RParen
-            | Token::Comma
-            | Token::SemiColon => {
-                return self.expected("exclusion operator", operator_token);
+            Token::EOF | Token::RParen | Token::Comma | Token::SemiColon => {
+                self.expected("exclusion operator", operator_token)
             }
-            _ => {}
+            _ => Ok(operator_token.token.to_string()),
         }
-        let operator = operator_token.token.to_string();
-        Ok(ExclusionElement { expr, operator })
     }
 
     fn parse_optional_nulls_distinct(&mut self) -> Result<NullsDistinctOption, ParserError> {

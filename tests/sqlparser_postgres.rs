@@ -948,6 +948,138 @@ fn parse_alter_collation() {
 }
 
 #[test]
+fn parse_create_text_search_configuration() {
+    assert_eq!(
+        pg().verified_stmt(
+            "CREATE TEXT SEARCH CONFIGURATION public.myconfig (PARSER = myparser)"
+        ),
+        Statement::CreateTextSearchConfiguration(CreateTextSearchConfiguration {
+            name: ObjectName::from(vec![Ident::new("public"), Ident::new("myconfig")]),
+            options: vec![SqlOption::KeyValue {
+                key: Ident::new("PARSER"),
+                value: Expr::Identifier(Ident::new("myparser")),
+            }],
+        })
+    );
+
+    assert_eq!(
+        pg().parse_sql_statements("CREATE TEXT SEARCH CONFIGURATION myconfig PARSER = pg_catalog.default"),
+        Err(ParserError::ParserError(
+            "Expected: (, found: PARSER".to_string()
+        ))
+    );
+}
+
+#[test]
+fn parse_create_text_search_dictionary() {
+    assert_eq!(
+        pg().verified_stmt(
+            "CREATE TEXT SEARCH DICTIONARY public.mydict (TEMPLATE = snowball, language = english)"
+        ),
+        Statement::CreateTextSearchDictionary(CreateTextSearchDictionary {
+            name: ObjectName::from(vec![Ident::new("public"), Ident::new("mydict")]),
+            options: vec![
+                SqlOption::KeyValue {
+                    key: Ident::new("TEMPLATE"),
+                    value: Expr::Identifier(Ident::new("snowball")),
+                },
+                SqlOption::KeyValue {
+                    key: Ident::new("language"),
+                    value: Expr::Identifier(Ident::new("english")),
+                },
+            ],
+        })
+    );
+
+    assert_eq!(
+        pg().parse_sql_statements("CREATE TEXT SEARCH DICTIONARY mydict"),
+        Err(ParserError::ParserError(
+            "Expected: (, found: EOF".to_string()
+        ))
+    );
+}
+
+#[test]
+fn parse_create_text_search_parser() {
+    assert_eq!(
+        pg().verified_stmt(
+            "CREATE TEXT SEARCH PARSER myparser (START = prsd_start, GETTOKEN = prsd_nexttoken, END = prsd_end, LEXTYPES = prsd_lextype, HEADLINE = prsd_headline)"
+        ),
+        Statement::CreateTextSearchParser(CreateTextSearchParser {
+            name: ObjectName::from(vec![Ident::new("myparser")]),
+            options: vec![
+                SqlOption::KeyValue {
+                    key: Ident::new("START"),
+                    value: Expr::Identifier(Ident::new("prsd_start")),
+                },
+                SqlOption::KeyValue {
+                    key: Ident::new("GETTOKEN"),
+                    value: Expr::Identifier(Ident::new("prsd_nexttoken")),
+                },
+                SqlOption::KeyValue {
+                    key: Ident::new("END"),
+                    value: Expr::Identifier(Ident::new("prsd_end")),
+                },
+                SqlOption::KeyValue {
+                    key: Ident::new("LEXTYPES"),
+                    value: Expr::Identifier(Ident::new("prsd_lextype")),
+                },
+                SqlOption::KeyValue {
+                    key: Ident::new("HEADLINE"),
+                    value: Expr::Identifier(Ident::new("prsd_headline")),
+                },
+            ],
+        })
+    );
+
+    assert_eq!(
+        pg().parse_sql_statements("CREATE TEXT SEARCH PARSER myparser START = prsd_start"),
+        Err(ParserError::ParserError(
+            "Expected: (, found: START".to_string()
+        ))
+    );
+}
+
+#[test]
+fn parse_create_text_search_template() {
+    assert_eq!(
+        pg().verified_stmt(
+            "CREATE TEXT SEARCH TEMPLATE mytemplate (INIT = dinit, LEXIZE = dlexize)"
+        ),
+        Statement::CreateTextSearchTemplate(CreateTextSearchTemplate {
+            name: ObjectName::from(vec![Ident::new("mytemplate")]),
+            options: vec![
+                SqlOption::KeyValue {
+                    key: Ident::new("INIT"),
+                    value: Expr::Identifier(Ident::new("dinit")),
+                },
+                SqlOption::KeyValue {
+                    key: Ident::new("LEXIZE"),
+                    value: Expr::Identifier(Ident::new("dlexize")),
+                },
+            ],
+        })
+    );
+
+    assert_eq!(
+        pg().parse_sql_statements("CREATE TEXT SEARCH TEMPLATE mytemplate LEXIZE = dlexize"),
+        Err(ParserError::ParserError(
+            "Expected: (, found: LEXIZE".to_string()
+        ))
+    );
+}
+
+#[test]
+fn parse_create_text_search_invalid_subtype() {
+    assert_eq!(
+        pg().parse_sql_statements("CREATE TEXT SEARCH UNKNOWN myname (option = value)"),
+        Err(ParserError::ParserError(
+            "Expected: CONFIGURATION, DICTIONARY, PARSER, or TEMPLATE after CREATE TEXT SEARCH, found: UNKNOWN".to_string()
+        ))
+    );
+}
+
+#[test]
 fn parse_drop_and_comment_collation_ast() {
     assert_eq!(
         pg_and_generic().verified_stmt("DROP COLLATION test0"),

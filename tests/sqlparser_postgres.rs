@@ -9221,3 +9221,99 @@ fn parse_lock_table() {
         }
     }
 }
+
+#[test]
+fn parse_create_foreign_data_wrapper() {
+    // Minimal: name only.
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw";
+    let Statement::CreateForeignDataWrapper(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "myfdw");
+    assert!(stmt.handler.is_none());
+    assert!(stmt.validator.is_none());
+    assert!(stmt.options.is_none());
+
+    // With HANDLER.
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw HANDLER myhandler";
+    let Statement::CreateForeignDataWrapper(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.handler,
+        Some(FdwRoutineClause::Function(ObjectName::from(vec![
+            "myhandler".into()
+        ])))
+    );
+
+    // With NO HANDLER.
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw NO HANDLER";
+    let Statement::CreateForeignDataWrapper(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.handler, Some(FdwRoutineClause::NoFunction));
+
+    // With NO VALIDATOR.
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw NO VALIDATOR";
+    let Statement::CreateForeignDataWrapper(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.validator, Some(FdwRoutineClause::NoFunction));
+
+    // With HANDLER, VALIDATOR, and OPTIONS.
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw HANDLER myhandler VALIDATOR myvalidator OPTIONS (debug 'true')";
+    let Statement::CreateForeignDataWrapper(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.handler,
+        Some(FdwRoutineClause::Function(ObjectName::from(vec![
+            "myhandler".into()
+        ])))
+    );
+    assert_eq!(
+        stmt.validator,
+        Some(FdwRoutineClause::Function(ObjectName::from(vec![
+            "myvalidator".into()
+        ])))
+    );
+    let options = stmt.options.unwrap();
+    assert_eq!(options.len(), 1);
+    assert_eq!(options[0].key.value, "debug");
+    assert_eq!(options[0].value.value, "true");
+}
+
+#[test]
+fn parse_create_foreign_table() {
+    // Basic: columns and SERVER.
+    let sql = "CREATE FOREIGN TABLE ft1 (id INTEGER, name TEXT) SERVER myserver";
+    let Statement::CreateForeignTable(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.to_string(), "ft1");
+    assert!(!stmt.if_not_exists);
+    assert_eq!(stmt.columns.len(), 2);
+    assert_eq!(stmt.columns[0].name.value, "id");
+    assert_eq!(stmt.columns[1].name.value, "name");
+    assert_eq!(stmt.server_name.value, "myserver");
+    assert!(stmt.options.is_none());
+
+    // With IF NOT EXISTS.
+    let sql = "CREATE FOREIGN TABLE IF NOT EXISTS ft2 (col INTEGER) SERVER remoteserver";
+    let Statement::CreateForeignTable(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(stmt.if_not_exists);
+    assert_eq!(stmt.name.to_string(), "ft2");
+
+    // With table-level OPTIONS.
+    let sql =
+        "CREATE FOREIGN TABLE ft3 (col INTEGER) SERVER remoteserver OPTIONS (schema_name 'public')";
+    let Statement::CreateForeignTable(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    let options = stmt.options.unwrap();
+    assert_eq!(options.len(), 1);
+    assert_eq!(options[0].key.value, "schema_name");
+    assert_eq!(options[0].value.value, "public");
+}

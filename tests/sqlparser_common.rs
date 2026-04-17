@@ -9028,6 +9028,7 @@ fn lateral_function() {
                             vec![Ident::new("customer"), Ident::new("id")],
                         ))),
                     ],
+                    with_ordinality: false,
                     alias: None,
                 },
                 global: false,

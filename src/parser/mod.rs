@@ -15898,11 +15898,13 @@ impl<'a> Parser<'a> {
                 let name = self.parse_object_name(false)?;
                 self.expect_token(&Token::LParen)?;
                 let args = self.parse_optional_args()?;
+                let with_ordinality = self.parse_keywords(&[Keyword::WITH, Keyword::ORDINALITY]);
                 let alias = self.maybe_parse_table_alias()?;
                 Ok(TableFactor::Function {
                     lateral: true,
                     name,
                     args,
+                    with_ordinality,
                     alias,
                 })
             }

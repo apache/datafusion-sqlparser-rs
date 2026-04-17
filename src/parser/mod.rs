@@ -5172,6 +5172,8 @@ impl<'a> Parser<'a> {
             self.parse_create_secret(or_replace, temporary, persistent)
         } else if self.parse_keyword(Keyword::USER) {
             self.parse_create_user(or_replace).map(Into::into)
+        } else if self.parse_keyword(Keyword::AGGREGATE) {
+            self.parse_create_aggregate(or_replace).map(Into::into)
         } else if or_replace {
             self.expected_ref(
                 "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION after CREATE OR REPLACE",
@@ -7207,6 +7209,194 @@ impl<'a> Parser<'a> {
             right_arg,
             options,
         })
+    }
+
+    /// Parse a [Statement::CreateAggregate]
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createaggregate.html)
+    pub fn parse_create_aggregate(
+        &mut self,
+        or_replace: bool,
+    ) -> Result<CreateAggregate, ParserError> {
+        let name = self.parse_object_name(false)?;
+
+        // Argument type list: `(input_data_type [, ...])` or `(*)` for zero-arg.
+        self.expect_token(&Token::LParen)?;
+        let args = if self.consume_token(&Token::Mul) {
+            // zero-argument aggregate written as `(*)` — treat as empty arg list.
+            vec![]
+        } else if self.consume_token(&Token::RParen) {
+            self.prev_token();
+            vec![]
+        } else {
+            let parsed = self.parse_comma_separated(|p| p.parse_data_type())?;
+            parsed
+        };
+        self.expect_token(&Token::RParen)?;
+
+        // Options block: `( SFUNC = ..., STYPE = ..., ... )`
+        self.expect_token(&Token::LParen)?;
+        let mut options: Vec<CreateAggregateOption> = Vec::new();
+        loop {
+            let token = self.next_token();
+            match &token.token {
+                Token::RParen => break,
+                Token::Comma => continue,
+                Token::Word(word) => {
+                    let option = self.parse_create_aggregate_option(&word.value.to_uppercase())?;
+                    options.push(option);
+                }
+                other => {
+                    return Err(ParserError::ParserError(format!(
+                        "Unexpected token in CREATE AGGREGATE options: {other:?}"
+                    )));
+                }
+            }
+        }
+
+        Ok(CreateAggregate {
+            or_replace,
+            name,
+            args,
+            options,
+        })
+    }
+
+    fn parse_create_aggregate_option(
+        &mut self,
+        key: &str,
+    ) -> Result<CreateAggregateOption, ParserError> {
+        match key {
+            "SFUNC" => {
+                self.expect_token(&Token::Eq)?;
+                Ok(CreateAggregateOption::Sfunc(
+                    self.parse_object_name(false)?,
+                ))
+            }
+            "STYPE" => {
+                self.expect_token(&Token::Eq)?;
+                Ok(CreateAggregateOption::Stype(self.parse_data_type()?))
+            }
+            "SSPACE" => {
+                self.expect_token(&Token::Eq)?;
+                let size = self.parse_literal_uint()?;
+                Ok(CreateAggregateOption::Sspace(size))
+            }
+            "FINALFUNC" => {
+                self.expect_token(&Token::Eq)?;
+                Ok(CreateAggregateOption::Finalfunc(
+                    self.parse_object_name(false)?,
+                ))
+            }
+            "FINALFUNC_EXTRA" => Ok(CreateAggregateOption::FinalfuncExtra),
+            "FINALFUNC_MODIFY" => {
+                self.expect_token(&Token::Eq)?;
+                Ok(CreateAggregateOption::FinalfuncModify(
+                    self.parse_aggregate_modify_kind()?,
+                ))
+            }
+            "COMBINEFUNC" => {
+                self.expect_token(&Token::Eq)?;
+                Ok(CreateAggregateOption::Combinefunc(
+                    self.parse_object_name(false)?,
+                ))
+            }
+            "SERIALFUNC" => {
+                self.expect_token(&Token::Eq)?;
+                Ok(CreateAggregateOption::Serialfunc(
+                    self.parse_object_name(false)?,
+                ))
+            }
+            "DESERIALFUNC" => {
+                self.expect_token(&Token::Eq)?;
+                Ok(CreateAggregateOption::Deserialfunc(
+                    self.parse_object_name(false)?,
+                ))
+            }
+            "INITCOND" => {
+                self.expect_token(&Token::Eq)?;
+                Ok(CreateAggregateOption::Initcond(self.parse_value()?.value))
+            }
+            "MSFUNC" => {
+                self.expect_token(&Token::Eq)?;
+                Ok(CreateAggregateOption::Msfunc(
+                    self.parse_object_name(false)?,
+                ))
+            }
+            "MINVFUNC" => {
+                self.expect_token(&Token::Eq)?;
+                Ok(CreateAggregateOption::Minvfunc(
+                    self.parse_object_name(false)?,
+                ))
+            }
+            "MSTYPE" => {
+                self.expect_token(&Token::Eq)?;
+                Ok(CreateAggregateOption::Mstype(self.parse_data_type()?))
+            }
+            "MSSPACE" => {
+                self.expect_token(&Token::Eq)?;
+                let size = self.parse_literal_uint()?;
+                Ok(CreateAggregateOption::Msspace(size))
+            }
+            "MFINALFUNC" => {
+                self.expect_token(&Token::Eq)?;
+                Ok(CreateAggregateOption::Mfinalfunc(
+                    self.parse_object_name(false)?,
+                ))
+            }
+            "MFINALFUNC_EXTRA" => Ok(CreateAggregateOption::MfinalfuncExtra),
+            "MFINALFUNC_MODIFY" => {
+                self.expect_token(&Token::Eq)?;
+                Ok(CreateAggregateOption::MfinalfuncModify(
+                    self.parse_aggregate_modify_kind()?,
+                ))
+            }
+            "MINITCOND" => {
+                self.expect_token(&Token::Eq)?;
+                Ok(CreateAggregateOption::Minitcond(self.parse_value()?.value))
+            }
+            "SORTOP" => {
+                self.expect_token(&Token::Eq)?;
+                Ok(CreateAggregateOption::Sortop(
+                    self.parse_object_name(false)?,
+                ))
+            }
+            "PARALLEL" => {
+                self.expect_token(&Token::Eq)?;
+                let parallel = match self.expect_one_of_keywords(&[
+                    Keyword::SAFE,
+                    Keyword::RESTRICTED,
+                    Keyword::UNSAFE,
+                ])? {
+                    Keyword::SAFE => FunctionParallel::Safe,
+                    Keyword::RESTRICTED => FunctionParallel::Restricted,
+                    Keyword::UNSAFE => FunctionParallel::Unsafe,
+                    _ => unreachable!(),
+                };
+                Ok(CreateAggregateOption::Parallel(parallel))
+            }
+            "HYPOTHETICAL" => Ok(CreateAggregateOption::Hypothetical),
+            other => Err(ParserError::ParserError(format!(
+                "Unknown CREATE AGGREGATE option: {other}"
+            ))),
+        }
+    }
+
+    fn parse_aggregate_modify_kind(&mut self) -> Result<AggregateModifyKind, ParserError> {
+        let token = self.next_token();
+        match &token.token {
+            Token::Word(word) => match word.value.to_uppercase().as_str() {
+                "READ_ONLY" => Ok(AggregateModifyKind::ReadOnly),
+                "SHAREABLE" => Ok(AggregateModifyKind::Shareable),
+                "READ_WRITE" => Ok(AggregateModifyKind::ReadWrite),
+                other => Err(ParserError::ParserError(format!(
+                    "Expected READ_ONLY, SHAREABLE, or READ_WRITE, got: {other}"
+                ))),
+            },
+            other => Err(ParserError::ParserError(format!(
+                "Expected READ_ONLY, SHAREABLE, or READ_WRITE, got: {other:?}"
+            ))),
+        }
     }
 
     /// Parse a [Statement::CreateOperatorFamily]

@@ -1338,8 +1338,7 @@ impl<'a> Parser<'a> {
                             ));
                         }
                         _ => {
-                            return self
-                                .expected("an identifier or a '*' after '.'", next_token);
+                            return self.expected("an identifier or a '*' after '.'", next_token);
                         }
                     }
                 }

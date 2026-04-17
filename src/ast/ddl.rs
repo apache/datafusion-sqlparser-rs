@@ -42,7 +42,8 @@ use crate::ast::{
         UniqueConstraint,
     },
     ArgMode, AttachedToken, CommentDef, ConditionalStatements, CreateFunctionBody,
-    CreateFunctionUsing, CreateTableLikeKind, CreateTableOptions, CreateViewParams, DataType, Expr,
+    CreateFunctionUsing, CreateServerOption, CreateTableLikeKind, CreateTableOptions,
+    CreateViewParams, DataType, Expr,
     FileFormat, FunctionBehavior, FunctionCalledOnNull, FunctionDefinitionSetParam, FunctionDesc,
     FunctionDeterminismSpecifier, FunctionParallel, FunctionSecurity, HiveDistributionStyle,
     HiveFormat, HiveIOFormat, HiveRowFormat, HiveSetLocation, Ident, InitializeKind,
@@ -5755,5 +5756,106 @@ impl fmt::Display for AlterPolicy {
 impl From<AlterPolicy> for crate::ast::Statement {
     fn from(v: AlterPolicy) -> Self {
         crate::ast::Statement::AlterPolicy(v)
+    }
+}
+
+/// The handler/validator clause of a `CREATE FOREIGN DATA WRAPPER` statement.
+///
+/// Specifies either a named function or the absence of a function.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FdwRoutineClause {
+    /// A named function, e.g. `HANDLER myhandler` or `VALIDATOR myvalidator`.
+    Function(ObjectName),
+    /// The `NO HANDLER` or `NO VALIDATOR` form.
+    NoFunction,
+}
+
+/// A `CREATE FOREIGN DATA WRAPPER` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createforeigndatawrapper.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateForeignDataWrapper {
+    /// The name of the foreign-data wrapper.
+    pub name: Ident,
+    /// Optional `HANDLER handler_function` or `NO HANDLER` clause.
+    pub handler: Option<FdwRoutineClause>,
+    /// Optional `VALIDATOR validator_function` or `NO VALIDATOR` clause.
+    pub validator: Option<FdwRoutineClause>,
+    /// Optional `OPTIONS (key 'value', ...)` clause.
+    pub options: Option<Vec<CreateServerOption>>,
+}
+
+impl fmt::Display for CreateForeignDataWrapper {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "CREATE FOREIGN DATA WRAPPER {}", self.name)?;
+        if let Some(handler) = &self.handler {
+            match handler {
+                FdwRoutineClause::Function(name) => write!(f, " HANDLER {name}")?,
+                FdwRoutineClause::NoFunction => write!(f, " NO HANDLER")?,
+            }
+        }
+        if let Some(validator) = &self.validator {
+            match validator {
+                FdwRoutineClause::Function(name) => write!(f, " VALIDATOR {name}")?,
+                FdwRoutineClause::NoFunction => write!(f, " NO VALIDATOR")?,
+            }
+        }
+        if let Some(options) = &self.options {
+            write!(f, " OPTIONS ({})", display_comma_separated(options))?;
+        }
+        Ok(())
+    }
+}
+
+impl From<CreateForeignDataWrapper> for crate::ast::Statement {
+    fn from(v: CreateForeignDataWrapper) -> Self {
+        crate::ast::Statement::CreateForeignDataWrapper(v)
+    }
+}
+
+/// A `CREATE FOREIGN TABLE` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createforeigntable.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateForeignTable {
+    /// The foreign table name.
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub name: ObjectName,
+    /// Whether `IF NOT EXISTS` was specified.
+    pub if_not_exists: bool,
+    /// Column definitions.
+    pub columns: Vec<ColumnDef>,
+    /// The `SERVER server_name` clause.
+    pub server_name: Ident,
+    /// Optional `OPTIONS (key 'value', ...)` clause at the table level.
+    pub options: Option<Vec<CreateServerOption>>,
+}
+
+impl fmt::Display for CreateForeignTable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "CREATE FOREIGN TABLE {if_not_exists}{name} ({columns}) SERVER {server_name}",
+            if_not_exists = if self.if_not_exists { "IF NOT EXISTS " } else { "" },
+            name = self.name,
+            columns = display_comma_separated(&self.columns),
+            server_name = self.server_name,
+        )?;
+        if let Some(options) = &self.options {
+            write!(f, " OPTIONS ({})", display_comma_separated(options))?;
+        }
+        Ok(())
+    }
+}
+
+impl From<CreateForeignTable> for crate::ast::Statement {
+    fn from(v: CreateForeignTable) -> Self {
+        crate::ast::Statement::CreateForeignTable(v)
     }
 }

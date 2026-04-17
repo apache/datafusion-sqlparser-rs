@@ -69,11 +69,12 @@ pub use self::ddl::{
     AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
     ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy,
     ColumnPolicyProperty, ConstraintCharacteristics, CreateCollation, CreateCollationDefinition,
-    CreateConnector, CreateDomain, CreateExtension, CreateFunction, CreateIndex, CreateOperator,
-    CreateOperatorClass, CreateOperatorFamily, CreatePolicy, CreatePolicyCommand, CreatePolicyType,
-    CreateTable, CreateTrigger, CreateView, Deduplicate, DeferrableInitial, DistStyle,
-    DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily,
-    DropOperatorSignature, DropPolicy, DropTrigger, ForValues, FunctionReturnType, GeneratedAs,
+    CreateConnector, CreateDomain, CreateExtension, CreateForeignDataWrapper, CreateForeignTable,
+    CreateFunction, CreateIndex, CreateOperator, CreateOperatorClass, CreateOperatorFamily,
+    CreatePolicy, CreatePolicyCommand, CreatePolicyType, CreateTable, CreateTrigger, CreateView,
+    Deduplicate, DeferrableInitial, DistStyle, DropBehavior, DropExtension, DropFunction,
+    DropOperator, DropOperatorClass, DropOperatorFamily, DropOperatorSignature, DropPolicy,
+    DropTrigger, FdwRoutineClause, ForValues, FunctionReturnType, GeneratedAs,
     GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
     IdentityPropertyKind, IdentityPropertyOrder, IndexColumn, IndexOption, IndexType,
     KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes, OperatorClassItem,
@@ -3699,6 +3700,16 @@ pub enum Statement {
     /// A `CREATE SERVER` statement.
     CreateServer(CreateServerStatement),
     /// ```sql
+    /// CREATE FOREIGN DATA WRAPPER
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createforeigndatawrapper.html)
+    CreateForeignDataWrapper(CreateForeignDataWrapper),
+    /// ```sql
+    /// CREATE FOREIGN TABLE
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createforeigntable.html)
+    CreateForeignTable(CreateForeignTable),
+    /// ```sql
     /// CREATE POLICY
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)
@@ -5504,6 +5515,8 @@ impl fmt::Display for Statement {
             Statement::CreateServer(stmt) => {
                 write!(f, "{stmt}")
             }
+            Statement::CreateForeignDataWrapper(stmt) => write!(f, "{stmt}"),
+            Statement::CreateForeignTable(stmt) => write!(f, "{stmt}"),
             Statement::CreatePolicy(policy) => write!(f, "{policy}"),
             Statement::CreateConnector(create_connector) => create_connector.fmt(f),
             Statement::CreateOperator(create_operator) => create_operator.fmt(f),

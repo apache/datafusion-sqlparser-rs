@@ -508,11 +508,10 @@ impl<'a> Parser<'a> {
                 Token::EOF => break,
 
                 // end of statement
-                Token::Word(word) => {
-                    if expecting_statement_delimiter && word.keyword == Keyword::END {
+                Token::Word(word)
+                    if expecting_statement_delimiter && word.keyword == Keyword::END => {
                         break;
                     }
-                }
                 _ => {}
             }
 
@@ -1305,8 +1304,8 @@ impl<'a> Parser<'a> {
 
         let next_token = self.next_token();
         match next_token.token {
-            t @ (Token::Word(_) | Token::SingleQuotedString(_)) => {
-                if self.peek_token_ref().token == Token::Period {
+            t @ (Token::Word(_) | Token::SingleQuotedString(_))
+                if self.peek_token_ref().token == Token::Period => {
                     let mut id_parts: Vec<Ident> = vec![match t {
                         Token::Word(w) => w.into_ident(next_token.span),
                         Token::SingleQuotedString(s) => Ident::with_quote('\'', s),
@@ -1343,7 +1342,6 @@ impl<'a> Parser<'a> {
                         }
                     }
                 }
-            }
             Token::Mul => {
                 return Ok(Expr::Wildcard(AttachedToken(next_token)));
             }
@@ -5031,11 +5029,10 @@ impl<'a> Parser<'a> {
         loop {
             match &self.peek_nth_token_ref(0).token {
                 Token::EOF => break,
-                Token::Word(w) => {
-                    if w.quote_style.is_none() && terminal_keywords.contains(&w.keyword) {
+                Token::Word(w)
+                    if w.quote_style.is_none() && terminal_keywords.contains(&w.keyword) => {
                         break;
                     }
-                }
                 _ => {}
             }
 
@@ -8388,8 +8385,8 @@ impl<'a> Parser<'a> {
                         Keyword::LINES,
                         Keyword::NULL,
                     ]) {
-                        Some(Keyword::FIELDS) => {
-                            if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) {
+                        Some(Keyword::FIELDS)
+                            if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) => {
                                 row_delimiters.push(HiveRowDelimiter {
                                     delimiter: HiveDelimiter::FieldsTerminatedBy,
                                     char: self.parse_identifier()?,
@@ -8401,58 +8398,43 @@ impl<'a> Parser<'a> {
                                         char: self.parse_identifier()?,
                                     });
                                 }
-                            } else {
-                                break;
                             }
-                        }
-                        Some(Keyword::COLLECTION) => {
+                        Some(Keyword::COLLECTION)
                             if self.parse_keywords(&[
                                 Keyword::ITEMS,
                                 Keyword::TERMINATED,
                                 Keyword::BY,
-                            ]) {
+                            ]) => {
                                 row_delimiters.push(HiveRowDelimiter {
                                     delimiter: HiveDelimiter::CollectionItemsTerminatedBy,
                                     char: self.parse_identifier()?,
                                 });
-                            } else {
-                                break;
                             }
-                        }
-                        Some(Keyword::MAP) => {
+                        Some(Keyword::MAP)
                             if self.parse_keywords(&[
                                 Keyword::KEYS,
                                 Keyword::TERMINATED,
                                 Keyword::BY,
-                            ]) {
+                            ]) => {
                                 row_delimiters.push(HiveRowDelimiter {
                                     delimiter: HiveDelimiter::MapKeysTerminatedBy,
                                     char: self.parse_identifier()?,
                                 });
-                            } else {
-                                break;
                             }
-                        }
-                        Some(Keyword::LINES) => {
-                            if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) {
+                        Some(Keyword::LINES)
+                            if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) => {
                                 row_delimiters.push(HiveRowDelimiter {
                                     delimiter: HiveDelimiter::LinesTerminatedBy,
                                     char: self.parse_identifier()?,
                                 });
-                            } else {
-                                break;
                             }
-                        }
-                        Some(Keyword::NULL) => {
-                            if self.parse_keywords(&[Keyword::DEFINED, Keyword::AS]) {
+                        Some(Keyword::NULL)
+                            if self.parse_keywords(&[Keyword::DEFINED, Keyword::AS]) => {
                                 row_delimiters.push(HiveRowDelimiter {
                                     delimiter: HiveDelimiter::NullDefinedAs,
                                     char: self.parse_identifier()?,
                                 });
-                            } else {
-                                break;
                             }
-                        }
                         _ => {
                             break;
                         }

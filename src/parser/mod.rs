@@ -9952,7 +9952,7 @@ impl<'a> Parser<'a> {
             }
             _ => {
                 if name.is_some() {
-                    self.expected("PRIMARY, UNIQUE, FOREIGN, or CHECK", next_token)
+                    self.expected("PRIMARY, UNIQUE, FOREIGN, CHECK, or EXCLUDE", next_token)
                 } else {
                     self.prev_token();
                     Ok(None)
@@ -9991,6 +9991,11 @@ impl<'a> Parser<'a> {
     fn parse_exclusion_operator(&mut self) -> Result<String, ParserError> {
         if self.parse_keyword(Keyword::OPERATOR) {
             self.expect_token(&Token::LParen)?;
+            let peek = self.peek_token_ref();
+            if peek.token == Token::RParen {
+                let token = self.next_token();
+                return self.expected("operator name", token);
+            }
             let mut parts = vec![];
             loop {
                 self.advance_token();

@@ -9477,7 +9477,7 @@ fn exclude_empty_element_list_errors() {
     let sql = "CREATE TABLE t (CONSTRAINT c EXCLUDE USING gist ())";
     let err = pg().parse_sql_statements(sql).unwrap_err();
     assert!(
-        err.to_string().contains("Expected"),
+        err.to_string().contains("Expected: an expression"),
         "unexpected error: {err}"
     );
 }
@@ -9489,6 +9489,13 @@ fn exclude_missing_operator_errors() {
     assert!(
         err.to_string().contains("exclusion operator"),
         "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn parse_exclude_constraint_operator_with_ordering() {
+    pg().verified_stmt(
+        "CREATE TABLE t (col INT, CONSTRAINT c EXCLUDE USING gist (col ASC WITH OPERATOR(pg_catalog.=)))",
     );
 }
 

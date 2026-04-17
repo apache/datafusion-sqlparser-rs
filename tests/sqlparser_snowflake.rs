@@ -472,13 +472,6 @@ fn test_snowflake_create_invalid_temporal_table() {
     );
 
     assert_eq!(
-        snowflake().parse_sql_statements("CREATE TEMP VOLATILE TABLE my_table (a INT)"),
-        Err(ParserError::ParserError(
-            "Expected: an object type after CREATE, found: VOLATILE".to_string()
-        ))
-    );
-
-    assert_eq!(
         snowflake().parse_sql_statements("CREATE TEMP TRANSIENT TABLE my_table (a INT)"),
         Err(ParserError::ParserError(
             "Expected: an object type after CREATE, found: TRANSIENT".to_string()

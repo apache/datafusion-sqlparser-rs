@@ -5213,6 +5213,17 @@ impl<'a> Parser<'a> {
             }
         } else if self.parse_keyword(Keyword::SERVER) {
             self.parse_pg_create_server()
+        } else if self.parse_keyword(Keyword::FOREIGN) {
+            if self.parse_keywords(&[Keyword::DATA, Keyword::WRAPPER]) {
+                self.parse_create_foreign_data_wrapper().map(Into::into)
+            } else if self.parse_keyword(Keyword::TABLE) {
+                self.parse_create_foreign_table().map(Into::into)
+            } else {
+                self.expected_ref(
+                    "DATA WRAPPER or TABLE after CREATE FOREIGN",
+                    self.peek_token_ref(),
+                )
+            }
         } else {
             self.expected_ref("an object type after CREATE", self.peek_token_ref())
         }
@@ -19755,6 +19766,86 @@ impl<'a> Parser<'a> {
             foreign_data_wrapper,
             options,
         }))
+    }
+
+    /// Parse a `CREATE FOREIGN DATA WRAPPER` statement.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createforeigndatawrapper.html>
+    pub fn parse_create_foreign_data_wrapper(
+        &mut self,
+    ) -> Result<CreateForeignDataWrapper, ParserError> {
+        let name = self.parse_identifier()?;
+
+        let handler = if self.parse_keyword(Keyword::HANDLER) {
+            Some(FdwRoutineClause::Function(self.parse_object_name(false)?))
+        } else if self.parse_keywords(&[Keyword::NO, Keyword::HANDLER]) {
+            Some(FdwRoutineClause::NoFunction)
+        } else {
+            None
+        };
+
+        let validator = if self.parse_keyword(Keyword::VALIDATOR) {
+            Some(FdwRoutineClause::Function(self.parse_object_name(false)?))
+        } else if self.parse_keywords(&[Keyword::NO, Keyword::VALIDATOR]) {
+            Some(FdwRoutineClause::NoFunction)
+        } else {
+            None
+        };
+
+        let options = if self.parse_keyword(Keyword::OPTIONS) {
+            self.expect_token(&Token::LParen)?;
+            let opts = self.parse_comma_separated(|p| {
+                let key = p.parse_identifier()?;
+                let value = p.parse_identifier()?;
+                Ok(CreateServerOption { key, value })
+            })?;
+            self.expect_token(&Token::RParen)?;
+            Some(opts)
+        } else {
+            None
+        };
+
+        Ok(CreateForeignDataWrapper {
+            name,
+            handler,
+            validator,
+            options,
+        })
+    }
+
+    /// Parse a `CREATE FOREIGN TABLE` statement.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createforeigntable.html>
+    pub fn parse_create_foreign_table(
+        &mut self,
+    ) -> Result<CreateForeignTable, ParserError> {
+        let if_not_exists =
+            self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let name = self.parse_object_name(false)?;
+        let (columns, _constraints) = self.parse_columns()?;
+        self.expect_keyword_is(Keyword::SERVER)?;
+        let server_name = self.parse_identifier()?;
+
+        let options = if self.parse_keyword(Keyword::OPTIONS) {
+            self.expect_token(&Token::LParen)?;
+            let opts = self.parse_comma_separated(|p| {
+                let key = p.parse_identifier()?;
+                let value = p.parse_identifier()?;
+                Ok(CreateServerOption { key, value })
+            })?;
+            self.expect_token(&Token::RParen)?;
+            Some(opts)
+        } else {
+            None
+        };
+
+        Ok(CreateForeignTable {
+            name,
+            if_not_exists,
+            columns,
+            server_name,
+            options,
+        })
     }
 
     /// The index of the first unprocessed token.

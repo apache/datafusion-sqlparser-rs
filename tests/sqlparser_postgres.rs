@@ -9146,7 +9146,7 @@ fn parse_exclude_constraint_basic() {
                     assert_eq!(c.index_method, Some(Ident::new("gist")));
                     assert_eq!(c.elements.len(), 1);
                     assert_eq!(c.elements[0].expr, Expr::Identifier(Ident::new("room")));
-                    assert_eq!(c.elements[0].operator, "=");
+                    assert_eq!(c.elements[0].operator.to_string(), "=");
                     assert!(c.elements[0].operator_class.is_none());
                     assert_eq!(c.elements[0].order, OrderByOptions::default());
                     assert_eq!(c.include.len(), 0);
@@ -9172,9 +9172,9 @@ fn parse_exclude_constraint_multi_element() {
                     assert!(c.name.is_none());
                     assert_eq!(c.index_method, Some(Ident::new("gist")));
                     assert_eq!(c.elements.len(), 2);
-                    assert_eq!(c.elements[0].operator, "=");
+                    assert_eq!(c.elements[0].operator.to_string(), "=");
                     assert_eq!(c.elements[0].expr, Expr::Identifier(Ident::new("room")));
-                    assert_eq!(c.elements[1].operator, "&&");
+                    assert_eq!(c.elements[1].operator.to_string(), "&&");
                     assert_eq!(c.elements[1].expr, Expr::Identifier(Ident::new("during")));
                 }
                 other => panic!("Expected Exclusion, got {other:?}"),
@@ -9336,7 +9336,7 @@ fn parse_exclude_constraint_in_alter_table() {
                 ..
             } => {
                 assert_eq!(c.name, Some(Ident::new("no_overlap")));
-                assert_eq!(c.elements[0].operator, "=");
+                assert_eq!(c.elements[0].operator.to_string(), "=");
             }
             other => panic!("Expected AddConstraint(Exclusion), got {other:?}"),
         },
@@ -9370,6 +9370,15 @@ fn parse_exclude_constraint_not_deferrable_initially_immediate() {
 }
 
 #[test]
+fn parse_exclude_constraint_collate() {
+    // `COLLATE` is consumed by the element expression parser; verify that
+    // a collated column round-trips inside an EXCLUDE element.
+    pg().verified_stmt(
+        "CREATE TABLE t (name TEXT, EXCLUDE USING btree (name COLLATE \"C\" WITH =))",
+    );
+}
+
+#[test]
 fn parse_exclude_constraint_operator_class() {
     let sql = "CREATE TABLE t (col TEXT, EXCLUDE USING gist (col text_pattern_ops WITH =))";
     match pg().verified_stmt(sql) {
@@ -9381,7 +9390,7 @@ fn parse_exclude_constraint_operator_class() {
                     c.elements[0].operator_class,
                     Some(ObjectName::from(vec![Ident::new("text_pattern_ops")]))
                 );
-                assert_eq!(c.elements[0].operator, "=");
+                assert_eq!(c.elements[0].operator.to_string(), "=");
             }
             other => panic!("Expected Exclusion, got {other:?}"),
         },
@@ -9440,7 +9449,7 @@ fn parse_exclude_constraint_function_expression() {
                     c.elements[0].operator_class,
                     Some(ObjectName::from(vec![Ident::new("text_pattern_ops")]))
                 );
-                assert_eq!(c.elements[0].operator, "=");
+                assert_eq!(c.elements[0].operator.to_string(), "=");
             }
             other => panic!("Expected Exclusion, got {other:?}"),
         },
@@ -9453,9 +9462,12 @@ fn parse_exclude_constraint_pg_custom_operator() {
     let sql = "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH OPERATOR(pg_catalog.=)))";
     match pg().verified_stmt(sql) {
         Statement::CreateTable(create_table) => match &create_table.constraints[0] {
-            TableConstraint::Exclusion(c) => {
-                assert_eq!(c.elements[0].operator, "OPERATOR(pg_catalog.=)");
-            }
+            TableConstraint::Exclusion(c) => match &c.elements[0].operator {
+                ExclusionOperator::PgCustom(parts) => {
+                    assert_eq!(parts, &vec!["pg_catalog".to_string(), "=".to_string()]);
+                }
+                other => panic!("Expected PgCustom operator, got {other:?}"),
+            },
             other => panic!("Expected Exclusion, got {other:?}"),
         },
         _ => panic!("Expected CreateTable"),

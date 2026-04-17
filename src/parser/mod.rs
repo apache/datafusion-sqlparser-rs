@@ -3874,21 +3874,12 @@ impl<'a> Parser<'a> {
                 Keyword::XOR => Some(BinaryOperator::Xor),
                 Keyword::OVERLAPS => Some(BinaryOperator::Overlaps),
                 Keyword::OPERATOR if dialect_is!(dialect is PostgreSqlDialect | GenericDialect) => {
-                    self.expect_token(&Token::LParen)?;
-                    // there are special rules for operator names in
-                    // postgres so we can not use 'parse_object'
-                    // or similar.
+                    // Postgres has special rules for operator names so we can
+                    // not use `parse_object` or similar.
                     // See https://www.postgresql.org/docs/current/sql-createoperator.html
-                    let mut idents = vec![];
-                    loop {
-                        self.advance_token();
-                        idents.push(self.get_current_token().to_string());
-                        if !self.consume_token(&Token::Period) {
-                            break;
-                        }
-                    }
-                    self.expect_token(&Token::RParen)?;
-                    Some(BinaryOperator::PGCustomBinaryOperator(idents))
+                    Some(BinaryOperator::PGCustomBinaryOperator(
+                        self.parse_pg_operator_ident_parts()?,
+                    ))
                 }
                 _ => None,
             },
@@ -9999,19 +9990,11 @@ impl<'a> Parser<'a> {
     ///
     /// Accepts either a single operator token (e.g. `=`, `&&`, `<->`) or the
     /// Postgres `OPERATOR(schema.op)` form for schema-qualified operators.
-    fn parse_exclusion_operator(&mut self) -> Result<String, ParserError> {
+    fn parse_exclusion_operator(&mut self) -> Result<ExclusionOperator, ParserError> {
         if self.parse_keyword(Keyword::OPERATOR) {
-            self.expect_token(&Token::LParen)?;
-            let mut parts = vec![];
-            loop {
-                self.advance_token();
-                parts.push(self.get_current_token().to_string());
-                if !self.consume_token(&Token::Period) {
-                    break;
-                }
-            }
-            self.expect_token(&Token::RParen)?;
-            return Ok(format!("OPERATOR({})", parts.join(".")));
+            return Ok(ExclusionOperator::PgCustom(
+                self.parse_pg_operator_ident_parts()?,
+            ));
         }
 
         let operator_token = self.next_token();
@@ -10019,8 +10002,26 @@ impl<'a> Parser<'a> {
             Token::EOF | Token::RParen | Token::Comma | Token::SemiColon => {
                 self.expected("exclusion operator", operator_token)
             }
-            _ => Ok(operator_token.token.to_string()),
+            _ => Ok(ExclusionOperator::Token(operator_token.token.to_string())),
         }
+    }
+
+    /// Parse the body of a Postgres `OPERATOR(schema.op)` form — i.e. the
+    /// parenthesised `.`-separated path of name parts after the `OPERATOR`
+    /// keyword. Shared between binary expression parsing and exclusion
+    /// constraint parsing.
+    fn parse_pg_operator_ident_parts(&mut self) -> Result<Vec<String>, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let mut idents = vec![];
+        loop {
+            self.advance_token();
+            idents.push(self.get_current_token().to_string());
+            if !self.consume_token(&Token::Period) {
+                break;
+            }
+        }
+        self.expect_token(&Token::RParen)?;
+        Ok(idents)
     }
 
     fn parse_optional_nulls_distinct(&mut self) -> Result<NullsDistinctOption, ParserError> {

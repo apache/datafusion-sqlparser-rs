@@ -617,6 +617,28 @@ impl crate::ast::Spanned for ConstraintUsingIndex {
     }
 }
 
+/// The operator that follows `WITH` in an `EXCLUDE` element.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ExclusionOperator {
+    /// A single operator token, e.g. `=`, `&&`, `<->`.
+    Token(String),
+    /// Postgres schema-qualified form: `OPERATOR(schema.op)`.
+    PgCustom(Vec<String>),
+}
+
+impl fmt::Display for ExclusionOperator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ExclusionOperator::Token(token) => f.write_str(token),
+            ExclusionOperator::PgCustom(parts) => {
+                write!(f, "OPERATOR({})", display_separated(parts, "."))
+            }
+        }
+    }
+}
+
 /// One element in an `EXCLUDE` constraint's element list.
 ///
 /// `{ column_name | ( expression ) } [ opclass ] [ ASC | DESC ] [ NULLS { FIRST | LAST } ] WITH <operator>`
@@ -632,9 +654,8 @@ pub struct ExclusionElement {
     pub operator_class: Option<ObjectName>,
     /// Ordering options (ASC/DESC, NULLS FIRST/LAST).
     pub order: OrderByOptions,
-    /// The exclusion operator. Either a simple token (`&&`, `=`, `<->`) or the
-    /// Postgres schema-qualified form `OPERATOR(schema.op)`.
-    pub operator: String,
+    /// The exclusion operator.
+    pub operator: ExclusionOperator,
 }
 
 impl fmt::Display for ExclusionElement {

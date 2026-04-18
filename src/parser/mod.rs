@@ -8180,45 +8180,45 @@ impl<'a> Parser<'a> {
 
     /// Parse a PostgreSQL-specific `CREATE TEXT SEARCH CONFIGURATION | DICTIONARY | PARSER | TEMPLATE` statement.
     pub fn parse_create_text_search(&mut self) -> Result<Statement, ParserError> {
-        if self.parse_keyword(Keyword::CONFIGURATION) {
-            let name = self.parse_object_name(false)?;
-            self.expect_token(&Token::LParen)?;
-            let options = self.parse_comma_separated(Parser::parse_sql_option)?;
-            self.expect_token(&Token::RParen)?;
-            Ok(Statement::CreateTextSearchConfiguration(
-                CreateTextSearchConfiguration { name, options },
-            ))
+        let subtype = if self.parse_keyword(Keyword::CONFIGURATION) {
+            Keyword::CONFIGURATION
         } else if self.parse_keyword(Keyword::DICTIONARY) {
-            let name = self.parse_object_name(false)?;
-            self.expect_token(&Token::LParen)?;
-            let options = self.parse_comma_separated(Parser::parse_sql_option)?;
-            self.expect_token(&Token::RParen)?;
-            Ok(Statement::CreateTextSearchDictionary(
-                CreateTextSearchDictionary { name, options },
-            ))
+            Keyword::DICTIONARY
         } else if self.parse_keyword(Keyword::PARSER) {
-            let name = self.parse_object_name(false)?;
-            self.expect_token(&Token::LParen)?;
-            let options = self.parse_comma_separated(Parser::parse_sql_option)?;
-            self.expect_token(&Token::RParen)?;
-            Ok(Statement::CreateTextSearchParser(CreateTextSearchParser {
-                name,
-                options,
-            }))
+            Keyword::PARSER
         } else if self.parse_keyword(Keyword::TEMPLATE) {
-            let name = self.parse_object_name(false)?;
-            self.expect_token(&Token::LParen)?;
-            let options = self.parse_comma_separated(Parser::parse_sql_option)?;
-            self.expect_token(&Token::RParen)?;
-            Ok(Statement::CreateTextSearchTemplate(
-                CreateTextSearchTemplate { name, options },
-            ))
+            Keyword::TEMPLATE
         } else {
-            self.expected_ref(
+            return self.expected_ref(
                 "CONFIGURATION, DICTIONARY, PARSER, or TEMPLATE after CREATE TEXT SEARCH",
                 self.peek_token_ref(),
-            )
-        }
+            );
+        };
+
+        let name = self.parse_object_name(false)?;
+        self.expect_token(&Token::LParen)?;
+        let options = self.parse_comma_separated(Parser::parse_sql_option)?;
+        self.expect_token(&Token::RParen)?;
+
+        Ok(match subtype {
+            Keyword::CONFIGURATION => Statement::CreateTextSearchConfiguration(
+                CreateTextSearchConfiguration { name, options },
+            ),
+            Keyword::DICTIONARY => {
+                Statement::CreateTextSearchDictionary(CreateTextSearchDictionary { name, options })
+            }
+            Keyword::PARSER => {
+                Statement::CreateTextSearchParser(CreateTextSearchParser { name, options })
+            }
+            Keyword::TEMPLATE => {
+                Statement::CreateTextSearchTemplate(CreateTextSearchTemplate { name, options })
+            }
+            unexpected => {
+                return Err(ParserError::ParserError(format!(
+                    "Internal parser error: unexpected CREATE TEXT SEARCH subtype `{unexpected}`"
+                )))
+            }
+        })
     }
 
     /// Parse a PostgreSQL-specific [Statement::DropExtension] statement.

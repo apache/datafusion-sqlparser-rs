@@ -5768,7 +5768,9 @@ impl From<AlterPolicy> for crate::ast::Statement {
 pub struct CreateTextSearchConfiguration {
     /// Name of the text search configuration being created.
     pub name: ObjectName,
-    /// Options list — must include `PARSER = parser_name`.
+    /// Options list. PostgreSQL requires `PARSER = parser_name`; the
+    /// parser does not enforce required keys (matching other options-list
+    /// handling in this crate).
     pub options: Vec<SqlOption>,
 }
 
@@ -5799,7 +5801,8 @@ impl From<CreateTextSearchConfiguration> for crate::ast::Statement {
 pub struct CreateTextSearchDictionary {
     /// Name of the text search dictionary being created.
     pub name: ObjectName,
-    /// Options list — must include `TEMPLATE = template_name`.
+    /// Options list. PostgreSQL requires `TEMPLATE = template_name`; the
+    /// parser does not enforce required keys.
     pub options: Vec<SqlOption>,
 }
 
@@ -5830,7 +5833,9 @@ impl From<CreateTextSearchDictionary> for crate::ast::Statement {
 pub struct CreateTextSearchParser {
     /// Name of the text search parser being created.
     pub name: ObjectName,
-    /// Options list — must include `START`, `GETTOKEN`, `END`, `LEXTYPES` (and optionally `HEADLINE`).
+    /// Options list. PostgreSQL requires `START`, `GETTOKEN`, `END`, and
+    /// `LEXTYPES` (with `HEADLINE` optional); the parser does not enforce
+    /// required keys.
     pub options: Vec<SqlOption>,
 }
 
@@ -5861,7 +5866,8 @@ impl From<CreateTextSearchParser> for crate::ast::Statement {
 pub struct CreateTextSearchTemplate {
     /// Name of the text search template being created.
     pub name: ObjectName,
-    /// Options list — must include `LEXIZE` (and optionally `INIT`).
+    /// Options list. PostgreSQL requires `LEXIZE` (with `INIT` optional);
+    /// the parser does not enforce required keys.
     pub options: Vec<SqlOption>,
 }
 

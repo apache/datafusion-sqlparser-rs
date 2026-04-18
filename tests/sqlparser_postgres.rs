@@ -1070,6 +1070,16 @@ fn parse_create_text_search_template() {
 }
 
 #[test]
+fn parse_create_text_search_schema_qualified_option_value() {
+    // PostgreSQL's TEXT SEARCH options accept schema-qualified names as
+    // values (e.g. `PARSER = pg_catalog.default`). Ensure they round-trip.
+    pg().verified_stmt(
+        "CREATE TEXT SEARCH CONFIGURATION public.myconfig (PARSER = pg_catalog.default)",
+    );
+    pg().verified_stmt("CREATE TEXT SEARCH DICTIONARY public.d (TEMPLATE = pg_catalog.simple)");
+}
+
+#[test]
 fn parse_create_text_search_invalid_subtype() {
     assert_eq!(
         pg().parse_sql_statements("CREATE TEXT SEARCH UNKNOWN myname (option = value)"),

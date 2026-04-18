@@ -6522,7 +6522,10 @@ impl From<CreateSubscription> for crate::ast::Statement {
 pub enum CastFunctionKind {
     /// `WITH FUNCTION function_name(arg_types)`
     WithFunction {
+        /// The name of the cast implementation function.
         function_name: ObjectName,
+        /// Optional argument type list. Empty if the function has no arguments
+        /// declared in the `CREATE CAST` clause.
         argument_types: Vec<DataType>,
     },
     /// `WITHOUT FUNCTION`
@@ -6546,6 +6549,10 @@ impl fmt::Display for CastFunctionKind {
             }
             CastFunctionKind::WithoutFunction => write!(f, "WITHOUT FUNCTION"),
             CastFunctionKind::WithInout => write!(f, "WITH INOUT"),
+        }
+    }
+}
+
 /// A kind of extended statistics collected by `CREATE STATISTICS`.
 ///
 /// Note: this is a PostgreSQL-specific concept.
@@ -6568,6 +6575,10 @@ impl fmt::Display for StatisticsKind {
             StatisticsKind::NDistinct => write!(f, "ndistinct"),
             StatisticsKind::Dependencies => write!(f, "dependencies"),
             StatisticsKind::Mcv => write!(f, "mcv"),
+        }
+    }
+}
+
 /// The object kind targeted by a `SECURITY LABEL` statement.
 ///
 /// See <https://www.postgresql.org/docs/current/sql-securitylabel.html>
@@ -6767,6 +6778,11 @@ impl fmt::Display for CreateLanguage {
         }
         if let Some(validator) = &self.validator {
             write!(f, " VALIDATOR {validator}")?;
+        }
+        Ok(())
+    }
+}
+
 /// A `CREATE STATISTICS` statement.
 ///
 /// Note: this is a PostgreSQL-specific statement.
@@ -6799,6 +6815,10 @@ impl fmt::Display for CreateStatistics {
         }
         write!(f, " ON {}", display_comma_separated(&self.on))?;
         write!(f, " FROM {}", self.from)?;
+        Ok(())
+    }
+}
+
 /// A `SECURITY LABEL` statement.
 ///
 /// Note: this is a PostgreSQL-specific statement.
@@ -6918,9 +6938,13 @@ impl From<CreateLanguage> for crate::ast::Statement {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum RuleEvent {
+    /// `ON SELECT` rule.
     Select,
+    /// `ON INSERT` rule.
     Insert,
+    /// `ON UPDATE` rule.
     Update,
+    /// `ON DELETE` rule.
     Delete,
 }
 
@@ -6931,6 +6955,10 @@ impl fmt::Display for RuleEvent {
             RuleEvent::Insert => write!(f, "INSERT"),
             RuleEvent::Update => write!(f, "UPDATE"),
             RuleEvent::Delete => write!(f, "DELETE"),
+        }
+    }
+}
+
 impl From<CreateStatistics> for crate::ast::Statement {
     fn from(v: CreateStatistics) -> Self {
         crate::ast::Statement::CreateStatistics(v)
@@ -7042,6 +7070,9 @@ impl fmt::Display for CreateRule {
 impl From<CreateRule> for crate::ast::Statement {
     fn from(v: CreateRule) -> Self {
         crate::ast::Statement::CreateRule(v)
+    }
+}
+
 /// A `CREATE ACCESS METHOD` statement.
 ///
 /// Note: this is a PostgreSQL-specific statement.
@@ -7137,6 +7168,10 @@ impl fmt::Display for CreateEventTrigger {
             "FUNCTION"
         };
         write!(f, " EXECUTE {func_kw} {}()", self.execute)?;
+        Ok(())
+    }
+}
+
 impl From<CreateUserMapping> for crate::ast::Statement {
     fn from(v: CreateUserMapping) -> Self {
         crate::ast::Statement::CreateUserMapping(v)
@@ -7248,6 +7283,9 @@ impl fmt::Display for CreateTransform {
 impl From<CreateTransform> for crate::ast::Statement {
     fn from(v: CreateTransform) -> Self {
         crate::ast::Statement::CreateTransform(v)
+    }
+}
+
 impl From<CreateTablespace> for crate::ast::Statement {
     fn from(v: CreateTablespace) -> Self {
         crate::ast::Statement::CreateTablespace(v)

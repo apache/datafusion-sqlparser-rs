@@ -20501,6 +20501,9 @@ impl<'a> Parser<'a> {
             condition,
             instead,
             action,
+        })
+    }
+
     /// Parse a `CREATE STATISTICS` statement.
     ///
     /// See <https://www.postgresql.org/docs/current/sql-createstatistics.html>

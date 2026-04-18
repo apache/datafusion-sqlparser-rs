@@ -69,8 +69,16 @@ pub use self::ddl::{
     AlterTableLock, AlterTableOperation, AlterTableType, AlterTrigger, AlterTriggerOperation,
     AlterType, AlterTypeAddValue,
     AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
-    AggregateModifyKind, ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions,
+    AggregateModifyKind, CastContext, CastFunctionKind, ClusteredBy, ColumnDef, ColumnOption,
+    ColumnOptionDef, ColumnOptions,
     ColumnPolicy, ColumnPolicyProperty, ConstraintCharacteristics, CreateAggregate,
+    CreateAggregateOption, CreateCast, CreateCollation, CreateCollationDefinition, CreateConnector,
+    CreateConversion, CreateDomain, CreateExtension, CreateForeignDataWrapper, CreateForeignTable,
+    CreateFunction, CreateIndex, CreateLanguage, CreateOperator, CreateOperatorClass,
+    CreateOperatorFamily, CreatePolicy, CreatePolicyCommand, CreatePolicyType, CreatePublication,
+    CreateRule, CreateSubscription, CreateTable,
+    CreateTextSearchConfiguration, CreateTextSearchDictionary, CreateTextSearchParser,
+    CreateTextSearchTemplate, CreateTrigger, PublicationTarget, RuleAction, RuleEvent,
     CreateAggregateOption, CreateCollation, CreateCollationDefinition, CreateConnector,
     CreateDomain, CreateExtension, CreateForeignDataWrapper, CreateForeignTable, CreateFunction,
     CreateIndex, CreateOperator, CreateOperatorClass, CreateOperatorFamily, CreatePolicy,
@@ -4052,6 +4060,31 @@ pub enum Statement {
     /// <https://www.postgresql.org/docs/current/sql-createsubscription.html>
     CreateSubscription(CreateSubscription),
     /// ```sql
+    /// CREATE CAST (source_type AS target_type) WITH FUNCTION func_name [(arg_types)] [AS ASSIGNMENT | AS IMPLICIT]
+    /// CREATE CAST (source_type AS target_type) WITHOUT FUNCTION [AS ASSIGNMENT | AS IMPLICIT]
+    /// CREATE CAST (source_type AS target_type) WITH INOUT [AS ASSIGNMENT | AS IMPLICIT]
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createcast.html>
+    CreateCast(CreateCast),
+    /// ```sql
+    /// CREATE [DEFAULT] CONVERSION name FOR 'source_encoding' TO 'dest_encoding' FROM function_name
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createconversion.html>
+    CreateConversion(CreateConversion),
+    /// ```sql
+    /// CREATE [OR REPLACE] [TRUSTED] [PROCEDURAL] LANGUAGE name [HANDLER handler_func] [INLINE inline_func] [VALIDATOR validator_func | NO VALIDATOR]
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createlanguage.html>
+    CreateLanguage(CreateLanguage),
+    /// ```sql
+    /// CREATE RULE name AS ON event TO table [WHERE condition] DO [ALSO | INSTEAD] { NOTHING | command | (command ; ...) }
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createrule.html>
+    CreateRule(CreateRule),
     /// CREATE STATISTICS [ IF NOT EXISTS ] name [ ( kind [, ...] ) ] ON expr [, ...] FROM table_name
     /// ```
     /// Note: this is a PostgreSQL-specific statement.
@@ -5582,6 +5615,10 @@ impl fmt::Display for Statement {
             Statement::CreateTextSearchTemplate(v) => write!(f, "{v}"),
             Statement::CreatePublication(v) => write!(f, "{v}"),
             Statement::CreateSubscription(v) => write!(f, "{v}"),
+            Statement::CreateCast(v) => write!(f, "{v}"),
+            Statement::CreateConversion(v) => write!(f, "{v}"),
+            Statement::CreateLanguage(v) => write!(f, "{v}"),
+            Statement::CreateRule(v) => write!(f, "{v}"),
             Statement::CreateStatistics(v) => write!(f, "{v}"),
             Statement::CreateAccessMethod(v) => write!(f, "{v}"),
             Statement::CreateEventTrigger(v) => write!(f, "{v}"),

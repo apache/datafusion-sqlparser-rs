@@ -9869,6 +9869,135 @@ fn parse_create_subscription_with_options() {
 }
 
 #[test]
+fn parse_create_cast_with_function() {
+    let sql = "CREATE CAST (TEXT AS INTEGER) WITH FUNCTION public.to_int(TEXT) AS ASSIGNMENT";
+    let Statement::CreateCast(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.source_type.to_string(), "TEXT");
+    assert_eq!(stmt.target_type.to_string(), "INTEGER");
+    assert!(matches!(stmt.cast_context, CastContext::Assignment));
+    match &stmt.function_kind {
+        CastFunctionKind::WithFunction {
+            function_name,
+            argument_types,
+        } => {
+            assert_eq!(function_name.to_string(), "public.to_int");
+            assert_eq!(argument_types.len(), 1);
+            assert_eq!(argument_types[0].to_string(), "TEXT");
+        }
+        other => panic!("unexpected function kind: {other:?}"),
+    }
+}
+
+#[test]
+fn parse_create_cast_without_function() {
+    let sql = "CREATE CAST (TEXT AS INTEGER) WITHOUT FUNCTION";
+    let Statement::CreateCast(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(matches!(stmt.function_kind, CastFunctionKind::WithoutFunction));
+    assert!(matches!(stmt.cast_context, CastContext::Explicit));
+}
+
+#[test]
+fn parse_create_cast_with_inout() {
+    let sql = "CREATE CAST (TEXT AS INTEGER) WITH INOUT AS IMPLICIT";
+    let Statement::CreateCast(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(matches!(stmt.function_kind, CastFunctionKind::WithInout));
+    assert!(matches!(stmt.cast_context, CastContext::Implicit));
+}
+
+#[test]
+fn parse_create_conversion_basic() {
+    let sql = "CREATE CONVERSION myconv FOR 'LATIN1' TO 'UTF8' FROM iso8859_1_to_utf8";
+    let Statement::CreateConversion(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.to_string(), "myconv");
+    assert!(!stmt.is_default);
+    assert_eq!(stmt.source_encoding, "LATIN1");
+    assert_eq!(stmt.destination_encoding, "UTF8");
+    assert_eq!(stmt.function_name.to_string(), "iso8859_1_to_utf8");
+}
+
+#[test]
+fn parse_create_default_conversion() {
+    let sql = "CREATE DEFAULT CONVERSION myconv FOR 'LATIN1' TO 'UTF8' FROM iso8859_1_to_utf8";
+    let Statement::CreateConversion(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(stmt.is_default);
+}
+
+#[test]
+fn parse_create_language_simple() {
+    let sql = "CREATE LANGUAGE plperl";
+    let Statement::CreateLanguage(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "plperl");
+    assert!(!stmt.or_replace);
+    assert!(!stmt.trusted);
+    assert!(!stmt.procedural);
+    assert!(stmt.handler.is_none());
+    assert!(stmt.inline_handler.is_none());
+    assert!(stmt.validator.is_none());
+}
+
+#[test]
+fn parse_create_language_full() {
+    let sql = "CREATE OR REPLACE TRUSTED PROCEDURAL LANGUAGE plpgsql HANDLER plpgsql_call_handler INLINE plpgsql_inline_handler VALIDATOR plpgsql_validator";
+    let Statement::CreateLanguage(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "plpgsql");
+    assert!(stmt.or_replace);
+    assert!(stmt.trusted);
+    assert!(stmt.procedural);
+    assert_eq!(stmt.handler.as_ref().unwrap().to_string(), "plpgsql_call_handler");
+    assert_eq!(stmt.inline_handler.as_ref().unwrap().to_string(), "plpgsql_inline_handler");
+    assert_eq!(stmt.validator.as_ref().unwrap().to_string(), "plpgsql_validator");
+}
+
+#[test]
+fn parse_create_rule_instead_nothing() {
+    let sql = "CREATE RULE t_del AS ON DELETE TO public.t DO INSTEAD NOTHING";
+    let Statement::CreateRule(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "t_del");
+    assert!(matches!(stmt.event, RuleEvent::Delete));
+    assert_eq!(stmt.table.to_string(), "public.t");
+    assert!(stmt.condition.is_none());
+    assert!(stmt.instead);
+    assert!(matches!(stmt.action, RuleAction::Nothing));
+}
+
+#[test]
+fn parse_create_rule_also_nothing() {
+    let sql = "CREATE RULE t_ins AS ON INSERT TO mytable DO ALSO NOTHING";
+    let Statement::CreateRule(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(matches!(stmt.event, RuleEvent::Insert));
+    assert!(!stmt.instead);
+    assert!(matches!(stmt.action, RuleAction::Nothing));
+}
+
+#[test]
+fn parse_create_rule_on_select() {
+    let sql = "CREATE RULE myview AS ON SELECT TO mytable DO INSTEAD NOTHING";
+    let Statement::CreateRule(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(matches!(stmt.event, RuleEvent::Select));
+    assert!(stmt.instead);
+}
+
+#[test]
 fn parse_create_statistics_basic() {
     let sql = "CREATE STATISTICS public.s ON a, b FROM public.t";
     let Statement::CreateStatistics(stmt) = pg().verified_stmt(sql) else {

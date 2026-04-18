@@ -9867,3 +9867,112 @@ fn parse_create_subscription_with_options() {
         other => panic!("unexpected option: {other:?}"),
     }
 }
+
+#[test]
+fn parse_create_statistics_basic() {
+    let sql = "CREATE STATISTICS public.s ON a, b FROM public.t";
+    let Statement::CreateStatistics(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(!stmt.if_not_exists);
+    assert_eq!(stmt.name.to_string(), "public.s");
+    assert!(stmt.kinds.is_empty());
+    assert_eq!(stmt.on.len(), 2);
+    assert_eq!(stmt.from.to_string(), "public.t");
+}
+
+#[test]
+fn parse_create_statistics_if_not_exists_with_kinds() {
+    let sql = "CREATE STATISTICS IF NOT EXISTS mystat (ndistinct, dependencies, mcv) ON col1, col2 FROM mytable";
+    let Statement::CreateStatistics(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(stmt.if_not_exists);
+    assert_eq!(stmt.name.to_string(), "mystat");
+    assert_eq!(
+        stmt.kinds,
+        vec![
+            StatisticsKind::NDistinct,
+            StatisticsKind::Dependencies,
+            StatisticsKind::Mcv,
+        ]
+    );
+    assert_eq!(stmt.on.len(), 2);
+}
+
+#[test]
+fn parse_create_access_method_index() {
+    let sql = "CREATE ACCESS METHOD my_am TYPE INDEX HANDLER bthandler";
+    let Statement::CreateAccessMethod(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "my_am");
+    assert_eq!(stmt.method_type, AccessMethodType::Index);
+    assert_eq!(stmt.handler.to_string(), "bthandler");
+}
+
+#[test]
+fn parse_create_access_method_table() {
+    let sql = "CREATE ACCESS METHOD my_tam TYPE TABLE HANDLER heap_tableam_handler";
+    let Statement::CreateAccessMethod(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "my_tam");
+    assert_eq!(stmt.method_type, AccessMethodType::Table);
+    assert_eq!(stmt.handler.to_string(), "heap_tableam_handler");
+}
+
+#[test]
+fn parse_create_event_trigger_basic() {
+    let sql = "CREATE EVENT TRIGGER myet ON ddl_command_start EXECUTE FUNCTION public.handler()";
+    let Statement::CreateEventTrigger(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "myet");
+    assert_eq!(stmt.event, EventTriggerEvent::DdlCommandStart);
+    assert!(stmt.when_tags.is_none());
+    assert_eq!(stmt.execute.to_string(), "public.handler");
+    assert!(!stmt.is_procedure);
+}
+
+#[test]
+fn parse_create_event_trigger_with_when_tags() {
+    let sql = "CREATE EVENT TRIGGER myet ON ddl_command_end WHEN TAG IN ('CREATE TABLE', 'ALTER TABLE') EXECUTE FUNCTION abort_any_command()";
+    let Statement::CreateEventTrigger(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.event, EventTriggerEvent::DdlCommandEnd);
+    let tags = stmt.when_tags.unwrap();
+    assert_eq!(tags.len(), 2);
+    assert_eq!(tags[0].to_string(), "'CREATE TABLE'");
+    assert_eq!(tags[1].to_string(), "'ALTER TABLE'");
+}
+
+#[test]
+fn parse_create_transform_basic() {
+    let sql = "CREATE TRANSFORM FOR INT LANGUAGE sql (FROM SQL WITH FUNCTION f1(internal), TO SQL WITH FUNCTION f2(INT))";
+    let Statement::CreateTransform(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(!stmt.or_replace);
+    assert_eq!(stmt.type_name.to_string(), "INT");
+    assert_eq!(stmt.language.value, "sql");
+    assert_eq!(stmt.elements.len(), 2);
+    assert!(stmt.elements[0].is_from);
+    assert_eq!(stmt.elements[0].function.to_string(), "f1");
+    assert!(!stmt.elements[1].is_from);
+    assert_eq!(stmt.elements[1].function.to_string(), "f2");
+}
+
+#[test]
+fn parse_create_or_replace_transform() {
+    let sql = "CREATE OR REPLACE TRANSFORM FOR BIGINT LANGUAGE plpgsql (FROM SQL WITH FUNCTION int8recv(internal))";
+    let Statement::CreateTransform(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(stmt.or_replace);
+    assert_eq!(stmt.type_name.to_string(), "BIGINT");
+    assert_eq!(stmt.language.value, "plpgsql");
+    assert_eq!(stmt.elements.len(), 1);
+    assert!(stmt.elements[0].is_from);
+}

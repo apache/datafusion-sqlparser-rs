@@ -7229,8 +7229,7 @@ impl<'a> Parser<'a> {
             self.prev_token();
             vec![]
         } else {
-            let parsed = self.parse_comma_separated(|p| p.parse_data_type())?;
-            parsed
+            self.parse_comma_separated(|p| p.parse_data_type())?
         };
         self.expect_token(&Token::RParen)?;
 
@@ -7369,7 +7368,11 @@ impl<'a> Parser<'a> {
                     Keyword::SAFE => FunctionParallel::Safe,
                     Keyword::RESTRICTED => FunctionParallel::Restricted,
                     Keyword::UNSAFE => FunctionParallel::Unsafe,
-                    _ => unreachable!(),
+                    unexpected_keyword => {
+                        return Err(ParserError::ParserError(format!(
+                            "Internal parser error: unexpected keyword `{unexpected_keyword}` in PARALLEL"
+                        )))
+                    }
                 };
                 Ok(CreateAggregateOption::Parallel(parallel))
             }

@@ -719,6 +719,7 @@ impl<'a> Parser<'a> {
                     self.parse_vacuum()
                 }
                 Keyword::RESET => self.parse_reset().map(Into::into),
+                Keyword::SECURITY => self.parse_security_label().map(Into::into),
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
@@ -5172,7 +5173,11 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::SECRET) {
             self.parse_create_secret(or_replace, temporary, persistent)
         } else if self.parse_keyword(Keyword::USER) {
-            self.parse_create_user(or_replace).map(Into::into)
+            if self.parse_keyword(Keyword::MAPPING) {
+                self.parse_create_user_mapping().map(Into::into)
+            } else {
+                self.parse_create_user(or_replace).map(Into::into)
+            }
         } else if self.parse_keyword(Keyword::AGGREGATE) {
             self.parse_create_aggregate(or_replace).map(Into::into)
         } else if self.peek_keyword(Keyword::TRUSTED)
@@ -5190,6 +5195,8 @@ impl<'a> Parser<'a> {
                     self.peek_token_ref(),
                 )
             }
+        } else if self.parse_keyword(Keyword::TRANSFORM) {
+            self.parse_create_transform(or_replace).map(Into::into)
         } else if or_replace {
             self.expected_ref(
                 "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION after CREATE OR REPLACE",
@@ -5255,6 +5262,14 @@ impl<'a> Parser<'a> {
             self.parse_create_publication().map(Into::into)
         } else if self.parse_keyword(Keyword::SUBSCRIPTION) {
             self.parse_create_subscription().map(Into::into)
+        } else if self.parse_keyword(Keyword::STATISTICS) {
+            self.parse_create_statistics().map(Into::into)
+        } else if self.parse_keywords(&[Keyword::ACCESS, Keyword::METHOD]) {
+            self.parse_create_access_method().map(Into::into)
+        } else if self.parse_keywords(&[Keyword::EVENT, Keyword::TRIGGER]) {
+            self.parse_create_event_trigger().map(Into::into)
+        } else if self.parse_keyword(Keyword::TABLESPACE) {
+            self.parse_create_tablespace().map(Into::into)
         } else {
             self.expected_ref("an object type after CREATE", self.peek_token_ref())
         }
@@ -20486,6 +20501,290 @@ impl<'a> Parser<'a> {
             condition,
             instead,
             action,
+    /// Parse a `CREATE STATISTICS` statement.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createstatistics.html>
+    pub fn parse_create_statistics(&mut self) -> Result<CreateStatistics, ParserError> {
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let name = self.parse_object_name(false)?;
+
+        let kinds = if self.consume_token(&Token::LParen) {
+            let kinds = self.parse_comma_separated(|p| {
+                let ident = p.parse_identifier()?;
+                match ident.value.to_lowercase().as_str() {
+                    "ndistinct" => Ok(StatisticsKind::NDistinct),
+                    "dependencies" => Ok(StatisticsKind::Dependencies),
+                    "mcv" => Ok(StatisticsKind::Mcv),
+                    other => Err(ParserError::ParserError(format!(
+                        "Unknown statistics kind: {other}"
+                    ))),
+                }
+            })?;
+            self.expect_token(&Token::RParen)?;
+            kinds
+        } else {
+            vec![]
+        };
+
+        self.expect_keyword_is(Keyword::ON)?;
+        let on = self.parse_comma_separated(Parser::parse_expr)?;
+        self.expect_keyword_is(Keyword::FROM)?;
+        let from = self.parse_object_name(false)?;
+
+        Ok(CreateStatistics {
+            if_not_exists,
+            name,
+            kinds,
+            on,
+            from,
+        })
+    }
+
+    /// Parse a `CREATE ACCESS METHOD` statement.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-create-access-method.html>
+    pub fn parse_create_access_method(&mut self) -> Result<CreateAccessMethod, ParserError> {
+        let name = self.parse_identifier()?;
+        self.expect_keyword_is(Keyword::TYPE)?;
+        let method_type = if self.parse_keyword(Keyword::INDEX) {
+            AccessMethodType::Index
+        } else if self.parse_keyword(Keyword::TABLE) {
+            AccessMethodType::Table
+        } else {
+            return self.expected_ref("INDEX or TABLE after TYPE", self.peek_token_ref());
+        };
+        self.expect_keyword_is(Keyword::HANDLER)?;
+        let handler = self.parse_object_name(false)?;
+
+        Ok(CreateAccessMethod {
+            name,
+            method_type,
+            handler,
+        })
+    }
+
+    /// Parse a `CREATE EVENT TRIGGER` statement.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createeventtrigger.html>
+    pub fn parse_create_event_trigger(&mut self) -> Result<CreateEventTrigger, ParserError> {
+        let name = self.parse_identifier()?;
+        self.expect_keyword_is(Keyword::ON)?;
+        let event_ident = self.parse_identifier()?;
+        let event = match event_ident.value.to_lowercase().as_str() {
+            "ddl_command_start" => EventTriggerEvent::DdlCommandStart,
+            "ddl_command_end" => EventTriggerEvent::DdlCommandEnd,
+            "table_rewrite" => EventTriggerEvent::TableRewrite,
+            "sql_drop" => EventTriggerEvent::SqlDrop,
+            other => {
+                return Err(ParserError::ParserError(format!(
+                    "Unknown event trigger event: {other}"
+                )))
+            }
+        };
+
+        let when_tags = if self.parse_keyword(Keyword::WHEN) {
+            self.expect_keyword_is(Keyword::TAG)?;
+            self.expect_keyword_is(Keyword::IN)?;
+            self.expect_token(&Token::LParen)?;
+            let tags = self.parse_comma_separated(|p| p.parse_value().map(|v| v.value))?;
+            self.expect_token(&Token::RParen)?;
+            Some(tags)
+        } else {
+            None
+        };
+
+        self.expect_keyword_is(Keyword::EXECUTE)?;
+        let is_procedure = if self.parse_keyword(Keyword::FUNCTION) {
+            false
+        } else if self.parse_keyword(Keyword::PROCEDURE) {
+            true
+        } else {
+            return self.expected_ref("FUNCTION or PROCEDURE after EXECUTE", self.peek_token_ref());
+        };
+        let execute = self.parse_object_name(false)?;
+        self.expect_token(&Token::LParen)?;
+        self.expect_token(&Token::RParen)?;
+
+        Ok(CreateEventTrigger {
+            name,
+            event,
+            when_tags,
+            execute,
+            is_procedure,
+        })
+    }
+
+    /// Parse a `CREATE [OR REPLACE] TRANSFORM` statement.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createtransform.html>
+    pub fn parse_create_transform(&mut self, or_replace: bool) -> Result<CreateTransform, ParserError> {
+        self.expect_keyword_is(Keyword::FOR)?;
+        let type_name = self.parse_data_type()?;
+        self.expect_keyword_is(Keyword::LANGUAGE)?;
+        let language = self.parse_identifier()?;
+        self.expect_token(&Token::LParen)?;
+        let elements = self.parse_comma_separated(|p| {
+            let is_from = if p.parse_keyword(Keyword::FROM) {
+                true
+            } else {
+                p.expect_keyword_is(Keyword::TO)?;
+                false
+            };
+            p.expect_keyword_is(Keyword::SQL)?;
+            p.expect_keyword_is(Keyword::WITH)?;
+            p.expect_keyword_is(Keyword::FUNCTION)?;
+            let function = p.parse_object_name(false)?;
+            p.expect_token(&Token::LParen)?;
+            let arg_types = if p.peek_token().token == Token::RParen {
+                vec![]
+            } else {
+                p.parse_comma_separated(|p| p.parse_data_type())?
+            };
+            p.expect_token(&Token::RParen)?;
+            Ok(TransformElement {
+                is_from,
+                function,
+                arg_types,
+            })
+        })?;
+        self.expect_token(&Token::RParen)?;
+
+        Ok(CreateTransform {
+            or_replace,
+            type_name,
+            language,
+            elements,
+        })
+    }
+
+
+    /// Parse a `SECURITY LABEL` statement.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-securitylabel.html>
+    pub fn parse_security_label(&mut self) -> Result<SecurityLabel, ParserError> {
+        self.expect_keyword_is(Keyword::LABEL)?;
+
+        let provider = if self.parse_keyword(Keyword::FOR) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+
+        self.expect_keyword_is(Keyword::ON)?;
+
+        let object_kind = if self.parse_keywords(&[Keyword::MATERIALIZED, Keyword::VIEW]) {
+            SecurityLabelObjectKind::MaterializedView
+        } else if self.parse_keyword(Keyword::TABLE) {
+            SecurityLabelObjectKind::Table
+        } else if self.parse_keyword(Keyword::COLUMN) {
+            SecurityLabelObjectKind::Column
+        } else if self.parse_keyword(Keyword::DATABASE) {
+            SecurityLabelObjectKind::Database
+        } else if self.parse_keyword(Keyword::DOMAIN) {
+            SecurityLabelObjectKind::Domain
+        } else if self.parse_keyword(Keyword::FUNCTION) {
+            SecurityLabelObjectKind::Function
+        } else if self.parse_keyword(Keyword::ROLE) {
+            SecurityLabelObjectKind::Role
+        } else if self.parse_keyword(Keyword::SCHEMA) {
+            SecurityLabelObjectKind::Schema
+        } else if self.parse_keyword(Keyword::SEQUENCE) {
+            SecurityLabelObjectKind::Sequence
+        } else if self.parse_keyword(Keyword::TYPE) {
+            SecurityLabelObjectKind::Type
+        } else if self.parse_keyword(Keyword::VIEW) {
+            SecurityLabelObjectKind::View
+        } else {
+            return self.expected_ref(
+                "TABLE, COLUMN, DATABASE, DOMAIN, FUNCTION, MATERIALIZED VIEW, ROLE, SCHEMA, SEQUENCE, TYPE, or VIEW after ON",
+                self.peek_token_ref(),
+            );
+        };
+
+        let object_name = self.parse_object_name(false)?;
+
+        self.expect_keyword_is(Keyword::IS)?;
+
+        let label = if self.parse_keyword(Keyword::NULL) {
+            None
+        } else {
+            Some(self.parse_value()?.value)
+        };
+
+        Ok(SecurityLabel {
+            provider,
+            object_kind,
+            object_name,
+            label,
+        })
+    }
+
+    /// Parse a `CREATE USER MAPPING` statement.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createusermapping.html>
+    pub fn parse_create_user_mapping(&mut self) -> Result<CreateUserMapping, ParserError> {
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+
+        self.expect_keyword_is(Keyword::FOR)?;
+
+        let user = if self.parse_keyword(Keyword::CURRENT_ROLE) {
+            UserMappingUser::CurrentRole
+        } else if self.parse_keyword(Keyword::CURRENT_USER) {
+            UserMappingUser::CurrentUser
+        } else if self.parse_keyword(Keyword::PUBLIC) {
+            UserMappingUser::Public
+        } else if self.parse_keyword(Keyword::USER) {
+            UserMappingUser::User
+        } else {
+            UserMappingUser::Ident(self.parse_identifier()?)
+        };
+
+        self.expect_keyword_is(Keyword::SERVER)?;
+        let server_name = self.parse_identifier()?;
+
+        let options = if self.parse_keyword(Keyword::OPTIONS) {
+            self.expect_token(&Token::LParen)?;
+            let opts = self.parse_comma_separated(|p| {
+                let key = p.parse_identifier()?;
+                let value = p.parse_identifier()?;
+                Ok(CreateServerOption { key, value })
+            })?;
+            self.expect_token(&Token::RParen)?;
+            Some(opts)
+        } else {
+            None
+        };
+
+        Ok(CreateUserMapping {
+            if_not_exists,
+            user,
+            server_name,
+            options,
+        })
+    }
+
+    /// Parse a `CREATE TABLESPACE` statement.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createtablespace.html>
+    pub fn parse_create_tablespace(&mut self) -> Result<CreateTablespace, ParserError> {
+        let name = self.parse_identifier()?;
+
+        let owner = if self.parse_keyword(Keyword::OWNER) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+
+        self.expect_keyword_is(Keyword::LOCATION)?;
+        let location = self.parse_value()?.value;
+
+        let with_options = self.parse_options(Keyword::WITH)?;
+
+        Ok(CreateTablespace {
+            name,
+            owner,
+            location,
+            with_options,
         })
     }
 

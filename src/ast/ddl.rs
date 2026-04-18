@@ -6546,6 +6546,73 @@ impl fmt::Display for CastFunctionKind {
             }
             CastFunctionKind::WithoutFunction => write!(f, "WITHOUT FUNCTION"),
             CastFunctionKind::WithInout => write!(f, "WITH INOUT"),
+/// A kind of extended statistics collected by `CREATE STATISTICS`.
+///
+/// Note: this is a PostgreSQL-specific concept.
+/// <https://www.postgresql.org/docs/current/sql-createstatistics.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum StatisticsKind {
+    /// `ndistinct` — n-distinct statistics
+    NDistinct,
+    /// `dependencies` — functional dependency statistics
+    Dependencies,
+    /// `mcv` — most-common-values statistics
+    Mcv,
+}
+
+impl fmt::Display for StatisticsKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            StatisticsKind::NDistinct => write!(f, "ndistinct"),
+            StatisticsKind::Dependencies => write!(f, "dependencies"),
+            StatisticsKind::Mcv => write!(f, "mcv"),
+/// The object kind targeted by a `SECURITY LABEL` statement.
+///
+/// See <https://www.postgresql.org/docs/current/sql-securitylabel.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SecurityLabelObjectKind {
+    /// `TABLE name`
+    Table,
+    /// `COLUMN name.colname`
+    Column,
+    /// `DATABASE name`
+    Database,
+    /// `DOMAIN name`
+    Domain,
+    /// `FUNCTION name`
+    Function,
+    /// `ROLE name`
+    Role,
+    /// `SCHEMA name`
+    Schema,
+    /// `SEQUENCE name`
+    Sequence,
+    /// `TYPE name`
+    Type,
+    /// `VIEW name`
+    View,
+    /// `MATERIALIZED VIEW name`
+    MaterializedView,
+}
+
+impl fmt::Display for SecurityLabelObjectKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SecurityLabelObjectKind::Table => write!(f, "TABLE"),
+            SecurityLabelObjectKind::Column => write!(f, "COLUMN"),
+            SecurityLabelObjectKind::Database => write!(f, "DATABASE"),
+            SecurityLabelObjectKind::Domain => write!(f, "DOMAIN"),
+            SecurityLabelObjectKind::Function => write!(f, "FUNCTION"),
+            SecurityLabelObjectKind::Role => write!(f, "ROLE"),
+            SecurityLabelObjectKind::Schema => write!(f, "SCHEMA"),
+            SecurityLabelObjectKind::Sequence => write!(f, "SEQUENCE"),
+            SecurityLabelObjectKind::Type => write!(f, "TYPE"),
+            SecurityLabelObjectKind::View => write!(f, "VIEW"),
+            SecurityLabelObjectKind::MaterializedView => write!(f, "MATERIALIZED VIEW"),
         }
     }
 }
@@ -6700,6 +6767,139 @@ impl fmt::Display for CreateLanguage {
         }
         if let Some(validator) = &self.validator {
             write!(f, " VALIDATOR {validator}")?;
+/// A `CREATE STATISTICS` statement.
+///
+/// Note: this is a PostgreSQL-specific statement.
+/// <https://www.postgresql.org/docs/current/sql-createstatistics.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateStatistics {
+    /// Optional `IF NOT EXISTS` clause.
+    pub if_not_exists: bool,
+    /// The statistics object name, e.g. `public.s`.
+    pub name: ObjectName,
+    /// Optional `(ndistinct, dependencies, mcv)` kind list.
+    pub kinds: Vec<StatisticsKind>,
+    /// The expressions (columns or arbitrary expressions) to collect statistics on.
+    pub on: Vec<Expr>,
+    /// The table to collect statistics from.
+    pub from: ObjectName,
+}
+
+impl fmt::Display for CreateStatistics {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CREATE STATISTICS")?;
+        if self.if_not_exists {
+            write!(f, " IF NOT EXISTS")?;
+        }
+        write!(f, " {}", self.name)?;
+        if !self.kinds.is_empty() {
+            write!(f, " ({})", display_comma_separated(&self.kinds))?;
+        }
+        write!(f, " ON {}", display_comma_separated(&self.on))?;
+        write!(f, " FROM {}", self.from)?;
+/// A `SECURITY LABEL` statement.
+///
+/// Note: this is a PostgreSQL-specific statement.
+/// <https://www.postgresql.org/docs/current/sql-securitylabel.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SecurityLabel {
+    /// Optional `FOR provider_name` clause.
+    pub provider: Option<Ident>,
+    /// The kind of object the label is applied to.
+    pub object_kind: SecurityLabelObjectKind,
+    /// The name of the object the label is applied to.
+    pub object_name: ObjectName,
+    /// The label string, or `None` for `IS NULL`.
+    pub label: Option<Value>,
+}
+
+impl fmt::Display for SecurityLabel {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "SECURITY LABEL")?;
+        if let Some(provider) = &self.provider {
+            write!(f, " FOR {provider}")?;
+        }
+        write!(f, " ON {} {}", self.object_kind, self.object_name)?;
+        write!(f, " IS ")?;
+        match &self.label {
+            Some(label) => write!(f, "{label}"),
+            None => write!(f, "NULL"),
+        }
+    }
+}
+
+impl From<SecurityLabel> for crate::ast::Statement {
+    fn from(v: SecurityLabel) -> Self {
+        crate::ast::Statement::SecurityLabel(v)
+    }
+}
+
+/// The role specification in a `CREATE USER MAPPING` statement.
+///
+/// See <https://www.postgresql.org/docs/current/sql-createusermapping.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum UserMappingUser {
+    /// A specific role name.
+    Ident(Ident),
+    /// `USER` (current user)
+    User,
+    /// `CURRENT_ROLE`
+    CurrentRole,
+    /// `CURRENT_USER`
+    CurrentUser,
+    /// `PUBLIC`
+    Public,
+}
+
+impl fmt::Display for UserMappingUser {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            UserMappingUser::Ident(ident) => write!(f, "{ident}"),
+            UserMappingUser::User => write!(f, "USER"),
+            UserMappingUser::CurrentRole => write!(f, "CURRENT_ROLE"),
+            UserMappingUser::CurrentUser => write!(f, "CURRENT_USER"),
+            UserMappingUser::Public => write!(f, "PUBLIC"),
+        }
+    }
+}
+
+/// A `CREATE USER MAPPING` statement.
+///
+/// Note: this is a PostgreSQL-specific statement.
+/// <https://www.postgresql.org/docs/current/sql-createusermapping.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateUserMapping {
+    /// `IF NOT EXISTS`
+    pub if_not_exists: bool,
+    /// The user/role for the mapping.
+    pub user: UserMappingUser,
+    /// The foreign server name.
+    pub server_name: Ident,
+    /// Optional `OPTIONS (key 'value', ...)` clause.
+    pub options: Option<Vec<CreateServerOption>>,
+}
+
+impl fmt::Display for CreateUserMapping {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CREATE USER MAPPING")?;
+        if self.if_not_exists {
+            write!(f, " IF NOT EXISTS")?;
+        }
+        write!(f, " FOR {} SERVER {}", self.user, self.server_name)?;
+        if let Some(options) = &self.options {
+            write!(
+                f,
+                " OPTIONS ({})",
+                display_comma_separated(options)
+            )?;
         }
         Ok(())
     }
@@ -6731,6 +6931,31 @@ impl fmt::Display for RuleEvent {
             RuleEvent::Insert => write!(f, "INSERT"),
             RuleEvent::Update => write!(f, "UPDATE"),
             RuleEvent::Delete => write!(f, "DELETE"),
+impl From<CreateStatistics> for crate::ast::Statement {
+    fn from(v: CreateStatistics) -> Self {
+        crate::ast::Statement::CreateStatistics(v)
+    }
+}
+
+/// The type of access method in `CREATE ACCESS METHOD`.
+///
+/// Note: this is a PostgreSQL-specific concept.
+/// <https://www.postgresql.org/docs/current/sql-create-access-method.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AccessMethodType {
+    /// `INDEX` — an index access method
+    Index,
+    /// `TABLE` — a table access method
+    Table,
+}
+
+impl fmt::Display for AccessMethodType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AccessMethodType::Index => write!(f, "INDEX"),
+            AccessMethodType::Table => write!(f, "TABLE"),
         }
     }
 }
@@ -6817,5 +7042,214 @@ impl fmt::Display for CreateRule {
 impl From<CreateRule> for crate::ast::Statement {
     fn from(v: CreateRule) -> Self {
         crate::ast::Statement::CreateRule(v)
+/// A `CREATE ACCESS METHOD` statement.
+///
+/// Note: this is a PostgreSQL-specific statement.
+/// <https://www.postgresql.org/docs/current/sql-create-access-method.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateAccessMethod {
+    /// The access method name.
+    pub name: Ident,
+    /// `TYPE INDEX | TABLE`
+    pub method_type: AccessMethodType,
+    /// `HANDLER handler_function`
+    pub handler: ObjectName,
+}
+
+impl fmt::Display for CreateAccessMethod {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CREATE ACCESS METHOD {name} TYPE {method_type} HANDLER {handler}",
+            name = self.name,
+            method_type = self.method_type,
+            handler = self.handler,
+        )
+    }
+}
+
+impl From<CreateAccessMethod> for crate::ast::Statement {
+    fn from(v: CreateAccessMethod) -> Self {
+        crate::ast::Statement::CreateAccessMethod(v)
+    }
+}
+
+/// An event name for `CREATE EVENT TRIGGER`.
+///
+/// Note: this is a PostgreSQL-specific concept.
+/// <https://www.postgresql.org/docs/current/sql-createeventtrigger.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum EventTriggerEvent {
+    /// `ddl_command_start`
+    DdlCommandStart,
+    /// `ddl_command_end`
+    DdlCommandEnd,
+    /// `table_rewrite`
+    TableRewrite,
+    /// `sql_drop`
+    SqlDrop,
+}
+
+impl fmt::Display for EventTriggerEvent {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            EventTriggerEvent::DdlCommandStart => write!(f, "ddl_command_start"),
+            EventTriggerEvent::DdlCommandEnd => write!(f, "ddl_command_end"),
+            EventTriggerEvent::TableRewrite => write!(f, "table_rewrite"),
+            EventTriggerEvent::SqlDrop => write!(f, "sql_drop"),
+        }
+    }
+}
+
+/// A `CREATE EVENT TRIGGER` statement.
+///
+/// Note: this is a PostgreSQL-specific statement.
+/// <https://www.postgresql.org/docs/current/sql-createeventtrigger.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateEventTrigger {
+    /// The trigger name.
+    pub name: Ident,
+    /// The event that fires the trigger.
+    pub event: EventTriggerEvent,
+    /// Optional `WHEN TAG IN ('tag', ...)` filter.
+    pub when_tags: Option<Vec<Value>>,
+    /// The handler function name (from `EXECUTE FUNCTION name()`).
+    pub execute: ObjectName,
+    /// Whether `PROCEDURE` was used instead of `FUNCTION` (older alias).
+    pub is_procedure: bool,
+}
+
+impl fmt::Display for CreateEventTrigger {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CREATE EVENT TRIGGER {} ON {}", self.name, self.event)?;
+        if let Some(tags) = &self.when_tags {
+            write!(f, " WHEN TAG IN ({})", display_comma_separated(tags))?;
+        }
+        let func_kw = if self.is_procedure {
+            "PROCEDURE"
+        } else {
+            "FUNCTION"
+        };
+        write!(f, " EXECUTE {func_kw} {}()", self.execute)?;
+impl From<CreateUserMapping> for crate::ast::Statement {
+    fn from(v: CreateUserMapping) -> Self {
+        crate::ast::Statement::CreateUserMapping(v)
+    }
+}
+
+/// A `CREATE TABLESPACE` statement.
+///
+/// Note: this is a PostgreSQL-specific statement.
+/// <https://www.postgresql.org/docs/current/sql-createtablespace.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateTablespace {
+    /// The tablespace name.
+    pub name: Ident,
+    /// Optional `OWNER role` clause.
+    pub owner: Option<Ident>,
+    /// The `LOCATION 'directory'` string.
+    pub location: Value,
+    /// Optional `WITH (option = value, ...)` clause.
+    pub with_options: Vec<SqlOption>,
+}
+
+impl fmt::Display for CreateTablespace {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CREATE TABLESPACE {}", self.name)?;
+        if let Some(owner) = &self.owner {
+            write!(f, " OWNER {owner}")?;
+        }
+        write!(f, " LOCATION {}", self.location)?;
+        if !self.with_options.is_empty() {
+            write!(f, " WITH ({})", display_comma_separated(&self.with_options))?;
+        }
+        Ok(())
+    }
+}
+
+impl From<CreateEventTrigger> for crate::ast::Statement {
+    fn from(v: CreateEventTrigger) -> Self {
+        crate::ast::Statement::CreateEventTrigger(v)
+    }
+}
+
+/// A single element in a `CREATE TRANSFORM` transform list.
+///
+/// Either `FROM SQL WITH FUNCTION name(arg_types)` or `TO SQL WITH FUNCTION name(arg_types)`.
+///
+/// Note: this is a PostgreSQL-specific concept.
+/// <https://www.postgresql.org/docs/current/sql-createtransform.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct TransformElement {
+    /// `true` = FROM SQL, `false` = TO SQL
+    pub is_from: bool,
+    /// The function name.
+    pub function: ObjectName,
+    /// The argument type list (may be empty).
+    pub arg_types: Vec<DataType>,
+}
+
+impl fmt::Display for TransformElement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let direction = if self.is_from { "FROM" } else { "TO" };
+        write!(
+            f,
+            "{direction} SQL WITH FUNCTION {}({})",
+            self.function,
+            display_comma_separated(&self.arg_types),
+        )
+    }
+}
+
+/// A `CREATE TRANSFORM` statement.
+///
+/// Note: this is a PostgreSQL-specific statement.
+/// <https://www.postgresql.org/docs/current/sql-createtransform.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateTransform {
+    /// Whether `OR REPLACE` was specified.
+    pub or_replace: bool,
+    /// The data type being transformed.
+    pub type_name: DataType,
+    /// The procedural language name.
+    pub language: Ident,
+    /// The list of transform elements (FROM SQL and/or TO SQL).
+    pub elements: Vec<TransformElement>,
+}
+
+impl fmt::Display for CreateTransform {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CREATE")?;
+        if self.or_replace {
+            write!(f, " OR REPLACE")?;
+        }
+        write!(
+            f,
+            " TRANSFORM FOR {} LANGUAGE {} ({})",
+            self.type_name,
+            self.language,
+            display_comma_separated(&self.elements),
+        )
+    }
+}
+
+impl From<CreateTransform> for crate::ast::Statement {
+    fn from(v: CreateTransform) -> Self {
+        crate::ast::Statement::CreateTransform(v)
+impl From<CreateTablespace> for crate::ast::Statement {
+    fn from(v: CreateTablespace) -> Self {
+        crate::ast::Statement::CreateTablespace(v)
     }
 }

@@ -79,6 +79,15 @@ pub use self::ddl::{
     CreateRule, CreateSubscription, CreateTable,
     CreateTextSearchConfiguration, CreateTextSearchDictionary, CreateTextSearchParser,
     CreateTextSearchTemplate, CreateTrigger, PublicationTarget, RuleAction, RuleEvent,
+    CreateAggregateOption, CreateCollation, CreateCollationDefinition, CreateConnector,
+    CreateDomain, CreateExtension, CreateForeignDataWrapper, CreateForeignTable, CreateFunction,
+    CreateIndex, CreateOperator, CreateOperatorClass, CreateOperatorFamily, CreatePolicy,
+    CreatePolicyCommand, CreatePolicyType, CreatePublication, CreateSubscription, CreateTable,
+    AccessMethodType, CreateAccessMethod, CreateEventTrigger, CreateStatistics, CreateTablespace,
+    CreateTextSearchConfiguration, CreateTextSearchDictionary, CreateTextSearchParser,
+    CreateTextSearchTemplate, CreateTransform, CreateTrigger, CreateUserMapping,
+    EventTriggerEvent, PublicationTarget, SecurityLabel, SecurityLabelObjectKind, StatisticsKind,
+    TransformElement, UserMappingUser,
     CreateView, Deduplicate, DeferrableInitial, DistStyle, DropBehavior, DropExtension,
     DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily, DropOperatorSignature,
     DropPolicy, DropTrigger, FdwRoutineClause, ForValues, FunctionReturnType, GeneratedAs,
@@ -4076,6 +4085,47 @@ pub enum Statement {
     /// Note: this is a PostgreSQL-specific statement.
     /// <https://www.postgresql.org/docs/current/sql-createrule.html>
     CreateRule(CreateRule),
+    /// CREATE STATISTICS [ IF NOT EXISTS ] name [ ( kind [, ...] ) ] ON expr [, ...] FROM table_name
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createstatistics.html>
+    CreateStatistics(CreateStatistics),
+    /// ```sql
+    /// CREATE ACCESS METHOD name TYPE INDEX | TABLE HANDLER handler_function
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-create-access-method.html>
+    CreateAccessMethod(CreateAccessMethod),
+    /// ```sql
+    /// CREATE EVENT TRIGGER name ON event [ WHEN TAG IN ( 'tag' [, ...] ) ] EXECUTE FUNCTION | PROCEDURE function_name()
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createeventtrigger.html>
+    CreateEventTrigger(CreateEventTrigger),
+    /// ```sql
+    /// CREATE [ OR REPLACE ] TRANSFORM FOR type_name LANGUAGE lang_name ( transform_element_list )
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createtransform.html>
+    CreateTransform(CreateTransform),
+    /// ```sql
+    /// SECURITY LABEL [ FOR provider_name ] ON object_type object_name IS { 'label' | NULL }
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-securitylabel.html>
+    SecurityLabel(SecurityLabel),
+    /// ```sql
+    /// CREATE USER MAPPING [ IF NOT EXISTS ] FOR { role | USER | CURRENT_ROLE | CURRENT_USER | PUBLIC } SERVER server_name [ OPTIONS (...) ]
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createusermapping.html>
+    CreateUserMapping(CreateUserMapping),
+    /// ```sql
+    /// CREATE TABLESPACE name [ OWNER role ] LOCATION 'directory' [ WITH (options) ]
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createtablespace.html>
+    CreateTablespace(CreateTablespace),
     /// ```sql
     /// DROP EXTENSION [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
     /// ```
@@ -5569,6 +5619,13 @@ impl fmt::Display for Statement {
             Statement::CreateConversion(v) => write!(f, "{v}"),
             Statement::CreateLanguage(v) => write!(f, "{v}"),
             Statement::CreateRule(v) => write!(f, "{v}"),
+            Statement::CreateStatistics(v) => write!(f, "{v}"),
+            Statement::CreateAccessMethod(v) => write!(f, "{v}"),
+            Statement::CreateEventTrigger(v) => write!(f, "{v}"),
+            Statement::CreateTransform(v) => write!(f, "{v}"),
+            Statement::SecurityLabel(v) => write!(f, "{v}"),
+            Statement::CreateUserMapping(v) => write!(f, "{v}"),
+            Statement::CreateTablespace(v) => write!(f, "{v}"),
             Statement::DropExtension(drop_extension) => write!(f, "{drop_extension}"),
             Statement::DropOperator(drop_operator) => write!(f, "{drop_operator}"),
             Statement::DropOperatorFamily(drop_operator_family) => {

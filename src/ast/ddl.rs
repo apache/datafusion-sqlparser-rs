@@ -6280,6 +6280,39 @@ impl fmt::Display for AlterDomainOperation {
     }
 }
 
+/// The target of a `CREATE PUBLICATION` statement: which rows to publish.
+///
+/// See <https://www.postgresql.org/docs/current/sql-createpublication.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum PublicationTarget {
+    /// `FOR ALL TABLES`
+    AllTables,
+    /// `FOR TABLE table [, ...]`
+    Tables(Vec<ObjectName>),
+    /// `FOR TABLES IN SCHEMA schema [, ...]`
+    TablesInSchema(Vec<Ident>),
+}
+
+impl fmt::Display for PublicationTarget {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            PublicationTarget::AllTables => write!(f, "FOR ALL TABLES"),
+            PublicationTarget::Tables(tables) => {
+                write!(f, "FOR TABLE {}", display_comma_separated(tables))
+            }
+            PublicationTarget::TablesInSchema(schemas) => {
+                write!(
+                    f,
+                    "FOR TABLES IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
+        }
+    }
+}
+
 impl From<AlterDomain> for crate::ast::Statement {
     fn from(a: AlterDomain) -> Self {
         crate::ast::Statement::AlterDomain(a)
@@ -6402,5 +6435,80 @@ impl fmt::Display for AlterExtensionOperation {
 impl From<AlterExtension> for crate::ast::Statement {
     fn from(a: AlterExtension) -> Self {
         crate::ast::Statement::AlterExtension(a)
+    }
+}
+
+/// A `CREATE PUBLICATION` statement.
+///
+/// Note: this is a PostgreSQL-specific statement.
+/// <https://www.postgresql.org/docs/current/sql-createpublication.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreatePublication {
+    /// The publication name.
+    pub name: Ident,
+    /// Optional target specification (`FOR ALL TABLES`, `FOR TABLE ...`, or `FOR TABLES IN SCHEMA ...`).
+    pub target: Option<PublicationTarget>,
+    /// Optional `WITH (key = value, ...)` clause.
+    pub with_options: Vec<SqlOption>,
+}
+
+impl fmt::Display for CreatePublication {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CREATE PUBLICATION {}", self.name)?;
+        if let Some(target) = &self.target {
+            write!(f, " {target}")?;
+        }
+        if !self.with_options.is_empty() {
+            write!(f, " WITH ({})", display_comma_separated(&self.with_options))?;
+        }
+        Ok(())
+    }
+}
+
+impl From<CreatePublication> for crate::ast::Statement {
+    fn from(v: CreatePublication) -> Self {
+        crate::ast::Statement::CreatePublication(v)
+    }
+}
+
+/// A `CREATE SUBSCRIPTION` statement.
+///
+/// Note: this is a PostgreSQL-specific statement.
+/// <https://www.postgresql.org/docs/current/sql-createsubscription.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateSubscription {
+    /// The subscription name.
+    pub name: Ident,
+    /// The `CONNECTION 'conninfo'` string.
+    pub connection: Value,
+    /// The `PUBLICATION publication_name [, ...]` list.
+    pub publications: Vec<Ident>,
+    /// Optional `WITH (key = value, ...)` clause.
+    pub with_options: Vec<SqlOption>,
+}
+
+impl fmt::Display for CreateSubscription {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CREATE SUBSCRIPTION {name} CONNECTION {connection} PUBLICATION {publications}",
+            name = self.name,
+            connection = self.connection,
+            publications = display_comma_separated(&self.publications),
+        )?;
+        if !self.with_options.is_empty() {
+            write!(f, " WITH ({})", display_comma_separated(&self.with_options))?;
+        }
+        Ok(())
+    }
+}
+
+impl From<CreateSubscription> for crate::ast::Statement {
+    fn from(v: CreateSubscription) -> Self {
+        crate::ast::Statement::CreateSubscription(v)
     }
 }

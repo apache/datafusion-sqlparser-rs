@@ -388,6 +388,8 @@ impl Spanned for Statement {
             Statement::CreateTextSearchDictionary(_) => Span::empty(),
             Statement::CreateTextSearchParser(_) => Span::empty(),
             Statement::CreateTextSearchTemplate(_) => Span::empty(),
+            Statement::CreatePublication(_) => Span::empty(),
+            Statement::CreateSubscription(_) => Span::empty(),
             Statement::DropExtension(drop_extension) => drop_extension.span(),
             Statement::DropOperator(drop_operator) => drop_operator.span(),
             Statement::DropOperatorFamily(drop_operator_family) => drop_operator_family.span(),

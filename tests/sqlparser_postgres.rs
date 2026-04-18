@@ -9761,3 +9761,109 @@ fn alter_procedure_rename() {
         }
     );
 }
+
+#[test]
+fn parse_create_publication_basic() {
+    let sql = "CREATE PUBLICATION mypub FOR TABLE public.t";
+    let Statement::CreatePublication(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "mypub");
+    assert!(stmt.with_options.is_empty());
+    match stmt.target.unwrap() {
+        PublicationTarget::Tables(tables) => {
+            assert_eq!(tables.len(), 1);
+            assert_eq!(tables[0].to_string(), "public.t");
+        }
+        other => panic!("unexpected target: {other:?}"),
+    }
+}
+
+#[test]
+fn parse_create_publication_for_all_tables() {
+    let sql = "CREATE PUBLICATION mypub FOR ALL TABLES";
+    let Statement::CreatePublication(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "mypub");
+    assert!(matches!(stmt.target, Some(PublicationTarget::AllTables)));
+    assert!(stmt.with_options.is_empty());
+}
+
+#[test]
+fn parse_create_publication_for_tables_in_schema() {
+    let sql = "CREATE PUBLICATION mypub FOR TABLES IN SCHEMA myschema";
+    let Statement::CreatePublication(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "mypub");
+    match stmt.target.unwrap() {
+        PublicationTarget::TablesInSchema(schemas) => {
+            assert_eq!(schemas.len(), 1);
+            assert_eq!(schemas[0].value, "myschema");
+        }
+        other => panic!("unexpected target: {other:?}"),
+    }
+}
+
+#[test]
+fn parse_create_publication_with_options() {
+    let sql = "CREATE PUBLICATION mypub FOR ALL TABLES WITH (publish = 'insert, update')";
+    let Statement::CreatePublication(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "mypub");
+    assert!(matches!(stmt.target, Some(PublicationTarget::AllTables)));
+    assert_eq!(stmt.with_options.len(), 1);
+    match &stmt.with_options[0] {
+        SqlOption::KeyValue { key, value } => {
+            assert_eq!(key.value, "publish");
+            assert_eq!(value.to_string(), "'insert, update'");
+        }
+        other => panic!("unexpected option: {other:?}"),
+    }
+}
+
+#[test]
+fn parse_create_subscription_basic() {
+    let sql = "CREATE SUBSCRIPTION mysub CONNECTION 'host=localhost' PUBLICATION mypub";
+    let Statement::CreateSubscription(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "mysub");
+    assert_eq!(stmt.connection.to_string(), "'host=localhost'");
+    assert_eq!(stmt.publications.len(), 1);
+    assert_eq!(stmt.publications[0].value, "mypub");
+    assert!(stmt.with_options.is_empty());
+}
+
+#[test]
+fn parse_create_subscription_with_options() {
+    let sql = "CREATE SUBSCRIPTION mysub CONNECTION 'host=localhost dbname=mydb' PUBLICATION mypub, otherpub WITH (copy_data = true, slot_name = 'myslot')";
+    let Statement::CreateSubscription(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "mysub");
+    assert_eq!(
+        stmt.connection.to_string(),
+        "'host=localhost dbname=mydb'"
+    );
+    assert_eq!(stmt.publications.len(), 2);
+    assert_eq!(stmt.publications[0].value, "mypub");
+    assert_eq!(stmt.publications[1].value, "otherpub");
+    assert_eq!(stmt.with_options.len(), 2);
+    match &stmt.with_options[0] {
+        SqlOption::KeyValue { key, value } => {
+            assert_eq!(key.value, "copy_data");
+            assert_eq!(value.to_string(), "true");
+        }
+        other => panic!("unexpected option: {other:?}"),
+    }
+    match &stmt.with_options[1] {
+        SqlOption::KeyValue { key, value } => {
+            assert_eq!(key.value, "slot_name");
+            assert_eq!(value.to_string(), "'myslot'");
+        }
+        other => panic!("unexpected option: {other:?}"),
+    }
+}

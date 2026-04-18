@@ -5760,15 +5760,25 @@ impl From<AlterPolicy> for crate::ast::Statement {
 
 /// The handler/validator clause of a `CREATE FOREIGN DATA WRAPPER` statement.
 ///
-/// Specifies either a named function or the absence of a function.
+/// The function-or-absence portion of a `HANDLER` or `VALIDATOR` clause on a
+/// foreign data wrapper.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum FdwRoutineClause {
     /// A named function, e.g. `HANDLER myhandler` or `VALIDATOR myvalidator`.
     Function(ObjectName),
-    /// The `NO HANDLER` or `NO VALIDATOR` form.
-    NoFunction,
+    /// The `NO HANDLER` / `NO VALIDATOR` form.
+    Absent,
+}
+
+impl FdwRoutineClause {
+    fn fmt_with_label(&self, f: &mut fmt::Formatter<'_>, label: &str) -> fmt::Result {
+        match self {
+            FdwRoutineClause::Function(name) => write!(f, " {label} {name}"),
+            FdwRoutineClause::Absent => write!(f, " NO {label}"),
+        }
+    }
 }
 
 /// A `CREATE FOREIGN DATA WRAPPER` statement.
@@ -5778,8 +5788,8 @@ pub enum FdwRoutineClause {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct CreateForeignDataWrapper {
-    /// The name of the foreign-data wrapper.
-    pub name: Ident,
+    /// The name of the foreign-data wrapper. Can be schema-qualified.
+    pub name: ObjectName,
     /// Optional `HANDLER handler_function` or `NO HANDLER` clause.
     pub handler: Option<FdwRoutineClause>,
     /// Optional `VALIDATOR validator_function` or `NO VALIDATOR` clause.
@@ -5792,16 +5802,10 @@ impl fmt::Display for CreateForeignDataWrapper {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "CREATE FOREIGN DATA WRAPPER {}", self.name)?;
         if let Some(handler) = &self.handler {
-            match handler {
-                FdwRoutineClause::Function(name) => write!(f, " HANDLER {name}")?,
-                FdwRoutineClause::NoFunction => write!(f, " NO HANDLER")?,
-            }
+            handler.fmt_with_label(f, "HANDLER")?;
         }
         if let Some(validator) = &self.validator {
-            match validator {
-                FdwRoutineClause::Function(name) => write!(f, " VALIDATOR {name}")?,
-                FdwRoutineClause::NoFunction => write!(f, " NO VALIDATOR")?,
-            }
+            validator.fmt_with_label(f, "VALIDATOR")?;
         }
         if let Some(options) = &self.options {
             write!(f, " OPTIONS ({})", display_comma_separated(options))?;
@@ -5830,6 +5834,9 @@ pub struct CreateForeignTable {
     pub if_not_exists: bool,
     /// Column definitions.
     pub columns: Vec<ColumnDef>,
+    /// Table-level constraints (e.g. `CHECK (...)`, composite `FOREIGN KEY`).
+    /// PostgreSQL accepts these in `CREATE FOREIGN TABLE` column lists.
+    pub constraints: Vec<TableConstraint>,
     /// The `SERVER server_name` clause.
     pub server_name: Ident,
     /// Optional `OPTIONS (key 'value', ...)` clause at the table level.
@@ -5840,7 +5847,7 @@ impl fmt::Display for CreateForeignTable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "CREATE FOREIGN TABLE {if_not_exists}{name} ({columns}) SERVER {server_name}",
+            "CREATE FOREIGN TABLE {if_not_exists}{name} ({columns}",
             if_not_exists = if self.if_not_exists {
                 "IF NOT EXISTS "
             } else {
@@ -5848,8 +5855,11 @@ impl fmt::Display for CreateForeignTable {
             },
             name = self.name,
             columns = display_comma_separated(&self.columns),
-            server_name = self.server_name,
         )?;
+        if !self.constraints.is_empty() {
+            write!(f, ", {}", display_comma_separated(&self.constraints))?;
+        }
+        write!(f, ") SERVER {}", self.server_name)?;
         if let Some(options) = &self.options {
             write!(f, " OPTIONS ({})", display_comma_separated(options))?;
         }

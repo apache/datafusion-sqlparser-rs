@@ -9229,7 +9229,7 @@ fn parse_create_foreign_data_wrapper() {
     let Statement::CreateForeignDataWrapper(stmt) = pg().verified_stmt(sql) else {
         unreachable!()
     };
-    assert_eq!(stmt.name.value, "myfdw");
+    assert_eq!(stmt.name.to_string(), "myfdw");
     assert!(stmt.handler.is_none());
     assert!(stmt.validator.is_none());
     assert!(stmt.options.is_none());
@@ -9251,14 +9251,14 @@ fn parse_create_foreign_data_wrapper() {
     let Statement::CreateForeignDataWrapper(stmt) = pg().verified_stmt(sql) else {
         unreachable!()
     };
-    assert_eq!(stmt.handler, Some(FdwRoutineClause::NoFunction));
+    assert_eq!(stmt.handler, Some(FdwRoutineClause::Absent));
 
     // With NO VALIDATOR.
     let sql = "CREATE FOREIGN DATA WRAPPER myfdw NO VALIDATOR";
     let Statement::CreateForeignDataWrapper(stmt) = pg().verified_stmt(sql) else {
         unreachable!()
     };
-    assert_eq!(stmt.validator, Some(FdwRoutineClause::NoFunction));
+    assert_eq!(stmt.validator, Some(FdwRoutineClause::Absent));
 
     // With HANDLER, VALIDATOR, and OPTIONS.
     let sql = "CREATE FOREIGN DATA WRAPPER myfdw HANDLER myhandler VALIDATOR myvalidator OPTIONS (debug 'true')";
@@ -9316,4 +9316,27 @@ fn parse_create_foreign_table() {
     assert_eq!(options.len(), 1);
     assert_eq!(options[0].key.value, "schema_name");
     assert_eq!(options[0].value.value, "public");
+}
+
+#[test]
+fn parse_create_foreign_table_with_check_constraint() {
+    // PostgreSQL accepts table-level CHECK constraints in CREATE FOREIGN TABLE.
+    // The constraint must round-trip rather than being silently dropped.
+    let sql =
+        "CREATE FOREIGN TABLE ft (id INTEGER, CONSTRAINT id_positive CHECK (id > 0)) SERVER s";
+    let Statement::CreateForeignTable(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.columns.len(), 1);
+    assert_eq!(stmt.constraints.len(), 1);
+}
+
+#[test]
+fn parse_create_foreign_data_wrapper_with_schema_qualified_name() {
+    // Schema-qualified FDW names should parse and round-trip through ObjectName.
+    let sql = "CREATE FOREIGN DATA WRAPPER myschema.myfdw";
+    let Statement::CreateForeignDataWrapper(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.to_string(), "myschema.myfdw");
 }

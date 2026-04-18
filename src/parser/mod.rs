@@ -19720,9 +19720,7 @@ impl<'a> Parser<'a> {
 
     /// Parse an optional `OPTIONS ( key value [, ...] )` clause shared by
     /// `CREATE SERVER`, `CREATE FOREIGN DATA WRAPPER`, and `CREATE FOREIGN TABLE`.
-    fn parse_fdw_options_clause(
-        &mut self,
-    ) -> Result<Option<Vec<CreateServerOption>>, ParserError> {
+    fn parse_fdw_options_clause(&mut self) -> Result<Option<Vec<CreateServerOption>>, ParserError> {
         if !self.parse_keyword(Keyword::OPTIONS) {
             return Ok(None);
         }

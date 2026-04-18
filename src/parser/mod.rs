@@ -7269,9 +7269,7 @@ impl<'a> Parser<'a> {
         match key {
             "SFUNC" => {
                 self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::Sfunc(
-                    self.parse_object_name(false)?,
-                ))
+                Ok(CreateAggregateOption::Sfunc(self.parse_object_name(false)?))
             }
             "STYPE" => {
                 self.expect_token(&Token::Eq)?;

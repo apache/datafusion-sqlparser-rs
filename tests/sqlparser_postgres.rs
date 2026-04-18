@@ -9233,10 +9233,7 @@ fn parse_create_aggregate_basic() {
             assert_eq!(agg.args.len(), 1);
             assert_eq!(agg.args[0].to_string(), "NUMERIC");
             assert_eq!(agg.options.len(), 4);
-            assert_eq!(
-                agg.options[0].to_string(),
-                "SFUNC = numeric_avg_accum"
-            );
+            assert_eq!(agg.options[0].to_string(), "SFUNC = numeric_avg_accum");
             assert_eq!(agg.options[1].to_string(), "STYPE = internal");
             assert_eq!(agg.options[2].to_string(), "FINALFUNC = numeric_avg");
             assert_eq!(agg.options[3].to_string(), "INITCOND = '0'");
@@ -9273,10 +9270,7 @@ fn parse_create_aggregate_with_moving_aggregate_options() {
             assert_eq!(agg.options.len(), 7);
             assert_eq!(agg.options[4].to_string(), "MSTYPE = FLOAT8");
             assert_eq!(agg.options[5].to_string(), "MFINALFUNC_EXTRA");
-            assert_eq!(
-                agg.options[6].to_string(),
-                "MFINALFUNC_MODIFY = READ_ONLY"
-            );
+            assert_eq!(agg.options[6].to_string(), "MFINALFUNC_MODIFY = READ_ONLY");
         }
         _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
     }

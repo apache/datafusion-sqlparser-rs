@@ -5175,11 +5175,34 @@ impl<'a> Parser<'a> {
             self.parse_create_user(or_replace).map(Into::into)
         } else if self.parse_keyword(Keyword::AGGREGATE) {
             self.parse_create_aggregate(or_replace).map(Into::into)
+        } else if self.peek_keyword(Keyword::TRUSTED)
+            || self.peek_keyword(Keyword::PROCEDURAL)
+            || self.peek_keyword(Keyword::LANGUAGE)
+        {
+            let trusted = self.parse_keyword(Keyword::TRUSTED);
+            let procedural = self.parse_keyword(Keyword::PROCEDURAL);
+            if self.parse_keyword(Keyword::LANGUAGE) {
+                self.parse_create_language(or_replace, trusted, procedural)
+                    .map(Into::into)
+            } else {
+                self.expected_ref(
+                    "LANGUAGE after TRUSTED or PROCEDURAL",
+                    self.peek_token_ref(),
+                )
+            }
         } else if or_replace {
             self.expected_ref(
                 "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION after CREATE OR REPLACE",
                 self.peek_token_ref(),
             )
+        } else if self.parse_keyword(Keyword::CAST) {
+            self.parse_create_cast().map(Into::into)
+        } else if self.parse_keyword(Keyword::CONVERSION) {
+            self.parse_create_conversion(false).map(Into::into)
+        } else if self.parse_keywords(&[Keyword::DEFAULT, Keyword::CONVERSION]) {
+            self.parse_create_conversion(true).map(Into::into)
+        } else if self.parse_keyword(Keyword::RULE) {
+            self.parse_create_rule().map(Into::into)
         } else if self.parse_keyword(Keyword::EXTENSION) {
             self.parse_create_extension().map(Into::into)
         } else if self.parse_keyword(Keyword::INDEX) {
@@ -20265,6 +20288,204 @@ impl<'a> Parser<'a> {
             connection,
             publications,
             with_options,
+        })
+    }
+
+    /// Parse a `CREATE CAST` statement.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createcast.html>
+    pub fn parse_create_cast(&mut self) -> Result<CreateCast, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let source_type = self.parse_data_type()?;
+        self.expect_keyword_is(Keyword::AS)?;
+        let target_type = self.parse_data_type()?;
+        self.expect_token(&Token::RParen)?;
+
+        let function_kind = if self.parse_keywords(&[Keyword::WITHOUT, Keyword::FUNCTION]) {
+            CastFunctionKind::WithoutFunction
+        } else if self.parse_keywords(&[Keyword::WITH, Keyword::INOUT]) {
+            CastFunctionKind::WithInout
+        } else if self.parse_keywords(&[Keyword::WITH, Keyword::FUNCTION]) {
+            let function_name = self.parse_object_name(false)?;
+            let argument_types = if self.peek_token_ref().token == Token::LParen {
+                self.expect_token(&Token::LParen)?;
+                let types = if self.peek_token_ref().token == Token::RParen {
+                    vec![]
+                } else {
+                    self.parse_comma_separated(|p| p.parse_data_type())?
+                };
+                self.expect_token(&Token::RParen)?;
+                types
+            } else {
+                vec![]
+            };
+            CastFunctionKind::WithFunction {
+                function_name,
+                argument_types,
+            }
+        } else {
+            return self.expected_ref(
+                "WITH FUNCTION, WITHOUT FUNCTION, or WITH INOUT",
+                self.peek_token_ref(),
+            );
+        };
+
+        let cast_context = if self.parse_keyword(Keyword::AS) {
+            if self.parse_keyword(Keyword::ASSIGNMENT) {
+                CastContext::Assignment
+            } else if self.parse_keyword(Keyword::IMPLICIT) {
+                CastContext::Implicit
+            } else {
+                return self.expected_ref("ASSIGNMENT or IMPLICIT after AS", self.peek_token_ref());
+            }
+        } else {
+            CastContext::Explicit
+        };
+
+        Ok(CreateCast {
+            source_type,
+            target_type,
+            function_kind,
+            cast_context,
+        })
+    }
+
+    /// Parse a `CREATE [DEFAULT] CONVERSION` statement.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createconversion.html>
+    pub fn parse_create_conversion(
+        &mut self,
+        is_default: bool,
+    ) -> Result<CreateConversion, ParserError> {
+        let name = self.parse_object_name(false)?;
+        self.expect_keyword_is(Keyword::FOR)?;
+        let source_encoding = self.parse_literal_string()?;
+        self.expect_keyword_is(Keyword::TO)?;
+        let destination_encoding = self.parse_literal_string()?;
+        self.expect_keyword_is(Keyword::FROM)?;
+        let function_name = self.parse_object_name(false)?;
+
+        Ok(CreateConversion {
+            name,
+            is_default,
+            source_encoding,
+            destination_encoding,
+            function_name,
+        })
+    }
+
+    /// Parse a `CREATE [OR REPLACE] [TRUSTED] [PROCEDURAL] LANGUAGE` statement.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createlanguage.html>
+    pub fn parse_create_language(
+        &mut self,
+        or_replace: bool,
+        trusted: bool,
+        procedural: bool,
+    ) -> Result<CreateLanguage, ParserError> {
+        let name = self.parse_identifier()?;
+
+        let handler = if self.parse_keyword(Keyword::HANDLER) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
+
+        let inline_handler = if self.parse_keyword(Keyword::INLINE) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
+
+        let validator = if self.parse_keywords(&[Keyword::NO, Keyword::VALIDATOR]) {
+            None
+        } else if self.parse_keyword(Keyword::VALIDATOR) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
+
+        Ok(CreateLanguage {
+            name,
+            or_replace,
+            trusted,
+            procedural,
+            handler,
+            inline_handler,
+            validator,
+        })
+    }
+
+    /// Parse a `CREATE RULE` statement.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createrule.html>
+    pub fn parse_create_rule(&mut self) -> Result<CreateRule, ParserError> {
+        let name = self.parse_identifier()?;
+        self.expect_keyword_is(Keyword::AS)?;
+        self.expect_keyword_is(Keyword::ON)?;
+
+        let event = if self.parse_keyword(Keyword::SELECT) {
+            RuleEvent::Select
+        } else if self.parse_keyword(Keyword::INSERT) {
+            RuleEvent::Insert
+        } else if self.parse_keyword(Keyword::UPDATE) {
+            RuleEvent::Update
+        } else if self.parse_keyword(Keyword::DELETE) {
+            RuleEvent::Delete
+        } else {
+            return self.expected_ref(
+                "SELECT, INSERT, UPDATE, or DELETE after ON",
+                self.peek_token_ref(),
+            );
+        };
+
+        self.expect_keyword_is(Keyword::TO)?;
+        let table = self.parse_object_name(false)?;
+
+        let condition = if self.parse_keyword(Keyword::WHERE) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
+        self.expect_keyword_is(Keyword::DO)?;
+
+        let instead = if self.parse_keyword(Keyword::INSTEAD) {
+            true
+        } else if self.parse_keyword(Keyword::ALSO) {
+            false
+        } else {
+            false
+        };
+
+        let action = if self.parse_keyword(Keyword::NOTHING) {
+            RuleAction::Nothing
+        } else if self.peek_token_ref().token == Token::LParen {
+            self.expect_token(&Token::LParen)?;
+            let mut stmts = Vec::new();
+            loop {
+                stmts.push(self.parse_statement()?);
+                if !self.consume_token(&Token::SemiColon) {
+                    break;
+                }
+                if self.peek_token_ref().token == Token::RParen {
+                    break;
+                }
+            }
+            self.expect_token(&Token::RParen)?;
+            RuleAction::Statements(stmts)
+        } else {
+            let stmt = self.parse_statement()?;
+            RuleAction::Statements(vec![stmt])
+        };
+
+        Ok(CreateRule {
+            name,
+            event,
+            table,
+            condition,
+            instead,
+            action,
         })
     }
 

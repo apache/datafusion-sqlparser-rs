@@ -6512,3 +6512,310 @@ impl From<CreateSubscription> for crate::ast::Statement {
         crate::ast::Statement::CreateSubscription(v)
     }
 }
+
+/// The function binding kind for a `CREATE CAST` statement.
+///
+/// Note: this is a PostgreSQL-specific construct.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CastFunctionKind {
+    /// `WITH FUNCTION function_name(arg_types)`
+    WithFunction {
+        function_name: ObjectName,
+        argument_types: Vec<DataType>,
+    },
+    /// `WITHOUT FUNCTION`
+    WithoutFunction,
+    /// `WITH INOUT`
+    WithInout,
+}
+
+impl fmt::Display for CastFunctionKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CastFunctionKind::WithFunction {
+                function_name,
+                argument_types,
+            } => {
+                write!(f, "WITH FUNCTION {function_name}")?;
+                if !argument_types.is_empty() {
+                    write!(f, "({})", display_comma_separated(argument_types))?;
+                }
+                Ok(())
+            }
+            CastFunctionKind::WithoutFunction => write!(f, "WITHOUT FUNCTION"),
+            CastFunctionKind::WithInout => write!(f, "WITH INOUT"),
+        }
+    }
+}
+
+/// The context in which a cast may be invoked automatically.
+///
+/// Note: this is a PostgreSQL-specific construct.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CastContext {
+    /// No `AS` clause — explicit cast only (default).
+    Explicit,
+    /// `AS ASSIGNMENT`
+    Assignment,
+    /// `AS IMPLICIT`
+    Implicit,
+}
+
+impl fmt::Display for CastContext {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CastContext::Explicit => Ok(()),
+            CastContext::Assignment => write!(f, " AS ASSIGNMENT"),
+            CastContext::Implicit => write!(f, " AS IMPLICIT"),
+        }
+    }
+}
+
+/// A `CREATE CAST` statement.
+///
+/// Note: this is a PostgreSQL-specific statement.
+/// <https://www.postgresql.org/docs/current/sql-createcast.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateCast {
+    /// The source type.
+    pub source_type: DataType,
+    /// The target type.
+    pub target_type: DataType,
+    /// How the cast is implemented.
+    pub function_kind: CastFunctionKind,
+    /// The cast context (explicit, assignment, or implicit).
+    pub cast_context: CastContext,
+}
+
+impl fmt::Display for CreateCast {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CREATE CAST ({source} AS {target}) {function_kind}{context}",
+            source = self.source_type,
+            target = self.target_type,
+            function_kind = self.function_kind,
+            context = self.cast_context,
+        )
+    }
+}
+
+impl From<CreateCast> for crate::ast::Statement {
+    fn from(v: CreateCast) -> Self {
+        crate::ast::Statement::CreateCast(v)
+    }
+}
+
+/// A `CREATE CONVERSION` statement.
+///
+/// Note: this is a PostgreSQL-specific statement.
+/// <https://www.postgresql.org/docs/current/sql-createconversion.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateConversion {
+    /// The conversion name.
+    pub name: ObjectName,
+    /// Whether this is a `DEFAULT` conversion.
+    pub is_default: bool,
+    /// The source encoding name (a string literal like `'LATIN1'`).
+    pub source_encoding: String,
+    /// The destination encoding name (a string literal like `'UTF8'`).
+    pub destination_encoding: String,
+    /// The conversion function name.
+    pub function_name: ObjectName,
+}
+
+impl fmt::Display for CreateConversion {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CREATE")?;
+        if self.is_default {
+            write!(f, " DEFAULT")?;
+        }
+        write!(
+            f,
+            " CONVERSION {name} FOR '{source}' TO '{destination}' FROM {function}",
+            name = self.name,
+            source = self.source_encoding,
+            destination = self.destination_encoding,
+            function = self.function_name,
+        )
+    }
+}
+
+impl From<CreateConversion> for crate::ast::Statement {
+    fn from(v: CreateConversion) -> Self {
+        crate::ast::Statement::CreateConversion(v)
+    }
+}
+
+/// A `CREATE LANGUAGE` statement.
+///
+/// Note: this is a PostgreSQL-specific statement.
+/// <https://www.postgresql.org/docs/current/sql-createlanguage.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateLanguage {
+    /// The language name.
+    pub name: Ident,
+    /// Whether `OR REPLACE` was specified.
+    pub or_replace: bool,
+    /// Whether `TRUSTED` was specified.
+    pub trusted: bool,
+    /// Whether `PROCEDURAL` was specified.
+    pub procedural: bool,
+    /// Optional `HANDLER handler_function` clause.
+    pub handler: Option<ObjectName>,
+    /// Optional `INLINE inline_function` clause.
+    pub inline_handler: Option<ObjectName>,
+    /// Optional `VALIDATOR validator_function` clause.
+    pub validator: Option<ObjectName>,
+}
+
+impl fmt::Display for CreateLanguage {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CREATE")?;
+        if self.or_replace {
+            write!(f, " OR REPLACE")?;
+        }
+        if self.trusted {
+            write!(f, " TRUSTED")?;
+        }
+        if self.procedural {
+            write!(f, " PROCEDURAL")?;
+        }
+        write!(f, " LANGUAGE {}", self.name)?;
+        if let Some(handler) = &self.handler {
+            write!(f, " HANDLER {handler}")?;
+        }
+        if let Some(inline) = &self.inline_handler {
+            write!(f, " INLINE {inline}")?;
+        }
+        if let Some(validator) = &self.validator {
+            write!(f, " VALIDATOR {validator}")?;
+        }
+        Ok(())
+    }
+}
+
+impl From<CreateLanguage> for crate::ast::Statement {
+    fn from(v: CreateLanguage) -> Self {
+        crate::ast::Statement::CreateLanguage(v)
+    }
+}
+
+/// The event that triggers a rule.
+///
+/// Note: this is a PostgreSQL-specific construct.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum RuleEvent {
+    Select,
+    Insert,
+    Update,
+    Delete,
+}
+
+impl fmt::Display for RuleEvent {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            RuleEvent::Select => write!(f, "SELECT"),
+            RuleEvent::Insert => write!(f, "INSERT"),
+            RuleEvent::Update => write!(f, "UPDATE"),
+            RuleEvent::Delete => write!(f, "DELETE"),
+        }
+    }
+}
+
+/// The action performed by a rule.
+///
+/// Note: this is a PostgreSQL-specific construct.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum RuleAction {
+    /// `NOTHING`
+    Nothing,
+    /// One or more statements (parenthesized when more than one).
+    Statements(Vec<crate::ast::Statement>),
+}
+
+impl fmt::Display for RuleAction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            RuleAction::Nothing => write!(f, "NOTHING"),
+            RuleAction::Statements(stmts) => {
+                if stmts.len() == 1 {
+                    write!(f, "{}", stmts[0])
+                } else {
+                    write!(f, "(")?;
+                    for (i, stmt) in stmts.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, "; ")?;
+                        }
+                        write!(f, "{stmt}")?;
+                    }
+                    write!(f, ")")
+                }
+            }
+        }
+    }
+}
+
+/// A `CREATE RULE` statement.
+///
+/// Note: this is a PostgreSQL-specific statement.
+/// <https://www.postgresql.org/docs/current/sql-createrule.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateRule {
+    /// The rule name.
+    pub name: Ident,
+    /// The event that triggers the rule.
+    pub event: RuleEvent,
+    /// The table the rule applies to.
+    pub table: ObjectName,
+    /// Optional `WHERE condition` clause.
+    pub condition: Option<Expr>,
+    /// Whether the rule is `INSTEAD` (true) or `ALSO` (false).
+    pub instead: bool,
+    /// The action(s) taken by the rule.
+    pub action: RuleAction,
+}
+
+impl fmt::Display for CreateRule {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CREATE RULE {name} AS ON {event} TO {table}",
+            name = self.name,
+            event = self.event,
+            table = self.table,
+        )?;
+        if let Some(condition) = &self.condition {
+            write!(f, " WHERE {condition}")?;
+        }
+        write!(f, " DO")?;
+        if self.instead {
+            write!(f, " INSTEAD")?;
+        } else {
+            write!(f, " ALSO")?;
+        }
+        write!(f, " {}", self.action)
+    }
+}
+
+impl From<CreateRule> for crate::ast::Statement {
+    fn from(v: CreateRule) -> Self {
+        crate::ast::Statement::CreateRule(v)
+    }
+}

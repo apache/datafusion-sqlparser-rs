@@ -535,6 +535,14 @@ pub enum AlterTableOperation {
         /// Parenthesized options supplied to `SET (...)`.
         options: Vec<SqlOption>,
     },
+    /// `SET TABLESPACE tablespace_name`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
+    SetTablespace {
+        /// The target tablespace name.
+        tablespace_name: Ident,
+    },
 }
 
 /// An `ALTER Policy` (`Statement::AlterPolicy`) operation
@@ -699,6 +707,14 @@ pub enum AlterIndexOperation {
     RenameIndex {
         /// The new name for the index.
         index_name: ObjectName,
+    },
+    /// `SET TABLESPACE tablespace_name`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterindex.html)
+    SetTablespace {
+        /// The target tablespace name.
+        tablespace_name: Ident,
     },
 }
 
@@ -1045,6 +1061,9 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::SetOptionsParens { options } => {
                 write!(f, "SET ({})", display_comma_separated(options))
             }
+            AlterTableOperation::SetTablespace { tablespace_name } => {
+                write!(f, "SET TABLESPACE {tablespace_name}")
+            }
         }
     }
 }
@@ -1054,6 +1073,9 @@ impl fmt::Display for AlterIndexOperation {
         match self {
             AlterIndexOperation::RenameIndex { index_name } => {
                 write!(f, "RENAME TO {index_name}")
+            }
+            AlterIndexOperation::SetTablespace { tablespace_name } => {
+                write!(f, "SET TABLESPACE {tablespace_name}")
             }
         }
     }
@@ -5390,6 +5412,8 @@ pub enum AlterFunctionKind {
     Function,
     /// `AGGREGATE`
     Aggregate,
+    /// `PROCEDURE`
+    Procedure,
 }
 
 impl fmt::Display for AlterFunctionKind {
@@ -5397,6 +5421,7 @@ impl fmt::Display for AlterFunctionKind {
         match self {
             Self::Function => write!(f, "FUNCTION"),
             Self::Aggregate => write!(f, "AGGREGATE"),
+            Self::Procedure => write!(f, "PROCEDURE"),
         }
     }
 }
@@ -5471,7 +5496,7 @@ impl fmt::Display for AlterFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "ALTER {} ", self.kind)?;
         match self.kind {
-            AlterFunctionKind::Function => {
+            AlterFunctionKind::Function | AlterFunctionKind::Procedure => {
                 write!(f, "{} ", self.function)?;
             }
             AlterFunctionKind::Aggregate => {
@@ -6134,5 +6159,248 @@ impl fmt::Display for CreateTextSearchTemplate {
 impl From<CreateTextSearchTemplate> for crate::ast::Statement {
     fn from(v: CreateTextSearchTemplate) -> Self {
         crate::ast::Statement::CreateTextSearchTemplate(v)
+    }
+}
+
+/// `ALTER DOMAIN` statement.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterdomain.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterDomain {
+    /// Name of the domain being altered.
+    pub name: ObjectName,
+    /// The operation to perform.
+    pub operation: AlterDomainOperation,
+}
+
+/// An [AlterDomain] operation.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterDomainOperation {
+    /// `ADD CONSTRAINT constraint_name CHECK (expr) [NOT VALID]`
+    AddConstraint {
+        /// The constraint to add.
+        constraint: TableConstraint,
+        /// Whether `NOT VALID` was specified.
+        not_valid: bool,
+    },
+    /// `DROP CONSTRAINT [IF EXISTS] constraint_name [CASCADE | RESTRICT]`
+    DropConstraint {
+        /// Whether `IF EXISTS` was specified.
+        if_exists: bool,
+        /// Name of the constraint to drop.
+        name: Ident,
+        /// Optional drop behavior.
+        drop_behavior: Option<DropBehavior>,
+    },
+    /// `RENAME CONSTRAINT old_name TO new_name`
+    RenameConstraint {
+        /// Existing constraint name.
+        old_name: Ident,
+        /// New constraint name.
+        new_name: Ident,
+    },
+    /// `OWNER TO { new_owner | CURRENT_ROLE | CURRENT_USER | SESSION_USER }`
+    OwnerTo(Owner),
+    /// `RENAME TO new_name`
+    RenameTo {
+        /// New name for the domain.
+        new_name: Ident,
+    },
+    /// `SET SCHEMA schema_name`
+    SetSchema {
+        /// The target schema name.
+        schema_name: ObjectName,
+    },
+    /// `SET DEFAULT expr`
+    SetDefault {
+        /// Default value expression.
+        default: Expr,
+    },
+    /// `DROP DEFAULT`
+    DropDefault,
+    /// `VALIDATE CONSTRAINT constraint_name`
+    ValidateConstraint {
+        /// Name of the constraint to validate.
+        name: Ident,
+    },
+}
+
+impl fmt::Display for AlterDomain {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ALTER DOMAIN {} {}", self.name, self.operation)
+    }
+}
+
+impl fmt::Display for AlterDomainOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterDomainOperation::AddConstraint {
+                constraint,
+                not_valid,
+            } => {
+                write!(f, "ADD {constraint}")?;
+                if *not_valid {
+                    write!(f, " NOT VALID")?;
+                }
+                Ok(())
+            }
+            AlterDomainOperation::DropConstraint {
+                if_exists,
+                name,
+                drop_behavior,
+            } => {
+                write!(f, "DROP CONSTRAINT")?;
+                if *if_exists {
+                    write!(f, " IF EXISTS")?;
+                }
+                write!(f, " {name}")?;
+                if let Some(behavior) = drop_behavior {
+                    write!(f, " {behavior}")?;
+                }
+                Ok(())
+            }
+            AlterDomainOperation::RenameConstraint { old_name, new_name } => {
+                write!(f, "RENAME CONSTRAINT {old_name} TO {new_name}")
+            }
+            AlterDomainOperation::OwnerTo(owner) => write!(f, "OWNER TO {owner}"),
+            AlterDomainOperation::RenameTo { new_name } => write!(f, "RENAME TO {new_name}"),
+            AlterDomainOperation::SetSchema { schema_name } => {
+                write!(f, "SET SCHEMA {schema_name}")
+            }
+            AlterDomainOperation::SetDefault { default } => write!(f, "SET DEFAULT {default}"),
+            AlterDomainOperation::DropDefault => write!(f, "DROP DEFAULT"),
+            AlterDomainOperation::ValidateConstraint { name } => {
+                write!(f, "VALIDATE CONSTRAINT {name}")
+            }
+        }
+    }
+}
+
+impl From<AlterDomain> for crate::ast::Statement {
+    fn from(a: AlterDomain) -> Self {
+        crate::ast::Statement::AlterDomain(a)
+    }
+}
+
+/// `ALTER TRIGGER name ON table_name RENAME TO new_name` statement.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertrigger.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterTrigger {
+    /// Name of the trigger being altered.
+    pub name: Ident,
+    /// Name of the table the trigger is defined on.
+    pub table_name: ObjectName,
+    /// The operation to perform.
+    pub operation: AlterTriggerOperation,
+}
+
+/// An [AlterTrigger] operation.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterTriggerOperation {
+    /// `RENAME TO new_name`
+    RenameTo {
+        /// New name for the trigger.
+        new_name: Ident,
+    },
+}
+
+impl fmt::Display for AlterTrigger {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "ALTER TRIGGER {} ON {} {}",
+            self.name, self.table_name, self.operation
+        )
+    }
+}
+
+impl fmt::Display for AlterTriggerOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterTriggerOperation::RenameTo { new_name } => write!(f, "RENAME TO {new_name}"),
+        }
+    }
+}
+
+impl From<AlterTrigger> for crate::ast::Statement {
+    fn from(a: AlterTrigger) -> Self {
+        crate::ast::Statement::AlterTrigger(a)
+    }
+}
+
+/// `ALTER EXTENSION` statement.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterextension.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterExtension {
+    /// Name of the extension being altered.
+    pub name: Ident,
+    /// The operation to perform.
+    pub operation: AlterExtensionOperation,
+}
+
+/// An [AlterExtension] operation.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterExtensionOperation {
+    /// `UPDATE [ TO new_version ]`
+    UpdateTo {
+        /// Optional target version string or identifier.
+        version: Option<Ident>,
+    },
+    /// `SET SCHEMA schema_name`
+    SetSchema {
+        /// The target schema name.
+        schema_name: ObjectName,
+    },
+    /// `OWNER TO { new_owner | CURRENT_ROLE | CURRENT_USER | SESSION_USER }`
+    OwnerTo(Owner),
+    /// `RENAME TO new_name`
+    RenameTo {
+        /// New name for the extension.
+        new_name: Ident,
+    },
+}
+
+impl fmt::Display for AlterExtension {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ALTER EXTENSION {} {}", self.name, self.operation)
+    }
+}
+
+impl fmt::Display for AlterExtensionOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterExtensionOperation::UpdateTo { version } => {
+                write!(f, "UPDATE")?;
+                if let Some(v) = version {
+                    write!(f, " TO {v}")?;
+                }
+                Ok(())
+            }
+            AlterExtensionOperation::SetSchema { schema_name } => {
+                write!(f, "SET SCHEMA {schema_name}")
+            }
+            AlterExtensionOperation::OwnerTo(owner) => write!(f, "OWNER TO {owner}"),
+            AlterExtensionOperation::RenameTo { new_name } => write!(f, "RENAME TO {new_name}"),
+        }
+    }
+}
+
+impl From<AlterExtension> for crate::ast::Statement {
+    fn from(a: AlterExtension) -> Self {
+        crate::ast::Statement::AlterExtension(a)
     }
 }

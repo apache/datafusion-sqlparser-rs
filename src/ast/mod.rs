@@ -61,11 +61,13 @@ pub use self::dcl::{
 };
 pub use self::ddl::{
     Alignment, AlterCollation, AlterCollationOperation, AlterColumnOperation, AlterConnectorOwner,
+    AlterDomain, AlterDomainOperation, AlterExtension, AlterExtensionOperation,
     AlterFunction, AlterFunctionAction, AlterFunctionKind, AlterFunctionOperation,
     AlterIndexOperation, AlterOperator, AlterOperatorClass, AlterOperatorClassOperation,
     AlterOperatorFamily, AlterOperatorFamilyOperation, AlterOperatorOperation, AlterPolicy,
     AlterPolicyOperation, AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm,
-    AlterTableLock, AlterTableOperation, AlterTableType, AlterType, AlterTypeAddValue,
+    AlterTableLock, AlterTableOperation, AlterTableType, AlterTrigger, AlterTriggerOperation,
+    AlterType, AlterTypeAddValue,
     AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
     AggregateModifyKind, ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions,
     ColumnPolicy, ColumnPolicyProperty, ConstraintCharacteristics, CreateAggregate,
@@ -3774,17 +3776,34 @@ pub enum Statement {
         with_options: Vec<SqlOption>,
     },
     /// ```sql
+    /// ALTER DOMAIN
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterdomain.html)
+    AlterDomain(AlterDomain),
+    /// ```sql
+    /// ALTER EXTENSION
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterextension.html)
+    AlterExtension(AlterExtension),
+    /// ```sql
     /// ALTER FUNCTION
     /// ALTER AGGREGATE
+    /// ALTER PROCEDURE
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterfunction.html)
     /// and [PostgreSQL](https://www.postgresql.org/docs/current/sql-alteraggregate.html)
+    /// and [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterprocedure.html)
     AlterFunction(AlterFunction),
     /// ```sql
     /// ALTER TYPE
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertype.html)
     /// ```
     AlterType(AlterType),
+    /// ```sql
+    /// ALTER TRIGGER
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertrigger.html)
+    AlterTrigger(AlterTrigger),
     /// ```sql
     /// ALTER COLLATION
     /// ```
@@ -5579,7 +5598,10 @@ impl fmt::Display for Statement {
                 }
                 write!(f, " AS {query}")
             }
+            Statement::AlterDomain(alter_domain) => write!(f, "{alter_domain}"),
+            Statement::AlterExtension(alter_extension) => write!(f, "{alter_extension}"),
             Statement::AlterFunction(alter_function) => write!(f, "{alter_function}"),
+            Statement::AlterTrigger(alter_trigger) => write!(f, "{alter_trigger}"),
             Statement::AlterType(AlterType { name, operation }) => {
                 write!(f, "ALTER TYPE {name} {operation}")
             }

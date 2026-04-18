@@ -10950,6 +10950,9 @@ impl<'a> Parser<'a> {
         } else if self.parse_keywords(&[Keyword::VALIDATE, Keyword::CONSTRAINT]) {
             let name = self.parse_identifier()?;
             AlterTableOperation::ValidateConstraint { name }
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::TABLESPACE]) {
+            let tablespace_name = self.parse_identifier()?;
+            AlterTableOperation::SetTablespace { tablespace_name }
         } else {
             let mut options =
                 self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;
@@ -11017,6 +11020,10 @@ impl<'a> Parser<'a> {
             Keyword::SCHEMA,
             Keyword::USER,
             Keyword::OPERATOR,
+            Keyword::DOMAIN,
+            Keyword::TRIGGER,
+            Keyword::EXTENSION,
+            Keyword::PROCEDURE,
         ])?;
         match object_type {
             Keyword::SCHEMA => {
@@ -11041,8 +11048,14 @@ impl<'a> Parser<'a> {
                     } else {
                         return self.expected_ref("TO after RENAME", self.peek_token_ref());
                     }
+                } else if self.parse_keywords(&[Keyword::SET, Keyword::TABLESPACE]) {
+                    let tablespace_name = self.parse_identifier()?;
+                    AlterIndexOperation::SetTablespace { tablespace_name }
                 } else {
-                    return self.expected_ref("RENAME after ALTER INDEX", self.peek_token_ref());
+                    return self.expected_ref(
+                        "RENAME or SET TABLESPACE after ALTER INDEX",
+                        self.peek_token_ref(),
+                    );
                 };
 
                 Ok(Statement::AlterIndex {
@@ -11052,6 +11065,7 @@ impl<'a> Parser<'a> {
             }
             Keyword::FUNCTION => self.parse_alter_function(AlterFunctionKind::Function),
             Keyword::AGGREGATE => self.parse_alter_function(AlterFunctionKind::Aggregate),
+            Keyword::PROCEDURE => self.parse_alter_function(AlterFunctionKind::Procedure),
             Keyword::OPERATOR => {
                 if self.parse_keyword(Keyword::FAMILY) {
                     self.parse_alter_operator_family().map(Into::into)
@@ -11065,9 +11079,12 @@ impl<'a> Parser<'a> {
             Keyword::POLICY => self.parse_alter_policy().map(Into::into),
             Keyword::CONNECTOR => self.parse_alter_connector(),
             Keyword::USER => self.parse_alter_user().map(Into::into),
+            Keyword::DOMAIN => self.parse_alter_domain(),
+            Keyword::TRIGGER => self.parse_alter_trigger(),
+            Keyword::EXTENSION => self.parse_alter_extension(),
             // unreachable because expect_one_of_keywords used above
             unexpected_keyword => Err(ParserError::ParserError(
-                format!("Internal parser error: expected any of {{VIEW, TYPE, COLLATION, TABLE, INDEX, FUNCTION, AGGREGATE, ROLE, POLICY, CONNECTOR, ICEBERG, SCHEMA, USER, OPERATOR}}, got {unexpected_keyword:?}"),
+                format!("Internal parser error: expected any of {{VIEW, TYPE, COLLATION, TABLE, INDEX, FUNCTION, AGGREGATE, ROLE, POLICY, CONNECTOR, ICEBERG, SCHEMA, USER, OPERATOR, DOMAIN, TRIGGER, EXTENSION, PROCEDURE}}, got {unexpected_keyword:?}"),
             )),
         }
     }
@@ -11244,7 +11261,9 @@ impl<'a> Parser<'a> {
         kind: AlterFunctionKind,
     ) -> Result<Statement, ParserError> {
         let (function, aggregate_star, aggregate_order_by) = match kind {
-            AlterFunctionKind::Function => (self.parse_function_desc()?, false, None),
+            AlterFunctionKind::Function | AlterFunctionKind::Procedure => {
+                (self.parse_function_desc()?, false, None)
+            }
             AlterFunctionKind::Aggregate => self.parse_alter_aggregate_signature()?,
         };
 
@@ -11257,7 +11276,9 @@ impl<'a> Parser<'a> {
             AlterFunctionOperation::SetSchema {
                 schema_name: self.parse_object_name(false)?,
             }
-        } else if matches!(kind, AlterFunctionKind::Function) && self.parse_keyword(Keyword::NO) {
+        } else if matches!(kind, AlterFunctionKind::Function | AlterFunctionKind::Procedure)
+            && self.parse_keyword(Keyword::NO)
+        {
             if !self.parse_keyword(Keyword::DEPENDS) {
                 return self.expected_ref("DEPENDS after NO", self.peek_token_ref());
             }
@@ -11266,7 +11287,7 @@ impl<'a> Parser<'a> {
                 no: true,
                 extension_name: self.parse_object_name(false)?,
             }
-        } else if matches!(kind, AlterFunctionKind::Function)
+        } else if matches!(kind, AlterFunctionKind::Function | AlterFunctionKind::Procedure)
             && self.parse_keyword(Keyword::DEPENDS)
         {
             self.expect_keywords(&[Keyword::ON, Keyword::EXTENSION])?;
@@ -11274,7 +11295,7 @@ impl<'a> Parser<'a> {
                 no: false,
                 extension_name: self.parse_object_name(false)?,
             }
-        } else if matches!(kind, AlterFunctionKind::Function) {
+        } else if matches!(kind, AlterFunctionKind::Function | AlterFunctionKind::Procedure) {
             let (actions, restrict) = self.parse_alter_function_actions()?;
             AlterFunctionOperation::Actions { actions, restrict }
         } else {
@@ -11291,6 +11312,113 @@ impl<'a> Parser<'a> {
             aggregate_star,
             operation,
         }))
+    }
+
+    /// Parse an `ALTER DOMAIN` statement.
+    pub fn parse_alter_domain(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name(false)?;
+
+        let operation = if self.parse_keyword(Keyword::ADD) {
+            if let Some(constraint) = self.parse_optional_table_constraint()? {
+                let not_valid = self.parse_keywords(&[Keyword::NOT, Keyword::VALID]);
+                AlterDomainOperation::AddConstraint {
+                    constraint,
+                    not_valid,
+                }
+            } else {
+                return self.expected_ref("constraint after ADD", self.peek_token_ref());
+            }
+        } else if self.parse_keywords(&[Keyword::DROP, Keyword::CONSTRAINT]) {
+            let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+            let name = self.parse_identifier()?;
+            let drop_behavior = self.parse_optional_drop_behavior();
+            AlterDomainOperation::DropConstraint {
+                if_exists,
+                name,
+                drop_behavior,
+            }
+        } else if self.parse_keywords(&[Keyword::DROP, Keyword::DEFAULT]) {
+            AlterDomainOperation::DropDefault
+        } else if self.parse_keywords(&[Keyword::RENAME, Keyword::CONSTRAINT]) {
+            let old_name = self.parse_identifier()?;
+            self.expect_keyword_is(Keyword::TO)?;
+            let new_name = self.parse_identifier()?;
+            AlterDomainOperation::RenameConstraint { old_name, new_name }
+        } else if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            let new_name = self.parse_identifier()?;
+            AlterDomainOperation::RenameTo { new_name }
+        } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            AlterDomainOperation::OwnerTo(self.parse_owner()?)
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+            AlterDomainOperation::SetSchema {
+                schema_name: self.parse_object_name(false)?,
+            }
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::DEFAULT]) {
+            AlterDomainOperation::SetDefault {
+                default: self.parse_expr()?,
+            }
+        } else if self.parse_keywords(&[Keyword::VALIDATE, Keyword::CONSTRAINT]) {
+            let name = self.parse_identifier()?;
+            AlterDomainOperation::ValidateConstraint { name }
+        } else {
+            return self.expected_ref(
+                "ADD, DROP, RENAME, OWNER TO, SET, VALIDATE after ALTER DOMAIN",
+                self.peek_token_ref(),
+            );
+        };
+
+        Ok(AlterDomain { name, operation }.into())
+    }
+
+    /// Parse an `ALTER TRIGGER` statement.
+    pub fn parse_alter_trigger(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_identifier()?;
+        self.expect_keyword_is(Keyword::ON)?;
+        let table_name = self.parse_object_name(false)?;
+
+        let operation = if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            let new_name = self.parse_identifier()?;
+            AlterTriggerOperation::RenameTo { new_name }
+        } else {
+            return self.expected_ref("RENAME TO after ALTER TRIGGER ... ON ...", self.peek_token_ref());
+        };
+
+        Ok(AlterTrigger {
+            name,
+            table_name,
+            operation,
+        }
+        .into())
+    }
+
+    /// Parse an `ALTER EXTENSION` statement.
+    pub fn parse_alter_extension(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_identifier()?;
+
+        let operation = if self.parse_keyword(Keyword::UPDATE) {
+            let version = if self.parse_keyword(Keyword::TO) {
+                Some(self.parse_identifier()?)
+            } else {
+                None
+            };
+            AlterExtensionOperation::UpdateTo { version }
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+            AlterExtensionOperation::SetSchema {
+                schema_name: self.parse_object_name(false)?,
+            }
+        } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            AlterExtensionOperation::OwnerTo(self.parse_owner()?)
+        } else if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            let new_name = self.parse_identifier()?;
+            AlterExtensionOperation::RenameTo { new_name }
+        } else {
+            return self.expected_ref(
+                "UPDATE, SET SCHEMA, OWNER TO, or RENAME TO after ALTER EXTENSION",
+                self.peek_token_ref(),
+            );
+        };
+
+        Ok(AlterExtension { name, operation }.into())
     }
 
     /// Parse a [Statement::AlterTable]

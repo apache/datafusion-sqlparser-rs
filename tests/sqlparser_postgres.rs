@@ -9976,3 +9976,139 @@ fn parse_create_or_replace_transform() {
     assert_eq!(stmt.elements.len(), 1);
     assert!(stmt.elements[0].is_from);
 }
+
+#[test]
+fn parse_security_label_on_table() {
+    let sql = "SECURITY LABEL FOR selinux ON TABLE public.t IS 'system_u:object_r:sepgsql_table_t:s0'";
+    let Statement::SecurityLabel(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.provider.as_ref().unwrap().value, "selinux");
+    assert!(matches!(stmt.object_kind, SecurityLabelObjectKind::Table));
+    assert_eq!(stmt.object_name.to_string(), "public.t");
+    assert_eq!(
+        stmt.label.as_ref().unwrap().to_string(),
+        "'system_u:object_r:sepgsql_table_t:s0'"
+    );
+}
+
+#[test]
+fn parse_security_label_no_provider_null() {
+    let sql = "SECURITY LABEL ON TABLE public.t IS NULL";
+    let Statement::SecurityLabel(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(stmt.provider.is_none());
+    assert!(matches!(stmt.object_kind, SecurityLabelObjectKind::Table));
+    assert!(stmt.label.is_none());
+}
+
+#[test]
+fn parse_security_label_on_role() {
+    let sql = "SECURITY LABEL FOR selinux ON ROLE admin IS 'system_u:object_r:sepgsql_role_t:s0'";
+    let Statement::SecurityLabel(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.provider.as_ref().unwrap().value, "selinux");
+    assert!(matches!(stmt.object_kind, SecurityLabelObjectKind::Role));
+    assert_eq!(stmt.object_name.to_string(), "admin");
+}
+
+#[test]
+fn parse_security_label_on_schema() {
+    let sql = "SECURITY LABEL ON SCHEMA myschema IS 'system_u:object_r:sepgsql_schema_t:s0'";
+    let Statement::SecurityLabel(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(stmt.provider.is_none());
+    assert!(matches!(stmt.object_kind, SecurityLabelObjectKind::Schema));
+    assert_eq!(stmt.object_name.to_string(), "myschema");
+}
+
+#[test]
+fn parse_create_user_mapping_basic() {
+    let sql = "CREATE USER MAPPING FOR postgres SERVER my_server";
+    let Statement::CreateUserMapping(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(!stmt.if_not_exists);
+    assert!(matches!(stmt.user, UserMappingUser::Ident(_)));
+    if let UserMappingUser::Ident(ident) = &stmt.user {
+        assert_eq!(ident.value, "postgres");
+    }
+    assert_eq!(stmt.server_name.value, "my_server");
+    assert!(stmt.options.is_none());
+}
+
+#[test]
+fn parse_create_user_mapping_if_not_exists_with_options() {
+    let sql = r#"CREATE USER MAPPING IF NOT EXISTS FOR postgres SERVER my_server OPTIONS ("user" 'bob')"#;
+    let Statement::CreateUserMapping(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(stmt.if_not_exists);
+    assert!(matches!(stmt.user, UserMappingUser::Ident(_)));
+    assert_eq!(stmt.server_name.value, "my_server");
+    let opts = stmt.options.as_ref().unwrap();
+    assert_eq!(opts.len(), 1);
+    assert_eq!(opts[0].key.value, "user");
+    assert_eq!(opts[0].value.value, "bob");
+}
+
+#[test]
+fn parse_create_user_mapping_current_user() {
+    let sql = "CREATE USER MAPPING FOR CURRENT_USER SERVER my_server";
+    let Statement::CreateUserMapping(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(matches!(stmt.user, UserMappingUser::CurrentUser));
+}
+
+#[test]
+fn parse_create_user_mapping_public() {
+    let sql = "CREATE USER MAPPING FOR PUBLIC SERVER my_server";
+    let Statement::CreateUserMapping(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(matches!(stmt.user, UserMappingUser::Public));
+}
+
+#[test]
+fn parse_create_tablespace_basic() {
+    let sql = "CREATE TABLESPACE my_ts LOCATION '/mnt/data'";
+    let Statement::CreateTablespace(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "my_ts");
+    assert!(stmt.owner.is_none());
+    assert_eq!(stmt.location.to_string(), "'/mnt/data'");
+    assert!(stmt.with_options.is_empty());
+}
+
+#[test]
+fn parse_create_tablespace_with_owner() {
+    let sql = "CREATE TABLESPACE my_ts OWNER admin LOCATION '/mnt/data'";
+    let Statement::CreateTablespace(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "my_ts");
+    assert_eq!(stmt.owner.as_ref().unwrap().value, "admin");
+    assert_eq!(stmt.location.to_string(), "'/mnt/data'");
+}
+
+#[test]
+fn parse_create_tablespace_with_options() {
+    let sql = "CREATE TABLESPACE my_ts LOCATION '/mnt/data' WITH (seq_page_cost = 1.0)";
+    let Statement::CreateTablespace(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "my_ts");
+    assert_eq!(stmt.with_options.len(), 1);
+    match &stmt.with_options[0] {
+        SqlOption::KeyValue { key, value } => {
+            assert_eq!(key.value, "seq_page_cost");
+            assert_eq!(value.to_string(), "1.0");
+        }
+        other => panic!("unexpected option: {other:?}"),
+    }
+}

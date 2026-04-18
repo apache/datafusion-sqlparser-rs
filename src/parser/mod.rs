@@ -19775,11 +19775,8 @@ impl<'a> Parser<'a> {
     /// Parse a `CREATE FOREIGN TABLE` statement.
     ///
     /// See <https://www.postgresql.org/docs/current/sql-createforeigntable.html>
-    pub fn parse_create_foreign_table(
-        &mut self,
-    ) -> Result<CreateForeignTable, ParserError> {
-        let if_not_exists =
-            self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+    pub fn parse_create_foreign_table(&mut self) -> Result<CreateForeignTable, ParserError> {
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let name = self.parse_object_name(false)?;
         let (columns, _constraints) = self.parse_columns()?;
         self.expect_keyword_is(Keyword::SERVER)?;

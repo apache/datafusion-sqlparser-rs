@@ -6512,3 +6512,202 @@ impl From<CreateSubscription> for crate::ast::Statement {
         crate::ast::Statement::CreateSubscription(v)
     }
 }
+
+/// The object kind targeted by a `SECURITY LABEL` statement.
+///
+/// See <https://www.postgresql.org/docs/current/sql-securitylabel.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SecurityLabelObjectKind {
+    /// `TABLE name`
+    Table,
+    /// `COLUMN name.colname`
+    Column,
+    /// `DATABASE name`
+    Database,
+    /// `DOMAIN name`
+    Domain,
+    /// `FUNCTION name`
+    Function,
+    /// `ROLE name`
+    Role,
+    /// `SCHEMA name`
+    Schema,
+    /// `SEQUENCE name`
+    Sequence,
+    /// `TYPE name`
+    Type,
+    /// `VIEW name`
+    View,
+    /// `MATERIALIZED VIEW name`
+    MaterializedView,
+}
+
+impl fmt::Display for SecurityLabelObjectKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SecurityLabelObjectKind::Table => write!(f, "TABLE"),
+            SecurityLabelObjectKind::Column => write!(f, "COLUMN"),
+            SecurityLabelObjectKind::Database => write!(f, "DATABASE"),
+            SecurityLabelObjectKind::Domain => write!(f, "DOMAIN"),
+            SecurityLabelObjectKind::Function => write!(f, "FUNCTION"),
+            SecurityLabelObjectKind::Role => write!(f, "ROLE"),
+            SecurityLabelObjectKind::Schema => write!(f, "SCHEMA"),
+            SecurityLabelObjectKind::Sequence => write!(f, "SEQUENCE"),
+            SecurityLabelObjectKind::Type => write!(f, "TYPE"),
+            SecurityLabelObjectKind::View => write!(f, "VIEW"),
+            SecurityLabelObjectKind::MaterializedView => write!(f, "MATERIALIZED VIEW"),
+        }
+    }
+}
+
+/// A `SECURITY LABEL` statement.
+///
+/// Note: this is a PostgreSQL-specific statement.
+/// <https://www.postgresql.org/docs/current/sql-securitylabel.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SecurityLabel {
+    /// Optional `FOR provider_name` clause.
+    pub provider: Option<Ident>,
+    /// The kind of object the label is applied to.
+    pub object_kind: SecurityLabelObjectKind,
+    /// The name of the object the label is applied to.
+    pub object_name: ObjectName,
+    /// The label string, or `None` for `IS NULL`.
+    pub label: Option<Value>,
+}
+
+impl fmt::Display for SecurityLabel {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "SECURITY LABEL")?;
+        if let Some(provider) = &self.provider {
+            write!(f, " FOR {provider}")?;
+        }
+        write!(f, " ON {} {}", self.object_kind, self.object_name)?;
+        write!(f, " IS ")?;
+        match &self.label {
+            Some(label) => write!(f, "{label}"),
+            None => write!(f, "NULL"),
+        }
+    }
+}
+
+impl From<SecurityLabel> for crate::ast::Statement {
+    fn from(v: SecurityLabel) -> Self {
+        crate::ast::Statement::SecurityLabel(v)
+    }
+}
+
+/// The role specification in a `CREATE USER MAPPING` statement.
+///
+/// See <https://www.postgresql.org/docs/current/sql-createusermapping.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum UserMappingUser {
+    /// A specific role name.
+    Ident(Ident),
+    /// `USER` (current user)
+    User,
+    /// `CURRENT_ROLE`
+    CurrentRole,
+    /// `CURRENT_USER`
+    CurrentUser,
+    /// `PUBLIC`
+    Public,
+}
+
+impl fmt::Display for UserMappingUser {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            UserMappingUser::Ident(ident) => write!(f, "{ident}"),
+            UserMappingUser::User => write!(f, "USER"),
+            UserMappingUser::CurrentRole => write!(f, "CURRENT_ROLE"),
+            UserMappingUser::CurrentUser => write!(f, "CURRENT_USER"),
+            UserMappingUser::Public => write!(f, "PUBLIC"),
+        }
+    }
+}
+
+/// A `CREATE USER MAPPING` statement.
+///
+/// Note: this is a PostgreSQL-specific statement.
+/// <https://www.postgresql.org/docs/current/sql-createusermapping.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateUserMapping {
+    /// `IF NOT EXISTS`
+    pub if_not_exists: bool,
+    /// The user/role for the mapping.
+    pub user: UserMappingUser,
+    /// The foreign server name.
+    pub server_name: Ident,
+    /// Optional `OPTIONS (key 'value', ...)` clause.
+    pub options: Option<Vec<CreateServerOption>>,
+}
+
+impl fmt::Display for CreateUserMapping {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CREATE USER MAPPING")?;
+        if self.if_not_exists {
+            write!(f, " IF NOT EXISTS")?;
+        }
+        write!(f, " FOR {} SERVER {}", self.user, self.server_name)?;
+        if let Some(options) = &self.options {
+            write!(
+                f,
+                " OPTIONS ({})",
+                display_comma_separated(options)
+            )?;
+        }
+        Ok(())
+    }
+}
+
+impl From<CreateUserMapping> for crate::ast::Statement {
+    fn from(v: CreateUserMapping) -> Self {
+        crate::ast::Statement::CreateUserMapping(v)
+    }
+}
+
+/// A `CREATE TABLESPACE` statement.
+///
+/// Note: this is a PostgreSQL-specific statement.
+/// <https://www.postgresql.org/docs/current/sql-createtablespace.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateTablespace {
+    /// The tablespace name.
+    pub name: Ident,
+    /// Optional `OWNER role` clause.
+    pub owner: Option<Ident>,
+    /// The `LOCATION 'directory'` string.
+    pub location: Value,
+    /// Optional `WITH (option = value, ...)` clause.
+    pub with_options: Vec<SqlOption>,
+}
+
+impl fmt::Display for CreateTablespace {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CREATE TABLESPACE {}", self.name)?;
+        if let Some(owner) = &self.owner {
+            write!(f, " OWNER {owner}")?;
+        }
+        write!(f, " LOCATION {}", self.location)?;
+        if !self.with_options.is_empty() {
+            write!(f, " WITH ({})", display_comma_separated(&self.with_options))?;
+        }
+        Ok(())
+    }
+}
+
+impl From<CreateTablespace> for crate::ast::Statement {
+    fn from(v: CreateTablespace) -> Self {
+        crate::ast::Statement::CreateTablespace(v)
+    }
+}

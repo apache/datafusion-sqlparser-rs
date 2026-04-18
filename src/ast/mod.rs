@@ -75,8 +75,9 @@ pub use self::ddl::{
     CreateDomain, CreateExtension, CreateForeignDataWrapper, CreateForeignTable, CreateFunction,
     CreateIndex, CreateOperator, CreateOperatorClass, CreateOperatorFamily, CreatePolicy,
     CreatePolicyCommand, CreatePolicyType, CreatePublication, CreateSubscription, CreateTable,
-    CreateTextSearchConfiguration, CreateTextSearchDictionary, CreateTextSearchParser,
-    CreateTextSearchTemplate, CreateTrigger, PublicationTarget,
+    CreateTablespace, CreateTextSearchConfiguration, CreateTextSearchDictionary,
+    CreateTextSearchParser, CreateTextSearchTemplate, CreateTrigger, CreateUserMapping,
+    PublicationTarget, SecurityLabel, SecurityLabelObjectKind, UserMappingUser,
     CreateView, Deduplicate, DeferrableInitial, DistStyle, DropBehavior, DropExtension,
     DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily, DropOperatorSignature,
     DropPolicy, DropTrigger, FdwRoutineClause, ForValues, FunctionReturnType, GeneratedAs,
@@ -4049,6 +4050,24 @@ pub enum Statement {
     /// <https://www.postgresql.org/docs/current/sql-createsubscription.html>
     CreateSubscription(CreateSubscription),
     /// ```sql
+    /// SECURITY LABEL [ FOR provider_name ] ON object_type object_name IS { 'label' | NULL }
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-securitylabel.html>
+    SecurityLabel(SecurityLabel),
+    /// ```sql
+    /// CREATE USER MAPPING [ IF NOT EXISTS ] FOR { role | USER | CURRENT_ROLE | CURRENT_USER | PUBLIC } SERVER server_name [ OPTIONS (...) ]
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createusermapping.html>
+    CreateUserMapping(CreateUserMapping),
+    /// ```sql
+    /// CREATE TABLESPACE name [ OWNER role ] LOCATION 'directory' [ WITH (options) ]
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createtablespace.html>
+    CreateTablespace(CreateTablespace),
+    /// ```sql
     /// DROP EXTENSION [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
     /// ```
     /// Note: this is a PostgreSQL-specific statement.
@@ -5537,6 +5556,9 @@ impl fmt::Display for Statement {
             Statement::CreateTextSearchTemplate(v) => write!(f, "{v}"),
             Statement::CreatePublication(v) => write!(f, "{v}"),
             Statement::CreateSubscription(v) => write!(f, "{v}"),
+            Statement::SecurityLabel(v) => write!(f, "{v}"),
+            Statement::CreateUserMapping(v) => write!(f, "{v}"),
+            Statement::CreateTablespace(v) => write!(f, "{v}"),
             Statement::DropExtension(drop_extension) => write!(f, "{drop_extension}"),
             Statement::DropOperator(drop_operator) => write!(f, "{drop_operator}"),
             Statement::DropOperatorFamily(drop_operator_family) => {

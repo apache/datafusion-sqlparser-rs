@@ -67,11 +67,12 @@ pub use self::ddl::{
     AlterPolicyOperation, AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm,
     AlterTableLock, AlterTableOperation, AlterTableType, AlterType, AlterTypeAddValue,
     AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
-    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy,
-    ColumnPolicyProperty, ConstraintCharacteristics, CreateCollation, CreateCollationDefinition,
-    CreateConnector, CreateDomain, CreateExtension, CreateFunction, CreateIndex, CreateOperator,
-    CreateOperatorClass, CreateOperatorFamily, CreatePolicy, CreatePolicyCommand, CreatePolicyType,
-    CreateTable, CreateTextSearchConfiguration, CreateTextSearchDictionary, CreateTextSearchParser,
+    AggregateModifyKind, ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions,
+    ColumnPolicy, ColumnPolicyProperty, ConstraintCharacteristics, CreateAggregate,
+    CreateAggregateOption, CreateCollation, CreateCollationDefinition, CreateConnector,
+    CreateDomain, CreateExtension, CreateFunction, CreateIndex, CreateOperator, CreateOperatorClass,
+    CreateOperatorFamily, CreatePolicy, CreatePolicyCommand, CreatePolicyType, CreateTable,
+    CreateTextSearchConfiguration, CreateTextSearchDictionary, CreateTextSearchParser,
     CreateTextSearchTemplate, CreateTrigger, CreateView, Deduplicate, DeferrableInitial, DistStyle,
     DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily,
     DropOperatorSignature, DropPolicy, DropTrigger, ForValues, FunctionReturnType, GeneratedAs,
@@ -3725,6 +3726,11 @@ pub enum Statement {
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createopclass.html)
     CreateOperatorClass(CreateOperatorClass),
     /// ```sql
+    /// CREATE AGGREGATE
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createaggregate.html)
+    CreateAggregate(CreateAggregate),
+    /// ```sql
     /// ALTER TABLE
     /// ```
     AlterTable(AlterTable),
@@ -5540,6 +5546,7 @@ impl fmt::Display for Statement {
                 create_operator_family.fmt(f)
             }
             Statement::CreateOperatorClass(create_operator_class) => create_operator_class.fmt(f),
+            Statement::CreateAggregate(create_aggregate) => create_aggregate.fmt(f),
             Statement::AlterTable(alter_table) => write!(f, "{alter_table}"),
             Statement::AlterIndex { name, operation } => {
                 write!(f, "ALTER INDEX {name} {operation}")

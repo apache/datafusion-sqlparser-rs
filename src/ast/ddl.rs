@@ -5859,6 +5859,160 @@ impl From<CreateForeignTable> for crate::ast::Statement {
         crate::ast::Statement::CreateForeignTable(v)
     }
 }
+
+/// CREATE AGGREGATE statement.
+/// See <https://www.postgresql.org/docs/current/sql-createaggregate.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateAggregate {
+    /// True if `OR REPLACE` was specified.
+    pub or_replace: bool,
+    /// The aggregate name (can be schema-qualified).
+    pub name: ObjectName,
+    /// Input argument types. Empty for zero-argument aggregates.
+    pub args: Vec<DataType>,
+    /// The options listed inside the required parentheses after the argument
+    /// list (e.g. `SFUNC`, `STYPE`, `FINALFUNC`, `PARALLEL`, …).
+    pub options: Vec<CreateAggregateOption>,
+}
+
+impl fmt::Display for CreateAggregate {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CREATE")?;
+        if self.or_replace {
+            write!(f, " OR REPLACE")?;
+        }
+        write!(f, " AGGREGATE {}", self.name)?;
+        write!(f, " ({})", display_comma_separated(&self.args))?;
+        write!(f, " (")?;
+        for (i, option) in self.options.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{option}")?;
+        }
+        write!(f, ")")
+    }
+}
+
+impl From<CreateAggregate> for crate::ast::Statement {
+    fn from(v: CreateAggregate) -> Self {
+        crate::ast::Statement::CreateAggregate(v)
+    }
+}
+
+/// A single option in a `CREATE AGGREGATE` options list.
+///
+/// See <https://www.postgresql.org/docs/current/sql-createaggregate.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreateAggregateOption {
+    /// `SFUNC = state_transition_function`
+    Sfunc(ObjectName),
+    /// `STYPE = state_data_type`
+    Stype(DataType),
+    /// `SSPACE = state_data_size` (in bytes)
+    Sspace(u64),
+    /// `FINALFUNC = final_function`
+    Finalfunc(ObjectName),
+    /// `FINALFUNC_EXTRA` — pass extra dummy arguments to the final function.
+    FinalfuncExtra,
+    /// `FINALFUNC_MODIFY = { READ_ONLY | SHAREABLE | READ_WRITE }`
+    FinalfuncModify(AggregateModifyKind),
+    /// `COMBINEFUNC = combine_function`
+    Combinefunc(ObjectName),
+    /// `SERIALFUNC = serial_function`
+    Serialfunc(ObjectName),
+    /// `DESERIALFUNC = deserial_function`
+    Deserialfunc(ObjectName),
+    /// `INITCOND = initial_condition` (a string literal)
+    Initcond(Value),
+    /// `MSFUNC = moving_state_transition_function`
+    Msfunc(ObjectName),
+    /// `MINVFUNC = moving_inverse_transition_function`
+    Minvfunc(ObjectName),
+    /// `MSTYPE = moving_state_data_type`
+    Mstype(DataType),
+    /// `MSSPACE = moving_state_data_size` (in bytes)
+    Msspace(u64),
+    /// `MFINALFUNC = moving_final_function`
+    Mfinalfunc(ObjectName),
+    /// `MFINALFUNC_EXTRA`
+    MfinalfuncExtra,
+    /// `MFINALFUNC_MODIFY = { READ_ONLY | SHAREABLE | READ_WRITE }`
+    MfinalfuncModify(AggregateModifyKind),
+    /// `MINITCOND = moving_initial_condition` (a string literal)
+    Minitcond(Value),
+    /// `SORTOP = sort_operator`
+    Sortop(ObjectName),
+    /// `PARALLEL = { SAFE | RESTRICTED | UNSAFE }`
+    Parallel(FunctionParallel),
+    /// `HYPOTHETICAL` — marks the aggregate as hypothetical-set.
+    Hypothetical,
+}
+
+impl fmt::Display for CreateAggregateOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Sfunc(name) => write!(f, "SFUNC = {name}"),
+            Self::Stype(data_type) => write!(f, "STYPE = {data_type}"),
+            Self::Sspace(size) => write!(f, "SSPACE = {size}"),
+            Self::Finalfunc(name) => write!(f, "FINALFUNC = {name}"),
+            Self::FinalfuncExtra => write!(f, "FINALFUNC_EXTRA"),
+            Self::FinalfuncModify(kind) => write!(f, "FINALFUNC_MODIFY = {kind}"),
+            Self::Combinefunc(name) => write!(f, "COMBINEFUNC = {name}"),
+            Self::Serialfunc(name) => write!(f, "SERIALFUNC = {name}"),
+            Self::Deserialfunc(name) => write!(f, "DESERIALFUNC = {name}"),
+            Self::Initcond(cond) => write!(f, "INITCOND = {cond}"),
+            Self::Msfunc(name) => write!(f, "MSFUNC = {name}"),
+            Self::Minvfunc(name) => write!(f, "MINVFUNC = {name}"),
+            Self::Mstype(data_type) => write!(f, "MSTYPE = {data_type}"),
+            Self::Msspace(size) => write!(f, "MSSPACE = {size}"),
+            Self::Mfinalfunc(name) => write!(f, "MFINALFUNC = {name}"),
+            Self::MfinalfuncExtra => write!(f, "MFINALFUNC_EXTRA"),
+            Self::MfinalfuncModify(kind) => write!(f, "MFINALFUNC_MODIFY = {kind}"),
+            Self::Minitcond(cond) => write!(f, "MINITCOND = {cond}"),
+            Self::Sortop(name) => write!(f, "SORTOP = {name}"),
+            Self::Parallel(parallel) => {
+                let kind = match parallel {
+                    FunctionParallel::Safe => "SAFE",
+                    FunctionParallel::Restricted => "RESTRICTED",
+                    FunctionParallel::Unsafe => "UNSAFE",
+                };
+                write!(f, "PARALLEL = {kind}")
+            }
+            Self::Hypothetical => write!(f, "HYPOTHETICAL"),
+        }
+    }
+}
+
+/// Modifier kind for `FINALFUNC_MODIFY` / `MFINALFUNC_MODIFY` in `CREATE AGGREGATE`.
+///
+/// See <https://www.postgresql.org/docs/current/sql-createaggregate.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AggregateModifyKind {
+    /// The final function does not modify the transition state.
+    ReadOnly,
+    /// The transition state may be shared between aggregate calls.
+    Shareable,
+    /// The final function may modify the transition state.
+    ReadWrite,
+}
+
+impl fmt::Display for AggregateModifyKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::ReadOnly => write!(f, "READ_ONLY"),
+            Self::Shareable => write!(f, "SHAREABLE"),
+            Self::ReadWrite => write!(f, "READ_WRITE"),
+        }
+    }
+}
+
 /// `CREATE TEXT SEARCH CONFIGURATION` statement.
 ///
 /// Note: this is a PostgreSQL-specific statement.

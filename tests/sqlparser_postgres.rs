@@ -9617,6 +9617,152 @@ fn parse_create_aggregate_with_moving_aggregate_options() {
 }
 
 #[test]
+fn alter_table_set_tablespace() {
+    let sql = "ALTER TABLE t SET TABLESPACE ts";
+    let Statement::AlterTable(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.to_string(), "t");
+    assert_eq!(stmt.operations.len(), 1);
+    assert_eq!(
+        stmt.operations[0],
+        AlterTableOperation::SetTablespace {
+            tablespace_name: "ts".into()
+        }
+    );
+}
+
+#[test]
+fn alter_index_set_tablespace() {
+    let sql = "ALTER INDEX idx SET TABLESPACE ts";
+    let Statement::AlterIndex { name, operation } = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(name.to_string(), "idx");
+    assert_eq!(
+        operation,
+        AlterIndexOperation::SetTablespace {
+            tablespace_name: "ts".into()
+        }
+    );
+}
+
+#[test]
+fn alter_domain_add_constraint() {
+    let sql = "ALTER DOMAIN positive_int ADD CONSTRAINT positive CHECK (VALUE > 0)";
+    let Statement::AlterDomain(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.to_string(), "positive_int");
+    assert!(matches!(
+        stmt.operation,
+        AlterDomainOperation::AddConstraint { not_valid: false, .. }
+    ));
+}
+
+#[test]
+fn alter_domain_drop_constraint() {
+    let sql = "ALTER DOMAIN email DROP CONSTRAINT valid_email";
+    let Statement::AlterDomain(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.to_string(), "email");
+    assert!(matches!(
+        stmt.operation,
+        AlterDomainOperation::DropConstraint {
+            if_exists: false,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn alter_domain_drop_constraint_if_exists() {
+    let sql = "ALTER DOMAIN email DROP CONSTRAINT IF EXISTS valid_email";
+    let Statement::AlterDomain(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(matches!(
+        stmt.operation,
+        AlterDomainOperation::DropConstraint {
+            if_exists: true,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn alter_trigger_rename() {
+    let sql = "ALTER TRIGGER old_trigger ON orders RENAME TO new_trigger";
+    let Statement::AlterTrigger(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "old_trigger");
+    assert_eq!(stmt.table_name.to_string(), "orders");
+    assert_eq!(
+        stmt.operation,
+        AlterTriggerOperation::RenameTo {
+            new_name: "new_trigger".into()
+        }
+    );
+}
+
+#[test]
+fn alter_extension_update() {
+    let sql = "ALTER EXTENSION pgcrypto UPDATE";
+    let Statement::AlterExtension(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "pgcrypto");
+    assert_eq!(
+        stmt.operation,
+        AlterExtensionOperation::UpdateTo { version: None }
+    );
+}
+
+#[test]
+fn alter_extension_update_to_version() {
+    let sql = "ALTER EXTENSION pgcrypto UPDATE TO '3.4'";
+    let Statement::AlterExtension(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "pgcrypto");
+    assert!(matches!(
+        stmt.operation,
+        AlterExtensionOperation::UpdateTo { version: Some(_) }
+    ));
+}
+
+#[test]
+fn alter_procedure_set_search_path() {
+    let sql = "ALTER PROCEDURE myproc(integer) SET search_path = public";
+    let Statement::AlterFunction(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.kind, AlterFunctionKind::Procedure);
+    assert_eq!(stmt.function.name.to_string(), "myproc");
+    assert!(matches!(
+        stmt.operation,
+        AlterFunctionOperation::Actions { .. }
+    ));
+}
+
+#[test]
+fn alter_procedure_rename() {
+    let sql = "ALTER PROCEDURE myproc(integer, text) RENAME TO renamed_proc";
+    let Statement::AlterFunction(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.kind, AlterFunctionKind::Procedure);
+    assert_eq!(
+        stmt.operation,
+        AlterFunctionOperation::RenameTo {
+            new_name: "renamed_proc".into()
+        }
+    );
+}
+
+#[test]
 fn parse_create_publication_basic() {
     let sql = "CREATE PUBLICATION mypub FOR TABLE public.t";
     let Statement::CreatePublication(stmt) = pg().verified_stmt(sql) else {

@@ -417,6 +417,9 @@ impl Spanned for Statement {
                     .chain(core::iter::once(query.span()))
                     .chain(with_options.iter().map(|i| i.span())),
             ),
+            Statement::AlterDomain(_) => Span::empty(),
+            Statement::AlterExtension(_) => Span::empty(),
+            Statement::AlterTrigger(_) => Span::empty(),
             // These statements need to be implemented
             Statement::AlterFunction { .. } => Span::empty(),
             Statement::AlterType { .. } => Span::empty(),
@@ -1236,6 +1239,7 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::SetOptionsParens { options } => {
                 union_spans(options.iter().map(|i| i.span()))
             }
+            AlterTableOperation::SetTablespace { .. } => Span::empty(),
         }
     }
 }
@@ -1322,6 +1326,7 @@ impl Spanned for AlterIndexOperation {
     fn span(&self) -> Span {
         match self {
             AlterIndexOperation::RenameIndex { index_name } => index_name.span(),
+            AlterIndexOperation::SetTablespace { .. } => Span::empty(),
         }
     }
 }

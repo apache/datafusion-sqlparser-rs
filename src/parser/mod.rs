@@ -7222,9 +7222,7 @@ impl<'a> Parser<'a> {
 
         // Argument type list: `(input_data_type [, ...])` or `(*)` for zero-arg.
         self.expect_token(&Token::LParen)?;
-        let args = if self.consume_token(&Token::Mul)
-            || self.peek_token().token == Token::RParen
-        {
+        let args = if self.consume_token(&Token::Mul) || self.peek_token().token == Token::RParen {
             vec![]
         } else {
             self.parse_comma_separated(|p| p.parse_data_type())?

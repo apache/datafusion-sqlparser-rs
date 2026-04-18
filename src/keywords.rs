@@ -1074,6 +1074,7 @@ define_keywords!(
     TRAN,
     TRANSACTION,
     TRANSIENT,
+    TRANSFORM,
     TRANSLATE,
     TRANSLATE_REGEX,
     TRANSLATION,

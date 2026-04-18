@@ -719,6 +719,7 @@ impl<'a> Parser<'a> {
                     self.parse_vacuum()
                 }
                 Keyword::RESET => self.parse_reset().map(Into::into),
+                Keyword::SECURITY => self.parse_security_label().map(Into::into),
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
@@ -5172,7 +5173,11 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::SECRET) {
             self.parse_create_secret(or_replace, temporary, persistent)
         } else if self.parse_keyword(Keyword::USER) {
-            self.parse_create_user(or_replace).map(Into::into)
+            if self.parse_keyword(Keyword::MAPPING) {
+                self.parse_create_user_mapping().map(Into::into)
+            } else {
+                self.parse_create_user(or_replace).map(Into::into)
+            }
         } else if self.parse_keyword(Keyword::AGGREGATE) {
             self.parse_create_aggregate(or_replace).map(Into::into)
         } else if or_replace {
@@ -5232,6 +5237,8 @@ impl<'a> Parser<'a> {
             self.parse_create_publication().map(Into::into)
         } else if self.parse_keyword(Keyword::SUBSCRIPTION) {
             self.parse_create_subscription().map(Into::into)
+        } else if self.parse_keyword(Keyword::TABLESPACE) {
+            self.parse_create_tablespace().map(Into::into)
         } else {
             self.expected_ref("an object type after CREATE", self.peek_token_ref())
         }
@@ -20264,6 +20271,136 @@ impl<'a> Parser<'a> {
             name,
             connection,
             publications,
+            with_options,
+        })
+    }
+
+    /// Parse a `SECURITY LABEL` statement.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-securitylabel.html>
+    pub fn parse_security_label(&mut self) -> Result<SecurityLabel, ParserError> {
+        self.expect_keyword_is(Keyword::LABEL)?;
+
+        let provider = if self.parse_keyword(Keyword::FOR) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+
+        self.expect_keyword_is(Keyword::ON)?;
+
+        let object_kind = if self.parse_keywords(&[Keyword::MATERIALIZED, Keyword::VIEW]) {
+            SecurityLabelObjectKind::MaterializedView
+        } else if self.parse_keyword(Keyword::TABLE) {
+            SecurityLabelObjectKind::Table
+        } else if self.parse_keyword(Keyword::COLUMN) {
+            SecurityLabelObjectKind::Column
+        } else if self.parse_keyword(Keyword::DATABASE) {
+            SecurityLabelObjectKind::Database
+        } else if self.parse_keyword(Keyword::DOMAIN) {
+            SecurityLabelObjectKind::Domain
+        } else if self.parse_keyword(Keyword::FUNCTION) {
+            SecurityLabelObjectKind::Function
+        } else if self.parse_keyword(Keyword::ROLE) {
+            SecurityLabelObjectKind::Role
+        } else if self.parse_keyword(Keyword::SCHEMA) {
+            SecurityLabelObjectKind::Schema
+        } else if self.parse_keyword(Keyword::SEQUENCE) {
+            SecurityLabelObjectKind::Sequence
+        } else if self.parse_keyword(Keyword::TYPE) {
+            SecurityLabelObjectKind::Type
+        } else if self.parse_keyword(Keyword::VIEW) {
+            SecurityLabelObjectKind::View
+        } else {
+            return self.expected_ref(
+                "TABLE, COLUMN, DATABASE, DOMAIN, FUNCTION, MATERIALIZED VIEW, ROLE, SCHEMA, SEQUENCE, TYPE, or VIEW after ON",
+                self.peek_token_ref(),
+            );
+        };
+
+        let object_name = self.parse_object_name(false)?;
+
+        self.expect_keyword_is(Keyword::IS)?;
+
+        let label = if self.parse_keyword(Keyword::NULL) {
+            None
+        } else {
+            Some(self.parse_value()?.value)
+        };
+
+        Ok(SecurityLabel {
+            provider,
+            object_kind,
+            object_name,
+            label,
+        })
+    }
+
+    /// Parse a `CREATE USER MAPPING` statement.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createusermapping.html>
+    pub fn parse_create_user_mapping(&mut self) -> Result<CreateUserMapping, ParserError> {
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+
+        self.expect_keyword_is(Keyword::FOR)?;
+
+        let user = if self.parse_keyword(Keyword::CURRENT_ROLE) {
+            UserMappingUser::CurrentRole
+        } else if self.parse_keyword(Keyword::CURRENT_USER) {
+            UserMappingUser::CurrentUser
+        } else if self.parse_keyword(Keyword::PUBLIC) {
+            UserMappingUser::Public
+        } else if self.parse_keyword(Keyword::USER) {
+            UserMappingUser::User
+        } else {
+            UserMappingUser::Ident(self.parse_identifier()?)
+        };
+
+        self.expect_keyword_is(Keyword::SERVER)?;
+        let server_name = self.parse_identifier()?;
+
+        let options = if self.parse_keyword(Keyword::OPTIONS) {
+            self.expect_token(&Token::LParen)?;
+            let opts = self.parse_comma_separated(|p| {
+                let key = p.parse_identifier()?;
+                let value = p.parse_identifier()?;
+                Ok(CreateServerOption { key, value })
+            })?;
+            self.expect_token(&Token::RParen)?;
+            Some(opts)
+        } else {
+            None
+        };
+
+        Ok(CreateUserMapping {
+            if_not_exists,
+            user,
+            server_name,
+            options,
+        })
+    }
+
+    /// Parse a `CREATE TABLESPACE` statement.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createtablespace.html>
+    pub fn parse_create_tablespace(&mut self) -> Result<CreateTablespace, ParserError> {
+        let name = self.parse_identifier()?;
+
+        let owner = if self.parse_keyword(Keyword::OWNER) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+
+        self.expect_keyword_is(Keyword::LOCATION)?;
+        let location = self.parse_value()?.value;
+
+        let with_options = self.parse_options(Keyword::WITH)?;
+
+        Ok(CreateTablespace {
+            name,
+            owner,
+            location,
             with_options,
         })
     }

@@ -950,9 +950,7 @@ fn parse_alter_collation() {
 #[test]
 fn parse_create_text_search_configuration() {
     assert_eq!(
-        pg().verified_stmt(
-            "CREATE TEXT SEARCH CONFIGURATION public.myconfig (PARSER = myparser)"
-        ),
+        pg().verified_stmt("CREATE TEXT SEARCH CONFIGURATION public.myconfig (PARSER = myparser)"),
         Statement::CreateTextSearchConfiguration(CreateTextSearchConfiguration {
             name: ObjectName::from(vec![Ident::new("public"), Ident::new("myconfig")]),
             options: vec![SqlOption::KeyValue {
@@ -963,7 +961,9 @@ fn parse_create_text_search_configuration() {
     );
 
     assert_eq!(
-        pg().parse_sql_statements("CREATE TEXT SEARCH CONFIGURATION myconfig PARSER = pg_catalog.default"),
+        pg().parse_sql_statements(
+            "CREATE TEXT SEARCH CONFIGURATION myconfig PARSER = pg_catalog.default"
+        ),
         Err(ParserError::ParserError(
             "Expected: (, found: PARSER".to_string()
         ))

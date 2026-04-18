@@ -174,14 +174,14 @@ fn test_values_clause() {
         value_keyword: false,
         explicit_row: false,
         rows: vec![
-            vec![
+            Parens::with_empty_span(vec![
                 Expr::Value((Value::DoubleQuotedString("one".to_owned())).with_empty_span()),
                 Expr::value(number("1")),
-            ],
-            vec![
+            ]),
+            Parens::with_empty_span(vec![
                 Expr::Value((Value::SingleQuotedString("two".to_owned())).with_empty_span()),
                 Expr::value(number("2")),
-            ],
+            ]),
         ],
     };
 

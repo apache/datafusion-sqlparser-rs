@@ -100,8 +100,11 @@ fn parse_insert_values() {
         Expr::value(number("2")),
         Expr::value(number("3")),
     ];
-    let rows1 = vec![row.clone()];
-    let rows2 = vec![row.clone(), row];
+    let rows1 = vec![Parens::with_empty_span(row.clone())];
+    let rows2 = vec![
+        Parens::with_empty_span(row.clone()),
+        Parens::with_empty_span(row),
+    ];
 
     let sql = "INSERT customer VALUES (1, 2, 3)";
     check_one(sql, "customer", &[], &rows1, false);
@@ -140,7 +143,7 @@ fn parse_insert_values() {
         sql: &str,
         expected_table_name: &str,
         expected_columns: &[String],
-        expected_rows: &[Vec<Expr>],
+        expected_rows: &[Parens<Vec<Expr>>],
         expected_value_keyword: bool,
     ) {
         match verified_stmt(sql) {
@@ -10101,7 +10104,7 @@ fn parse_merge() {
                             kind: MergeInsertKind::Values(Values {
                                 value_keyword: false,
                                 explicit_row: false,
-                                rows: vec![vec![
+                                rows: vec![Parens::with_empty_span(vec![
                                     Expr::CompoundIdentifier(vec![
                                         Ident::new("stg"),
                                         Ident::new("A")
@@ -10114,7 +10117,7 @@ fn parse_merge() {
                                         Ident::new("stg"),
                                         Ident::new("C")
                                     ]),
-                                ]]
+                                ])]
                             }),
                             insert_predicate: None,
                         }),

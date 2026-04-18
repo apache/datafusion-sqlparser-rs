@@ -19028,16 +19028,15 @@ impl<'a> Parser<'a> {
             if parser.parse_keyword(Keyword::ROW) {
                 explicit_row = true;
             }
-
-            parser.expect_token(&Token::LParen)?;
-            if allow_empty && parser.peek_token().token == Token::RParen {
-                parser.next_token();
-                Ok(vec![])
-            } else {
-                let exprs = parser.parse_comma_separated(Parser::parse_expr)?;
-                parser.expect_token(&Token::RParen)?;
-                Ok(exprs)
-            }
+            Ok(Parens {
+                opening_token: parser.expect_token(&Token::LParen)?.into(),
+                content: if allow_empty && parser.peek_token_ref().token == Token::RParen {
+                    vec![]
+                } else {
+                    parser.parse_comma_separated(Parser::parse_expr)?
+                },
+                closing_token: parser.expect_token(&Token::RParen)?.into(),
+            })
         })?;
         Ok(Values {
             explicit_row,

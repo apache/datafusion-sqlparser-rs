@@ -3634,7 +3634,7 @@ pub struct Values {
     /// <https://dev.mysql.com/doc/refman/9.2/en/insert.html>
     pub value_keyword: bool,
     /// The list of rows, each row is a list of expressions.
-    pub rows: Vec<Vec<Expr>>,
+    pub rows: Vec<Parens<Vec<Expr>>>,
 }
 
 impl fmt::Display for Values {

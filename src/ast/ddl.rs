@@ -5826,7 +5826,7 @@ pub enum CreateAggregateOption {
     /// `DESERIALFUNC = deserial_function`
     Deserialfunc(ObjectName),
     /// `INITCOND = initial_condition` (a string literal)
-    Initcond(Value),
+    Initcond(ValueWithSpan),
     /// `MSFUNC = moving_state_transition_function`
     Msfunc(ObjectName),
     /// `MINVFUNC = moving_inverse_transition_function`
@@ -5842,7 +5842,7 @@ pub enum CreateAggregateOption {
     /// `MFINALFUNC_MODIFY = { READ_ONLY | SHAREABLE | READ_WRITE }`
     MfinalfuncModify(AggregateModifyKind),
     /// `MINITCOND = moving_initial_condition` (a string literal)
-    Minitcond(Value),
+    Minitcond(ValueWithSpan),
     /// `SORTOP = sort_operator`
     Sortop(ObjectName),
     /// `PARALLEL = { SAFE | RESTRICTED | UNSAFE }`

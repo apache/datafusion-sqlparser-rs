@@ -5176,7 +5176,7 @@ impl<'a> Parser<'a> {
             self.parse_create_aggregate(or_replace).map(Into::into)
         } else if or_replace {
             self.expected_ref(
-                "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION after CREATE OR REPLACE",
+                "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION or AGGREGATE after CREATE OR REPLACE",
                 self.peek_token_ref(),
             )
         } else if self.parse_keyword(Keyword::EXTENSION) {
@@ -7222,36 +7222,22 @@ impl<'a> Parser<'a> {
 
         // Argument type list: `(input_data_type [, ...])` or `(*)` for zero-arg.
         self.expect_token(&Token::LParen)?;
-        let args = if self.consume_token(&Token::Mul) {
-            // zero-argument aggregate written as `(*)` — treat as empty arg list.
-            vec![]
-        } else if self.consume_token(&Token::RParen) {
-            self.prev_token();
+        let args = if self.consume_token(&Token::Mul)
+            || self.peek_token().token == Token::RParen
+        {
             vec![]
         } else {
             self.parse_comma_separated(|p| p.parse_data_type())?
         };
         self.expect_token(&Token::RParen)?;
 
-        // Options block: `( SFUNC = ..., STYPE = ..., ... )`
+        // Options block: `( SFUNC = ..., STYPE = ..., ... )`.
         self.expect_token(&Token::LParen)?;
-        let mut options: Vec<CreateAggregateOption> = Vec::new();
-        loop {
-            let token = self.next_token();
-            match &token.token {
-                Token::RParen => break,
-                Token::Comma => continue,
-                Token::Word(word) => {
-                    let option = self.parse_create_aggregate_option(&word.value.to_uppercase())?;
-                    options.push(option);
-                }
-                other => {
-                    return Err(ParserError::ParserError(format!(
-                        "Unexpected token in CREATE AGGREGATE options: {other:?}"
-                    )));
-                }
-            }
-        }
+        let options = self.parse_comma_separated(|parser| {
+            let key = parser.parse_identifier()?;
+            parser.parse_create_aggregate_option(&key.value.to_uppercase())
+        })?;
+        self.expect_token(&Token::RParen)?;
 
         Ok(CreateAggregate {
             or_replace,
@@ -7312,7 +7298,7 @@ impl<'a> Parser<'a> {
             }
             "INITCOND" => {
                 self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::Initcond(self.parse_value()?.value))
+                Ok(CreateAggregateOption::Initcond(self.parse_value()?))
             }
             "MSFUNC" => {
                 self.expect_token(&Token::Eq)?;
@@ -7350,29 +7336,25 @@ impl<'a> Parser<'a> {
             }
             "MINITCOND" => {
                 self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::Minitcond(self.parse_value()?.value))
+                Ok(CreateAggregateOption::Minitcond(self.parse_value()?))
             }
             "SORTOP" => {
                 self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::Sortop(
-                    self.parse_object_name(false)?,
-                ))
+                Ok(CreateAggregateOption::Sortop(self.parse_operator_name()?))
             }
             "PARALLEL" => {
                 self.expect_token(&Token::Eq)?;
-                let parallel = match self.expect_one_of_keywords(&[
-                    Keyword::SAFE,
-                    Keyword::RESTRICTED,
-                    Keyword::UNSAFE,
-                ])? {
-                    Keyword::SAFE => FunctionParallel::Safe,
-                    Keyword::RESTRICTED => FunctionParallel::Restricted,
-                    Keyword::UNSAFE => FunctionParallel::Unsafe,
-                    unexpected_keyword => {
-                        return Err(ParserError::ParserError(format!(
-                            "Internal parser error: unexpected keyword `{unexpected_keyword}` in PARALLEL"
-                        )))
-                    }
+                let parallel = if self.parse_keyword(Keyword::SAFE) {
+                    FunctionParallel::Safe
+                } else if self.parse_keyword(Keyword::RESTRICTED) {
+                    FunctionParallel::Restricted
+                } else if self.parse_keyword(Keyword::UNSAFE) {
+                    FunctionParallel::Unsafe
+                } else {
+                    return self.expected_ref(
+                        "SAFE, RESTRICTED, or UNSAFE after PARALLEL =",
+                        self.peek_token_ref(),
+                    );
                 };
                 Ok(CreateAggregateOption::Parallel(parallel))
             }

@@ -72,8 +72,9 @@ pub use self::ddl::{
     CreateAggregateOption, CreateCollation, CreateCollationDefinition, CreateConnector,
     CreateDomain, CreateExtension, CreateForeignDataWrapper, CreateForeignTable, CreateFunction,
     CreateIndex, CreateOperator, CreateOperatorClass, CreateOperatorFamily, CreatePolicy,
-    CreatePolicyCommand, CreatePolicyType, CreateTable, CreateTextSearchConfiguration,
-    CreateTextSearchDictionary, CreateTextSearchParser, CreateTextSearchTemplate, CreateTrigger,
+    CreatePolicyCommand, CreatePolicyType, CreatePublication, CreateSubscription, CreateTable,
+    CreateTextSearchConfiguration, CreateTextSearchDictionary, CreateTextSearchParser,
+    CreateTextSearchTemplate, CreateTrigger, PublicationTarget,
     CreateView, Deduplicate, DeferrableInitial, DistStyle, DropBehavior, DropExtension,
     DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily, DropOperatorSignature,
     DropPolicy, DropTrigger, FdwRoutineClause, ForValues, FunctionReturnType, GeneratedAs,
@@ -4017,6 +4018,18 @@ pub enum Statement {
     /// <https://www.postgresql.org/docs/current/sql-createtstemplate.html>
     CreateTextSearchTemplate(CreateTextSearchTemplate),
     /// ```sql
+    /// CREATE PUBLICATION name [ FOR ALL TABLES | FOR TABLE table [, ...] | FOR TABLES IN SCHEMA schema [, ...] ] [ WITH ( option = value [, ...] ) ]
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createpublication.html>
+    CreatePublication(CreatePublication),
+    /// ```sql
+    /// CREATE SUBSCRIPTION name CONNECTION 'conninfo' PUBLICATION publication_name [, ...] [ WITH ( option = value [, ...] ) ]
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createsubscription.html>
+    CreateSubscription(CreateSubscription),
+    /// ```sql
     /// DROP EXTENSION [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
     /// ```
     /// Note: this is a PostgreSQL-specific statement.
@@ -5503,6 +5516,8 @@ impl fmt::Display for Statement {
             Statement::CreateTextSearchDictionary(v) => write!(f, "{v}"),
             Statement::CreateTextSearchParser(v) => write!(f, "{v}"),
             Statement::CreateTextSearchTemplate(v) => write!(f, "{v}"),
+            Statement::CreatePublication(v) => write!(f, "{v}"),
+            Statement::CreateSubscription(v) => write!(f, "{v}"),
             Statement::DropExtension(drop_extension) => write!(f, "{drop_extension}"),
             Statement::DropOperator(drop_operator) => write!(f, "{drop_operator}"),
             Statement::DropOperatorFamily(drop_operator_family) => {

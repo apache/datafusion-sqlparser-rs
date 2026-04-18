@@ -5228,6 +5228,10 @@ impl<'a> Parser<'a> {
             }
         } else if self.parse_keywords(&[Keyword::TEXT, Keyword::SEARCH]) {
             self.parse_create_text_search()
+        } else if self.parse_keyword(Keyword::PUBLICATION) {
+            self.parse_create_publication().map(Into::into)
+        } else if self.parse_keyword(Keyword::SUBSCRIPTION) {
+            self.parse_create_subscription().map(Into::into)
         } else {
             self.expected_ref("an object type after CREATE", self.peek_token_ref())
         }
@@ -20080,6 +20084,59 @@ impl<'a> Parser<'a> {
             columns,
             server_name,
             options,
+        })
+    }
+
+    /// Parse a `CREATE PUBLICATION` statement.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createpublication.html>
+    pub fn parse_create_publication(&mut self) -> Result<CreatePublication, ParserError> {
+        let name = self.parse_identifier()?;
+
+        let target = if self.parse_keyword(Keyword::FOR) {
+            if self.parse_keywords(&[Keyword::ALL, Keyword::TABLES]) {
+                Some(PublicationTarget::AllTables)
+            } else if self.parse_keyword(Keyword::TABLE) {
+                let tables = self.parse_comma_separated(|p| p.parse_object_name(false))?;
+                Some(PublicationTarget::Tables(tables))
+            } else if self.parse_keywords(&[Keyword::TABLES, Keyword::IN, Keyword::SCHEMA]) {
+                let schemas = self.parse_comma_separated(|p| p.parse_identifier())?;
+                Some(PublicationTarget::TablesInSchema(schemas))
+            } else {
+                return self.expected_ref(
+                    "ALL TABLES, TABLE, or TABLES IN SCHEMA after FOR",
+                    self.peek_token_ref(),
+                );
+            }
+        } else {
+            None
+        };
+
+        let with_options = self.parse_options(Keyword::WITH)?;
+
+        Ok(CreatePublication {
+            name,
+            target,
+            with_options,
+        })
+    }
+
+    /// Parse a `CREATE SUBSCRIPTION` statement.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-createsubscription.html>
+    pub fn parse_create_subscription(&mut self) -> Result<CreateSubscription, ParserError> {
+        let name = self.parse_identifier()?;
+        self.expect_keyword_is(Keyword::CONNECTION)?;
+        let connection = self.parse_value()?.value;
+        self.expect_keyword_is(Keyword::PUBLICATION)?;
+        let publications = self.parse_comma_separated(|p| p.parse_identifier())?;
+        let with_options = self.parse_options(Keyword::WITH)?;
+
+        Ok(CreateSubscription {
+            name,
+            connection,
+            publications,
+            with_options,
         })
     }
 

@@ -8201,9 +8201,12 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::RParen)?;
 
         Ok(match subtype {
-            Keyword::CONFIGURATION => Statement::CreateTextSearchConfiguration(
-                CreateTextSearchConfiguration { name, options },
-            ),
+            Keyword::CONFIGURATION => {
+                Statement::CreateTextSearchConfiguration(CreateTextSearchConfiguration {
+                    name,
+                    options,
+                })
+            }
             Keyword::DICTIONARY => {
                 Statement::CreateTextSearchDictionary(CreateTextSearchDictionary { name, options })
             }

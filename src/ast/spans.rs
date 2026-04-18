@@ -394,6 +394,8 @@ impl Spanned for Statement {
             Statement::DropOperatorClass(drop_operator_class) => drop_operator_class.span(),
             Statement::CreateSecret { .. } => Span::empty(),
             Statement::CreateServer { .. } => Span::empty(),
+            Statement::CreateForeignDataWrapper { .. } => Span::empty(),
+            Statement::CreateForeignTable { .. } => Span::empty(),
             Statement::CreateConnector { .. } => Span::empty(),
             Statement::CreateOperator(create_operator) => create_operator.span(),
             Statement::CreateOperatorFamily(create_operator_family) => {

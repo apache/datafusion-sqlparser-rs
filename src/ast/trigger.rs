@@ -161,24 +161,32 @@ impl fmt::Display for TriggerExecBodyType {
         }
     }
 }
-/// This keyword immediately precedes the declaration of one or two relation names that provide access to the transition relations of the triggering statement
+/// The EXECUTE clause of a CREATE TRIGGER statement.
+///
+/// Holds call-site information: the function/procedure name and optional
+/// positional argument expressions (e.g. string literals passed to
+/// `tsvector_update_trigger`).  This is deliberately distinct from
+/// `FunctionDesc`, which carries CREATE-FUNCTION-style parameter
+/// *declarations* (`argname argtype DEFAULT expr`).
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TriggerExecBody {
     /// Whether the body is a `FUNCTION` or `PROCEDURE` invocation.
     pub exec_type: TriggerExecBodyType,
-    /// Description of the function/procedure to execute.
-    pub func_desc: FunctionDesc,
+    /// The name of the function or procedure to invoke.
+    pub func_name: ObjectName,
+    /// Call-site arguments (expressions).  `None` means no parentheses were
+    /// written; `Some(vec![])` means empty parentheses `()`.
+    pub args: Option<Vec<Expr>>,
 }
 
 impl fmt::Display for TriggerExecBody {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{exec_type} {func_desc}",
-            exec_type = self.exec_type,
-            func_desc = self.func_desc
-        )
+        write!(f, "{} {}", self.exec_type, self.func_name)?;
+        if let Some(args) = &self.args {
+            write!(f, "({})", display_comma_separated(args))?;
+        }
+        Ok(())
     }
 }

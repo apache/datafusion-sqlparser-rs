@@ -6385,18 +6385,42 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse the execution body of a trigger (`FUNCTION` or `PROCEDURE`).
+    ///
+    /// Unlike CREATE FUNCTION, trigger EXECUTE clauses take call-site
+    /// expressions as arguments (e.g. string literals), not parameter
+    /// declarations.  We therefore parse the name separately and then
+    /// parse each argument as a full expression.
     pub fn parse_trigger_exec_body(&mut self) -> Result<TriggerExecBody, ParserError> {
+        let exec_type = match self
+            .expect_one_of_keywords(&[Keyword::FUNCTION, Keyword::PROCEDURE])?
+        {
+            Keyword::FUNCTION => TriggerExecBodyType::Function,
+            Keyword::PROCEDURE => TriggerExecBodyType::Procedure,
+            unexpected_keyword => {
+                return Err(ParserError::ParserError(format!(
+                    "Internal parser error: unexpected keyword `{unexpected_keyword}` in trigger exec body"
+                )))
+            }
+        };
+
+        let func_name = self.parse_object_name(false)?;
+
+        let args = if self.consume_token(&Token::LParen) {
+            if self.consume_token(&Token::RParen) {
+                Some(vec![])
+            } else {
+                let exprs = self.parse_comma_separated(Parser::parse_expr)?;
+                self.expect_token(&Token::RParen)?;
+                Some(exprs)
+            }
+        } else {
+            None
+        };
+
         Ok(TriggerExecBody {
-            exec_type: match self
-                .expect_one_of_keywords(&[Keyword::FUNCTION, Keyword::PROCEDURE])?
-            {
-                Keyword::FUNCTION => TriggerExecBodyType::Function,
-                Keyword::PROCEDURE => TriggerExecBodyType::Procedure,
-                unexpected_keyword => return Err(ParserError::ParserError(
-                    format!("Internal parser error: unexpected keyword `{unexpected_keyword}` in trigger exec body"),
-                )),
-            },
-            func_desc: self.parse_function_desc()?,
+            exec_type,
+            func_name,
+            args,
         })
     }
 

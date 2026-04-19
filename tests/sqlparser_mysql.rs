@@ -4222,10 +4222,8 @@ fn parse_create_trigger() {
             condition: None,
             exec_body: Some(TriggerExecBody {
                 exec_type: TriggerExecBodyType::Function,
-                func_desc: FunctionDesc {
-                    name: ObjectName::from(vec![Ident::new("emp_stamp")]),
-                    args: Some(vec![]),
-                }
+                func_name: ObjectName::from(vec![Ident::new("emp_stamp")]),
+                args: Some(vec![]),
             }),
             statements_as: false,
             statements: None,

@@ -10018,6 +10018,19 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // FULLTEXT and SPATIAL are MySQL-specific table constraint keywords. For
+        // dialects that don't support them (e.g. PostgreSQL) they are valid
+        // identifiers and must not be consumed here — the caller will parse them
+        // as column names instead.
+        if name.is_none()
+            && self
+                .peek_one_of_keywords(&[Keyword::FULLTEXT, Keyword::SPATIAL])
+                .is_some()
+            && !dialect_of!(self is GenericDialect | MySqlDialect)
+        {
+            return Ok(None);
+        }
+
         let next_token = self.next_token();
         match next_token.token {
             Token::Word(w) if w.keyword == Keyword::UNIQUE => {

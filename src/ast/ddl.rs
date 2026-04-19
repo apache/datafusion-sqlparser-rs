@@ -246,6 +246,28 @@ pub enum AlterTableOperation {
         /// Partition expression to detach.
         partition: Partition,
     },
+    /// `ATTACH PARTITION <partition_name> { FOR VALUES <partition_bound_spec> | DEFAULT }`
+    ///
+    /// PostgreSQL-specific operation for declarative partitioning.
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
+    AttachPartitionOf {
+        /// Name of the partition table to attach.
+        partition_name: ObjectName,
+        /// Partition bound specification, or DEFAULT.
+        partition_bound: ForValues,
+    },
+    /// `DETACH PARTITION <partition_name> [ CONCURRENTLY | FINALIZE ]`
+    ///
+    /// PostgreSQL-specific operation for declarative partitioning.
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertable.html)
+    DetachPartitionOf {
+        /// Name of the partition table to detach.
+        partition_name: ObjectName,
+        /// Whether to detach concurrently (non-blocking two-phase detach).
+        concurrently: bool,
+        /// Whether to finalize a previously started concurrent detach.
+        finalize: bool,
+    },
     /// `FREEZE PARTITION <partition_expr>`
     /// Note: this is a ClickHouse-specific operation, please refer to
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/partition#freeze-partition)
@@ -895,6 +917,26 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::DetachPartition { partition } => {
                 write!(f, "DETACH {partition}")
+            }
+            AlterTableOperation::AttachPartitionOf {
+                partition_name,
+                partition_bound,
+            } => {
+                write!(f, "ATTACH PARTITION {partition_name} {partition_bound}")
+            }
+            AlterTableOperation::DetachPartitionOf {
+                partition_name,
+                concurrently,
+                finalize,
+            } => {
+                write!(f, "DETACH PARTITION {partition_name}")?;
+                if *concurrently {
+                    write!(f, " CONCURRENTLY")?;
+                }
+                if *finalize {
+                    write!(f, " FINALIZE")?;
+                }
+                Ok(())
             }
             AlterTableOperation::EnableAlwaysRule { name } => {
                 write!(f, "ENABLE ALWAYS RULE {name}")

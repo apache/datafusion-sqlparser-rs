@@ -6645,6 +6645,20 @@ impl<'a> Parser<'a> {
                 Keyword::BINDING,
             ]);
 
+        // PostgreSQL: optional WITH [NO] DATA clause on materialized views.
+        // pg_dump emits this clause; parse it so corpus schemas round-trip cleanly.
+        let with_data = if materialized && self.parse_keyword(Keyword::WITH) {
+            if self.parse_keyword(Keyword::NO) {
+                self.expect_keyword_is(Keyword::DATA)?;
+                Some(false)
+            } else {
+                self.expect_keyword_is(Keyword::DATA)?;
+                Some(true)
+            }
+        } else {
+            None
+        };
+
         Ok(CreateView {
             or_alter,
             name,
@@ -6663,6 +6677,7 @@ impl<'a> Parser<'a> {
             to,
             params: create_view_params,
             name_before_not_exists,
+            with_data,
         })
     }
 

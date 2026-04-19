@@ -4364,6 +4364,11 @@ pub struct CreateView {
     pub to: Option<ObjectName>,
     /// MySQL: Optional parameters for the view algorithm, definer, and security context
     pub params: Option<CreateViewParams>,
+    /// PostgreSQL: `WITH [NO] DATA` clause on materialized views.
+    /// `None` means the clause was absent; `Some(true)` means `WITH DATA`;
+    /// `Some(false)` means `WITH NO DATA`.
+    /// <https://www.postgresql.org/docs/current/sql-creatematerializedview.html>
+    pub with_data: Option<bool>,
 }
 
 impl fmt::Display for CreateView {
@@ -4429,6 +4434,11 @@ impl fmt::Display for CreateView {
         self.query.fmt(f)?;
         if self.with_no_schema_binding {
             write!(f, " WITH NO SCHEMA BINDING")?;
+        }
+        match self.with_data {
+            Some(true) => write!(f, " WITH DATA")?,
+            Some(false) => write!(f, " WITH NO DATA")?,
+            None => {}
         }
         Ok(())
     }

@@ -6418,10 +6418,8 @@ fn parse_create_simple_before_insert_trigger() {
         condition: None,
         exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
-            func_desc: FunctionDesc {
-                name: ObjectName::from(vec![Ident::new("check_account_insert")]),
-                args: None,
-            },
+            func_name: ObjectName::from(vec![Ident::new("check_account_insert")]),
+            args: None,
         }),
         statements_as: false,
         statements: None,
@@ -6457,10 +6455,8 @@ fn parse_create_after_update_trigger_with_condition() {
         }))),
         exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
-            func_desc: FunctionDesc {
-                name: ObjectName::from(vec![Ident::new("check_account_update")]),
-                args: None,
-            },
+            func_name: ObjectName::from(vec![Ident::new("check_account_update")]),
+            args: None,
         }),
         statements_as: false,
         statements: None,
@@ -6489,10 +6485,8 @@ fn parse_create_instead_of_delete_trigger() {
         condition: None,
         exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
-            func_desc: FunctionDesc {
-                name: ObjectName::from(vec![Ident::new("check_account_deletes")]),
-                args: None,
-            },
+            func_name: ObjectName::from(vec![Ident::new("check_account_deletes")]),
+            args: None,
         }),
         statements_as: false,
         statements: None,
@@ -6525,10 +6519,8 @@ fn parse_create_trigger_with_multiple_events_and_deferrable() {
         condition: None,
         exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
-            func_desc: FunctionDesc {
-                name: ObjectName::from(vec![Ident::new("check_account_changes")]),
-                args: None,
-            },
+            func_name: ObjectName::from(vec![Ident::new("check_account_changes")]),
+            args: None,
         }),
         statements_as: false,
         statements: None,
@@ -6572,10 +6564,80 @@ fn parse_create_trigger_with_referencing() {
         condition: None,
         exec_body: Some(TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
-            func_desc: FunctionDesc {
-                name: ObjectName::from(vec![Ident::new("check_account_referencing")]),
-                args: None,
-            },
+            func_name: ObjectName::from(vec![Ident::new("check_account_referencing")]),
+            args: None,
+        }),
+        statements_as: false,
+        statements: None,
+        characteristics: None,
+    });
+
+    assert_eq!(pg().verified_stmt(sql), expected);
+}
+
+#[test]
+fn parse_create_trigger_with_string_literal_args() {
+    // Verify that EXECUTE FUNCTION accepts call-site expression arguments
+    // (e.g. string literals), not just bare identifiers.  This matches the
+    // PostgreSQL tsvector_update_trigger calling convention used in pagila.
+    let sql = "CREATE TRIGGER film_fulltext_trigger BEFORE INSERT OR UPDATE ON public.film FOR EACH ROW EXECUTE FUNCTION tsvector_update_trigger('fulltext', 'pg_catalog.english', 'title', 'description')";
+    let expected = Statement::CreateTrigger(CreateTrigger {
+        or_alter: false,
+        temporary: false,
+        or_replace: false,
+        is_constraint: false,
+        name: ObjectName::from(vec![Ident::new("film_fulltext_trigger")]),
+        period: Some(TriggerPeriod::Before),
+        period_before_table: true,
+        events: vec![TriggerEvent::Insert, TriggerEvent::Update(vec![])],
+        table_name: ObjectName::from(vec![
+            Ident::new("public"),
+            Ident::new("film"),
+        ]),
+        referenced_table_name: None,
+        referencing: vec![],
+        trigger_object: Some(TriggerObjectKind::ForEach(TriggerObject::Row)),
+        condition: None,
+        exec_body: Some(TriggerExecBody {
+            exec_type: TriggerExecBodyType::Function,
+            func_name: ObjectName::from(vec![Ident::new("tsvector_update_trigger")]),
+            args: Some(vec![
+                Expr::Value(Value::SingleQuotedString("fulltext".to_string()).with_empty_span()),
+                Expr::Value(Value::SingleQuotedString("pg_catalog.english".to_string()).with_empty_span()),
+                Expr::Value(Value::SingleQuotedString("title".to_string()).with_empty_span()),
+                Expr::Value(Value::SingleQuotedString("description".to_string()).with_empty_span()),
+            ]),
+        }),
+        statements_as: false,
+        statements: None,
+        characteristics: None,
+    });
+
+    assert_eq!(pg().verified_stmt(sql), expected);
+}
+
+#[test]
+fn parse_create_trigger_with_empty_args() {
+    // EXECUTE FUNCTION fn() — explicit empty parens
+    let sql = "CREATE TRIGGER trg BEFORE INSERT ON t FOR EACH ROW EXECUTE FUNCTION my_fn()";
+    let expected = Statement::CreateTrigger(CreateTrigger {
+        or_alter: false,
+        temporary: false,
+        or_replace: false,
+        is_constraint: false,
+        name: ObjectName::from(vec![Ident::new("trg")]),
+        period: Some(TriggerPeriod::Before),
+        period_before_table: true,
+        events: vec![TriggerEvent::Insert],
+        table_name: ObjectName::from(vec![Ident::new("t")]),
+        referenced_table_name: None,
+        referencing: vec![],
+        trigger_object: Some(TriggerObjectKind::ForEach(TriggerObject::Row)),
+        condition: None,
+        exec_body: Some(TriggerExecBody {
+            exec_type: TriggerExecBodyType::Function,
+            func_name: ObjectName::from(vec![Ident::new("my_fn")]),
+            args: Some(vec![]),
         }),
         statements_as: false,
         statements: None,
@@ -6883,10 +6945,8 @@ fn parse_trigger_related_functions() {
             condition: None,
             exec_body: Some(TriggerExecBody {
                 exec_type: TriggerExecBodyType::Function,
-                func_desc: FunctionDesc {
-                    name: ObjectName::from(vec![Ident::new("emp_stamp")]),
-                    args: Some(vec![]),
-                }
+                func_name: ObjectName::from(vec![Ident::new("emp_stamp")]),
+                args: Some(vec![]),
             }),
             statements_as: false,
             statements: None,

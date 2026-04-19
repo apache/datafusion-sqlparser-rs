@@ -10898,6 +10898,26 @@ impl<'a> Parser<'a> {
         {
             let new_owner = self.parse_owner()?;
             AlterTableOperation::OwnerTo { new_owner }
+        } else if dialect_of!(self is PostgreSqlDialect)
+            && self.parse_keywords(&[Keyword::ATTACH, Keyword::PARTITION])
+        {
+            let partition_name = self.parse_object_name(false)?;
+            let partition_bound = self.parse_partition_for_values()?;
+            AlterTableOperation::AttachPartitionOf {
+                partition_name,
+                partition_bound,
+            }
+        } else if dialect_of!(self is PostgreSqlDialect)
+            && self.parse_keywords(&[Keyword::DETACH, Keyword::PARTITION])
+        {
+            let partition_name = self.parse_object_name(false)?;
+            let concurrently = self.parse_keyword(Keyword::CONCURRENTLY);
+            let finalize = self.parse_keyword(Keyword::FINALIZE);
+            AlterTableOperation::DetachPartitionOf {
+                partition_name,
+                concurrently,
+                finalize,
+            }
         } else if dialect_of!(self is ClickHouseDialect|GenericDialect)
             && self.parse_keyword(Keyword::ATTACH)
         {

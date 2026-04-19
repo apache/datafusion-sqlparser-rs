@@ -10241,3 +10241,202 @@ fn parse_create_tablespace_with_options() {
         other => panic!("unexpected option: {other:?}"),
     }
 }
+
+#[test]
+fn alter_table_attach_partition_range() {
+    let sql = "ALTER TABLE ONLY public.payment ATTACH PARTITION public.payment_p2022_01 FOR VALUES FROM ('2022-01-01 00:00:00+00') TO ('2022-02-01 00:00:00+00')";
+    let dialect = PostgreSqlDialect {};
+    let statements = sqlparser::parser::Parser::parse_sql(&dialect, sql).unwrap();
+    assert_eq!(1, statements.len());
+    match &statements[0] {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(1, operations.len());
+            match &operations[0] {
+                AlterTableOperation::AttachPartitionOf {
+                    partition_name,
+                    partition_bound,
+                } => {
+                    assert_eq!("public.payment_p2022_01", partition_name.to_string());
+                    match partition_bound {
+                        ForValues::From { from, to } => {
+                            assert_eq!(1, from.len());
+                            assert_eq!(1, to.len());
+                            assert_eq!(
+                                "'2022-01-01 00:00:00+00'",
+                                from[0].to_string()
+                            );
+                            assert_eq!(
+                                "'2022-02-01 00:00:00+00'",
+                                to[0].to_string()
+                            );
+                        }
+                        _ => panic!("Expected ForValues::From"),
+                    }
+                }
+                _ => panic!("Expected AttachPartitionOf"),
+            }
+        }
+        _ => panic!("Expected AlterTable"),
+    }
+}
+
+#[test]
+fn alter_table_attach_partition_list() {
+    let sql = "ALTER TABLE cities ATTACH PARTITION cities_ab FOR VALUES IN ('a', 'b')";
+    let dialect = PostgreSqlDialect {};
+    let statements = sqlparser::parser::Parser::parse_sql(&dialect, sql).unwrap();
+    assert_eq!(1, statements.len());
+    match &statements[0] {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(1, operations.len());
+            match &operations[0] {
+                AlterTableOperation::AttachPartitionOf {
+                    partition_name,
+                    partition_bound,
+                } => {
+                    assert_eq!("cities_ab", partition_name.to_string());
+                    match partition_bound {
+                        ForValues::In(values) => {
+                            assert_eq!(2, values.len());
+                        }
+                        _ => panic!("Expected ForValues::In"),
+                    }
+                }
+                _ => panic!("Expected AttachPartitionOf"),
+            }
+        }
+        _ => panic!("Expected AlterTable"),
+    }
+}
+
+#[test]
+fn alter_table_attach_partition_hash() {
+    let sql = "ALTER TABLE orders ATTACH PARTITION orders_p1 FOR VALUES WITH (MODULUS 4, REMAINDER 0)";
+    let dialect = PostgreSqlDialect {};
+    let statements = sqlparser::parser::Parser::parse_sql(&dialect, sql).unwrap();
+    assert_eq!(1, statements.len());
+    match &statements[0] {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(1, operations.len());
+            match &operations[0] {
+                AlterTableOperation::AttachPartitionOf {
+                    partition_name,
+                    partition_bound,
+                } => {
+                    assert_eq!("orders_p1", partition_name.to_string());
+                    match partition_bound {
+                        ForValues::With { modulus, remainder } => {
+                            assert_eq!(4, *modulus);
+                            assert_eq!(0, *remainder);
+                        }
+                        _ => panic!("Expected ForValues::With"),
+                    }
+                }
+                _ => panic!("Expected AttachPartitionOf"),
+            }
+        }
+        _ => panic!("Expected AlterTable"),
+    }
+}
+
+#[test]
+fn alter_table_attach_partition_default() {
+    let sql = "ALTER TABLE cities ATTACH PARTITION cities_default DEFAULT";
+    let dialect = PostgreSqlDialect {};
+    let statements = sqlparser::parser::Parser::parse_sql(&dialect, sql).unwrap();
+    assert_eq!(1, statements.len());
+    match &statements[0] {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(1, operations.len());
+            match &operations[0] {
+                AlterTableOperation::AttachPartitionOf {
+                    partition_name,
+                    partition_bound,
+                } => {
+                    assert_eq!("cities_default", partition_name.to_string());
+                    assert_eq!(ForValues::Default, *partition_bound);
+                }
+                _ => panic!("Expected AttachPartitionOf"),
+            }
+        }
+        _ => panic!("Expected AlterTable"),
+    }
+}
+
+#[test]
+fn alter_table_detach_partition_plain() {
+    let sql = "ALTER TABLE measurement DETACH PARTITION measurement_y2021m01";
+    let dialect = PostgreSqlDialect {};
+    let statements = sqlparser::parser::Parser::parse_sql(&dialect, sql).unwrap();
+    assert_eq!(1, statements.len());
+    match &statements[0] {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(1, operations.len());
+            match &operations[0] {
+                AlterTableOperation::DetachPartitionOf {
+                    partition_name,
+                    concurrently,
+                    finalize,
+                } => {
+                    assert_eq!("measurement_y2021m01", partition_name.to_string());
+                    assert!(!concurrently);
+                    assert!(!finalize);
+                }
+                _ => panic!("Expected DetachPartitionOf"),
+            }
+        }
+        _ => panic!("Expected AlterTable"),
+    }
+}
+
+#[test]
+fn alter_table_detach_partition_concurrently() {
+    let sql = "ALTER TABLE measurement DETACH PARTITION measurement_y2021m01 CONCURRENTLY";
+    let dialect = PostgreSqlDialect {};
+    let statements = sqlparser::parser::Parser::parse_sql(&dialect, sql).unwrap();
+    assert_eq!(1, statements.len());
+    match &statements[0] {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(1, operations.len());
+            match &operations[0] {
+                AlterTableOperation::DetachPartitionOf {
+                    partition_name,
+                    concurrently,
+                    finalize,
+                } => {
+                    assert_eq!("measurement_y2021m01", partition_name.to_string());
+                    assert!(concurrently);
+                    assert!(!finalize);
+                }
+                _ => panic!("Expected DetachPartitionOf"),
+            }
+        }
+        _ => panic!("Expected AlterTable"),
+    }
+}
+
+#[test]
+fn alter_table_detach_partition_finalize() {
+    let sql = "ALTER TABLE measurement DETACH PARTITION measurement_y2021m01 FINALIZE";
+    let dialect = PostgreSqlDialect {};
+    let statements = sqlparser::parser::Parser::parse_sql(&dialect, sql).unwrap();
+    assert_eq!(1, statements.len());
+    match &statements[0] {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(1, operations.len());
+            match &operations[0] {
+                AlterTableOperation::DetachPartitionOf {
+                    partition_name,
+                    concurrently,
+                    finalize,
+                } => {
+                    assert_eq!("measurement_y2021m01", partition_name.to_string());
+                    assert!(!concurrently);
+                    assert!(finalize);
+                }
+                _ => panic!("Expected DetachPartitionOf"),
+            }
+        }
+        _ => panic!("Expected AlterTable"),
+    }
+}

@@ -7221,6 +7221,20 @@ fn parse_ts_datatypes() {
 }
 
 #[test]
+fn parse_fulltext_column_and_index_in_postgres() {
+    match pg().verified_stmt("CREATE TABLE film (fulltext TSVECTOR NOT NULL)") {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(columns.len(), 1);
+            assert_eq!(columns[0].name.value, "fulltext");
+            assert_eq!(columns[0].data_type, DataType::TsVector);
+        }
+        _ => unreachable!(),
+    }
+
+    pg().verified_stmt("CREATE INDEX film_fulltext_idx ON film USING gist (fulltext)");
+}
+
+#[test]
 fn parse_alter_table_constraint_not_valid() {
     match pg_and_generic().verified_stmt(
         "ALTER TABLE foo ADD CONSTRAINT bar FOREIGN KEY (baz) REFERENCES other(ref) NOT VALID",

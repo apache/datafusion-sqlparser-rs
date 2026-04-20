@@ -12822,10 +12822,16 @@ impl<'a> Parser<'a> {
         match self.parse_optional_alias_inner(None, validator)? {
             Some(name) => {
                 let columns = self.parse_table_alias_column_defs()?;
+                let at = if self.dialect.supports_partiql() && self.parse_keyword(Keyword::AT) {
+                    Some(self.parse_identifier()?)
+                } else {
+                    None
+                };
                 Ok(Some(TableAlias {
                     explicit,
                     name,
                     columns,
+                    at,
                 }))
             }
             None => Ok(None),
@@ -14474,6 +14480,7 @@ impl<'a> Parser<'a> {
                         explicit: false,
                         name,
                         columns: vec![],
+                        at: None,
                     },
                     query,
                     from: None,
@@ -14518,6 +14525,7 @@ impl<'a> Parser<'a> {
                 explicit: false,
                 name,
                 columns,
+                at: None,
             },
             query,
             from: None,

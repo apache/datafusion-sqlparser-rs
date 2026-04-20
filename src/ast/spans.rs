@@ -2186,8 +2186,13 @@ impl Spanned for TableAlias {
             explicit: _,
             name,
             columns,
+            at,
         } = self;
-        union_spans(core::iter::once(name.span).chain(columns.iter().map(Spanned::span)))
+        union_spans(
+            core::iter::once(name.span)
+                .chain(columns.iter().map(Spanned::span))
+                .chain(at.iter().map(|at| at.span)),
+        )
     }
 }
 

@@ -669,6 +669,7 @@ fn parse_select_with_table_alias() {
                         TableAliasColumnDef::from_name("B"),
                         TableAliasColumnDef::from_name("C"),
                     ],
+                    at: None,
                 }),
                 args: None,
                 with_hints: vec![],
@@ -7861,6 +7862,7 @@ fn parse_recursive_cte() {
                 span: Span::empty(),
             },
             columns: vec![TableAliasColumnDef::from_name("val")],
+            at: None,
         },
         query: Box::new(cte_query),
         from: None,
@@ -11347,6 +11349,7 @@ fn parse_pivot_table() {
                     TableAliasColumnDef::from_name("c"),
                     TableAliasColumnDef::from_name("d"),
                 ],
+                at: None,
             })
         }
     );
@@ -11485,6 +11488,7 @@ fn parse_unpivot_table() {
                 .into_iter()
                 .map(TableAliasColumnDef::from_name)
                 .collect(),
+            at: None,
         }),
     };
     pretty_assertions::assert_eq!(verified_only_select(sql).from[0].relation, base_unpivot);

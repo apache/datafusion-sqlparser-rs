@@ -2533,7 +2533,11 @@ pub struct TableAlias {
     pub name: Ident,
     /// Optional column aliases declared in parentheses after the table alias.
     pub columns: Vec<TableAliasColumnDef>,
-    /// Optional PartiQL index alias declared with `AT`.
+    /// Optional PartiQL index alias declared with `AT`. For example:
+    /// ```sql
+    /// SELECT element, index FROM bar AS b, b.data.scalar_array AS element AT index
+    /// ```
+    /// See: <https://docs.aws.amazon.com/redshift/latest/dg/query-super.html>
     pub at: Option<Ident>,
 }
 

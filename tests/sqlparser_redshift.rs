@@ -520,11 +520,12 @@ fn test_null_treatment_inside_and_outside_window_function() {
 
 #[test]
 fn test_partiql_from_alias_with_at_index() {
-    redshift().verified_stmt("SELECT * FROM lineitem AS l (a, b, c) AT idx");
+    let dialects = all_dialects_where(|d| d.supports_partiql());
+    dialects.verified_stmt("SELECT * FROM lineitem AS l (a, b, c) AT idx");
 
     let sql =
         "SELECT index, val FROM (SELECT array('AAA', 'BBB') AS val) AS b, b.val AS val AT index";
-    let select = redshift().verified_only_select(sql);
+    let select = dialects.verified_only_select(sql);
 
     match &select.from[1].relation {
         TableFactor::Table { name, alias, .. } => {

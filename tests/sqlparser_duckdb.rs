@@ -780,6 +780,7 @@ fn test_duckdb_union_datatype() {
             with_tags: Default::default(),
             base_location: Default::default(),
             external_volume: Default::default(),
+            with_connection: Default::default(),
             catalog: Default::default(),
             catalog_sync: Default::default(),
             storage_serialization_policy: Default::default(),

@@ -6587,6 +6587,24 @@ fn interval_disallow_interval_expr_double_colon() {
 }
 
 #[test]
+fn parse_text_type_modifier_double_colon_cast() {
+    let expr = verified_expr("ID::TEXT(16777216)");
+    assert_eq!(
+        expr,
+        Expr::Cast {
+            kind: CastKind::DoubleColon,
+            expr: Box::new(Expr::Identifier(Ident::new("ID"))),
+            data_type: DataType::Custom(
+                ObjectName::from(vec![Ident::new("TEXT")]),
+                vec!["16777216".to_string()]
+            ),
+            array: false,
+            format: None,
+        }
+    );
+}
+
+#[test]
 fn parse_interval_and_or_xor() {
     let sql = "SELECT col FROM test \
         WHERE d3_date > d1_date + INTERVAL '5 days' \

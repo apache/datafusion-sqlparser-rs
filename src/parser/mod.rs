@@ -12555,7 +12555,16 @@ impl<'a> Parser<'a> {
                     self.expect_token(&Token::RParen)?;
                     Ok(DataType::FixedString(character_length))
                 }
-                Keyword::TEXT => Ok(DataType::Text),
+                Keyword::TEXT => {
+                    if let Some(modifiers) = self.parse_optional_type_modifiers()? {
+                        Ok(DataType::Custom(
+                            ObjectName::from(vec![Ident::new("TEXT")]),
+                            modifiers,
+                        ))
+                    } else {
+                        Ok(DataType::Text)
+                    }
+                }
                 Keyword::TINYTEXT => Ok(DataType::TinyText),
                 Keyword::MEDIUMTEXT => Ok(DataType::MediumText),
                 Keyword::LONGTEXT => Ok(DataType::LongText),

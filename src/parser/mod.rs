@@ -12556,15 +12556,11 @@ impl<'a> Parser<'a> {
                     Ok(DataType::FixedString(character_length))
                 }
                 Keyword::TEXT => {
-                    if dialect.supports_text_type_modifiers() {
-                        if let Some(modifiers) = self.parse_optional_type_modifiers()? {
-                            Ok(DataType::Custom(
-                                ObjectName::from(vec![Ident::new("TEXT")]),
-                                modifiers,
-                            ))
-                        } else {
-                            Ok(DataType::Text)
-                        }
+                    if let Some(modifiers) = self.parse_optional_type_modifiers()? {
+                        Ok(DataType::Custom(
+                            ObjectName::from(vec![Ident::new("TEXT")]),
+                            modifiers,
+                        ))
                     } else {
                         Ok(DataType::Text)
                     }

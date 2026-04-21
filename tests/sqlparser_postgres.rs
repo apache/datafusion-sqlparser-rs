@@ -6702,6 +6702,7 @@ fn parse_trigger_related_functions() {
             with_tags: None,
             base_location: None,
             external_volume: None,
+            with_connection: None,
             catalog: None,
             catalog_sync: None,
             storage_serialization_policy: None,

@@ -2448,6 +2448,49 @@ fn test_copy_into_with_transformations() {
 }
 
 #[test]
+fn test_copy_into_with_cast_transformation() {
+    // Snowflake `COPY INTO` transformation lists support casts like
+    // `$1:"col"::TYPE` and `$1::TYPE`. These are distinct from the bare
+    // `$<n>[.<col>][:<elem>]` stage-load-select-item shape, so the parser
+    // must fall through to the generic select-item parser to handle the
+    // `::` cast operator.
+    //
+    // Regression: the Snowflake-specific parser used to successfully
+    // consume `$1:"col"` as a stage-load-select-item, leaving `::TYPE`
+    // behind and causing "Expected: FROM, found: ::" once the COPY INTO
+    // body tried to expect `FROM`.
+    let variants = [
+        concat!(
+            "COPY INTO my_company.emp_basic (a) FROM ",
+            r#"(SELECT $1:"A"::NUMBER(38, 0) FROM @stg)"#,
+        ),
+        concat!(
+            "COPY INTO my_company.emp_basic (a) FROM ",
+            "(SELECT $1::NUMBER(38, 0) FROM @stg)",
+        ),
+        concat!(
+            "COPY INTO my_company.emp_basic (a) FROM ",
+            "(SELECT $1:SEQUENCE::NUMBER(38, 0) FROM @stg)",
+        ),
+        concat!(
+            "COPY INTO my_company.emp_basic (a, b) FROM ",
+            r#"(SELECT $1:"A"::VARIANT, $1:"B"::TEXT FROM @stg)"#,
+        ),
+        // Mix with an ordinary stage-load-select-item in the same list,
+        // so we don't over-correct and break the existing shape.
+        concat!(
+            "COPY INTO my_company.emp_basic (a, b) FROM ",
+            r#"(SELECT t.$1:plain AS plain, $1:"B"::TEXT FROM @stg AS t)"#,
+        ),
+    ];
+    for sql in variants {
+        snowflake().parse_sql_statements(sql).unwrap_or_else(|e| {
+            panic!("expected {sql:?} to parse, got {e}");
+        });
+    }
+}
+
+#[test]
 fn test_copy_into_file_format() {
     let sql = concat!(
         "COPY INTO my_company.emp_basic ",

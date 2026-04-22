@@ -1545,6 +1545,14 @@ fn parse_select_item_for_data_load(
         }
     }
 
+    // A trailing `::` means this is a cast expression (e.g.
+    // `$1:"col"::NUMBER(38,0)`), not a stage-load-select-item. Bail so
+    // `maybe_parse` rewinds and the caller falls through to
+    // `parse_select_item`, which handles the cast correctly.
+    if matches!(parser.peek_token_ref().token, Token::DoubleColon) {
+        return parser.expected("stage load select item", parser.peek_token());
+    }
+
     // as
     if parser.parse_keyword(Keyword::AS) {
         item_as = Some(match parser.next_token().token {

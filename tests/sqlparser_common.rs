@@ -100,8 +100,11 @@ fn parse_insert_values() {
         Expr::value(number("2")),
         Expr::value(number("3")),
     ];
-    let rows1 = vec![row.clone()];
-    let rows2 = vec![row.clone(), row];
+    let rows1 = vec![Parens::with_empty_span(row.clone())];
+    let rows2 = vec![
+        Parens::with_empty_span(row.clone()),
+        Parens::with_empty_span(row),
+    ];
 
     let sql = "INSERT customer VALUES (1, 2, 3)";
     check_one(sql, "customer", &[], &rows1, false);
@@ -140,7 +143,7 @@ fn parse_insert_values() {
         sql: &str,
         expected_table_name: &str,
         expected_columns: &[String],
-        expected_rows: &[Vec<Expr>],
+        expected_rows: &[Parens<Vec<Expr>>],
         expected_value_keyword: bool,
     ) {
         match verified_stmt(sql) {
@@ -535,6 +538,7 @@ fn parse_update_set_from() {
             returning: None,
             output: None,
             or: None,
+            order_by: vec![],
             limit: None
         })
     );
@@ -554,6 +558,7 @@ fn parse_update_with_table_alias() {
             selection,
             returning,
             or: None,
+            order_by: _,
             limit: None,
             optimizer_hints,
             update_token: _,
@@ -664,6 +669,7 @@ fn parse_select_with_table_alias() {
                         TableAliasColumnDef::from_name("B"),
                         TableAliasColumnDef::from_name("C"),
                     ],
+                    at: None,
                 }),
                 args: None,
                 with_hints: vec![],
@@ -1293,16 +1299,29 @@ fn parse_select_wildcard_with_alias() {
     dialects
         .parse_sql_statements("SELECT t.* AS all_cols FROM t")
         .unwrap();
+    dialects.one_statement_parses_to(
+        "SELECT t.* all_cols FROM t",
+        "SELECT t.* AS all_cols FROM t",
+    );
+    dialects.one_statement_parses_to(
+        "SELECT t.* all_cols, other_col FROM t",
+        "SELECT t.* AS all_cols, other_col FROM t",
+    );
 
     // unqualified wildcard with alias
     dialects
         .parse_sql_statements("SELECT * AS all_cols FROM t")
         .unwrap();
+    dialects.one_statement_parses_to("SELECT * all_cols FROM t", "SELECT * AS all_cols FROM t");
 
     // mixed: regular column + qualified wildcard with alias
     dialects
         .parse_sql_statements("SELECT a.id, b.* AS b_cols FROM a JOIN b ON (a.id = b.a_id)")
         .unwrap();
+    dialects.one_statement_parses_to(
+        "SELECT a.id, b.* b_cols FROM a JOIN b ON (a.id = b.a_id)",
+        "SELECT a.id, b.* AS b_cols FROM a JOIN b ON (a.id = b.a_id)",
+    );
 }
 
 #[test]
@@ -6568,6 +6587,24 @@ fn interval_disallow_interval_expr_double_colon() {
 }
 
 #[test]
+fn parse_text_type_modifier_double_colon_cast() {
+    let expr = verified_expr("ID::TEXT(16777216)");
+    assert_eq!(
+        expr,
+        Expr::Cast {
+            kind: CastKind::DoubleColon,
+            expr: Box::new(Expr::Identifier(Ident::new("ID"))),
+            data_type: DataType::Custom(
+                ObjectName::from(vec![Ident::new("TEXT")]),
+                vec!["16777216".to_string()]
+            ),
+            array: false,
+            format: None,
+        }
+    );
+}
+
+#[test]
 fn parse_interval_and_or_xor() {
     let sql = "SELECT col FROM test \
         WHERE d3_date > d1_date + INTERVAL '5 days' \
@@ -7843,6 +7880,7 @@ fn parse_recursive_cte() {
                 span: Span::empty(),
             },
             columns: vec![TableAliasColumnDef::from_name("val")],
+            at: None,
         },
         query: Box::new(cte_query),
         from: None,
@@ -9013,6 +9051,7 @@ fn lateral_function() {
                             vec![Ident::new("customer"), Ident::new("id")],
                         ))),
                     ],
+                    with_ordinality: false,
                     alias: None,
                 },
                 global: false,
@@ -10085,7 +10124,7 @@ fn parse_merge() {
                             kind: MergeInsertKind::Values(Values {
                                 value_keyword: false,
                                 explicit_row: false,
-                                rows: vec![vec![
+                                rows: vec![Parens::with_empty_span(vec![
                                     Expr::CompoundIdentifier(vec![
                                         Ident::new("stg"),
                                         Ident::new("A")
@@ -10098,7 +10137,7 @@ fn parse_merge() {
                                         Ident::new("stg"),
                                         Ident::new("C")
                                     ]),
-                                ]]
+                                ])]
                             }),
                             insert_predicate: None,
                         }),
@@ -11328,6 +11367,7 @@ fn parse_pivot_table() {
                     TableAliasColumnDef::from_name("c"),
                     TableAliasColumnDef::from_name("d"),
                 ],
+                at: None,
             })
         }
     );
@@ -11466,6 +11506,7 @@ fn parse_unpivot_table() {
                 .into_iter()
                 .map(TableAliasColumnDef::from_name)
                 .collect(),
+            at: None,
         }),
     };
     pretty_assertions::assert_eq!(verified_only_select(sql).from[0].relation, base_unpivot);
@@ -12294,8 +12335,8 @@ fn parse_execute_stored_procedure() {
         }
         _ => unreachable!(),
     }
-    // Test optional parentheses around procedure name
-    ms_and_generic().one_statement_parses_to("EXEC ('name')", "EXECUTE 'name'");
+    // Parenthesised form is dynamic SQL; the expression ends up in parameters.
+    ms_and_generic().one_statement_parses_to("EXEC ('name')", "EXECUTE ('name')");
 }
 
 #[test]
@@ -13106,6 +13147,19 @@ fn test_group_by_grouping_sets() {
             ])],
             vec![]
         )
+    );
+}
+
+#[test]
+fn test_group_by_grouping_sets_bare_columns() {
+    all_dialects_where(|d| d.supports_group_by_expr()).one_statement_parses_to(
+        "SELECT a, b FROM t GROUP BY GROUPING SETS (a, b, c)",
+        "SELECT a, b FROM t GROUP BY GROUPING SETS ((a), (b), (c))",
+    );
+
+    all_dialects_where(|d| d.supports_group_by_expr()).one_statement_parses_to(
+        "SELECT a, b FROM t GROUP BY GROUPING SETS ((a, b), c)",
+        "SELECT a, b FROM t GROUP BY GROUPING SETS ((a, b), (c))",
     );
 }
 
@@ -14744,6 +14798,7 @@ fn parse_method_expr() {
 fn test_show_dbs_schemas_tables_views() {
     // These statements are parsed the same by all dialects
     let stmts = vec![
+        "SHOW CATALOGS",
         "SHOW DATABASES",
         "SHOW SCHEMAS",
         "SHOW TABLES",
@@ -14761,7 +14816,11 @@ fn test_show_dbs_schemas_tables_views() {
     // These statements are parsed the same by all dialects
     // except for how the parser interprets the location of
     // LIKE option (infix/suffix)
-    let stmts = vec!["SHOW DATABASES LIKE '%abc'", "SHOW SCHEMAS LIKE '%abc'"];
+    let stmts = vec![
+        "SHOW CATALOGS LIKE '%abc'",
+        "SHOW DATABASES LIKE '%abc'",
+        "SHOW SCHEMAS LIKE '%abc'",
+    ];
     for stmt in stmts {
         all_dialects_where(|d| d.supports_show_like_before_in()).verified_stmt(stmt);
         all_dialects_where(|d| !d.supports_show_like_before_in()).verified_stmt(stmt);
@@ -15279,6 +15338,7 @@ fn parse_comments() {
 
     // https://www.postgresql.org/docs/current/sql-comment.html
     let object_types = [
+        ("COLLATION", CommentObject::Collation),
         ("COLUMN", CommentObject::Column),
         ("DATABASE", CommentObject::Database),
         ("DOMAIN", CommentObject::Domain),
@@ -16189,8 +16249,35 @@ fn test_select_from_first() {
             pipe_operators: vec![],
         };
         assert_eq!(expected, ast);
-        assert_eq!(ast.to_string(), q);
     }
+}
+
+#[test]
+fn test_select_from_first_with_cte() {
+    let dialects = all_dialects_where(|d| d.supports_from_first_select());
+    let q = "WITH test AS (FROM t SELECT a) FROM test SELECT 1";
+
+    let ast = dialects.verified_query(q);
+
+    let ast_select = ast.body.as_select().unwrap();
+
+    let expected_body_select_projection =
+        vec![SelectItem::UnnamedExpr(Expr::Value(ValueWithSpan {
+            value: test_utils::number("1"),
+            span: Span::empty(),
+        }))];
+
+    let expected_body_from = vec![TableWithJoins {
+        relation: table_from_name(ObjectName::from(vec![Ident {
+            value: "test".to_string(),
+            quote_style: None,
+            span: Span::empty(),
+        }])),
+        joins: vec![],
+    }];
+
+    assert_eq!(ast_select.projection, expected_body_select_projection);
+    assert_eq!(ast_select.from, expected_body_from);
 }
 
 #[test]
@@ -18740,4 +18827,27 @@ fn test_wildcard_func_arg() {
     );
     dialects.verified_expr("HASH(* EXCLUDE (col1))");
     dialects.verified_expr("HASH(* EXCLUDE (col1, col2))");
+}
+
+#[test]
+fn parse_select_item_multi_column_alias() {
+    all_dialects_where(|d| d.supports_select_item_multi_column_alias())
+        .verified_stmt("SELECT stack(2, 'a', 'b', 'c', 'd') AS (col1, col2)");
+
+    all_dialects_where(|d| d.supports_select_item_multi_column_alias())
+        .verified_stmt("SELECT stack(2, 'a', 'b', 'c', 'd') AS (col1, col2) FROM t");
+
+    assert!(
+        all_dialects_where(|d| !d.supports_select_item_multi_column_alias())
+            .parse_sql_statements("SELECT stack(2, 'a', 'b') AS (col1, col2)")
+            .is_err()
+    );
+}
+
+#[test]
+fn parse_non_pg_dialects_keep_xml_names_as_regular_identifiers() {
+    // On dialects that do NOT support XML expressions, bare `xml` should
+    // be treated as a regular column identifier, not a typed-string prefix.
+    let dialects = all_dialects_except(|d| d.supports_xml_expressions());
+    dialects.verified_only_select("SELECT xml FROM t");
 }

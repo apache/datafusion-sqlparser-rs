@@ -30,7 +30,7 @@ use helpers::{
 };
 
 use core::cmp::Ordering;
-use core::ops::Deref;
+use core::ops::{Deref, DerefMut};
 use core::{
     fmt::{self, Display},
     hash,
@@ -60,27 +60,28 @@ pub use self::dcl::{
     SetConfigValue, Use,
 };
 pub use self::ddl::{
-    Alignment, AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterOperator,
-    AlterOperatorClass, AlterOperatorClassOperation, AlterOperatorFamily,
-    AlterOperatorFamilyOperation, AlterOperatorOperation, AlterPolicy, AlterPolicyOperation,
-    AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm, AlterTableLock,
-    AlterTableOperation, AlterTableType, AlterType, AlterTypeAddValue, AlterTypeAddValuePosition,
-    AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue, ClusteredBy, ColumnDef,
-    ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy, ColumnPolicyProperty,
-    ConstraintCharacteristics, CreateConnector, CreateDomain, CreateExtension, CreateFunction,
-    CreateIndex, CreateOperator, CreateOperatorClass, CreateOperatorFamily, CreatePolicy,
-    CreatePolicyCommand, CreatePolicyType, CreateTable, CreateTrigger, CreateView, Deduplicate,
-    DeferrableInitial, DistStyle, DropBehavior, DropExtension, DropFunction, DropOperator,
-    DropOperatorClass, DropOperatorFamily, DropOperatorSignature, DropPolicy, DropTrigger,
-    ForValues, FunctionReturnType, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
-    IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
-    IndexColumn, IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption,
-    OperatorArgTypes, OperatorClassItem, OperatorFamilyDropItem, OperatorFamilyItem,
-    OperatorOption, OperatorPurpose, Owner, Partition, PartitionBoundValue, ProcedureParam,
-    ReferentialAction, RenameTableNameKind, ReplicaIdentity, TagsColumnOption, TriggerObjectKind,
-    Truncate, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
-    UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
-    UserDefinedTypeStorage, ViewColumnDef,
+    Alignment, AlterCollation, AlterCollationOperation, AlterColumnOperation, AlterConnectorOwner,
+    AlterFunction, AlterFunctionAction, AlterFunctionKind, AlterFunctionOperation,
+    AlterIndexOperation, AlterOperator, AlterOperatorClass, AlterOperatorClassOperation,
+    AlterOperatorFamily, AlterOperatorFamilyOperation, AlterOperatorOperation, AlterPolicy,
+    AlterPolicyOperation, AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm,
+    AlterTableLock, AlterTableOperation, AlterTableType, AlterType, AlterTypeAddValue,
+    AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
+    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy,
+    ColumnPolicyProperty, ConstraintCharacteristics, CreateCollation, CreateCollationDefinition,
+    CreateConnector, CreateDomain, CreateExtension, CreateFunction, CreateIndex, CreateOperator,
+    CreateOperatorClass, CreateOperatorFamily, CreatePolicy, CreatePolicyCommand, CreatePolicyType,
+    CreateTable, CreateTrigger, CreateView, Deduplicate, DeferrableInitial, DistStyle,
+    DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily,
+    DropOperatorSignature, DropPolicy, DropTrigger, ForValues, FunctionReturnType, GeneratedAs,
+    GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
+    IdentityPropertyKind, IdentityPropertyOrder, IndexColumn, IndexOption, IndexType,
+    KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes, OperatorClassItem,
+    OperatorFamilyDropItem, OperatorFamilyItem, OperatorOption, OperatorPurpose, Owner, Partition,
+    PartitionBoundValue, ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity,
+    TagsColumnOption, TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
+    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, ViewColumnDef,
 };
 pub use self::dml::{
     Delete, Insert, Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr,
@@ -197,6 +198,45 @@ fn format_statement_list(f: &mut fmt::Formatter, statements: &[Statement]) -> fm
     // We manually insert semicolon for the last statement,
     // since display_separated doesn't handle that case.
     write!(f, ";")
+}
+
+/// A item `T` enclosed in a pair of parentheses
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Parens<T> {
+    /// the opening parenthesis token, i.e. `(`
+    pub opening_token: AttachedToken,
+    /// content enclosed in parentheses
+    pub content: T,
+    /// the closing parenthesis token, i.e. `)`
+    pub closing_token: AttachedToken,
+}
+
+impl<T> Parens<T> {
+    /// Constructor wrapping `content` into `Parens` with an empty span;
+    /// useful for testing purposes.
+    pub fn with_empty_span(content: T) -> Self {
+        Self {
+            opening_token: AttachedToken::empty(),
+            content,
+            closing_token: AttachedToken::empty(),
+        }
+    }
+}
+
+impl<T> Deref for Parens<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.content
+    }
+}
+
+impl<T> DerefMut for Parens<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.content
+    }
 }
 
 /// An identifier, decomposed into its value or character data and the quote style.
@@ -2449,6 +2489,8 @@ impl fmt::Display for ShowCreateObject {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Objects that can be targeted by a `COMMENT` statement.
 pub enum CommentObject {
+    /// A collation.
+    Collation,
     /// A table column.
     Column,
     /// A database.
@@ -2484,6 +2526,7 @@ pub enum CommentObject {
 impl fmt::Display for CommentObject {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            CommentObject::Collation => f.write_str("COLLATION"),
             CommentObject::Column => f.write_str("COLUMN"),
             CommentObject::Database => f.write_str("DATABASE"),
             CommentObject::Domain => f.write_str("DOMAIN"),
@@ -3751,10 +3794,22 @@ pub enum Statement {
         with_options: Vec<SqlOption>,
     },
     /// ```sql
+    /// ALTER FUNCTION
+    /// ALTER AGGREGATE
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterfunction.html)
+    /// and [PostgreSQL](https://www.postgresql.org/docs/current/sql-alteraggregate.html)
+    AlterFunction(AlterFunction),
+    /// ```sql
     /// ALTER TYPE
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertype.html)
     /// ```
     AlterType(AlterType),
+    /// ```sql
+    /// ALTER COLLATION
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altercollation.html)
+    AlterCollation(AlterCollation),
     /// ```sql
     /// ALTER OPERATOR
     /// ```
@@ -3952,6 +4007,12 @@ pub enum Statement {
     /// Note: this is a PostgreSQL-specific statement,
     CreateExtension(CreateExtension),
     /// ```sql
+    /// CREATE COLLATION
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createcollation.html>
+    CreateCollation(CreateCollation),
+    /// ```sql
     /// DROP EXTENSION [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
     /// ```
     /// Note: this is a PostgreSQL-specific statement.
@@ -4087,6 +4148,17 @@ pub enum Statement {
         show_options: ShowStatementOptions,
     },
     /// ```sql
+    /// SHOW CATALOGS
+    /// ```
+    ShowCatalogs {
+        /// `true` when terse output format was requested.
+        terse: bool,
+        /// `true` when history information was requested.
+        history: bool,
+        /// Additional options for `SHOW CATALOGS`.
+        show_options: ShowStatementOptions,
+    },
+    /// ```sql
     /// SHOW DATABASES
     /// ```
     ShowDatabases {
@@ -4096,6 +4168,15 @@ pub enum Statement {
         history: bool,
         /// Additional options for `SHOW DATABASES`.
         show_options: ShowStatementOptions,
+    },
+    /// ```sql
+    /// SHOW [FULL] PROCESSLIST
+    /// ```
+    ///
+    /// Note: this is a MySQL-specific statement.
+    ShowProcessList {
+        /// `true` when full process information was requested.
+        full: bool,
     },
     /// ```sql
     /// SHOW SCHEMAS
@@ -4456,7 +4537,7 @@ pub enum Statement {
         name: Option<ObjectName>,
         /// Parameter expressions passed to execute.
         parameters: Vec<Expr>,
-        /// Whether parentheses were present.
+        /// Whether parentheses were present around `parameters`.
         has_parentheses: bool,
         /// Is this an `EXECUTE IMMEDIATE`.
         immediate: bool,
@@ -5413,6 +5494,7 @@ impl fmt::Display for Statement {
             }
             Statement::CreateIndex(create_index) => create_index.fmt(f),
             Statement::CreateExtension(create_extension) => write!(f, "{create_extension}"),
+            Statement::CreateCollation(create_collation) => write!(f, "{create_collation}"),
             Statement::DropExtension(drop_extension) => write!(f, "{drop_extension}"),
             Statement::DropOperator(drop_operator) => write!(f, "{drop_operator}"),
             Statement::DropOperatorFamily(drop_operator_family) => {
@@ -5486,9 +5568,11 @@ impl fmt::Display for Statement {
                 }
                 write!(f, " AS {query}")
             }
+            Statement::AlterFunction(alter_function) => write!(f, "{alter_function}"),
             Statement::AlterType(AlterType { name, operation }) => {
                 write!(f, "ALTER TYPE {name} {operation}")
             }
+            Statement::AlterCollation(alter_collation) => write!(f, "{alter_collation}"),
             Statement::AlterOperator(alter_operator) => write!(f, "{alter_operator}"),
             Statement::AlterOperatorFamily(alter_operator_family) => {
                 write!(f, "{alter_operator_family}")
@@ -5710,6 +5794,27 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
+            Statement::ShowCatalogs {
+                terse,
+                history,
+                show_options,
+            } => {
+                write!(
+                    f,
+                    "SHOW {terse}CATALOGS{history}{show_options}",
+                    terse = if *terse { "TERSE " } else { "" },
+                    history = if *history { " HISTORY" } else { "" },
+                )?;
+                Ok(())
+            }
+            Statement::ShowProcessList { full } => {
+                write!(
+                    f,
+                    "SHOW {full}PROCESSLIST",
+                    full = if *full { "FULL " } else { "" },
+                )?;
+                Ok(())
+            }
             Statement::ShowSchemas {
                 terse,
                 history,
@@ -5911,7 +6016,8 @@ impl fmt::Display for Statement {
                 default,
             } => {
                 let (open, close) = if *has_parentheses {
-                    ("(", ")")
+                    // Space before `(` only when there is no name directly preceding it.
+                    (if name.is_some() { "(" } else { " (" }, ")")
                 } else {
                     (if parameters.is_empty() { "" } else { " " }, "")
                 };
@@ -8353,6 +8459,8 @@ impl fmt::Display for HavingBoundKind {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// Types of database objects referenced by DDL statements.
 pub enum ObjectType {
+    /// A collation.
+    Collation,
     /// A table.
     Table,
     /// A view.
@@ -8382,6 +8490,7 @@ pub enum ObjectType {
 impl fmt::Display for ObjectType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match self {
+            ObjectType::Collation => "COLLATION",
             ObjectType::Table => "TABLE",
             ObjectType::View => "VIEW",
             ObjectType::MaterializedView => "MATERIALIZED VIEW",
@@ -8587,6 +8696,15 @@ pub enum HiveIOFormat {
     FileFormat {
         /// The file format used for storage.
         format: FileFormat,
+    },
+    /// `USING <format>` syntax used by Spark SQL.
+    ///
+    /// Example: `CREATE TABLE t (i INT) USING PARQUET`
+    ///
+    /// See <https://spark.apache.org/docs/latest/sql-ref-syntax-ddl-create-table-datasource.html>
+    Using {
+        /// The data source or format name, e.g. `parquet`, `delta`, `csv`.
+        format: Ident,
     },
 }
 
@@ -9814,6 +9932,8 @@ pub enum ArgMode {
     Out,
     /// `INOUT` mode.
     InOut,
+    /// `VARIADIC` mode.
+    Variadic,
 }
 
 impl fmt::Display for ArgMode {
@@ -9822,6 +9942,7 @@ impl fmt::Display for ArgMode {
             ArgMode::In => write!(f, "IN"),
             ArgMode::Out => write!(f, "OUT"),
             ArgMode::InOut => write!(f, "INOUT"),
+            ArgMode::Variadic => write!(f, "VARIADIC"),
         }
     }
 }
@@ -9878,6 +9999,8 @@ impl fmt::Display for FunctionSecurity {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum FunctionSetValue {
+    /// SET param = DEFAULT / SET param TO DEFAULT
+    Default,
     /// SET param = value1, value2, ...
     Values(Vec<Expr>),
     /// SET param FROM CURRENT
@@ -9892,7 +10015,7 @@ pub enum FunctionSetValue {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct FunctionDefinitionSetParam {
     /// The name of the configuration parameter.
-    pub name: Ident,
+    pub name: ObjectName,
     /// The value to set for the parameter.
     pub value: FunctionSetValue,
 }
@@ -9901,6 +10024,7 @@ impl fmt::Display for FunctionDefinitionSetParam {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "SET {} ", self.name)?;
         match &self.value {
+            FunctionSetValue::Default => write!(f, "= DEFAULT"),
             FunctionSetValue::Values(values) => {
                 write!(f, "= {}", display_comma_separated(values))
             }
@@ -11978,6 +12102,12 @@ impl From<CreateExtension> for Statement {
     }
 }
 
+impl From<CreateCollation> for Statement {
+    fn from(c: CreateCollation) -> Self {
+        Self::CreateCollation(c)
+    }
+}
+
 impl From<DropExtension> for Statement {
     fn from(de: DropExtension) -> Self {
         Self::DropExtension(de)
@@ -12080,9 +12210,21 @@ impl From<AlterSchema> for Statement {
     }
 }
 
+impl From<AlterFunction> for Statement {
+    fn from(a: AlterFunction) -> Self {
+        Self::AlterFunction(a)
+    }
+}
+
 impl From<AlterType> for Statement {
     fn from(a: AlterType) -> Self {
         Self::AlterType(a)
+    }
+}
+
+impl From<AlterCollation> for Statement {
+    fn from(a: AlterCollation) -> Self {
+        Self::AlterCollation(a)
     }
 }
 

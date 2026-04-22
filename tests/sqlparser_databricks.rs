@@ -174,14 +174,14 @@ fn test_values_clause() {
         value_keyword: false,
         explicit_row: false,
         rows: vec![
-            vec![
+            Parens::with_empty_span(vec![
                 Expr::Value((Value::DoubleQuotedString("one".to_owned())).with_empty_span()),
                 Expr::value(number("1")),
-            ],
-            vec![
+            ]),
+            Parens::with_empty_span(vec![
                 Expr::Value((Value::SingleQuotedString("two".to_owned())).with_empty_span()),
                 Expr::value(number("2")),
-            ],
+            ]),
         ],
     };
 
@@ -296,6 +296,66 @@ fn parse_use() {
             databricks().parse_sql_statements(sql).unwrap_err(),
             ParserError::ParserError("Expected: identifier, found: EOF".to_string()),
         );
+    }
+}
+
+#[test]
+fn parse_show_catalogs() {
+    databricks().verified_stmt("SHOW CATALOGS");
+    databricks().verified_stmt("SHOW TERSE CATALOGS");
+    databricks().verified_stmt("SHOW CATALOGS HISTORY");
+    databricks().verified_stmt("SHOW CATALOGS LIKE 'pay*'");
+    databricks().verified_stmt("SHOW CATALOGS 'pay*'");
+    databricks().verified_stmt("SHOW CATALOGS STARTS WITH 'pay'");
+    databricks().verified_stmt("SHOW CATALOGS LIMIT 10");
+    databricks().verified_stmt("SHOW CATALOGS HISTORY STARTS WITH 'pay'");
+
+    match databricks().verified_stmt("SHOW CATALOGS LIKE 'pay*'") {
+        Statement::ShowCatalogs {
+            terse,
+            history,
+            show_options,
+        } => {
+            assert!(!terse);
+            assert!(!history);
+            assert_eq!(show_options.show_in, None);
+            assert_eq!(show_options.starts_with, None);
+            assert_eq!(show_options.limit, None);
+            assert_eq!(show_options.limit_from, None);
+            assert_eq!(
+                show_options.filter_position,
+                Some(ShowStatementFilterPosition::Suffix(
+                    ShowStatementFilter::Like("pay*".to_string())
+                ))
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_show_catalogs_with_show_options() {
+    databricks().verified_stmt("SHOW TERSE CATALOGS HISTORY IN ACCOUNT");
+
+    match databricks().verified_stmt("SHOW TERSE CATALOGS HISTORY IN ACCOUNT") {
+        Statement::ShowCatalogs {
+            terse,
+            history,
+            show_options,
+        } => {
+            assert!(terse);
+            assert!(history);
+            assert_eq!(show_options.filter_position, None);
+            assert!(matches!(
+                show_options.show_in,
+                Some(ShowStatementIn {
+                    parent_type: Some(ShowStatementInParentType::Account),
+                    parent_name: None,
+                    ..
+                })
+            ));
+        }
+        _ => unreachable!(),
     }
 }
 
@@ -643,4 +703,38 @@ fn parse_databricks_json_accessor() {
         "SELECT raw:store.bicycle.price::double FROM store_data",
         "SELECT raw:store.bicycle.price::DOUBLE FROM store_data",
     );
+}
+
+#[test]
+fn parse_numeric_prefix_identifier() {
+    databricks().verified_stmt("SELECT * FROM catalog.schema.1st_table");
+
+    databricks().verified_stmt("SELECT * FROM a.b.1c");
+}
+
+#[test]
+fn parse_cte_without_as() {
+    databricks_and_generic().one_statement_parses_to(
+        "WITH cte (SELECT 1) SELECT * FROM cte",
+        "WITH cte AS (SELECT 1) SELECT * FROM cte",
+    );
+
+    databricks_and_generic().one_statement_parses_to(
+        "WITH a AS (SELECT 1), b (SELECT 2) SELECT * FROM a, b",
+        "WITH a AS (SELECT 1), b AS (SELECT 2) SELECT * FROM a, b",
+    );
+
+    databricks_and_generic().one_statement_parses_to(
+        "WITH cte (col1, col2) (SELECT 1, 2) SELECT * FROM cte",
+        "WITH cte (col1, col2) AS (SELECT 1, 2) SELECT * FROM cte",
+    );
+
+    databricks_and_generic().verified_query("WITH cte AS (SELECT 1) SELECT * FROM cte");
+
+    databricks_and_generic()
+        .verified_query("WITH cte (col1, col2) AS (SELECT 1, 2) SELECT * FROM cte");
+
+    assert!(all_dialects_where(|d| !d.supports_cte_without_as())
+        .parse_sql_statements("WITH cte (SELECT 1) SELECT * FROM cte")
+        .is_err());
 }

@@ -370,6 +370,18 @@ fn parse_show_columns() {
 }
 
 #[test]
+fn parse_show_process_list() {
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW PROCESSLIST"),
+        Statement::ShowProcessList { full: false }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW FULL PROCESSLIST"),
+        Statement::ShowProcessList { full: true }
+    );
+}
+
+#[test]
 fn parse_show_status() {
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW SESSION STATUS LIKE 'ssl_cipher'"),
@@ -1928,27 +1940,27 @@ fn parse_simple_insert() {
                         value_keyword: false,
                         explicit_row: false,
                         rows: vec![
-                            vec![
+                            Parens::with_empty_span(vec![
                                 Expr::Value(
                                     (Value::SingleQuotedString("Test Some Inserts".to_string()))
                                         .with_empty_span()
                                 ),
                                 Expr::value(number("1"))
-                            ],
-                            vec![
+                            ]),
+                            Parens::with_empty_span(vec![
                                 Expr::Value(
                                     (Value::SingleQuotedString("Test Entry 2".to_string()))
                                         .with_empty_span()
                                 ),
                                 Expr::value(number("2"))
-                            ],
-                            vec![
+                            ]),
+                            Parens::with_empty_span(vec![
                                 Expr::Value(
                                     (Value::SingleQuotedString("Test Entry 3".to_string()))
                                         .with_empty_span()
                                 ),
                                 Expr::value(number("3"))
-                            ]
+                            ])
                         ]
                     })),
                     order_by: None,
@@ -1999,13 +2011,13 @@ fn parse_ignore_insert() {
                     body: Box::new(SetExpr::Values(Values {
                         value_keyword: false,
                         explicit_row: false,
-                        rows: vec![vec![
+                        rows: vec![Parens::with_empty_span(vec![
                             Expr::Value(
                                 (Value::SingleQuotedString("Test Some Inserts".to_string()))
                                     .with_empty_span()
                             ),
                             Expr::value(number("1"))
-                        ]]
+                        ])]
                     })),
                     order_by: None,
                     limit_clause: None,
@@ -2055,13 +2067,13 @@ fn parse_priority_insert() {
                     body: Box::new(SetExpr::Values(Values {
                         value_keyword: false,
                         explicit_row: false,
-                        rows: vec![vec![
+                        rows: vec![Parens::with_empty_span(vec![
                             Expr::Value(
                                 (Value::SingleQuotedString("Test Some Inserts".to_string()))
                                     .with_empty_span()
                             ),
                             Expr::value(number("1"))
-                        ]]
+                        ])]
                     })),
                     order_by: None,
                     limit_clause: None,
@@ -2108,13 +2120,13 @@ fn parse_priority_insert() {
                     body: Box::new(SetExpr::Values(Values {
                         value_keyword: false,
                         explicit_row: false,
-                        rows: vec![vec![
+                        rows: vec![Parens::with_empty_span(vec![
                             Expr::Value(
                                 (Value::SingleQuotedString("Test Some Inserts".to_string()))
                                     .with_empty_span()
                             ),
                             Expr::value(number("1"))
-                        ]]
+                        ])]
                     })),
                     order_by: None,
                     limit_clause: None,
@@ -2164,9 +2176,9 @@ fn parse_insert_as() {
                     body: Box::new(SetExpr::Values(Values {
                         value_keyword: false,
                         explicit_row: false,
-                        rows: vec![vec![Expr::Value(
+                        rows: vec![Parens::with_empty_span(vec![Expr::Value(
                             (Value::SingleQuotedString("2024-01-01".to_string())).with_empty_span()
-                        )]]
+                        )])]
                     })),
                     order_by: None,
                     limit_clause: None,
@@ -2227,13 +2239,13 @@ fn parse_insert_as() {
                     body: Box::new(SetExpr::Values(Values {
                         value_keyword: false,
                         explicit_row: false,
-                        rows: vec![vec![
+                        rows: vec![Parens::with_empty_span(vec![
                             Expr::value(number("1")),
                             Expr::Value(
                                 (Value::SingleQuotedString("2024-01-01".to_string()))
                                     .with_empty_span()
                             )
-                        ]]
+                        ])]
                     })),
                     order_by: None,
                     limit_clause: None,
@@ -2284,13 +2296,13 @@ fn parse_replace_insert() {
                     body: Box::new(SetExpr::Values(Values {
                         value_keyword: false,
                         explicit_row: false,
-                        rows: vec![vec![
+                        rows: vec![Parens::with_empty_span(vec![
                             Expr::Value(
                                 (Value::SingleQuotedString("Test Some Inserts".to_string()))
                                     .with_empty_span()
                             ),
                             Expr::value(number("1"))
-                        ]]
+                        ])]
                     })),
                     order_by: None,
                     limit_clause: None,
@@ -2332,7 +2344,10 @@ fn parse_empty_row_insert() {
                     body: Box::new(SetExpr::Values(Values {
                         value_keyword: false,
                         explicit_row: false,
-                        rows: vec![vec![], vec![]]
+                        rows: vec![
+                            Parens::with_empty_span(vec![]),
+                            Parens::with_empty_span(vec![])
+                        ]
                     })),
                     order_by: None,
                     limit_clause: None,
@@ -2383,7 +2398,7 @@ fn parse_insert_with_on_duplicate_update() {
                     body: Box::new(SetExpr::Values(Values {
                         value_keyword: false,
                         explicit_row: false,
-                        rows: vec![vec![
+                        rows: vec![Parens::with_empty_span(vec![
                             Expr::Value(
                                 (Value::SingleQuotedString("accounting_manager".to_string()))
                                     .with_empty_span()
@@ -2398,7 +2413,7 @@ fn parse_insert_with_on_duplicate_update() {
                             Expr::Value((Value::Boolean(true)).with_empty_span()),
                             Expr::Value((Value::Boolean(true)).with_empty_span()),
                             Expr::Value((Value::Boolean(true)).with_empty_span()),
-                        ]]
+                        ])]
                     })),
                     order_by: None,
                     limit_clause: None,
@@ -2707,6 +2722,7 @@ fn parse_update_with_joins() {
             selection,
             returning,
             or: None,
+            order_by: _,
             limit: None,
             optimizer_hints,
             update_token: _,
@@ -2779,6 +2795,59 @@ fn parse_update_with_joins() {
                 selection
             );
             assert_eq!(None, returning);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_update_with_order_by() {
+    let sql = "UPDATE foo SET bar = false WHERE foo = true ORDER BY foo ASC";
+    match mysql_and_generic().verified_stmt(sql) {
+        Statement::Update(Update { order_by, .. }) => {
+            assert_eq!(
+                vec![OrderByExpr {
+                    expr: Expr::Identifier(Ident {
+                        value: "foo".to_owned(),
+                        quote_style: None,
+                        span: Span::empty(),
+                    }),
+                    options: OrderByOptions {
+                        asc: Some(true),
+                        nulls_first: None,
+                    },
+                    with_fill: None,
+                }],
+                order_by
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_update_with_order_by_and_limit() {
+    let sql = "UPDATE foo SET bar = false WHERE foo = true ORDER BY foo ASC LIMIT 10";
+    match mysql_and_generic().verified_stmt(sql) {
+        Statement::Update(Update {
+            order_by, limit, ..
+        }) => {
+            assert_eq!(
+                vec![OrderByExpr {
+                    expr: Expr::Identifier(Ident {
+                        value: "foo".to_owned(),
+                        quote_style: None,
+                        span: Span::empty(),
+                    }),
+                    options: OrderByOptions {
+                        asc: Some(true),
+                        nulls_first: None,
+                    },
+                    with_fill: None,
+                }],
+                order_by
+            );
+            assert_eq!(Some(Expr::value(number("10"))), limit);
         }
         _ => unreachable!(),
     }

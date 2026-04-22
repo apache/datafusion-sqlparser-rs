@@ -141,6 +141,8 @@ impl Dialect for RedshiftSqlDialect {
         true
     }
 
+    /// Redshift supports aliasing wildcard expressions:
+    /// <https://docs.aws.amazon.com/redshift/latest/dg/r_SELECT_list.html>
     fn supports_select_wildcard_with_alias(&self) -> bool {
         true
     }
@@ -154,6 +156,10 @@ impl Dialect for RedshiftSqlDialect {
     }
 
     fn supports_string_literal_concatenation_with_newline(&self) -> bool {
+        true
+    }
+
+    fn supports_window_function_null_treatment_arg(&self) -> bool {
         true
     }
 }

@@ -872,6 +872,15 @@ pub enum SelectItem {
         /// The alias for the expression.
         alias: Ident,
     },
+    /// An expression, followed by `[ AS ] (alias1, alias2, ...)`
+    ///
+    /// [Spark SQL](https://spark.apache.org/docs/latest/sql-ref-syntax-qry-select.html)
+    ExprWithAliases {
+        /// The expression being projected.
+        expr: Expr,
+        /// The list of aliases for the expression.
+        aliases: Vec<Ident>,
+    },
     /// An expression, followed by a wildcard expansion.
     /// e.g. `alias.*`, `STRUCT<STRING>('foo').*`
     QualifiedWildcard(SelectItemQualifiedWildcardKind, WildcardAdditionalOptions),
@@ -1174,6 +1183,12 @@ impl fmt::Display for SelectItem {
                 expr.fmt(f)?;
                 f.write_str(" AS ")?;
                 alias.fmt(f)
+            }
+            SelectItem::ExprWithAliases { expr, aliases } => {
+                expr.fmt(f)?;
+                f.write_str(" AS (")?;
+                display_comma_separated(aliases).fmt(f)?;
+                f.write_str(")")
             }
             SelectItem::QualifiedWildcard(kind, additional_options) => {
                 kind.fmt(f)?;
@@ -1507,6 +1522,8 @@ pub enum TableFactor {
         name: ObjectName,
         /// Arguments passed to the function.
         args: Vec<FunctionArg>,
+        /// Whether `WITH ORDINALITY` was specified to include ordinality.
+        with_ordinality: bool,
         /// Optional alias for the result of the function.
         alias: Option<TableAlias>,
     },
@@ -2262,6 +2279,7 @@ impl fmt::Display for TableFactor {
                 lateral,
                 name,
                 args,
+                with_ordinality,
                 alias,
             } => {
                 if *lateral {
@@ -2269,6 +2287,9 @@ impl fmt::Display for TableFactor {
                 }
                 write!(f, "{name}")?;
                 write!(f, "({})", display_comma_separated(args))?;
+                if *with_ordinality {
+                    write!(f, " WITH ORDINALITY")?;
+                }
                 if let Some(alias) = alias {
                     write!(f, " {alias}")?;
                 }
@@ -2512,6 +2533,12 @@ pub struct TableAlias {
     pub name: Ident,
     /// Optional column aliases declared in parentheses after the table alias.
     pub columns: Vec<TableAliasColumnDef>,
+    /// Optional PartiQL index alias declared with `AT`. For example:
+    /// ```sql
+    /// SELECT element, index FROM bar AS b, b.data.scalar_array AS element AT index
+    /// ```
+    /// See: <https://docs.aws.amazon.com/redshift/latest/dg/query-super.html>
+    pub at: Option<Ident>,
 }
 
 impl fmt::Display for TableAlias {
@@ -2519,6 +2546,9 @@ impl fmt::Display for TableAlias {
         write!(f, "{}{}", if self.explicit { "AS " } else { "" }, self.name)?;
         if !self.columns.is_empty() {
             write!(f, " ({})", display_comma_separated(&self.columns))?;
+        }
+        if let Some(at) = &self.at {
+            write!(f, " AT {at}")?;
         }
         Ok(())
     }
@@ -3613,7 +3643,7 @@ pub struct Values {
     /// <https://dev.mysql.com/doc/refman/9.2/en/insert.html>
     pub value_keyword: bool,
     /// The list of rows, each row is a list of expressions.
-    pub rows: Vec<Vec<Expr>>,
+    pub rows: Vec<Parens<Vec<Expr>>>,
 }
 
 impl fmt::Display for Values {

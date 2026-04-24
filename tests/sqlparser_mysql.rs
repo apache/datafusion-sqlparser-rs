@@ -1940,27 +1940,27 @@ fn parse_simple_insert() {
                         value_keyword: false,
                         explicit_row: false,
                         rows: vec![
-                            vec![
+                            Parens::with_empty_span(vec![
                                 Expr::Value(
                                     (Value::SingleQuotedString("Test Some Inserts".to_string()))
                                         .with_empty_span()
                                 ),
                                 Expr::value(number("1"))
-                            ],
-                            vec![
+                            ]),
+                            Parens::with_empty_span(vec![
                                 Expr::Value(
                                     (Value::SingleQuotedString("Test Entry 2".to_string()))
                                         .with_empty_span()
                                 ),
                                 Expr::value(number("2"))
-                            ],
-                            vec![
+                            ]),
+                            Parens::with_empty_span(vec![
                                 Expr::Value(
                                     (Value::SingleQuotedString("Test Entry 3".to_string()))
                                         .with_empty_span()
                                 ),
                                 Expr::value(number("3"))
-                            ]
+                            ])
                         ]
                     })),
                     order_by: None,
@@ -2011,13 +2011,13 @@ fn parse_ignore_insert() {
                     body: Box::new(SetExpr::Values(Values {
                         value_keyword: false,
                         explicit_row: false,
-                        rows: vec![vec![
+                        rows: vec![Parens::with_empty_span(vec![
                             Expr::Value(
                                 (Value::SingleQuotedString("Test Some Inserts".to_string()))
                                     .with_empty_span()
                             ),
                             Expr::value(number("1"))
-                        ]]
+                        ])]
                     })),
                     order_by: None,
                     limit_clause: None,
@@ -2067,13 +2067,13 @@ fn parse_priority_insert() {
                     body: Box::new(SetExpr::Values(Values {
                         value_keyword: false,
                         explicit_row: false,
-                        rows: vec![vec![
+                        rows: vec![Parens::with_empty_span(vec![
                             Expr::Value(
                                 (Value::SingleQuotedString("Test Some Inserts".to_string()))
                                     .with_empty_span()
                             ),
                             Expr::value(number("1"))
-                        ]]
+                        ])]
                     })),
                     order_by: None,
                     limit_clause: None,
@@ -2120,13 +2120,13 @@ fn parse_priority_insert() {
                     body: Box::new(SetExpr::Values(Values {
                         value_keyword: false,
                         explicit_row: false,
-                        rows: vec![vec![
+                        rows: vec![Parens::with_empty_span(vec![
                             Expr::Value(
                                 (Value::SingleQuotedString("Test Some Inserts".to_string()))
                                     .with_empty_span()
                             ),
                             Expr::value(number("1"))
-                        ]]
+                        ])]
                     })),
                     order_by: None,
                     limit_clause: None,
@@ -2176,9 +2176,9 @@ fn parse_insert_as() {
                     body: Box::new(SetExpr::Values(Values {
                         value_keyword: false,
                         explicit_row: false,
-                        rows: vec![vec![Expr::Value(
+                        rows: vec![Parens::with_empty_span(vec![Expr::Value(
                             (Value::SingleQuotedString("2024-01-01".to_string())).with_empty_span()
-                        )]]
+                        )])]
                     })),
                     order_by: None,
                     limit_clause: None,
@@ -2239,13 +2239,13 @@ fn parse_insert_as() {
                     body: Box::new(SetExpr::Values(Values {
                         value_keyword: false,
                         explicit_row: false,
-                        rows: vec![vec![
+                        rows: vec![Parens::with_empty_span(vec![
                             Expr::value(number("1")),
                             Expr::Value(
                                 (Value::SingleQuotedString("2024-01-01".to_string()))
                                     .with_empty_span()
                             )
-                        ]]
+                        ])]
                     })),
                     order_by: None,
                     limit_clause: None,
@@ -2296,13 +2296,13 @@ fn parse_replace_insert() {
                     body: Box::new(SetExpr::Values(Values {
                         value_keyword: false,
                         explicit_row: false,
-                        rows: vec![vec![
+                        rows: vec![Parens::with_empty_span(vec![
                             Expr::Value(
                                 (Value::SingleQuotedString("Test Some Inserts".to_string()))
                                     .with_empty_span()
                             ),
                             Expr::value(number("1"))
-                        ]]
+                        ])]
                     })),
                     order_by: None,
                     limit_clause: None,
@@ -2344,7 +2344,10 @@ fn parse_empty_row_insert() {
                     body: Box::new(SetExpr::Values(Values {
                         value_keyword: false,
                         explicit_row: false,
-                        rows: vec![vec![], vec![]]
+                        rows: vec![
+                            Parens::with_empty_span(vec![]),
+                            Parens::with_empty_span(vec![])
+                        ]
                     })),
                     order_by: None,
                     limit_clause: None,
@@ -2395,7 +2398,7 @@ fn parse_insert_with_on_duplicate_update() {
                     body: Box::new(SetExpr::Values(Values {
                         value_keyword: false,
                         explicit_row: false,
-                        rows: vec![vec![
+                        rows: vec![Parens::with_empty_span(vec![
                             Expr::Value(
                                 (Value::SingleQuotedString("accounting_manager".to_string()))
                                     .with_empty_span()
@@ -2410,7 +2413,7 @@ fn parse_insert_with_on_duplicate_update() {
                             Expr::Value((Value::Boolean(true)).with_empty_span()),
                             Expr::Value((Value::Boolean(true)).with_empty_span()),
                             Expr::Value((Value::Boolean(true)).with_empty_span()),
-                        ]]
+                        ])]
                     })),
                     order_by: None,
                     limit_clause: None,

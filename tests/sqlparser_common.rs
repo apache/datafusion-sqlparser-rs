@@ -100,8 +100,11 @@ fn parse_insert_values() {
         Expr::value(number("2")),
         Expr::value(number("3")),
     ];
-    let rows1 = vec![row.clone()];
-    let rows2 = vec![row.clone(), row];
+    let rows1 = vec![Parens::with_empty_span(row.clone())];
+    let rows2 = vec![
+        Parens::with_empty_span(row.clone()),
+        Parens::with_empty_span(row),
+    ];
 
     let sql = "INSERT customer VALUES (1, 2, 3)";
     check_one(sql, "customer", &[], &rows1, false);
@@ -140,7 +143,7 @@ fn parse_insert_values() {
         sql: &str,
         expected_table_name: &str,
         expected_columns: &[String],
-        expected_rows: &[Vec<Expr>],
+        expected_rows: &[Parens<Vec<Expr>>],
         expected_value_keyword: bool,
     ) {
         match verified_stmt(sql) {
@@ -666,6 +669,7 @@ fn parse_select_with_table_alias() {
                         TableAliasColumnDef::from_name("B"),
                         TableAliasColumnDef::from_name("C"),
                     ],
+                    at: None,
                 }),
                 args: None,
                 with_hints: vec![],
@@ -6583,6 +6587,24 @@ fn interval_disallow_interval_expr_double_colon() {
 }
 
 #[test]
+fn parse_text_type_modifier_double_colon_cast() {
+    let expr = verified_expr("ID::TEXT(16777216)");
+    assert_eq!(
+        expr,
+        Expr::Cast {
+            kind: CastKind::DoubleColon,
+            expr: Box::new(Expr::Identifier(Ident::new("ID"))),
+            data_type: DataType::Custom(
+                ObjectName::from(vec![Ident::new("TEXT")]),
+                vec!["16777216".to_string()]
+            ),
+            array: false,
+            format: None,
+        }
+    );
+}
+
+#[test]
 fn parse_interval_and_or_xor() {
     let sql = "SELECT col FROM test \
         WHERE d3_date > d1_date + INTERVAL '5 days' \
@@ -7858,6 +7880,7 @@ fn parse_recursive_cte() {
                 span: Span::empty(),
             },
             columns: vec![TableAliasColumnDef::from_name("val")],
+            at: None,
         },
         query: Box::new(cte_query),
         from: None,
@@ -9028,6 +9051,7 @@ fn lateral_function() {
                             vec![Ident::new("customer"), Ident::new("id")],
                         ))),
                     ],
+                    with_ordinality: false,
                     alias: None,
                 },
                 global: false,
@@ -10100,7 +10124,7 @@ fn parse_merge() {
                             kind: MergeInsertKind::Values(Values {
                                 value_keyword: false,
                                 explicit_row: false,
-                                rows: vec![vec![
+                                rows: vec![Parens::with_empty_span(vec![
                                     Expr::CompoundIdentifier(vec![
                                         Ident::new("stg"),
                                         Ident::new("A")
@@ -10113,7 +10137,7 @@ fn parse_merge() {
                                         Ident::new("stg"),
                                         Ident::new("C")
                                     ]),
-                                ]]
+                                ])]
                             }),
                             insert_predicate: None,
                         }),
@@ -11343,6 +11367,7 @@ fn parse_pivot_table() {
                     TableAliasColumnDef::from_name("c"),
                     TableAliasColumnDef::from_name("d"),
                 ],
+                at: None,
             })
         }
     );
@@ -11481,6 +11506,7 @@ fn parse_unpivot_table() {
                 .into_iter()
                 .map(TableAliasColumnDef::from_name)
                 .collect(),
+            at: None,
         }),
     };
     pretty_assertions::assert_eq!(verified_only_select(sql).from[0].relation, base_unpivot);

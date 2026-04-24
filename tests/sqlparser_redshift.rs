@@ -517,3 +517,28 @@ fn test_null_treatment_inside_and_outside_window_function() {
     redshift().verified_stmt("SELECT FIRST_VALUE(1 IGNORE NULLS) OVER () FROM (SELECT 1) t");
     redshift().verified_stmt("SELECT FIRST_VALUE(1) IGNORE NULLS OVER () FROM (SELECT 1) t");
 }
+
+#[test]
+fn test_partiql_from_alias_with_at_index() {
+    let dialects = all_dialects_where(|d| d.supports_partiql());
+    dialects.verified_stmt("SELECT * FROM lineitem AS l (a, b, c) AT idx");
+
+    let sql =
+        "SELECT index, val FROM (SELECT array('AAA', 'BBB') AS val) AS b, b.val AS val AT index";
+    let select = dialects.verified_only_select(sql);
+
+    match &select.from[1].relation {
+        TableFactor::Table { name, alias, .. } => {
+            assert_eq!(
+                name,
+                &ObjectName::from(vec![Ident::new("b"), Ident::new("val")])
+            );
+            assert_eq!(alias.as_ref().map(|a| &a.name), Some(&Ident::new("val")));
+            assert_eq!(
+                alias.as_ref().and_then(|a| a.at.as_ref()),
+                Some(&Ident::new("index"))
+            );
+        }
+        _ => panic!("expected table factor"),
+    }
+}

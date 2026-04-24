@@ -30,7 +30,7 @@ use helpers::{
 };
 
 use core::cmp::Ordering;
-use core::ops::Deref;
+use core::ops::{Deref, DerefMut};
 use core::{
     fmt::{self, Display},
     hash,
@@ -199,6 +199,45 @@ fn format_statement_list(f: &mut fmt::Formatter, statements: &[Statement]) -> fm
     // We manually insert semicolon for the last statement,
     // since display_separated doesn't handle that case.
     write!(f, ";")
+}
+
+/// A item `T` enclosed in a pair of parentheses
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Parens<T> {
+    /// the opening parenthesis token, i.e. `(`
+    pub opening_token: AttachedToken,
+    /// content enclosed in parentheses
+    pub content: T,
+    /// the closing parenthesis token, i.e. `)`
+    pub closing_token: AttachedToken,
+}
+
+impl<T> Parens<T> {
+    /// Constructor wrapping `content` into `Parens` with an empty span;
+    /// useful for testing purposes.
+    pub fn with_empty_span(content: T) -> Self {
+        Self {
+            opening_token: AttachedToken::empty(),
+            content,
+            closing_token: AttachedToken::empty(),
+        }
+    }
+}
+
+impl<T> Deref for Parens<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.content
+    }
+}
+
+impl<T> DerefMut for Parens<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.content
+    }
 }
 
 /// An identifier, decomposed into its value or character data and the quote style.
@@ -8658,6 +8697,15 @@ pub enum HiveIOFormat {
     FileFormat {
         /// The file format used for storage.
         format: FileFormat,
+    },
+    /// `USING <format>` syntax used by Spark SQL.
+    ///
+    /// Example: `CREATE TABLE t (i INT) USING PARQUET`
+    ///
+    /// See <https://spark.apache.org/docs/latest/sql-ref-syntax-ddl-create-table-datasource.html>
+    Using {
+        /// The data source or format name, e.g. `parquet`, `delta`, `csv`.
+        format: Ident,
     },
 }
 

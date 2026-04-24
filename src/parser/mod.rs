@@ -8301,6 +8301,7 @@ impl<'a> Parser<'a> {
                 Keyword::STORED,
                 Keyword::LOCATION,
                 Keyword::WITH,
+                Keyword::USING,
             ]) {
                 Some(Keyword::ROW) => {
                     hive_format
@@ -8339,6 +8340,16 @@ impl<'a> Parser<'a> {
                     } else {
                         break;
                     }
+                }
+                Some(Keyword::USING) if self.dialect.supports_create_table_using() => {
+                    let format = self.parse_identifier()?;
+                    hive_format.get_or_insert_with(HiveFormat::default).storage =
+                        Some(HiveIOFormat::Using { format });
+                }
+                Some(Keyword::USING) => {
+                    // USING is not a table format keyword in this dialect; put it back
+                    self.prev_token();
+                    break;
                 }
                 None => break,
                 _ => break,
@@ -12566,6 +12577,9 @@ impl<'a> Parser<'a> {
                 Keyword::TINYBLOB => Ok(DataType::TinyBlob),
                 Keyword::MEDIUMBLOB => Ok(DataType::MediumBlob),
                 Keyword::LONGBLOB => Ok(DataType::LongBlob),
+                Keyword::LONG if self.dialect.supports_long_type_as_bigint() => {
+                    Ok(DataType::BigInt(None))
+                }
                 Keyword::BYTES => Ok(DataType::Bytes(self.parse_optional_precision()?)),
                 Keyword::BIT => {
                     if self.parse_keyword(Keyword::VARYING) {
@@ -12643,7 +12657,16 @@ impl<'a> Parser<'a> {
                     self.expect_token(&Token::RParen)?;
                     Ok(DataType::FixedString(character_length))
                 }
-                Keyword::TEXT => Ok(DataType::Text),
+                Keyword::TEXT => {
+                    if let Some(modifiers) = self.parse_optional_type_modifiers()? {
+                        Ok(DataType::Custom(
+                            ObjectName::from(vec![Ident::new("TEXT")]),
+                            modifiers,
+                        ))
+                    } else {
+                        Ok(DataType::Text)
+                    }
+                }
                 Keyword::TINYTEXT => Ok(DataType::TinyText),
                 Keyword::MEDIUMTEXT => Ok(DataType::MediumText),
                 Keyword::LONGTEXT => Ok(DataType::LongText),
@@ -12700,8 +12723,7 @@ impl<'a> Parser<'a> {
                     let field_defs = self.parse_duckdb_struct_type_def()?;
                     Ok(DataType::Struct(field_defs, StructBracketKind::Parentheses))
                 }
-                Keyword::STRUCT if dialect_is!(dialect is BigQueryDialect | DatabricksDialect | GenericDialect) =>
-                {
+                Keyword::STRUCT if self.dialect.supports_struct_literal() => {
                     self.prev_token();
                     let (field_defs, _trailing_bracket) =
                         self.parse_struct_type_def(Self::parse_struct_field_def)?;
@@ -12721,6 +12743,17 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::LOWCARDINALITY if dialect_is!(dialect is ClickHouseDialect | GenericDialect) => {
                     Ok(self.parse_sub_type(DataType::LowCardinality)?)
+                }
+                Keyword::MAP if self.dialect.supports_map_literal_with_angle_brackets() => {
+                    self.expect_token(&Token::Lt)?;
+                    let key_data_type = self.parse_data_type()?;
+                    self.expect_token(&Token::Comma)?;
+                    let (value_data_type, _trailing_bracket) = self.parse_data_type_helper()?;
+                    trailing_bracket = self.expect_closing_angle_bracket(_trailing_bracket)?;
+                    Ok(DataType::Map(
+                        Box::new(key_data_type),
+                        Box::new(value_data_type),
+                    ))
                 }
                 Keyword::MAP if dialect_is!(dialect is ClickHouseDialect | GenericDialect) => {
                     self.prev_token();
@@ -12900,10 +12933,16 @@ impl<'a> Parser<'a> {
         match self.parse_optional_alias_inner(None, validator)? {
             Some(name) => {
                 let columns = self.parse_table_alias_column_defs()?;
+                let at = if self.dialect.supports_partiql() && self.parse_keyword(Keyword::AT) {
+                    Some(self.parse_identifier()?)
+                } else {
+                    None
+                };
                 Ok(Some(TableAlias {
                     explicit,
                     name,
                     columns,
+                    at,
                 }))
             }
             None => Ok(None),
@@ -14552,6 +14591,7 @@ impl<'a> Parser<'a> {
                         explicit: false,
                         name,
                         columns: vec![],
+                        at: None,
                     },
                     query,
                     from: None,
@@ -14596,6 +14636,7 @@ impl<'a> Parser<'a> {
                 explicit: false,
                 name,
                 columns,
+                at: None,
             },
             query,
             from: None,
@@ -15976,11 +16017,13 @@ impl<'a> Parser<'a> {
                 let name = self.parse_object_name(false)?;
                 self.expect_token(&Token::LParen)?;
                 let args = self.parse_optional_args()?;
+                let with_ordinality = self.parse_keywords(&[Keyword::WITH, Keyword::ORDINALITY]);
                 let alias = self.maybe_parse_table_alias()?;
                 Ok(TableFactor::Function {
                     lateral: true,
                     name,
                     args,
+                    with_ordinality,
                     alias,
                 })
             }
@@ -19104,16 +19147,15 @@ impl<'a> Parser<'a> {
             if parser.parse_keyword(Keyword::ROW) {
                 explicit_row = true;
             }
-
-            parser.expect_token(&Token::LParen)?;
-            if allow_empty && parser.peek_token().token == Token::RParen {
-                parser.next_token();
-                Ok(vec![])
-            } else {
-                let exprs = parser.parse_comma_separated(Parser::parse_expr)?;
-                parser.expect_token(&Token::RParen)?;
-                Ok(exprs)
-            }
+            Ok(Parens {
+                opening_token: parser.expect_token(&Token::LParen)?.into(),
+                content: if allow_empty && parser.peek_token_ref().token == Token::RParen {
+                    vec![]
+                } else {
+                    parser.parse_comma_separated(Parser::parse_expr)?
+                },
+                closing_token: parser.expect_token(&Token::RParen)?.into(),
+            })
         })?;
         Ok(Values {
             explicit_row,

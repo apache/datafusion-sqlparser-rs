@@ -90,7 +90,7 @@ pub use self::ddl::{
     SecurityLabelObjectKind, StatisticsKind, TagsColumnOption, TransformElement, TriggerObjectKind,
     Truncate, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
     UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
-    UserDefinedTypeStorage, UserMappingUser, ViewColumnDef
+    UserDefinedTypeStorage, UserMappingUser, ViewColumnDef,
 };
 pub use self::dml::{
     Delete, Insert, Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr,
@@ -4077,6 +4077,7 @@ pub enum Statement {
     /// Note: this is a PostgreSQL-specific statement.
     /// <https://www.postgresql.org/docs/current/sql-createrule.html>
     CreateRule(CreateRule),
+    /// ```sql
     /// CREATE STATISTICS [ IF NOT EXISTS ] name [ ( kind [, ...] ) ] ON expr [, ...] FROM table_name
     /// ```
     /// Note: this is a PostgreSQL-specific statement.

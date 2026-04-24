@@ -43,15 +43,14 @@ use crate::ast::{
     },
     ArgMode, AttachedToken, CommentDef, ConditionalStatements, CreateFunctionBody,
     CreateFunctionUsing, CreateServerOption, CreateTableLikeKind, CreateTableOptions,
-    CreateViewParams, DataType, Expr,
-    FileFormat, FunctionBehavior, FunctionCalledOnNull, FunctionDefinitionSetParam, FunctionDesc,
-    FunctionDeterminismSpecifier, FunctionParallel, FunctionSecurity, HiveDistributionStyle,
-    HiveFormat, HiveIOFormat, HiveRowFormat, HiveSetLocation, Ident, InitializeKind,
-    MySQLColumnPosition, ObjectName, OnCommit, OneOrManyWithParens, OperateFunctionArg,
-    OrderByExpr, ProjectionSelect, Query, RefreshModeKind, ResetConfig, RowAccessPolicy,
-    SequenceOptions, Spanned, SqlOption, StorageLifecyclePolicy, StorageSerializationPolicy,
-    TableVersion, Tag, TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod,
-    TriggerReferencing, Value, ValueWithSpan, WrappedCollection,
+    CreateViewParams, DataType, Expr, FileFormat, FunctionBehavior, FunctionCalledOnNull,
+    FunctionDefinitionSetParam, FunctionDesc, FunctionDeterminismSpecifier, FunctionParallel,
+    FunctionSecurity, HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat,
+    HiveSetLocation, Ident, InitializeKind, MySQLColumnPosition, ObjectName, OnCommit,
+    OneOrManyWithParens, OperateFunctionArg, OrderByExpr, ProjectionSelect, Query, RefreshModeKind,
+    ResetConfig, RowAccessPolicy, SequenceOptions, Spanned, SqlOption, StorageLifecyclePolicy,
+    StorageSerializationPolicy, TableVersion, Tag, TriggerEvent, TriggerExecBody, TriggerObject,
+    TriggerPeriod, TriggerReferencing, Value, ValueWithSpan, WrappedCollection,
 };
 use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
 use crate::keywords::Keyword;
@@ -3555,7 +3554,6 @@ impl fmt::Display for DistStyle {
     }
 }
 
-
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -5919,7 +5917,11 @@ impl fmt::Display for CreateForeignTable {
         write!(
             f,
             "CREATE FOREIGN TABLE {if_not_exists}{name} ({columns}) SERVER {server_name}",
-            if_not_exists = if self.if_not_exists { "IF NOT EXISTS " } else { "" },
+            if_not_exists = if self.if_not_exists {
+                "IF NOT EXISTS "
+            } else {
+                ""
+            },
             name = self.name,
             columns = display_comma_separated(&self.columns),
             server_name = self.server_name,
@@ -6967,11 +6969,7 @@ impl fmt::Display for CreateUserMapping {
         }
         write!(f, " FOR {} SERVER {}", self.user, self.server_name)?;
         if let Some(options) = &self.options {
-            write!(
-                f,
-                " OPTIONS ({})",
-                display_comma_separated(options)
-            )?;
+            write!(f, " OPTIONS ({})", display_comma_separated(options))?;
         }
         Ok(())
     }

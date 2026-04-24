@@ -950,9 +950,7 @@ fn parse_alter_collation() {
 #[test]
 fn parse_create_text_search_configuration() {
     assert_eq!(
-        pg().verified_stmt(
-            "CREATE TEXT SEARCH CONFIGURATION public.myconfig (PARSER = myparser)"
-        ),
+        pg().verified_stmt("CREATE TEXT SEARCH CONFIGURATION public.myconfig (PARSER = myparser)"),
         Statement::CreateTextSearchConfiguration(CreateTextSearchConfiguration {
             name: ObjectName::from(vec![Ident::new("public"), Ident::new("myconfig")]),
             options: vec![SqlOption::KeyValue {
@@ -963,7 +961,9 @@ fn parse_create_text_search_configuration() {
     );
 
     assert_eq!(
-        pg().parse_sql_statements("CREATE TEXT SEARCH CONFIGURATION myconfig PARSER = pg_catalog.default"),
+        pg().parse_sql_statements(
+            "CREATE TEXT SEARCH CONFIGURATION myconfig PARSER = pg_catalog.default"
+        ),
         Err(ParserError::ParserError(
             "Expected: (, found: PARSER".to_string()
         ))
@@ -6590,10 +6590,7 @@ fn parse_create_trigger_with_string_literal_args() {
         period: Some(TriggerPeriod::Before),
         period_before_table: true,
         events: vec![TriggerEvent::Insert, TriggerEvent::Update(vec![])],
-        table_name: ObjectName::from(vec![
-            Ident::new("public"),
-            Ident::new("film"),
-        ]),
+        table_name: ObjectName::from(vec![Ident::new("public"), Ident::new("film")]),
         referenced_table_name: None,
         referencing: vec![],
         trigger_object: Some(TriggerObjectKind::ForEach(TriggerObject::Row)),
@@ -6603,7 +6600,9 @@ fn parse_create_trigger_with_string_literal_args() {
             func_name: ObjectName::from(vec![Ident::new("tsvector_update_trigger")]),
             args: Some(vec![
                 Expr::Value(Value::SingleQuotedString("fulltext".to_string()).with_empty_span()),
-                Expr::Value(Value::SingleQuotedString("pg_catalog.english".to_string()).with_empty_span()),
+                Expr::Value(
+                    Value::SingleQuotedString("pg_catalog.english".to_string()).with_empty_span(),
+                ),
                 Expr::Value(Value::SingleQuotedString("title".to_string()).with_empty_span()),
                 Expr::Value(Value::SingleQuotedString("description".to_string()).with_empty_span()),
             ]),
@@ -7291,7 +7290,7 @@ fn parse_fulltext_column_and_index_in_postgres() {
         _ => unreachable!(),
     }
 
-    pg().verified_stmt("CREATE INDEX film_fulltext_idx ON film USING gist (fulltext)");
+    pg().verified_stmt("CREATE INDEX film_fulltext_idx ON film USING GIST (fulltext)");
 }
 
 #[test]
@@ -9342,8 +9341,7 @@ fn parse_pg_analyze() {
 
 #[test]
 fn parse_exclude_constraint_basic() {
-    let sql =
-        "CREATE TABLE t (room INT, CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =))";
+    let sql = "CREATE TABLE t (room INT, CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =))";
     match pg().verified_stmt(sql) {
         Statement::CreateTable(create_table) => {
             assert_eq!(1, create_table.constraints.len());
@@ -9387,8 +9385,7 @@ fn parse_exclude_constraint_multi_element() {
 
 #[test]
 fn parse_exclude_constraint_with_where() {
-    let sql =
-        "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =) WHERE (col > 0))";
+    let sql = "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =) WHERE (col > 0))";
     match pg().verified_stmt(sql) {
         Statement::CreateTable(create_table) => {
             assert_eq!(1, create_table.constraints.len());
@@ -9405,8 +9402,7 @@ fn parse_exclude_constraint_with_where() {
 
 #[test]
 fn parse_exclude_constraint_with_include() {
-    let sql =
-        "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =) INCLUDE (col))";
+    let sql = "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =) INCLUDE (col))";
     match pg().verified_stmt(sql) {
         Statement::CreateTable(create_table) => {
             assert_eq!(1, create_table.constraints.len());
@@ -9449,10 +9445,7 @@ fn parse_exclude_constraint_deferrable() {
                 TableConstraint::Exclusion(c) => {
                     let characteristics = c.characteristics.as_ref().unwrap();
                     assert_eq!(characteristics.deferrable, Some(true));
-                    assert_eq!(
-                        characteristics.initially,
-                        Some(DeferrableInitial::Deferred)
-                    );
+                    assert_eq!(characteristics.initially, Some(DeferrableInitial::Deferred));
                 }
                 other => panic!("Expected Exclusion, got {other:?}"),
             }
@@ -9463,8 +9456,7 @@ fn parse_exclude_constraint_deferrable() {
 
 #[test]
 fn parse_exclude_constraint_in_alter_table() {
-    let sql =
-        "ALTER TABLE t ADD CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =)";
+    let sql = "ALTER TABLE t ADD CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =)";
     pg().verified_stmt(sql);
 }
 
@@ -9641,10 +9633,7 @@ fn parse_create_aggregate_basic() {
             assert_eq!(agg.args.len(), 1);
             assert_eq!(agg.args[0].to_string(), "NUMERIC");
             assert_eq!(agg.options.len(), 4);
-            assert_eq!(
-                agg.options[0].to_string(),
-                "SFUNC = numeric_avg_accum"
-            );
+            assert_eq!(agg.options[0].to_string(), "SFUNC = numeric_avg_accum");
             assert_eq!(agg.options[1].to_string(), "STYPE = internal");
             assert_eq!(agg.options[2].to_string(), "FINALFUNC = numeric_avg");
             assert_eq!(agg.options[3].to_string(), "INITCOND = '0'");
@@ -9681,10 +9670,7 @@ fn parse_create_aggregate_with_moving_aggregate_options() {
             assert_eq!(agg.options.len(), 7);
             assert_eq!(agg.options[4].to_string(), "MSTYPE = FLOAT8");
             assert_eq!(agg.options[5].to_string(), "MFINALFUNC_EXTRA");
-            assert_eq!(
-                agg.options[6].to_string(),
-                "MFINALFUNC_MODIFY = READ_ONLY"
-            );
+            assert_eq!(agg.options[6].to_string(), "MFINALFUNC_MODIFY = READ_ONLY");
         }
         _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
     }
@@ -9730,7 +9716,10 @@ fn alter_domain_add_constraint() {
     assert_eq!(stmt.name.to_string(), "positive_int");
     assert!(matches!(
         stmt.operation,
-        AlterDomainOperation::AddConstraint { not_valid: false, .. }
+        AlterDomainOperation::AddConstraint {
+            not_valid: false,
+            ..
+        }
     ));
 }
 
@@ -9809,7 +9798,7 @@ fn alter_extension_update_to_version() {
 
 #[test]
 fn alter_procedure_set_search_path() {
-    let sql = "ALTER PROCEDURE myproc(integer) SET search_path = public";
+    let sql = "ALTER PROCEDURE myproc(INTEGER) SET search_path = public";
     let Statement::AlterFunction(stmt) = pg().verified_stmt(sql) else {
         unreachable!()
     };
@@ -9823,7 +9812,7 @@ fn alter_procedure_set_search_path() {
 
 #[test]
 fn alter_procedure_rename() {
-    let sql = "ALTER PROCEDURE myproc(integer, text) RENAME TO renamed_proc";
+    let sql = "ALTER PROCEDURE myproc(INTEGER, TEXT) RENAME TO renamed_proc";
     let Statement::AlterFunction(stmt) = pg().verified_stmt(sql) else {
         unreachable!()
     };
@@ -9918,10 +9907,7 @@ fn parse_create_subscription_with_options() {
         unreachable!()
     };
     assert_eq!(stmt.name.value, "mysub");
-    assert_eq!(
-        stmt.connection.to_string(),
-        "'host=localhost dbname=mydb'"
-    );
+    assert_eq!(stmt.connection.to_string(), "'host=localhost dbname=mydb'");
     assert_eq!(stmt.publications.len(), 2);
     assert_eq!(stmt.publications[0].value, "mypub");
     assert_eq!(stmt.publications[1].value, "otherpub");
@@ -9970,7 +9956,10 @@ fn parse_create_cast_without_function() {
     let Statement::CreateCast(stmt) = pg().verified_stmt(sql) else {
         unreachable!()
     };
-    assert!(matches!(stmt.function_kind, CastFunctionKind::WithoutFunction));
+    assert!(matches!(
+        stmt.function_kind,
+        CastFunctionKind::WithoutFunction
+    ));
     assert!(matches!(stmt.cast_context, CastContext::Explicit));
 }
 
@@ -10031,9 +10020,18 @@ fn parse_create_language_full() {
     assert!(stmt.or_replace);
     assert!(stmt.trusted);
     assert!(stmt.procedural);
-    assert_eq!(stmt.handler.as_ref().unwrap().to_string(), "plpgsql_call_handler");
-    assert_eq!(stmt.inline_handler.as_ref().unwrap().to_string(), "plpgsql_inline_handler");
-    assert_eq!(stmt.validator.as_ref().unwrap().to_string(), "plpgsql_validator");
+    assert_eq!(
+        stmt.handler.as_ref().unwrap().to_string(),
+        "plpgsql_call_handler"
+    );
+    assert_eq!(
+        stmt.inline_handler.as_ref().unwrap().to_string(),
+        "plpgsql_inline_handler"
+    );
+    assert_eq!(
+        stmt.validator.as_ref().unwrap().to_string(),
+        "plpgsql_validator"
+    );
 }
 
 #[test]
@@ -10182,7 +10180,8 @@ fn parse_create_or_replace_transform() {
 
 #[test]
 fn parse_security_label_on_table() {
-    let sql = "SECURITY LABEL FOR selinux ON TABLE public.t IS 'system_u:object_r:sepgsql_table_t:s0'";
+    let sql =
+        "SECURITY LABEL FOR selinux ON TABLE public.t IS 'system_u:object_r:sepgsql_table_t:s0'";
     let Statement::SecurityLabel(stmt) = pg().verified_stmt(sql) else {
         unreachable!()
     };
@@ -10245,7 +10244,8 @@ fn parse_create_user_mapping_basic() {
 
 #[test]
 fn parse_create_user_mapping_if_not_exists_with_options() {
-    let sql = r#"CREATE USER MAPPING IF NOT EXISTS FOR postgres SERVER my_server OPTIONS ("user" 'bob')"#;
+    let sql =
+        r#"CREATE USER MAPPING IF NOT EXISTS FOR postgres SERVER my_server OPTIONS ("user" 'bob')"#;
     let Statement::CreateUserMapping(stmt) = pg().verified_stmt(sql) else {
         unreachable!()
     };
@@ -10323,7 +10323,7 @@ fn alter_table_attach_partition_range() {
     let statements = sqlparser::parser::Parser::parse_sql(&dialect, sql).unwrap();
     assert_eq!(1, statements.len());
     match &statements[0] {
-        Statement::AlterTable { operations, .. } => {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
             assert_eq!(1, operations.len());
             match &operations[0] {
                 AlterTableOperation::AttachPartitionOf {
@@ -10335,14 +10335,8 @@ fn alter_table_attach_partition_range() {
                         ForValues::From { from, to } => {
                             assert_eq!(1, from.len());
                             assert_eq!(1, to.len());
-                            assert_eq!(
-                                "'2022-01-01 00:00:00+00'",
-                                from[0].to_string()
-                            );
-                            assert_eq!(
-                                "'2022-02-01 00:00:00+00'",
-                                to[0].to_string()
-                            );
+                            assert_eq!("'2022-01-01 00:00:00+00'", from[0].to_string());
+                            assert_eq!("'2022-02-01 00:00:00+00'", to[0].to_string());
                         }
                         _ => panic!("Expected ForValues::From"),
                     }
@@ -10361,7 +10355,7 @@ fn alter_table_attach_partition_list() {
     let statements = sqlparser::parser::Parser::parse_sql(&dialect, sql).unwrap();
     assert_eq!(1, statements.len());
     match &statements[0] {
-        Statement::AlterTable { operations, .. } => {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
             assert_eq!(1, operations.len());
             match &operations[0] {
                 AlterTableOperation::AttachPartitionOf {
@@ -10385,12 +10379,13 @@ fn alter_table_attach_partition_list() {
 
 #[test]
 fn alter_table_attach_partition_hash() {
-    let sql = "ALTER TABLE orders ATTACH PARTITION orders_p1 FOR VALUES WITH (MODULUS 4, REMAINDER 0)";
+    let sql =
+        "ALTER TABLE orders ATTACH PARTITION orders_p1 FOR VALUES WITH (MODULUS 4, REMAINDER 0)";
     let dialect = PostgreSqlDialect {};
     let statements = sqlparser::parser::Parser::parse_sql(&dialect, sql).unwrap();
     assert_eq!(1, statements.len());
     match &statements[0] {
-        Statement::AlterTable { operations, .. } => {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
             assert_eq!(1, operations.len());
             match &operations[0] {
                 AlterTableOperation::AttachPartitionOf {
@@ -10420,7 +10415,7 @@ fn alter_table_attach_partition_default() {
     let statements = sqlparser::parser::Parser::parse_sql(&dialect, sql).unwrap();
     assert_eq!(1, statements.len());
     match &statements[0] {
-        Statement::AlterTable { operations, .. } => {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
             assert_eq!(1, operations.len());
             match &operations[0] {
                 AlterTableOperation::AttachPartitionOf {
@@ -10444,7 +10439,7 @@ fn alter_table_detach_partition_plain() {
     let statements = sqlparser::parser::Parser::parse_sql(&dialect, sql).unwrap();
     assert_eq!(1, statements.len());
     match &statements[0] {
-        Statement::AlterTable { operations, .. } => {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
             assert_eq!(1, operations.len());
             match &operations[0] {
                 AlterTableOperation::DetachPartitionOf {
@@ -10470,7 +10465,7 @@ fn alter_table_detach_partition_concurrently() {
     let statements = sqlparser::parser::Parser::parse_sql(&dialect, sql).unwrap();
     assert_eq!(1, statements.len());
     match &statements[0] {
-        Statement::AlterTable { operations, .. } => {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
             assert_eq!(1, operations.len());
             match &operations[0] {
                 AlterTableOperation::DetachPartitionOf {
@@ -10496,7 +10491,7 @@ fn alter_table_detach_partition_finalize() {
     let statements = sqlparser::parser::Parser::parse_sql(&dialect, sql).unwrap();
     assert_eq!(1, statements.len());
     match &statements[0] {
-        Statement::AlterTable { operations, .. } => {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
             assert_eq!(1, operations.len());
             match &operations[0] {
                 AlterTableOperation::DetachPartitionOf {

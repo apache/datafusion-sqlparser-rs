@@ -9907,50 +9907,9 @@ impl<'a> Parser<'a> {
                 ))
             }
             Token::Word(w)
-                if w.keyword == Keyword::EXCLUDE
-                    && dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
+                if w.keyword == Keyword::EXCLUDE && self.dialect.supports_exclude_constraint() =>
             {
-                let index_method = if self.parse_keyword(Keyword::USING) {
-                    Some(self.parse_identifier()?)
-                } else {
-                    None
-                };
-
-                self.expect_token(&Token::LParen)?;
-                let elements = self.parse_comma_separated(|p| p.parse_exclusion_element())?;
-                self.expect_token(&Token::RParen)?;
-
-                let include = if self.parse_keyword(Keyword::INCLUDE) {
-                    self.expect_token(&Token::LParen)?;
-                    let cols = self.parse_comma_separated(|p| p.parse_identifier())?;
-                    self.expect_token(&Token::RParen)?;
-                    cols
-                } else {
-                    vec![]
-                };
-
-                let where_clause = if self.parse_keyword(Keyword::WHERE) {
-                    self.expect_token(&Token::LParen)?;
-                    let predicate = self.parse_expr()?;
-                    self.expect_token(&Token::RParen)?;
-                    Some(Box::new(predicate))
-                } else {
-                    None
-                };
-
-                let characteristics = self.parse_constraint_characteristics()?;
-
-                Ok(Some(
-                    ExclusionConstraint {
-                        name,
-                        index_method,
-                        elements,
-                        include,
-                        where_clause,
-                        characteristics,
-                    }
-                    .into(),
-                ))
+                Ok(Some(self.parse_exclude_constraint(name)?.into()))
             }
             _ => {
                 if name.is_some() {
@@ -9963,47 +9922,88 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_exclusion_element(&mut self) -> Result<ExclusionElement, ParserError> {
+    /// Parse an `EXCLUDE` table constraint, with the leading `EXCLUDE` keyword
+    /// already consumed.
+    fn parse_exclude_constraint(
+        &mut self,
+        name: Option<Ident>,
+    ) -> Result<ExcludeConstraint, ParserError> {
+        let index_method = if self.parse_keyword(Keyword::USING) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+
+        self.expect_token(&Token::LParen)?;
+        let elements = self.parse_comma_separated(|p| p.parse_exclude_constraint_element())?;
+        self.expect_token(&Token::RParen)?;
+
+        let include = if self.parse_keyword(Keyword::INCLUDE) {
+            self.expect_token(&Token::LParen)?;
+            let cols = self.parse_comma_separated(|p| p.parse_identifier())?;
+            self.expect_token(&Token::RParen)?;
+            cols
+        } else {
+            vec![]
+        };
+
+        let where_clause = if self.parse_keyword(Keyword::WHERE) {
+            self.expect_token(&Token::LParen)?;
+            let predicate = self.parse_expr()?;
+            self.expect_token(&Token::RParen)?;
+            Some(Box::new(predicate))
+        } else {
+            None
+        };
+
+        let characteristics = self.parse_constraint_characteristics()?;
+
+        Ok(ExcludeConstraint {
+            name,
+            index_method,
+            elements,
+            include,
+            where_clause,
+            characteristics,
+        })
+    }
+
+    fn parse_exclude_constraint_element(
+        &mut self,
+    ) -> Result<ExcludeConstraintElement, ParserError> {
         // `index_elem` grammar: { col | (expr) } [ opclass ] [ ASC | DESC ] [ NULLS FIRST | LAST ].
         // Shared with `CREATE INDEX` columns.
-        let (
-            OrderByExpr {
-                expr,
-                options: order,
-                ..
-            },
-            operator_class,
-        ) = self.parse_order_by_expr_inner(true)?;
-
+        let column = self.parse_create_index_expr()?;
         self.expect_keyword_is(Keyword::WITH)?;
-        let operator = self.parse_exclusion_operator()?;
-
-        Ok(ExclusionElement {
-            expr,
-            operator_class,
-            order,
-            operator,
-        })
+        let operator = self.parse_exclude_constraint_operator()?;
+        Ok(ExcludeConstraintElement { column, operator })
     }
 
     /// Parse the operator that follows `WITH` in an `EXCLUDE` element.
     ///
     /// Accepts either a single operator token (e.g. `=`, `&&`, `<->`) or the
     /// Postgres `OPERATOR(schema.op)` form for schema-qualified operators.
-    fn parse_exclusion_operator(&mut self) -> Result<ExclusionOperator, ParserError> {
+    fn parse_exclude_constraint_operator(
+        &mut self,
+    ) -> Result<ExcludeConstraintOperator, ParserError> {
         if self.parse_keyword(Keyword::OPERATOR) {
-            return Ok(ExclusionOperator::PgCustom(
+            return Ok(ExcludeConstraintOperator::PgCustom(
                 self.parse_pg_operator_ident_parts()?,
             ));
         }
 
+        // Reject structural delimiters (`,`, `)`, `;`, EOF) since they signal a
+        // missing operator between `WITH` and the next element / end of list.
         let operator_token = self.next_token();
-        match &operator_token.token {
-            Token::EOF | Token::RParen | Token::Comma | Token::SemiColon => {
-                self.expected("exclusion operator", operator_token)
-            }
-            _ => Ok(ExclusionOperator::Token(operator_token.token.to_string())),
+        if matches!(
+            operator_token.token,
+            Token::EOF | Token::RParen | Token::Comma | Token::SemiColon
+        ) {
+            return self.expected("exclusion operator", operator_token);
         }
+        Ok(ExcludeConstraintOperator::Token(
+            operator_token.token.to_string(),
+        ))
     }
 
     /// Parse the body of a Postgres `OPERATOR(schema.op)` form — i.e. the

@@ -208,6 +208,11 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    /// see <https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE>
+    fn supports_exclude_constraint(&self) -> bool {
+        true
+    }
+
     /// see <https://www.postgresql.org/docs/13/functions-math.html>
     fn supports_factorial_operator(&self) -> bool {
         true

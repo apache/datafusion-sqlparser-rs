@@ -20,7 +20,7 @@
 use crate::ast::{
     display_comma_separated, display_separated, ConstraintCharacteristics,
     ConstraintReferenceMatchKind, Expr, Ident, IndexColumn, IndexOption, IndexType,
-    KeyOrIndexDisplay, NullsDistinctOption, ObjectName, OrderByOptions, ReferentialAction,
+    KeyOrIndexDisplay, NullsDistinctOption, ObjectName, ReferentialAction,
 };
 use crate::tokenizer::Span;
 use core::fmt;
@@ -117,12 +117,12 @@ pub enum TableConstraint {
     ///
     /// [1]: https://www.postgresql.org/docs/current/sql-altertable.html
     UniqueUsingIndex(ConstraintUsingIndex),
-    /// PostgreSQL `EXCLUDE` constraint.
+    /// `EXCLUDE` constraint.
     ///
     /// `[ CONSTRAINT <name> ] EXCLUDE [ USING <index_method> ] ( <element> WITH <operator> [, ...] ) [ INCLUDE (<cols>) ] [ WHERE (<predicate>) ]`
     ///
-    /// See <https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE>
-    Exclusion(ExclusionConstraint),
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE)
+    Exclude(ExcludeConstraint),
 }
 
 impl From<UniqueConstraint> for TableConstraint {
@@ -161,9 +161,9 @@ impl From<FullTextOrSpatialConstraint> for TableConstraint {
     }
 }
 
-impl From<ExclusionConstraint> for TableConstraint {
-    fn from(constraint: ExclusionConstraint) -> Self {
-        TableConstraint::Exclusion(constraint)
+impl From<ExcludeConstraint> for TableConstraint {
+    fn from(constraint: ExcludeConstraint) -> Self {
+        TableConstraint::Exclude(constraint)
     }
 }
 
@@ -178,7 +178,7 @@ impl fmt::Display for TableConstraint {
             TableConstraint::FulltextOrSpatial(constraint) => constraint.fmt(f),
             TableConstraint::PrimaryKeyUsingIndex(c) => c.fmt_with_keyword(f, "PRIMARY KEY"),
             TableConstraint::UniqueUsingIndex(c) => c.fmt_with_keyword(f, "UNIQUE"),
-            TableConstraint::Exclusion(constraint) => constraint.fmt(f),
+            TableConstraint::Exclude(constraint) => constraint.fmt(f),
         }
     }
 }
@@ -617,22 +617,24 @@ impl crate::ast::Spanned for ConstraintUsingIndex {
     }
 }
 
-/// The operator that follows `WITH` in an `EXCLUDE` element.
+/// The operator that follows `WITH` in an `EXCLUDE` constraint element.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum ExclusionOperator {
+pub enum ExcludeConstraintOperator {
     /// A single operator token, e.g. `=`, `&&`, `<->`.
     Token(String),
     /// Postgres schema-qualified form: `OPERATOR(schema.op)`.
     PgCustom(Vec<String>),
 }
 
-impl fmt::Display for ExclusionOperator {
+impl fmt::Display for ExcludeConstraintOperator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ExclusionOperator::Token(token) => f.write_str(token),
-            ExclusionOperator::PgCustom(parts) => {
+            ExcludeConstraintOperator::Token(token) => f.write_str(token),
+            ExcludeConstraintOperator::PgCustom(parts) => {
                 write!(f, "OPERATOR({})", display_separated(parts, "."))
             }
         }
@@ -641,58 +643,46 @@ impl fmt::Display for ExclusionOperator {
 
 /// One element in an `EXCLUDE` constraint's element list.
 ///
-/// `{ column_name | ( expression ) } [ opclass ] [ ASC | DESC ] [ NULLS { FIRST | LAST } ] WITH <operator>`
-///
-/// See <https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE>
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct ExclusionElement {
-    /// The index expression or column name.
-    pub expr: Expr,
-    /// Optional operator class (e.g. `gist_geometry_ops_nd`).
-    pub operator_class: Option<ObjectName>,
-    /// Ordering options (ASC/DESC, NULLS FIRST/LAST).
-    pub order: OrderByOptions,
+pub struct ExcludeConstraintElement {
+    /// The index column (`{ column_name | ( expression ) } [ opclass ] [ ASC | DESC ] [ NULLS { FIRST | LAST } ]`).
+    pub column: IndexColumn,
     /// The exclusion operator.
-    pub operator: ExclusionOperator,
+    pub operator: ExcludeConstraintOperator,
 }
 
-impl fmt::Display for ExclusionElement {
+impl fmt::Display for ExcludeConstraintElement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.expr)?;
-        if let Some(opclass) = &self.operator_class {
-            write!(f, " {opclass}")?;
-        }
-        write!(f, "{} WITH {}", self.order, self.operator)
+        write!(f, "{} WITH {}", self.column, self.operator)
     }
 }
 
-impl crate::ast::Spanned for ExclusionElement {
+impl crate::ast::Spanned for ExcludeConstraintElement {
     fn span(&self) -> Span {
-        let mut span = self.expr.span();
-        if let Some(opclass) = &self.operator_class {
+        let mut span = self.column.column.expr.span();
+        if let Some(opclass) = &self.column.operator_class {
             span = span.union(&opclass.span());
         }
         span
     }
 }
 
-/// A PostgreSQL `EXCLUDE` constraint.
+/// An `EXCLUDE` constraint.
 ///
-/// `[ CONSTRAINT <name> ] EXCLUDE [ USING <index_method> ] ( <element> WITH <operator> [, ...] ) [ INCLUDE (<cols>) ] [ WHERE (<predicate>) ]`
-///
-/// See <https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE>
+/// [PostgreSql](https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct ExclusionConstraint {
+pub struct ExcludeConstraint {
     /// Optional constraint name.
     pub name: Option<Ident>,
     /// Optional index method (e.g. `gist`, `spgist`).
     pub index_method: Option<Ident>,
     /// The list of index expressions with their exclusion operators.
-    pub elements: Vec<ExclusionElement>,
+    pub elements: Vec<ExcludeConstraintElement>,
     /// Optional list of additional columns to include in the index.
     pub include: Vec<Ident>,
     /// Optional `WHERE` predicate to restrict the constraint to a subset of rows.
@@ -701,7 +691,7 @@ pub struct ExclusionConstraint {
     pub characteristics: Option<ConstraintCharacteristics>,
 }
 
-impl fmt::Display for ExclusionConstraint {
+impl fmt::Display for ExcludeConstraint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use crate::ast::ddl::display_constraint_name;
         write!(f, "{}EXCLUDE", display_constraint_name(&self.name))?;
@@ -722,7 +712,7 @@ impl fmt::Display for ExclusionConstraint {
     }
 }
 
-impl crate::ast::Spanned for ExclusionConstraint {
+impl crate::ast::Spanned for ExcludeConstraint {
     fn span(&self) -> Span {
         Span::union_iter(
             self.name

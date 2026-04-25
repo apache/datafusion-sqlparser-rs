@@ -903,6 +903,9 @@ impl<'a> Parser<'a> {
         let token = self.next_token();
 
         let (object_type, object_name) = match token.token {
+            Token::Word(w) if w.keyword == Keyword::AGGREGATE => {
+                (CommentObject::Aggregate, self.parse_object_name(false)?)
+            }
             Token::Word(w) if w.keyword == Keyword::COLLATION => {
                 (CommentObject::Collation, self.parse_object_name(false)?)
             }
@@ -931,6 +934,9 @@ impl<'a> Parser<'a> {
                     self.parse_object_name(false)?,
                 )
             }
+            Token::Word(w) if w.keyword == Keyword::POLICY => {
+                (CommentObject::Policy, self.parse_object_name(false)?)
+            }
             Token::Word(w) if w.keyword == Keyword::PROCEDURE => {
                 (CommentObject::Procedure, self.parse_object_name(false)?)
             }
@@ -946,6 +952,9 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::TABLE => {
                 (CommentObject::Table, self.parse_object_name(false)?)
             }
+            Token::Word(w) if w.keyword == Keyword::TRIGGER => {
+                (CommentObject::Trigger, self.parse_object_name(false)?)
+            }
             Token::Word(w) if w.keyword == Keyword::TYPE => {
                 (CommentObject::Type, self.parse_object_name(false)?)
             }
@@ -958,6 +967,33 @@ impl<'a> Parser<'a> {
             _ => self.expected("comment object_type", token)?,
         };
 
+        let arguments = match object_type {
+            CommentObject::Function | CommentObject::Procedure | CommentObject::Aggregate => {
+                if self.consume_token(&Token::LParen) {
+                    let list = self.parse_comma_separated0(Self::parse_data_type, Token::RParen)?;
+                    self.expect_token(&Token::RParen)?;
+                    Some(list)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+
+        if object_type == CommentObject::Aggregate && arguments.is_none() {
+            return Err(ParserError::ParserError(
+                "COMMENT ON AGGREGATE requires an argument list, e.g. AGGREGATE foo(int)".into(),
+            ));
+        }
+
+        let relation = match object_type {
+            CommentObject::Trigger | CommentObject::Policy => {
+                self.expect_keyword_is(Keyword::ON)?;
+                Some(self.parse_object_name(false)?)
+            }
+            _ => None,
+        };
+
         self.expect_keyword_is(Keyword::IS)?;
         let comment = if self.parse_keyword(Keyword::NULL) {
             None
@@ -967,6 +1003,8 @@ impl<'a> Parser<'a> {
         Ok(Statement::Comment {
             object_type,
             object_name,
+            arguments,
+            relation,
             comment,
             if_exists,
         })
@@ -12751,6 +12789,9 @@ impl<'a> Parser<'a> {
                 Ok(s)
             }
             Token::UnicodeStringLiteral(s) => Ok(s),
+            Token::DollarQuotedString(s) if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
+                Ok(s.value)
+            }
             _ => self.expected("literal string", next_token),
         }
     }

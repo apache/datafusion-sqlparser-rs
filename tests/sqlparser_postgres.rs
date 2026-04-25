@@ -1114,6 +1114,8 @@ fn parse_drop_and_comment_collation_ast() {
         Statement::Comment {
             object_type: CommentObject::Collation,
             object_name: ObjectName::from(vec![Ident::new("test0")]),
+            arguments: None,
+            relation: None,
             comment: Some("US English".to_string()),
             if_exists: false,
         }
@@ -10507,5 +10509,162 @@ fn alter_table_detach_partition_finalize() {
             }
         }
         _ => panic!("Expected AlterTable"),
+    }
+}
+
+#[test]
+fn parse_comment_on_trigger() {
+    match pg_and_generic()
+        .verified_stmt("COMMENT ON TRIGGER my_trigger ON public.my_table IS 'trigger note'")
+    {
+        Statement::Comment {
+            object_type,
+            object_name,
+            relation,
+            arguments,
+            comment,
+            if_exists,
+        } => {
+            assert_eq!(CommentObject::Trigger, object_type);
+            assert_eq!("my_trigger", object_name.to_string());
+            assert_eq!("public.my_table", relation.unwrap().to_string());
+            assert!(arguments.is_none());
+            assert_eq!(Some("trigger note".to_string()), comment);
+            assert!(!if_exists);
+        }
+        _ => panic!("Expected COMMENT ON TRIGGER"),
+    }
+
+    pg_and_generic().verified_stmt("COMMENT ON TRIGGER t ON s.foo IS NULL");
+    pg_and_generic().verified_stmt("COMMENT IF EXISTS ON TRIGGER t ON foo IS 'note'");
+}
+
+#[test]
+fn parse_comment_on_policy() {
+    match pg_and_generic()
+        .verified_stmt("COMMENT ON POLICY tenant_isolation ON public.docs IS 'rls'")
+    {
+        Statement::Comment {
+            object_type,
+            object_name,
+            relation,
+            arguments,
+            comment,
+            if_exists,
+        } => {
+            assert_eq!(CommentObject::Policy, object_type);
+            assert_eq!("tenant_isolation", object_name.to_string());
+            assert_eq!("public.docs", relation.unwrap().to_string());
+            assert!(arguments.is_none());
+            assert_eq!(Some("rls".to_string()), comment);
+            assert!(!if_exists);
+        }
+        _ => panic!("Expected COMMENT ON POLICY"),
+    }
+
+    pg_and_generic().verified_stmt("COMMENT ON POLICY p ON t IS NULL");
+}
+
+#[test]
+fn parse_comment_on_aggregate() {
+    match pg_and_generic().verified_stmt("COMMENT ON AGGREGATE my_sum(INTEGER) IS 'sums things'") {
+        Statement::Comment {
+            object_type,
+            object_name,
+            relation,
+            arguments,
+            comment,
+            if_exists,
+        } => {
+            assert_eq!(CommentObject::Aggregate, object_type);
+            assert_eq!("my_sum", object_name.to_string());
+            assert!(relation.is_none());
+            let args = arguments.expect("aggregate should carry argument types");
+            assert_eq!(1, args.len());
+            assert!(matches!(args[0], DataType::Integer(_)));
+            assert_eq!(Some("sums things".to_string()), comment);
+            assert!(!if_exists);
+        }
+        _ => panic!("Expected COMMENT ON AGGREGATE"),
+    }
+
+    pg_and_generic().verified_stmt("COMMENT ON AGGREGATE public.avg(DOUBLE PRECISION) IS 'avg'");
+    pg_and_generic().verified_stmt("COMMENT ON AGGREGATE s.f(INTEGER, TEXT) IS NULL");
+    pg_and_generic().verified_stmt("COMMENT ON AGGREGATE no_args() IS 'none'");
+}
+
+#[test]
+fn parse_comment_on_aggregate_requires_argument_list() {
+    let result = pg().parse_sql_statements("COMMENT ON AGGREGATE foo IS 'bad'");
+    assert!(
+        result.is_err(),
+        "COMMENT ON AGGREGATE without argument list must error, got: {result:?}"
+    );
+}
+
+#[test]
+fn parse_comment_on_function_with_arg_types() {
+    match pg_and_generic().verified_stmt("COMMENT ON FUNCTION add(INTEGER, INTEGER) IS 'adds'") {
+        Statement::Comment {
+            object_type,
+            object_name,
+            relation,
+            arguments,
+            comment,
+            if_exists,
+        } => {
+            assert_eq!(CommentObject::Function, object_type);
+            assert_eq!("add", object_name.to_string());
+            assert!(relation.is_none());
+            let args = arguments.expect("function should carry argument types");
+            assert_eq!(2, args.len());
+            assert_eq!(Some("adds".to_string()), comment);
+            assert!(!if_exists);
+        }
+        _ => panic!("Expected COMMENT ON FUNCTION"),
+    }
+
+    pg_and_generic().verified_stmt("COMMENT ON FUNCTION public.noop() IS 'no args'");
+    pg_and_generic().verified_stmt("COMMENT ON FUNCTION f(TEXT) IS NULL");
+    match pg_and_generic().verified_stmt("COMMENT ON FUNCTION f IS 'bare'") {
+        Statement::Comment {
+            object_type,
+            arguments,
+            ..
+        } => {
+            assert_eq!(CommentObject::Function, object_type);
+            assert!(arguments.is_none());
+        }
+        _ => panic!("Expected COMMENT ON FUNCTION"),
+    }
+}
+
+#[test]
+fn parse_comment_dollar_quoted_body() {
+    pg_and_generic().one_statement_parses_to(
+        "COMMENT ON TABLE foo IS $$hello world$$",
+        "COMMENT ON TABLE foo IS 'hello world'",
+    );
+
+    pg_and_generic().one_statement_parses_to(
+        "COMMENT ON TABLE foo IS $tag$multi\nline$tag$",
+        "COMMENT ON TABLE foo IS 'multi\nline'",
+    );
+
+    pg_and_generic().one_statement_parses_to(
+        "COMMENT ON TABLE foo IS $$it's escaped$$",
+        "COMMENT ON TABLE foo IS 'it''s escaped'",
+    );
+
+    match pg_and_generic()
+        .parse_sql_statements("COMMENT ON TABLE foo IS $$hello$$")
+        .unwrap()
+        .pop()
+        .unwrap()
+    {
+        Statement::Comment { comment, .. } => {
+            assert_eq!(Some("hello".to_string()), comment);
+        }
+        _ => panic!("Expected COMMENT"),
     }
 }

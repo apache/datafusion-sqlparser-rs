@@ -11165,6 +11165,7 @@ impl<'a> Parser<'a> {
             Keyword::TRIGGER,
             Keyword::EXTENSION,
             Keyword::PROCEDURE,
+            Keyword::DEFAULT,
         ])?;
         match object_type {
             Keyword::SCHEMA => {
@@ -11180,6 +11181,7 @@ impl<'a> Parser<'a> {
                 self.expect_keyword(Keyword::TABLE)?;
                 self.parse_alter_table(true)
             }
+            Keyword::DEFAULT => self.parse_alter_default_privileges().map(Into::into),
             Keyword::INDEX => {
                 let index_name = self.parse_object_name(false)?;
                 let operation = if self.parse_keyword(Keyword::RENAME) {
@@ -11225,7 +11227,7 @@ impl<'a> Parser<'a> {
             Keyword::EXTENSION => self.parse_alter_extension(),
             // unreachable because expect_one_of_keywords used above
             unexpected_keyword => Err(ParserError::ParserError(
-                format!("Internal parser error: expected any of {{VIEW, TYPE, COLLATION, TABLE, INDEX, FUNCTION, AGGREGATE, ROLE, POLICY, CONNECTOR, ICEBERG, SCHEMA, USER, OPERATOR, DOMAIN, TRIGGER, EXTENSION, PROCEDURE}}, got {unexpected_keyword:?}"),
+                format!("Internal parser error: expected any of {{VIEW, TYPE, COLLATION, TABLE, INDEX, FUNCTION, AGGREGATE, ROLE, POLICY, CONNECTOR, ICEBERG, SCHEMA, USER, OPERATOR, DOMAIN, TRIGGER, EXTENSION, PROCEDURE, DEFAULT}}, got {unexpected_keyword:?}"),
             )),
         }
     }
@@ -11638,12 +11640,27 @@ impl<'a> Parser<'a> {
     pub fn parse_alter_type(&mut self) -> Result<Statement, ParserError> {
         let name = self.parse_object_name(false)?;
 
-        if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+        let operation = if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
             let new_name = self.parse_identifier()?;
-            Ok(Statement::AlterType(AlterType {
-                name,
-                operation: AlterTypeOperation::Rename(AlterTypeRename { new_name }),
-            }))
+            AlterTypeOperation::Rename(AlterTypeRename { new_name })
+        } else if self.parse_keywords(&[Keyword::RENAME, Keyword::VALUE]) {
+            let existing_enum_value = self.parse_identifier()?;
+            self.expect_keyword(Keyword::TO)?;
+            let new_enum_value = self.parse_identifier()?;
+            AlterTypeOperation::RenameValue(AlterTypeRenameValue {
+                from: existing_enum_value,
+                to: new_enum_value,
+            })
+        } else if self.parse_keywords(&[Keyword::RENAME, Keyword::ATTRIBUTE]) {
+            let old_name = self.parse_identifier()?;
+            self.expect_keyword(Keyword::TO)?;
+            let new_name = self.parse_identifier()?;
+            let drop_behavior = self.parse_optional_drop_behavior();
+            AlterTypeOperation::RenameAttribute {
+                old_name,
+                new_name,
+                drop_behavior,
+            }
         } else if self.parse_keywords(&[Keyword::ADD, Keyword::VALUE]) {
             let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
             let new_enum_value = self.parse_identifier()?;
@@ -11654,32 +11671,177 @@ impl<'a> Parser<'a> {
             } else {
                 None
             };
-
-            Ok(Statement::AlterType(AlterType {
-                name,
-                operation: AlterTypeOperation::AddValue(AlterTypeAddValue {
-                    if_not_exists,
-                    value: new_enum_value,
-                    position,
-                }),
-            }))
-        } else if self.parse_keywords(&[Keyword::RENAME, Keyword::VALUE]) {
-            let existing_enum_value = self.parse_identifier()?;
-            self.expect_keyword(Keyword::TO)?;
-            let new_enum_value = self.parse_identifier()?;
-
-            Ok(Statement::AlterType(AlterType {
-                name,
-                operation: AlterTypeOperation::RenameValue(AlterTypeRenameValue {
-                    from: existing_enum_value,
-                    to: new_enum_value,
-                }),
-            }))
+            AlterTypeOperation::AddValue(AlterTypeAddValue {
+                if_not_exists,
+                value: new_enum_value,
+                position,
+            })
+        } else if self.parse_keywords(&[Keyword::ADD, Keyword::ATTRIBUTE]) {
+            let attr_name = self.parse_identifier()?;
+            let data_type = self.parse_data_type()?;
+            let collation = if self.parse_keyword(Keyword::COLLATE) {
+                Some(self.parse_object_name(false)?)
+            } else {
+                None
+            };
+            let drop_behavior = self.parse_optional_drop_behavior();
+            AlterTypeOperation::AddAttribute {
+                name: attr_name,
+                data_type,
+                collation,
+                drop_behavior,
+            }
+        } else if self.parse_keywords(&[Keyword::DROP, Keyword::ATTRIBUTE]) {
+            let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+            let attr_name = self.parse_identifier()?;
+            let drop_behavior = self.parse_optional_drop_behavior();
+            AlterTypeOperation::DropAttribute {
+                if_exists,
+                name: attr_name,
+                drop_behavior,
+            }
+        } else if self.parse_keywords(&[Keyword::ALTER, Keyword::ATTRIBUTE]) {
+            let attr_name = self.parse_identifier()?;
+            let _ = self.parse_keywords(&[Keyword::SET, Keyword::DATA]);
+            self.expect_keyword(Keyword::TYPE)?;
+            let data_type = self.parse_data_type()?;
+            let collation = if self.parse_keyword(Keyword::COLLATE) {
+                Some(self.parse_object_name(false)?)
+            } else {
+                None
+            };
+            let drop_behavior = self.parse_optional_drop_behavior();
+            AlterTypeOperation::AlterAttribute {
+                name: attr_name,
+                data_type,
+                collation,
+                drop_behavior,
+            }
+        } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            let new_owner = self.parse_owner()?;
+            AlterTypeOperation::OwnerTo { new_owner }
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+            let new_schema = self.parse_object_name(false)?;
+            AlterTypeOperation::SetSchema { new_schema }
         } else {
-            self.expected_ref(
-                "{RENAME TO | { RENAME | ADD } VALUE}",
+            return self.expected_ref(
+                "{RENAME TO | RENAME VALUE | RENAME ATTRIBUTE | ADD VALUE | \
+                 ADD ATTRIBUTE | DROP ATTRIBUTE | ALTER ATTRIBUTE | OWNER TO | SET SCHEMA}",
                 self.peek_token_ref(),
-            )
+            );
+        };
+
+        Ok(Statement::AlterType(AlterType { name, operation }))
+    }
+
+    /// Parse a [Statement::AlterDefaultPrivileges].
+    ///
+    /// The leading `ALTER DEFAULT` keyword sequence has already been consumed by
+    /// [`Self::parse_alter`].
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-alterdefaultprivileges.html)
+    pub fn parse_alter_default_privileges(
+        &mut self,
+    ) -> Result<AlterDefaultPrivileges, ParserError> {
+        self.expect_keyword(Keyword::PRIVILEGES)?;
+
+        let for_roles = if self.parse_keyword(Keyword::FOR) {
+            // PostgreSQL accepts ROLE or USER as synonyms here.
+            self.expect_one_of_keywords(&[Keyword::ROLE, Keyword::USER])?;
+            self.parse_comma_separated(Parser::parse_identifier)?
+        } else {
+            Vec::new()
+        };
+
+        let in_schemas = if self.parse_keywords(&[Keyword::IN, Keyword::SCHEMA]) {
+            self.parse_comma_separated(Parser::parse_identifier)?
+        } else {
+            Vec::new()
+        };
+
+        let action = self.parse_alter_default_privileges_action()?;
+
+        Ok(AlterDefaultPrivileges {
+            for_roles,
+            in_schemas,
+            action,
+        })
+    }
+
+    fn parse_alter_default_privileges_action(
+        &mut self,
+    ) -> Result<AlterDefaultPrivilegesAction, ParserError> {
+        let kw = self.expect_one_of_keywords(&[Keyword::GRANT, Keyword::REVOKE])?;
+        match kw {
+            Keyword::GRANT => {
+                let privileges = self.parse_alter_default_privileges_privileges()?;
+                self.expect_keyword(Keyword::ON)?;
+                let object_type = self.parse_alter_default_privileges_object_type()?;
+                self.expect_keyword(Keyword::TO)?;
+                let grantees = self.parse_grantees()?;
+                let with_grant_option =
+                    self.parse_keywords(&[Keyword::WITH, Keyword::GRANT, Keyword::OPTION]);
+                Ok(AlterDefaultPrivilegesAction::Grant {
+                    privileges,
+                    object_type,
+                    grantees,
+                    with_grant_option,
+                })
+            }
+            Keyword::REVOKE => {
+                let grant_option_for =
+                    self.parse_keywords(&[Keyword::GRANT, Keyword::OPTION, Keyword::FOR]);
+                let privileges = self.parse_alter_default_privileges_privileges()?;
+                self.expect_keyword(Keyword::ON)?;
+                let object_type = self.parse_alter_default_privileges_object_type()?;
+                self.expect_keyword(Keyword::FROM)?;
+                let grantees = self.parse_grantees()?;
+                let cascade = self.parse_cascade_option();
+                Ok(AlterDefaultPrivilegesAction::Revoke {
+                    grant_option_for,
+                    privileges,
+                    object_type,
+                    grantees,
+                    cascade,
+                })
+            }
+            unexpected_keyword => Err(ParserError::ParserError(format!(
+                "Internal parser error: expected GRANT or REVOKE, got {unexpected_keyword:?}"
+            ))),
+        }
+    }
+
+    fn parse_alter_default_privileges_privileges(&mut self) -> Result<Privileges, ParserError> {
+        if self.parse_keyword(Keyword::ALL) {
+            Ok(Privileges::All {
+                with_privileges_keyword: self.parse_keyword(Keyword::PRIVILEGES),
+            })
+        } else {
+            Ok(Privileges::Actions(self.parse_actions_list()?))
+        }
+    }
+
+    fn parse_alter_default_privileges_object_type(
+        &mut self,
+    ) -> Result<AlterDefaultPrivilegesObjectType, ParserError> {
+        let kw = self.expect_one_of_keywords(&[
+            Keyword::TABLES,
+            Keyword::SEQUENCES,
+            Keyword::FUNCTIONS,
+            Keyword::ROUTINES,
+            Keyword::TYPES,
+            Keyword::SCHEMAS,
+        ])?;
+        match kw {
+            Keyword::TABLES => Ok(AlterDefaultPrivilegesObjectType::Tables),
+            Keyword::SEQUENCES => Ok(AlterDefaultPrivilegesObjectType::Sequences),
+            Keyword::FUNCTIONS => Ok(AlterDefaultPrivilegesObjectType::Functions),
+            Keyword::ROUTINES => Ok(AlterDefaultPrivilegesObjectType::Routines),
+            Keyword::TYPES => Ok(AlterDefaultPrivilegesObjectType::Types),
+            Keyword::SCHEMAS => Ok(AlterDefaultPrivilegesObjectType::Schemas),
+            unexpected_keyword => Err(ParserError::ParserError(format!(
+                "Internal parser error: expected one of {{TABLES, SEQUENCES, FUNCTIONS, ROUTINES, TYPES, SCHEMAS}}, got {unexpected_keyword:?}"
+            ))),
         }
     }
 

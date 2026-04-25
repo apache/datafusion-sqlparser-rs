@@ -270,6 +270,7 @@ impl Spanned for Values {
 /// - [Statement::CreateTextSearchParser]
 /// - [Statement::CreateTextSearchTemplate]
 /// - [Statement::AlterCollation]
+/// - [Statement::AlterDefaultPrivileges]
 /// - [Statement::Fetch]
 /// - [Statement::Flush]
 /// - [Statement::Discard]
@@ -435,6 +436,7 @@ impl Spanned for Statement {
             Statement::AlterFunction { .. } => Span::empty(),
             Statement::AlterType { .. } => Span::empty(),
             Statement::AlterCollation { .. } => Span::empty(),
+            Statement::AlterDefaultPrivileges { .. } => Span::empty(),
             Statement::AlterOperator { .. } => Span::empty(),
             Statement::AlterOperatorFamily { .. } => Span::empty(),
             Statement::AlterOperatorClass { .. } => Span::empty(),

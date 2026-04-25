@@ -56,6 +56,7 @@ pub use self::data_type::{
     ExactNumberInfo, IntervalFields, StructBracketKind, TimezoneInfo,
 };
 pub use self::dcl::{
+    AlterDefaultPrivileges, AlterDefaultPrivilegesAction, AlterDefaultPrivilegesObjectType,
     AlterRoleOperation, CreateRole, Grant, ResetConfig, Revoke, RoleOption, SecondaryRoles,
     SetConfigValue, Use,
 };
@@ -3823,6 +3824,14 @@ pub enum Statement {
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altercollation.html)
     AlterCollation(AlterCollation),
     /// ```sql
+    /// ALTER DEFAULT PRIVILEGES
+    ///     [ FOR { ROLE | USER } target_role [, ...] ]
+    ///     [ IN SCHEMA schema_name [, ...] ]
+    ///     abbreviated_grant_or_revoke
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterdefaultprivileges.html)
+    AlterDefaultPrivileges(AlterDefaultPrivileges),
+    /// ```sql
     /// ALTER OPERATOR
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alteroperator.html)
@@ -5721,6 +5730,9 @@ impl fmt::Display for Statement {
                 write!(f, "ALTER TYPE {name} {operation}")
             }
             Statement::AlterCollation(alter_collation) => write!(f, "{alter_collation}"),
+            Statement::AlterDefaultPrivileges(alter_default_privileges) => {
+                write!(f, "{alter_default_privileges}")
+            }
             Statement::AlterOperator(alter_operator) => write!(f, "{alter_operator}"),
             Statement::AlterOperatorFamily(alter_operator_family) => {
                 write!(f, "{alter_operator_family}")
@@ -7574,6 +7586,9 @@ pub struct Grantee {
 
 impl fmt::Display for Grantee {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if matches!(self.grantee_type, GranteesType::Public) {
+            return write!(f, "PUBLIC");
+        }
         match self.grantee_type {
             GranteesType::Role => {
                 write!(f, "ROLE ")?;
@@ -7587,9 +7602,7 @@ impl fmt::Display for Grantee {
             GranteesType::Group => {
                 write!(f, "GROUP ")?;
             }
-            GranteesType::Public => {
-                write!(f, "PUBLIC ")?;
-            }
+            GranteesType::Public => {}
             GranteesType::DatabaseRole => {
                 write!(f, "DATABASE ROLE ")?;
             }

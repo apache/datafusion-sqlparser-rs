@@ -1144,6 +1144,82 @@ pub enum AlterTypeOperation {
     AddValue(AlterTypeAddValue),
     /// Rename an existing value of the type.
     RenameValue(AlterTypeRenameValue),
+    /// Change the type owner.
+    ///
+    /// ```sql
+    /// ALTER TYPE name OWNER TO { new_owner | CURRENT_ROLE | CURRENT_USER | SESSION_USER }
+    /// ```
+    OwnerTo {
+        /// New owner specification.
+        new_owner: Owner,
+    },
+    /// Move the type to a new schema.
+    ///
+    /// ```sql
+    /// ALTER TYPE name SET SCHEMA new_schema
+    /// ```
+    SetSchema {
+        /// Target schema name.
+        new_schema: ObjectName,
+    },
+    /// Add an attribute to a composite type.
+    ///
+    /// ```sql
+    /// ALTER TYPE name ADD ATTRIBUTE attribute_name data_type
+    ///     [COLLATE collation] [CASCADE | RESTRICT]
+    /// ```
+    AddAttribute {
+        /// Attribute name being added.
+        name: Ident,
+        /// Attribute data type.
+        data_type: DataType,
+        /// Optional `COLLATE` clause.
+        collation: Option<ObjectName>,
+        /// Optional `CASCADE | RESTRICT` modifier.
+        drop_behavior: Option<DropBehavior>,
+    },
+    /// Drop an attribute from a composite type.
+    ///
+    /// ```sql
+    /// ALTER TYPE name DROP ATTRIBUTE [IF EXISTS] attribute_name [CASCADE | RESTRICT]
+    /// ```
+    DropAttribute {
+        /// Whether `IF EXISTS` was specified.
+        if_exists: bool,
+        /// Attribute being dropped.
+        name: Ident,
+        /// Optional `CASCADE | RESTRICT` modifier.
+        drop_behavior: Option<DropBehavior>,
+    },
+    /// Alter an attribute of a composite type.
+    ///
+    /// ```sql
+    /// ALTER TYPE name ALTER ATTRIBUTE attribute_name [SET DATA] TYPE data_type
+    ///     [COLLATE collation] [CASCADE | RESTRICT]
+    /// ```
+    AlterAttribute {
+        /// Attribute being altered.
+        name: Ident,
+        /// New attribute data type.
+        data_type: DataType,
+        /// Optional `COLLATE` clause.
+        collation: Option<ObjectName>,
+        /// Optional `CASCADE | RESTRICT` modifier.
+        drop_behavior: Option<DropBehavior>,
+    },
+    /// Rename an attribute of a composite type.
+    ///
+    /// ```sql
+    /// ALTER TYPE name RENAME ATTRIBUTE old_name TO new_name [CASCADE | RESTRICT]
+    /// ```
+    RenameAttribute {
+        /// Existing attribute name.
+        old_name: Ident,
+        /// New attribute name.
+        new_name: Ident,
+        /// Optional `CASCADE | RESTRICT` modifier.
+        drop_behavior: Option<DropBehavior>,
+    },
 }
 
 /// See [AlterTypeOperation::Rename]
@@ -1219,6 +1295,68 @@ impl fmt::Display for AlterTypeOperation {
             }
             Self::RenameValue(AlterTypeRenameValue { from, to }) => {
                 write!(f, "RENAME VALUE {from} TO {to}")
+            }
+            Self::OwnerTo { new_owner } => {
+                write!(f, "OWNER TO {new_owner}")
+            }
+            Self::SetSchema { new_schema } => {
+                write!(f, "SET SCHEMA {new_schema}")
+            }
+            Self::AddAttribute {
+                name,
+                data_type,
+                collation,
+                drop_behavior,
+            } => {
+                write!(f, "ADD ATTRIBUTE {name} {data_type}")?;
+                if let Some(collation) = collation {
+                    write!(f, " COLLATE {collation}")?;
+                }
+                if let Some(drop_behavior) = drop_behavior {
+                    write!(f, " {drop_behavior}")?;
+                }
+                Ok(())
+            }
+            Self::DropAttribute {
+                if_exists,
+                name,
+                drop_behavior,
+            } => {
+                write!(f, "DROP ATTRIBUTE")?;
+                if *if_exists {
+                    write!(f, " IF EXISTS")?;
+                }
+                write!(f, " {name}")?;
+                if let Some(drop_behavior) = drop_behavior {
+                    write!(f, " {drop_behavior}")?;
+                }
+                Ok(())
+            }
+            Self::AlterAttribute {
+                name,
+                data_type,
+                collation,
+                drop_behavior,
+            } => {
+                write!(f, "ALTER ATTRIBUTE {name} SET DATA TYPE {data_type}")?;
+                if let Some(collation) = collation {
+                    write!(f, " COLLATE {collation}")?;
+                }
+                if let Some(drop_behavior) = drop_behavior {
+                    write!(f, " {drop_behavior}")?;
+                }
+                Ok(())
+            }
+            Self::RenameAttribute {
+                old_name,
+                new_name,
+                drop_behavior,
+            } => {
+                write!(f, "RENAME ATTRIBUTE {old_name} TO {new_name}")?;
+                if let Some(drop_behavior) = drop_behavior {
+                    write!(f, " {drop_behavior}")?;
+                }
+                Ok(())
             }
         }
     }

@@ -9919,6 +9919,15 @@ fn parse_grant() {
     verified_stmt("GRANT ALL ON TYPE t1, t2 TO role1");
     verified_stmt("GRANT USAGE ON DOMAIN sc1.email_addr TO ROLE role1");
     verified_stmt("GRANT ALL ON DOMAIN d1, d2 TO role1");
+
+    // Regression: Grantee Display used to emit "PUBLIC " with a trailing space,
+    // breaking round-trip for TO PUBLIC. MSSQL treats PUBLIC as a reserved
+    // grantee identifier, so scope to dialects that parse it as GranteesType::Public.
+    all_dialects_where(|d| {
+        !d.get_reserved_grantees_types()
+            .contains(&GranteesType::Public)
+    })
+    .verified_stmt("GRANT SELECT ON my_table TO PUBLIC");
 }
 
 #[test]

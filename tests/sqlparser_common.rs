@@ -9878,6 +9878,47 @@ fn parse_grant() {
     verified_stmt("GRANT ROLE role1 TO ROLE role2");
     verified_stmt("GRANT ROLE role1 TO USER user");
     verified_stmt("GRANT CREATE SCHEMA ON DATABASE db1 TO ROLE role1");
+
+    let sql_type = "GRANT USAGE ON TYPE user_role TO app_user";
+    match verified_stmt(sql_type) {
+        Statement::Grant(Grant {
+            privileges,
+            objects,
+            grantees,
+            ..
+        }) => match (privileges, objects) {
+            (Privileges::Actions(actions), Some(GrantObjects::Types(types))) => {
+                assert_eq!(vec![Action::Usage], actions);
+                assert_eq_vec(&["user_role"], &types);
+                assert_eq_vec(&["app_user"], &grantees);
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+
+    let sql_domain = "GRANT USAGE ON DOMAIN email_addr TO app_user";
+    match verified_stmt(sql_domain) {
+        Statement::Grant(Grant {
+            privileges,
+            objects,
+            grantees,
+            ..
+        }) => match (privileges, objects) {
+            (Privileges::Actions(actions), Some(GrantObjects::Domains(domains))) => {
+                assert_eq!(vec![Action::Usage], actions);
+                assert_eq_vec(&["email_addr"], &domains);
+                assert_eq_vec(&["app_user"], &grantees);
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+
+    verified_stmt("GRANT USAGE ON TYPE sc1.user_role TO ROLE role1");
+    verified_stmt("GRANT ALL ON TYPE t1, t2 TO role1");
+    verified_stmt("GRANT USAGE ON DOMAIN sc1.email_addr TO ROLE role1");
+    verified_stmt("GRANT ALL ON DOMAIN d1, d2 TO role1");
 }
 
 #[test]

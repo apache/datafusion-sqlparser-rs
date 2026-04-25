@@ -17908,6 +17908,8 @@ impl<'a> Parser<'a> {
                     Keyword::CONNECTION,
                     Keyword::PROCEDURE,
                     Keyword::FUNCTION,
+                    Keyword::TYPE,
+                    Keyword::DOMAIN,
                 ]);
                 let objects =
                     self.parse_comma_separated(|p| p.parse_object_name_inner(false, true));
@@ -17920,6 +17922,8 @@ impl<'a> Parser<'a> {
                     Some(Keyword::VIEW) => Some(GrantObjects::Views(objects?)),
                     Some(Keyword::USER) => Some(GrantObjects::Users(objects?)),
                     Some(Keyword::CONNECTION) => Some(GrantObjects::Connections(objects?)),
+                    Some(Keyword::TYPE) => Some(GrantObjects::Types(objects?)),
+                    Some(Keyword::DOMAIN) => Some(GrantObjects::Domains(objects?)),
                     kw @ (Some(Keyword::PROCEDURE) | Some(Keyword::FUNCTION)) => {
                         if let Some(name) = objects?.first() {
                             self.parse_grant_procedure_or_function(name, &kw)?

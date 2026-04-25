@@ -7749,6 +7749,18 @@ pub enum GrantObjects {
         /// Optional argument types for overloaded functions.
         arg_types: Vec<DataType>,
     },
+
+    /// Grant privileges on specific user-defined types (PostgreSQL).
+    ///
+    /// For example:
+    /// `GRANT USAGE ON TYPE user_role TO app_user`
+    Types(Vec<ObjectName>),
+
+    /// Grant privileges on specific domains (PostgreSQL).
+    ///
+    /// For example:
+    /// `GRANT USAGE ON DOMAIN email_addr TO app_user`
+    Domains(Vec<ObjectName>),
 }
 
 impl fmt::Display for GrantObjects {
@@ -7893,6 +7905,12 @@ impl fmt::Display for GrantObjects {
                     write!(f, "({})", display_comma_separated(arg_types))?;
                 }
                 Ok(())
+            }
+            GrantObjects::Types(types) => {
+                write!(f, "TYPE {}", display_comma_separated(types))
+            }
+            GrantObjects::Domains(domains) => {
+                write!(f, "DOMAIN {}", display_comma_separated(domains))
             }
         }
     }

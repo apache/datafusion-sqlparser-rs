@@ -970,9 +970,10 @@ impl<'a> Parser<'a> {
         let arguments = match object_type {
             CommentObject::Function | CommentObject::Procedure | CommentObject::Aggregate => {
                 if self.consume_token(&Token::LParen) {
-                    let list = self.parse_comma_separated0(Self::parse_data_type, Token::RParen)?;
+                    let args =
+                        self.parse_comma_separated0(Self::parse_function_arg, Token::RParen)?;
                     self.expect_token(&Token::RParen)?;
-                    Some(list)
+                    Some(args.into_iter().map(|a| a.data_type).collect())
                 } else {
                     None
                 }

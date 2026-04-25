@@ -10678,6 +10678,46 @@ fn parse_comment_on_function_with_arg_types() {
 }
 
 #[test]
+fn parse_comment_on_function_with_argname() {
+    pg_and_generic().one_statement_parses_to(
+        "COMMENT ON FUNCTION add(a INTEGER, b INTEGER) IS 'adds'",
+        "COMMENT ON FUNCTION add(INTEGER, INTEGER) IS 'adds'",
+    );
+}
+
+#[test]
+fn parse_comment_on_function_with_argmode() {
+    pg_and_generic().one_statement_parses_to(
+        "COMMENT ON FUNCTION upsert(IN id INTEGER, OUT result TEXT) IS 'upserts'",
+        "COMMENT ON FUNCTION upsert(INTEGER, TEXT) IS 'upserts'",
+    );
+    pg_and_generic().one_statement_parses_to(
+        "COMMENT ON FUNCTION swap(INOUT a INTEGER, INOUT b INTEGER) IS 'swap'",
+        "COMMENT ON FUNCTION swap(INTEGER, INTEGER) IS 'swap'",
+    );
+}
+
+#[test]
+fn parse_comment_on_function_with_variadic() {
+    pg_and_generic().one_statement_parses_to(
+        "COMMENT ON FUNCTION concat_all(VARIADIC arr TEXT[]) IS 'joins'",
+        "COMMENT ON FUNCTION concat_all(TEXT[]) IS 'joins'",
+    );
+}
+
+#[test]
+fn parse_comment_on_aggregate_with_argname_and_variadic() {
+    pg_and_generic().one_statement_parses_to(
+        "COMMENT ON AGGREGATE my_sum(val INTEGER) IS 'sums'",
+        "COMMENT ON AGGREGATE my_sum(INTEGER) IS 'sums'",
+    );
+    pg_and_generic().one_statement_parses_to(
+        "COMMENT ON AGGREGATE concat_agg(VARIADIC arr TEXT[]) IS 'agg'",
+        "COMMENT ON AGGREGATE concat_agg(TEXT[]) IS 'agg'",
+    );
+}
+
+#[test]
 fn parse_alter_type_add_attribute() {
     let sql = "ALTER TYPE public.my_type ADD ATTRIBUTE new_attr INTEGER";
     match pg_and_generic().verified_stmt(sql) {

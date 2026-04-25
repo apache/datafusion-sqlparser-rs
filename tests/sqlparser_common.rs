@@ -15348,6 +15348,7 @@ fn parse_comments() {
             object_name,
             comment: Some(comment),
             if_exists,
+            ..
         } => {
             assert_eq!("comment", comment);
             assert_eq!("tab.name", object_name.to_string());
@@ -15385,6 +15386,7 @@ fn parse_comments() {
                 object_name,
                 comment: Some(comment),
                 if_exists,
+                ..
             } => {
                 assert_eq!("comment", comment);
                 assert_eq!("db.t0", object_name.to_string());
@@ -15403,6 +15405,7 @@ fn parse_comments() {
             object_name,
             comment: None,
             if_exists,
+            ..
         } => {
             assert_eq!("public.tab", object_name.to_string());
             assert_eq!(CommentObject::Table, object_type);

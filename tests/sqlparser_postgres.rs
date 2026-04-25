@@ -10509,3 +10509,286 @@ fn alter_table_detach_partition_finalize() {
         _ => panic!("Expected AlterTable"),
     }
 }
+
+#[test]
+fn parse_alter_type_owner_to() {
+    let sql = "ALTER TYPE public.my_type OWNER TO some_role";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::AlterType(AlterType { name, operation }) => {
+            assert_eq!("public.my_type", name.to_string());
+            assert_eq!(
+                AlterTypeOperation::OwnerTo {
+                    new_owner: Owner::Ident(Ident::new("some_role")),
+                },
+                operation
+            );
+        }
+        other => panic!("expected Statement::AlterType, got {other:?}"),
+    }
+
+    pg_and_generic().verified_stmt("ALTER TYPE foo OWNER TO CURRENT_ROLE");
+    pg_and_generic().verified_stmt("ALTER TYPE foo OWNER TO CURRENT_USER");
+    pg_and_generic().verified_stmt("ALTER TYPE foo OWNER TO SESSION_USER");
+}
+
+#[test]
+fn parse_alter_type_set_schema() {
+    let sql = "ALTER TYPE public.my_type SET SCHEMA other_schema";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::AlterType(AlterType { name, operation }) => {
+            assert_eq!("public.my_type", name.to_string());
+            assert_eq!(
+                AlterTypeOperation::SetSchema {
+                    new_schema: ObjectName::from(vec![Ident::new("other_schema")]),
+                },
+                operation
+            );
+        }
+        other => panic!("expected Statement::AlterType, got {other:?}"),
+    }
+}
+
+#[test]
+fn parse_alter_type_add_attribute() {
+    let sql = "ALTER TYPE public.my_type ADD ATTRIBUTE new_attr INTEGER";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::AlterType(AlterType { name, operation }) => {
+            assert_eq!("public.my_type", name.to_string());
+            match operation {
+                AlterTypeOperation::AddAttribute {
+                    if_not_exists,
+                    name: attr_name,
+                    data_type,
+                    collation,
+                    drop_behavior,
+                } => {
+                    assert!(!if_not_exists);
+                    assert_eq!(Ident::new("new_attr"), attr_name);
+                    assert_eq!(DataType::Integer(None), data_type);
+                    assert!(collation.is_none());
+                    assert!(drop_behavior.is_none());
+                }
+                other => panic!("expected AddAttribute, got {other:?}"),
+            }
+        }
+        other => panic!("expected Statement::AlterType, got {other:?}"),
+    }
+
+    pg_and_generic()
+        .verified_stmt("ALTER TYPE foo ADD ATTRIBUTE IF NOT EXISTS new_attr TEXT CASCADE");
+    pg_and_generic()
+        .verified_stmt(r#"ALTER TYPE foo ADD ATTRIBUTE new_attr TEXT COLLATE "C" RESTRICT"#);
+}
+
+#[test]
+fn parse_alter_type_drop_attribute() {
+    let sql = "ALTER TYPE public.my_type DROP ATTRIBUTE old_attr";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::AlterType(AlterType { name, operation }) => {
+            assert_eq!("public.my_type", name.to_string());
+            assert_eq!(
+                AlterTypeOperation::DropAttribute {
+                    if_exists: false,
+                    name: Ident::new("old_attr"),
+                    drop_behavior: None,
+                },
+                operation
+            );
+        }
+        other => panic!("expected Statement::AlterType, got {other:?}"),
+    }
+
+    pg_and_generic().verified_stmt("ALTER TYPE foo DROP ATTRIBUTE IF EXISTS old_attr CASCADE");
+    pg_and_generic().verified_stmt("ALTER TYPE foo DROP ATTRIBUTE old_attr RESTRICT");
+}
+
+#[test]
+fn parse_alter_type_alter_attribute() {
+    let sql = "ALTER TYPE public.my_type ALTER ATTRIBUTE attr SET DATA TYPE TEXT";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::AlterType(AlterType { name, operation }) => {
+            assert_eq!("public.my_type", name.to_string());
+            assert_eq!(
+                AlterTypeOperation::AlterAttribute {
+                    name: Ident::new("attr"),
+                    data_type: DataType::Text,
+                    collation: None,
+                    drop_behavior: None,
+                },
+                operation
+            );
+        }
+        other => panic!("expected Statement::AlterType, got {other:?}"),
+    }
+
+    // Postgres allows omitting `SET DATA`; the AST canonicalises by emitting it.
+    pg_and_generic().one_statement_parses_to(
+        "ALTER TYPE foo ALTER ATTRIBUTE attr TYPE INTEGER",
+        "ALTER TYPE foo ALTER ATTRIBUTE attr SET DATA TYPE INTEGER",
+    );
+
+    pg_and_generic().verified_stmt(
+        r#"ALTER TYPE foo ALTER ATTRIBUTE attr SET DATA TYPE TEXT COLLATE "C" CASCADE"#,
+    );
+}
+
+#[test]
+fn parse_alter_type_rename_attribute() {
+    let sql = "ALTER TYPE public.my_type RENAME ATTRIBUTE old_attr TO new_attr";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::AlterType(AlterType { name, operation }) => {
+            assert_eq!("public.my_type", name.to_string());
+            assert_eq!(
+                AlterTypeOperation::RenameAttribute {
+                    old_name: Ident::new("old_attr"),
+                    new_name: Ident::new("new_attr"),
+                    drop_behavior: None,
+                },
+                operation
+            );
+        }
+        other => panic!("expected Statement::AlterType, got {other:?}"),
+    }
+
+    pg_and_generic().verified_stmt("ALTER TYPE foo RENAME ATTRIBUTE old_attr TO new_attr CASCADE");
+    pg_and_generic().verified_stmt("ALTER TYPE foo RENAME ATTRIBUTE old_attr TO new_attr RESTRICT");
+}
+
+#[test]
+fn parse_alter_default_privileges_grant_tables() {
+    let sql = "ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO reader";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::AlterDefaultPrivileges(AlterDefaultPrivileges {
+            for_roles,
+            in_schemas,
+            action,
+        }) => {
+            assert!(for_roles.is_empty());
+            assert!(in_schemas.is_empty());
+            match action {
+                AlterDefaultPrivilegesAction::Grant {
+                    privileges,
+                    object_type,
+                    grantees,
+                    with_grant_option,
+                } => {
+                    assert!(matches!(privileges, Privileges::Actions(ref a) if a.len() == 1));
+                    assert_eq!(AlterDefaultPrivilegesObjectType::Tables, object_type);
+                    assert_eq!(1, grantees.len());
+                    assert_eq!(GranteesType::None, grantees[0].grantee_type);
+                    assert!(!with_grant_option);
+                }
+                other => panic!("expected Grant action, got {other:?}"),
+            }
+        }
+        other => panic!("expected Statement::AlterDefaultPrivileges, got {other:?}"),
+    }
+}
+
+#[test]
+fn parse_alter_default_privileges_for_role_in_schema() {
+    let sql = "ALTER DEFAULT PRIVILEGES FOR ROLE app_role IN SCHEMA public, audit \
+               GRANT SELECT, INSERT ON TABLES TO reader, writer WITH GRANT OPTION";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::AlterDefaultPrivileges(AlterDefaultPrivileges {
+            for_roles,
+            in_schemas,
+            action,
+        }) => {
+            assert_eq!(vec![Ident::new("app_role")], for_roles);
+            assert_eq!(vec![Ident::new("public"), Ident::new("audit")], in_schemas);
+            match action {
+                AlterDefaultPrivilegesAction::Grant {
+                    privileges,
+                    object_type,
+                    grantees,
+                    with_grant_option,
+                } => {
+                    match privileges {
+                        Privileges::Actions(actions) => assert_eq!(2, actions.len()),
+                        other => panic!("expected specific privileges, got {other:?}"),
+                    }
+                    assert_eq!(AlterDefaultPrivilegesObjectType::Tables, object_type);
+                    assert_eq!(2, grantees.len());
+                    assert!(with_grant_option);
+                }
+                other => panic!("expected Grant action, got {other:?}"),
+            }
+        }
+        other => panic!("expected Statement::AlterDefaultPrivileges, got {other:?}"),
+    }
+}
+
+#[test]
+fn parse_alter_default_privileges_for_user_synonym() {
+    // FOR USER is a synonym for FOR ROLE; the AST canonicalises to ROLE.
+    pg_and_generic().one_statement_parses_to(
+        "ALTER DEFAULT PRIVILEGES FOR USER app_role GRANT USAGE ON SEQUENCES TO reader",
+        "ALTER DEFAULT PRIVILEGES FOR ROLE app_role GRANT USAGE ON SEQUENCES TO reader",
+    );
+}
+
+#[test]
+fn parse_alter_default_privileges_revoke_grant_option_for_cascade() {
+    let sql = "ALTER DEFAULT PRIVILEGES IN SCHEMA public \
+               REVOKE GRANT OPTION FOR ALL PRIVILEGES ON FUNCTIONS FROM reader CASCADE";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::AlterDefaultPrivileges(AlterDefaultPrivileges {
+            for_roles,
+            in_schemas,
+            action,
+        }) => {
+            assert!(for_roles.is_empty());
+            assert_eq!(vec![Ident::new("public")], in_schemas);
+            match action {
+                AlterDefaultPrivilegesAction::Revoke {
+                    grant_option_for,
+                    privileges,
+                    object_type,
+                    grantees,
+                    cascade,
+                } => {
+                    assert!(grant_option_for);
+                    assert!(matches!(
+                        privileges,
+                        Privileges::All {
+                            with_privileges_keyword: true
+                        }
+                    ));
+                    assert_eq!(AlterDefaultPrivilegesObjectType::Functions, object_type);
+                    assert_eq!(1, grantees.len());
+                    assert_eq!(GranteesType::None, grantees[0].grantee_type);
+                    assert_eq!(Some(CascadeOption::Cascade), cascade);
+                }
+                other => panic!("expected Revoke action, got {other:?}"),
+            }
+        }
+        other => panic!("expected Statement::AlterDefaultPrivileges, got {other:?}"),
+    }
+}
+
+#[test]
+fn parse_alter_default_privileges_revoke_restrict() {
+    pg_and_generic().verified_stmt(
+        "ALTER DEFAULT PRIVILEGES REVOKE SELECT ON TABLES FROM reader, writer RESTRICT",
+    );
+}
+
+#[test]
+fn parse_alter_default_privileges_object_kinds() {
+    // Each object kind round-trips identically.
+    pg_and_generic().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO reader");
+    pg_and_generic().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT USAGE ON SEQUENCES TO reader");
+    pg_and_generic().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON FUNCTIONS TO reader");
+    pg_and_generic().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON ROUTINES TO reader");
+    pg_and_generic().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT USAGE ON TYPES TO reader");
+    pg_and_generic().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT USAGE ON SCHEMAS TO reader");
+}
+
+#[test]
+fn parse_alter_default_privileges_multiple_for_roles() {
+    pg_and_generic().verified_stmt(
+        "ALTER DEFAULT PRIVILEGES FOR ROLE alice, bob \
+         GRANT SELECT ON TABLES TO reader",
+    );
+}

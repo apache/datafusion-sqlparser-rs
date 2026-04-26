@@ -902,70 +902,22 @@ impl<'a> Parser<'a> {
         self.expect_keyword_is(Keyword::ON)?;
         let token = self.next_token();
 
-        let (object_type, object_name) = match token.token {
-            Token::Word(w) if w.keyword == Keyword::AGGREGATE => {
-                (CommentObject::Aggregate, self.parse_object_name(false)?)
-            }
-            Token::Word(w) if w.keyword == Keyword::COLLATION => {
-                (CommentObject::Collation, self.parse_object_name(false)?)
-            }
-            Token::Word(w) if w.keyword == Keyword::COLUMN => {
-                (CommentObject::Column, self.parse_object_name(false)?)
-            }
-            Token::Word(w) if w.keyword == Keyword::DATABASE => {
-                (CommentObject::Database, self.parse_object_name(false)?)
-            }
-            Token::Word(w) if w.keyword == Keyword::DOMAIN => {
-                (CommentObject::Domain, self.parse_object_name(false)?)
-            }
-            Token::Word(w) if w.keyword == Keyword::EXTENSION => {
-                (CommentObject::Extension, self.parse_object_name(false)?)
-            }
-            Token::Word(w) if w.keyword == Keyword::FUNCTION => {
-                (CommentObject::Function, self.parse_object_name(false)?)
-            }
-            Token::Word(w) if w.keyword == Keyword::INDEX => {
-                (CommentObject::Index, self.parse_object_name(false)?)
-            }
-            Token::Word(w) if w.keyword == Keyword::MATERIALIZED => {
-                self.expect_keyword_is(Keyword::VIEW)?;
-                (
-                    CommentObject::MaterializedView,
-                    self.parse_object_name(false)?,
-                )
-            }
-            Token::Word(w) if w.keyword == Keyword::POLICY => {
-                (CommentObject::Policy, self.parse_object_name(false)?)
-            }
-            Token::Word(w) if w.keyword == Keyword::PROCEDURE => {
-                (CommentObject::Procedure, self.parse_object_name(false)?)
-            }
-            Token::Word(w) if w.keyword == Keyword::ROLE => {
-                (CommentObject::Role, self.parse_object_name(false)?)
-            }
-            Token::Word(w) if w.keyword == Keyword::SCHEMA => {
-                (CommentObject::Schema, self.parse_object_name(false)?)
-            }
-            Token::Word(w) if w.keyword == Keyword::SEQUENCE => {
-                (CommentObject::Sequence, self.parse_object_name(false)?)
-            }
-            Token::Word(w) if w.keyword == Keyword::TABLE => {
-                (CommentObject::Table, self.parse_object_name(false)?)
-            }
-            Token::Word(w) if w.keyword == Keyword::TRIGGER => {
-                (CommentObject::Trigger, self.parse_object_name(false)?)
-            }
-            Token::Word(w) if w.keyword == Keyword::TYPE => {
-                (CommentObject::Type, self.parse_object_name(false)?)
-            }
-            Token::Word(w) if w.keyword == Keyword::USER => {
-                (CommentObject::User, self.parse_object_name(false)?)
-            }
-            Token::Word(w) if w.keyword == Keyword::VIEW => {
-                (CommentObject::View, self.parse_object_name(false)?)
-            }
-            _ => self.expected("comment object_type", token)?,
+        let keyword = match &token.token {
+            Token::Word(w) => Some(w.keyword),
+            _ => None,
         };
+        let object_type = match keyword {
+            Some(Keyword::MATERIALIZED) => {
+                self.expect_keyword_is(Keyword::VIEW)?;
+                CommentObject::MaterializedView
+            }
+            Some(other) => match CommentObject::from_keyword(other) {
+                Some(obj) => obj,
+                None => return self.expected("comment object_type", token),
+            },
+            None => return self.expected("comment object_type", token),
+        };
+        let object_name = self.parse_object_name(false)?;
 
         let arguments = match object_type {
             CommentObject::Function | CommentObject::Procedure | CommentObject::Aggregate => {
@@ -11703,6 +11655,9 @@ impl<'a> Parser<'a> {
             }
         } else if self.parse_keywords(&[Keyword::ALTER, Keyword::ATTRIBUTE]) {
             let attr_name = self.parse_identifier()?;
+            // PostgreSQL accepts both `ALTER ATTRIBUTE x TYPE ...` and the
+            // verbose `ALTER ATTRIBUTE x SET DATA TYPE ...`; consume the
+            // optional `SET DATA` and canonicalize to the bare form.
             let _ = self.parse_keywords(&[Keyword::SET, Keyword::DATA]);
             self.expect_keyword(Keyword::TYPE)?;
             let data_type = self.parse_data_type()?;

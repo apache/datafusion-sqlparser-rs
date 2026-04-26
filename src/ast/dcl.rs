@@ -607,11 +607,8 @@ impl fmt::Display for AlterDefaultPrivilegesAction {
                 grantees,
                 with_grant_option,
             } => {
-                write!(
-                    f,
-                    "GRANT {privileges} ON {object_type} TO {grantees}",
-                    grantees = display_comma_separated(grantees),
-                )?;
+                write!(f, "GRANT ")?;
+                write_privileges_body(f, privileges, object_type, "TO", grantees)?;
                 if *with_grant_option {
                     write!(f, " WITH GRANT OPTION")?;
                 }
@@ -628,11 +625,7 @@ impl fmt::Display for AlterDefaultPrivilegesAction {
                 if *grant_option_for {
                     write!(f, "GRANT OPTION FOR ")?;
                 }
-                write!(
-                    f,
-                    "{privileges} ON {object_type} FROM {grantees}",
-                    grantees = display_comma_separated(grantees),
-                )?;
+                write_privileges_body(f, privileges, object_type, "FROM", grantees)?;
                 if let Some(cascade) = cascade {
                     write!(f, " {cascade}")?;
                 }
@@ -640,6 +633,20 @@ impl fmt::Display for AlterDefaultPrivilegesAction {
             }
         }
     }
+}
+
+fn write_privileges_body(
+    f: &mut fmt::Formatter,
+    privileges: &Privileges,
+    object_type: &AlterDefaultPrivilegesObjectType,
+    connector: &str,
+    grantees: &[Grantee],
+) -> fmt::Result {
+    write!(
+        f,
+        "{privileges} ON {object_type} {connector} {grantees}",
+        grantees = display_comma_separated(grantees),
+    )
 }
 
 /// `ALTER DEFAULT PRIVILEGES` statement.
@@ -676,12 +683,6 @@ impl fmt::Display for AlterDefaultPrivileges {
             )?;
         }
         write!(f, " {}", self.action)
-    }
-}
-
-impl Spanned for AlterDefaultPrivileges {
-    fn span(&self) -> Span {
-        Span::empty()
     }
 }
 

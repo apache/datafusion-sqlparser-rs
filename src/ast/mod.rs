@@ -2501,29 +2501,63 @@ pub enum CommentObject {
     View,
 }
 
+impl CommentObject {
+    pub(crate) fn keyword_str(&self) -> &'static str {
+        match self {
+            CommentObject::Aggregate => "AGGREGATE",
+            CommentObject::Collation => "COLLATION",
+            CommentObject::Column => "COLUMN",
+            CommentObject::Database => "DATABASE",
+            CommentObject::Domain => "DOMAIN",
+            CommentObject::Extension => "EXTENSION",
+            CommentObject::Function => "FUNCTION",
+            CommentObject::Index => "INDEX",
+            CommentObject::MaterializedView => "MATERIALIZED VIEW",
+            CommentObject::Policy => "POLICY",
+            CommentObject::Procedure => "PROCEDURE",
+            CommentObject::Role => "ROLE",
+            CommentObject::Schema => "SCHEMA",
+            CommentObject::Sequence => "SEQUENCE",
+            CommentObject::Table => "TABLE",
+            CommentObject::Trigger => "TRIGGER",
+            CommentObject::Type => "TYPE",
+            CommentObject::User => "USER",
+            CommentObject::View => "VIEW",
+        }
+    }
+
+    /// Map a single keyword to its [`CommentObject`].
+    ///
+    /// `MATERIALIZED VIEW` is the only multi-keyword case and must be handled
+    /// by the caller.
+    pub(crate) fn from_keyword(keyword: Keyword) -> Option<Self> {
+        Some(match keyword {
+            Keyword::AGGREGATE => CommentObject::Aggregate,
+            Keyword::COLLATION => CommentObject::Collation,
+            Keyword::COLUMN => CommentObject::Column,
+            Keyword::DATABASE => CommentObject::Database,
+            Keyword::DOMAIN => CommentObject::Domain,
+            Keyword::EXTENSION => CommentObject::Extension,
+            Keyword::FUNCTION => CommentObject::Function,
+            Keyword::INDEX => CommentObject::Index,
+            Keyword::POLICY => CommentObject::Policy,
+            Keyword::PROCEDURE => CommentObject::Procedure,
+            Keyword::ROLE => CommentObject::Role,
+            Keyword::SCHEMA => CommentObject::Schema,
+            Keyword::SEQUENCE => CommentObject::Sequence,
+            Keyword::TABLE => CommentObject::Table,
+            Keyword::TRIGGER => CommentObject::Trigger,
+            Keyword::TYPE => CommentObject::Type,
+            Keyword::USER => CommentObject::User,
+            Keyword::VIEW => CommentObject::View,
+            _ => return None,
+        })
+    }
+}
+
 impl fmt::Display for CommentObject {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            CommentObject::Aggregate => f.write_str("AGGREGATE"),
-            CommentObject::Collation => f.write_str("COLLATION"),
-            CommentObject::Column => f.write_str("COLUMN"),
-            CommentObject::Database => f.write_str("DATABASE"),
-            CommentObject::Domain => f.write_str("DOMAIN"),
-            CommentObject::Extension => f.write_str("EXTENSION"),
-            CommentObject::Function => f.write_str("FUNCTION"),
-            CommentObject::Index => f.write_str("INDEX"),
-            CommentObject::MaterializedView => f.write_str("MATERIALIZED VIEW"),
-            CommentObject::Policy => f.write_str("POLICY"),
-            CommentObject::Procedure => f.write_str("PROCEDURE"),
-            CommentObject::Role => f.write_str("ROLE"),
-            CommentObject::Schema => f.write_str("SCHEMA"),
-            CommentObject::Sequence => f.write_str("SEQUENCE"),
-            CommentObject::Table => f.write_str("TABLE"),
-            CommentObject::Trigger => f.write_str("TRIGGER"),
-            CommentObject::Type => f.write_str("TYPE"),
-            CommentObject::User => f.write_str("USER"),
-            CommentObject::View => f.write_str("VIEW"),
-        }
+        f.write_str(self.keyword_str())
     }
 }
 
@@ -6224,8 +6258,8 @@ impl fmt::Display for Statement {
             } => {
                 write!(f, "COMMENT ")?;
                 if *if_exists {
-                    write!(f, "IF EXISTS ")?
-                };
+                    write!(f, "IF EXISTS ")?;
+                }
                 write!(f, "ON {object_type} {object_name}")?;
                 if let Some(args) = arguments {
                     write!(f, "({})", display_comma_separated(args))?;

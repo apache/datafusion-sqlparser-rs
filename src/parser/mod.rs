@@ -939,7 +939,7 @@ impl<'a> Parser<'a> {
             ));
         }
 
-        let relation = match object_type {
+        let table_name = match object_type {
             CommentObject::Trigger | CommentObject::Policy => {
                 self.expect_keyword_is(Keyword::ON)?;
                 Some(self.parse_object_name(false)?)
@@ -957,7 +957,7 @@ impl<'a> Parser<'a> {
             object_type,
             object_name,
             arguments,
-            relation,
+            table_name,
             comment,
             if_exists,
         })

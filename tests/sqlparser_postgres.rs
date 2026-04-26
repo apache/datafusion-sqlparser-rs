@@ -1115,7 +1115,7 @@ fn parse_drop_and_comment_collation_ast() {
             object_type: CommentObject::Collation,
             object_name: ObjectName::from(vec![Ident::new("test0")]),
             arguments: None,
-            relation: None,
+            table_name: None,
             comment: Some("US English".to_string()),
             if_exists: false,
         }
@@ -10558,14 +10558,14 @@ fn parse_comment_on_trigger() {
         Statement::Comment {
             object_type,
             object_name,
-            relation,
+            table_name,
             arguments,
             comment,
             if_exists,
         } => {
             assert_eq!(CommentObject::Trigger, object_type);
             assert_eq!("my_trigger", object_name.to_string());
-            assert_eq!("public.my_table", relation.unwrap().to_string());
+            assert_eq!("public.my_table", table_name.unwrap().to_string());
             assert!(arguments.is_none());
             assert_eq!(Some("trigger note".to_string()), comment);
             assert!(!if_exists);
@@ -10585,14 +10585,14 @@ fn parse_comment_on_policy() {
         Statement::Comment {
             object_type,
             object_name,
-            relation,
+            table_name,
             arguments,
             comment,
             if_exists,
         } => {
             assert_eq!(CommentObject::Policy, object_type);
             assert_eq!("tenant_isolation", object_name.to_string());
-            assert_eq!("public.docs", relation.unwrap().to_string());
+            assert_eq!("public.docs", table_name.unwrap().to_string());
             assert!(arguments.is_none());
             assert_eq!(Some("rls".to_string()), comment);
             assert!(!if_exists);
@@ -10609,14 +10609,14 @@ fn parse_comment_on_aggregate() {
         Statement::Comment {
             object_type,
             object_name,
-            relation,
+            table_name,
             arguments,
             comment,
             if_exists,
         } => {
             assert_eq!(CommentObject::Aggregate, object_type);
             assert_eq!("my_sum", object_name.to_string());
-            assert!(relation.is_none());
+            assert!(table_name.is_none());
             let args = arguments.expect("aggregate should carry argument types");
             assert_eq!(1, args.len());
             assert!(matches!(args[0], DataType::Integer(_)));
@@ -10646,14 +10646,14 @@ fn parse_comment_on_function_with_arg_types() {
         Statement::Comment {
             object_type,
             object_name,
-            relation,
+            table_name,
             arguments,
             comment,
             if_exists,
         } => {
             assert_eq!(CommentObject::Function, object_type);
             assert_eq!("add", object_name.to_string());
-            assert!(relation.is_none());
+            assert!(table_name.is_none());
             let args = arguments.expect("function should carry argument types");
             assert_eq!(2, args.len());
             assert_eq!(Some("adds".to_string()), comment);

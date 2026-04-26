@@ -4461,10 +4461,10 @@ pub enum Statement {
         /// while `None` means no parameter list was provided. Used for
         /// `FUNCTION`, `PROCEDURE`, and `AGGREGATE` targets.
         arguments: Option<Vec<DataType>>,
-        /// Partner relation for objects scoped to a table, i.e. the
-        /// `ON <relation>` tail in `COMMENT ON TRIGGER t ON tbl IS '…'` or
+        /// Partner table for objects scoped to a table, i.e. the
+        /// `ON <table>` tail in `COMMENT ON TRIGGER t ON tbl IS '…'` or
         /// `COMMENT ON POLICY p ON tbl IS '…'`.
-        relation: Option<ObjectName>,
+        table_name: Option<ObjectName>,
         /// Optional comment text (None to remove comment).
         comment: Option<String>,
         /// An optional `IF EXISTS` clause. (Non-standard.)
@@ -6252,7 +6252,7 @@ impl fmt::Display for Statement {
                 object_type,
                 object_name,
                 arguments,
-                relation,
+                table_name,
                 comment,
                 if_exists,
             } => {
@@ -6264,8 +6264,8 @@ impl fmt::Display for Statement {
                 if let Some(args) = arguments {
                     write!(f, "({})", display_comma_separated(args))?;
                 }
-                if let Some(relation) = relation {
-                    write!(f, " ON {relation}")?;
+                if let Some(table_name) = table_name {
+                    write!(f, " ON {table_name}")?;
                 }
                 write!(f, " IS ")?;
                 if let Some(c) = comment {

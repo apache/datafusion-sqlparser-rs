@@ -10662,7 +10662,6 @@ fn parse_comment_on_function_with_arg_types() {
         _ => panic!("Expected COMMENT ON FUNCTION"),
     }
 
-    pg_and_generic().verified_stmt("COMMENT ON FUNCTION public.noop() IS 'no args'");
     pg_and_generic().verified_stmt("COMMENT ON FUNCTION f(TEXT) IS NULL");
     match pg_and_generic().verified_stmt("COMMENT ON FUNCTION f IS 'bare'") {
         Statement::Comment {

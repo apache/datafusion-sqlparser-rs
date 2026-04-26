@@ -36,7 +36,7 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
-    display_comma_separated, display_separated,
+    display_comma_separated, display_option_spaced, display_separated,
     table_constraints::{
         CheckConstraint, ForeignKeyConstraint, PrimaryKeyConstraint, TableConstraint,
         UniqueConstraint,
@@ -1312,10 +1312,7 @@ impl fmt::Display for AlterTypeOperation {
                 if let Some(collation) = collation {
                     write!(f, " COLLATE {collation}")?;
                 }
-                if let Some(drop_behavior) = drop_behavior {
-                    write!(f, " {drop_behavior}")?;
-                }
-                Ok(())
+                write!(f, "{}", display_option_spaced(drop_behavior))
             }
             Self::DropAttribute {
                 if_exists,
@@ -1326,11 +1323,7 @@ impl fmt::Display for AlterTypeOperation {
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }
-                write!(f, " {name}")?;
-                if let Some(drop_behavior) = drop_behavior {
-                    write!(f, " {drop_behavior}")?;
-                }
-                Ok(())
+                write!(f, " {name}{}", display_option_spaced(drop_behavior))
             }
             Self::AlterAttribute {
                 name,
@@ -1342,22 +1335,17 @@ impl fmt::Display for AlterTypeOperation {
                 if let Some(collation) = collation {
                     write!(f, " COLLATE {collation}")?;
                 }
-                if let Some(drop_behavior) = drop_behavior {
-                    write!(f, " {drop_behavior}")?;
-                }
-                Ok(())
+                write!(f, "{}", display_option_spaced(drop_behavior))
             }
             Self::RenameAttribute {
                 old_name,
                 new_name,
                 drop_behavior,
-            } => {
-                write!(f, "RENAME ATTRIBUTE {old_name} TO {new_name}")?;
-                if let Some(drop_behavior) = drop_behavior {
-                    write!(f, " {drop_behavior}")?;
-                }
-                Ok(())
-            }
+            } => write!(
+                f,
+                "RENAME ATTRIBUTE {old_name} TO {new_name}{}",
+                display_option_spaced(drop_behavior)
+            ),
         }
     }
 }

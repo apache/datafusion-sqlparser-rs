@@ -4765,6 +4765,52 @@ fn test_snowflake_create_view_copy_grants() {
 }
 
 #[test]
+fn test_snowflake_create_view_copy_grants_after_columns() {
+    // Snowflake's documented placement for `COPY GRANTS` on `CREATE VIEW` is
+    // *after* the column list. Display normalizes to the pre-columns form
+    // already supported, so use `one_statement_parses_to` to assert the
+    // post-columns input is accepted and the AST flag is set.
+    // <https://docs.snowflake.com/en/sql-reference/sql/create-view#syntax>
+    let cases = [
+        (
+            "CREATE OR REPLACE VIEW v (a, b) COPY GRANTS AS SELECT a, b FROM t",
+            "CREATE OR REPLACE VIEW v COPY GRANTS (a, b) AS SELECT a, b FROM t",
+        ),
+        (
+            "CREATE OR REPLACE SECURE VIEW v (a, b) COPY GRANTS AS SELECT a, b FROM t",
+            "CREATE OR REPLACE SECURE VIEW v COPY GRANTS (a, b) AS SELECT a, b FROM t",
+        ),
+        (
+            "CREATE MATERIALIZED VIEW v (a) COPY GRANTS AS SELECT a FROM t",
+            "CREATE MATERIALIZED VIEW v COPY GRANTS (a) AS SELECT a FROM t",
+        ),
+    ];
+    for (sql, parsed) in cases {
+        match snowflake().one_statement_parses_to(sql, parsed) {
+            Statement::CreateView(CreateView {
+                name,
+                copy_grants,
+                columns,
+                ..
+            }) => {
+                assert_eq!("v", name.to_string());
+                assert!(copy_grants, "copy_grants should be true for {sql:?}");
+                assert!(!columns.is_empty(), "columns should be set for {sql:?}");
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    // Baseline: the same query without COPY GRANTS must not flip the flag.
+    match snowflake().verified_stmt("CREATE OR REPLACE VIEW v (a) AS SELECT a FROM t") {
+        Statement::CreateView(CreateView { copy_grants, .. }) => {
+            assert!(!copy_grants);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn test_snowflake_identifier_function() {
     // Using IDENTIFIER to reference a column
     match &snowflake()

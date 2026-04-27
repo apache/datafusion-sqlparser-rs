@@ -917,7 +917,11 @@ impl<'a> Parser<'a> {
             },
             None => return self.expected("comment object_type", token),
         };
-        let object_name = self.parse_object_name(false)?;
+        let object_name = if object_type == CommentObject::Operator {
+            self.parse_operator_name()?
+        } else {
+            self.parse_object_name(false)?
+        };
 
         let arguments = match object_type {
             CommentObject::Function | CommentObject::Procedure | CommentObject::Aggregate => {
@@ -939,12 +943,28 @@ impl<'a> Parser<'a> {
             ));
         }
 
-        let table_name = match object_type {
-            CommentObject::Trigger | CommentObject::Policy => {
+        let operator_args = if object_type == CommentObject::Operator {
+            self.expect_token(&Token::LParen)?;
+            let left = self.parse_operator_arg_type_or_none()?;
+            self.expect_token(&Token::Comma)?;
+            let right = self.parse_operator_arg_type_or_none()?;
+            self.expect_token(&Token::RParen)?;
+            Some(CommentOperatorArgs { left, right })
+        } else {
+            None
+        };
+
+        let (table_name, on_domain) = match object_type {
+            CommentObject::Trigger | CommentObject::Policy | CommentObject::Rule => {
                 self.expect_keyword_is(Keyword::ON)?;
-                Some(self.parse_object_name(false)?)
+                (Some(self.parse_object_name(false)?), false)
             }
-            _ => None,
+            CommentObject::Constraint => {
+                self.expect_keyword_is(Keyword::ON)?;
+                let on_domain = self.parse_keyword(Keyword::DOMAIN);
+                (Some(self.parse_object_name(false)?), on_domain)
+            }
+            _ => (None, false),
         };
 
         self.expect_keyword_is(Keyword::IS)?;
@@ -957,7 +977,9 @@ impl<'a> Parser<'a> {
             object_type,
             object_name,
             arguments,
+            operator_args,
             table_name,
+            on_domain,
             comment,
             if_exists,
         })
@@ -8532,19 +8554,9 @@ impl<'a> Parser<'a> {
     fn parse_drop_operator_signature(&mut self) -> Result<DropOperatorSignature, ParserError> {
         let name = self.parse_operator_name()?;
         self.expect_token(&Token::LParen)?;
-
-        // Parse left operand type (or NONE for prefix operators)
-        let left_type = if self.parse_keyword(Keyword::NONE) {
-            None
-        } else {
-            Some(self.parse_data_type()?)
-        };
-
+        let left_type = self.parse_operator_arg_type_or_none()?;
         self.expect_token(&Token::Comma)?;
-
-        // Parse right operand type (always required)
         let right_type = self.parse_data_type()?;
-
         self.expect_token(&Token::RParen)?;
 
         Ok(DropOperatorSignature {
@@ -8552,6 +8564,16 @@ impl<'a> Parser<'a> {
             left_type,
             right_type,
         })
+    }
+
+    /// Parse one slot of a PostgreSQL operator signature: a `DataType` or the
+    /// keyword `NONE`. Used by `DROP OPERATOR` and `COMMENT ON OPERATOR`.
+    fn parse_operator_arg_type_or_none(&mut self) -> Result<Option<DataType>, ParserError> {
+        if self.parse_keyword(Keyword::NONE) {
+            Ok(None)
+        } else {
+            Ok(Some(self.parse_data_type()?))
+        }
     }
 
     /// Parse a [Statement::DropOperatorFamily]

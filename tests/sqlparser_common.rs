@@ -15368,6 +15368,9 @@ fn parse_comments() {
     }
 
     // https://www.postgresql.org/docs/current/sql-comment.html
+    // CONSTRAINT, OPERATOR, RULE require object-specific tails handled in
+    // their own tests; this table only covers `COMMENT ON <KEYWORD> name IS '…'`
+    // shapes that share the simple object_name + comment structure.
     let object_types = [
         ("COLLATION", CommentObject::Collation),
         ("COLUMN", CommentObject::Column),

@@ -2467,6 +2467,8 @@ pub enum CommentObject {
     Collation,
     /// A table column.
     Column,
+    /// A table or domain constraint.
+    Constraint,
     /// A database.
     Database,
     /// A domain.
@@ -2479,12 +2481,16 @@ pub enum CommentObject {
     Index,
     /// A materialized view.
     MaterializedView,
+    /// A user-defined operator.
+    Operator,
     /// A row-level security policy.
     Policy,
     /// A procedure.
     Procedure,
     /// A role.
     Role,
+    /// A query rewrite rule.
+    Rule,
     /// A schema.
     Schema,
     /// A sequence.
@@ -2507,15 +2513,18 @@ impl CommentObject {
             CommentObject::Aggregate => "AGGREGATE",
             CommentObject::Collation => "COLLATION",
             CommentObject::Column => "COLUMN",
+            CommentObject::Constraint => "CONSTRAINT",
             CommentObject::Database => "DATABASE",
             CommentObject::Domain => "DOMAIN",
             CommentObject::Extension => "EXTENSION",
             CommentObject::Function => "FUNCTION",
             CommentObject::Index => "INDEX",
             CommentObject::MaterializedView => "MATERIALIZED VIEW",
+            CommentObject::Operator => "OPERATOR",
             CommentObject::Policy => "POLICY",
             CommentObject::Procedure => "PROCEDURE",
             CommentObject::Role => "ROLE",
+            CommentObject::Rule => "RULE",
             CommentObject::Schema => "SCHEMA",
             CommentObject::Sequence => "SEQUENCE",
             CommentObject::Table => "TABLE",
@@ -2535,14 +2544,17 @@ impl CommentObject {
             Keyword::AGGREGATE => CommentObject::Aggregate,
             Keyword::COLLATION => CommentObject::Collation,
             Keyword::COLUMN => CommentObject::Column,
+            Keyword::CONSTRAINT => CommentObject::Constraint,
             Keyword::DATABASE => CommentObject::Database,
             Keyword::DOMAIN => CommentObject::Domain,
             Keyword::EXTENSION => CommentObject::Extension,
             Keyword::FUNCTION => CommentObject::Function,
             Keyword::INDEX => CommentObject::Index,
+            Keyword::OPERATOR => CommentObject::Operator,
             Keyword::POLICY => CommentObject::Policy,
             Keyword::PROCEDURE => CommentObject::Procedure,
             Keyword::ROLE => CommentObject::Role,
+            Keyword::RULE => CommentObject::Rule,
             Keyword::SCHEMA => CommentObject::Schema,
             Keyword::SEQUENCE => CommentObject::Sequence,
             Keyword::TABLE => CommentObject::Table,
@@ -2558,6 +2570,38 @@ impl CommentObject {
 impl fmt::Display for CommentObject {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(self.keyword_str())
+    }
+}
+
+/// Operand types for `COMMENT ON OPERATOR name (left, right)`.
+///
+/// Each side may be `NONE` for prefix or postfix unary operators, mirroring
+/// the syntax allowed by `DROP OPERATOR` / `ALTER OPERATOR`. Both sides are
+/// optional independently because PostgreSQL accepts unary operators in
+/// either direction.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CommentOperatorArgs {
+    /// Left-hand operand type, or `None` for `NONE` (prefix operator).
+    pub left: Option<DataType>,
+    /// Right-hand operand type, or `None` for `NONE` (postfix operator).
+    pub right: Option<DataType>,
+}
+
+impl fmt::Display for CommentOperatorArgs {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let write_side = |opt: &Option<DataType>, f: &mut fmt::Formatter| -> fmt::Result {
+            match opt {
+                Some(dt) => write!(f, "{dt}"),
+                None => f.write_str("NONE"),
+            }
+        };
+        f.write_str("(")?;
+        write_side(&self.left, f)?;
+        f.write_str(", ")?;
+        write_side(&self.right, f)?;
+        f.write_str(")")
     }
 }
 
@@ -4461,10 +4505,21 @@ pub enum Statement {
         /// while `None` means no parameter list was provided. Used for
         /// `FUNCTION`, `PROCEDURE`, and `AGGREGATE` targets.
         arguments: Option<Vec<DataType>>,
-        /// Partner table for objects scoped to a table, i.e. the
-        /// `ON <table>` tail in `COMMENT ON TRIGGER t ON tbl IS '…'` or
-        /// `COMMENT ON POLICY p ON tbl IS '…'`.
+        /// Operand signature for `COMMENT ON OPERATOR name (left, right)`.
+        /// Always `Some(_)` for `Operator`, `None` for every other variant.
+        /// Modeled separately from `arguments` because operator slots may be
+        /// `NONE` (unary operators), which `Vec<DataType>` cannot express.
+        operator_args: Option<CommentOperatorArgs>,
+        /// Partner relation for objects scoped to a relation, i.e. the
+        /// `ON <table>` (or `ON DOMAIN <domain>`) tail in
+        /// `COMMENT ON TRIGGER t ON tbl IS '…'`,
+        /// `COMMENT ON POLICY p ON tbl IS '…'`,
+        /// `COMMENT ON RULE r ON tbl IS '…'`, or
+        /// `COMMENT ON CONSTRAINT c ON [DOMAIN] tbl IS '…'`.
         table_name: Option<ObjectName>,
+        /// `true` when the relation tail used the `ON DOMAIN <domain>` form.
+        /// Only meaningful for `Constraint`; always `false` otherwise.
+        on_domain: bool,
         /// Optional comment text (None to remove comment).
         comment: Option<String>,
         /// An optional `IF EXISTS` clause. (Non-standard.)
@@ -6252,7 +6307,9 @@ impl fmt::Display for Statement {
                 object_type,
                 object_name,
                 arguments,
+                operator_args,
                 table_name,
+                on_domain,
                 comment,
                 if_exists,
             } => {
@@ -6264,8 +6321,12 @@ impl fmt::Display for Statement {
                 if let Some(args) = arguments {
                     write!(f, "({})", display_comma_separated(args))?;
                 }
+                if let Some(operator_args) = operator_args {
+                    write!(f, "{operator_args}")?;
+                }
                 if let Some(table_name) = table_name {
-                    write!(f, " ON {table_name}")?;
+                    let prefix = if *on_domain { " ON DOMAIN " } else { " ON " };
+                    write!(f, "{prefix}{table_name}")?;
                 }
                 write!(f, " IS ")?;
                 if let Some(c) = comment {

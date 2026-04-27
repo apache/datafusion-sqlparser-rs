@@ -1115,7 +1115,9 @@ fn parse_drop_and_comment_collation_ast() {
             object_type: CommentObject::Collation,
             object_name: ObjectName::from(vec![Ident::new("test0")]),
             arguments: None,
+            operator_args: None,
             table_name: None,
+            on_domain: false,
             comment: Some("US English".to_string()),
             if_exists: false,
         }
@@ -10560,6 +10562,8 @@ fn parse_comment_on_trigger() {
             object_name,
             table_name,
             arguments,
+            operator_args: _,
+            on_domain: _,
             comment,
             if_exists,
         } => {
@@ -10587,6 +10591,8 @@ fn parse_comment_on_policy() {
             object_name,
             table_name,
             arguments,
+            operator_args: _,
+            on_domain: _,
             comment,
             if_exists,
         } => {
@@ -10611,6 +10617,8 @@ fn parse_comment_on_aggregate() {
             object_name,
             table_name,
             arguments,
+            operator_args: _,
+            on_domain: _,
             comment,
             if_exists,
         } => {
@@ -10648,6 +10656,8 @@ fn parse_comment_on_function_with_arg_types() {
             object_name,
             table_name,
             arguments,
+            operator_args: _,
+            on_domain: _,
             comment,
             if_exists,
         } => {
@@ -10713,6 +10723,184 @@ fn parse_comment_on_aggregate_with_argname_and_variadic() {
     pg_and_generic().one_statement_parses_to(
         "COMMENT ON AGGREGATE concat_agg(VARIADIC arr TEXT[]) IS 'agg'",
         "COMMENT ON AGGREGATE concat_agg(TEXT[]) IS 'agg'",
+    );
+}
+
+#[test]
+fn parse_comment_on_constraint_on_table() {
+    match pg_and_generic()
+        .verified_stmt("COMMENT ON CONSTRAINT positive_total ON public.orders IS 'must be > 0'")
+    {
+        Statement::Comment {
+            object_type,
+            object_name,
+            table_name,
+            arguments,
+            operator_args,
+            on_domain,
+            comment,
+            if_exists,
+        } => {
+            assert_eq!(CommentObject::Constraint, object_type);
+            assert_eq!("positive_total", object_name.to_string());
+            assert_eq!("public.orders", table_name.unwrap().to_string());
+            assert!(!on_domain);
+            assert!(arguments.is_none());
+            assert!(operator_args.is_none());
+            assert_eq!(Some("must be > 0".to_string()), comment);
+            assert!(!if_exists);
+        }
+        _ => panic!("Expected COMMENT ON CONSTRAINT"),
+    }
+
+    pg_and_generic().verified_stmt("COMMENT ON CONSTRAINT c ON tbl IS NULL");
+    pg_and_generic().verified_stmt("COMMENT IF EXISTS ON CONSTRAINT c ON s.tbl IS 'note'");
+}
+
+#[test]
+fn parse_comment_on_constraint_on_domain() {
+    match pg_and_generic()
+        .verified_stmt("COMMENT ON CONSTRAINT not_null_check ON DOMAIN public.email IS 'guard'")
+    {
+        Statement::Comment {
+            object_type,
+            object_name,
+            table_name,
+            on_domain,
+            comment,
+            ..
+        } => {
+            assert_eq!(CommentObject::Constraint, object_type);
+            assert_eq!("not_null_check", object_name.to_string());
+            assert_eq!("public.email", table_name.unwrap().to_string());
+            assert!(on_domain);
+            assert_eq!(Some("guard".to_string()), comment);
+        }
+        _ => panic!("Expected COMMENT ON CONSTRAINT ... ON DOMAIN"),
+    }
+
+    pg_and_generic().verified_stmt("COMMENT ON CONSTRAINT c ON DOMAIN d IS NULL");
+    pg_and_generic().verified_stmt("COMMENT ON CONSTRAINT c ON DOMAIN public.email IS 'qualified'");
+}
+
+#[test]
+fn parse_comment_on_constraint_requires_relation_tail() {
+    let result = pg().parse_sql_statements("COMMENT ON CONSTRAINT c IS 'bad'");
+    assert!(
+        result.is_err(),
+        "COMMENT ON CONSTRAINT without ON <relation> tail must error, got: {result:?}"
+    );
+}
+
+#[test]
+fn parse_comment_on_operator_binary() {
+    match pg_and_generic()
+        .verified_stmt("COMMENT ON OPERATOR public.+(INTEGER, INTEGER) IS 'integer addition'")
+    {
+        Statement::Comment {
+            object_type,
+            object_name,
+            operator_args,
+            arguments,
+            table_name,
+            on_domain,
+            comment,
+            if_exists,
+        } => {
+            assert_eq!(CommentObject::Operator, object_type);
+            assert_eq!("public.+", object_name.to_string());
+            let op_args = operator_args.expect("operator should carry argument signature");
+            assert!(matches!(op_args.left, Some(DataType::Integer(_))));
+            assert!(matches!(op_args.right, Some(DataType::Integer(_))));
+            assert!(arguments.is_none());
+            assert!(table_name.is_none());
+            assert!(!on_domain);
+            assert_eq!(Some("integer addition".to_string()), comment);
+            assert!(!if_exists);
+        }
+        _ => panic!("Expected COMMENT ON OPERATOR"),
+    }
+}
+
+#[test]
+fn parse_comment_on_operator_prefix_left_none() {
+    match pg_and_generic().verified_stmt("COMMENT ON OPERATOR -(NONE, INTEGER) IS 'unary minus'") {
+        Statement::Comment {
+            object_type,
+            operator_args,
+            ..
+        } => {
+            assert_eq!(CommentObject::Operator, object_type);
+            let op_args = operator_args.expect("operator should carry argument signature");
+            assert!(op_args.left.is_none());
+            assert!(matches!(op_args.right, Some(DataType::Integer(_))));
+        }
+        _ => panic!("Expected COMMENT ON OPERATOR"),
+    }
+}
+
+#[test]
+fn parse_comment_on_operator_postfix_right_none() {
+    match pg_and_generic().verified_stmt("COMMENT ON OPERATOR !(INTEGER, NONE) IS 'factorial'") {
+        Statement::Comment {
+            object_type,
+            operator_args,
+            ..
+        } => {
+            assert_eq!(CommentObject::Operator, object_type);
+            let op_args = operator_args.expect("operator should carry argument signature");
+            assert!(matches!(op_args.left, Some(DataType::Integer(_))));
+            assert!(op_args.right.is_none());
+        }
+        _ => panic!("Expected COMMENT ON OPERATOR"),
+    }
+}
+
+#[test]
+fn parse_comment_on_operator_requires_argument_list() {
+    let result = pg().parse_sql_statements("COMMENT ON OPERATOR + IS 'bad'");
+    assert!(
+        result.is_err(),
+        "COMMENT ON OPERATOR without (left, right) must error, got: {result:?}"
+    );
+}
+
+#[test]
+fn parse_comment_on_rule() {
+    match pg_and_generic()
+        .verified_stmt("COMMENT ON RULE notify_me ON public.orders IS 'rewrite rule'")
+    {
+        Statement::Comment {
+            object_type,
+            object_name,
+            table_name,
+            arguments,
+            operator_args,
+            on_domain,
+            comment,
+            if_exists,
+        } => {
+            assert_eq!(CommentObject::Rule, object_type);
+            assert_eq!("notify_me", object_name.to_string());
+            assert_eq!("public.orders", table_name.unwrap().to_string());
+            assert!(!on_domain);
+            assert!(arguments.is_none());
+            assert!(operator_args.is_none());
+            assert_eq!(Some("rewrite rule".to_string()), comment);
+            assert!(!if_exists);
+        }
+        _ => panic!("Expected COMMENT ON RULE"),
+    }
+
+    pg_and_generic().verified_stmt("COMMENT ON RULE r ON t IS NULL");
+}
+
+#[test]
+fn parse_comment_on_rule_requires_relation_tail() {
+    let result = pg().parse_sql_statements("COMMENT ON RULE r IS 'bad'");
+    assert!(
+        result.is_err(),
+        "COMMENT ON RULE without ON <table> tail must error, got: {result:?}"
     );
 }
 

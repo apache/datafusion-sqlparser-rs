@@ -10157,7 +10157,7 @@ fn parse_merge() {
                         }),
                         action: MergeAction::Update(MergeUpdateExpr {
                             update_token: AttachedToken::empty(),
-                            assignments: vec![
+                            kind: MergeUpdateKind::Set(vec![
                                 Assignment {
                                     target: AssignmentTarget::ColumnName(ObjectName::from(vec![
                                         Ident::new("dest"),
@@ -10178,7 +10178,7 @@ fn parse_merge() {
                                         Ident::new("G"),
                                     ]),
                                 },
-                            ],
+                            ]),
                             update_predicate: None,
                             delete_predicate: None,
                         }),

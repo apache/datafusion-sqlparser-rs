@@ -85,7 +85,8 @@ pub use self::ddl::{
 };
 pub use self::dml::{
     Delete, Insert, Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr,
-    MergeInsertKind, MergeUpdateExpr, MultiTableInsertIntoClause, MultiTableInsertType,
+    MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, MultiTableInsertIntoClause,
+    MultiTableInsertType,
     MultiTableInsertValue, MultiTableInsertValues, MultiTableInsertWhenClause, OutputClause,
     Update,
 };

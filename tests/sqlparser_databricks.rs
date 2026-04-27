@@ -738,3 +738,61 @@ fn parse_cte_without_as() {
         .parse_sql_statements("WITH cte (SELECT 1) SELECT * FROM cte")
         .is_err());
 }
+
+#[test]
+fn test_merge_update_set_star_and_insert_star() {
+    let sql = "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN UPDATE SET * WHEN NOT MATCHED THEN INSERT *";
+    databricks_and_generic().verified_stmt(sql);
+
+    match databricks().verified_stmt(sql) {
+        Statement::Merge(merge) => {
+            assert_eq!(merge.clauses.len(), 2);
+
+            match &merge.clauses[0].action {
+                MergeAction::Update(update_expr) => {
+                    assert!(matches!(update_expr.kind, MergeUpdateKind::Star));
+                }
+                _ => panic!("Expected UPDATE action"),
+            }
+
+            match &merge.clauses[1].action {
+                MergeAction::Insert(insert_expr) => {
+                    assert!(matches!(insert_expr.kind, MergeInsertKind::Star));
+                    assert!(insert_expr.columns.is_empty());
+                }
+                _ => panic!("Expected INSERT action"),
+            }
+        }
+        _ => panic!("Expected MERGE statement"),
+    }
+}
+
+#[test]
+fn test_merge_update_set_star_with_predicate() {
+    let sql = "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED AND source.active = true THEN UPDATE SET *";
+    databricks_and_generic().verified_stmt(sql);
+}
+
+#[test]
+fn test_merge_insert_star_with_not_matched_by_target() {
+    let sql = "MERGE INTO target USING source ON target.id = source.id WHEN NOT MATCHED BY TARGET THEN INSERT *";
+    databricks_and_generic().verified_stmt(sql);
+}
+
+#[test]
+fn test_merge_mixed_star_and_explicit() {
+    let sql = "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN UPDATE SET * WHEN NOT MATCHED THEN INSERT (a, b) VALUES (source.a, source.b)";
+    databricks_and_generic().verified_stmt(sql);
+}
+
+#[test]
+fn test_merge_star_with_subquery_source() {
+    let sql = concat!(
+        "MERGE INTO t1 AS target ",
+        "USING (SELECT * FROM t2) AS source ",
+        "ON target.id = source.id ",
+        "WHEN MATCHED THEN UPDATE SET * ",
+        "WHEN NOT MATCHED THEN INSERT *"
+    );
+    databricks_and_generic().verified_stmt(sql);
+}

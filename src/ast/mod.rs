@@ -1371,6 +1371,12 @@ pub enum Expr {
     Lambda(LambdaFunction),
     /// Checks membership of a value in a JSON array
     MemberOf(MemberOf),
+    /// PostgreSQL `XMLCONCAT(xml[, ...])` — concatenates a list of
+    /// individual XML values to create a single value containing an
+    /// XML content fragment.
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/functions-xml.html#FUNCTIONS-PRODUCING-XML-XMLCONCAT)
+    XmlConcat(Vec<Expr>),
 }
 
 impl Expr {
@@ -2221,6 +2227,9 @@ impl fmt::Display for Expr {
             Expr::Prior(expr) => write!(f, "PRIOR {expr}"),
             Expr::Lambda(lambda) => write!(f, "{lambda}"),
             Expr::MemberOf(member_of) => write!(f, "{member_of}"),
+            Expr::XmlConcat(exprs) => {
+                write!(f, "XMLCONCAT({})", display_comma_separated(exprs))
+            }
         }
     }
 }

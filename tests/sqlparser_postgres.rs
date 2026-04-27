@@ -3916,6 +3916,31 @@ fn parse_on_commit() {
 }
 
 #[test]
+fn parse_xmlconcat_expression() {
+    // XMLCONCAT should parse as a dedicated Expr::XmlConcat variant on
+    // PostgreSQL and Generic, preserving argument order.
+    let sql = "SELECT XMLCONCAT('<a/>', '<b/>', '<c/>')";
+    let select = pg_and_generic().verified_only_select(sql);
+    match expr_from_projection(&select.projection[0]) {
+        Expr::XmlConcat(exprs) => {
+            assert_eq!(exprs.len(), 3);
+            let strings: Vec<String> = exprs
+                .iter()
+                .map(|e| match e {
+                    Expr::Value(v) => match &v.value {
+                        Value::SingleQuotedString(s) => s.clone(),
+                        other => panic!("Expected SingleQuotedString, got: {other:?}"),
+                    },
+                    other => panic!("Expected Value, got: {other:?}"),
+                })
+                .collect();
+            assert_eq!(strings, vec!["<a/>", "<b/>", "<c/>"]);
+        }
+        other => panic!("Expected Expr::XmlConcat, got: {other:?}"),
+    }
+}
+
+#[test]
 fn parse_xml_typed_string() {
     // xml '...' should parse as a TypedString on PostgreSQL and Generic
     let sql = "SELECT xml '<foo/>'";

@@ -2731,7 +2731,7 @@ fn test_export_data() {
                     kind: OrderByKind::Expressions(vec![OrderByExpr {
                         expr: Expr::Identifier(Ident::new("field1")),
                         options: OrderByOptions {
-                            asc: None,
+                            sort: None,
                             nulls_first: None,
                         },
                         with_fill: None,
@@ -2837,7 +2837,7 @@ fn test_export_data() {
                     kind: OrderByKind::Expressions(vec![OrderByExpr {
                         expr: Expr::Identifier(Ident::new("field1")),
                         options: OrderByOptions {
-                            asc: None,
+                            sort: None,
                             nulls_first: None,
                         },
                         with_fill: None,

@@ -691,7 +691,7 @@ fn table_constraint_unique_primary_ctor(
             column: OrderByExpr {
                 expr: Expr::Identifier(ident),
                 options: OrderByOptions {
-                    asc: None,
+                    sort: None,
                     nulls_first: None,
                 },
                 with_fill: None,
@@ -2866,7 +2866,7 @@ fn parse_delete_with_order_by() {
                         span: Span::empty(),
                     }),
                     options: OrderByOptions {
-                        asc: Some(false),
+                        sort: Some(OrderBySort::Desc),
                         nulls_first: None,
                     },
                     with_fill: None,

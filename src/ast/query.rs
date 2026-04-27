@@ -2913,7 +2913,7 @@ impl fmt::Display for OrderBy {
 pub struct OrderByExpr {
     /// The expression to order by.
     pub expr: Expr,
-    /// Ordering options such as `ASC`/`DESC` and `NULLS` behavior.
+    /// Ordering options such as `ASC`/`DESC`/`USING <operator>` and `NULLS` behavior.
     pub options: OrderByOptions,
     /// Optional `WITH FILL` clause (ClickHouse extension) which specifies how to fill gaps.
     pub with_fill: Option<WithFill>,
@@ -2931,7 +2931,8 @@ impl From<Ident> for OrderByExpr {
 
 impl fmt::Display for OrderByExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}{}", self.expr, self.options)?;
+        write!(f, "{}", self.expr)?;
+        write!(f, "{}", self.options)?;
         if let Some(ref with_fill) = self.with_fill {
             write!(f, " {with_fill}")?
         }
@@ -3006,22 +3007,47 @@ impl fmt::Display for InterpolateExpr {
     }
 }
 
-#[derive(Default, Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+/// The sort order for an `ORDER BY` expression.
+///
+/// See PostgreSQL `USING` operator:
+/// <https://www.postgresql.org/docs/current/sql-select.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-/// Options for an `ORDER BY` expression (ASC/DESC and NULLS FIRST/LAST).
+pub enum OrderBySort {
+    /// `ASC`
+    Asc,
+    /// `DESC`
+    Desc,
+    /// PostgreSQL `USING <operator>` ordering.
+    ///
+    /// See <https://www.postgresql.org/docs/current/sql-select.html>
+    Using(ObjectName),
+}
+
+#[derive(Default, Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// Options for an `ORDER BY` expression.
 pub struct OrderByOptions {
-    /// Optional `ASC` (`Some(true)`) or `DESC` (`Some(false)`).
-    pub asc: Option<bool>,
+    /// Optional sort order: `ASC`, `DESC`, or `USING <operator>`.
+    pub sort: Option<OrderBySort>,
     /// Optional `NULLS FIRST` (`Some(true)`) or `NULLS LAST` (`Some(false)`).
     pub nulls_first: Option<bool>,
 }
 
 impl fmt::Display for OrderByOptions {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.asc {
-            Some(true) => write!(f, " ASC")?,
-            Some(false) => write!(f, " DESC")?,
+        match &self.sort {
+            Some(OrderBySort::Asc) => write!(f, " ASC")?,
+            Some(OrderBySort::Desc) => write!(f, " DESC")?,
+            Some(OrderBySort::Using(op)) => {
+                if op.0.len() > 1 {
+                    write!(f, " USING OPERATOR({op})")?;
+                } else {
+                    write!(f, " USING {op}")?;
+                }
+            }
             None => (),
         }
         match self.nulls_first {

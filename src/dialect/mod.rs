@@ -349,6 +349,23 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `PARTITION BY` appearing after `ORDER BY`
+    /// in a `CREATE TABLE` statement (in addition to the standard placement before `ORDER BY`).
+    ///
+    /// ClickHouse DDL uses this ordering:
+    /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table#partition-by>
+    fn supports_partition_by_after_order_by(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports ClickHouse-style `ARRAY JOIN` / `LEFT ARRAY JOIN` /
+    /// `INNER ARRAY JOIN` syntax for unnesting arrays inline.
+    ///
+    /// <https://clickhouse.com/docs/en/sql-reference/statements/select/array-join>
+    fn supports_array_join_syntax(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialects supports `group sets, roll up, or cube` expressions.
     fn supports_group_by_expr(&self) -> bool {
         false

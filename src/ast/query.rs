@@ -2785,6 +2785,13 @@ impl fmt::Display for Join {
                 self.relation,
                 suffix(constraint)
             )),
+            JoinOperator::ArrayJoin => f.write_fmt(format_args!("ARRAY JOIN {}", self.relation)),
+            JoinOperator::LeftArrayJoin => {
+                f.write_fmt(format_args!("LEFT ARRAY JOIN {}", self.relation))
+            }
+            JoinOperator::InnerArrayJoin => {
+                f.write_fmt(format_args!("INNER ARRAY JOIN {}", self.relation))
+            }
         }
     }
 }
@@ -2839,6 +2846,14 @@ pub enum JoinOperator {
     ///
     /// See <https://dev.mysql.com/doc/refman/8.4/en/join.html>.
     StraightJoin(JoinConstraint),
+    /// ClickHouse: `ARRAY JOIN` for unnesting arrays inline.
+    ///
+    /// See <https://clickhouse.com/docs/en/sql-reference/statements/select/array-join>.
+    ArrayJoin,
+    /// ClickHouse: `LEFT ARRAY JOIN` for unnesting arrays inline (preserves rows with empty arrays).
+    LeftArrayJoin,
+    /// ClickHouse: `INNER ARRAY JOIN` for unnesting arrays inline (filters rows with empty arrays).
+    InnerArrayJoin,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

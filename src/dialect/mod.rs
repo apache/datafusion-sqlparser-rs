@@ -30,6 +30,7 @@ mod redshift;
 mod snowflake;
 mod spark;
 mod sqlite;
+mod teradata;
 
 use core::any::{Any, TypeId};
 use core::fmt::Debug;
@@ -54,6 +55,7 @@ pub use self::snowflake::parse_snowflake_stage_name;
 pub use self::snowflake::SnowflakeDialect;
 pub use self::spark::SparkSqlDialect;
 pub use self::sqlite::SQLiteDialect;
+pub use self::teradata::TeradataDialect;
 
 /// Macro for streamlining the creation of derived `Dialect` objects.
 /// The generated struct includes `new()` and `default()` constructors.
@@ -1841,6 +1843,7 @@ pub fn dialect_from_str(dialect_name: impl AsRef<str>) -> Option<Box<dyn Dialect
         "databricks" => Some(Box::new(DatabricksDialect {})),
         "spark" | "sparksql" => Some(Box::new(SparkSqlDialect {})),
         "oracle" => Some(Box::new(OracleDialect {})),
+        "teradata" => Some(Box::new(TeradataDialect {})),
         _ => None,
     }
 }
@@ -1894,6 +1897,8 @@ mod tests {
         assert!(parse_dialect("DuckDb").is::<DuckDbDialect>());
         assert!(parse_dialect("DataBricks").is::<DatabricksDialect>());
         assert!(parse_dialect("databricks").is::<DatabricksDialect>());
+        assert!(parse_dialect("teradata").is::<TeradataDialect>());
+        assert!(parse_dialect("Teradata").is::<TeradataDialect>());
 
         // error cases
         assert!(dialect_from_str("Unknown").is_none());

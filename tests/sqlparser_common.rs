@@ -18206,7 +18206,7 @@ fn test_parse_semantic_view_table_factor() {
 
 #[test]
 fn parse_adjacent_string_literal_concatenation() {
-    let sql = r#"SELECT 'M' "y" 'S' "q" 'l'"#;
+    let sql = r#"SELECT 'M' 'y' 'S' 'q' 'l'"#;
     let dialects = all_dialects_where(|d| d.supports_string_literal_concatenation());
     dialects.one_statement_parses_to(sql, r"SELECT 'MySql'");
 

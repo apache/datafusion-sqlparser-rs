@@ -3873,21 +3873,12 @@ impl<'a> Parser<'a> {
                 Keyword::XOR => Some(BinaryOperator::Xor),
                 Keyword::OVERLAPS => Some(BinaryOperator::Overlaps),
                 Keyword::OPERATOR if dialect_is!(dialect is PostgreSqlDialect | GenericDialect) => {
-                    self.expect_token(&Token::LParen)?;
-                    // there are special rules for operator names in
-                    // postgres so we can not use 'parse_object'
-                    // or similar.
+                    // Postgres has special rules for operator names so we can
+                    // not use `parse_object` or similar.
                     // See https://www.postgresql.org/docs/current/sql-createoperator.html
-                    let mut idents = vec![];
-                    loop {
-                        self.advance_token();
-                        idents.push(self.get_current_token().to_string());
-                        if !self.consume_token(&Token::Period) {
-                            break;
-                        }
-                    }
-                    self.expect_token(&Token::RParen)?;
-                    Some(BinaryOperator::PGCustomBinaryOperator(idents))
+                    Some(BinaryOperator::PGCustomBinaryOperator(
+                        self.parse_pg_operator_ident_parts()?,
+                    ))
                 }
                 _ => None,
             },
@@ -9915,15 +9906,126 @@ impl<'a> Parser<'a> {
                     .into(),
                 ))
             }
+            Token::Word(w)
+                if w.keyword == Keyword::EXCLUDE && self.dialect.supports_exclude_constraint() =>
+            {
+                Ok(Some(self.parse_exclude_constraint(name)?.into()))
+            }
             _ => {
                 if name.is_some() {
-                    self.expected("PRIMARY, UNIQUE, FOREIGN, or CHECK", next_token)
+                    self.expected("PRIMARY, UNIQUE, FOREIGN, CHECK, or EXCLUDE", next_token)
                 } else {
                     self.prev_token();
                     Ok(None)
                 }
             }
         }
+    }
+
+    /// Parse an `EXCLUDE` table constraint, with the leading `EXCLUDE` keyword
+    /// already consumed.
+    fn parse_exclude_constraint(
+        &mut self,
+        name: Option<Ident>,
+    ) -> Result<ExcludeConstraint, ParserError> {
+        let index_method = if self.parse_keyword(Keyword::USING) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+
+        self.expect_token(&Token::LParen)?;
+        let elements = self.parse_comma_separated(|p| p.parse_exclude_constraint_element())?;
+        self.expect_token(&Token::RParen)?;
+
+        let include = if self.parse_keyword(Keyword::INCLUDE) {
+            self.expect_token(&Token::LParen)?;
+            let cols = self.parse_comma_separated(|p| p.parse_identifier())?;
+            self.expect_token(&Token::RParen)?;
+            cols
+        } else {
+            vec![]
+        };
+
+        let where_clause = if self.parse_keyword(Keyword::WHERE) {
+            self.expect_token(&Token::LParen)?;
+            let predicate = self.parse_expr()?;
+            self.expect_token(&Token::RParen)?;
+            Some(Box::new(predicate))
+        } else {
+            None
+        };
+
+        let characteristics = self.parse_constraint_characteristics()?;
+
+        Ok(ExcludeConstraint {
+            name,
+            index_method,
+            elements,
+            include,
+            where_clause,
+            characteristics,
+        })
+    }
+
+    fn parse_exclude_constraint_element(
+        &mut self,
+    ) -> Result<ExcludeConstraintElement, ParserError> {
+        // `index_elem` grammar: { col | (expr) } [ opclass ] [ ASC | DESC ] [ NULLS FIRST | LAST ].
+        // Shared with `CREATE INDEX` columns.
+        let column = self.parse_create_index_expr()?;
+        self.expect_keyword_is(Keyword::WITH)?;
+        let operator = self.parse_exclude_constraint_operator()?;
+        Ok(ExcludeConstraintElement { column, operator })
+    }
+
+    /// Parse the operator that follows `WITH` in an `EXCLUDE` element.
+    ///
+    /// Accepts either a single operator token (e.g. `=`, `&&`, `<->`) or the
+    /// Postgres `OPERATOR(schema.op)` form for schema-qualified operators.
+    fn parse_exclude_constraint_operator(
+        &mut self,
+    ) -> Result<ExcludeConstraintOperator, ParserError> {
+        if self.parse_keyword(Keyword::OPERATOR) {
+            return Ok(ExcludeConstraintOperator::PgCustom(
+                self.parse_pg_operator_ident_parts()?,
+            ));
+        }
+
+        // Reject structural delimiters (`,`, `)`, `;`, EOF) since they signal a
+        // missing operator between `WITH` and the next element / end of list.
+        let operator_token = self.next_token();
+        if matches!(
+            operator_token.token,
+            Token::EOF | Token::RParen | Token::Comma | Token::SemiColon
+        ) {
+            return self.expected("exclusion operator", operator_token);
+        }
+        Ok(ExcludeConstraintOperator::Token(
+            operator_token.token.to_string(),
+        ))
+    }
+
+    /// Parse the body of a Postgres `OPERATOR(schema.op)` form — i.e. the
+    /// parenthesised `.`-separated path of name parts after the `OPERATOR`
+    /// keyword. Shared between binary expression parsing and exclusion
+    /// constraint parsing.
+    fn parse_pg_operator_ident_parts(&mut self) -> Result<Vec<String>, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        if self.peek_token_ref().token == Token::RParen {
+            let token = self.next_token();
+            return self.expected("operator name", token);
+        }
+        let mut idents = vec![];
+        loop {
+            self.advance_token();
+            idents.push(self.get_current_token().to_string());
+            if !self.consume_token(&Token::Period) {
+                break;
+            }
+        }
+        self.expect_token(&Token::RParen)?;
+        Ok(idents)
     }
 
     fn parse_optional_nulls_distinct(&mut self) -> Result<NullsDistinctOption, ParserError> {

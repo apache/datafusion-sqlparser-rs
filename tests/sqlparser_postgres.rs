@@ -24,7 +24,7 @@ mod test_utils;
 
 use helpers::attached_token::AttachedToken;
 use sqlparser::ast::*;
-use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
+use sqlparser::dialect::{Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect};
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Span;
 use test_utils::*;
@@ -9218,6 +9218,30 @@ fn parse_lock_table() {
                 assert!(!lock.nowait);
             }
             _ => panic!("Expected Lock, got: {stmt:?}"),
+        }
+    }
+}
+
+#[test]
+fn exclude_as_column_name_parses_in_mysql_and_sqlite() {
+    // `exclude` must remain usable as an identifier where it is not a
+    // reserved keyword; PG reserves it as a constraint keyword.
+    let sql = "CREATE TABLE t (exclude INT)";
+    for dialect in [
+        Box::new(MySqlDialect {}) as Box<dyn Dialect>,
+        Box::new(SQLiteDialect {}),
+    ] {
+        let type_name = format!("{dialect:?}");
+        let parser = TestedDialects::new(vec![dialect]);
+        let stmts = parser
+            .parse_sql_statements(sql)
+            .unwrap_or_else(|e| panic!("{type_name} failed to parse {sql}: {e}"));
+        match &stmts[0] {
+            Statement::CreateTable(create_table) => {
+                assert_eq!(create_table.columns.len(), 1);
+                assert_eq!(create_table.columns[0].name.value, "exclude");
+            }
+            other => panic!("{type_name}: expected CreateTable, got {other:?}"),
         }
     }
 }

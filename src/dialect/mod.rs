@@ -1169,6 +1169,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `EXCLUDE` table constraints, e.g.
+    /// `EXCLUDE USING gist (c WITH &&)` in `CREATE TABLE`/`ALTER TABLE`.
+    /// See <https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE>.
+    fn supports_exclude_constraint(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports the `LOAD DATA` statement
     fn supports_load_data(&self) -> bool {
         false

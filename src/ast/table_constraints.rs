@@ -26,7 +26,7 @@ use crate::tokenizer::Span;
 use core::fmt;
 
 #[cfg(not(feature = "std"))]
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -117,6 +117,12 @@ pub enum TableConstraint {
     ///
     /// [1]: https://www.postgresql.org/docs/current/sql-altertable.html
     UniqueUsingIndex(ConstraintUsingIndex),
+    /// `EXCLUDE` constraint.
+    ///
+    /// `[ CONSTRAINT <name> ] EXCLUDE [ USING <index_method> ] ( <element> WITH <operator> [, ...] ) [ INCLUDE (<cols>) ] [ WHERE (<predicate>) ]`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE)
+    Exclude(ExcludeConstraint),
 }
 
 impl From<UniqueConstraint> for TableConstraint {
@@ -155,6 +161,12 @@ impl From<FullTextOrSpatialConstraint> for TableConstraint {
     }
 }
 
+impl From<ExcludeConstraint> for TableConstraint {
+    fn from(constraint: ExcludeConstraint) -> Self {
+        TableConstraint::Exclude(constraint)
+    }
+}
+
 impl fmt::Display for TableConstraint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -166,6 +178,7 @@ impl fmt::Display for TableConstraint {
             TableConstraint::FulltextOrSpatial(constraint) => constraint.fmt(f),
             TableConstraint::PrimaryKeyUsingIndex(c) => c.fmt_with_keyword(f, "PRIMARY KEY"),
             TableConstraint::UniqueUsingIndex(c) => c.fmt_with_keyword(f, "UNIQUE"),
+            TableConstraint::Exclude(constraint) => constraint.fmt(f),
         }
     }
 }
@@ -601,5 +614,115 @@ impl crate::ast::Spanned for ConstraintUsingIndex {
             .map(|c| c.span())
             .unwrap_or(self.index_name.span);
         start.union(&end)
+    }
+}
+
+/// The operator that follows `WITH` in an `EXCLUDE` constraint element.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ExcludeConstraintOperator {
+    /// A single operator token, e.g. `=`, `&&`, `<->`.
+    Token(String),
+    /// Postgres schema-qualified form: `OPERATOR(schema.op)`.
+    PgCustom(Vec<String>),
+}
+
+impl fmt::Display for ExcludeConstraintOperator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ExcludeConstraintOperator::Token(token) => f.write_str(token),
+            ExcludeConstraintOperator::PgCustom(parts) => {
+                write!(f, "OPERATOR({})", display_separated(parts, "."))
+            }
+        }
+    }
+}
+
+/// One element in an `EXCLUDE` constraint's element list.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ExcludeConstraintElement {
+    /// The index column (`{ column_name | ( expression ) } [ opclass ] [ ASC | DESC ] [ NULLS { FIRST | LAST } ]`).
+    pub column: IndexColumn,
+    /// The exclusion operator.
+    pub operator: ExcludeConstraintOperator,
+}
+
+impl fmt::Display for ExcludeConstraintElement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} WITH {}", self.column, self.operator)
+    }
+}
+
+impl crate::ast::Spanned for ExcludeConstraintElement {
+    fn span(&self) -> Span {
+        let mut span = self.column.column.expr.span();
+        if let Some(opclass) = &self.column.operator_class {
+            span = span.union(&opclass.span());
+        }
+        span
+    }
+}
+
+/// An `EXCLUDE` constraint.
+///
+/// [PostgreSql](https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ExcludeConstraint {
+    /// Optional constraint name.
+    pub name: Option<Ident>,
+    /// Optional index method (e.g. `gist`, `spgist`).
+    pub index_method: Option<Ident>,
+    /// The list of index expressions with their exclusion operators.
+    pub elements: Vec<ExcludeConstraintElement>,
+    /// Optional list of additional columns to include in the index.
+    pub include: Vec<Ident>,
+    /// Optional `WHERE` predicate to restrict the constraint to a subset of rows.
+    pub where_clause: Option<Box<Expr>>,
+    /// Optional constraint characteristics like `DEFERRABLE`.
+    pub characteristics: Option<ConstraintCharacteristics>,
+}
+
+impl fmt::Display for ExcludeConstraint {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use crate::ast::ddl::display_constraint_name;
+        write!(f, "{}EXCLUDE", display_constraint_name(&self.name))?;
+        if let Some(method) = &self.index_method {
+            write!(f, " USING {method}")?;
+        }
+        write!(f, " ({})", display_comma_separated(&self.elements))?;
+        if !self.include.is_empty() {
+            write!(f, " INCLUDE ({})", display_comma_separated(&self.include))?;
+        }
+        if let Some(predicate) = &self.where_clause {
+            write!(f, " WHERE ({predicate})")?;
+        }
+        if let Some(characteristics) = &self.characteristics {
+            write!(f, " {characteristics}")?;
+        }
+        Ok(())
+    }
+}
+
+impl crate::ast::Spanned for ExcludeConstraint {
+    fn span(&self) -> Span {
+        Span::union_iter(
+            self.name
+                .iter()
+                .map(|i| i.span)
+                .chain(self.index_method.iter().map(|i| i.span))
+                .chain(self.elements.iter().map(|e| e.span()))
+                .chain(self.include.iter().map(|i| i.span))
+                .chain(self.where_clause.iter().map(|e| e.span()))
+                .chain(self.characteristics.iter().map(|c| c.span())),
+        )
     }
 }

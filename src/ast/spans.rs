@@ -650,6 +650,7 @@ impl Spanned for TableConstraint {
             TableConstraint::FulltextOrSpatial(constraint) => constraint.span(),
             TableConstraint::PrimaryKeyUsingIndex(constraint)
             | TableConstraint::UniqueUsingIndex(constraint) => constraint.span(),
+            TableConstraint::Exclude(constraint) => constraint.span(),
         }
     }
 }

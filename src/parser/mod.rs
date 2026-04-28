@@ -5212,6 +5212,8 @@ impl<'a> Parser<'a> {
             }
         } else if self.parse_keyword(Keyword::SERVER) {
             self.parse_pg_create_server()
+        } else if self.parse_keywords(&[Keyword::TEXT, Keyword::SEARCH]) {
+            self.parse_create_text_search()
         } else {
             self.expected_ref("an object type after CREATE", self.peek_token_ref())
         }
@@ -8173,6 +8175,52 @@ impl<'a> Parser<'a> {
             if_not_exists,
             name,
             definition,
+        })
+    }
+
+    /// Parse a PostgreSQL-specific `CREATE TEXT SEARCH CONFIGURATION | DICTIONARY | PARSER | TEMPLATE` statement.
+    pub fn parse_create_text_search(&mut self) -> Result<Statement, ParserError> {
+        let subtype = if self.parse_keyword(Keyword::CONFIGURATION) {
+            Keyword::CONFIGURATION
+        } else if self.parse_keyword(Keyword::DICTIONARY) {
+            Keyword::DICTIONARY
+        } else if self.parse_keyword(Keyword::PARSER) {
+            Keyword::PARSER
+        } else if self.parse_keyword(Keyword::TEMPLATE) {
+            Keyword::TEMPLATE
+        } else {
+            return self.expected_ref(
+                "CONFIGURATION, DICTIONARY, PARSER, or TEMPLATE after CREATE TEXT SEARCH",
+                self.peek_token_ref(),
+            );
+        };
+
+        let name = self.parse_object_name(false)?;
+        self.expect_token(&Token::LParen)?;
+        let options = self.parse_comma_separated(Parser::parse_sql_option)?;
+        self.expect_token(&Token::RParen)?;
+
+        Ok(match subtype {
+            Keyword::CONFIGURATION => {
+                Statement::CreateTextSearchConfiguration(CreateTextSearchConfiguration {
+                    name,
+                    options,
+                })
+            }
+            Keyword::DICTIONARY => {
+                Statement::CreateTextSearchDictionary(CreateTextSearchDictionary { name, options })
+            }
+            Keyword::PARSER => {
+                Statement::CreateTextSearchParser(CreateTextSearchParser { name, options })
+            }
+            Keyword::TEMPLATE => {
+                Statement::CreateTextSearchTemplate(CreateTextSearchTemplate { name, options })
+            }
+            unexpected => {
+                return Err(ParserError::ParserError(format!(
+                    "Internal parser error: unexpected CREATE TEXT SEARCH subtype `{unexpected}`"
+                )))
+            }
         })
     }
 

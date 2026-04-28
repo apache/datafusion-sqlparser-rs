@@ -1925,6 +1925,21 @@ impl<'a> Tokenizer<'a> {
 
         chars.next();
 
+        // Handle ${placeholder} syntax
+        if matches!(chars.peek(), Some('{')) {
+            chars.next(); // consume '{'
+            let placeholder = peeking_take_while(chars, |ch| ch != '}');
+            if matches!(chars.peek(), Some('}')) {
+                chars.next(); // consume '}'
+                return Ok(Token::Placeholder(format!("${{{placeholder}}}")));
+            } else {
+                return self.tokenizer_error(
+                    chars.location(),
+                    "Unterminated dollar-brace placeholder, expected '}'",
+                );
+            }
+        }
+
         // If the dialect does not support dollar-quoted strings, then `$$` is rather a placeholder.
         if matches!(chars.peek(), Some('$')) && !self.dialect.supports_dollar_placeholder() {
             chars.next();
@@ -3235,6 +3250,36 @@ mod tests {
                 Token::Placeholder("$ABC".into()),
             ]
         );
+    }
+
+    #[test]
+    fn tokenize_dollar_brace_placeholder() {
+        let sql = String::from("SELECT ${name}, ${1}");
+        let dialect = GenericDialect {};
+        let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::make_keyword("SELECT"),
+                Token::Whitespace(Whitespace::Space),
+                Token::Placeholder("${name}".into()),
+                Token::Comma,
+                Token::Whitespace(Whitespace::Space),
+                Token::Placeholder("${1}".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn tokenize_dollar_brace_placeholder_unterminated() {
+        let sql = String::from("SELECT ${name");
+        let dialect = GenericDialect {};
+        let result = Tokenizer::new(&dialect, &sql).tokenize();
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("Unterminated dollar-brace placeholder"));
     }
 
     #[test]

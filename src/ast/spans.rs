@@ -272,6 +272,10 @@ impl Spanned for Values {
 /// - [Statement::Declare]
 /// - [Statement::CreateExtension]
 /// - [Statement::CreateCollation]
+/// - [Statement::CreateTextSearchConfiguration]
+/// - [Statement::CreateTextSearchDictionary]
+/// - [Statement::CreateTextSearchParser]
+/// - [Statement::CreateTextSearchTemplate]
 /// - [Statement::AlterCollation]
 /// - [Statement::Fetch]
 /// - [Statement::Flush]
@@ -387,12 +391,31 @@ impl Spanned for Statement {
             Statement::CreateRole(create_role) => create_role.span(),
             Statement::CreateExtension(create_extension) => create_extension.span(),
             Statement::CreateCollation(create_collation) => create_collation.span(),
+            Statement::CreateTextSearchConfiguration(_) => Span::empty(),
+            Statement::CreateTextSearchDictionary(_) => Span::empty(),
+            Statement::CreateTextSearchParser(_) => Span::empty(),
+            Statement::CreateTextSearchTemplate(_) => Span::empty(),
+            Statement::CreatePublication(_) => Span::empty(),
+            Statement::CreateSubscription(_) => Span::empty(),
+            Statement::CreateCast(_) => Span::empty(),
+            Statement::CreateConversion(_) => Span::empty(),
+            Statement::CreateLanguage(_) => Span::empty(),
+            Statement::CreateRule(_) => Span::empty(),
+            Statement::CreateStatistics(_) => Span::empty(),
+            Statement::CreateAccessMethod(_) => Span::empty(),
+            Statement::CreateEventTrigger(_) => Span::empty(),
+            Statement::CreateTransform(_) => Span::empty(),
+            Statement::SecurityLabel(_) => Span::empty(),
+            Statement::CreateUserMapping(_) => Span::empty(),
+            Statement::CreateTablespace(_) => Span::empty(),
             Statement::DropExtension(drop_extension) => drop_extension.span(),
             Statement::DropOperator(drop_operator) => drop_operator.span(),
             Statement::DropOperatorFamily(drop_operator_family) => drop_operator_family.span(),
             Statement::DropOperatorClass(drop_operator_class) => drop_operator_class.span(),
             Statement::CreateSecret { .. } => Span::empty(),
             Statement::CreateServer { .. } => Span::empty(),
+            Statement::CreateForeignDataWrapper { .. } => Span::empty(),
+            Statement::CreateForeignTable { .. } => Span::empty(),
             Statement::CreateConnector { .. } => Span::empty(),
             Statement::CreateOperator(create_operator) => create_operator.span(),
             Statement::CreateOperatorFamily(create_operator_family) => {
@@ -412,6 +435,9 @@ impl Spanned for Statement {
                     .chain(core::iter::once(query.span()))
                     .chain(with_options.iter().map(|i| i.span())),
             ),
+            Statement::AlterDomain(_) => Span::empty(),
+            Statement::AlterExtension(_) => Span::empty(),
+            Statement::AlterTrigger(_) => Span::empty(),
             // These statements need to be implemented
             Statement::AlterFunction { .. } => Span::empty(),
             Statement::AlterType { .. } => Span::empty(),
@@ -518,6 +544,7 @@ impl Spanned for Statement {
             Statement::Vacuum(..) => Span::empty(),
             Statement::AlterUser(..) => Span::empty(),
             Statement::Reset(..) => Span::empty(),
+            Statement::CreateAggregate(_) => Span::empty(),
         }
     }
 }
@@ -619,6 +646,31 @@ impl Spanned for CreateTable {
     }
 }
 
+impl Spanned for PartitionBoundValue {
+    fn span(&self) -> Span {
+        match self {
+            PartitionBoundValue::Expr(expr) => expr.span(),
+            PartitionBoundValue::MinValue => Span::empty(),
+            PartitionBoundValue::MaxValue => Span::empty(),
+        }
+    }
+}
+
+impl Spanned for ForValues {
+    fn span(&self) -> Span {
+        match self {
+            ForValues::In(exprs) => union_spans(exprs.iter().map(|e| e.span())),
+            ForValues::From { from, to } => union_spans(
+                from.iter()
+                    .map(|v| v.span())
+                    .chain(to.iter().map(|v| v.span())),
+            ),
+            ForValues::With { .. } => Span::empty(),
+            ForValues::Default => Span::empty(),
+        }
+    }
+}
+
 impl Spanned for ColumnDef {
     fn span(&self) -> Span {
         let ColumnDef {
@@ -648,35 +700,9 @@ impl Spanned for TableConstraint {
             TableConstraint::Check(constraint) => constraint.span(),
             TableConstraint::Index(constraint) => constraint.span(),
             TableConstraint::FulltextOrSpatial(constraint) => constraint.span(),
+            TableConstraint::Exclusion(constraint) => constraint.span(),
             TableConstraint::PrimaryKeyUsingIndex(constraint)
             | TableConstraint::UniqueUsingIndex(constraint) => constraint.span(),
-        }
-    }
-}
-
-impl Spanned for PartitionBoundValue {
-    fn span(&self) -> Span {
-        match self {
-            PartitionBoundValue::Expr(expr) => expr.span(),
-            // MINVALUE and MAXVALUE are keywords without tracked spans
-            PartitionBoundValue::MinValue => Span::empty(),
-            PartitionBoundValue::MaxValue => Span::empty(),
-        }
-    }
-}
-
-impl Spanned for ForValues {
-    fn span(&self) -> Span {
-        match self {
-            ForValues::In(exprs) => union_spans(exprs.iter().map(|e| e.span())),
-            ForValues::From { from, to } => union_spans(
-                from.iter()
-                    .map(|v| v.span())
-                    .chain(to.iter().map(|v| v.span())),
-            ),
-            // WITH (MODULUS n, REMAINDER r) - u64 values have no spans
-            ForValues::With { .. } => Span::empty(),
-            ForValues::Default => Span::empty(),
         }
     }
 }
@@ -1122,6 +1148,8 @@ impl Spanned for AlterTableOperation {
                 partition,
             } => name.span.union_opt(&partition.as_ref().map(|i| i.span)),
             AlterTableOperation::DisableRowLevelSecurity => Span::empty(),
+            AlterTableOperation::ForceRowLevelSecurity => Span::empty(),
+            AlterTableOperation::NoForceRowLevelSecurity => Span::empty(),
             AlterTableOperation::DisableRule { name } => name.span,
             AlterTableOperation::DisableTrigger { name } => name.span,
             AlterTableOperation::DropConstraint {
@@ -1137,6 +1165,15 @@ impl Spanned for AlterTableOperation {
             } => union_spans(column_names.iter().map(|i| i.span)),
             AlterTableOperation::AttachPartition { partition } => partition.span(),
             AlterTableOperation::DetachPartition { partition } => partition.span(),
+            AlterTableOperation::AttachPartitionOf {
+                partition_name,
+                partition_bound: _,
+            } => partition_name.span(),
+            AlterTableOperation::DetachPartitionOf {
+                partition_name,
+                concurrently: _,
+                finalize: _,
+            } => partition_name.span(),
             AlterTableOperation::FreezePartition {
                 partition,
                 with_name,
@@ -1229,6 +1266,7 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::SetOptionsParens { options } => {
                 union_spans(options.iter().map(|i| i.span()))
             }
+            AlterTableOperation::SetTablespace { .. } => Span::empty(),
         }
     }
 }
@@ -1315,6 +1353,7 @@ impl Spanned for AlterIndexOperation {
     fn span(&self) -> Span {
         match self {
             AlterIndexOperation::RenameIndex { index_name } => index_name.span(),
+            AlterIndexOperation::SetTablespace { .. } => Span::empty(),
         }
     }
 }

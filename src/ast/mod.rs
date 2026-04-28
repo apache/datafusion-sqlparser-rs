@@ -60,28 +60,37 @@ pub use self::dcl::{
     SetConfigValue, Use,
 };
 pub use self::ddl::{
-    Alignment, AlterCollation, AlterCollationOperation, AlterColumnOperation, AlterConnectorOwner,
-    AlterFunction, AlterFunctionAction, AlterFunctionKind, AlterFunctionOperation,
-    AlterIndexOperation, AlterOperator, AlterOperatorClass, AlterOperatorClassOperation,
-    AlterOperatorFamily, AlterOperatorFamilyOperation, AlterOperatorOperation, AlterPolicy,
-    AlterPolicyOperation, AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm,
-    AlterTableLock, AlterTableOperation, AlterTableType, AlterType, AlterTypeAddValue,
-    AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
+    AccessMethodType, AggregateModifyKind, Alignment, AlterCollation, AlterCollationOperation,
+    AlterColumnOperation, AlterConnectorOwner, AlterDomain, AlterDomainOperation, AlterExtension,
+    AlterExtensionOperation, AlterFunction, AlterFunctionAction, AlterFunctionKind,
+    AlterFunctionOperation, AlterIndexOperation, AlterOperator, AlterOperatorClass,
+    AlterOperatorClassOperation, AlterOperatorFamily, AlterOperatorFamilyOperation,
+    AlterOperatorOperation, AlterPolicy, AlterPolicyOperation, AlterSchema, AlterSchemaOperation,
+    AlterTable, AlterTableAlgorithm, AlterTableLock, AlterTableOperation, AlterTableType,
+    AlterTrigger, AlterTriggerOperation, AlterType, AlterTypeAddValue, AlterTypeAddValuePosition,
+    AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue, CastContext, CastFunctionKind,
     ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy,
-    ColumnPolicyProperty, ConstraintCharacteristics, CreateCollation, CreateCollationDefinition,
-    CreateConnector, CreateDomain, CreateExtension, CreateFunction, CreateIndex, CreateOperator,
+    ColumnPolicyProperty, ConstraintCharacteristics, CreateAccessMethod, CreateAggregate,
+    CreateAggregateOption, CreateCast, CreateCollation, CreateCollationDefinition, CreateConnector,
+    CreateConversion, CreateDomain, CreateEventTrigger, CreateExtension, CreateForeignDataWrapper,
+    CreateForeignTable, CreateFunction, CreateIndex, CreateLanguage, CreateOperator,
     CreateOperatorClass, CreateOperatorFamily, CreatePolicy, CreatePolicyCommand, CreatePolicyType,
-    CreateTable, CreateTrigger, CreateView, Deduplicate, DeferrableInitial, DistStyle,
-    DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily,
-    DropOperatorSignature, DropPolicy, DropTrigger, ForValues, FunctionReturnType, GeneratedAs,
-    GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
-    IdentityPropertyKind, IdentityPropertyOrder, IndexColumn, IndexOption, IndexType,
-    KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes, OperatorClassItem,
-    OperatorFamilyDropItem, OperatorFamilyItem, OperatorOption, OperatorPurpose, Owner, Partition,
-    PartitionBoundValue, ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity,
-    TagsColumnOption, TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
-    UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
-    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, ViewColumnDef,
+    CreatePublication, CreateRule, CreateStatistics, CreateSubscription, CreateTable,
+    CreateTablespace, CreateTextSearchConfiguration, CreateTextSearchDictionary,
+    CreateTextSearchParser, CreateTextSearchTemplate, CreateTransform, CreateTrigger,
+    CreateUserMapping, CreateView, Deduplicate, DeferrableInitial, DistStyle, DropBehavior,
+    DropExtension, DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily,
+    DropOperatorSignature, DropPolicy, DropTrigger, EventTriggerEvent, FdwRoutineClause, ForValues,
+    FunctionReturnType, GeneratedAs, GeneratedExpressionMode, IdentityParameters, IdentityProperty,
+    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, IndexColumn,
+    IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes,
+    OperatorClassItem, OperatorFamilyDropItem, OperatorFamilyItem, OperatorOption, OperatorPurpose,
+    Owner, Partition, PartitionBoundValue, ProcedureParam, PublicationTarget, ReferentialAction,
+    RenameTableNameKind, ReplicaIdentity, RuleAction, RuleEvent, SecurityLabel,
+    SecurityLabelObjectKind, StatisticsKind, TagsColumnOption, TransformElement, TriggerObjectKind,
+    Truncate, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
+    UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
+    UserDefinedTypeStorage, UserMappingUser, ViewColumnDef
 };
 pub use self::dml::{
     Delete, Insert, Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr,
@@ -138,8 +147,9 @@ mod dml;
 pub mod helpers;
 pub mod table_constraints;
 pub use table_constraints::{
-    CheckConstraint, ConstraintUsingIndex, ForeignKeyConstraint, FullTextOrSpatialConstraint,
-    IndexConstraint, PrimaryKeyConstraint, TableConstraint, UniqueConstraint,
+    CheckConstraint, ConstraintUsingIndex, ExclusionConstraint, ExclusionElement,
+    ForeignKeyConstraint, FullTextOrSpatialConstraint, IndexConstraint, PrimaryKeyConstraint,
+    TableConstraint, UniqueConstraint,
 };
 mod operator;
 mod query;
@@ -3737,6 +3747,16 @@ pub enum Statement {
     /// A `CREATE SERVER` statement.
     CreateServer(CreateServerStatement),
     /// ```sql
+    /// CREATE FOREIGN DATA WRAPPER
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createforeigndatawrapper.html)
+    CreateForeignDataWrapper(CreateForeignDataWrapper),
+    /// ```sql
+    /// CREATE FOREIGN TABLE
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createforeigntable.html)
+    CreateForeignTable(CreateForeignTable),
+    /// ```sql
     /// CREATE POLICY
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)
@@ -3761,6 +3781,11 @@ pub enum Statement {
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createopclass.html)
     CreateOperatorClass(CreateOperatorClass),
+    /// ```sql
+    /// CREATE AGGREGATE
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createaggregate.html)
+    CreateAggregate(CreateAggregate),
     /// ```sql
     /// ALTER TABLE
     /// ```
@@ -3794,17 +3819,34 @@ pub enum Statement {
         with_options: Vec<SqlOption>,
     },
     /// ```sql
+    /// ALTER DOMAIN
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterdomain.html)
+    AlterDomain(AlterDomain),
+    /// ```sql
+    /// ALTER EXTENSION
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterextension.html)
+    AlterExtension(AlterExtension),
+    /// ```sql
     /// ALTER FUNCTION
     /// ALTER AGGREGATE
+    /// ALTER PROCEDURE
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterfunction.html)
     /// and [PostgreSQL](https://www.postgresql.org/docs/current/sql-alteraggregate.html)
+    /// and [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterprocedure.html)
     AlterFunction(AlterFunction),
     /// ```sql
     /// ALTER TYPE
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertype.html)
     /// ```
     AlterType(AlterType),
+    /// ```sql
+    /// ALTER TRIGGER
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertrigger.html)
+    AlterTrigger(AlterTrigger),
     /// ```sql
     /// ALTER COLLATION
     /// ```
@@ -4012,6 +4054,109 @@ pub enum Statement {
     /// Note: this is a PostgreSQL-specific statement.
     /// <https://www.postgresql.org/docs/current/sql-createcollation.html>
     CreateCollation(CreateCollation),
+    /// ```sql
+    /// CREATE TEXT SEARCH CONFIGURATION name ( PARSER = parser_name )
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createtsconfig.html>
+    CreateTextSearchConfiguration(CreateTextSearchConfiguration),
+    /// ```sql
+    /// CREATE TEXT SEARCH DICTIONARY name ( TEMPLATE = template_name [, option = value, ...] )
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createtsdictionary.html>
+    CreateTextSearchDictionary(CreateTextSearchDictionary),
+    /// ```sql
+    /// CREATE TEXT SEARCH PARSER name ( START = start_fn, GETTOKEN = gettoken_fn, END = end_fn, LEXTYPES = lextypes_fn [, HEADLINE = headline_fn] )
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createtsparser.html>
+    CreateTextSearchParser(CreateTextSearchParser),
+    /// ```sql
+    /// CREATE TEXT SEARCH TEMPLATE name ( [INIT = init_fn,] LEXIZE = lexize_fn )
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createtstemplate.html>
+    CreateTextSearchTemplate(CreateTextSearchTemplate),
+    /// ```sql
+    /// CREATE PUBLICATION name [ FOR ALL TABLES | FOR TABLE table [, ...] | FOR TABLES IN SCHEMA schema [, ...] ] [ WITH ( option = value [, ...] ) ]
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createpublication.html>
+    CreatePublication(CreatePublication),
+    /// ```sql
+    /// CREATE SUBSCRIPTION name CONNECTION 'conninfo' PUBLICATION publication_name [, ...] [ WITH ( option = value [, ...] ) ]
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createsubscription.html>
+    CreateSubscription(CreateSubscription),
+    /// ```sql
+    /// CREATE CAST (source_type AS target_type) WITH FUNCTION func_name [(arg_types)] [AS ASSIGNMENT | AS IMPLICIT]
+    /// CREATE CAST (source_type AS target_type) WITHOUT FUNCTION [AS ASSIGNMENT | AS IMPLICIT]
+    /// CREATE CAST (source_type AS target_type) WITH INOUT [AS ASSIGNMENT | AS IMPLICIT]
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createcast.html>
+    CreateCast(CreateCast),
+    /// ```sql
+    /// CREATE [DEFAULT] CONVERSION name FOR 'source_encoding' TO 'dest_encoding' FROM function_name
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createconversion.html>
+    CreateConversion(CreateConversion),
+    /// ```sql
+    /// CREATE [OR REPLACE] [TRUSTED] [PROCEDURAL] LANGUAGE name [HANDLER handler_func] [INLINE inline_func] [VALIDATOR validator_func | NO VALIDATOR]
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createlanguage.html>
+    CreateLanguage(CreateLanguage),
+    /// ```sql
+    /// CREATE RULE name AS ON event TO table [WHERE condition] DO [ALSO | INSTEAD] { NOTHING | command | (command ; ...) }
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createrule.html>
+    CreateRule(CreateRule),
+    /// CREATE STATISTICS [ IF NOT EXISTS ] name [ ( kind [, ...] ) ] ON expr [, ...] FROM table_name
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createstatistics.html>
+    CreateStatistics(CreateStatistics),
+    /// ```sql
+    /// CREATE ACCESS METHOD name TYPE INDEX | TABLE HANDLER handler_function
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-create-access-method.html>
+    CreateAccessMethod(CreateAccessMethod),
+    /// ```sql
+    /// CREATE EVENT TRIGGER name ON event [ WHEN TAG IN ( 'tag' [, ...] ) ] EXECUTE FUNCTION | PROCEDURE function_name()
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createeventtrigger.html>
+    CreateEventTrigger(CreateEventTrigger),
+    /// ```sql
+    /// CREATE [ OR REPLACE ] TRANSFORM FOR type_name LANGUAGE lang_name ( transform_element_list )
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createtransform.html>
+    CreateTransform(CreateTransform),
+    /// ```sql
+    /// SECURITY LABEL [ FOR provider_name ] ON object_type object_name IS { 'label' | NULL }
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-securitylabel.html>
+    SecurityLabel(SecurityLabel),
+    /// ```sql
+    /// CREATE USER MAPPING [ IF NOT EXISTS ] FOR { role | USER | CURRENT_ROLE | CURRENT_USER | PUBLIC } SERVER server_name [ OPTIONS (...) ]
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createusermapping.html>
+    CreateUserMapping(CreateUserMapping),
+    /// ```sql
+    /// CREATE TABLESPACE name [ OWNER role ] LOCATION 'directory' [ WITH (options) ]
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// <https://www.postgresql.org/docs/current/sql-createtablespace.html>
+    CreateTablespace(CreateTablespace),
     /// ```sql
     /// DROP EXTENSION [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
     /// ```
@@ -5495,6 +5640,23 @@ impl fmt::Display for Statement {
             Statement::CreateIndex(create_index) => create_index.fmt(f),
             Statement::CreateExtension(create_extension) => write!(f, "{create_extension}"),
             Statement::CreateCollation(create_collation) => write!(f, "{create_collation}"),
+            Statement::CreateTextSearchConfiguration(v) => write!(f, "{v}"),
+            Statement::CreateTextSearchDictionary(v) => write!(f, "{v}"),
+            Statement::CreateTextSearchParser(v) => write!(f, "{v}"),
+            Statement::CreateTextSearchTemplate(v) => write!(f, "{v}"),
+            Statement::CreatePublication(v) => write!(f, "{v}"),
+            Statement::CreateSubscription(v) => write!(f, "{v}"),
+            Statement::CreateCast(v) => write!(f, "{v}"),
+            Statement::CreateConversion(v) => write!(f, "{v}"),
+            Statement::CreateLanguage(v) => write!(f, "{v}"),
+            Statement::CreateRule(v) => write!(f, "{v}"),
+            Statement::CreateStatistics(v) => write!(f, "{v}"),
+            Statement::CreateAccessMethod(v) => write!(f, "{v}"),
+            Statement::CreateEventTrigger(v) => write!(f, "{v}"),
+            Statement::CreateTransform(v) => write!(f, "{v}"),
+            Statement::SecurityLabel(v) => write!(f, "{v}"),
+            Statement::CreateUserMapping(v) => write!(f, "{v}"),
+            Statement::CreateTablespace(v) => write!(f, "{v}"),
             Statement::DropExtension(drop_extension) => write!(f, "{drop_extension}"),
             Statement::DropOperator(drop_operator) => write!(f, "{drop_operator}"),
             Statement::DropOperatorFamily(drop_operator_family) => {
@@ -5542,6 +5704,8 @@ impl fmt::Display for Statement {
             Statement::CreateServer(stmt) => {
                 write!(f, "{stmt}")
             }
+            Statement::CreateForeignDataWrapper(stmt) => write!(f, "{stmt}"),
+            Statement::CreateForeignTable(stmt) => write!(f, "{stmt}"),
             Statement::CreatePolicy(policy) => write!(f, "{policy}"),
             Statement::CreateConnector(create_connector) => create_connector.fmt(f),
             Statement::CreateOperator(create_operator) => create_operator.fmt(f),
@@ -5549,6 +5713,7 @@ impl fmt::Display for Statement {
                 create_operator_family.fmt(f)
             }
             Statement::CreateOperatorClass(create_operator_class) => create_operator_class.fmt(f),
+            Statement::CreateAggregate(create_aggregate) => create_aggregate.fmt(f),
             Statement::AlterTable(alter_table) => write!(f, "{alter_table}"),
             Statement::AlterIndex { name, operation } => {
                 write!(f, "ALTER INDEX {name} {operation}")
@@ -5568,7 +5733,10 @@ impl fmt::Display for Statement {
                 }
                 write!(f, " AS {query}")
             }
+            Statement::AlterDomain(alter_domain) => write!(f, "{alter_domain}"),
+            Statement::AlterExtension(alter_extension) => write!(f, "{alter_extension}"),
             Statement::AlterFunction(alter_function) => write!(f, "{alter_function}"),
+            Statement::AlterTrigger(alter_trigger) => write!(f, "{alter_trigger}"),
             Statement::AlterType(AlterType { name, operation }) => {
                 write!(f, "ALTER TYPE {name} {operation}")
             }

@@ -948,6 +948,138 @@ fn parse_alter_collation() {
 }
 
 #[test]
+fn parse_create_text_search_configuration() {
+    assert_eq!(
+        pg().verified_stmt(
+            "CREATE TEXT SEARCH CONFIGURATION public.myconfig (PARSER = myparser)"
+        ),
+        Statement::CreateTextSearchConfiguration(CreateTextSearchConfiguration {
+            name: ObjectName::from(vec![Ident::new("public"), Ident::new("myconfig")]),
+            options: vec![SqlOption::KeyValue {
+                key: Ident::new("PARSER"),
+                value: Expr::Identifier(Ident::new("myparser")),
+            }],
+        })
+    );
+
+    assert_eq!(
+        pg().parse_sql_statements("CREATE TEXT SEARCH CONFIGURATION myconfig PARSER = pg_catalog.default"),
+        Err(ParserError::ParserError(
+            "Expected: (, found: PARSER".to_string()
+        ))
+    );
+}
+
+#[test]
+fn parse_create_text_search_dictionary() {
+    assert_eq!(
+        pg().verified_stmt(
+            "CREATE TEXT SEARCH DICTIONARY public.mydict (TEMPLATE = snowball, language = english)"
+        ),
+        Statement::CreateTextSearchDictionary(CreateTextSearchDictionary {
+            name: ObjectName::from(vec![Ident::new("public"), Ident::new("mydict")]),
+            options: vec![
+                SqlOption::KeyValue {
+                    key: Ident::new("TEMPLATE"),
+                    value: Expr::Identifier(Ident::new("snowball")),
+                },
+                SqlOption::KeyValue {
+                    key: Ident::new("language"),
+                    value: Expr::Identifier(Ident::new("english")),
+                },
+            ],
+        })
+    );
+
+    assert_eq!(
+        pg().parse_sql_statements("CREATE TEXT SEARCH DICTIONARY mydict"),
+        Err(ParserError::ParserError(
+            "Expected: (, found: EOF".to_string()
+        ))
+    );
+}
+
+#[test]
+fn parse_create_text_search_parser() {
+    assert_eq!(
+        pg().verified_stmt(
+            "CREATE TEXT SEARCH PARSER myparser (START = prsd_start, GETTOKEN = prsd_nexttoken, END = prsd_end, LEXTYPES = prsd_lextype, HEADLINE = prsd_headline)"
+        ),
+        Statement::CreateTextSearchParser(CreateTextSearchParser {
+            name: ObjectName::from(vec![Ident::new("myparser")]),
+            options: vec![
+                SqlOption::KeyValue {
+                    key: Ident::new("START"),
+                    value: Expr::Identifier(Ident::new("prsd_start")),
+                },
+                SqlOption::KeyValue {
+                    key: Ident::new("GETTOKEN"),
+                    value: Expr::Identifier(Ident::new("prsd_nexttoken")),
+                },
+                SqlOption::KeyValue {
+                    key: Ident::new("END"),
+                    value: Expr::Identifier(Ident::new("prsd_end")),
+                },
+                SqlOption::KeyValue {
+                    key: Ident::new("LEXTYPES"),
+                    value: Expr::Identifier(Ident::new("prsd_lextype")),
+                },
+                SqlOption::KeyValue {
+                    key: Ident::new("HEADLINE"),
+                    value: Expr::Identifier(Ident::new("prsd_headline")),
+                },
+            ],
+        })
+    );
+
+    assert_eq!(
+        pg().parse_sql_statements("CREATE TEXT SEARCH PARSER myparser START = prsd_start"),
+        Err(ParserError::ParserError(
+            "Expected: (, found: START".to_string()
+        ))
+    );
+}
+
+#[test]
+fn parse_create_text_search_template() {
+    assert_eq!(
+        pg().verified_stmt(
+            "CREATE TEXT SEARCH TEMPLATE mytemplate (INIT = dinit, LEXIZE = dlexize)"
+        ),
+        Statement::CreateTextSearchTemplate(CreateTextSearchTemplate {
+            name: ObjectName::from(vec![Ident::new("mytemplate")]),
+            options: vec![
+                SqlOption::KeyValue {
+                    key: Ident::new("INIT"),
+                    value: Expr::Identifier(Ident::new("dinit")),
+                },
+                SqlOption::KeyValue {
+                    key: Ident::new("LEXIZE"),
+                    value: Expr::Identifier(Ident::new("dlexize")),
+                },
+            ],
+        })
+    );
+
+    assert_eq!(
+        pg().parse_sql_statements("CREATE TEXT SEARCH TEMPLATE mytemplate LEXIZE = dlexize"),
+        Err(ParserError::ParserError(
+            "Expected: (, found: LEXIZE".to_string()
+        ))
+    );
+}
+
+#[test]
+fn parse_create_text_search_invalid_subtype() {
+    assert_eq!(
+        pg().parse_sql_statements("CREATE TEXT SEARCH UNKNOWN myname (option = value)"),
+        Err(ParserError::ParserError(
+            "Expected: CONFIGURATION, DICTIONARY, PARSER, or TEMPLATE after CREATE TEXT SEARCH, found: UNKNOWN".to_string()
+        ))
+    );
+}
+
+#[test]
 fn parse_drop_and_comment_collation_ast() {
     assert_eq!(
         pg_and_generic().verified_stmt("DROP COLLATION test0"),
@@ -7117,6 +7249,20 @@ fn parse_ts_datatypes() {
 }
 
 #[test]
+fn parse_fulltext_column_and_index_in_postgres() {
+    match pg().verified_stmt("CREATE TABLE film (fulltext TSVECTOR NOT NULL)") {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(columns.len(), 1);
+            assert_eq!(columns[0].name.value, "fulltext");
+            assert_eq!(columns[0].data_type, DataType::TsVector);
+        }
+        _ => unreachable!(),
+    }
+
+    pg().verified_stmt("CREATE INDEX film_fulltext_idx ON film USING gist (fulltext)");
+}
+
+#[test]
 fn parse_alter_table_constraint_not_valid() {
     match pg_and_generic().verified_stmt(
         "ALTER TABLE foo ADD CONSTRAINT bar FOREIGN KEY (baz) REFERENCES other(ref) NOT VALID",
@@ -9163,6 +9309,140 @@ fn parse_pg_analyze() {
 }
 
 #[test]
+fn parse_exclude_constraint_basic() {
+    let sql =
+        "CREATE TABLE t (room INT, CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =))";
+    match pg().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!(1, create_table.constraints.len());
+            match &create_table.constraints[0] {
+                TableConstraint::Exclusion(c) => {
+                    assert_eq!(c.name, Some(Ident::new("no_overlap")));
+                    assert_eq!(c.index_method, Some(Ident::new("gist")));
+                    assert_eq!(c.elements.len(), 1);
+                    assert_eq!(c.elements[0].operator, "=");
+                    assert_eq!(c.include.len(), 0);
+                    assert!(c.where_clause.is_none());
+                }
+                other => panic!("Expected Exclusion, got {other:?}"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_exclude_constraint_multi_element() {
+    let sql =
+        "CREATE TABLE t (room INT, during INT, EXCLUDE USING gist (room WITH =, during WITH &&))";
+    match pg().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!(1, create_table.constraints.len());
+            match &create_table.constraints[0] {
+                TableConstraint::Exclusion(c) => {
+                    assert!(c.name.is_none());
+                    assert_eq!(c.index_method, Some(Ident::new("gist")));
+                    assert_eq!(c.elements.len(), 2);
+                    assert_eq!(c.elements[0].operator, "=");
+                    assert_eq!(c.elements[1].operator, "&&");
+                }
+                other => panic!("Expected Exclusion, got {other:?}"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_exclude_constraint_with_where() {
+    let sql =
+        "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =) WHERE (col > 0))";
+    match pg().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!(1, create_table.constraints.len());
+            match &create_table.constraints[0] {
+                TableConstraint::Exclusion(c) => {
+                    assert!(c.where_clause.is_some());
+                }
+                other => panic!("Expected Exclusion, got {other:?}"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_exclude_constraint_with_include() {
+    let sql =
+        "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =) INCLUDE (col))";
+    match pg().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!(1, create_table.constraints.len());
+            match &create_table.constraints[0] {
+                TableConstraint::Exclusion(c) => {
+                    assert_eq!(c.include, vec![Ident::new("col")]);
+                }
+                other => panic!("Expected Exclusion, got {other:?}"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_exclude_constraint_no_using() {
+    let sql = "CREATE TABLE t (col INT, EXCLUDE (col WITH =))";
+    match pg().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!(1, create_table.constraints.len());
+            match &create_table.constraints[0] {
+                TableConstraint::Exclusion(c) => {
+                    assert!(c.index_method.is_none());
+                }
+                other => panic!("Expected Exclusion, got {other:?}"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_exclude_constraint_deferrable() {
+    let sql =
+        "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =) DEFERRABLE INITIALLY DEFERRED)";
+    match pg().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!(1, create_table.constraints.len());
+            match &create_table.constraints[0] {
+                TableConstraint::Exclusion(c) => {
+                    let characteristics = c.characteristics.as_ref().unwrap();
+                    assert_eq!(characteristics.deferrable, Some(true));
+                    assert_eq!(
+                        characteristics.initially,
+                        Some(DeferrableInitial::Deferred)
+                    );
+                }
+                other => panic!("Expected Exclusion, got {other:?}"),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
+fn parse_exclude_constraint_in_alter_table() {
+    let sql =
+        "ALTER TABLE t ADD CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =)";
+    pg().verified_stmt(sql);
+}
+
+#[test]
+fn roundtrip_exclude_constraint() {
+    let sql = "CREATE TABLE t (CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =, during WITH &&) INCLUDE (id) WHERE (active = true))";
+    pg().verified_stmt(sql);
+}
+
+#[test]
 fn parse_lock_table() {
     pg_and_generic().one_statement_parses_to(
         "LOCK public.widgets IN EXCLUSIVE MODE",
@@ -9219,5 +9499,986 @@ fn parse_lock_table() {
             }
             _ => panic!("Expected Lock, got: {stmt:?}"),
         }
+    }
+}
+
+#[test]
+fn parse_create_foreign_data_wrapper() {
+    // Minimal: name only.
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw";
+    let Statement::CreateForeignDataWrapper(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "myfdw");
+    assert!(stmt.handler.is_none());
+    assert!(stmt.validator.is_none());
+    assert!(stmt.options.is_none());
+
+    // With HANDLER.
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw HANDLER myhandler";
+    let Statement::CreateForeignDataWrapper(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.handler,
+        Some(FdwRoutineClause::Function(ObjectName::from(vec![
+            "myhandler".into()
+        ])))
+    );
+
+    // With NO HANDLER.
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw NO HANDLER";
+    let Statement::CreateForeignDataWrapper(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.handler, Some(FdwRoutineClause::NoFunction));
+
+    // With NO VALIDATOR.
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw NO VALIDATOR";
+    let Statement::CreateForeignDataWrapper(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.validator, Some(FdwRoutineClause::NoFunction));
+
+    // With HANDLER, VALIDATOR, and OPTIONS.
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw HANDLER myhandler VALIDATOR myvalidator OPTIONS (debug 'true')";
+    let Statement::CreateForeignDataWrapper(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        stmt.handler,
+        Some(FdwRoutineClause::Function(ObjectName::from(vec![
+            "myhandler".into()
+        ])))
+    );
+    assert_eq!(
+        stmt.validator,
+        Some(FdwRoutineClause::Function(ObjectName::from(vec![
+            "myvalidator".into()
+        ])))
+    );
+    let options = stmt.options.unwrap();
+    assert_eq!(options.len(), 1);
+    assert_eq!(options[0].key.value, "debug");
+    assert_eq!(options[0].value.value, "true");
+}
+
+#[test]
+fn parse_create_foreign_table() {
+    // Basic: columns and SERVER.
+    let sql = "CREATE FOREIGN TABLE ft1 (id INTEGER, name TEXT) SERVER myserver";
+    let Statement::CreateForeignTable(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.to_string(), "ft1");
+    assert!(!stmt.if_not_exists);
+    assert_eq!(stmt.columns.len(), 2);
+    assert_eq!(stmt.columns[0].name.value, "id");
+    assert_eq!(stmt.columns[1].name.value, "name");
+    assert_eq!(stmt.server_name.value, "myserver");
+    assert!(stmt.options.is_none());
+
+    // With IF NOT EXISTS.
+    let sql = "CREATE FOREIGN TABLE IF NOT EXISTS ft2 (col INTEGER) SERVER remoteserver";
+    let Statement::CreateForeignTable(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(stmt.if_not_exists);
+    assert_eq!(stmt.name.to_string(), "ft2");
+
+    // With table-level OPTIONS.
+    let sql =
+        "CREATE FOREIGN TABLE ft3 (col INTEGER) SERVER remoteserver OPTIONS (schema_name 'public')";
+    let Statement::CreateForeignTable(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    let options = stmt.options.unwrap();
+    assert_eq!(options.len(), 1);
+    assert_eq!(options[0].key.value, "schema_name");
+    assert_eq!(options[0].value.value, "public");
+}
+
+#[test]
+fn parse_create_aggregate_basic() {
+    let sql = "CREATE AGGREGATE myavg (NUMERIC) (SFUNC = numeric_avg_accum, STYPE = internal, FINALFUNC = numeric_avg, INITCOND = '0')";
+    let stmt = pg().verified_stmt(sql);
+    match stmt {
+        Statement::CreateAggregate(agg) => {
+            assert!(!agg.or_replace);
+            assert_eq!(agg.name.to_string(), "myavg");
+            assert_eq!(agg.args.len(), 1);
+            assert_eq!(agg.args[0].to_string(), "NUMERIC");
+            assert_eq!(agg.options.len(), 4);
+            assert_eq!(
+                agg.options[0].to_string(),
+                "SFUNC = numeric_avg_accum"
+            );
+            assert_eq!(agg.options[1].to_string(), "STYPE = internal");
+            assert_eq!(agg.options[2].to_string(), "FINALFUNC = numeric_avg");
+            assert_eq!(agg.options[3].to_string(), "INITCOND = '0'");
+        }
+        _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
+    }
+}
+
+#[test]
+fn parse_create_aggregate_or_replace_with_parallel() {
+    let sql = "CREATE OR REPLACE AGGREGATE sum2 (INT4, INT4) (SFUNC = int4pl, STYPE = INT4, PARALLEL = SAFE)";
+    let stmt = pg().verified_stmt(sql);
+    match stmt {
+        Statement::CreateAggregate(agg) => {
+            assert!(agg.or_replace);
+            assert_eq!(agg.name.to_string(), "sum2");
+            assert_eq!(agg.args.len(), 2);
+            assert_eq!(agg.options.len(), 3);
+            assert_eq!(agg.options[2].to_string(), "PARALLEL = SAFE");
+        }
+        _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
+    }
+}
+
+#[test]
+fn parse_create_aggregate_with_moving_aggregate_options() {
+    let sql = "CREATE AGGREGATE moving_sum (FLOAT8) (SFUNC = float8pl, STYPE = FLOAT8, MSFUNC = float8pl, MINVFUNC = float8mi, MSTYPE = FLOAT8, MFINALFUNC_EXTRA, MFINALFUNC_MODIFY = READ_ONLY)";
+    let stmt = pg().verified_stmt(sql);
+    match stmt {
+        Statement::CreateAggregate(agg) => {
+            assert!(!agg.or_replace);
+            assert_eq!(agg.name.to_string(), "moving_sum");
+            assert_eq!(agg.args.len(), 1);
+            assert_eq!(agg.options.len(), 7);
+            assert_eq!(agg.options[4].to_string(), "MSTYPE = FLOAT8");
+            assert_eq!(agg.options[5].to_string(), "MFINALFUNC_EXTRA");
+            assert_eq!(
+                agg.options[6].to_string(),
+                "MFINALFUNC_MODIFY = READ_ONLY"
+            );
+        }
+        _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
+    }
+}
+
+#[test]
+fn alter_table_set_tablespace() {
+    let sql = "ALTER TABLE t SET TABLESPACE ts";
+    let Statement::AlterTable(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.to_string(), "t");
+    assert_eq!(stmt.operations.len(), 1);
+    assert_eq!(
+        stmt.operations[0],
+        AlterTableOperation::SetTablespace {
+            tablespace_name: "ts".into()
+        }
+    );
+}
+
+#[test]
+fn alter_index_set_tablespace() {
+    let sql = "ALTER INDEX idx SET TABLESPACE ts";
+    let Statement::AlterIndex { name, operation } = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(name.to_string(), "idx");
+    assert_eq!(
+        operation,
+        AlterIndexOperation::SetTablespace {
+            tablespace_name: "ts".into()
+        }
+    );
+}
+
+#[test]
+fn alter_domain_add_constraint() {
+    let sql = "ALTER DOMAIN positive_int ADD CONSTRAINT positive CHECK (VALUE > 0)";
+    let Statement::AlterDomain(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.to_string(), "positive_int");
+    assert!(matches!(
+        stmt.operation,
+        AlterDomainOperation::AddConstraint { not_valid: false, .. }
+    ));
+}
+
+#[test]
+fn alter_domain_drop_constraint() {
+    let sql = "ALTER DOMAIN email DROP CONSTRAINT valid_email";
+    let Statement::AlterDomain(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.to_string(), "email");
+    assert!(matches!(
+        stmt.operation,
+        AlterDomainOperation::DropConstraint {
+            if_exists: false,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn alter_domain_drop_constraint_if_exists() {
+    let sql = "ALTER DOMAIN email DROP CONSTRAINT IF EXISTS valid_email";
+    let Statement::AlterDomain(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(matches!(
+        stmt.operation,
+        AlterDomainOperation::DropConstraint {
+            if_exists: true,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn alter_trigger_rename() {
+    let sql = "ALTER TRIGGER old_trigger ON orders RENAME TO new_trigger";
+    let Statement::AlterTrigger(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "old_trigger");
+    assert_eq!(stmt.table_name.to_string(), "orders");
+    assert_eq!(
+        stmt.operation,
+        AlterTriggerOperation::RenameTo {
+            new_name: "new_trigger".into()
+        }
+    );
+}
+
+#[test]
+fn alter_extension_update() {
+    let sql = "ALTER EXTENSION pgcrypto UPDATE";
+    let Statement::AlterExtension(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "pgcrypto");
+    assert_eq!(
+        stmt.operation,
+        AlterExtensionOperation::UpdateTo { version: None }
+    );
+}
+
+#[test]
+fn alter_extension_update_to_version() {
+    let sql = "ALTER EXTENSION pgcrypto UPDATE TO '3.4'";
+    let Statement::AlterExtension(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "pgcrypto");
+    assert!(matches!(
+        stmt.operation,
+        AlterExtensionOperation::UpdateTo { version: Some(_) }
+    ));
+}
+
+#[test]
+fn alter_procedure_set_search_path() {
+    let sql = "ALTER PROCEDURE myproc(integer) SET search_path = public";
+    let Statement::AlterFunction(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.kind, AlterFunctionKind::Procedure);
+    assert_eq!(stmt.function.name.to_string(), "myproc");
+    assert!(matches!(
+        stmt.operation,
+        AlterFunctionOperation::Actions { .. }
+    ));
+}
+
+#[test]
+fn alter_procedure_rename() {
+    let sql = "ALTER PROCEDURE myproc(integer, text) RENAME TO renamed_proc";
+    let Statement::AlterFunction(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.kind, AlterFunctionKind::Procedure);
+    assert_eq!(
+        stmt.operation,
+        AlterFunctionOperation::RenameTo {
+            new_name: "renamed_proc".into()
+        }
+    );
+}
+
+#[test]
+fn parse_create_publication_basic() {
+    let sql = "CREATE PUBLICATION mypub FOR TABLE public.t";
+    let Statement::CreatePublication(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "mypub");
+    assert!(stmt.with_options.is_empty());
+    match stmt.target.unwrap() {
+        PublicationTarget::Tables(tables) => {
+            assert_eq!(tables.len(), 1);
+            assert_eq!(tables[0].to_string(), "public.t");
+        }
+        other => panic!("unexpected target: {other:?}"),
+    }
+}
+
+#[test]
+fn parse_create_publication_for_all_tables() {
+    let sql = "CREATE PUBLICATION mypub FOR ALL TABLES";
+    let Statement::CreatePublication(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "mypub");
+    assert!(matches!(stmt.target, Some(PublicationTarget::AllTables)));
+    assert!(stmt.with_options.is_empty());
+}
+
+#[test]
+fn parse_create_publication_for_tables_in_schema() {
+    let sql = "CREATE PUBLICATION mypub FOR TABLES IN SCHEMA myschema";
+    let Statement::CreatePublication(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "mypub");
+    match stmt.target.unwrap() {
+        PublicationTarget::TablesInSchema(schemas) => {
+            assert_eq!(schemas.len(), 1);
+            assert_eq!(schemas[0].value, "myschema");
+        }
+        other => panic!("unexpected target: {other:?}"),
+    }
+}
+
+#[test]
+fn parse_create_publication_with_options() {
+    let sql = "CREATE PUBLICATION mypub FOR ALL TABLES WITH (publish = 'insert, update')";
+    let Statement::CreatePublication(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "mypub");
+    assert!(matches!(stmt.target, Some(PublicationTarget::AllTables)));
+    assert_eq!(stmt.with_options.len(), 1);
+    match &stmt.with_options[0] {
+        SqlOption::KeyValue { key, value } => {
+            assert_eq!(key.value, "publish");
+            assert_eq!(value.to_string(), "'insert, update'");
+        }
+        other => panic!("unexpected option: {other:?}"),
+    }
+}
+
+#[test]
+fn parse_create_subscription_basic() {
+    let sql = "CREATE SUBSCRIPTION mysub CONNECTION 'host=localhost' PUBLICATION mypub";
+    let Statement::CreateSubscription(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "mysub");
+    assert_eq!(stmt.connection.to_string(), "'host=localhost'");
+    assert_eq!(stmt.publications.len(), 1);
+    assert_eq!(stmt.publications[0].value, "mypub");
+    assert!(stmt.with_options.is_empty());
+}
+
+#[test]
+fn parse_create_subscription_with_options() {
+    let sql = "CREATE SUBSCRIPTION mysub CONNECTION 'host=localhost dbname=mydb' PUBLICATION mypub, otherpub WITH (copy_data = true, slot_name = 'myslot')";
+    let Statement::CreateSubscription(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "mysub");
+    assert_eq!(
+        stmt.connection.to_string(),
+        "'host=localhost dbname=mydb'"
+    );
+    assert_eq!(stmt.publications.len(), 2);
+    assert_eq!(stmt.publications[0].value, "mypub");
+    assert_eq!(stmt.publications[1].value, "otherpub");
+    assert_eq!(stmt.with_options.len(), 2);
+    match &stmt.with_options[0] {
+        SqlOption::KeyValue { key, value } => {
+            assert_eq!(key.value, "copy_data");
+            assert_eq!(value.to_string(), "true");
+        }
+        other => panic!("unexpected option: {other:?}"),
+    }
+    match &stmt.with_options[1] {
+        SqlOption::KeyValue { key, value } => {
+            assert_eq!(key.value, "slot_name");
+            assert_eq!(value.to_string(), "'myslot'");
+        }
+        other => panic!("unexpected option: {other:?}"),
+    }
+}
+
+#[test]
+fn parse_create_cast_with_function() {
+    let sql = "CREATE CAST (TEXT AS INTEGER) WITH FUNCTION public.to_int(TEXT) AS ASSIGNMENT";
+    let Statement::CreateCast(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.source_type.to_string(), "TEXT");
+    assert_eq!(stmt.target_type.to_string(), "INTEGER");
+    assert!(matches!(stmt.cast_context, CastContext::Assignment));
+    match &stmt.function_kind {
+        CastFunctionKind::WithFunction {
+            function_name,
+            argument_types,
+        } => {
+            assert_eq!(function_name.to_string(), "public.to_int");
+            assert_eq!(argument_types.len(), 1);
+            assert_eq!(argument_types[0].to_string(), "TEXT");
+        }
+        other => panic!("unexpected function kind: {other:?}"),
+    }
+}
+
+#[test]
+fn parse_create_cast_without_function() {
+    let sql = "CREATE CAST (TEXT AS INTEGER) WITHOUT FUNCTION";
+    let Statement::CreateCast(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(matches!(stmt.function_kind, CastFunctionKind::WithoutFunction));
+    assert!(matches!(stmt.cast_context, CastContext::Explicit));
+}
+
+#[test]
+fn parse_create_cast_with_inout() {
+    let sql = "CREATE CAST (TEXT AS INTEGER) WITH INOUT AS IMPLICIT";
+    let Statement::CreateCast(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(matches!(stmt.function_kind, CastFunctionKind::WithInout));
+    assert!(matches!(stmt.cast_context, CastContext::Implicit));
+}
+
+#[test]
+fn parse_create_conversion_basic() {
+    let sql = "CREATE CONVERSION myconv FOR 'LATIN1' TO 'UTF8' FROM iso8859_1_to_utf8";
+    let Statement::CreateConversion(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.to_string(), "myconv");
+    assert!(!stmt.is_default);
+    assert_eq!(stmt.source_encoding, "LATIN1");
+    assert_eq!(stmt.destination_encoding, "UTF8");
+    assert_eq!(stmt.function_name.to_string(), "iso8859_1_to_utf8");
+}
+
+#[test]
+fn parse_create_default_conversion() {
+    let sql = "CREATE DEFAULT CONVERSION myconv FOR 'LATIN1' TO 'UTF8' FROM iso8859_1_to_utf8";
+    let Statement::CreateConversion(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(stmt.is_default);
+}
+
+#[test]
+fn parse_create_language_simple() {
+    let sql = "CREATE LANGUAGE plperl";
+    let Statement::CreateLanguage(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "plperl");
+    assert!(!stmt.or_replace);
+    assert!(!stmt.trusted);
+    assert!(!stmt.procedural);
+    assert!(stmt.handler.is_none());
+    assert!(stmt.inline_handler.is_none());
+    assert!(stmt.validator.is_none());
+}
+
+#[test]
+fn parse_create_language_full() {
+    let sql = "CREATE OR REPLACE TRUSTED PROCEDURAL LANGUAGE plpgsql HANDLER plpgsql_call_handler INLINE plpgsql_inline_handler VALIDATOR plpgsql_validator";
+    let Statement::CreateLanguage(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "plpgsql");
+    assert!(stmt.or_replace);
+    assert!(stmt.trusted);
+    assert!(stmt.procedural);
+    assert_eq!(stmt.handler.as_ref().unwrap().to_string(), "plpgsql_call_handler");
+    assert_eq!(stmt.inline_handler.as_ref().unwrap().to_string(), "plpgsql_inline_handler");
+    assert_eq!(stmt.validator.as_ref().unwrap().to_string(), "plpgsql_validator");
+}
+
+#[test]
+fn parse_create_rule_instead_nothing() {
+    let sql = "CREATE RULE t_del AS ON DELETE TO public.t DO INSTEAD NOTHING";
+    let Statement::CreateRule(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "t_del");
+    assert!(matches!(stmt.event, RuleEvent::Delete));
+    assert_eq!(stmt.table.to_string(), "public.t");
+    assert!(stmt.condition.is_none());
+    assert!(stmt.instead);
+    assert!(matches!(stmt.action, RuleAction::Nothing));
+}
+
+#[test]
+fn parse_create_rule_also_nothing() {
+    let sql = "CREATE RULE t_ins AS ON INSERT TO mytable DO ALSO NOTHING";
+    let Statement::CreateRule(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(matches!(stmt.event, RuleEvent::Insert));
+    assert!(!stmt.instead);
+    assert!(matches!(stmt.action, RuleAction::Nothing));
+}
+
+#[test]
+fn parse_create_rule_on_select() {
+    let sql = "CREATE RULE myview AS ON SELECT TO mytable DO INSTEAD NOTHING";
+    let Statement::CreateRule(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(matches!(stmt.event, RuleEvent::Select));
+    assert!(stmt.instead);
+}
+
+#[test]
+fn parse_create_statistics_basic() {
+    let sql = "CREATE STATISTICS public.s ON a, b FROM public.t";
+    let Statement::CreateStatistics(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(!stmt.if_not_exists);
+    assert_eq!(stmt.name.to_string(), "public.s");
+    assert!(stmt.kinds.is_empty());
+    assert_eq!(stmt.on.len(), 2);
+    assert_eq!(stmt.from.to_string(), "public.t");
+}
+
+#[test]
+fn parse_create_statistics_if_not_exists_with_kinds() {
+    let sql = "CREATE STATISTICS IF NOT EXISTS mystat (ndistinct, dependencies, mcv) ON col1, col2 FROM mytable";
+    let Statement::CreateStatistics(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(stmt.if_not_exists);
+    assert_eq!(stmt.name.to_string(), "mystat");
+    assert_eq!(
+        stmt.kinds,
+        vec![
+            StatisticsKind::NDistinct,
+            StatisticsKind::Dependencies,
+            StatisticsKind::Mcv,
+        ]
+    );
+    assert_eq!(stmt.on.len(), 2);
+}
+
+#[test]
+fn parse_create_access_method_index() {
+    let sql = "CREATE ACCESS METHOD my_am TYPE INDEX HANDLER bthandler";
+    let Statement::CreateAccessMethod(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "my_am");
+    assert_eq!(stmt.method_type, AccessMethodType::Index);
+    assert_eq!(stmt.handler.to_string(), "bthandler");
+}
+
+#[test]
+fn parse_create_access_method_table() {
+    let sql = "CREATE ACCESS METHOD my_tam TYPE TABLE HANDLER heap_tableam_handler";
+    let Statement::CreateAccessMethod(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "my_tam");
+    assert_eq!(stmt.method_type, AccessMethodType::Table);
+    assert_eq!(stmt.handler.to_string(), "heap_tableam_handler");
+}
+
+#[test]
+fn parse_create_event_trigger_basic() {
+    let sql = "CREATE EVENT TRIGGER myet ON ddl_command_start EXECUTE FUNCTION public.handler()";
+    let Statement::CreateEventTrigger(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "myet");
+    assert_eq!(stmt.event, EventTriggerEvent::DdlCommandStart);
+    assert!(stmt.when_tags.is_none());
+    assert_eq!(stmt.execute.to_string(), "public.handler");
+    assert!(!stmt.is_procedure);
+}
+
+#[test]
+fn parse_create_event_trigger_with_when_tags() {
+    let sql = "CREATE EVENT TRIGGER myet ON ddl_command_end WHEN TAG IN ('CREATE TABLE', 'ALTER TABLE') EXECUTE FUNCTION abort_any_command()";
+    let Statement::CreateEventTrigger(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.event, EventTriggerEvent::DdlCommandEnd);
+    let tags = stmt.when_tags.unwrap();
+    assert_eq!(tags.len(), 2);
+    assert_eq!(tags[0].to_string(), "'CREATE TABLE'");
+    assert_eq!(tags[1].to_string(), "'ALTER TABLE'");
+}
+
+#[test]
+fn parse_create_transform_basic() {
+    let sql = "CREATE TRANSFORM FOR INT LANGUAGE sql (FROM SQL WITH FUNCTION f1(internal), TO SQL WITH FUNCTION f2(INT))";
+    let Statement::CreateTransform(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(!stmt.or_replace);
+    assert_eq!(stmt.type_name.to_string(), "INT");
+    assert_eq!(stmt.language.value, "sql");
+    assert_eq!(stmt.elements.len(), 2);
+    assert!(stmt.elements[0].is_from);
+    assert_eq!(stmt.elements[0].function.to_string(), "f1");
+    assert!(!stmt.elements[1].is_from);
+    assert_eq!(stmt.elements[1].function.to_string(), "f2");
+}
+
+#[test]
+fn parse_create_or_replace_transform() {
+    let sql = "CREATE OR REPLACE TRANSFORM FOR BIGINT LANGUAGE plpgsql (FROM SQL WITH FUNCTION int8recv(internal))";
+    let Statement::CreateTransform(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(stmt.or_replace);
+    assert_eq!(stmt.type_name.to_string(), "BIGINT");
+    assert_eq!(stmt.language.value, "plpgsql");
+    assert_eq!(stmt.elements.len(), 1);
+    assert!(stmt.elements[0].is_from);
+}
+
+#[test]
+fn parse_security_label_on_table() {
+    let sql = "SECURITY LABEL FOR selinux ON TABLE public.t IS 'system_u:object_r:sepgsql_table_t:s0'";
+    let Statement::SecurityLabel(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.provider.as_ref().unwrap().value, "selinux");
+    assert!(matches!(stmt.object_kind, SecurityLabelObjectKind::Table));
+    assert_eq!(stmt.object_name.to_string(), "public.t");
+    assert_eq!(
+        stmt.label.as_ref().unwrap().to_string(),
+        "'system_u:object_r:sepgsql_table_t:s0'"
+    );
+}
+
+#[test]
+fn parse_security_label_no_provider_null() {
+    let sql = "SECURITY LABEL ON TABLE public.t IS NULL";
+    let Statement::SecurityLabel(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(stmt.provider.is_none());
+    assert!(matches!(stmt.object_kind, SecurityLabelObjectKind::Table));
+    assert!(stmt.label.is_none());
+}
+
+#[test]
+fn parse_security_label_on_role() {
+    let sql = "SECURITY LABEL FOR selinux ON ROLE admin IS 'system_u:object_r:sepgsql_role_t:s0'";
+    let Statement::SecurityLabel(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.provider.as_ref().unwrap().value, "selinux");
+    assert!(matches!(stmt.object_kind, SecurityLabelObjectKind::Role));
+    assert_eq!(stmt.object_name.to_string(), "admin");
+}
+
+#[test]
+fn parse_security_label_on_schema() {
+    let sql = "SECURITY LABEL ON SCHEMA myschema IS 'system_u:object_r:sepgsql_schema_t:s0'";
+    let Statement::SecurityLabel(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(stmt.provider.is_none());
+    assert!(matches!(stmt.object_kind, SecurityLabelObjectKind::Schema));
+    assert_eq!(stmt.object_name.to_string(), "myschema");
+}
+
+#[test]
+fn parse_create_user_mapping_basic() {
+    let sql = "CREATE USER MAPPING FOR postgres SERVER my_server";
+    let Statement::CreateUserMapping(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(!stmt.if_not_exists);
+    assert!(matches!(stmt.user, UserMappingUser::Ident(_)));
+    if let UserMappingUser::Ident(ident) = &stmt.user {
+        assert_eq!(ident.value, "postgres");
+    }
+    assert_eq!(stmt.server_name.value, "my_server");
+    assert!(stmt.options.is_none());
+}
+
+#[test]
+fn parse_create_user_mapping_if_not_exists_with_options() {
+    let sql = r#"CREATE USER MAPPING IF NOT EXISTS FOR postgres SERVER my_server OPTIONS ("user" 'bob')"#;
+    let Statement::CreateUserMapping(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(stmt.if_not_exists);
+    assert!(matches!(stmt.user, UserMappingUser::Ident(_)));
+    assert_eq!(stmt.server_name.value, "my_server");
+    let opts = stmt.options.as_ref().unwrap();
+    assert_eq!(opts.len(), 1);
+    assert_eq!(opts[0].key.value, "user");
+    assert_eq!(opts[0].value.value, "bob");
+}
+
+#[test]
+fn parse_create_user_mapping_current_user() {
+    let sql = "CREATE USER MAPPING FOR CURRENT_USER SERVER my_server";
+    let Statement::CreateUserMapping(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(matches!(stmt.user, UserMappingUser::CurrentUser));
+}
+
+#[test]
+fn parse_create_user_mapping_public() {
+    let sql = "CREATE USER MAPPING FOR PUBLIC SERVER my_server";
+    let Statement::CreateUserMapping(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert!(matches!(stmt.user, UserMappingUser::Public));
+}
+
+#[test]
+fn parse_create_tablespace_basic() {
+    let sql = "CREATE TABLESPACE my_ts LOCATION '/mnt/data'";
+    let Statement::CreateTablespace(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "my_ts");
+    assert!(stmt.owner.is_none());
+    assert_eq!(stmt.location.to_string(), "'/mnt/data'");
+    assert!(stmt.with_options.is_empty());
+}
+
+#[test]
+fn parse_create_tablespace_with_owner() {
+    let sql = "CREATE TABLESPACE my_ts OWNER admin LOCATION '/mnt/data'";
+    let Statement::CreateTablespace(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "my_ts");
+    assert_eq!(stmt.owner.as_ref().unwrap().value, "admin");
+    assert_eq!(stmt.location.to_string(), "'/mnt/data'");
+}
+
+#[test]
+fn parse_create_tablespace_with_options() {
+    let sql = "CREATE TABLESPACE my_ts LOCATION '/mnt/data' WITH (seq_page_cost = 1.0)";
+    let Statement::CreateTablespace(stmt) = pg().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.name.value, "my_ts");
+    assert_eq!(stmt.with_options.len(), 1);
+    match &stmt.with_options[0] {
+        SqlOption::KeyValue { key, value } => {
+            assert_eq!(key.value, "seq_page_cost");
+            assert_eq!(value.to_string(), "1.0");
+        }
+        other => panic!("unexpected option: {other:?}"),
+    }
+}
+
+#[test]
+fn alter_table_attach_partition_range() {
+    let sql = "ALTER TABLE ONLY public.payment ATTACH PARTITION public.payment_p2022_01 FOR VALUES FROM ('2022-01-01 00:00:00+00') TO ('2022-02-01 00:00:00+00')";
+    let dialect = PostgreSqlDialect {};
+    let statements = sqlparser::parser::Parser::parse_sql(&dialect, sql).unwrap();
+    assert_eq!(1, statements.len());
+    match &statements[0] {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(1, operations.len());
+            match &operations[0] {
+                AlterTableOperation::AttachPartitionOf {
+                    partition_name,
+                    partition_bound,
+                } => {
+                    assert_eq!("public.payment_p2022_01", partition_name.to_string());
+                    match partition_bound {
+                        ForValues::From { from, to } => {
+                            assert_eq!(1, from.len());
+                            assert_eq!(1, to.len());
+                            assert_eq!(
+                                "'2022-01-01 00:00:00+00'",
+                                from[0].to_string()
+                            );
+                            assert_eq!(
+                                "'2022-02-01 00:00:00+00'",
+                                to[0].to_string()
+                            );
+                        }
+                        _ => panic!("Expected ForValues::From"),
+                    }
+                }
+                _ => panic!("Expected AttachPartitionOf"),
+            }
+        }
+        _ => panic!("Expected AlterTable"),
+    }
+}
+
+#[test]
+fn alter_table_attach_partition_list() {
+    let sql = "ALTER TABLE cities ATTACH PARTITION cities_ab FOR VALUES IN ('a', 'b')";
+    let dialect = PostgreSqlDialect {};
+    let statements = sqlparser::parser::Parser::parse_sql(&dialect, sql).unwrap();
+    assert_eq!(1, statements.len());
+    match &statements[0] {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(1, operations.len());
+            match &operations[0] {
+                AlterTableOperation::AttachPartitionOf {
+                    partition_name,
+                    partition_bound,
+                } => {
+                    assert_eq!("cities_ab", partition_name.to_string());
+                    match partition_bound {
+                        ForValues::In(values) => {
+                            assert_eq!(2, values.len());
+                        }
+                        _ => panic!("Expected ForValues::In"),
+                    }
+                }
+                _ => panic!("Expected AttachPartitionOf"),
+            }
+        }
+        _ => panic!("Expected AlterTable"),
+    }
+}
+
+#[test]
+fn alter_table_attach_partition_hash() {
+    let sql = "ALTER TABLE orders ATTACH PARTITION orders_p1 FOR VALUES WITH (MODULUS 4, REMAINDER 0)";
+    let dialect = PostgreSqlDialect {};
+    let statements = sqlparser::parser::Parser::parse_sql(&dialect, sql).unwrap();
+    assert_eq!(1, statements.len());
+    match &statements[0] {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(1, operations.len());
+            match &operations[0] {
+                AlterTableOperation::AttachPartitionOf {
+                    partition_name,
+                    partition_bound,
+                } => {
+                    assert_eq!("orders_p1", partition_name.to_string());
+                    match partition_bound {
+                        ForValues::With { modulus, remainder } => {
+                            assert_eq!(4, *modulus);
+                            assert_eq!(0, *remainder);
+                        }
+                        _ => panic!("Expected ForValues::With"),
+                    }
+                }
+                _ => panic!("Expected AttachPartitionOf"),
+            }
+        }
+        _ => panic!("Expected AlterTable"),
+    }
+}
+
+#[test]
+fn alter_table_attach_partition_default() {
+    let sql = "ALTER TABLE cities ATTACH PARTITION cities_default DEFAULT";
+    let dialect = PostgreSqlDialect {};
+    let statements = sqlparser::parser::Parser::parse_sql(&dialect, sql).unwrap();
+    assert_eq!(1, statements.len());
+    match &statements[0] {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(1, operations.len());
+            match &operations[0] {
+                AlterTableOperation::AttachPartitionOf {
+                    partition_name,
+                    partition_bound,
+                } => {
+                    assert_eq!("cities_default", partition_name.to_string());
+                    assert_eq!(ForValues::Default, *partition_bound);
+                }
+                _ => panic!("Expected AttachPartitionOf"),
+            }
+        }
+        _ => panic!("Expected AlterTable"),
+    }
+}
+
+#[test]
+fn alter_table_detach_partition_plain() {
+    let sql = "ALTER TABLE measurement DETACH PARTITION measurement_y2021m01";
+    let dialect = PostgreSqlDialect {};
+    let statements = sqlparser::parser::Parser::parse_sql(&dialect, sql).unwrap();
+    assert_eq!(1, statements.len());
+    match &statements[0] {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(1, operations.len());
+            match &operations[0] {
+                AlterTableOperation::DetachPartitionOf {
+                    partition_name,
+                    concurrently,
+                    finalize,
+                } => {
+                    assert_eq!("measurement_y2021m01", partition_name.to_string());
+                    assert!(!concurrently);
+                    assert!(!finalize);
+                }
+                _ => panic!("Expected DetachPartitionOf"),
+            }
+        }
+        _ => panic!("Expected AlterTable"),
+    }
+}
+
+#[test]
+fn alter_table_detach_partition_concurrently() {
+    let sql = "ALTER TABLE measurement DETACH PARTITION measurement_y2021m01 CONCURRENTLY";
+    let dialect = PostgreSqlDialect {};
+    let statements = sqlparser::parser::Parser::parse_sql(&dialect, sql).unwrap();
+    assert_eq!(1, statements.len());
+    match &statements[0] {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(1, operations.len());
+            match &operations[0] {
+                AlterTableOperation::DetachPartitionOf {
+                    partition_name,
+                    concurrently,
+                    finalize,
+                } => {
+                    assert_eq!("measurement_y2021m01", partition_name.to_string());
+                    assert!(concurrently);
+                    assert!(!finalize);
+                }
+                _ => panic!("Expected DetachPartitionOf"),
+            }
+        }
+        _ => panic!("Expected AlterTable"),
+    }
+}
+
+#[test]
+fn alter_table_detach_partition_finalize() {
+    let sql = "ALTER TABLE measurement DETACH PARTITION measurement_y2021m01 FINALIZE";
+    let dialect = PostgreSqlDialect {};
+    let statements = sqlparser::parser::Parser::parse_sql(&dialect, sql).unwrap();
+    assert_eq!(1, statements.len());
+    match &statements[0] {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(1, operations.len());
+            match &operations[0] {
+                AlterTableOperation::DetachPartitionOf {
+                    partition_name,
+                    concurrently,
+                    finalize,
+                } => {
+                    assert_eq!("measurement_y2021m01", partition_name.to_string());
+                    assert!(!concurrently);
+                    assert!(finalize);
+                }
+                _ => panic!("Expected DetachPartitionOf"),
+            }
+        }
+        _ => panic!("Expected AlterTable"),
     }
 }

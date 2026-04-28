@@ -3813,6 +3813,163 @@ fn parse_json_table_is_not_reserved() {
     }
 }
 
+fn parse_pg_select(sql: &str) -> Select {
+    let stmts = pg().parse_sql_statements(sql).unwrap();
+    let stmt = stmts.into_iter().next().unwrap();
+    let Statement::Query(query) = stmt else {
+        panic!("Expected query statement");
+    };
+    let SetExpr::Select(select) = *query.body else {
+        panic!("Expected select query body");
+    };
+    *select
+}
+
+fn parse_pg_projection_expr(sql: &str) -> Expr {
+    let select = parse_pg_select(sql);
+    expr_from_projection(&select.projection[0]).clone()
+}
+
+#[test]
+fn parse_postgres_sql_json_query_functions() {
+    let expr = parse_pg_projection_expr("SELECT JSON_EXISTS(jsonb '1', '$.a' FALSE ON ERROR)");
+    let Expr::Function(Function {
+        args: FunctionArguments::List(FunctionArgumentList { clauses, .. }),
+        ..
+    }) = expr
+    else {
+        panic!("Expected JSON_EXISTS to parse as a function call");
+    };
+    assert_eq!(
+        clauses,
+        vec![FunctionArgumentClause::JsonExistsOnErrorClause(
+            JsonExistsOnErrorBehavior::False
+        )]
+    );
+
+    let expr = parse_pg_projection_expr(
+        "SELECT JSON_VALUE(jsonb '{\"a\": 1}', '$.a ? (@ > $x)' PASSING 0 AS x RETURNING int DEFAULT 1 ON EMPTY ERROR ON ERROR)",
+    );
+    let Expr::Function(Function {
+        args: FunctionArguments::List(FunctionArgumentList { clauses, .. }),
+        ..
+    }) = expr
+    else {
+        panic!("Expected JSON_VALUE to parse as a function call");
+    };
+    assert!(matches!(
+        &clauses[0],
+        FunctionArgumentClause::JsonPassingClause(JsonPassingClause { args })
+            if args.len() == 1 && args[0].name.value == "x"
+    ));
+    assert!(matches!(
+        &clauses[1],
+        FunctionArgumentClause::JsonReturningClause(JsonReturningClause {
+            data_type: DataType::Int(None)
+        })
+    ));
+    assert!(matches!(
+        &clauses[2],
+        FunctionArgumentClause::JsonValueBehaviorClause(JsonValueBehaviorClause {
+            behavior: JsonValueBehavior::Default(_),
+            target: JsonBehaviorTarget::Empty,
+        })
+    ));
+    assert!(matches!(
+        &clauses[3],
+        FunctionArgumentClause::JsonValueBehaviorClause(JsonValueBehaviorClause {
+            behavior: JsonValueBehavior::Error,
+            target: JsonBehaviorTarget::Error,
+        })
+    ));
+
+    let expr = parse_pg_projection_expr(
+        "SELECT JSON_QUERY(jsonb '[\"1\"]', '$[*]' RETURNING bytea FORMAT JSON WITH UNCONDITIONAL ARRAY WRAPPER KEEP QUOTES ON SCALAR STRING EMPTY ARRAY ON EMPTY EMPTY OBJECT ON ERROR)",
+    );
+    let Expr::Function(Function {
+        args: FunctionArguments::List(FunctionArgumentList { clauses, .. }),
+        ..
+    }) = expr
+    else {
+        panic!("Expected JSON_QUERY to parse as a function call");
+    };
+    assert!(matches!(
+        &clauses[0],
+        FunctionArgumentClause::JsonReturningClause(JsonReturningClause {
+            data_type: DataType::Bytea
+        })
+    ));
+    assert!(matches!(
+        &clauses[1],
+        FunctionArgumentClause::JsonFormatClause(JsonFormatClause {
+            format: JsonFormatType::Json,
+            encoding: None,
+        })
+    ));
+    assert!(matches!(
+        &clauses[2],
+        FunctionArgumentClause::JsonQueryWrapperClause(
+            JsonQueryWrapperClause::WithUnconditionalArrayWrapper
+        )
+    ));
+    assert!(matches!(
+        &clauses[3],
+        FunctionArgumentClause::JsonQueryQuotesClause(JsonQueryQuotesClause {
+            mode: JsonQueryQuotesMode::Keep,
+            on_scalar_string: true,
+        })
+    ));
+    assert!(matches!(
+        &clauses[4],
+        FunctionArgumentClause::JsonQueryBehaviorClause(JsonQueryBehaviorClause {
+            behavior: JsonQueryBehavior::EmptyArray,
+            target: JsonBehaviorTarget::Empty,
+        })
+    ));
+    assert!(matches!(
+        &clauses[5],
+        FunctionArgumentClause::JsonQueryBehaviorClause(JsonQueryBehaviorClause {
+            behavior: JsonQueryBehavior::EmptyObject,
+            target: JsonBehaviorTarget::Error,
+        })
+    ));
+}
+
+#[test]
+fn parse_postgres_json_table_on_error() {
+    let select = parse_pg_select(
+        "SELECT * FROM JSON_TABLE(jsonb '1', '$' COLUMNS (a int PATH '$.a' ERROR ON ERROR) ERROR ON ERROR) jt",
+    );
+    let relation = &select.from[0].relation;
+    assert!(matches!(
+        relation,
+        TableFactor::JsonTable {
+            on_error: Some(JsonTableOnErrorHandling::Error),
+            ..
+        }
+    ));
+
+    let select = parse_pg_select(
+        "SELECT * FROM JSON_TABLE(jsonb '1', '$' COLUMNS (a int PATH '$.a') EMPTY ARRAY ON ERROR) jt",
+    );
+    let relation = &select.from[0].relation;
+    assert!(matches!(
+        relation,
+        TableFactor::JsonTable {
+            on_error: Some(JsonTableOnErrorHandling::EmptyArray),
+            ..
+        }
+    ));
+}
+
+#[test]
+fn parse_postgres_sql_json_duplicate_behavior_clauses() {
+    let sql = "SELECT JSON_VALUE(jsonb '1', '$.a' NULL ON EMPTY ERROR ON EMPTY)";
+    assert!(pg().parse_sql_statements(sql).is_err());
+    let sql = "SELECT JSON_QUERY(jsonb '[]', '$[*]' NULL ON ERROR EMPTY ARRAY ON ERROR)";
+    assert!(pg().parse_sql_statements(sql).is_err());
+}
+
 #[test]
 fn test_composite_value() {
     let sql = "SELECT (on_hand.item).name FROM on_hand WHERE (on_hand.item).price > 9";

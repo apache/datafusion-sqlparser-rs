@@ -2205,86 +2205,31 @@ fn parse_big_query_declare() {
 
 #[test]
 fn parse_bigquery_create_external_table_with_connection_and_options() {
-    let sql = concat!(
-        "CREATE OR REPLACE EXTERNAL TABLE `proj.ds.tbl` ",
-        "WITH CONNECTION `projects/proj/locations/us/connections/c` ",
-        r#"OPTIONS(format = "ICEBERG", uris = ["gs://b/m.json"])"#,
+    bigquery().one_statement_parses_to(
+        concat!(
+            "CREATE OR REPLACE EXTERNAL TABLE `proj.ds.tbl` ",
+            "WITH CONNECTION `projects/proj/locations/us/connections/c` ",
+            r#"OPTIONS(format = "ICEBERG", uris = ["gs://b/m.json"])"#,
+        ),
+        concat!(
+            "CREATE OR REPLACE EXTERNAL TABLE `proj`.`ds`.`tbl` () ",
+            "WITH CONNECTION `projects/proj/locations/us/connections/c` ",
+            r#"OPTIONS(format = "ICEBERG", uris = ["gs://b/m.json"])"#,
+        ),
     );
-    let stmts = bigquery().parse_sql_statements(sql).unwrap();
-    assert_eq!(stmts.len(), 1);
-    let Statement::CreateTable(ct) = &stmts[0] else {
-        panic!("expected CreateTable, got {:?}", stmts[0]);
-    };
-    assert!(ct.external);
-    assert!(ct.or_replace);
-    assert!(ct.columns.is_empty());
-    let with_connection = ct.with_connection.as_ref().expect("with_connection set");
-    assert_eq!(
-        with_connection.to_string(),
-        "`projects/proj/locations/us/connections/c`"
-    );
-    let CreateTableOptions::Options(opts) = &ct.table_options else {
-        panic!("expected OPTIONS, got {:?}", ct.table_options);
-    };
-    assert_eq!(opts.len(), 2);
 }
 
 #[test]
 fn parse_bigquery_create_external_table_with_connection_variants() {
-    // WITH CONNECTION alone — no OPTIONS, no explicit column list.
-    // Display normalizes the bare form by adding an empty column list, so
-    // use `one_statement_parses_to` to assert the normalized output.
-    let stmt = bigquery().one_statement_parses_to(
+    bigquery().one_statement_parses_to(
         "CREATE EXTERNAL TABLE t WITH CONNECTION c",
         "CREATE EXTERNAL TABLE t () WITH CONNECTION c",
     );
-    let Statement::CreateTable(ct) = stmt else {
-        panic!("expected CreateTable");
-    };
-    assert!(ct.external);
-    assert!(!ct.or_replace);
-    assert!(ct.columns.is_empty());
-    assert_eq!(
-        ct.with_connection
-            .as_ref()
-            .expect("with_connection set")
-            .to_string(),
-        "c"
-    );
-    assert!(matches!(ct.table_options, CreateTableOptions::None));
-
-    // With explicit columns + OPTIONS. Exercises the Display round-trip of
-    // the `(columns) WITH CONNECTION <name> OPTIONS(...)` ordering so a
-    // future refactor that reshuffles clause order will fail this test.
-    let sql = concat!(
+    bigquery().verified_stmt(concat!(
         "CREATE EXTERNAL TABLE t (a INT64, b STRING) ",
         r#"WITH CONNECTION c OPTIONS(uris = ["gs://x"])"#,
-    );
-    let stmt = bigquery().verified_stmt(sql);
-    let Statement::CreateTable(ct) = stmt else {
-        panic!("expected CreateTable");
-    };
-    assert_eq!(ct.columns.len(), 2);
-    assert_eq!(
-        ct.with_connection
-            .as_ref()
-            .expect("with_connection set")
-            .to_string(),
-        "c"
-    );
-    let CreateTableOptions::Options(opts) = &ct.table_options else {
-        panic!("expected OPTIONS, got {:?}", ct.table_options);
-    };
-    assert_eq!(opts.len(), 1);
-
-    // Baseline: no WITH CONNECTION. The new parser branch must not produce
-    // a spurious with_connection when the keyword pair is absent.
-    let stmt =
-        bigquery().verified_stmt("CREATE EXTERNAL TABLE t (a INT64) OPTIONS(uris = [\"gs://x\"])");
-    let Statement::CreateTable(ct) = stmt else {
-        panic!("expected CreateTable");
-    };
-    assert!(ct.with_connection.is_none());
+    ));
+    bigquery().verified_stmt(r#"CREATE EXTERNAL TABLE t (a INT64) OPTIONS(uris = ["gs://x"])"#);
 }
 
 fn bigquery() -> TestedDialects {

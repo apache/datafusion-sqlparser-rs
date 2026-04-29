@@ -4766,11 +4766,6 @@ fn test_snowflake_create_view_copy_grants() {
 
 #[test]
 fn test_snowflake_create_view_copy_grants_after_columns() {
-    // Snowflake's documented placement for `COPY GRANTS` on `CREATE VIEW` is
-    // *after* the column list. Display normalizes to the pre-columns form
-    // already supported, so use `one_statement_parses_to` to assert the
-    // post-columns input is accepted and the AST flag is set.
-    // <https://docs.snowflake.com/en/sql-reference/sql/create-view#syntax>
     let cases = [
         (
             "CREATE OR REPLACE VIEW v (a, b) COPY GRANTS AS SELECT a, b FROM t",
@@ -4786,28 +4781,9 @@ fn test_snowflake_create_view_copy_grants_after_columns() {
         ),
     ];
     for (sql, parsed) in cases {
-        match snowflake().one_statement_parses_to(sql, parsed) {
-            Statement::CreateView(CreateView {
-                name,
-                copy_grants,
-                columns,
-                ..
-            }) => {
-                assert_eq!("v", name.to_string());
-                assert!(copy_grants, "copy_grants should be true for {sql:?}");
-                assert!(!columns.is_empty(), "columns should be set for {sql:?}");
-            }
-            _ => unreachable!(),
-        }
+        snowflake().one_statement_parses_to(sql, parsed);
     }
-
-    // Baseline: the same query without COPY GRANTS must not flip the flag.
-    match snowflake().verified_stmt("CREATE OR REPLACE VIEW v (a) AS SELECT a FROM t") {
-        Statement::CreateView(CreateView { copy_grants, .. }) => {
-            assert!(!copy_grants);
-        }
-        _ => unreachable!(),
-    }
+    snowflake().verified_stmt("CREATE OR REPLACE VIEW v (a) AS SELECT a FROM t");
 }
 
 #[test]

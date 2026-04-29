@@ -2448,6 +2448,35 @@ fn test_copy_into_with_transformations() {
 }
 
 #[test]
+fn test_copy_into_with_cast_transformation() {
+    let variants = [
+        concat!(
+            "COPY INTO my_company.emp_basic (a) FROM ",
+            r#"(SELECT $1:"A"::NUMBER(38, 0) FROM @stg)"#,
+        ),
+        concat!(
+            "COPY INTO my_company.emp_basic (a) FROM ",
+            "(SELECT $1::NUMBER(38, 0) FROM @stg)",
+        ),
+        concat!(
+            "COPY INTO my_company.emp_basic (a) FROM ",
+            "(SELECT $1:SEQUENCE::NUMBER(38, 0) FROM @stg)",
+        ),
+        concat!(
+            "COPY INTO my_company.emp_basic (a, b) FROM ",
+            r#"(SELECT $1:"A"::VARIANT, $1:"B"::TEXT FROM @stg)"#,
+        ),
+        concat!(
+            "COPY INTO my_company.emp_basic (a, b) FROM ",
+            r#"(SELECT t.$1:plain AS plain, $1:"B"::TEXT FROM @stg AS t)"#,
+        ),
+    ];
+    for sql in variants {
+        snowflake().verified_stmt(sql);
+    }
+}
+
+#[test]
 fn test_copy_into_file_format() {
     let sql = concat!(
         "COPY INTO my_company.emp_basic ",

@@ -157,6 +157,9 @@ pub struct CreateTableBuilder {
     pub base_location: Option<String>,
     /// Optional external volume identifier.
     pub external_volume: Option<String>,
+    /// `WITH CONNECTION` clause.
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_external_table_statement)
+    pub with_connection: Option<ObjectName>,
     /// Optional catalog name.
     pub catalog: Option<String>,
     /// Optional catalog synchronization option.
@@ -235,6 +238,7 @@ impl CreateTableBuilder {
             with_tags: None,
             base_location: None,
             external_volume: None,
+            with_connection: None,
             catalog: None,
             catalog_sync: None,
             storage_serialization_policy: None,
@@ -488,6 +492,11 @@ impl CreateTableBuilder {
         self.external_volume = external_volume;
         self
     }
+    /// Set the `WITH CONNECTION` clause.
+    pub fn with_connection(mut self, with_connection: Option<ObjectName>) -> Self {
+        self.with_connection = with_connection;
+        self
+    }
     /// Set the catalog name for the table.
     pub fn catalog(mut self, catalog: Option<String>) -> Self {
         self.catalog = catalog;
@@ -605,6 +614,7 @@ impl CreateTableBuilder {
             with_tags: self.with_tags,
             base_location: self.base_location,
             external_volume: self.external_volume,
+            with_connection: self.with_connection,
             catalog: self.catalog,
             catalog_sync: self.catalog_sync,
             storage_serialization_policy: self.storage_serialization_policy,
@@ -686,6 +696,7 @@ impl From<CreateTable> for CreateTableBuilder {
             with_tags: table.with_tags,
             base_location: table.base_location,
             external_volume: table.external_volume,
+            with_connection: table.with_connection,
             catalog: table.catalog,
             catalog_sync: table.catalog_sync,
             storage_serialization_policy: table.storage_serialization_policy,

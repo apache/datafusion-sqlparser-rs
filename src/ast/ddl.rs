@@ -3021,6 +3021,9 @@ pub struct CreateTable {
     /// Snowflake "EXTERNAL_VOLUME" clause for Iceberg tables
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table>
     pub external_volume: Option<String>,
+    /// `WITH CONNECTION` clause.
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_external_table_statement)
+    pub with_connection: Option<ObjectName>,
     /// Snowflake "BASE_LOCATION" clause for Iceberg tables
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table>
     pub base_location: Option<String>,
@@ -3249,6 +3252,9 @@ impl fmt::Display for CreateTable {
         }
         if let Some(cluster_by) = self.cluster_by.as_ref() {
             write!(f, " CLUSTER BY {cluster_by}")?;
+        }
+        if let Some(with_connection) = &self.with_connection {
+            write!(f, " WITH CONNECTION {with_connection}")?;
         }
         if let options @ CreateTableOptions::Options(_) = &self.table_options {
             write!(f, " {options}")?;

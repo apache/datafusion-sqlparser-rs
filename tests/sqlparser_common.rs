@@ -9565,6 +9565,7 @@ fn test_create_index_with_using_function() {
             columns,
             unique,
             concurrently,
+            r#async,
             if_not_exists,
             include,
             nulls_distinct: None,
@@ -9579,6 +9580,7 @@ fn test_create_index_with_using_function() {
             assert_eq!(indexed_columns, columns);
             assert!(unique);
             assert!(!concurrently);
+            assert!(!r#async);
             assert!(if_not_exists);
             assert!(include.is_empty());
             assert!(with.is_empty());
@@ -9620,6 +9622,7 @@ fn test_create_index_with_with_clause() {
             columns,
             unique,
             concurrently,
+            r#async,
             if_not_exists,
             include,
             nulls_distinct: None,
@@ -9633,6 +9636,7 @@ fn test_create_index_with_with_clause() {
             pretty_assertions::assert_eq!(indexed_columns, columns);
             assert!(unique);
             assert!(!concurrently);
+            assert!(!r#async);
             assert!(!if_not_exists);
             assert!(include.is_empty());
             pretty_assertions::assert_eq!(with_parameters, with);
@@ -9641,6 +9645,12 @@ fn test_create_index_with_with_clause() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_create_index_async() {
+    verified_stmt("CREATE INDEX ASYNC my_index ON my_table(col1)");
+    verified_stmt("CREATE UNIQUE INDEX ASYNC my_index ON my_table(col1)");
 }
 
 #[test]

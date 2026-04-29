@@ -3021,8 +3021,8 @@ pub struct CreateTable {
     /// Snowflake "EXTERNAL_VOLUME" clause for Iceberg tables
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table>
     pub external_volume: Option<String>,
-    /// BigQuery `WITH CONNECTION` clause for external tables
-    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_external_table_statement>
+    /// `WITH CONNECTION` clause.
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_external_table_statement)
     pub with_connection: Option<ObjectName>,
     /// Snowflake "BASE_LOCATION" clause for Iceberg tables
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table>

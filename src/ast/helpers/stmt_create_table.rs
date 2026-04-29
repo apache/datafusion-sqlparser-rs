@@ -157,8 +157,8 @@ pub struct CreateTableBuilder {
     pub base_location: Option<String>,
     /// Optional external volume identifier.
     pub external_volume: Option<String>,
-    /// BigQuery `WITH CONNECTION` clause for external tables.
-    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_external_table_statement>
+    /// `WITH CONNECTION` clause.
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_external_table_statement)
     pub with_connection: Option<ObjectName>,
     /// Optional catalog name.
     pub catalog: Option<String>,
@@ -492,7 +492,7 @@ impl CreateTableBuilder {
         self.external_volume = external_volume;
         self
     }
-    /// Set the BigQuery `WITH CONNECTION` clause for external tables.
+    /// Set the `WITH CONNECTION` clause.
     pub fn with_connection(mut self, with_connection: Option<ObjectName>) -> Self {
         self.with_connection = with_connection;
         self

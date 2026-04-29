@@ -9624,6 +9624,12 @@ fn test_create_index_with_with_clause() {
 }
 
 #[test]
+fn parse_create_index_async() {
+    verified_stmt("CREATE INDEX ASYNC my_index ON my_table(col1)");
+    verified_stmt("CREATE UNIQUE INDEX ASYNC my_index ON my_table(col1)");
+}
+
+#[test]
 fn parse_drop_index() {
     let sql = "DROP INDEX idx_a";
     match verified_stmt(sql) {

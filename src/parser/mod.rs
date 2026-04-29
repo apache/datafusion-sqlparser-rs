@@ -6533,10 +6533,16 @@ impl<'a> Parser<'a> {
         let name_before_not_exists = !if_not_exists_first
             && self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let if_not_exists = if_not_exists_first || name_before_not_exists;
-        let copy_grants = self.parse_keywords(&[Keyword::COPY, Keyword::GRANTS]);
+        let mut copy_grants = self.parse_keywords(&[Keyword::COPY, Keyword::GRANTS]);
         // Many dialects support `OR ALTER` right after `CREATE`, but we don't (yet).
         // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
         let columns = self.parse_view_columns()?;
+        // Snowflake also documents `COPY GRANTS` *after* the column list; accept
+        // either position, but not both.
+        // <https://docs.snowflake.com/en/sql-reference/sql/create-view#syntax>
+        if !copy_grants {
+            copy_grants = self.parse_keywords(&[Keyword::COPY, Keyword::GRANTS]);
+        }
         let mut options = CreateTableOptions::None;
         let with_options = self.parse_options(Keyword::WITH)?;
         if !with_options.is_empty() {

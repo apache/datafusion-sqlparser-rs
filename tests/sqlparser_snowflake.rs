@@ -4765,6 +4765,28 @@ fn test_snowflake_create_view_copy_grants() {
 }
 
 #[test]
+fn test_snowflake_create_view_copy_grants_after_columns() {
+    let cases = [
+        (
+            "CREATE OR REPLACE VIEW v (a, b) COPY GRANTS AS SELECT a, b FROM t",
+            "CREATE OR REPLACE VIEW v COPY GRANTS (a, b) AS SELECT a, b FROM t",
+        ),
+        (
+            "CREATE OR REPLACE SECURE VIEW v (a, b) COPY GRANTS AS SELECT a, b FROM t",
+            "CREATE OR REPLACE SECURE VIEW v COPY GRANTS (a, b) AS SELECT a, b FROM t",
+        ),
+        (
+            "CREATE MATERIALIZED VIEW v (a) COPY GRANTS AS SELECT a FROM t",
+            "CREATE MATERIALIZED VIEW v COPY GRANTS (a) AS SELECT a FROM t",
+        ),
+    ];
+    for (sql, parsed) in cases {
+        snowflake().one_statement_parses_to(sql, parsed);
+    }
+    snowflake().verified_stmt("CREATE OR REPLACE VIEW v (a) AS SELECT a FROM t");
+}
+
+#[test]
 fn test_snowflake_identifier_function() {
     // Using IDENTIFIER to reference a column
     match &snowflake()

@@ -29,7 +29,7 @@ use crate::ast::{
     DistStyle, Expr, FileFormat, ForValues, HiveDistributionStyle, HiveFormat, Ident,
     InitializeKind, ObjectName, OnCommit, OneOrManyWithParens, Query, RefreshModeKind,
     RowAccessPolicy, Statement, StorageLifecyclePolicy, StorageSerializationPolicy,
-    TableConstraint, TableVersion, Tag, WrappedCollection,
+    TableConstraint, TableVersion, Tag, WithData, WrappedCollection,
 };
 
 use crate::parser::ParserError;
@@ -183,6 +183,12 @@ pub struct CreateTableBuilder {
     pub sortkey: Option<Vec<Expr>>,
     /// Redshift `BACKUP` option.
     pub backup: Option<bool>,
+    /// `MULTISET | SET` table-kind prefix.
+    pub multiset: Option<bool>,
+    /// `FALLBACK` clause.
+    pub fallback: Option<bool>,
+    /// `WITH DATA` clause.
+    pub with_data: Option<WithData>,
 }
 
 impl CreateTableBuilder {
@@ -248,6 +254,9 @@ impl CreateTableBuilder {
             distkey: None,
             sortkey: None,
             backup: None,
+            multiset: None,
+            fallback: None,
+            with_data: None,
         }
     }
     /// Set `OR REPLACE` for the CREATE TABLE statement.
@@ -556,6 +565,22 @@ impl CreateTableBuilder {
         self.backup = backup;
         self
     }
+    /// Set `MULTISET | SET` table-kind prefix.
+    /// Some(true) => `MULTISET`, Some(false) => `SET`.
+    pub fn multiset(mut self, multiset: Option<bool>) -> Self {
+        self.multiset = multiset;
+        self
+    }
+    /// Set `FALLBACK` / `NO FALLBACK` flag.
+    pub fn fallback(mut self, fallback: Option<bool>) -> Self {
+        self.fallback = fallback;
+        self
+    }
+    /// Set `WITH DATA` clause.
+    pub fn with_data(mut self, with_data: Option<WithData>) -> Self {
+        self.with_data = with_data;
+        self
+    }
     /// Consume the builder and produce a `CreateTable`.
     pub fn build(self) -> CreateTable {
         CreateTable {
@@ -618,6 +643,9 @@ impl CreateTableBuilder {
             distkey: self.distkey,
             sortkey: self.sortkey,
             backup: self.backup,
+            multiset: self.multiset,
+            fallback: self.fallback,
+            with_data: self.with_data,
         }
     }
 }
@@ -699,6 +727,9 @@ impl From<CreateTable> for CreateTableBuilder {
             distkey: table.distkey,
             sortkey: table.sortkey,
             backup: table.backup,
+            multiset: table.multiset,
+            fallback: table.fallback,
+            with_data: table.with_data,
         }
     }
 }

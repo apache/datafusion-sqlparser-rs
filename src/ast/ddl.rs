@@ -3207,6 +3207,7 @@ impl fmt::Display for CreateTable {
                 Some(HiveIOFormat::FileFormat { format }) if !self.external => {
                     write!(f, " STORED AS {format}")?
                 }
+                Some(HiveIOFormat::Using { format }) => write!(f, " USING {format}")?,
                 _ => (),
             }
             if let Some(serde_properties) = serde_properties.as_ref() {

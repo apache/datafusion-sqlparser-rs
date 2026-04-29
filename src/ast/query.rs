@@ -1522,6 +1522,8 @@ pub enum TableFactor {
         name: ObjectName,
         /// Arguments passed to the function.
         args: Vec<FunctionArg>,
+        /// Whether `WITH ORDINALITY` was specified to include ordinality.
+        with_ordinality: bool,
         /// Optional alias for the result of the function.
         alias: Option<TableAlias>,
     },
@@ -2277,6 +2279,7 @@ impl fmt::Display for TableFactor {
                 lateral,
                 name,
                 args,
+                with_ordinality,
                 alias,
             } => {
                 if *lateral {
@@ -2284,6 +2287,9 @@ impl fmt::Display for TableFactor {
                 }
                 write!(f, "{name}")?;
                 write!(f, "({})", display_comma_separated(args))?;
+                if *with_ordinality {
+                    write!(f, " WITH ORDINALITY")?;
+                }
                 if let Some(alias) = alias {
                     write!(f, " {alias}")?;
                 }
@@ -2527,6 +2533,12 @@ pub struct TableAlias {
     pub name: Ident,
     /// Optional column aliases declared in parentheses after the table alias.
     pub columns: Vec<TableAliasColumnDef>,
+    /// Optional PartiQL index alias declared with `AT`. For example:
+    /// ```sql
+    /// SELECT element, index FROM bar AS b, b.data.scalar_array AS element AT index
+    /// ```
+    /// See: <https://docs.aws.amazon.com/redshift/latest/dg/query-super.html>
+    pub at: Option<Ident>,
 }
 
 impl fmt::Display for TableAlias {
@@ -2534,6 +2546,9 @@ impl fmt::Display for TableAlias {
         write!(f, "{}{}", if self.explicit { "AS " } else { "" }, self.name)?;
         if !self.columns.is_empty() {
             write!(f, " ({})", display_comma_separated(&self.columns))?;
+        }
+        if let Some(at) = &self.at {
+            write!(f, " AT {at}")?;
         }
         Ok(())
     }
@@ -2770,6 +2785,13 @@ impl fmt::Display for Join {
                 self.relation,
                 suffix(constraint)
             )),
+            JoinOperator::ArrayJoin => f.write_fmt(format_args!("ARRAY JOIN {}", self.relation)),
+            JoinOperator::LeftArrayJoin => {
+                f.write_fmt(format_args!("LEFT ARRAY JOIN {}", self.relation))
+            }
+            JoinOperator::InnerArrayJoin => {
+                f.write_fmt(format_args!("INNER ARRAY JOIN {}", self.relation))
+            }
         }
     }
 }
@@ -2824,6 +2846,14 @@ pub enum JoinOperator {
     ///
     /// See <https://dev.mysql.com/doc/refman/8.4/en/join.html>.
     StraightJoin(JoinConstraint),
+    /// ClickHouse: `ARRAY JOIN` for unnesting arrays inline.
+    ///
+    /// See <https://clickhouse.com/docs/en/sql-reference/statements/select/array-join>.
+    ArrayJoin,
+    /// ClickHouse: `LEFT ARRAY JOIN` for unnesting arrays inline (preserves rows with empty arrays).
+    LeftArrayJoin,
+    /// ClickHouse: `INNER ARRAY JOIN` for unnesting arrays inline (filters rows with empty arrays).
+    InnerArrayJoin,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -3628,7 +3658,7 @@ pub struct Values {
     /// <https://dev.mysql.com/doc/refman/9.2/en/insert.html>
     pub value_keyword: bool,
     /// The list of rows, each row is a list of expressions.
-    pub rows: Vec<Vec<Expr>>,
+    pub rows: Vec<Parens<Vec<Expr>>>,
 }
 
 impl fmt::Display for Values {

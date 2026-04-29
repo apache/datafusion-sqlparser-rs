@@ -41,13 +41,13 @@ use super::{
     MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
     MergeInsertKind, MergeUpdateExpr, NamedParenthesizedList, NamedWindowDefinition, ObjectName,
     ObjectNamePart, Offset, OnConflict, OnConflictAction, OnInsert, OpenStatement, OrderBy,
-    OrderByExpr, OrderByKind, OutputClause, Partition, PartitionBoundValue, PivotValueSource,
-    ProjectionSelect, Query, RaiseStatement, RaiseStatementValue, ReferentialAction,
-    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
-    SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
-    TableConstraint, TableFactor, TableObject, TableOptionsClustered, TableWithJoins, Update,
-    UpdateTableFromKind, Use, Values, ViewColumnDef, WhileStatement, WildcardAdditionalOptions,
-    With, WithFill,
+    OrderByExpr, OrderByKind, OutputClause, Parens, Partition, PartitionBoundValue,
+    PivotValueSource, ProjectionSelect, Query, RaiseStatement, RaiseStatementValue,
+    ReferentialAction, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
+    SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias,
+    TableAliasColumnDef, TableConstraint, TableFactor, TableObject, TableOptionsClustered,
+    TableWithJoins, Update, UpdateTableFromKind, Use, Values, ViewColumnDef, WhileStatement,
+    WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -103,6 +103,12 @@ pub trait Spanned {
 impl Spanned for TokenWithSpan {
     fn span(&self) -> Span {
         self.span
+    }
+}
+
+impl<T> Spanned for Parens<T> {
+    fn span(&self) -> Span {
+        self.opening_token.0.span.union(&self.closing_token.0.span)
     }
 }
 
@@ -239,10 +245,11 @@ impl Spanned for Values {
             rows,
         } = self;
 
-        union_spans(
-            rows.iter()
-                .map(|row| union_spans(row.iter().map(|expr| expr.span()))),
-        )
+        match &rows[..] {
+            [] => Span::empty(),
+            [f] => f.span(),
+            [f, .., l] => f.span().union(&l.span()),
+        }
     }
 }
 
@@ -478,6 +485,7 @@ impl Spanned for Statement {
             Statement::AlterConnector { .. } => Span::empty(),
             Statement::DropPolicy { .. } => Span::empty(),
             Statement::DropConnector { .. } => Span::empty(),
+            Statement::ShowCatalogs { .. } => Span::empty(),
             Statement::ShowDatabases { .. } => Span::empty(),
             Statement::ShowProcessList { .. } => Span::empty(),
             Statement::ShowSchemas { .. } => Span::empty(),
@@ -1990,6 +1998,7 @@ impl Spanned for TableFactor {
                 lateral: _,
                 name,
                 args,
+                with_ordinality: _,
                 alias,
             } => union_spans(
                 name.0
@@ -2178,8 +2187,13 @@ impl Spanned for TableAlias {
             explicit: _,
             name,
             columns,
+            at,
         } = self;
-        union_spans(core::iter::once(name.span).chain(columns.iter().map(Spanned::span)))
+        union_spans(
+            core::iter::once(name.span)
+                .chain(columns.iter().map(Spanned::span))
+                .chain(at.iter().map(|at| at.span)),
+        )
     }
 }
 
@@ -2239,6 +2253,9 @@ impl Spanned for JoinOperator {
             JoinOperator::Anti(join_constraint) => join_constraint.span(),
             JoinOperator::Semi(join_constraint) => join_constraint.span(),
             JoinOperator::StraightJoin(join_constraint) => join_constraint.span(),
+            JoinOperator::ArrayJoin => Span::empty(),
+            JoinOperator::LeftArrayJoin => Span::empty(),
+            JoinOperator::InnerArrayJoin => Span::empty(),
         }
     }
 }

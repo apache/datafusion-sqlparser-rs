@@ -194,6 +194,7 @@ define_keywords!(
     CASES,
     CAST,
     CATALOG,
+    CATALOGS,
     CATALOG_SYNC,
     CATALOG_SYNC_NAMESPACE_FLATTEN_DELIMITER,
     CATALOG_SYNC_NAMESPACE_MODE,
@@ -1236,6 +1237,8 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::FOR,
     // for MYSQL PARTITION SELECTION
     Keyword::PARTITION,
+    // for Clickhouse ARRAY JOIN (ARRAY must not be parsed as a table alias)
+    Keyword::ARRAY,
     // for Clickhouse PREWHERE
     Keyword::PREWHERE,
     Keyword::SETTINGS,

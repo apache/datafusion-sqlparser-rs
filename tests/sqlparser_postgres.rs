@@ -2070,11 +2070,11 @@ fn parse_prepare() {
             assert_eq!(table_name.to_string(), "customers");
             assert!(columns.is_empty());
 
-            let expected_values = [vec![
+            let expected_values = [Parens::with_empty_span(vec![
                 Expr::Identifier("a1".into()),
                 Expr::Identifier("a2".into()),
                 Expr::Identifier("a3".into()),
-            ]];
+            ])];
             match &*source.body {
                 SetExpr::Values(Values { rows, .. }) => {
                     assert_eq!(rows.as_slice(), &expected_values)
@@ -5792,10 +5792,10 @@ fn test_simple_postgres_insert_with_alias() {
                 body: Box::new(SetExpr::Values(Values {
                     value_keyword: false,
                     explicit_row: false,
-                    rows: vec![vec![
+                    rows: vec![Parens::with_empty_span(vec![
                         Expr::Identifier(Ident::new("DEFAULT")),
                         Expr::Value((Value::Number("123".to_string(), false)).with_empty_span())
-                    ]]
+                    ])]
                 })),
                 order_by: None,
                 limit_clause: None,
@@ -5872,13 +5872,13 @@ fn test_simple_postgres_insert_with_alias() {
                 body: Box::new(SetExpr::Values(Values {
                     value_keyword: false,
                     explicit_row: false,
-                    rows: vec![vec![
+                    rows: vec![Parens::with_empty_span(vec![
                         Expr::Identifier(Ident::new("DEFAULT")),
                         Expr::Value(
                             (Value::Number(bigdecimal::BigDecimal::new(123.into(), 0), false))
                                 .with_empty_span()
                         )
-                    ]]
+                    ])]
                 })),
                 order_by: None,
                 limit_clause: None,
@@ -5954,12 +5954,12 @@ fn test_simple_insert_with_quoted_alias() {
                 body: Box::new(SetExpr::Values(Values {
                     value_keyword: false,
                     explicit_row: false,
-                    rows: vec![vec![
+                    rows: vec![Parens::with_empty_span(vec![
                         Expr::Identifier(Ident::new("DEFAULT")),
                         Expr::Value(
                             (Value::SingleQuotedString("0123".to_string())).with_empty_span()
                         )
-                    ]]
+                    ])]
                 })),
                 order_by: None,
                 limit_clause: None,
@@ -6151,6 +6151,34 @@ fn test_table_function_with_ordinality() {
             assert_eq!("generate_series", name.to_string().as_str());
         }
         _ => panic!("Expecting TableFactor::Table with ordinality"),
+    }
+}
+
+#[test]
+fn test_lateral_function_with_ordinality_and_column_aliases() {
+    let from = pg()
+        .verified_only_select(
+            "SELECT * FROM tbl, \
+             LATERAL json_array_elements(c1::JSON) \
+             WITH ORDINALITY AS t (c1, index)",
+        )
+        .from;
+    assert_eq!(2, from.len());
+    match &from[1].relation {
+        TableFactor::Function {
+            lateral: true,
+            name,
+            with_ordinality: true,
+            alias: Some(alias),
+            ..
+        } => {
+            assert_eq!("json_array_elements", name.to_string().as_str());
+            assert_eq!("t", alias.name.value.as_str());
+            assert_eq!(2, alias.columns.len());
+            assert_eq!("c1", alias.columns[0].name.value.as_str());
+            assert_eq!("index", alias.columns[1].name.value.as_str());
+        }
+        _ => panic!("Expecting TableFactor::Function with ordinality and alias columns"),
     }
 }
 

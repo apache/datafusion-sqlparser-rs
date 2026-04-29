@@ -318,4 +318,12 @@ impl Dialect for PostgreSqlDialect {
     fn supports_xml_expressions(&self) -> bool {
         true
     }
+
+    /// Postgres supports query optimizer hints via the `pg_hint_plan` extension,
+    /// using the same comment-prefixed-with-`+` syntax as MySQL and Oracle.
+    ///
+    /// See <https://github.com/ossc-db/pg_hint_plan>
+    fn supports_comment_optimizer_hint(&self) -> bool {
+        true
+    }
 }

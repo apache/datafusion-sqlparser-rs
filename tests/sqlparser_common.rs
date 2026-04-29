@@ -100,8 +100,11 @@ fn parse_insert_values() {
         Expr::value(number("2")),
         Expr::value(number("3")),
     ];
-    let rows1 = vec![row.clone()];
-    let rows2 = vec![row.clone(), row];
+    let rows1 = vec![Parens::with_empty_span(row.clone())];
+    let rows2 = vec![
+        Parens::with_empty_span(row.clone()),
+        Parens::with_empty_span(row),
+    ];
 
     let sql = "INSERT customer VALUES (1, 2, 3)";
     check_one(sql, "customer", &[], &rows1, false);
@@ -140,7 +143,7 @@ fn parse_insert_values() {
         sql: &str,
         expected_table_name: &str,
         expected_columns: &[String],
-        expected_rows: &[Vec<Expr>],
+        expected_rows: &[Parens<Vec<Expr>>],
         expected_value_keyword: bool,
     ) {
         match verified_stmt(sql) {
@@ -666,6 +669,7 @@ fn parse_select_with_table_alias() {
                         TableAliasColumnDef::from_name("B"),
                         TableAliasColumnDef::from_name("C"),
                     ],
+                    at: None,
                 }),
                 args: None,
                 with_hints: vec![],
@@ -6583,6 +6587,24 @@ fn interval_disallow_interval_expr_double_colon() {
 }
 
 #[test]
+fn parse_text_type_modifier_double_colon_cast() {
+    let expr = verified_expr("ID::TEXT(16777216)");
+    assert_eq!(
+        expr,
+        Expr::Cast {
+            kind: CastKind::DoubleColon,
+            expr: Box::new(Expr::Identifier(Ident::new("ID"))),
+            data_type: DataType::Custom(
+                ObjectName::from(vec![Ident::new("TEXT")]),
+                vec!["16777216".to_string()]
+            ),
+            array: false,
+            format: None,
+        }
+    );
+}
+
+#[test]
 fn parse_interval_and_or_xor() {
     let sql = "SELECT col FROM test \
         WHERE d3_date > d1_date + INTERVAL '5 days' \
@@ -7858,6 +7880,7 @@ fn parse_recursive_cte() {
                 span: Span::empty(),
             },
             columns: vec![TableAliasColumnDef::from_name("val")],
+            at: None,
         },
         query: Box::new(cte_query),
         from: None,
@@ -9028,6 +9051,7 @@ fn lateral_function() {
                             vec![Ident::new("customer"), Ident::new("id")],
                         ))),
                     ],
+                    with_ordinality: false,
                     alias: None,
                 },
                 global: false,
@@ -10110,7 +10134,7 @@ fn parse_merge() {
                             kind: MergeInsertKind::Values(Values {
                                 value_keyword: false,
                                 explicit_row: false,
-                                rows: vec![vec![
+                                rows: vec![Parens::with_empty_span(vec![
                                     Expr::CompoundIdentifier(vec![
                                         Ident::new("stg"),
                                         Ident::new("A")
@@ -10123,7 +10147,7 @@ fn parse_merge() {
                                         Ident::new("stg"),
                                         Ident::new("C")
                                     ]),
-                                ]]
+                                ])]
                             }),
                             insert_predicate: None,
                         }),
@@ -11353,6 +11377,7 @@ fn parse_pivot_table() {
                     TableAliasColumnDef::from_name("c"),
                     TableAliasColumnDef::from_name("d"),
                 ],
+                at: None,
             })
         }
     );
@@ -11491,6 +11516,7 @@ fn parse_unpivot_table() {
                 .into_iter()
                 .map(TableAliasColumnDef::from_name)
                 .collect(),
+            at: None,
         }),
     };
     pretty_assertions::assert_eq!(verified_only_select(sql).from[0].relation, base_unpivot);
@@ -14782,6 +14808,7 @@ fn parse_method_expr() {
 fn test_show_dbs_schemas_tables_views() {
     // These statements are parsed the same by all dialects
     let stmts = vec![
+        "SHOW CATALOGS",
         "SHOW DATABASES",
         "SHOW SCHEMAS",
         "SHOW TABLES",
@@ -14799,7 +14826,11 @@ fn test_show_dbs_schemas_tables_views() {
     // These statements are parsed the same by all dialects
     // except for how the parser interprets the location of
     // LIKE option (infix/suffix)
-    let stmts = vec!["SHOW DATABASES LIKE '%abc'", "SHOW SCHEMAS LIKE '%abc'"];
+    let stmts = vec![
+        "SHOW CATALOGS LIKE '%abc'",
+        "SHOW DATABASES LIKE '%abc'",
+        "SHOW SCHEMAS LIKE '%abc'",
+    ];
     for stmt in stmts {
         all_dialects_where(|d| d.supports_show_like_before_in()).verified_stmt(stmt);
         all_dialects_where(|d| !d.supports_show_like_before_in()).verified_stmt(stmt);
@@ -16228,8 +16259,35 @@ fn test_select_from_first() {
             pipe_operators: vec![],
         };
         assert_eq!(expected, ast);
-        assert_eq!(ast.to_string(), q);
     }
+}
+
+#[test]
+fn test_select_from_first_with_cte() {
+    let dialects = all_dialects_where(|d| d.supports_from_first_select());
+    let q = "WITH test AS (FROM t SELECT a) FROM test SELECT 1";
+
+    let ast = dialects.verified_query(q);
+
+    let ast_select = ast.body.as_select().unwrap();
+
+    let expected_body_select_projection =
+        vec![SelectItem::UnnamedExpr(Expr::Value(ValueWithSpan {
+            value: test_utils::number("1"),
+            span: Span::empty(),
+        }))];
+
+    let expected_body_from = vec![TableWithJoins {
+        relation: table_from_name(ObjectName::from(vec![Ident {
+            value: "test".to_string(),
+            quote_style: None,
+            span: Span::empty(),
+        }])),
+        joins: vec![],
+    }];
+
+    assert_eq!(ast_select.projection, expected_body_select_projection);
+    assert_eq!(ast_select.from, expected_body_from);
 }
 
 #[test]
@@ -18158,7 +18216,7 @@ fn test_parse_semantic_view_table_factor() {
 
 #[test]
 fn parse_adjacent_string_literal_concatenation() {
-    let sql = r#"SELECT 'M' "y" 'S' "q" 'l'"#;
+    let sql = r#"SELECT 'M' 'y' 'S' 'q' 'l'"#;
     let dialects = all_dialects_where(|d| d.supports_string_literal_concatenation());
     dialects.one_statement_parses_to(sql, r"SELECT 'MySql'");
 

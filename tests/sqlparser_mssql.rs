@@ -106,7 +106,8 @@ fn parse_mssql_delimited_identifiers() {
                         &Some(TableAlias {
                             explicit: false,
                             name: Ident::with_quote('[', "WHERE"),
-                            columns: vec![]
+                            columns: vec![],
+                            at: None,
                         })
                     );
                 }

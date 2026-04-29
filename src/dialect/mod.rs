@@ -28,7 +28,9 @@ mod oracle;
 mod postgresql;
 mod redshift;
 mod snowflake;
+mod spark;
 mod sqlite;
+mod teradata;
 
 use core::any::{Any, TypeId};
 use core::fmt::Debug;
@@ -51,7 +53,9 @@ pub use self::postgresql::PostgreSqlDialect;
 pub use self::redshift::RedshiftSqlDialect;
 pub use self::snowflake::parse_snowflake_stage_name;
 pub use self::snowflake::SnowflakeDialect;
+pub use self::spark::SparkSqlDialect;
 pub use self::sqlite::SQLiteDialect;
+pub use self::teradata::TeradataDialect;
 
 /// Macro for streamlining the creation of derived `Dialect` objects.
 /// The generated struct includes `new()` and `default()` constructors.
@@ -342,6 +346,23 @@ pub trait Dialect: Debug + Any {
     ///
     /// [`ANSI`]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#array-aggregate-function
     fn supports_within_after_array_aggregation(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports `PARTITION BY` appearing after `ORDER BY`
+    /// in a `CREATE TABLE` statement (in addition to the standard placement before `ORDER BY`).
+    ///
+    /// ClickHouse DDL uses this ordering:
+    /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table#partition-by>
+    fn supports_partition_by_after_order_by(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports ClickHouse-style `ARRAY JOIN` / `LEFT ARRAY JOIN` /
+    /// `INNER ARRAY JOIN` syntax for unnesting arrays inline.
+    ///
+    /// <https://clickhouse.com/docs/en/sql-reference/statements/select/array-join>
+    fn supports_array_join_syntax(&self) -> bool {
         false
     }
 
@@ -655,6 +676,21 @@ pub trait Dialect: Debug + Any {
     /// SELECT *
     /// ```
     fn supports_from_first_select(&self) -> bool {
+        false
+    }
+
+    /// Return true if the dialect supports "FROM-first" inserts.
+    ///
+    /// Example:
+    /// ```sql
+    /// WITH cte AS (SELECT key FROM src)
+    /// FROM cte
+    /// INSERT OVERWRITE table my_table
+    /// SELECT *
+    ///
+    /// See <https://hive.apache.org/docs/latest/language/common-table-expression/>
+    /// ```
+    fn supports_from_first_insert(&self) -> bool {
         false
     }
 
@@ -1712,6 +1748,42 @@ pub trait Dialect: Debug + Any {
     fn supports_xml_expressions(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect supports `USING <format>` in `CREATE TABLE`.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE TABLE t (i INT) USING PARQUET
+    /// ```
+    ///
+    /// [Spark SQL](https://spark.apache.org/docs/latest/sql-ref-syntax-ddl-create-table-datasource.html)
+    fn supports_create_table_using(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect treats `LONG` as an alias for `BIGINT`.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE TABLE t (id LONG)
+    /// ```
+    ///
+    /// [Spark SQL](https://spark.apache.org/docs/latest/sql-ref-datatypes.html)
+    fn supports_long_type_as_bigint(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports `MAP<K, V>` angle-bracket syntax for the MAP data type.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE TABLE t (m MAP<STRING, INT>)
+    /// ```
+    ///
+    /// [Spark SQL](https://spark.apache.org/docs/latest/sql-ref-datatypes.html)
+    fn supports_map_literal_with_angle_brackets(&self) -> bool {
+        false
+    }
 }
 
 /// Operators for which precedence must be defined.
@@ -1786,7 +1858,9 @@ pub fn dialect_from_str(dialect_name: impl AsRef<str>) -> Option<Box<dyn Dialect
         "ansi" => Some(Box::new(AnsiDialect {})),
         "duckdb" => Some(Box::new(DuckDbDialect {})),
         "databricks" => Some(Box::new(DatabricksDialect {})),
+        "spark" | "sparksql" => Some(Box::new(SparkSqlDialect {})),
         "oracle" => Some(Box::new(OracleDialect {})),
+        "teradata" => Some(Box::new(TeradataDialect {})),
         _ => None,
     }
 }
@@ -1840,6 +1914,8 @@ mod tests {
         assert!(parse_dialect("DuckDb").is::<DuckDbDialect>());
         assert!(parse_dialect("DataBricks").is::<DatabricksDialect>());
         assert!(parse_dialect("databricks").is::<DatabricksDialect>());
+        assert!(parse_dialect("teradata").is::<TeradataDialect>());
+        assert!(parse_dialect("Teradata").is::<TeradataDialect>());
 
         // error cases
         assert!(dialect_from_str("Unknown").is_none());

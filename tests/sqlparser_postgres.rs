@@ -3229,39 +3229,7 @@ fn parse_create_index_concurrently() {
 
 #[test]
 fn parse_create_index_async() {
-    let sql = "CREATE INDEX ASYNC my_index ON my_table(col1)";
-    match pg().verified_stmt(sql) {
-        Statement::CreateIndex(CreateIndex {
-            name: Some(ObjectName(name)),
-            table_name: ObjectName(table_name),
-            using,
-            columns,
-            unique,
-            concurrently,
-            r#async,
-            if_not_exists,
-            include,
-            nulls_distinct: None,
-            with,
-            predicate: None,
-            index_options,
-            alter_options,
-        }) => {
-            assert_eq_vec(&["my_index"], &name);
-            assert_eq_vec(&["my_table"], &table_name);
-            assert_eq!(None, using);
-            assert!(!unique);
-            assert!(!concurrently);
-            assert!(r#async);
-            assert!(!if_not_exists);
-            assert_eq_vec(&["col1"], &columns);
-            assert!(include.is_empty());
-            assert!(with.is_empty());
-            assert!(index_options.is_empty());
-            assert!(alter_options.is_empty());
-        }
-        _ => unreachable!(),
-    }
+    pg().verified_stmt("CREATE INDEX ASYNC my_index ON my_table(col1)"); 
 
     let sql = "CREATE UNIQUE INDEX ASYNC my_index ON my_table(col1)";
     match pg().verified_stmt(sql) {

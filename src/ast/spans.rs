@@ -39,15 +39,15 @@ use super::{
     IfStatement, IlikeSelectItem, IndexColumn, Insert, Interpolate, InterpolateExpr, Join,
     JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
     MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
-    MergeInsertKind, MergeUpdateExpr, NamedParenthesizedList, NamedWindowDefinition, ObjectName,
-    ObjectNamePart, Offset, OnConflict, OnConflictAction, OnInsert, OpenStatement, OrderBy,
-    OrderByExpr, OrderByKind, OutputClause, Parens, Partition, PartitionBoundValue,
-    PivotValueSource, ProjectionSelect, Query, RaiseStatement, RaiseStatementValue,
-    ReferentialAction, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
-    SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias,
-    TableAliasColumnDef, TableConstraint, TableFactor, TableObject, TableOptionsClustered,
-    TableWithJoins, Update, UpdateTableFromKind, Use, Values, ViewColumnDef, WhileStatement,
-    WildcardAdditionalOptions, With, WithFill,
+    MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, NamedParenthesizedList,
+    NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
+    OnInsert, OpenStatement, OrderBy, OrderByExpr, OrderByKind, OutputClause, Parens, Partition,
+    PartitionBoundValue, PivotValueSource, ProjectionSelect, Query, RaiseStatement,
+    RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
+    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
+    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
+    TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Values, ViewColumnDef,
+    WhileStatement, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -2534,7 +2534,7 @@ impl Spanned for MergeInsertExpr {
                 self.kind_token.0.span,
                 match self.kind {
                     MergeInsertKind::Values(ref values) => values.span(),
-                    MergeInsertKind::Row => Span::empty(), // ~ covered by `kind_token`
+                    MergeInsertKind::Row | MergeInsertKind::Star => Span::empty(),
                 },
             ]
             .into_iter()
@@ -2546,9 +2546,13 @@ impl Spanned for MergeInsertExpr {
 
 impl Spanned for MergeUpdateExpr {
     fn span(&self) -> Span {
+        let kind_span = match &self.kind {
+            MergeUpdateKind::Set(assignments) => union_spans(assignments.iter().map(Spanned::span)),
+            MergeUpdateKind::Star => Span::empty(),
+        };
         union_spans(
             core::iter::once(self.update_token.0.span)
-                .chain(self.assignments.iter().map(Spanned::span))
+                .chain(core::iter::once(kind_span))
                 .chain(self.update_predicate.iter().map(Spanned::span))
                 .chain(self.delete_predicate.iter().map(Spanned::span)),
         )
@@ -2930,7 +2934,7 @@ WHERE id = 1
         );
         if let MergeAction::Update(MergeUpdateExpr {
             update_token,
-            assignments: _,
+            kind: _,
             update_predicate: _,
             delete_predicate: _,
         }) = &clauses[1].action

@@ -1181,6 +1181,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `UPDATE SET *` and `INSERT *`
+    /// shorthand syntax in `MERGE` statements.
+    /// <https://docs.databricks.com/en/sql/language-manual/delta-merge-into.html>
+    fn supports_merge_star_syntax(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports the `LISTEN`, `UNLISTEN` and `NOTIFY` statements
     fn supports_listen_notify(&self) -> bool {
         false

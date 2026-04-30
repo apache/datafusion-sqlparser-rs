@@ -312,4 +312,8 @@ impl Dialect for GenericDialect {
     fn supports_xml_expressions(&self) -> bool {
         true
     }
+
+    fn supports_merge_star_syntax(&self) -> bool {
+        true
+    }
 }

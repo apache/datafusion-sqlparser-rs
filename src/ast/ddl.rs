@@ -2113,8 +2113,7 @@ impl fmt::Display for ColumnOption {
                         GeneratedAs::ExpStored => "",
                     };
                     write!(f, "GENERATED {when} AS IDENTITY")?;
-                    if sequence_options.is_some() {
-                        let so = sequence_options.as_ref().unwrap();
+                    if let Some(so) = sequence_options {
                         if !so.is_empty() {
                             write!(f, " (")?;
                         }

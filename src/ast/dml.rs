@@ -656,7 +656,7 @@ pub enum MergeInsertKind {
     /// INSERT *
     /// ```
     /// [Databricks](https://docs.databricks.com/en/sql/language-manual/delta-merge-into.html)
-    Star,
+    Wildcard,
 }
 
 impl Display for MergeInsertKind {

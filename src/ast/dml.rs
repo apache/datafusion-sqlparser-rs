@@ -649,7 +649,7 @@ pub enum MergeInsertKind {
     /// ```
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
     Row,
-    /// The insert expression uses the `*` shorthand to insert all columns.
+    /// The insert expression uses the `*` wildcard to insert all columns.
     ///
     /// Example:
     /// ```sql
@@ -668,7 +668,7 @@ impl Display for MergeInsertKind {
             MergeInsertKind::Row => {
                 write!(f, "ROW")
             }
-            MergeInsertKind::Star => {
+            MergeInsertKind::Wildcard => {
                 write!(f, "*")
             }
         }
@@ -733,14 +733,14 @@ pub enum MergeUpdateKind {
     /// UPDATE SET quantity = source.quantity, name = source.name
     /// ```
     Set(Vec<Assignment>),
-    /// The `*` shorthand to update all columns from the source.
+    /// The `*` wildcard to update all columns from the source.
     ///
     /// Example:
     /// ```sql
     /// UPDATE SET *
     /// ```
     /// [Databricks](https://docs.databricks.com/en/sql/language-manual/delta-merge-into.html)
-    Star,
+    Wildcard,
 }
 
 impl Display for MergeUpdateKind {
@@ -749,7 +749,7 @@ impl Display for MergeUpdateKind {
             MergeUpdateKind::Set(assignments) => {
                 write!(f, "SET {}", display_comma_separated(assignments))
             }
-            MergeUpdateKind::Star => {
+            MergeUpdateKind::Wildcard => {
                 write!(f, "SET *")
             }
         }

@@ -108,9 +108,4 @@ impl Dialect for DatabricksDialect {
     fn supports_select_item_multi_column_alias(&self) -> bool {
         true
     }
-
-    /// See <https://docs.databricks.com/en/sql/language-manual/delta-merge-into.html>
-    fn supports_merge_star_syntax(&self) -> bool {
-        true
-    }
 }

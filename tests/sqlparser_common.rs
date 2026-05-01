@@ -10239,6 +10239,45 @@ WHEN NOT MATCHED THEN \
 INSERT (PLAYGROUND.FOO.ID, PLAYGROUND.FOO.NAME) \
 VALUES (1, 'abc')";
     all_dialects().verified_stmt(sql);
+
+    // MERGE with wildcard (UPDATE SET * and INSERT *)
+    let sql = "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN UPDATE SET * WHEN NOT MATCHED THEN INSERT *";
+    match verified_stmt(sql) {
+        Statement::Merge(merge) => {
+            assert_eq!(merge.clauses.len(), 2);
+
+            match &merge.clauses[0].action {
+                MergeAction::Update(update_expr) => {
+                    assert!(matches!(update_expr.kind, MergeUpdateKind::Wildcard));
+                }
+                _ => panic!("Expected UPDATE action"),
+            }
+
+            match &merge.clauses[1].action {
+                MergeAction::Insert(insert_expr) => {
+                    assert!(matches!(insert_expr.kind, MergeInsertKind::Wildcard));
+                    assert!(insert_expr.columns.is_empty());
+                }
+                _ => panic!("Expected INSERT action"),
+            }
+        }
+        _ => panic!("Expected MERGE statement"),
+    }
+
+    verified_stmt("MERGE INTO target USING source ON target.id = source.id WHEN MATCHED AND source.active = 1 THEN UPDATE SET *");
+
+    verified_stmt("MERGE INTO target USING source ON target.id = source.id WHEN NOT MATCHED BY TARGET THEN INSERT *");
+
+    verified_stmt("MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN UPDATE SET * WHEN NOT MATCHED THEN INSERT (a, b) VALUES (source.a, source.b)");
+
+    let sql = concat!(
+        "MERGE INTO t1 AS target ",
+        "USING (SELECT * FROM t2) AS source ",
+        "ON target.id = source.id ",
+        "WHEN MATCHED THEN UPDATE SET * ",
+        "WHEN NOT MATCHED THEN INSERT *"
+    );
+    verified_stmt(sql);
 }
 
 #[test]

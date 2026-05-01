@@ -121,10 +121,8 @@ impl Parser<'_> {
 
                     let update_token = self.get_current_token().clone();
                     self.expect_keyword_is(Keyword::SET)?;
-                    let kind = if self.dialect.supports_merge_star_syntax()
-                        && self.consume_token(&Token::Mul)
-                    {
-                        MergeUpdateKind::Star
+                    let kind = if self.consume_token(&Token::Mul) {
+                        MergeUpdateKind::Wildcard
                     } else {
                         MergeUpdateKind::Set(self.parse_comma_separated(Parser::parse_assignment)?)
                     };
@@ -175,14 +173,13 @@ impl Parser<'_> {
 
                     let insert_token = self.get_current_token().clone();
 
-                    if self.dialect.supports_merge_star_syntax() && self.consume_token(&Token::Mul)
-                    {
+                    if self.consume_token(&Token::Mul) {
                         let star_token = self.get_current_token().clone();
                         MergeAction::Insert(MergeInsertExpr {
                             insert_token: insert_token.into(),
                             columns: vec![],
                             kind_token: star_token.into(),
-                            kind: MergeInsertKind::Star,
+                            kind: MergeInsertKind::Wildcard,
                             insert_predicate: None,
                         })
                     } else {

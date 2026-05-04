@@ -39,15 +39,15 @@ use super::{
     IfStatement, IlikeSelectItem, IndexColumn, Insert, Interpolate, InterpolateExpr, Join,
     JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
     MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
-    MergeInsertKind, MergeUpdateExpr, NamedParenthesizedList, NamedWindowDefinition, ObjectName,
-    ObjectNamePart, Offset, OnConflict, OnConflictAction, OnInsert, OpenStatement, OrderBy,
-    OrderByExpr, OrderByKind, OutputClause, Partition, PartitionBoundValue, PivotValueSource,
-    ProjectionSelect, Query, RaiseStatement, RaiseStatementValue, ReferentialAction,
-    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
-    SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
-    TableConstraint, TableFactor, TableObject, TableOptionsClustered, TableWithJoins, Update,
-    UpdateTableFromKind, Use, Values, ViewColumnDef, WhileStatement, WildcardAdditionalOptions,
-    With, WithFill,
+    MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, NamedParenthesizedList,
+    NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
+    OnInsert, OpenStatement, OrderBy, OrderByExpr, OrderByKind, OutputClause, Parens, Partition,
+    PartitionBoundValue, PivotValueSource, ProjectionSelect, Query, RaiseStatement,
+    RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
+    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
+    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
+    TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Values, ViewColumnDef,
+    WhileStatement, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -103,6 +103,12 @@ pub trait Spanned {
 impl Spanned for TokenWithSpan {
     fn span(&self) -> Span {
         self.span
+    }
+}
+
+impl<T> Spanned for Parens<T> {
+    fn span(&self) -> Span {
+        self.opening_token.0.span.union(&self.closing_token.0.span)
     }
 }
 
@@ -239,10 +245,11 @@ impl Spanned for Values {
             rows,
         } = self;
 
-        union_spans(
-            rows.iter()
-                .map(|row| union_spans(row.iter().map(|expr| expr.span()))),
-        )
+        match &rows[..] {
+            [] => Span::empty(),
+            [f] => f.span(),
+            [f, .., l] => f.span().union(&l.span()),
+        }
     }
 }
 
@@ -264,6 +271,8 @@ impl Spanned for Values {
 /// - [Statement::DropSecret]
 /// - [Statement::Declare]
 /// - [Statement::CreateExtension]
+/// - [Statement::CreateCollation]
+/// - [Statement::AlterCollation]
 /// - [Statement::Fetch]
 /// - [Statement::Flush]
 /// - [Statement::Discard]
@@ -377,6 +386,7 @@ impl Spanned for Statement {
             Statement::CreateIndex(create_index) => create_index.span(),
             Statement::CreateRole(create_role) => create_role.span(),
             Statement::CreateExtension(create_extension) => create_extension.span(),
+            Statement::CreateCollation(create_collation) => create_collation.span(),
             Statement::DropExtension(drop_extension) => drop_extension.span(),
             Statement::DropOperator(drop_operator) => drop_operator.span(),
             Statement::DropOperatorFamily(drop_operator_family) => drop_operator_family.span(),
@@ -403,7 +413,9 @@ impl Spanned for Statement {
                     .chain(with_options.iter().map(|i| i.span())),
             ),
             // These statements need to be implemented
+            Statement::AlterFunction { .. } => Span::empty(),
             Statement::AlterType { .. } => Span::empty(),
+            Statement::AlterCollation { .. } => Span::empty(),
             Statement::AlterOperator { .. } => Span::empty(),
             Statement::AlterOperatorFamily { .. } => Span::empty(),
             Statement::AlterOperatorClass { .. } => Span::empty(),
@@ -473,7 +485,9 @@ impl Spanned for Statement {
             Statement::AlterConnector { .. } => Span::empty(),
             Statement::DropPolicy { .. } => Span::empty(),
             Statement::DropConnector { .. } => Span::empty(),
+            Statement::ShowCatalogs { .. } => Span::empty(),
             Statement::ShowDatabases { .. } => Span::empty(),
+            Statement::ShowProcessList { .. } => Span::empty(),
             Statement::ShowSchemas { .. } => Span::empty(),
             Statement::ShowObjects { .. } => Span::empty(),
             Statement::ShowViews { .. } => Span::empty(),
@@ -952,6 +966,7 @@ impl Spanned for Update {
             returning,
             output,
             or: _,
+            order_by,
             limit,
         } = self;
 
@@ -963,6 +978,7 @@ impl Spanned for Update {
                 .chain(selection.iter().map(|i| i.span()))
                 .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
                 .chain(output.iter().map(|i| i.span()))
+                .chain(order_by.iter().map(|i| i.span()))
                 .chain(limit.iter().map(|i| i.span())),
         )
     }
@@ -1821,6 +1837,9 @@ impl Spanned for SelectItem {
         match self {
             SelectItem::UnnamedExpr(expr) => expr.span(),
             SelectItem::ExprWithAlias { expr, alias } => expr.span().union(&alias.span),
+            SelectItem::ExprWithAliases { expr, aliases } => {
+                union_spans(iter::once(expr.span()).chain(aliases.iter().map(|i| i.span)))
+            }
             SelectItem::QualifiedWildcard(kind, wildcard_additional_options) => union_spans(
                 [kind.span()]
                     .into_iter()
@@ -1978,6 +1997,7 @@ impl Spanned for TableFactor {
                 lateral: _,
                 name,
                 args,
+                with_ordinality: _,
                 alias,
             } => union_spans(
                 name.0
@@ -2166,8 +2186,13 @@ impl Spanned for TableAlias {
             explicit: _,
             name,
             columns,
+            at,
         } = self;
-        union_spans(core::iter::once(name.span).chain(columns.iter().map(Spanned::span)))
+        union_spans(
+            core::iter::once(name.span)
+                .chain(columns.iter().map(Spanned::span))
+                .chain(at.iter().map(|at| at.span)),
+        )
     }
 }
 
@@ -2227,6 +2252,9 @@ impl Spanned for JoinOperator {
             JoinOperator::Anti(join_constraint) => join_constraint.span(),
             JoinOperator::Semi(join_constraint) => join_constraint.span(),
             JoinOperator::StraightJoin(join_constraint) => join_constraint.span(),
+            JoinOperator::ArrayJoin => Span::empty(),
+            JoinOperator::LeftArrayJoin => Span::empty(),
+            JoinOperator::InnerArrayJoin => Span::empty(),
         }
     }
 }
@@ -2506,7 +2534,7 @@ impl Spanned for MergeInsertExpr {
                 self.kind_token.0.span,
                 match self.kind {
                     MergeInsertKind::Values(ref values) => values.span(),
-                    MergeInsertKind::Row => Span::empty(), // ~ covered by `kind_token`
+                    MergeInsertKind::Row | MergeInsertKind::Wildcard => Span::empty(),
                 },
             ]
             .into_iter()
@@ -2518,9 +2546,13 @@ impl Spanned for MergeInsertExpr {
 
 impl Spanned for MergeUpdateExpr {
     fn span(&self) -> Span {
+        let kind_span = match &self.kind {
+            MergeUpdateKind::Set(assignments) => union_spans(assignments.iter().map(Spanned::span)),
+            MergeUpdateKind::Wildcard => Span::empty(),
+        };
         union_spans(
             core::iter::once(self.update_token.0.span)
-                .chain(self.assignments.iter().map(Spanned::span))
+                .chain(core::iter::once(kind_span))
                 .chain(self.update_predicate.iter().map(Spanned::span))
                 .chain(self.delete_predicate.iter().map(Spanned::span)),
         )
@@ -2902,7 +2934,7 @@ WHERE id = 1
         );
         if let MergeAction::Update(MergeUpdateExpr {
             update_token,
-            assignments: _,
+            kind: _,
             update_predicate: _,
             delete_predicate: _,
         }) = &clauses[1].action

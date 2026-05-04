@@ -311,7 +311,23 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_select_wildcard_with_alias(&self) -> bool {
+        true
+    }
+
     fn supports_comma_separated_trim(&self) -> bool {
+        true
+    }
+
+    fn supports_xml_expressions(&self) -> bool {
+        true
+    }
+
+    /// Postgres supports query optimizer hints via the `pg_hint_plan` extension,
+    /// using the same comment-prefixed-with-`+` syntax as MySQL and Oracle.
+    ///
+    /// See <https://github.com/ossc-db/pg_hint_plan>
+    fn supports_comment_optimizer_hint(&self) -> bool {
         true
     }
 }

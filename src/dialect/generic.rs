@@ -45,6 +45,14 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_partition_by_after_order_by(&self) -> bool {
+        true
+    }
+
+    fn supports_array_join_syntax(&self) -> bool {
+        true
+    }
+
     fn supports_group_by_expr(&self) -> bool {
         true
     }
@@ -130,6 +138,10 @@ impl Dialect for GenericDialect {
     }
 
     fn supports_limit_comma(&self) -> bool {
+        true
+    }
+
+    fn supports_update_order_by(&self) -> bool {
         true
     }
 
@@ -286,6 +298,18 @@ impl Dialect for GenericDialect {
     }
 
     fn supports_comma_separated_trim(&self) -> bool {
+        true
+    }
+
+    fn supports_cte_without_as(&self) -> bool {
+        true
+    }
+
+    fn supports_select_item_multi_column_alias(&self) -> bool {
+        true
+    }
+
+    fn supports_xml_expressions(&self) -> bool {
         true
     }
 }

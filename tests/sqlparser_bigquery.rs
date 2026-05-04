@@ -1821,13 +1821,16 @@ fn parse_merge() {
         kind: MergeInsertKind::Values(Values {
             value_keyword: false,
             explicit_row: false,
-            rows: vec![vec![Expr::value(number("1")), Expr::value(number("2"))]],
+            rows: vec![Parens::with_empty_span(vec![
+                Expr::value(number("1")),
+                Expr::value(number("2")),
+            ])],
         }),
         insert_predicate: None,
     });
     let update_action = MergeAction::Update(MergeUpdateExpr {
         update_token: AttachedToken::empty(),
-        assignments: vec![
+        kind: MergeUpdateKind::Set(vec![
             Assignment {
                 target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new("a")])),
                 value: Expr::value(number("1")),
@@ -1836,7 +1839,7 @@ fn parse_merge() {
                 target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new("b")])),
                 value: Expr::value(number("2")),
             },
-        ],
+        ]),
         update_predicate: None,
         delete_predicate: None,
     });
@@ -2003,10 +2006,10 @@ fn parse_merge() {
                             kind: MergeInsertKind::Values(Values {
                                 value_keyword: false,
                                 explicit_row: false,
-                                rows: vec![vec![
+                                rows: vec![Parens::with_empty_span(vec![
                                     Expr::value(number("1")),
                                     Expr::Identifier(Ident::new("DEFAULT")),
-                                ]]
+                                ])]
                             }),
                             insert_predicate: None,
                         })
@@ -2022,10 +2025,10 @@ fn parse_merge() {
                             kind: MergeInsertKind::Values(Values {
                                 value_keyword: false,
                                 explicit_row: false,
-                                rows: vec![vec![
+                                rows: vec![Parens::with_empty_span(vec![
                                     Expr::value(number("1")),
                                     Expr::Identifier(Ident::new("DEFAULT")),
-                                ]]
+                                ])]
                             }),
                             insert_predicate: None,
                         })

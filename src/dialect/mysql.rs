@@ -179,6 +179,11 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    /// See: <https://dev.mysql.com/doc/refman/8.4/en/update.html>
+    fn supports_update_order_by(&self) -> bool {
+        true
+    }
+
     fn supports_data_type_signed_suffix(&self) -> bool {
         true
     }

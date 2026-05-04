@@ -65,6 +65,12 @@ impl Dialect for MsSqlDialect {
         true
     }
 
+    /// SQL Server supports `$` as a prefix for money literals
+    /// <https://learn.microsoft.com/en-us/sql/t-sql/data-types/constants-transact-sql?view=sql-server-ver17#money-constants>
+    fn supports_dollar_as_money_prefix(&self) -> bool {
+        true
+    }
+
     fn supports_connect_by(&self) -> bool {
         true
     }

@@ -6,3 +6,4 @@ dev/release/rat_exclude_files.txt
 sqlparser_bench/img/flamegraph.svg
 **Cargo.lock
 filtered_rat.txt
+AGENTS.md

@@ -39,6 +39,10 @@ impl Dialect for DatabricksDialect {
         matches!(ch, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_')
     }
 
+    fn supports_numeric_prefix(&self) -> bool {
+        true
+    }
+
     fn supports_filter_during_aggregation(&self) -> bool {
         true
     }
@@ -88,6 +92,20 @@ impl Dialect for DatabricksDialect {
 
     /// See <https://docs.databricks.com/en/sql/language-manual/delta-optimize.html>
     fn supports_optimize_table(&self) -> bool {
+        true
+    }
+
+    /// See <https://docs.databricks.com/aws/en/sql/language-manual/functions/bangsign>
+    fn supports_bang_not_operator(&self) -> bool {
+        true
+    }
+
+    /// See <https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-select-cte>
+    fn supports_cte_without_as(&self) -> bool {
+        true
+    }
+
+    fn supports_select_item_multi_column_alias(&self) -> bool {
         true
     }
 }

@@ -193,6 +193,7 @@ define_keywords!(
     CASES,
     CAST,
     CATALOG,
+    CATALOGS,
     CATALOG_SYNC,
     CATALOG_SYNC_NAMESPACE_FLATTEN_DELIMITER,
     CATALOG_SYNC_NAMESPACE_MODE,
@@ -259,6 +260,7 @@ define_keywords!(
     COPY_OPTIONS,
     CORR,
     CORRESPONDING,
+    COST,
     COUNT,
     COVAR_POP,
     COVAR_SAMP,
@@ -324,6 +326,7 @@ define_keywords!(
     DELTA,
     DENSE_RANK,
     DENY,
+    DEPENDS,
     DEREF,
     DESC,
     DESCRIBE,
@@ -810,6 +813,7 @@ define_keywords!(
     PRIOR,
     PRIVILEGES,
     PROCEDURE,
+    PROCESSLIST,
     PROFILE,
     PROGRAM,
     PROJECTION,
@@ -1135,6 +1139,7 @@ define_keywords!(
     VARCHAR2,
     VARIABLE,
     VARIABLES,
+    VARIADIC,
     VARYING,
     VAR_POP,
     VAR_SAMP,
@@ -1231,6 +1236,8 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::FOR,
     // for MYSQL PARTITION SELECTION
     Keyword::PARTITION,
+    // for Clickhouse ARRAY JOIN (ARRAY must not be parsed as a table alias)
+    Keyword::ARRAY,
     // for Clickhouse PREWHERE
     Keyword::PREWHERE,
     Keyword::SETTINGS,

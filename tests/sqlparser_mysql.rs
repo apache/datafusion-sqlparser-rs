@@ -2813,7 +2813,7 @@ fn parse_update_with_order_by() {
                         span: Span::empty(),
                     }),
                     options: OrderByOptions {
-                        asc: Some(true),
+                        sort: Some(OrderBySort::Asc),
                         nulls_first: None,
                     },
                     with_fill: None,
@@ -2840,7 +2840,7 @@ fn parse_update_with_order_by_and_limit() {
                         span: Span::empty(),
                     }),
                     options: OrderByOptions {
-                        asc: Some(true),
+                        sort: Some(OrderBySort::Asc),
                         nulls_first: None,
                     },
                     with_fill: None,

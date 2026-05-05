@@ -1830,7 +1830,7 @@ fn parse_merge() {
     });
     let update_action = MergeAction::Update(MergeUpdateExpr {
         update_token: AttachedToken::empty(),
-        assignments: vec![
+        kind: MergeUpdateKind::Set(vec![
             Assignment {
                 target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new("a")])),
                 value: Expr::value(number("1")),
@@ -1839,7 +1839,7 @@ fn parse_merge() {
                 target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new("b")])),
                 value: Expr::value(number("2")),
             },
-        ],
+        ]),
         update_predicate: None,
         delete_predicate: None,
     });

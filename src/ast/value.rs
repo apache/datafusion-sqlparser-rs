@@ -708,3 +708,12 @@ impl fmt::Display for TrimWhereField {
         })
     }
 }
+
+#[cfg(test)]
+#[test]
+fn test_escape_quoted_string_with_multibyte_quote_char() {
+    assert_eq!(
+        format!("{}", escape_quoted_string("a🦀b🦀c", '🦀')),
+        "a🦀🦀b🦀🦀c"
+    );
+}

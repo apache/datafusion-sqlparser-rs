@@ -2204,7 +2204,7 @@ fn parse_big_query_declare() {
 }
 
 #[test]
-fn parse_bigquery_create_external_table_with_connection_and_options() {
+fn parse_bigquery_create_external_table_with_connection() {
     bigquery().one_statement_parses_to(
         concat!(
             "CREATE OR REPLACE EXTERNAL TABLE `proj.ds.tbl` ",
@@ -2217,10 +2217,6 @@ fn parse_bigquery_create_external_table_with_connection_and_options() {
             r#"OPTIONS(format = "ICEBERG", uris = ["gs://b/m.json"])"#,
         ),
     );
-}
-
-#[test]
-fn parse_bigquery_create_external_table_with_connection_variants() {
     bigquery().one_statement_parses_to(
         "CREATE EXTERNAL TABLE t WITH CONNECTION c",
         "CREATE EXTERNAL TABLE t () WITH CONNECTION c",

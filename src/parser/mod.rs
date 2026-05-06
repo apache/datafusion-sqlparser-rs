@@ -674,7 +674,7 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     self.parse_throw().map(Into::into)
                 }
-                Keyword::ROLLBACK => self.parse_rollback(),
+                Keyword::ROLLBACK | Keyword::ABORT => self.parse_rollback(),
                 Keyword::ASSERT => self.parse_assert(),
                 // `PREPARE`, `EXECUTE` and `DEALLOCATE` are Postgres-specific
                 // syntaxes. They are used for Postgres prepared statement.

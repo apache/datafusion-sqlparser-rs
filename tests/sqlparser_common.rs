@@ -9476,6 +9476,22 @@ fn parse_rollback() {
 }
 
 #[test]
+fn parse_abort() {
+    one_statement_parses_to("ABORT", "ROLLBACK");
+    one_statement_parses_to("ABORT TRANSACTION", "ROLLBACK");
+    one_statement_parses_to("ABORT WORK", "ROLLBACK");
+    one_statement_parses_to("ABORT AND CHAIN", "ROLLBACK AND CHAIN");
+    one_statement_parses_to("ABORT AND NO CHAIN", "ROLLBACK");
+    one_statement_parses_to("ABORT TRANSACTION AND CHAIN", "ROLLBACK AND CHAIN");
+    one_statement_parses_to("ABORT WORK AND NO CHAIN", "ROLLBACK");
+    one_statement_parses_to("ABORT TO test1", "ROLLBACK TO SAVEPOINT test1");
+    one_statement_parses_to(
+        "ABORT AND CHAIN TO test1",
+        "ROLLBACK AND CHAIN TO SAVEPOINT test1",
+    );
+}
+
+#[test]
 #[should_panic(expected = "Parse results with GenericDialect are different from PostgreSqlDialect")]
 fn ensure_multiple_dialects_are_tested() {
     // The SQL here must be parsed differently by different dialects.

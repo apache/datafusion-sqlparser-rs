@@ -754,8 +754,9 @@ pub struct With {
     pub with_token: AttachedToken,
     /// Whether the `WITH` is recursive (`WITH RECURSIVE`).
     pub recursive: bool,
-    /// The list of CTEs declared by this `WITH` clause.
-    pub cte_tables: Vec<Cte>,
+    /// The items declared by this `WITH` clause: traditional CTEs and,
+    /// for dialects that support it, named expressions.
+    pub items: Vec<WithItem>,
 }
 
 impl fmt::Display for With {
@@ -764,8 +765,38 @@ impl fmt::Display for With {
         if self.recursive {
             f.write_str("RECURSIVE ")?;
         }
-        display_comma_separated(&self.cte_tables).fmt(f)?;
+        display_comma_separated(&self.items).fmt(f)?;
         Ok(())
+    }
+}
+
+/// A single item in a `WITH` clause.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum WithItem {
+    /// A traditional common table expression: `name [(cols)] AS [MATERIALIZED] (query)`.
+    Cte(Cte),
+    /// `<expr> AS <alias>` — binds an expression (literal, scalar subquery,
+    /// lambda, …) to a name visible in the surrounding query.
+    ///
+    /// See ClickHouse's [common scalar expressions][1].
+    ///
+    /// [1]: https://clickhouse.com/docs/sql-reference/statements/select/with#common-scalar-expressions
+    Named {
+        /// The expression bound to the alias.
+        expr: Expr,
+        /// The name the expression is bound to.
+        alias: Ident,
+    },
+}
+
+impl fmt::Display for WithItem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            WithItem::Cte(cte) => cte.fmt(f),
+            WithItem::Named { expr, alias } => write!(f, "{expr} AS {alias}"),
+        }
     }
 }
 

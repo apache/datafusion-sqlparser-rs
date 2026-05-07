@@ -14105,7 +14105,7 @@ impl<'a> Parser<'a> {
             Some(With {
                 with_token: with_token.clone().into(),
                 recursive: self.parse_keyword(Keyword::RECURSIVE),
-                cte_tables: self.parse_comma_separated(Parser::parse_cte)?,
+                items: self.parse_comma_separated(Parser::parse_with_item)?,
             })
         } else {
             None
@@ -14637,6 +14637,33 @@ impl<'a> Parser<'a> {
             cte.from = Some(self.parse_identifier()?);
         }
         Ok(cte)
+    }
+
+    /// Parse a single item in a `WITH` clause.
+    ///
+    /// In standard SQL this is always a CTE (`name [(cols)] AS (query)`).
+    /// Dialects that enable [`Dialect::supports_with_clause_scalar_expression`]
+    /// — currently only ClickHouse — also accept the reversed form
+    /// `<expression> AS <identifier>`, which can be freely interleaved with
+    /// CTEs in the same comma-separated list.
+    pub fn parse_with_item(&mut self) -> Result<WithItem, ParserError> {
+        if !self.dialect.supports_with_clause_scalar_expression() {
+            return self.parse_cte().map(WithItem::Cte);
+        }
+
+        // CTE form must start with an identifier. If the leading token
+        // can't begin one (e.g. `42`, `(SELECT …)`, `(x, y) -> …`), this
+        // is unambiguously the named-expression form.
+        if matches!(self.peek_token().token, Token::Word(_)) {
+            if let Some(cte) = self.maybe_parse(|p| p.parse_cte())? {
+                return Ok(WithItem::Cte(cte));
+            }
+        }
+
+        let expr = self.parse_expr()?;
+        self.expect_keyword(Keyword::AS)?;
+        let alias = self.parse_identifier()?;
+        Ok(WithItem::Named { expr, alias })
     }
 
     /// Parse a "query body", which is an expression with roughly the

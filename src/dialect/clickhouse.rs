@@ -153,4 +153,9 @@ impl Dialect for ClickHouseDialect {
     fn supports_comma_separated_trim(&self) -> bool {
         true
     }
+
+    /// See <https://clickhouse.com/docs/sql-reference/statements/select/with#common-scalar-expressions>
+    fn supports_with_clause_scalar_expression(&self) -> bool {
+        true
+    }
 }

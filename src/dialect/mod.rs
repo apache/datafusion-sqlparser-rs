@@ -1745,6 +1745,21 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect allows a `WITH` clause item to bind a
+    /// scalar (or otherwise non-CTE) expression to a name, with the form
+    /// `<expression> AS <identifier>` — alongside or instead of the
+    /// traditional `<identifier> AS (<subquery>)` CTE form.
+    ///
+    /// For example, in ClickHouse:
+    /// ```sql
+    /// WITH 42 AS answer SELECT answer FROM t
+    /// ```
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/sql-reference/statements/select/with#common-scalar-expressions)
+    fn supports_with_clause_scalar_expression(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports parenthesized multi-column
     /// aliases in SELECT items. For example:
     /// ```sql

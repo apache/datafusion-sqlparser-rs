@@ -108,7 +108,7 @@ pub use self::query::{
     TableSampleKind, TableSampleMethod, TableSampleModifier, TableSampleQuantity, TableSampleSeed,
     TableSampleSeedModifier, TableSampleUnit, TableVersion, TableWithJoins, Top, TopQuantity,
     UpdateTableFromKind, ValueTableMode, Values, WildcardAdditionalOptions, With, WithFill,
-    XmlNamespaceDefinition, XmlPassingArgument, XmlPassingClause, XmlTableColumn,
+    WithItem, XmlNamespaceDefinition, XmlPassingArgument, XmlPassingClause, XmlTableColumn,
     XmlTableColumnOption,
 };
 

@@ -1845,6 +1845,70 @@ fn parse_inner_array_join() {
     }
 }
 
+#[test]
+fn parse_with_clause_named_expression() {
+    // Plain literal scalar.
+    clickhouse().verified_stmt("WITH 42 AS answer SELECT answer FROM t");
+
+    // String literal scalar from the ClickHouse docs.
+    clickhouse().verified_stmt(
+        "WITH '2019-08-01 15:23:00' AS ts_upper_bound SELECT * FROM hits \
+         WHERE EventDate = toDate(ts_upper_bound) AND EventTime <= ts_upper_bound",
+    );
+
+    // Aggregate function call as a named expression.
+    clickhouse().verified_stmt(
+        "WITH sum(bytes) AS s SELECT formatReadableSize(s), \"table\" \
+         FROM system.parts GROUP BY \"table\" ORDER BY s",
+    );
+
+    // Scalar subquery as the bound expression.
+    clickhouse().verified_stmt(
+        "WITH (SELECT sum(bytes) FROM system.parts WHERE active) AS total_disk_usage \
+         SELECT (sum(bytes) / total_disk_usage) * 100 AS table_disk_usage, \"table\" \
+         FROM system.parts GROUP BY \"table\" ORDER BY table_disk_usage DESC LIMIT 10",
+    );
+
+    // Bare-identifier scalar — disambiguation case (`name AS alias` looks like
+    // a CTE prefix but the missing `(` after `AS` makes it a named expression).
+    clickhouse().verified_stmt("WITH user_id AS uid SELECT uid FROM t");
+
+    // Mixing a named expression with a real CTE in the same WITH list.
+    clickhouse().verified_stmt("WITH 1 AS one, cte AS (SELECT 1) SELECT one FROM cte");
+
+    // Lambda as the bound expression (also taken from the docs).
+    clickhouse().verified_stmt(
+        "WITH '.txt' AS extension, (id, extension) -> concat(lower(id), extension) AS gen_name \
+         SELECT gen_name('test', '.sql') AS file_name",
+    );
+}
+
+#[test]
+fn parse_with_clause_named_expression_ast() {
+    let query = clickhouse().verified_query("WITH 42 AS answer SELECT answer FROM t");
+    let with = query.with.as_ref().unwrap();
+    assert!(!with.recursive);
+    assert_eq!(with.items.len(), 1);
+    match &with.items[0] {
+        WithItem::Named { expr, alias } => {
+            assert_eq!(alias.value, "answer");
+            assert!(matches!(expr, Expr::Value(_)));
+        }
+        other => panic!("expected a named expression, got {other:?}"),
+    }
+}
+
+#[test]
+fn parse_with_clause_named_expression_unsupported_in_other_dialects() {
+    // The named-expression form is only enabled for ClickHouse; other
+    // dialects should still reject `WITH 42 AS answer …`.
+    let res = sqlparser::parser::Parser::parse_sql(
+        &GenericDialect {},
+        "WITH 42 AS answer SELECT answer FROM t",
+    );
+    assert!(res.is_err(), "expected parse error, got {res:?}");
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects::new(vec![Box::new(ClickHouseDialect {})])
 }

@@ -5240,15 +5240,13 @@ impl<'a> Parser<'a> {
             self.parse_create_text_search().map(Into::into)
         } else if self.peek_keywords(&[Keyword::UNLOGGED, Keyword::TABLE]) {
             self.expect_keywords(&[Keyword::UNLOGGED, Keyword::TABLE])?;
-            self.parse_create_table(
-                or_replace, temporary, true, global, transient, volatile, multiset,
-            )
-            .map(Into::into)
+            let mut create_table = self
+                .parse_create_table(or_replace, temporary, global, transient, volatile, multiset)?;
+            create_table.unlogged = true;
+            Ok(create_table.into())
         } else if self.parse_keyword(Keyword::TABLE) {
-            self.parse_create_table(
-                or_replace, temporary, false, global, transient, volatile, multiset,
-            )
-            .map(Into::into)
+            self.parse_create_table(or_replace, temporary, global, transient, volatile, multiset)
+                .map(Into::into)
         } else if self.peek_keyword(Keyword::MATERIALIZED)
             || self.peek_keyword(Keyword::VIEW)
             || self.peek_keywords(&[Keyword::SECURE, Keyword::MATERIALIZED, Keyword::VIEW])
@@ -8661,7 +8659,6 @@ impl<'a> Parser<'a> {
         &mut self,
         or_replace: bool,
         temporary: bool,
-        unlogged: bool,
         global: Option<bool>,
         transient: bool,
         volatile: bool,
@@ -8843,7 +8840,7 @@ impl<'a> Parser<'a> {
 
         Ok(CreateTableBuilder::new(table_name)
             .temporary(temporary)
-            .unlogged(unlogged)
+            .unlogged(false)
             .columns(columns)
             .constraints(constraints)
             .or_replace(or_replace)

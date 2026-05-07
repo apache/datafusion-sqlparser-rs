@@ -18890,3 +18890,27 @@ fn parse_non_pg_dialects_keep_xml_names_as_regular_identifiers() {
     let dialects = all_dialects_except(|d| d.supports_xml_expressions());
     dialects.verified_only_select("SELECT xml FROM t");
 }
+
+#[test]
+fn parse_unlogged_table_logging_controls_in_all_dialects() {
+    match all_dialects().verified_stmt("CREATE UNLOGGED TABLE t (a INT)") {
+        Statement::CreateTable(CreateTable { unlogged, .. }) => {
+            assert!(unlogged);
+        }
+        _ => unreachable!("Expected CREATE TABLE"),
+    }
+
+    match all_dialects().verified_stmt("ALTER TABLE t SET LOGGED") {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
+            assert_eq!(vec![AlterTableOperation::SetLogged], operations);
+        }
+        _ => unreachable!("Expected ALTER TABLE"),
+    }
+
+    match all_dialects().verified_stmt("ALTER TABLE t SET UNLOGGED") {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
+            assert_eq!(vec![AlterTableOperation::SetUnlogged], operations);
+        }
+        _ => unreachable!("Expected ALTER TABLE"),
+    }
+}

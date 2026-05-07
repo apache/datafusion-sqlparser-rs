@@ -8496,9 +8496,11 @@ fn parse_alter_function_and_aggregate() {
 }
 
 #[test]
-fn parse_create_and_alter_text_search() {
-    // CREATE — one per object type
-    pg_and_generic().verified_stmt("CREATE TEXT SEARCH DICTIONARY d (template = simple)");
+fn parse_create_text_search() {
+    // CREATE: one per object type
+    let stmt =
+        pg_and_generic().verified_stmt("CREATE TEXT SEARCH DICTIONARY d (template = simple)");
+    assert_eq!(Span::empty(), stmt.span());
     pg_and_generic().verified_stmt("CREATE TEXT SEARCH CONFIGURATION c (copy = english)");
     pg_and_generic().verified_stmt("CREATE TEXT SEARCH TEMPLATE t (lexize = dsimple_lexize)");
     pg_and_generic().verified_stmt(
@@ -8506,24 +8508,44 @@ fn parse_create_and_alter_text_search() {
     );
 
     // CREATE with quoted option key
-    pg_and_generic().verified_stmt("CREATE TEXT SEARCH TEMPLATE t (\"Init\" = init_function)");
-
-    // ALTER — one test per object type arm, one per operation kind
-    pg_and_generic().verified_stmt("ALTER TEXT SEARCH DICTIONARY d (opt = val)");
-    pg_and_generic().verified_stmt("ALTER TEXT SEARCH DICTIONARY d (opt)");
-    pg_and_generic().verified_stmt("ALTER TEXT SEARCH CONFIGURATION c OWNER TO some_user");
-    pg_and_generic().verified_stmt("ALTER TEXT SEARCH TEMPLATE t SET SCHEMA s");
-    pg_and_generic().verified_stmt("ALTER TEXT SEARCH PARSER p RENAME TO p2");
+    pg_and_generic().verified_stmt(r#"CREATE TEXT SEARCH TEMPLATE t ("Init" = init_function)"#);
 
     // Object type must be an unquoted keyword-like token in this position.
     assert!(pg()
-        .parse_sql_statements("CREATE TEXT SEARCH \"DICTIONARY\" d (template = simple)")
+        .parse_sql_statements(r#"CREATE TEXT SEARCH "DICTIONARY" d (template = simple)"#)
         .is_err());
 
     // CREATE options are key-value pairs in PostgreSQL syntax.
     assert!(pg()
         .parse_sql_statements("CREATE TEXT SEARCH DICTIONARY d (template)")
         .is_err());
+}
+
+#[test]
+fn parse_alter_text_search() {
+    // One test per operation kind.
+    let stmt = pg_and_generic().verified_stmt("ALTER TEXT SEARCH DICTIONARY d (opt = val)");
+    assert_eq!(Span::empty(), stmt.span());
+    if let Statement::AlterTextSearch(alter_text_search) = stmt {
+        assert_eq!(Span::empty(), alter_text_search.span());
+    } else {
+        unreachable!("expected ALTER TEXT SEARCH statement");
+    }
+    pg_and_generic().verified_stmt("ALTER TEXT SEARCH DICTIONARY d (opt)");
+    pg_and_generic().verified_stmt("ALTER TEXT SEARCH CONFIGURATION c OWNER TO some_user");
+    pg_and_generic().verified_stmt("ALTER TEXT SEARCH TEMPLATE t SET SCHEMA s");
+    pg_and_generic().verified_stmt("ALTER TEXT SEARCH PARSER p RENAME TO p2");
+
+    // The parser accepts text search operations permissively across object types.
+    pg_and_generic().verified_stmt("ALTER TEXT SEARCH TEMPLATE t OWNER TO some_user");
+    pg_and_generic().verified_stmt("ALTER TEXT SEARCH PARSER p (opt = val)");
+
+    let err = pg()
+        .parse_sql_statements("ALTER TEXT SEARCH DICTIONARY d RESET foo")
+        .unwrap_err();
+    assert!(err
+        .to_string()
+        .contains("RENAME TO, OWNER TO, SET SCHEMA, or (...) after ALTER TEXT SEARCH"));
 }
 
 #[test]

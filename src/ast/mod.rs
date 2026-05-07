@@ -65,12 +65,12 @@ pub use self::ddl::{
     AlterIndexOperation, AlterOperator, AlterOperatorClass, AlterOperatorClassOperation,
     AlterOperatorFamily, AlterOperatorFamilyOperation, AlterOperatorOperation, AlterPolicy,
     AlterPolicyOperation, AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm,
-    AlterTableLock, AlterTableOperation, AlterTableType, AlterTextSearch,
-    AlterTextSearchDictionaryOption, AlterTextSearchOperation, AlterType, AlterTypeAddValue,
-    AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
-    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy,
-    ColumnPolicyProperty, ConstraintCharacteristics, CreateCollation, CreateCollationDefinition,
-    CreateConnector, CreateDomain, CreateExtension, CreateFunction, CreateIndex, CreateOperator,
+    AlterTableLock, AlterTableOperation, AlterTableType, AlterTextSearch, AlterTextSearchOperation,
+    AlterTextSearchOption, AlterType, AlterTypeAddValue, AlterTypeAddValuePosition,
+    AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue, ClusteredBy, ColumnDef,
+    ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy, ColumnPolicyProperty,
+    ConstraintCharacteristics, CreateCollation, CreateCollationDefinition, CreateConnector,
+    CreateDomain, CreateExtension, CreateFunction, CreateIndex, CreateOperator,
     CreateOperatorClass, CreateOperatorFamily, CreatePolicy, CreatePolicyCommand, CreatePolicyType,
     CreateTable, CreateTextSearch, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
     DistStyle, DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass,
@@ -3757,9 +3757,8 @@ pub enum Statement {
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createopclass.html)
     CreateOperatorClass(CreateOperatorClass),
-    /// ```sql
-    /// CREATE TEXT SEARCH { DICTIONARY | CONFIGURATION | TEMPLATE | PARSER }
-    /// ```
+    /// A `CREATE TEXT SEARCH` statement.
+    ///
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/textsearch-intro.html)
     CreateTextSearch(CreateTextSearch),
     /// ```sql
@@ -3826,9 +3825,8 @@ pub enum Statement {
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-alteropclass.html)
     AlterOperatorClass(AlterOperatorClass),
-    /// ```sql
-    /// ALTER TEXT SEARCH { DICTIONARY | CONFIGURATION | TEMPLATE | PARSER }
-    /// ```
+    /// An `ALTER TEXT SEARCH` statement.
+    ///
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/textsearch-configuration.html)
     AlterTextSearch(AlterTextSearch),
     /// ```sql

@@ -5627,7 +5627,9 @@ impl Spanned for AlterFunction {
     }
 }
 
-/// PostgreSQL text search object kind.
+/// Text search object kind.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/textsearch-intro.html).
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -5653,7 +5655,9 @@ impl fmt::Display for TextSearchObjectType {
     }
 }
 
-/// PostgreSQL `CREATE TEXT SEARCH ...` statement.
+/// `CREATE TEXT SEARCH ...` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtsdictionary.html).
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -5684,18 +5688,20 @@ impl Spanned for CreateTextSearch {
     }
 }
 
-/// Option assignment used by `ALTER TEXT SEARCH DICTIONARY ... ( ... )`.
+/// Option assignment used by `ALTER TEXT SEARCH ... ( ... )`.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertsdictionary.html).
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct AlterTextSearchDictionaryOption {
+pub struct AlterTextSearchOption {
     /// Option name.
     pub key: Ident,
     /// Optional value (`option [= value]`).
     pub value: Option<Expr>,
 }
 
-impl fmt::Display for AlterTextSearchDictionaryOption {
+impl fmt::Display for AlterTextSearchOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.value {
             Some(value) => write!(f, "{} = {}", self.key, value),
@@ -5704,7 +5710,9 @@ impl fmt::Display for AlterTextSearchDictionaryOption {
     }
 }
 
-/// Operation for PostgreSQL `ALTER TEXT SEARCH ...`.
+/// Operation for `ALTER TEXT SEARCH ...`.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertsdictionary.html).
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -5723,8 +5731,8 @@ pub enum AlterTextSearchOperation {
     },
     /// `( option [= value] [, ...] )`
     SetOptions {
-        /// Dictionary options to apply.
-        options: Vec<AlterTextSearchDictionaryOption>,
+        /// Text search options to apply.
+        options: Vec<AlterTextSearchOption>,
     },
 }
 
@@ -5743,7 +5751,9 @@ impl fmt::Display for AlterTextSearchOperation {
     }
 }
 
-/// PostgreSQL `ALTER TEXT SEARCH ...` statement.
+/// `ALTER TEXT SEARCH ...` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertsdictionary.html).
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

@@ -5232,14 +5232,13 @@ impl<'a> Parser<'a> {
             Keyword::CONFIGURATION => Ok(TextSearchObjectType::Configuration),
             Keyword::TEMPLATE => Ok(TextSearchObjectType::Template),
             Keyword::PARSER => Ok(TextSearchObjectType::Parser),
-            // unreachable because expect_one_of_keywords used above
             unexpected_keyword => Err(ParserError::ParserError(format!(
                 "Internal parser error: expected any of {{DICTIONARY, CONFIGURATION, TEMPLATE, PARSER}}, got {unexpected_keyword:?}"
             ))),
         }
     }
 
-    /// Parse a PostgreSQL `CREATE TEXT SEARCH ...` statement.
+    /// Parse a `CREATE TEXT SEARCH ...` statement.
     pub fn parse_create_text_search(&mut self) -> Result<CreateTextSearch, ParserError> {
         self.expect_keywords(&[Keyword::TEXT, Keyword::SEARCH])?;
         let object_type = self.parse_text_search_object_type()?;
@@ -5254,98 +5253,39 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_alter_text_search_dictionary_option(
-        &mut self,
-    ) -> Result<AlterTextSearchDictionaryOption, ParserError> {
+    fn parse_alter_text_search_option(&mut self) -> Result<AlterTextSearchOption, ParserError> {
         let key = self.parse_identifier()?;
         let value = if self.consume_token(&Token::Eq) {
             Some(self.parse_expr()?)
         } else {
             None
         };
-        Ok(AlterTextSearchDictionaryOption { key, value })
+        Ok(AlterTextSearchOption { key, value })
     }
 
-    /// Parse a PostgreSQL `ALTER TEXT SEARCH ...` statement.
+    /// Parse an `ALTER TEXT SEARCH ...` statement.
     pub fn parse_alter_text_search(&mut self) -> Result<AlterTextSearch, ParserError> {
         self.expect_keywords(&[Keyword::TEXT, Keyword::SEARCH])?;
         let object_type = self.parse_text_search_object_type()?;
         let name = self.parse_object_name(false)?;
 
-        let operation = match object_type {
-            TextSearchObjectType::Dictionary => {
-                if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
-                    AlterTextSearchOperation::RenameTo {
-                        new_name: self.parse_identifier()?,
-                    }
-                } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
-                    AlterTextSearchOperation::OwnerTo(self.parse_owner()?)
-                } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
-                    AlterTextSearchOperation::SetSchema {
-                        schema_name: self.parse_object_name(false)?,
-                    }
-                } else if self.consume_token(&Token::LParen) {
-                    let options = self
-                        .parse_comma_separated(Parser::parse_alter_text_search_dictionary_option)?;
-                    self.expect_token(&Token::RParen)?;
-                    AlterTextSearchOperation::SetOptions { options }
-                } else {
-                    return self.expected_ref(
-                        "RENAME TO, OWNER TO, SET SCHEMA, or (...) after ALTER TEXT SEARCH DICTIONARY",
-                        self.peek_token_ref(),
-                    );
-                }
+        let operation = if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            AlterTextSearchOperation::RenameTo {
+                new_name: self.parse_identifier()?,
             }
-            TextSearchObjectType::Configuration => {
-                if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
-                    AlterTextSearchOperation::RenameTo {
-                        new_name: self.parse_identifier()?,
-                    }
-                } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
-                    AlterTextSearchOperation::OwnerTo(self.parse_owner()?)
-                } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
-                    AlterTextSearchOperation::SetSchema {
-                        schema_name: self.parse_object_name(false)?,
-                    }
-                } else {
-                    return self.expected_ref(
-                        "RENAME TO, OWNER TO, or SET SCHEMA after ALTER TEXT SEARCH CONFIGURATION",
-                        self.peek_token_ref(),
-                    );
-                }
+        } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            AlterTextSearchOperation::OwnerTo(self.parse_owner()?)
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
+            AlterTextSearchOperation::SetSchema {
+                schema_name: self.parse_object_name(false)?,
             }
-            TextSearchObjectType::Template => {
-                if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
-                    AlterTextSearchOperation::RenameTo {
-                        new_name: self.parse_identifier()?,
-                    }
-                } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
-                    AlterTextSearchOperation::SetSchema {
-                        schema_name: self.parse_object_name(false)?,
-                    }
-                } else {
-                    return self.expected_ref(
-                        "RENAME TO or SET SCHEMA after ALTER TEXT SEARCH TEMPLATE",
-                        self.peek_token_ref(),
-                    );
-                }
-            }
-            TextSearchObjectType::Parser => {
-                if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
-                    AlterTextSearchOperation::RenameTo {
-                        new_name: self.parse_identifier()?,
-                    }
-                } else if self.parse_keywords(&[Keyword::SET, Keyword::SCHEMA]) {
-                    AlterTextSearchOperation::SetSchema {
-                        schema_name: self.parse_object_name(false)?,
-                    }
-                } else {
-                    return self.expected_ref(
-                        "RENAME TO or SET SCHEMA after ALTER TEXT SEARCH PARSER",
-                        self.peek_token_ref(),
-                    );
-                }
-            }
+        } else if self.consume_token(&Token::LParen) {
+            let options = self.parse_comma_separated(Parser::parse_alter_text_search_option)?;
+            self.expect_token(&Token::RParen)?;
+            AlterTextSearchOperation::SetOptions { options }
+        } else {
+            let expected = "RENAME TO, OWNER TO, SET SCHEMA, or (...) after ALTER TEXT SEARCH";
+            return self.expected_ref(expected, self.peek_token_ref());
         };
 
         Ok(AlterTextSearch {

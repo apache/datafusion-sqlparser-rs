@@ -2970,7 +2970,7 @@ fn parse_create_indices_with_operator_classes() {
                         within_group: vec![],
                     }),
                     options: OrderByOptions {
-                        asc: None,
+                        sort: None,
                         nulls_first: None,
                     },
                     with_fill: None,
@@ -3034,7 +3034,7 @@ fn parse_create_indices_with_operator_classes() {
                                     span: Span::empty()
                                 }),
                                 options: OrderByOptions {
-                                    asc: None,
+                                    sort: None,
                                     nulls_first: None,
                                 },
                                 with_fill: None,
@@ -6781,6 +6781,7 @@ fn parse_trigger_related_functions() {
             with_tags: None,
             base_location: None,
             external_volume: None,
+            with_connection: None,
             catalog: None,
             catalog_sync: None,
             storage_serialization_policy: None,
@@ -6795,6 +6796,9 @@ fn parse_trigger_related_functions() {
             distkey: None,
             sortkey: None,
             backup: None,
+            multiset: None,
+            fallback: None,
+            with_data: None,
         }
     );
 

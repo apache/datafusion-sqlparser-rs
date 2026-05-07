@@ -2203,6 +2203,31 @@ fn parse_big_query_declare() {
     );
 }
 
+#[test]
+fn parse_bigquery_create_external_table_with_connection() {
+    bigquery().one_statement_parses_to(
+        concat!(
+            "CREATE OR REPLACE EXTERNAL TABLE `proj.ds.tbl` ",
+            "WITH CONNECTION `projects/proj/locations/us/connections/c` ",
+            r#"OPTIONS(format = "ICEBERG", uris = ["gs://b/m.json"])"#,
+        ),
+        concat!(
+            "CREATE OR REPLACE EXTERNAL TABLE `proj`.`ds`.`tbl` () ",
+            "WITH CONNECTION `projects/proj/locations/us/connections/c` ",
+            r#"OPTIONS(format = "ICEBERG", uris = ["gs://b/m.json"])"#,
+        ),
+    );
+    bigquery().one_statement_parses_to(
+        "CREATE EXTERNAL TABLE t WITH CONNECTION c",
+        "CREATE EXTERNAL TABLE t () WITH CONNECTION c",
+    );
+    bigquery().verified_stmt(concat!(
+        "CREATE EXTERNAL TABLE t (a INT64, b STRING) ",
+        r#"WITH CONNECTION c OPTIONS(uris = ["gs://x"])"#,
+    ));
+    bigquery().verified_stmt(r#"CREATE EXTERNAL TABLE t (a INT64) OPTIONS(uris = ["gs://x"])"#);
+}
+
 fn bigquery() -> TestedDialects {
     TestedDialects::new(vec![Box::new(BigQueryDialect {})])
 }
@@ -2731,7 +2756,7 @@ fn test_export_data() {
                     kind: OrderByKind::Expressions(vec![OrderByExpr {
                         expr: Expr::Identifier(Ident::new("field1")),
                         options: OrderByOptions {
-                            asc: None,
+                            sort: None,
                             nulls_first: None,
                         },
                         with_fill: None,
@@ -2837,7 +2862,7 @@ fn test_export_data() {
                     kind: OrderByKind::Expressions(vec![OrderByExpr {
                         expr: Expr::Identifier(Ident::new("field1")),
                         options: OrderByOptions {
-                            asc: None,
+                            sort: None,
                             nulls_first: None,
                         },
                         with_fill: None,

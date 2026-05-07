@@ -2127,8 +2127,7 @@ impl fmt::Display for ColumnOption {
                         GeneratedAs::ExpStored => "",
                     };
                     write!(f, "GENERATED {when} AS IDENTITY")?;
-                    if sequence_options.is_some() {
-                        let so = sequence_options.as_ref().unwrap();
+                    if let Some(so) = sequence_options {
                         if !so.is_empty() {
                             write!(f, " (")?;
                         }
@@ -3037,6 +3036,9 @@ pub struct CreateTable {
     /// Snowflake "EXTERNAL_VOLUME" clause for Iceberg tables
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table>
     pub external_volume: Option<String>,
+    /// `WITH CONNECTION` clause.
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_external_table_statement)
+    pub with_connection: Option<ObjectName>,
     /// Snowflake "BASE_LOCATION" clause for Iceberg tables
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table>
     pub base_location: Option<String>,
@@ -3076,6 +3078,20 @@ pub struct CreateTable {
     /// Redshift `BACKUP` option: `BACKUP { YES | NO }`
     /// <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html>
     pub backup: Option<bool>,
+    /// `MULTISET | SET` table-kind prefix.
+    /// `Some(true)` => `MULTISET`, `Some(false)` => `SET`.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/MULTISET-or-SET)
+    pub multiset: Option<bool>,
+    /// `FALLBACK` clause.
+    /// `Some(true)` => `FALLBACK`, `Some(false)` => `NO FALLBACK`
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/FALLBACK-or-NO-FALLBACK)
+    pub fallback: Option<bool>,
+    /// `WITH DATA` clause on a `CREATE TABLE ... AS` statement.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/AS_clause/WITH-Clause-Phrase)
+    pub with_data: Option<WithData>,
 }
 
 impl fmt::Display for CreateTable {
@@ -3103,15 +3119,21 @@ impl fmt::Display for CreateTable {
                 })
                 .unwrap_or(""),
             if_not_exists = if self.if_not_exists { "IF NOT EXISTS " } else { "" },
+            multiset = self
+                .multiset
+                .map(|m| if m { "MULTISET " } else { "SET " })
+                .unwrap_or(""),
             temporary = if self.temporary { "TEMPORARY " } else { "" },
             unlogged = if self.unlogged { "UNLOGGED " } else { "" },
             transient = if self.transient { "TRANSIENT " } else { "" },
             volatile = if self.volatile { "VOLATILE " } else { "" },
-            // Only for Snowflake
             iceberg = if self.iceberg { "ICEBERG " } else { "" },
             dynamic = if self.dynamic { "DYNAMIC " } else { "" },
             name = self.name,
         )?;
+        if let Some(fallback) = self.fallback {
+            write!(f, ", {}", if fallback { "FALLBACK" } else { "NO FALLBACK" })?;
+        }
         if let Some(partition_of) = &self.partition_of {
             write!(f, " PARTITION OF {partition_of}")?;
         }
@@ -3267,6 +3289,9 @@ impl fmt::Display for CreateTable {
         if let Some(cluster_by) = self.cluster_by.as_ref() {
             write!(f, " CLUSTER BY {cluster_by}")?;
         }
+        if let Some(with_connection) = &self.with_connection {
+            write!(f, " WITH CONNECTION {with_connection}")?;
+        }
         if let options @ CreateTableOptions::Options(_) = &self.table_options {
             write!(f, " {options}")?;
         }
@@ -3395,6 +3420,41 @@ impl fmt::Display for CreateTable {
         }
         if let Some(query) = &self.query {
             write!(f, " AS {query}")?;
+        }
+        if let Some(with_data) = &self.with_data {
+            write!(f, " {with_data}")?;
+        }
+        Ok(())
+    }
+}
+
+/// `WITH DATA` clause on `CREATE TABLE ... AS` statement.
+///
+/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/AS_clause/WITH-Clause-Phrase)
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct WithData {
+    /// `true` for `WITH DATA`, `false` for `WITH NO DATA`.
+    pub data: bool,
+    /// `Some(true)` for `AND STATISTICS`, `Some(false)` for `AND NO STATISTICS`,
+    /// `None` if the `AND [NO] STATISTICS` sub-clause is omitted.
+    pub statistics: Option<bool>,
+}
+
+impl fmt::Display for WithData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("WITH ")?;
+        if !self.data {
+            f.write_str("NO ")?;
+        }
+        f.write_str("DATA")?;
+        if let Some(stats) = self.statistics {
+            f.write_str(" AND ")?;
+            if !stats {
+                f.write_str("NO ")?;
+            }
+            f.write_str("STATISTICS")?;
         }
         Ok(())
     }

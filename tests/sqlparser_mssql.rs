@@ -2000,6 +2000,7 @@ fn parse_create_table_with_valid_options() {
                 with_tags: None,
                 base_location: None,
                 external_volume: None,
+                with_connection: None,
                 catalog: None,
                 catalog_sync: None,
                 storage_serialization_policy: None,
@@ -2014,6 +2015,9 @@ fn parse_create_table_with_valid_options() {
                 distkey: None,
                 sortkey: None,
                 backup: None,
+                multiset: None,
+                fallback: None,
+                with_data: None,
             })
         );
     }
@@ -2175,6 +2179,7 @@ fn parse_create_table_with_identity_column() {
                 with_tags: None,
                 base_location: None,
                 external_volume: None,
+                with_connection: None,
                 catalog: None,
                 catalog_sync: None,
                 storage_serialization_policy: None,
@@ -2189,6 +2194,9 @@ fn parse_create_table_with_identity_column() {
                 distkey: None,
                 sortkey: None,
                 backup: None,
+                multiset: None,
+                fallback: None,
+                with_data: None,
             }),
         );
     }

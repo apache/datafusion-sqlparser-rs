@@ -1381,10 +1381,18 @@ impl<'a> Tokenizer<'a> {
                         return Ok(Some(Token::HexStringLiteral(s2)));
                     }
 
-                    // match one period
-                    if let Some('.') = chars.peek() {
-                        s.push('.');
-                        chars.next();
+                    // match one period. if we've just consumed an integer
+                    // and the previous token is `.`, we're inside a ClickHouse
+                    // tuple element access chain, and the trailing dot belongs
+                    // to the chain, not to this number.
+                    let in_tuple_chain = self.dialect.supports_tuple_element_access()
+                        && prev_token == Some(&Token::Period)
+                        && !s.is_empty();
+                    if !in_tuple_chain {
+                        if let Some('.') = chars.peek() {
+                            s.push('.');
+                            chars.next();
+                        }
                     }
 
                     // If the dialect supports identifiers that start with a numeric prefix
@@ -1396,6 +1404,26 @@ impl<'a> Tokenizer<'a> {
                         if let Some(Token::Word(_)) = prev_token {
                             return Ok(Some(Token::Period));
                         }
+                    }
+
+                    // ClickHouse-style positional tuple element access: emit `.` as a
+                    // standalone Period when it follows the LHS of a chain (an
+                    // identifier, `]`, `)`, or another integer already in the chain),
+                    // so e.g. `arr[1].1` and `t.1.2` parse as `CompoundFieldAccess`
+                    // instead of being fused into a decimal literal.
+                    if s == "."
+                        && self.dialect.supports_tuple_element_access()
+                        && matches!(
+                            prev_token,
+                            Some(
+                                Token::Word(_)
+                                    | Token::RBracket
+                                    | Token::RParen
+                                    | Token::Number(_, _)
+                            )
+                        )
+                    {
+                        return Ok(Some(Token::Period));
                     }
 
                     // Consume fractional digits.
@@ -4300,6 +4328,98 @@ mod tests {
                 Token::Period,
                 Token::make_word("1two3", None),
             ],
+        );
+    }
+
+    #[test]
+    fn tokenize_clickhouse_tuple_element_access() {
+        let dialects = all_dialects_where(|dialect| dialect.supports_tuple_element_access());
+
+        // After a Word, RBracket, or RParen, `.<digit>` is split into `Period`
+        // and a separate integer `Number`, so the parser can build a
+        // CompoundFieldAccess instead of seeing a single decimal literal.
+        dialects.tokenizes_to(
+            "t.1",
+            vec![
+                Token::make_word("t", None),
+                Token::Period,
+                Token::Number("1".to_string(), false),
+            ],
+        );
+
+        dialects.tokenizes_to(
+            "arr[1].2",
+            vec![
+                Token::make_word("arr", None),
+                Token::LBracket,
+                Token::Number("1".to_string(), false),
+                Token::RBracket,
+                Token::Period,
+                Token::Number("2".to_string(), false),
+            ],
+        );
+
+        dialects.tokenizes_to(
+            "(1,2).2",
+            vec![
+                Token::LParen,
+                Token::Number("1".to_string(), false),
+                Token::Comma,
+                Token::Number("2".to_string(), false),
+                Token::RParen,
+                Token::Period,
+                Token::Number("2".to_string(), false),
+            ],
+        );
+
+        // Nested access `tup.1.2` (Tuple of Tuple) — the rule must re-fire on
+        // the second dot, and the integer between the two dots must not eat
+        // the trailing dot as a decimal fraction.
+        dialects.tokenizes_to(
+            "t.1.2",
+            vec![
+                Token::make_word("t", None),
+                Token::Period,
+                Token::Number("1".to_string(), false),
+                Token::Period,
+                Token::Number("2".to_string(), false),
+            ],
+        );
+
+        // Decimal literals must remain untouched: the previous token is
+        // either whitespace or a number, never the LHS of an access chain.
+        dialects.tokenizes_to(
+            "SELECT 0.5",
+            vec![
+                Token::make_keyword("SELECT"),
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("0.5".to_string(), false),
+            ],
+        );
+
+        dialects.tokenizes_to(
+            "SELECT .5",
+            vec![
+                Token::make_keyword("SELECT"),
+                Token::Whitespace(Whitespace::Space),
+                Token::Number(".5".to_string(), false),
+            ],
+        );
+
+        // Regression: dialects without the flag keep the old behavior. The
+        // dot and digit fuse into a single decimal-shaped Number token.
+        let tokens = Tokenizer::new(&GenericDialect {}, "arr[1].2")
+            .tokenize()
+            .unwrap();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::make_word("arr", None),
+                Token::LBracket,
+                Token::Number("1".to_string(), false),
+                Token::RBracket,
+                Token::Number(".2".to_string(), false),
+            ]
         );
     }
 

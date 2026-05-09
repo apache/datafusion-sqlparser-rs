@@ -278,6 +278,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_order_by_using_operator(&self) -> bool {
+        true
+    }
+
     fn supports_set_names(&self) -> bool {
         true
     }

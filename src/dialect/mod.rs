@@ -1224,6 +1224,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect accepts a comma-separated list of table-level
+    /// options placed between the table name and the column-list parenthesis, e.g.
+    ///
+    /// ```sql
+    /// CREATE TABLE foo, NO FALLBACK, NO BEFORE JOURNAL (col INTEGER)
+    /// ```
+    fn supports_leading_comma_before_table_options(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports PartiQL for querying semi-structured data
     /// <https://partiql.org/index.html>
     fn supports_partiql(&self) -> bool {
@@ -1401,6 +1411,14 @@ pub trait Dialect: Debug + Any {
     ///
     /// For example: ```SELECT * FROM addresses ORDER BY ALL;```.
     fn supports_order_by_all(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports PostgreSQL-style ordering operators:
+    /// `ORDER BY expr USING <operator>`.
+    ///
+    /// For example: `SELECT * FROM t ORDER BY a USING <`.
+    fn supports_order_by_using_operator(&self) -> bool {
         false
     }
 

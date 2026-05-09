@@ -593,6 +593,7 @@ impl Spanned for CreateTable {
             with_storage_lifecycle_policy: _,   // todo, Snowflake specific
             with_tags: _,                       // todo, Snowflake specific
             external_volume: _,                 // todo, Snowflake specific
+            with_connection: _,                 // todo, BigQuery external table connection
             base_location: _,                   // todo, Snowflake specific
             catalog: _,                         // todo, Snowflake specific
             catalog_sync: _,                    // todo, Snowflake specific
@@ -608,6 +609,9 @@ impl Spanned for CreateTable {
             distkey: _,
             sortkey: _,
             backup: _,
+            multiset: _,
+            fallback: _,
+            with_data: _,
         } = self;
 
         union_spans(

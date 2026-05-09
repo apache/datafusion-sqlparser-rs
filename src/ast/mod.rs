@@ -84,7 +84,7 @@ pub use self::ddl::{
     RenameTableNameKind, ReplicaIdentity, TablespaceResetOption, TagsColumnOption,
     TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
     UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
-    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, ViewColumnDef,
+    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, ViewColumnDef, WithData,
 };
 pub use self::dml::{
     Delete, Insert, Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr,
@@ -102,7 +102,7 @@ pub use self::query::{
     JsonTableNestedColumn, LateralView, LimitClause, LockClause, LockType, MatchRecognizePattern,
     MatchRecognizeSymbol, Measure, NamedWindowDefinition, NamedWindowExpr, NonBlock, Offset,
     OffsetRows, OpenJsonTableColumn, OrderBy, OrderByExpr, OrderByKind, OrderByOptions,
-    PipeOperator, PivotValueSource, ProjectionSelect, Query, RenameSelectItem,
+    OrderBySort, PipeOperator, PivotValueSource, ProjectionSelect, Query, RenameSelectItem,
     RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select,
     SelectFlavor, SelectInto, SelectItem, SelectItemQualifiedWildcardKind, SelectModifiers,
     SetExpr, SetOperator, SetQuantifier, Setting, SymbolDefinition, Table, TableAlias,
@@ -1856,16 +1856,10 @@ impl fmt::Display for Expr {
                 negated,
             } => {
                 let not_ = if *negated { "NOT " } else { "" };
-                if form.is_none() {
-                    write!(f, "{expr} IS {not_}NORMALIZED")
+                if let Some(form) = form {
+                    write!(f, "{} IS {}{} NORMALIZED", expr, not_, form)
                 } else {
-                    write!(
-                        f,
-                        "{} IS {}{} NORMALIZED",
-                        expr,
-                        not_,
-                        form.as_ref().unwrap()
-                    )
+                    write!(f, "{expr} IS {not_}NORMALIZED")
                 }
             }
             Expr::SimilarTo {
@@ -5767,8 +5761,8 @@ impl fmt::Display for Statement {
                     write!(f, " SESSION")?;
                 }
                 write!(f, " STATUS")?;
-                if filter.is_some() {
-                    write!(f, " {}", filter.as_ref().unwrap())?;
+                if let Some(filter) = filter {
+                    write!(f, " {}", filter)?;
                 }
                 Ok(())
             }
@@ -5785,8 +5779,8 @@ impl fmt::Display for Statement {
                     write!(f, " SESSION")?;
                 }
                 write!(f, " VARIABLES")?;
-                if filter.is_some() {
-                    write!(f, " {}", filter.as_ref().unwrap())?;
+                if let Some(filter) = filter {
+                    write!(f, " {}", filter)?;
                 }
                 Ok(())
             }
@@ -6198,8 +6192,8 @@ impl fmt::Display for Statement {
                 if !copy_options.options.is_empty() {
                     write!(f, " COPY_OPTIONS=({copy_options})")?;
                 }
-                if comment.is_some() {
-                    write!(f, " COMMENT='{}'", comment.as_ref().unwrap())?;
+                if let Some(comment) = comment {
+                    write!(f, " COMMENT='{}'", comment)?;
                 }
                 Ok(())
             }
@@ -6286,12 +6280,11 @@ impl fmt::Display for Statement {
             }
             Statement::Pragma { name, value, is_eq } => {
                 write!(f, "PRAGMA {name}")?;
-                if value.is_some() {
-                    let val = value.as_ref().unwrap();
+                if let Some(value) = value {
                     if *is_eq {
-                        write!(f, " = {val}")?;
+                        write!(f, " = {value}")?;
                     } else {
-                        write!(f, "({val})")?;
+                        write!(f, "({value})")?;
                     }
                 }
                 Ok(())

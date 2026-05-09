@@ -89,4 +89,9 @@ impl Dialect for TeradataDialect {
     fn supports_string_literal_concatenation(&self) -> bool {
         true
     }
+
+    /// See <https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS>
+    fn supports_leading_comma_before_table_options(&self) -> bool {
+        true
+    }
 }

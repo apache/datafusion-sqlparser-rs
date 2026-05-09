@@ -341,6 +341,17 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports Hive-style `DISTRIBUTE BY` and `SORT BY`
+    /// clauses within a window specification.
+    ///
+    /// Example
+    /// ```sql
+    /// SELECT row_number() OVER (DISTRIBUTE BY a SORT BY b)
+    /// ```
+    fn supports_window_spec_distribute_sort(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `ARRAY_AGG() [WITHIN GROUP (ORDER BY)]` expressions.
     /// Otherwise, the dialect should expect an `ORDER BY` without the `WITHIN GROUP` clause, e.g. [`ANSI`]
     ///

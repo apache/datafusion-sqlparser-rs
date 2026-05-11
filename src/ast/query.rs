@@ -754,9 +754,8 @@ pub struct With {
     pub with_token: AttachedToken,
     /// Whether the `WITH` is recursive (`WITH RECURSIVE`).
     pub recursive: bool,
-    /// The items declared by this `WITH` clause: traditional CTEs and,
-    /// for dialects that support it, named expressions.
-    pub items: Vec<WithItem>,
+    /// The expressions declared by this `WITH` clause.
+    pub exprs: Vec<WithExpression>,
 }
 
 impl fmt::Display for With {
@@ -765,37 +764,29 @@ impl fmt::Display for With {
         if self.recursive {
             f.write_str("RECURSIVE ")?;
         }
-        display_comma_separated(&self.items).fmt(f)?;
+        display_comma_separated(&self.exprs).fmt(f)?;
         Ok(())
     }
 }
 
-/// A single item in a `WITH` clause.
+/// A single expression in a `WITH` clause.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum WithItem {
-    /// A traditional common table expression: `name [(cols)] AS [MATERIALIZED] (query)`.
+pub enum WithExpression {
+    /// A common table expression.
     Cte(Cte),
-    /// `<expr> AS <alias>` — binds an expression (literal, scalar subquery,
-    /// lambda, …) to a name visible in the surrounding query.
+    /// A common scalar expression.
     ///
-    /// See ClickHouse's [common scalar expressions][1].
-    ///
-    /// [1]: https://clickhouse.com/docs/sql-reference/statements/select/with#common-scalar-expressions
-    Named {
-        /// The expression bound to the alias.
-        expr: Expr,
-        /// The name the expression is bound to.
-        alias: Ident,
-    },
+    /// [Clickhouse]: https://clickhouse.com/docs/sql-reference/statements/select/with#common-scalar-expressions
+    Cse(ExprWithAlias),
 }
 
-impl fmt::Display for WithItem {
+impl fmt::Display for WithExpression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            WithItem::Cte(cte) => cte.fmt(f),
-            WithItem::Named { expr, alias } => write!(f, "{expr} AS {alias}"),
+            WithExpression::Cte(cte) => cte.fmt(f),
+            WithExpression::Cse(cse) => cse.fmt(f),
         }
     }
 }

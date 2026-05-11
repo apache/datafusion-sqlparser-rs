@@ -155,7 +155,7 @@ impl Dialect for ClickHouseDialect {
     }
 
     /// See <https://clickhouse.com/docs/sql-reference/statements/select/with#common-scalar-expressions>
-    fn supports_with_clause_scalar_expression(&self) -> bool {
+    fn supports_common_scalar_expressions(&self) -> bool {
         true
     }
 }

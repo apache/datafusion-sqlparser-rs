@@ -7854,8 +7854,8 @@ fn parse_ctes() {
 
     fn assert_ctes_in_select(expected: &[&str], sel: &Query) {
         for (i, exp) in expected.iter().enumerate() {
-            let cte = match &sel.with.as_ref().unwrap().items[i] {
-                WithItem::Cte(cte) => cte,
+            let cte = match &sel.with.as_ref().unwrap().exprs[i] {
+                WithExpression::Cte(cte) => cte,
                 other => panic!("expected a CTE, got {other:?}"),
             };
             assert_eq!(*exp, cte.query.to_string());
@@ -7902,8 +7902,8 @@ fn parse_ctes() {
     let sql = &format!("WITH outer_cte AS ({with}) SELECT * FROM outer_cte");
     let select = verified_query(sql);
     let with = select.with.as_ref().unwrap();
-    let outer_cte = match only(&with.items) {
-        WithItem::Cte(cte) => cte,
+    let outer_cte = match only(&with.exprs) {
+        WithExpression::Cte(cte) => cte,
         other => panic!("expected a CTE, got {other:?}"),
     };
     assert_ctes_in_select(&cte_sqls, &outer_cte.query);
@@ -7914,8 +7914,8 @@ fn parse_cte_renamed_columns() {
     let sql = "WITH cte (col1, col2) AS (SELECT foo, bar FROM baz) SELECT * FROM cte";
     let query = all_dialects().verified_query(sql);
     let with = query.with.unwrap();
-    let cte = match with.items.first().unwrap() {
-        WithItem::Cte(cte) => cte,
+    let cte = match with.exprs.first().unwrap() {
+        WithExpression::Cte(cte) => cte,
         other => panic!("expected a CTE, got {other:?}"),
     };
     assert_eq!(
@@ -7937,8 +7937,8 @@ fn parse_recursive_cte() {
 
     let with = query.with.as_ref().unwrap();
     assert!(with.recursive);
-    assert_eq!(with.items.len(), 1);
-    let expected = WithItem::Cte(Cte {
+    assert_eq!(with.exprs.len(), 1);
+    let expected = WithExpression::Cte(Cte {
         alias: TableAlias {
             explicit: false,
             name: Ident {
@@ -7954,7 +7954,7 @@ fn parse_recursive_cte() {
         materialized: None,
         closing_paren_token: AttachedToken::empty(),
     });
-    assert_eq!(with.items.first().unwrap(), &expected);
+    assert_eq!(with.exprs.first().unwrap(), &expected);
 }
 
 #[test]

@@ -14105,7 +14105,7 @@ impl<'a> Parser<'a> {
             Some(With {
                 with_token: with_token.clone().into(),
                 recursive: self.parse_keyword(Keyword::RECURSIVE),
-                items: self.parse_comma_separated(Parser::parse_with_item)?,
+                exprs: self.parse_comma_separated(Parser::parse_with_expression)?,
             })
         } else {
             None
@@ -14639,31 +14639,21 @@ impl<'a> Parser<'a> {
         Ok(cte)
     }
 
-    /// Parse a single item in a `WITH` clause.
-    ///
-    /// In standard SQL this is always a CTE (`name [(cols)] AS (query)`).
-    /// Dialects that enable [`Dialect::supports_with_clause_scalar_expression`]
-    /// — currently only ClickHouse — also accept the reversed form
-    /// `<expression> AS <identifier>`, which can be freely interleaved with
-    /// CTEs in the same comma-separated list.
-    pub fn parse_with_item(&mut self) -> Result<WithItem, ParserError> {
-        if !self.dialect.supports_with_clause_scalar_expression() {
-            return self.parse_cte().map(WithItem::Cte);
+    /// Parse a single expression in a `WITH` clause.
+    pub fn parse_with_expression(&mut self) -> Result<WithExpression, ParserError> {
+        if !self.dialect.supports_common_scalar_expressions() {
+            return self.parse_cte().map(WithExpression::Cte);
         }
-
-        // CTE form must start with an identifier. If the leading token
-        // can't begin one (e.g. `42`, `(SELECT …)`, `(x, y) -> …`), this
-        // is unambiguously the named-expression form.
-        if matches!(self.peek_token().token, Token::Word(_)) {
-            if let Some(cte) = self.maybe_parse(|p| p.parse_cte())? {
-                return Ok(WithItem::Cte(cte));
-            }
+        if let Some(cte) = self.maybe_parse(|p| p.parse_cte())? {
+            return Ok(WithExpression::Cte(cte));
         }
-
         let expr = self.parse_expr()?;
         self.expect_keyword(Keyword::AS)?;
         let alias = self.parse_identifier()?;
-        Ok(WithItem::Named { expr, alias })
+        Ok(WithExpression::Cse(ExprWithAlias {
+            expr,
+            alias: Some(alias),
+        }))
     }
 
     /// Parse a "query body", which is an expression with roughly the

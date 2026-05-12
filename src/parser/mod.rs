@@ -9972,7 +9972,6 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<ExcludeConstraintElement, ParserError> {
         // `index_elem` grammar: { col | (expr) } [ opclass ] [ ASC | DESC ] [ NULLS FIRST | LAST ].
-        // Shared with `CREATE INDEX` columns.
         let column = self.parse_create_index_expr()?;
         self.expect_keyword_is(Keyword::WITH)?;
         let operator = self.parse_exclude_constraint_operator()?;

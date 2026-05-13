@@ -1863,23 +1863,25 @@ fn parse_with_clause_common_scalar_expression() {
     }
 
     // String literal scalar (from the ClickHouse docs).
-    dialects.verified_stmt(
-        "WITH '2019-08-01 15:23:00' AS ts_upper_bound SELECT * FROM hits \
-         WHERE EventDate = toDate(ts_upper_bound) AND EventTime <= ts_upper_bound",
-    );
+    dialects.verified_stmt(concat!(
+        "WITH '2019-08-01 15:23:00' AS ts_upper_bound ",
+        "SELECT * FROM hits ",
+        "WHERE EventDate = toDate(ts_upper_bound) AND EventTime <= ts_upper_bound",
+    ));
 
     // Aggregate function call as a common scalar expression.
-    dialects.verified_stmt(
-        "WITH sum(bytes) AS s SELECT formatReadableSize(s), \"table\" \
-         FROM system.parts GROUP BY \"table\" ORDER BY s",
-    );
+    dialects.verified_stmt(concat!(
+        "WITH sum(bytes) AS s ",
+        "SELECT formatReadableSize(s), \"table\" ",
+        "FROM system.parts GROUP BY \"table\" ORDER BY s",
+    ));
 
     // Scalar subquery as the bound expression.
-    dialects.verified_stmt(
-        "WITH (SELECT sum(bytes) FROM system.parts WHERE active) AS total_disk_usage \
-         SELECT (sum(bytes) / total_disk_usage) * 100 AS table_disk_usage, \"table\" \
-         FROM system.parts GROUP BY \"table\" ORDER BY table_disk_usage DESC LIMIT 10",
-    );
+    dialects.verified_stmt(concat!(
+        "WITH (SELECT sum(bytes) FROM system.parts WHERE active) AS total_disk_usage ",
+        "SELECT (sum(bytes) / total_disk_usage) * 100 AS table_disk_usage, \"table\" ",
+        "FROM system.parts GROUP BY \"table\" ORDER BY table_disk_usage DESC LIMIT 10",
+    ));
 
     // Bare-identifier scalar — disambiguation case (`name AS alias` looks like
     // a CTE prefix but the missing `(` after `AS` makes it a scalar).
@@ -1889,10 +1891,11 @@ fn parse_with_clause_common_scalar_expression() {
     dialects.verified_stmt("WITH 1 AS one, cte AS (SELECT 1) SELECT one FROM cte");
 
     // Lambda as the bound expression (also taken from the docs).
-    dialects.verified_stmt(
-        "WITH '.txt' AS extension, (id, extension) -> concat(lower(id), extension) AS gen_name \
-         SELECT gen_name('test', '.sql') AS file_name",
-    );
+    dialects.verified_stmt(concat!(
+        "WITH '.txt' AS extension, ",
+        "(id, extension) -> concat(lower(id), extension) AS gen_name ",
+        "SELECT gen_name('test', '.sql') AS file_name",
+    ));
 }
 
 fn clickhouse() -> TestedDialects {

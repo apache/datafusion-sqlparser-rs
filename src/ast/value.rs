@@ -577,7 +577,8 @@ impl fmt::Display for EscapeQuotedString<'_> {
                             // The quote is not escaped.
                             // Including idx in the range, so the quote at idx will be printed twice:
                             // in this call to write_str() and in the next one.
-                            f.write_str(&self.string[start_idx..=idx])?;
+                            let end_idx = idx + ch.len_utf8();
+                            f.write_str(&self.string[start_idx..end_idx])?;
                             start_idx = idx;
                         }
                     }
@@ -706,4 +707,13 @@ impl fmt::Display for TrimWhereField {
             Trailing => "TRAILING",
         })
     }
+}
+
+#[cfg(test)]
+#[test]
+fn test_escape_quoted_string_with_multibyte_quote_char() {
+    assert_eq!(
+        format!("{}", escape_quoted_string("a🦀b🦀c", '🦀')),
+        "a🦀🦀b🦀🦀c"
+    );
 }

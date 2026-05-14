@@ -2818,8 +2818,9 @@ pub struct CreateIndex {
     pub unique: bool,
     /// whether the index is created concurrently
     pub concurrently: bool,
-    /// whether the index is created asynchronously
-    /// [DSQL]: <https://docs.aws.amazon.com/aurora-dsql/latest/userguide/working-with-create-index-async.html>
+    /// whether the index is created asynchronously ([DSQL]).
+    ///
+    /// [DSQL]: https://docs.aws.amazon.com/aurora-dsql/latest/userguide/working-with-create-index-async.html
     pub r#async: bool,
     /// IF NOT EXISTS clause
     pub if_not_exists: bool,

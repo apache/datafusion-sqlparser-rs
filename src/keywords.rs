@@ -131,6 +131,7 @@ define_keywords!(
     ASOF,
     ASSERT,
     ASYMMETRIC,
+    ASYNC,
     AT,
     ATOMIC,
     ATTACH,

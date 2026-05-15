@@ -2806,6 +2806,7 @@ fn parse_create_index() {
             columns,
             unique,
             concurrently,
+            r#async,
             if_not_exists,
             nulls_distinct: None,
             include,
@@ -2819,6 +2820,7 @@ fn parse_create_index() {
             assert_eq!(None, using);
             assert!(!unique);
             assert!(!concurrently);
+            assert!(!r#async);
             assert!(if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
@@ -2841,6 +2843,7 @@ fn parse_create_anonymous_index() {
             columns,
             unique,
             concurrently,
+            r#async,
             if_not_exists,
             include,
             nulls_distinct: None,
@@ -2854,6 +2857,7 @@ fn parse_create_anonymous_index() {
             assert_eq!(None, using);
             assert!(!unique);
             assert!(!concurrently);
+            assert!(!r#async);
             assert!(!if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
@@ -2959,6 +2963,7 @@ fn parse_create_indices_with_operator_classes() {
                     columns,
                     unique: false,
                     concurrently: false,
+                    r#async: false,
                     if_not_exists: false,
                     include,
                     nulls_distinct: None,
@@ -2987,6 +2992,7 @@ fn parse_create_indices_with_operator_classes() {
                     columns,
                     unique: false,
                     concurrently: false,
+                    r#async: false,
                     if_not_exists: false,
                     include,
                     nulls_distinct: None,
@@ -3070,6 +3076,7 @@ fn parse_create_bloom() {
             columns,
             unique: false,
             concurrently: false,
+            r#async: false,
             if_not_exists: false,
             include,
             nulls_distinct: None,
@@ -3126,6 +3133,7 @@ fn parse_create_brin() {
             columns,
             unique: false,
             concurrently: false,
+            r#async: false,
             if_not_exists: false,
             include,
             nulls_distinct: None,
@@ -3193,6 +3201,7 @@ fn parse_create_index_concurrently() {
             columns,
             unique,
             concurrently,
+            r#async,
             if_not_exists,
             include,
             nulls_distinct: None,
@@ -3206,6 +3215,7 @@ fn parse_create_index_concurrently() {
             assert_eq!(None, using);
             assert!(!unique);
             assert!(concurrently);
+            assert!(!r#async);
             assert!(if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
@@ -3228,6 +3238,7 @@ fn parse_create_index_with_predicate() {
             columns,
             unique,
             concurrently,
+            r#async,
             if_not_exists,
             include,
             nulls_distinct: None,
@@ -3241,6 +3252,7 @@ fn parse_create_index_with_predicate() {
             assert_eq!(None, using);
             assert!(!unique);
             assert!(!concurrently);
+            assert!(!r#async);
             assert!(if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
@@ -3263,6 +3275,7 @@ fn parse_create_index_with_include() {
             columns,
             unique,
             concurrently,
+            r#async,
             if_not_exists,
             include,
             nulls_distinct: None,
@@ -3276,6 +3289,7 @@ fn parse_create_index_with_include() {
             assert_eq!(None, using);
             assert!(!unique);
             assert!(!concurrently);
+            assert!(!r#async);
             assert!(if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
             assert_eq_vec(&["col3", "col4"], &include);
@@ -3298,6 +3312,7 @@ fn parse_create_index_with_nulls_distinct() {
             columns,
             unique,
             concurrently,
+            r#async,
             if_not_exists,
             include,
             nulls_distinct: Some(nulls_distinct),
@@ -3311,6 +3326,7 @@ fn parse_create_index_with_nulls_distinct() {
             assert_eq!(None, using);
             assert!(!unique);
             assert!(!concurrently);
+            assert!(!r#async);
             assert!(if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
@@ -3331,6 +3347,7 @@ fn parse_create_index_with_nulls_distinct() {
             columns,
             unique,
             concurrently,
+            r#async,
             if_not_exists,
             include,
             nulls_distinct: Some(nulls_distinct),
@@ -3344,6 +3361,7 @@ fn parse_create_index_with_nulls_distinct() {
             assert_eq!(None, using);
             assert!(!unique);
             assert!(!concurrently);
+            assert!(!r#async);
             assert!(if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());

@@ -9484,10 +9484,10 @@ fn parse_abort() {
     one_statement_parses_to("ABORT AND NO CHAIN", "ROLLBACK");
     one_statement_parses_to("ABORT TRANSACTION AND CHAIN", "ROLLBACK AND CHAIN");
     one_statement_parses_to("ABORT WORK AND NO CHAIN", "ROLLBACK");
-    one_statement_parses_to("ABORT TO test1", "ROLLBACK TO SAVEPOINT test1");
-    one_statement_parses_to(
-        "ABORT AND CHAIN TO test1",
-        "ROLLBACK AND CHAIN TO SAVEPOINT test1",
+
+    assert_eq!(
+        parse_sql_statements("ABORT TO test1").unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: TO".to_string()),
     );
 }
 

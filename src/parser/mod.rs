@@ -674,7 +674,8 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     self.parse_throw().map(Into::into)
                 }
-                Keyword::ROLLBACK | Keyword::ABORT => self.parse_rollback(),
+                Keyword::ROLLBACK => self.parse_rollback(),
+                Keyword::ABORT => self.parse_abort(),
                 Keyword::ASSERT => self.parse_assert(),
                 // `PREPARE`, `EXECUTE` and `DEALLOCATE` are Postgres-specific
                 // syntaxes. They are used for Postgres prepared statement.
@@ -19273,6 +19274,20 @@ impl<'a> Parser<'a> {
         let savepoint = self.parse_rollback_savepoint()?;
 
         Ok(Statement::Rollback { chain, savepoint })
+    }
+
+    /// Parse an 'ABORT' statement
+    ///
+    /// ```sql
+    /// ABORT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]
+    /// ```
+    pub fn parse_abort(&mut self) -> Result<Statement, ParserError> {
+        let chain = self.parse_commit_rollback_chain()?;
+
+        Ok(Statement::Rollback {
+            chain,
+            savepoint: None,
+        })
     }
 
     /// Parse an optional `AND [NO] CHAIN` clause for `COMMIT` and `ROLLBACK` statements

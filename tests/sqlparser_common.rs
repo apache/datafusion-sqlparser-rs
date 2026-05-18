@@ -9537,6 +9537,22 @@ fn parse_rollback() {
 }
 
 #[test]
+fn parse_abort() {
+    one_statement_parses_to("ABORT", "ROLLBACK");
+    one_statement_parses_to("ABORT TRANSACTION", "ROLLBACK");
+    one_statement_parses_to("ABORT WORK", "ROLLBACK");
+    one_statement_parses_to("ABORT AND CHAIN", "ROLLBACK AND CHAIN");
+    one_statement_parses_to("ABORT AND NO CHAIN", "ROLLBACK");
+    one_statement_parses_to("ABORT TRANSACTION AND CHAIN", "ROLLBACK AND CHAIN");
+    one_statement_parses_to("ABORT WORK AND NO CHAIN", "ROLLBACK");
+
+    assert_eq!(
+        parse_sql_statements("ABORT TO test1").unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: TO".to_string()),
+    );
+}
+
+#[test]
 #[should_panic(expected = "Parse results with GenericDialect are different from PostgreSqlDialect")]
 fn ensure_multiple_dialects_are_tested() {
     // The SQL here must be parsed differently by different dialects.

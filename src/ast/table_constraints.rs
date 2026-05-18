@@ -627,14 +627,14 @@ pub enum ExcludeConstraintOperator {
     /// A single operator token, e.g. `=`, `&&`, `<->`.
     Token(String),
     /// Postgres schema-qualified form: `OPERATOR(schema.op)`.
-    PgCustom(Vec<String>),
+    PGCustom(Vec<String>),
 }
 
 impl fmt::Display for ExcludeConstraintOperator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ExcludeConstraintOperator::Token(token) => f.write_str(token),
-            ExcludeConstraintOperator::PgCustom(parts) => {
+            ExcludeConstraintOperator::PGCustom(parts) => {
                 write!(f, "OPERATOR({})", display_separated(parts, "."))
             }
         }
@@ -660,19 +660,9 @@ impl fmt::Display for ExcludeConstraintElement {
     }
 }
 
-impl crate::ast::Spanned for ExcludeConstraintElement {
-    fn span(&self) -> Span {
-        let mut span = self.column.column.expr.span();
-        if let Some(opclass) = &self.column.operator_class {
-            span = span.union(&opclass.span());
-        }
-        span
-    }
-}
-
 /// An `EXCLUDE` constraint.
 ///
-/// [PostgreSql](https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE)
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

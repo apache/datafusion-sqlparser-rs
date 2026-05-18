@@ -10080,7 +10080,7 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<ExcludeConstraintOperator, ParserError> {
         if self.parse_keyword(Keyword::OPERATOR) {
-            return Ok(ExcludeConstraintOperator::PgCustom(
+            return Ok(ExcludeConstraintOperator::PGCustom(
                 self.parse_pg_operator_ident_parts()?,
             ));
         }

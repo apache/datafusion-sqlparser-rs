@@ -18,4 +18,5 @@ Cargo.lock
 
 *.swp
 
-.DS_store.worktrees/
+.DS_store
+.worktrees/

@@ -2889,6 +2889,22 @@ fn parse_order_by_using_operator_invalid_cases() {
 }
 
 #[test]
+fn parse_operator_empty_parens_rejected() {
+    // The shared `parse_pg_operator_ident_parts` helper rejects an empty
+    // `OPERATOR()` in the binary-expression path, not only in EXCLUDE
+    // constraints. Lock in that behavior.
+    let dialects = TestedDialects::new(vec![
+        Box::new(PostgreSqlDialect {}),
+        Box::new(GenericDialect {}),
+    ]);
+    let result = dialects.parse_sql_statements("SELECT a OPERATOR() b");
+    assert_eq!(
+        ParserError::ParserError("Expected: operator name, found: )".to_string()),
+        result.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_select_group_by() {
     let sql = "SELECT id, fname, lname FROM customer GROUP BY lname, fname";
     let select = verified_only_select(sql);
@@ -4512,24 +4528,24 @@ fn parse_exclude_constraint() {
 
     // Error cases: malformed EXCLUDE syntax must be rejected with a useful
     // message rather than silently accepted.
-    for (sql, expected_fragment) in [
+    for (sql, expected_message) in [
         (
             "CREATE TABLE t (CONSTRAINT c EXCLUDE USING gist (col))",
-            "Expected: WITH",
+            "Expected: WITH, found: )",
         ),
         (
             "CREATE TABLE t (CONSTRAINT c EXCLUDE USING gist ())",
-            "Expected: an expression",
+            "Expected: an expression, found: )",
         ),
         (
             "CREATE TABLE t (CONSTRAINT c EXCLUDE USING gist (col WITH))",
-            "exclusion operator",
+            "Expected: exclusion operator, found: )",
         ),
     ] {
-        let err = dialects.parse_sql_statements(sql).unwrap_err().to_string();
-        assert!(
-            err.contains(expected_fragment),
-            "expected {expected_fragment:?} in error for {sql:?}, got: {err}"
+        let result = dialects.parse_sql_statements(sql);
+        assert_eq!(
+            ParserError::ParserError(expected_message.to_string()),
+            result.unwrap_err()
         );
     }
 

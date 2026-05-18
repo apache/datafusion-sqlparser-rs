@@ -5833,8 +5833,11 @@ pub struct CreateAggregate {
     pub or_replace: bool,
     /// The aggregate name (can be schema-qualified).
     pub name: ObjectName,
-    /// Input argument types. Empty for zero-argument aggregates.
-    pub args: Vec<DataType>,
+    /// Input arguments. Empty for zero-argument aggregates or `(*)`.
+    pub args: Vec<OperateFunctionArg>,
+    /// True if the argument list was the wildcard form `(*)` (used by
+    /// zero-argument aggregates such as `count(*)`).
+    pub star_args: bool,
     /// The options listed inside the required parentheses after the argument
     /// list (e.g. `SFUNC`, `STYPE`, `FINALFUNC`, `PARALLEL`, …).
     pub options: Vec<CreateAggregateOption>,
@@ -5847,15 +5850,12 @@ impl fmt::Display for CreateAggregate {
             write!(f, " OR REPLACE")?;
         }
         write!(f, " AGGREGATE {}", self.name)?;
-        write!(f, " ({})", display_comma_separated(&self.args))?;
-        write!(f, " (")?;
-        for (i, option) in self.options.iter().enumerate() {
-            if i > 0 {
-                write!(f, ", ")?;
-            }
-            write!(f, "{option}")?;
+        if self.star_args && self.args.is_empty() {
+            write!(f, " (*)")?;
+        } else {
+            write!(f, " ({})", display_comma_separated(&self.args))?;
         }
-        write!(f, ")")
+        write!(f, " ({})", display_comma_separated(&self.options))
     }
 }
 
@@ -5873,43 +5873,43 @@ impl From<CreateAggregate> for crate::ast::Statement {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CreateAggregateOption {
     /// `SFUNC = state_transition_function`
-    Sfunc(ObjectName),
+    StateTransitionFunction(ObjectName),
     /// `STYPE = state_data_type`
-    Stype(DataType),
+    StateDataType(DataType),
     /// `SSPACE = state_data_size` (in bytes)
-    Sspace(u64),
+    StateDataSize(u64),
     /// `FINALFUNC = final_function`
-    Finalfunc(ObjectName),
+    FinalFunction(ObjectName),
     /// `FINALFUNC_EXTRA` — pass extra dummy arguments to the final function.
-    FinalfuncExtra,
+    FinalFunctionExtra,
     /// `FINALFUNC_MODIFY = { READ_ONLY | SHAREABLE | READ_WRITE }`
-    FinalfuncModify(AggregateModifyKind),
+    FinalFunctionModify(AggregateModifyKind),
     /// `COMBINEFUNC = combine_function`
-    Combinefunc(ObjectName),
+    CombineFunction(ObjectName),
     /// `SERIALFUNC = serial_function`
-    Serialfunc(ObjectName),
+    SerialFunction(ObjectName),
     /// `DESERIALFUNC = deserial_function`
-    Deserialfunc(ObjectName),
+    DeserialFunction(ObjectName),
     /// `INITCOND = initial_condition` (a string literal)
-    Initcond(ValueWithSpan),
+    InitialCondition(ValueWithSpan),
     /// `MSFUNC = moving_state_transition_function`
-    Msfunc(ObjectName),
+    MovingStateTransitionFunction(ObjectName),
     /// `MINVFUNC = moving_inverse_transition_function`
-    Minvfunc(ObjectName),
+    MovingInverseTransitionFunction(ObjectName),
     /// `MSTYPE = moving_state_data_type`
-    Mstype(DataType),
+    MovingStateDataType(DataType),
     /// `MSSPACE = moving_state_data_size` (in bytes)
-    Msspace(u64),
+    MovingStateDataSize(u64),
     /// `MFINALFUNC = moving_final_function`
-    Mfinalfunc(ObjectName),
+    MovingFinalFunction(ObjectName),
     /// `MFINALFUNC_EXTRA`
-    MfinalfuncExtra,
+    MovingFinalFunctionExtra,
     /// `MFINALFUNC_MODIFY = { READ_ONLY | SHAREABLE | READ_WRITE }`
-    MfinalfuncModify(AggregateModifyKind),
+    MovingFinalFunctionModify(AggregateModifyKind),
     /// `MINITCOND = moving_initial_condition` (a string literal)
-    Minitcond(ValueWithSpan),
+    MovingInitialCondition(ValueWithSpan),
     /// `SORTOP = sort_operator`
-    Sortop(ObjectName),
+    SortOperator(ObjectName),
     /// `PARALLEL = { SAFE | RESTRICTED | UNSAFE }`
     Parallel(FunctionParallel),
     /// `HYPOTHETICAL` — marks the aggregate as hypothetical-set.
@@ -5919,25 +5919,25 @@ pub enum CreateAggregateOption {
 impl fmt::Display for CreateAggregateOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Sfunc(name) => write!(f, "SFUNC = {name}"),
-            Self::Stype(data_type) => write!(f, "STYPE = {data_type}"),
-            Self::Sspace(size) => write!(f, "SSPACE = {size}"),
-            Self::Finalfunc(name) => write!(f, "FINALFUNC = {name}"),
-            Self::FinalfuncExtra => write!(f, "FINALFUNC_EXTRA"),
-            Self::FinalfuncModify(kind) => write!(f, "FINALFUNC_MODIFY = {kind}"),
-            Self::Combinefunc(name) => write!(f, "COMBINEFUNC = {name}"),
-            Self::Serialfunc(name) => write!(f, "SERIALFUNC = {name}"),
-            Self::Deserialfunc(name) => write!(f, "DESERIALFUNC = {name}"),
-            Self::Initcond(cond) => write!(f, "INITCOND = {cond}"),
-            Self::Msfunc(name) => write!(f, "MSFUNC = {name}"),
-            Self::Minvfunc(name) => write!(f, "MINVFUNC = {name}"),
-            Self::Mstype(data_type) => write!(f, "MSTYPE = {data_type}"),
-            Self::Msspace(size) => write!(f, "MSSPACE = {size}"),
-            Self::Mfinalfunc(name) => write!(f, "MFINALFUNC = {name}"),
-            Self::MfinalfuncExtra => write!(f, "MFINALFUNC_EXTRA"),
-            Self::MfinalfuncModify(kind) => write!(f, "MFINALFUNC_MODIFY = {kind}"),
-            Self::Minitcond(cond) => write!(f, "MINITCOND = {cond}"),
-            Self::Sortop(name) => write!(f, "SORTOP = {name}"),
+            Self::StateTransitionFunction(name) => write!(f, "SFUNC = {name}"),
+            Self::StateDataType(data_type) => write!(f, "STYPE = {data_type}"),
+            Self::StateDataSize(size) => write!(f, "SSPACE = {size}"),
+            Self::FinalFunction(name) => write!(f, "FINALFUNC = {name}"),
+            Self::FinalFunctionExtra => write!(f, "FINALFUNC_EXTRA"),
+            Self::FinalFunctionModify(kind) => write!(f, "FINALFUNC_MODIFY = {kind}"),
+            Self::CombineFunction(name) => write!(f, "COMBINEFUNC = {name}"),
+            Self::SerialFunction(name) => write!(f, "SERIALFUNC = {name}"),
+            Self::DeserialFunction(name) => write!(f, "DESERIALFUNC = {name}"),
+            Self::InitialCondition(cond) => write!(f, "INITCOND = {cond}"),
+            Self::MovingStateTransitionFunction(name) => write!(f, "MSFUNC = {name}"),
+            Self::MovingInverseTransitionFunction(name) => write!(f, "MINVFUNC = {name}"),
+            Self::MovingStateDataType(data_type) => write!(f, "MSTYPE = {data_type}"),
+            Self::MovingStateDataSize(size) => write!(f, "MSSPACE = {size}"),
+            Self::MovingFinalFunction(name) => write!(f, "MFINALFUNC = {name}"),
+            Self::MovingFinalFunctionExtra => write!(f, "MFINALFUNC_EXTRA"),
+            Self::MovingFinalFunctionModify(kind) => write!(f, "MFINALFUNC_MODIFY = {kind}"),
+            Self::MovingInitialCondition(cond) => write!(f, "MINITCOND = {cond}"),
+            Self::SortOperator(name) => write!(f, "SORTOP = {name}"),
             Self::Parallel(parallel) => {
                 let kind = match parallel {
                     FunctionParallel::Safe => "SAFE",

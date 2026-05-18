@@ -7235,12 +7235,13 @@ impl<'a> Parser<'a> {
     ) -> Result<CreateAggregate, ParserError> {
         let name = self.parse_object_name(false)?;
 
-        // Argument type list: `(input_data_type [, ...])` or `(*)` for zero-arg.
+        // Argument list: `(input_arg [, ...])` or `(*)` for zero-arg.
         self.expect_token(&Token::LParen)?;
-        let args = if self.consume_token(&Token::Mul) || self.peek_token().token == Token::RParen {
+        let star_args = self.consume_token(&Token::Mul);
+        let args = if star_args || self.peek_token().token == Token::RParen {
             vec![]
         } else {
-            self.parse_comma_separated(|p| p.parse_data_type())?
+            self.parse_comma_separated(Parser::parse_function_arg)?
         };
         self.expect_token(&Token::RParen)?;
 
@@ -7256,8 +7257,22 @@ impl<'a> Parser<'a> {
             or_replace,
             name,
             args,
+            star_args,
             options,
         })
+    }
+
+    /// Parse `PARALLEL` qualifier value: `{ SAFE | RESTRICTED | UNSAFE }`.
+    fn parse_function_parallel(&mut self) -> Result<FunctionParallel, ParserError> {
+        if self.parse_keyword(Keyword::SAFE) {
+            Ok(FunctionParallel::Safe)
+        } else if self.parse_keyword(Keyword::RESTRICTED) {
+            Ok(FunctionParallel::Restricted)
+        } else if self.parse_keyword(Keyword::UNSAFE) {
+            Ok(FunctionParallel::Unsafe)
+        } else {
+            self.expected_ref("one of SAFE | RESTRICTED | UNSAFE", self.peek_token_ref())
+        }
     }
 
     fn parse_create_aggregate_option(
@@ -7267,109 +7282,109 @@ impl<'a> Parser<'a> {
         match key {
             "SFUNC" => {
                 self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::Sfunc(self.parse_object_name(false)?))
+                Ok(CreateAggregateOption::StateTransitionFunction(
+                    self.parse_object_name(false)?,
+                ))
             }
             "STYPE" => {
                 self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::Stype(self.parse_data_type()?))
+                Ok(CreateAggregateOption::StateDataType(
+                    self.parse_data_type()?,
+                ))
             }
             "SSPACE" => {
                 self.expect_token(&Token::Eq)?;
                 let size = self.parse_literal_uint()?;
-                Ok(CreateAggregateOption::Sspace(size))
+                Ok(CreateAggregateOption::StateDataSize(size))
             }
             "FINALFUNC" => {
                 self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::Finalfunc(
+                Ok(CreateAggregateOption::FinalFunction(
                     self.parse_object_name(false)?,
                 ))
             }
-            "FINALFUNC_EXTRA" => Ok(CreateAggregateOption::FinalfuncExtra),
+            "FINALFUNC_EXTRA" => Ok(CreateAggregateOption::FinalFunctionExtra),
             "FINALFUNC_MODIFY" => {
                 self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::FinalfuncModify(
+                Ok(CreateAggregateOption::FinalFunctionModify(
                     self.parse_aggregate_modify_kind()?,
                 ))
             }
             "COMBINEFUNC" => {
                 self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::Combinefunc(
+                Ok(CreateAggregateOption::CombineFunction(
                     self.parse_object_name(false)?,
                 ))
             }
             "SERIALFUNC" => {
                 self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::Serialfunc(
+                Ok(CreateAggregateOption::SerialFunction(
                     self.parse_object_name(false)?,
                 ))
             }
             "DESERIALFUNC" => {
                 self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::Deserialfunc(
+                Ok(CreateAggregateOption::DeserialFunction(
                     self.parse_object_name(false)?,
                 ))
             }
             "INITCOND" => {
                 self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::Initcond(self.parse_value()?))
+                Ok(CreateAggregateOption::InitialCondition(self.parse_value()?))
             }
             "MSFUNC" => {
                 self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::Msfunc(
+                Ok(CreateAggregateOption::MovingStateTransitionFunction(
                     self.parse_object_name(false)?,
                 ))
             }
             "MINVFUNC" => {
                 self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::Minvfunc(
+                Ok(CreateAggregateOption::MovingInverseTransitionFunction(
                     self.parse_object_name(false)?,
                 ))
             }
             "MSTYPE" => {
                 self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::Mstype(self.parse_data_type()?))
+                Ok(CreateAggregateOption::MovingStateDataType(
+                    self.parse_data_type()?,
+                ))
             }
             "MSSPACE" => {
                 self.expect_token(&Token::Eq)?;
                 let size = self.parse_literal_uint()?;
-                Ok(CreateAggregateOption::Msspace(size))
+                Ok(CreateAggregateOption::MovingStateDataSize(size))
             }
             "MFINALFUNC" => {
                 self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::Mfinalfunc(
+                Ok(CreateAggregateOption::MovingFinalFunction(
                     self.parse_object_name(false)?,
                 ))
             }
-            "MFINALFUNC_EXTRA" => Ok(CreateAggregateOption::MfinalfuncExtra),
+            "MFINALFUNC_EXTRA" => Ok(CreateAggregateOption::MovingFinalFunctionExtra),
             "MFINALFUNC_MODIFY" => {
                 self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::MfinalfuncModify(
+                Ok(CreateAggregateOption::MovingFinalFunctionModify(
                     self.parse_aggregate_modify_kind()?,
                 ))
             }
             "MINITCOND" => {
                 self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::Minitcond(self.parse_value()?))
+                Ok(CreateAggregateOption::MovingInitialCondition(
+                    self.parse_value()?,
+                ))
             }
             "SORTOP" => {
                 self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::Sortop(self.parse_operator_name()?))
+                Ok(CreateAggregateOption::SortOperator(
+                    self.parse_operator_name()?,
+                ))
             }
             "PARALLEL" => {
                 self.expect_token(&Token::Eq)?;
-                let parallel = if self.parse_keyword(Keyword::SAFE) {
-                    FunctionParallel::Safe
-                } else if self.parse_keyword(Keyword::RESTRICTED) {
-                    FunctionParallel::Restricted
-                } else if self.parse_keyword(Keyword::UNSAFE) {
-                    FunctionParallel::Unsafe
-                } else {
-                    return self.expected_ref(
-                        "SAFE, RESTRICTED, or UNSAFE after PARALLEL =",
-                        self.peek_token_ref(),
-                    );
-                };
-                Ok(CreateAggregateOption::Parallel(parallel))
+                Ok(CreateAggregateOption::Parallel(
+                    self.parse_function_parallel()?,
+                ))
             }
             "HYPOTHETICAL" => Ok(CreateAggregateOption::Hypothetical),
             other => Err(ParserError::ParserError(format!(

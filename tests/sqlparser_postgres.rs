@@ -9247,10 +9247,11 @@ fn parse_lock_table() {
 #[test]
 fn parse_create_aggregate_basic() {
     let sql = "CREATE AGGREGATE myavg (NUMERIC) (SFUNC = numeric_avg_accum, STYPE = internal, FINALFUNC = numeric_avg, INITCOND = '0')";
-    let stmt = pg().verified_stmt(sql);
+    let stmt = pg_and_generic().verified_stmt(sql);
     match stmt {
         Statement::CreateAggregate(agg) => {
             assert!(!agg.or_replace);
+            assert!(!agg.star_args);
             assert_eq!(agg.name.to_string(), "myavg");
             assert_eq!(agg.args.len(), 1);
             assert_eq!(agg.args[0].to_string(), "NUMERIC");
@@ -9267,7 +9268,7 @@ fn parse_create_aggregate_basic() {
 #[test]
 fn parse_create_aggregate_or_replace_with_parallel() {
     let sql = "CREATE OR REPLACE AGGREGATE sum2 (INT4, INT4) (SFUNC = int4pl, STYPE = INT4, PARALLEL = SAFE)";
-    let stmt = pg().verified_stmt(sql);
+    let stmt = pg_and_generic().verified_stmt(sql);
     match stmt {
         Statement::CreateAggregate(agg) => {
             assert!(agg.or_replace);
@@ -9283,7 +9284,7 @@ fn parse_create_aggregate_or_replace_with_parallel() {
 #[test]
 fn parse_create_aggregate_with_moving_aggregate_options() {
     let sql = "CREATE AGGREGATE moving_sum (FLOAT8) (SFUNC = float8pl, STYPE = FLOAT8, MSFUNC = float8pl, MINVFUNC = float8mi, MSTYPE = FLOAT8, MFINALFUNC_EXTRA, MFINALFUNC_MODIFY = READ_ONLY)";
-    let stmt = pg().verified_stmt(sql);
+    let stmt = pg_and_generic().verified_stmt(sql);
     match stmt {
         Statement::CreateAggregate(agg) => {
             assert!(!agg.or_replace);
@@ -9296,4 +9297,54 @@ fn parse_create_aggregate_with_moving_aggregate_options() {
         }
         _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
     }
+}
+
+#[test]
+fn parse_create_aggregate_star_args() {
+    let canonical = "CREATE AGGREGATE my_count (*) (SFUNC = int8inc, STYPE = INT8, INITCOND = '0')";
+    let stmt = pg_and_generic().verified_stmt(canonical);
+    match stmt {
+        Statement::CreateAggregate(agg) => {
+            assert!(agg.star_args);
+            assert!(agg.args.is_empty());
+            assert_eq!(agg.name.to_string(), "my_count");
+        }
+        _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
+    }
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE AGGREGATE my_count ( * ) (SFUNC = int8inc, STYPE = INT8)",
+        "CREATE AGGREGATE my_count (*) (SFUNC = int8inc, STYPE = INT8)",
+    );
+}
+
+#[test]
+fn parse_create_aggregate_named_and_variadic_args() {
+    let sql =
+        "CREATE AGGREGATE my_agg (input INT, VARIADIC tail TEXT) (SFUNC = my_sfunc, STYPE = INT)";
+    let stmt = pg_and_generic().verified_stmt(sql);
+    match stmt {
+        Statement::CreateAggregate(agg) => {
+            assert_eq!(agg.args.len(), 2);
+            assert_eq!(agg.args[0].to_string(), "input INT");
+            assert_eq!(agg.args[1].to_string(), "VARIADIC tail TEXT");
+        }
+        _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
+    }
+}
+
+#[test]
+fn parse_create_aggregate_additional_options() {
+    pg_and_generic().verified_stmt(
+        "CREATE AGGREGATE percentile (FLOAT8) (SFUNC = ordered_set_transition, STYPE = internal, FINALFUNC = percentile_final, FINALFUNC_MODIFY = READ_WRITE, HYPOTHETICAL)",
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE AGGREGATE my_min (INT) (SFUNC = my_sfunc, STYPE = INT, SSPACE = 128, SORTOP = <)",
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE AGGREGATE my_min2 (INT) (SFUNC = my_sfunc, STYPE = INT, SORTOP = pg_catalog.<)",
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE AGGREGATE my_sum (INT) (SFUNC = my_sfunc, STYPE = internal, COMBINEFUNC = my_combine, SERIALFUNC = my_serial, DESERIALFUNC = my_deserial)",
+    );
 }

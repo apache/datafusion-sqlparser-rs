@@ -131,6 +131,7 @@ define_keywords!(
     ASOF,
     ASSERT,
     ASYMMETRIC,
+    ASYNC,
     AT,
     ATOMIC,
     ATTACH,
@@ -416,6 +417,7 @@ define_keywords!(
     FACTS,
     FAIL,
     FAILOVER,
+    FALLBACK,
     FALSE,
     FAMILY,
     FETCH,
@@ -1240,6 +1242,8 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::FOR,
     // for MYSQL PARTITION SELECTION
     Keyword::PARTITION,
+    // for Clickhouse ARRAY JOIN (ARRAY must not be parsed as a table alias)
+    Keyword::ARRAY,
     // for Clickhouse PREWHERE
     Keyword::PREWHERE,
     Keyword::SETTINGS,

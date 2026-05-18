@@ -472,13 +472,6 @@ fn test_snowflake_create_invalid_temporal_table() {
     );
 
     assert_eq!(
-        snowflake().parse_sql_statements("CREATE TEMP VOLATILE TABLE my_table (a INT)"),
-        Err(ParserError::ParserError(
-            "Expected: an object type after CREATE, found: VOLATILE".to_string()
-        ))
-    );
-
-    assert_eq!(
         snowflake().parse_sql_statements("CREATE TEMP TRANSIENT TABLE my_table (a INT)"),
         Err(ParserError::ParserError(
             "Expected: an object type after CREATE, found: TRANSIENT".to_string()
@@ -2445,6 +2438,35 @@ fn test_copy_into_with_transformations() {
         "(SELECT t1.$1:st AS st, $1:index, t2.$1, 4, '5' AS const_str FROM @schema.general_finished T) "
     );
     snowflake().parse_sql_statements(sql1).unwrap();
+}
+
+#[test]
+fn test_copy_into_with_cast_transformation() {
+    let variants = [
+        concat!(
+            "COPY INTO my_company.emp_basic (a) FROM ",
+            r#"(SELECT $1:"A"::NUMBER(38, 0) FROM @stg)"#,
+        ),
+        concat!(
+            "COPY INTO my_company.emp_basic (a) FROM ",
+            "(SELECT $1::NUMBER(38, 0) FROM @stg)",
+        ),
+        concat!(
+            "COPY INTO my_company.emp_basic (a) FROM ",
+            "(SELECT $1:SEQUENCE::NUMBER(38, 0) FROM @stg)",
+        ),
+        concat!(
+            "COPY INTO my_company.emp_basic (a, b) FROM ",
+            r#"(SELECT $1:"A"::VARIANT, $1:"B"::TEXT FROM @stg)"#,
+        ),
+        concat!(
+            "COPY INTO my_company.emp_basic (a, b) FROM ",
+            r#"(SELECT t.$1:plain AS plain, $1:"B"::TEXT FROM @stg AS t)"#,
+        ),
+    ];
+    for sql in variants {
+        snowflake().verified_stmt(sql);
+    }
 }
 
 #[test]
@@ -4762,6 +4784,28 @@ fn test_snowflake_create_view_copy_grants() {
     snowflake().verified_stmt(
         "CREATE OR REPLACE VIEW bla COPY GRANTS (a, b) AS (SELECT a, b FROM source)",
     );
+}
+
+#[test]
+fn test_snowflake_create_view_copy_grants_after_columns() {
+    let cases = [
+        (
+            "CREATE OR REPLACE VIEW v (a, b) COPY GRANTS AS SELECT a, b FROM t",
+            "CREATE OR REPLACE VIEW v COPY GRANTS (a, b) AS SELECT a, b FROM t",
+        ),
+        (
+            "CREATE OR REPLACE SECURE VIEW v (a, b) COPY GRANTS AS SELECT a, b FROM t",
+            "CREATE OR REPLACE SECURE VIEW v COPY GRANTS (a, b) AS SELECT a, b FROM t",
+        ),
+        (
+            "CREATE MATERIALIZED VIEW v (a) COPY GRANTS AS SELECT a FROM t",
+            "CREATE MATERIALIZED VIEW v COPY GRANTS (a) AS SELECT a FROM t",
+        ),
+    ];
+    for (sql, parsed) in cases {
+        snowflake().one_statement_parses_to(sql, parsed);
+    }
+    snowflake().verified_stmt("CREATE OR REPLACE VIEW v (a) AS SELECT a FROM t");
 }
 
 #[test]

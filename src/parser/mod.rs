@@ -1009,7 +1009,7 @@ impl<'a> Parser<'a> {
             FlushType::OptimizerCosts
         } else if self.parse_keywords(&[Keyword::RELAY, Keyword::LOGS]) {
             if self.parse_keywords(&[Keyword::FOR, Keyword::CHANNEL]) {
-                channel = Some(self.parse_object_name(false).unwrap().to_string());
+                channel = Some(self.parse_object_name(false)?.to_string());
             }
             FlushType::RelayLogs
         } else if self.parse_keywords(&[Keyword::SLOW, Keyword::LOGS]) {
@@ -1378,7 +1378,7 @@ impl<'a> Parser<'a> {
         }
         let alias = self.parse_optional_alias_inner(None, validator)?;
         let order_by = OrderByOptions {
-            asc: self.parse_asc_desc(),
+            sort: self.parse_optional_order_by_sort(),
             nulls_first: None,
         };
         Ok(ExprWithAliasAndOrderBy {
@@ -5115,6 +5115,7 @@ impl<'a> Parser<'a> {
     pub fn parse_create(&mut self) -> Result<Statement, ParserError> {
         let or_replace = self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
         let or_alter = self.parse_keywords(&[Keyword::OR, Keyword::ALTER]);
+        let multiset = self.maybe_parse_multiset();
         let local = self.parse_one_of_keywords(&[Keyword::LOCAL]).is_some();
         let global = self.parse_one_of_keywords(&[Keyword::GLOBAL]).is_some();
         let transient = self.parse_one_of_keywords(&[Keyword::TRANSIENT]).is_some();
@@ -5128,13 +5129,14 @@ impl<'a> Parser<'a> {
         let temporary = self
             .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
             .is_some();
+        let volatile = self.parse_keyword(Keyword::VOLATILE);
         let persistent = dialect_of!(self is DuckDbDialect)
             && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
         let create_view_params = self.parse_create_view_params()?;
         if self.peek_keywords(&[Keyword::SNAPSHOT, Keyword::TABLE]) {
             self.parse_create_snapshot_table().map(Into::into)
         } else if self.parse_keyword(Keyword::TABLE) {
-            self.parse_create_table(or_replace, temporary, global, transient)
+            self.parse_create_table(or_replace, temporary, global, transient, volatile, multiset)
                 .map(Into::into)
         } else if self.peek_keyword(Keyword::MATERIALIZED)
             || self.peek_keyword(Keyword::VIEW)
@@ -6407,6 +6409,12 @@ impl<'a> Parser<'a> {
             None
         };
         let location = hive_formats.as_ref().and_then(|hf| hf.location.clone());
+
+        let with_connection = if self.parse_keywords(&[Keyword::WITH, Keyword::CONNECTION]) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
         let table_options = if !table_properties.is_empty() {
             CreateTableOptions::TableProperties(table_properties)
@@ -6421,6 +6429,7 @@ impl<'a> Parser<'a> {
             .hive_distribution(hive_distribution)
             .hive_formats(hive_formats)
             .table_options(table_options)
+            .with_connection(with_connection)
             .or_replace(or_replace)
             .if_not_exists(if_not_exists)
             .external(true)
@@ -6524,10 +6533,16 @@ impl<'a> Parser<'a> {
         let name_before_not_exists = !if_not_exists_first
             && self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let if_not_exists = if_not_exists_first || name_before_not_exists;
-        let copy_grants = self.parse_keywords(&[Keyword::COPY, Keyword::GRANTS]);
+        let mut copy_grants = self.parse_keywords(&[Keyword::COPY, Keyword::GRANTS]);
         // Many dialects support `OR ALTER` right after `CREATE`, but we don't (yet).
         // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
         let columns = self.parse_view_columns()?;
+        // Snowflake also documents `COPY GRANTS` *after* the column list; accept
+        // either position, but not both.
+        // <https://docs.snowflake.com/en/sql-reference/sql/create-view#syntax>
+        if !copy_grants {
+            copy_grants = self.parse_keywords(&[Keyword::COPY, Keyword::GRANTS]);
+        }
         let mut options = CreateTableOptions::None;
         let with_options = self.parse_options(Keyword::WITH)?;
         if !with_options.is_empty() {
@@ -8019,6 +8034,7 @@ impl<'a> Parser<'a> {
     /// Parse a `CREATE INDEX` statement.
     pub fn parse_create_index(&mut self, unique: bool) -> Result<CreateIndex, ParserError> {
         let concurrently = self.parse_keyword(Keyword::CONCURRENTLY);
+        let r#async = self.parse_keyword(Keyword::ASYNC);
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
 
         let mut using = None;
@@ -8098,6 +8114,7 @@ impl<'a> Parser<'a> {
             columns,
             unique,
             concurrently,
+            r#async,
             if_not_exists,
             include,
             nulls_distinct,
@@ -8461,10 +8478,24 @@ impl<'a> Parser<'a> {
         temporary: bool,
         global: Option<bool>,
         transient: bool,
+        volatile: bool,
+        multiset: Option<bool>,
     ) -> Result<CreateTable, ParserError> {
         let allow_unquoted_hyphen = dialect_of!(self is BigQueryDialect);
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name(allow_unquoted_hyphen)?;
+
+        let fallback = if self.dialect.supports_leading_comma_before_table_options()
+            && self.consume_token(&Token::Comma)
+        {
+            let fallback = self.maybe_parse_fallback()?;
+            if fallback.is_none() {
+                self.prev_token(); // Put back comma.
+            }
+            fallback
+        } else {
+            None
+        };
 
         // PostgreSQL PARTITION OF for child partition tables
         // Note: This is a PostgreSQL-specific feature, but the dialect check was intentionally
@@ -8555,6 +8586,17 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // ClickHouse allows PARTITION BY after ORDER BY
+        // https://clickhouse.com/docs/en/sql-reference/statements/create/table#partition-by
+        let partition_by = if create_table_config.partition_by.is_none()
+            && self.dialect.supports_partition_by_after_order_by()
+            && self.parse_keywords(&[Keyword::PARTITION, Keyword::BY])
+        {
+            Some(Box::new(self.parse_expr()?))
+        } else {
+            create_table_config.partition_by
+        };
+
         let on_commit = if self.parse_keywords(&[Keyword::ON, Keyword::COMMIT]) {
             Some(self.parse_create_table_on_commit()?)
         } else {
@@ -8606,6 +8648,13 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // `WITH DATA` clause only applies if there is a query body.
+        let with_data = if query.is_some() {
+            self.maybe_parse_with_data()?
+        } else {
+            None
+        };
+
         Ok(CreateTableBuilder::new(table_name)
             .temporary(temporary)
             .columns(columns)
@@ -8613,6 +8662,9 @@ impl<'a> Parser<'a> {
             .or_replace(or_replace)
             .if_not_exists(if_not_exists)
             .transient(transient)
+            .volatile(volatile)
+            .multiset(multiset)
+            .fallback(fallback)
             .hive_distribution(hive_distribution)
             .hive_formats(hive_formats)
             .global(global)
@@ -8625,19 +8677,61 @@ impl<'a> Parser<'a> {
             .on_commit(on_commit)
             .on_cluster(on_cluster)
             .clustered_by(clustered_by)
-            .partition_by(create_table_config.partition_by)
+            .partition_by(partition_by)
             .cluster_by(create_table_config.cluster_by)
             .inherits(create_table_config.inherits)
             .partition_of(partition_of)
             .for_values(for_values)
             .table_options(create_table_config.table_options)
             .primary_key(primary_key)
+            .with_data(with_data)
             .strict(strict)
             .backup(backup)
             .diststyle(diststyle)
             .distkey(distkey)
             .sortkey(sortkey)
             .build())
+    }
+
+    /// Parse `MULTISET` table-kind prefix on `CREATE TABLE`.
+    fn maybe_parse_multiset(&mut self) -> Option<bool> {
+        match self.parse_one_of_keywords(&[Keyword::SET, Keyword::MULTISET]) {
+            Some(Keyword::MULTISET) => Some(true),
+            Some(Keyword::SET) => Some(false),
+            _ => None,
+        }
+    }
+
+    /// Parse `FALLBACK` option on a `CREATE TABLE` statement,
+    fn maybe_parse_fallback(&mut self) -> Result<Option<bool>, ParserError> {
+        if self.parse_keywords(&[Keyword::NO, Keyword::FALLBACK]) {
+            Ok(Some(false))
+        } else if self.parse_keyword(Keyword::FALLBACK) {
+            Ok(Some(true))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Parse [`WithData`] clause on `CREATE TABLE ... AS` statement.
+    fn maybe_parse_with_data(&mut self) -> Result<Option<WithData>, ParserError> {
+        let data = if self.parse_keywords(&[Keyword::WITH, Keyword::DATA]) {
+            true
+        } else if self.parse_keywords(&[Keyword::WITH, Keyword::NO, Keyword::DATA]) {
+            false
+        } else {
+            return Ok(None);
+        };
+
+        let statistics = if self.parse_keywords(&[Keyword::AND, Keyword::STATISTICS]) {
+            Some(true)
+        } else if self.parse_keywords(&[Keyword::AND, Keyword::NO, Keyword::STATISTICS]) {
+            Some(false)
+        } else {
+            None
+        };
+
+        Ok(Some(WithData { data, statistics }))
     }
 
     fn maybe_parse_create_table_like(
@@ -15869,6 +15963,33 @@ impl<'a> Parser<'a> {
                         constraint: self.parse_join_constraint(false)?,
                     },
                 }
+            } else if self.dialect.supports_array_join_syntax()
+                && self.parse_keywords(&[Keyword::INNER, Keyword::ARRAY, Keyword::JOIN])
+            {
+                // ClickHouse: INNER ARRAY JOIN
+                Join {
+                    relation: self.parse_table_factor()?,
+                    global,
+                    join_operator: JoinOperator::InnerArrayJoin,
+                }
+            } else if self.dialect.supports_array_join_syntax()
+                && self.parse_keywords(&[Keyword::LEFT, Keyword::ARRAY, Keyword::JOIN])
+            {
+                // ClickHouse: LEFT ARRAY JOIN
+                Join {
+                    relation: self.parse_table_factor()?,
+                    global,
+                    join_operator: JoinOperator::LeftArrayJoin,
+                }
+            } else if self.dialect.supports_array_join_syntax()
+                && self.parse_keywords(&[Keyword::ARRAY, Keyword::JOIN])
+            {
+                // ClickHouse: ARRAY JOIN
+                Join {
+                    relation: self.parse_table_factor()?,
+                    global,
+                    join_operator: JoinOperator::ArrayJoin,
+                }
             } else {
                 let natural = self.parse_keyword(Keyword::NATURAL);
                 let peek_keyword = if let Token::Word(w) = &self.peek_token_ref().token {
@@ -18841,6 +18962,15 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse ASC or DESC and map to [OrderBySort].
+    fn parse_optional_order_by_sort(&mut self) -> Option<OrderBySort> {
+        match self.parse_asc_desc() {
+            Some(true) => Some(OrderBySort::Asc),
+            Some(false) => Some(OrderBySort::Desc),
+            None => None,
+        }
+    }
+
     /// Parse an [OrderByExpr] expression.
     pub fn parse_order_by_expr(&mut self) -> Result<OrderByExpr, ParserError> {
         self.parse_order_by_expr_inner(false)
@@ -18877,7 +19007,18 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let options = self.parse_order_by_options()?;
+        let options = if !with_operator_class
+            && self.dialect.supports_order_by_using_operator()
+            && self.parse_keyword(Keyword::USING)
+        {
+            let op = self.parse_order_by_using_operator()?;
+            OrderByOptions {
+                sort: Some(OrderBySort::Using(op)),
+                nulls_first: self.parse_null_ordering_modifier(),
+            }
+        } else {
+            self.parse_order_by_options()?
+        };
 
         let with_fill = if self.dialect.supports_with_fill()
             && self.parse_keywords(&[Keyword::WITH, Keyword::FILL])
@@ -18897,18 +19038,33 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    fn parse_order_by_options(&mut self) -> Result<OrderByOptions, ParserError> {
-        let asc = self.parse_asc_desc();
+    fn parse_order_by_using_operator(&mut self) -> Result<ObjectName, ParserError> {
+        if self.parse_keyword(Keyword::OPERATOR) {
+            self.expect_token(&Token::LParen)?;
+            let operator_name = self.parse_operator_name()?;
+            self.expect_token(&Token::RParen)?;
+            return Ok(operator_name);
+        }
 
-        let nulls_first = if self.parse_keywords(&[Keyword::NULLS, Keyword::FIRST]) {
+        let token = self.next_token();
+        Ok(ObjectName::from(vec![Ident::new(token.token.to_string())]))
+    }
+
+    fn parse_null_ordering_modifier(&mut self) -> Option<bool> {
+        if self.parse_keywords(&[Keyword::NULLS, Keyword::FIRST]) {
             Some(true)
         } else if self.parse_keywords(&[Keyword::NULLS, Keyword::LAST]) {
             Some(false)
         } else {
             None
-        };
+        }
+    }
 
-        Ok(OrderByOptions { asc, nulls_first })
+    fn parse_order_by_options(&mut self) -> Result<OrderByOptions, ParserError> {
+        let sort = self.parse_optional_order_by_sort();
+        let nulls_first = self.parse_null_ordering_modifier();
+
+        Ok(OrderByOptions { sort, nulls_first })
     }
 
     // Parse a WITH FILL clause (ClickHouse dialect)
@@ -21159,7 +21315,7 @@ mod tests {
                 column: OrderByExpr {
                     expr: Expr::Identifier(name.into()),
                     options: OrderByOptions {
-                        asc: None,
+                        sort: None,
                         nulls_first: None,
                     },
                     with_fill: None,

@@ -45,6 +45,14 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_partition_by_after_order_by(&self) -> bool {
+        true
+    }
+
+    fn supports_array_join_syntax(&self) -> bool {
+        true
+    }
+
     fn supports_group_by_expr(&self) -> bool {
         true
     }

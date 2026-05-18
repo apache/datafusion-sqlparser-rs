@@ -2596,7 +2596,7 @@ fn parse_select_order_by() {
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("lname")),
                     options: OrderByOptions {
-                        asc: Some(true),
+                        sort: Some(OrderBySort::Asc),
                         nulls_first: None,
                     },
                     with_fill: None,
@@ -2604,7 +2604,7 @@ fn parse_select_order_by() {
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("fname")),
                     options: OrderByOptions {
-                        asc: Some(false),
+                        sort: Some(OrderBySort::Desc),
                         nulls_first: None,
                     },
                     with_fill: None,
@@ -2612,7 +2612,7 @@ fn parse_select_order_by() {
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("id")),
                     options: OrderByOptions {
-                        asc: None,
+                        sort: None,
                         nulls_first: None,
                     },
                     with_fill: None,
@@ -2637,7 +2637,7 @@ fn parse_select_order_by_limit() {
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("lname")),
                 options: OrderByOptions {
-                    asc: Some(true),
+                    sort: Some(OrderBySort::Asc),
                     nulls_first: None,
                 },
                 with_fill: None,
@@ -2645,7 +2645,7 @@ fn parse_select_order_by_limit() {
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("fname")),
                 options: OrderByOptions {
-                    asc: Some(false),
+                    sort: Some(OrderBySort::Desc),
                     nulls_first: None,
                 },
                 with_fill: None,
@@ -2675,63 +2675,63 @@ fn parse_select_order_by_all() {
         (
             "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL",
             OrderByKind::All(OrderByOptions {
-                asc: None,
+                sort: None,
                 nulls_first: None,
             }),
         ),
         (
             "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL NULLS FIRST",
             OrderByKind::All(OrderByOptions {
-                asc: None,
+                sort: None,
                 nulls_first: Some(true),
             }),
         ),
         (
             "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL NULLS LAST",
             OrderByKind::All(OrderByOptions {
-                asc: None,
+                sort: None,
                 nulls_first: Some(false),
             }),
         ),
         (
             "SELECT id, fname, lname FROM customer ORDER BY ALL ASC",
             OrderByKind::All(OrderByOptions {
-                asc: Some(true),
+                sort: Some(OrderBySort::Asc),
                 nulls_first: None,
             }),
         ),
         (
             "SELECT id, fname, lname FROM customer ORDER BY ALL ASC NULLS FIRST",
             OrderByKind::All(OrderByOptions {
-                asc: Some(true),
+                sort: Some(OrderBySort::Asc),
                 nulls_first: Some(true),
             }),
         ),
         (
             "SELECT id, fname, lname FROM customer ORDER BY ALL ASC NULLS LAST",
             OrderByKind::All(OrderByOptions {
-                asc: Some(true),
+                sort: Some(OrderBySort::Asc),
                 nulls_first: Some(false),
             }),
         ),
         (
             "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL DESC",
             OrderByKind::All(OrderByOptions {
-                asc: Some(false),
+                sort: Some(OrderBySort::Desc),
                 nulls_first: None,
             }),
         ),
         (
             "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL DESC NULLS FIRST",
             OrderByKind::All(OrderByOptions {
-                asc: Some(false),
+                sort: Some(OrderBySort::Desc),
                 nulls_first: Some(true),
             }),
         ),
         (
             "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL DESC NULLS LAST",
             OrderByKind::All(OrderByOptions {
-                asc: Some(false),
+                sort: Some(OrderBySort::Desc),
                 nulls_first: Some(false),
             }),
         ),
@@ -2758,7 +2758,7 @@ fn parse_select_order_by_not_support_all() {
             OrderByKind::Expressions(vec![OrderByExpr {
                 expr: Expr::Identifier(Ident::new("ALL")),
                 options: OrderByOptions {
-                    asc: None,
+                    sort: None,
                     nulls_first: None,
                 },
                 with_fill: None,
@@ -2769,7 +2769,7 @@ fn parse_select_order_by_not_support_all() {
             OrderByKind::Expressions(vec![OrderByExpr {
                 expr: Expr::Identifier(Ident::new("ALL")),
                 options: OrderByOptions {
-                    asc: Some(true),
+                    sort: Some(OrderBySort::Asc),
                     nulls_first: Some(true),
                 },
                 with_fill: None,
@@ -2780,7 +2780,7 @@ fn parse_select_order_by_not_support_all() {
             OrderByKind::Expressions(vec![OrderByExpr {
                 expr: Expr::Identifier(Ident::new("ALL")),
                 options: OrderByOptions {
-                    asc: Some(false),
+                    sort: Some(OrderBySort::Desc),
                     nulls_first: Some(false),
                 },
                 with_fill: None,
@@ -2803,7 +2803,7 @@ fn parse_select_order_by_nulls_order() {
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("lname")),
                 options: OrderByOptions {
-                    asc: Some(true),
+                    sort: Some(OrderBySort::Asc),
                     nulls_first: Some(true),
                 },
                 with_fill: None,
@@ -2811,7 +2811,7 @@ fn parse_select_order_by_nulls_order() {
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("fname")),
                 options: OrderByOptions {
-                    asc: Some(false),
+                    sort: Some(OrderBySort::Desc),
                     nulls_first: Some(false),
                 },
                 with_fill: None,
@@ -2825,6 +2825,67 @@ fn parse_select_order_by_nulls_order() {
         limit_by: vec![],
     };
     assert_eq!(Some(expected_limit_clause), select.limit_clause);
+}
+
+#[test]
+fn parse_aggregate_order_by_using_operator() {
+    let sql = "SELECT aggfns(DISTINCT a, a, c ORDER BY c USING ~<~, a) FROM t";
+    let dialects = all_dialects_where(|d| d.supports_order_by_using_operator());
+    let select = dialects.verified_only_select(sql);
+    let SelectItem::UnnamedExpr(Expr::Function(Function {
+        args: FunctionArguments::List(FunctionArgumentList { clauses, .. }),
+        ..
+    })) = &select.projection[0]
+    else {
+        unreachable!("expected aggregate function in projection");
+    };
+
+    let Some(FunctionArgumentClause::OrderBy(order_by_exprs)) = clauses
+        .iter()
+        .find(|clause| matches!(clause, FunctionArgumentClause::OrderBy(_)))
+    else {
+        unreachable!("expected ORDER BY clause in aggregate function argument list");
+    };
+
+    assert_eq!(
+        order_by_exprs[0].options.sort,
+        Some(OrderBySort::Using(ObjectName::from(vec!["~<~".into()])))
+    );
+    assert_eq!(order_by_exprs[1].options.sort, None);
+}
+
+#[test]
+fn parse_order_by_using_operator_syntax() {
+    let dialects = all_dialects_where(|d| d.supports_order_by_using_operator());
+    dialects.one_statement_parses_to(
+        "SELECT a FROM t ORDER BY a USING OPERATOR(<)",
+        "SELECT a FROM t ORDER BY a USING <",
+    );
+
+    let query = dialects
+        .verified_query("SELECT a FROM t ORDER BY a USING OPERATOR(pg_catalog.<) NULLS LAST");
+    let order_by = query.order_by.expect("expected ORDER BY clause");
+    let OrderByKind::Expressions(exprs) = order_by.kind else {
+        unreachable!("expected ORDER BY expressions");
+    };
+
+    assert_eq!(
+        exprs[0].options.sort,
+        Some(OrderBySort::Using(ObjectName::from(vec![
+            Ident::new("pg_catalog"),
+            Ident::new("<"),
+        ])))
+    );
+    assert_eq!(exprs[0].options.nulls_first, Some(false));
+}
+
+#[test]
+fn parse_order_by_using_operator_invalid_cases() {
+    let dialects = all_dialects_where(|d| d.supports_order_by_using_operator());
+    let err = dialects
+        .parse_sql_statements("SELECT a FROM t ORDER BY a USING OPERATOR();")
+        .unwrap_err();
+    assert!(matches!(err, ParserError::ParserError(_)));
 }
 
 #[test]
@@ -3033,7 +3094,7 @@ fn parse_select_qualify() {
                     order_by: vec![OrderByExpr {
                         expr: Expr::Identifier(Ident::new("o")),
                         options: OrderByOptions {
-                            asc: None,
+                            sort: None,
                             nulls_first: None,
                         },
                         with_fill: None,
@@ -3482,7 +3543,7 @@ fn parse_listagg() {
                         span: Span::empty(),
                     }),
                     options: OrderByOptions {
-                        asc: None,
+                        sort: None,
                         nulls_first: None,
                     },
                     with_fill: None,
@@ -3494,7 +3555,7 @@ fn parse_listagg() {
                         span: Span::empty(),
                     }),
                     options: OrderByOptions {
-                        asc: None,
+                        sort: None,
                         nulls_first: None,
                     },
                     with_fill: None,
@@ -5841,7 +5902,7 @@ fn parse_window_functions() {
                 order_by: vec![OrderByExpr {
                     expr: Expr::Identifier(Ident::new("dt")),
                     options: OrderByOptions {
-                        asc: Some(false),
+                        sort: Some(OrderBySort::Desc),
                         nulls_first: None,
                     },
                     with_fill: None,
@@ -6067,7 +6128,7 @@ fn test_parse_named_window() {
                             span: Span::empty(),
                         }),
                         options: OrderByOptions {
-                            asc: None,
+                            sort: None,
                             nulls_first: None,
                         },
                         with_fill: None,
@@ -9582,7 +9643,7 @@ fn parse_create_index() {
                 expr: Expr::Identifier(Ident::new("name")),
                 with_fill: None,
                 options: OrderByOptions {
-                    asc: None,
+                    sort: None,
                     nulls_first: None,
                 },
             },
@@ -9593,7 +9654,7 @@ fn parse_create_index() {
                 expr: Expr::Identifier(Ident::new("age")),
                 with_fill: None,
                 options: OrderByOptions {
-                    asc: Some(false),
+                    sort: Some(OrderBySort::Desc),
                     nulls_first: None,
                 },
             },
@@ -9628,7 +9689,7 @@ fn test_create_index_with_using_function() {
                 expr: Expr::Identifier(Ident::new("name")),
                 with_fill: None,
                 options: OrderByOptions {
-                    asc: None,
+                    sort: None,
                     nulls_first: None,
                 },
             },
@@ -9639,7 +9700,7 @@ fn test_create_index_with_using_function() {
                 expr: Expr::Identifier(Ident::new("age")),
                 with_fill: None,
                 options: OrderByOptions {
-                    asc: Some(false),
+                    sort: Some(OrderBySort::Desc),
                     nulls_first: None,
                 },
             },
@@ -9653,6 +9714,7 @@ fn test_create_index_with_using_function() {
             columns,
             unique,
             concurrently,
+            r#async,
             if_not_exists,
             include,
             nulls_distinct: None,
@@ -9667,6 +9729,7 @@ fn test_create_index_with_using_function() {
             assert_eq!(indexed_columns, columns);
             assert!(unique);
             assert!(!concurrently);
+            assert!(!r#async);
             assert!(if_not_exists);
             assert!(include.is_empty());
             assert!(with.is_empty());
@@ -9684,7 +9747,7 @@ fn test_create_index_with_with_clause() {
         column: OrderByExpr {
             expr: Expr::Identifier(Ident::new("title")),
             options: OrderByOptions {
-                asc: None,
+                sort: None,
                 nulls_first: None,
             },
             with_fill: None,
@@ -9708,6 +9771,7 @@ fn test_create_index_with_with_clause() {
             columns,
             unique,
             concurrently,
+            r#async,
             if_not_exists,
             include,
             nulls_distinct: None,
@@ -9721,6 +9785,7 @@ fn test_create_index_with_with_clause() {
             pretty_assertions::assert_eq!(indexed_columns, columns);
             assert!(unique);
             assert!(!concurrently);
+            assert!(!r#async);
             assert!(!if_not_exists);
             assert!(include.is_empty());
             pretty_assertions::assert_eq!(with_parameters, with);
@@ -9729,6 +9794,12 @@ fn test_create_index_with_with_clause() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_create_index_async() {
+    verified_stmt("CREATE INDEX ASYNC my_index ON my_table(col1)");
+    verified_stmt("CREATE UNIQUE INDEX ASYNC my_index ON my_table(col1)");
 }
 
 #[test]
@@ -10245,7 +10316,7 @@ fn parse_merge() {
                         }),
                         action: MergeAction::Update(MergeUpdateExpr {
                             update_token: AttachedToken::empty(),
-                            assignments: vec![
+                            kind: MergeUpdateKind::Set(vec![
                                 Assignment {
                                     target: AssignmentTarget::ColumnName(ObjectName::from(vec![
                                         Ident::new("dest"),
@@ -10266,7 +10337,7 @@ fn parse_merge() {
                                         Ident::new("G"),
                                     ]),
                                 },
-                            ],
+                            ]),
                             update_predicate: None,
                             delete_predicate: None,
                         }),
@@ -10327,6 +10398,45 @@ WHEN NOT MATCHED THEN \
 INSERT (PLAYGROUND.FOO.ID, PLAYGROUND.FOO.NAME) \
 VALUES (1, 'abc')";
     all_dialects().verified_stmt(sql);
+
+    // MERGE with wildcard (UPDATE SET * and INSERT *)
+    let sql = "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN UPDATE SET * WHEN NOT MATCHED THEN INSERT *";
+    match verified_stmt(sql) {
+        Statement::Merge(merge) => {
+            assert_eq!(merge.clauses.len(), 2);
+
+            match &merge.clauses[0].action {
+                MergeAction::Update(update_expr) => {
+                    assert!(matches!(update_expr.kind, MergeUpdateKind::Wildcard));
+                }
+                _ => panic!("Expected UPDATE action"),
+            }
+
+            match &merge.clauses[1].action {
+                MergeAction::Insert(insert_expr) => {
+                    assert!(matches!(insert_expr.kind, MergeInsertKind::Wildcard));
+                    assert!(insert_expr.columns.is_empty());
+                }
+                _ => panic!("Expected INSERT action"),
+            }
+        }
+        _ => panic!("Expected MERGE statement"),
+    }
+
+    verified_stmt("MERGE INTO target USING source ON target.id = source.id WHEN MATCHED AND source.active = 1 THEN UPDATE SET *");
+
+    verified_stmt("MERGE INTO target USING source ON target.id = source.id WHEN NOT MATCHED BY TARGET THEN INSERT *");
+
+    verified_stmt("MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN UPDATE SET * WHEN NOT MATCHED THEN INSERT (a, b) VALUES (source.a, source.b)");
+
+    let sql = concat!(
+        "MERGE INTO t1 AS target ",
+        "USING (SELECT * FROM t2) AS source ",
+        "ON target.id = source.id ",
+        "WHEN MATCHED THEN UPDATE SET * ",
+        "WHEN NOT MATCHED THEN INSERT *"
+    );
+    verified_stmt(sql);
 }
 
 #[test]
@@ -13325,7 +13435,7 @@ fn test_match_recognize() {
             order_by: vec![OrderByExpr {
                 expr: Expr::Identifier(Ident::new("price_date")),
                 options: OrderByOptions {
-                    asc: None,
+                    sort: None,
                     nulls_first: None,
                 },
                 with_fill: None,
@@ -18294,7 +18404,7 @@ fn test_parse_semantic_view_table_factor() {
 
 #[test]
 fn parse_adjacent_string_literal_concatenation() {
-    let sql = r#"SELECT 'M' "y" 'S' "q" 'l'"#;
+    let sql = r#"SELECT 'M' 'y' 'S' 'q' 'l'"#;
     let dialects = all_dialects_where(|d| d.supports_string_literal_concatenation());
     dialects.one_statement_parses_to(sql, r"SELECT 'MySql'");
 

@@ -292,6 +292,7 @@ pub fn all_dialects() -> TestedDialects {
         Box::new(DatabricksDialect {}),
         Box::new(ClickHouseDialect {}),
         Box::new(OracleDialect {}),
+        Box::new(TeradataDialect {}),
     ])
 }
 
@@ -374,6 +375,7 @@ pub fn table_alias(explicit: bool, name: impl Into<String>) -> Option<TableAlias
         explicit,
         name: Ident::new(name),
         columns: vec![],
+        at: None,
     })
 }
 

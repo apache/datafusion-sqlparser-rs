@@ -691,7 +691,7 @@ fn table_constraint_unique_primary_ctor(
             column: OrderByExpr {
                 expr: Expr::Identifier(ident),
                 options: OrderByOptions {
-                    asc: None,
+                    sort: None,
                     nulls_first: None,
                 },
                 with_fill: None,
@@ -2813,7 +2813,7 @@ fn parse_update_with_order_by() {
                         span: Span::empty(),
                     }),
                     options: OrderByOptions {
-                        asc: Some(true),
+                        sort: Some(OrderBySort::Asc),
                         nulls_first: None,
                     },
                     with_fill: None,
@@ -2840,7 +2840,7 @@ fn parse_update_with_order_by_and_limit() {
                         span: Span::empty(),
                     }),
                     options: OrderByOptions {
-                        asc: Some(true),
+                        sort: Some(OrderBySort::Asc),
                         nulls_first: None,
                     },
                     with_fill: None,
@@ -2866,7 +2866,7 @@ fn parse_delete_with_order_by() {
                         span: Span::empty(),
                     }),
                     options: OrderByOptions {
-                        asc: Some(false),
+                        sort: Some(OrderBySort::Desc),
                         nulls_first: None,
                     },
                     with_fill: None,
@@ -4893,4 +4893,10 @@ fn parse_create_database_with_charset_option_ordering() {
         "CREATE DATABASE mydb COLLATE utf8mb4_unicode_ci CHARACTER SET utf8mb4",
         "CREATE DATABASE mydb DEFAULT CHARACTER SET utf8mb4 DEFAULT COLLATE utf8mb4_unicode_ci",
     );
+}
+
+#[test]
+fn parse_adjacent_string_literal_concatenation() {
+    let sql = r#"SELECT 'M' "y" 'S' "q" 'l'"#;
+    mysql().one_statement_parses_to(sql, r"SELECT 'MySql'");
 }

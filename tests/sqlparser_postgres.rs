@@ -950,8 +950,10 @@ fn parse_alter_collation() {
 #[test]
 fn parse_create_text_search_configuration() {
     assert_eq!(
-        pg().verified_stmt("CREATE TEXT SEARCH CONFIGURATION public.myconfig (PARSER = myparser)"),
-        Statement::CreateTextSearchConfiguration(CreateTextSearchConfiguration {
+        pg_and_generic()
+            .verified_stmt("CREATE TEXT SEARCH CONFIGURATION public.myconfig (PARSER = myparser)"),
+        Statement::CreateTextSearch(CreateTextSearch {
+            kind: TextSearchObjectType::Configuration,
             name: ObjectName::from(vec![Ident::new("public"), Ident::new("myconfig")]),
             options: vec![SqlOption::KeyValue {
                 key: Ident::new("PARSER"),
@@ -961,7 +963,7 @@ fn parse_create_text_search_configuration() {
     );
 
     assert_eq!(
-        pg().parse_sql_statements(
+        pg_and_generic().parse_sql_statements(
             "CREATE TEXT SEARCH CONFIGURATION myconfig PARSER = pg_catalog.default"
         ),
         Err(ParserError::ParserError(
@@ -973,10 +975,11 @@ fn parse_create_text_search_configuration() {
 #[test]
 fn parse_create_text_search_dictionary() {
     assert_eq!(
-        pg().verified_stmt(
+        pg_and_generic().verified_stmt(
             "CREATE TEXT SEARCH DICTIONARY public.mydict (TEMPLATE = snowball, language = english)"
         ),
-        Statement::CreateTextSearchDictionary(CreateTextSearchDictionary {
+        Statement::CreateTextSearch(CreateTextSearch {
+            kind: TextSearchObjectType::Dictionary,
             name: ObjectName::from(vec![Ident::new("public"), Ident::new("mydict")]),
             options: vec![
                 SqlOption::KeyValue {
@@ -992,7 +995,7 @@ fn parse_create_text_search_dictionary() {
     );
 
     assert_eq!(
-        pg().parse_sql_statements("CREATE TEXT SEARCH DICTIONARY mydict"),
+        pg_and_generic().parse_sql_statements("CREATE TEXT SEARCH DICTIONARY mydict"),
         Err(ParserError::ParserError(
             "Expected: (, found: EOF".to_string()
         ))
@@ -1002,10 +1005,11 @@ fn parse_create_text_search_dictionary() {
 #[test]
 fn parse_create_text_search_parser() {
     assert_eq!(
-        pg().verified_stmt(
+        pg_and_generic().verified_stmt(
             "CREATE TEXT SEARCH PARSER myparser (START = prsd_start, GETTOKEN = prsd_nexttoken, END = prsd_end, LEXTYPES = prsd_lextype, HEADLINE = prsd_headline)"
         ),
-        Statement::CreateTextSearchParser(CreateTextSearchParser {
+        Statement::CreateTextSearch(CreateTextSearch {
+            kind: TextSearchObjectType::Parser,
             name: ObjectName::from(vec![Ident::new("myparser")]),
             options: vec![
                 SqlOption::KeyValue {
@@ -1033,7 +1037,8 @@ fn parse_create_text_search_parser() {
     );
 
     assert_eq!(
-        pg().parse_sql_statements("CREATE TEXT SEARCH PARSER myparser START = prsd_start"),
+        pg_and_generic()
+            .parse_sql_statements("CREATE TEXT SEARCH PARSER myparser START = prsd_start"),
         Err(ParserError::ParserError(
             "Expected: (, found: START".to_string()
         ))
@@ -1043,10 +1048,11 @@ fn parse_create_text_search_parser() {
 #[test]
 fn parse_create_text_search_template() {
     assert_eq!(
-        pg().verified_stmt(
+        pg_and_generic().verified_stmt(
             "CREATE TEXT SEARCH TEMPLATE mytemplate (INIT = dinit, LEXIZE = dlexize)"
         ),
-        Statement::CreateTextSearchTemplate(CreateTextSearchTemplate {
+        Statement::CreateTextSearch(CreateTextSearch {
+            kind: TextSearchObjectType::Template,
             name: ObjectName::from(vec![Ident::new("mytemplate")]),
             options: vec![
                 SqlOption::KeyValue {
@@ -1062,7 +1068,8 @@ fn parse_create_text_search_template() {
     );
 
     assert_eq!(
-        pg().parse_sql_statements("CREATE TEXT SEARCH TEMPLATE mytemplate LEXIZE = dlexize"),
+        pg_and_generic()
+            .parse_sql_statements("CREATE TEXT SEARCH TEMPLATE mytemplate LEXIZE = dlexize"),
         Err(ParserError::ParserError(
             "Expected: (, found: LEXIZE".to_string()
         ))
@@ -1073,16 +1080,18 @@ fn parse_create_text_search_template() {
 fn parse_create_text_search_schema_qualified_option_value() {
     // PostgreSQL's TEXT SEARCH options accept schema-qualified names as
     // values (e.g. `PARSER = pg_catalog.default`). Ensure they round-trip.
-    pg().verified_stmt(
+    pg_and_generic().verified_stmt(
         "CREATE TEXT SEARCH CONFIGURATION public.myconfig (PARSER = pg_catalog.default)",
     );
-    pg().verified_stmt("CREATE TEXT SEARCH DICTIONARY public.d (TEMPLATE = pg_catalog.simple)");
+    pg_and_generic()
+        .verified_stmt("CREATE TEXT SEARCH DICTIONARY public.d (TEMPLATE = pg_catalog.simple)");
 }
 
 #[test]
 fn parse_create_text_search_invalid_subtype() {
     assert_eq!(
-        pg().parse_sql_statements("CREATE TEXT SEARCH UNKNOWN myname (option = value)"),
+        pg_and_generic()
+            .parse_sql_statements("CREATE TEXT SEARCH UNKNOWN myname (option = value)"),
         Err(ParserError::ParserError(
             "Expected: CONFIGURATION, DICTIONARY, PARSER, or TEMPLATE after CREATE TEXT SEARCH, found: UNKNOWN".to_string()
         ))

@@ -5823,132 +5823,70 @@ impl From<AlterPolicy> for crate::ast::Statement {
     }
 }
 
-/// `CREATE TEXT SEARCH CONFIGURATION` statement.
+/// Kind of object created by a `CREATE TEXT SEARCH` statement.
+///
+/// Note: this is a PostgreSQL-specific concept.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TextSearchObjectType {
+    /// `CREATE TEXT SEARCH CONFIGURATION`
+    Configuration,
+    /// `CREATE TEXT SEARCH DICTIONARY`
+    Dictionary,
+    /// `CREATE TEXT SEARCH PARSER`
+    Parser,
+    /// `CREATE TEXT SEARCH TEMPLATE`
+    Template,
+}
+
+impl fmt::Display for TextSearchObjectType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            TextSearchObjectType::Configuration => "CONFIGURATION",
+            TextSearchObjectType::Dictionary => "DICTIONARY",
+            TextSearchObjectType::Parser => "PARSER",
+            TextSearchObjectType::Template => "TEMPLATE",
+        })
+    }
+}
+
+/// `CREATE TEXT SEARCH { CONFIGURATION | DICTIONARY | PARSER | TEMPLATE }` statement.
 ///
 /// Note: this is a PostgreSQL-specific statement.
-/// <https://www.postgresql.org/docs/current/sql-createtsconfig.html>
+/// - <https://www.postgresql.org/docs/current/sql-createtsconfig.html>
+/// - <https://www.postgresql.org/docs/current/sql-createtsdictionary.html>
+/// - <https://www.postgresql.org/docs/current/sql-createtsparser.html>
+/// - <https://www.postgresql.org/docs/current/sql-createtstemplate.html>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct CreateTextSearchConfiguration {
-    /// Name of the text search configuration being created.
+pub struct CreateTextSearch {
+    /// Kind of text search object being created.
+    pub kind: TextSearchObjectType,
+    /// Name of the text search object being created.
     pub name: ObjectName,
-    /// Options list. PostgreSQL requires `PARSER = parser_name`; the
-    /// parser does not enforce required keys (matching other options-list
-    /// handling in this crate).
+    /// Options list. PostgreSQL requires kind-specific keys (e.g. `PARSER`
+    /// for configurations, `TEMPLATE` for dictionaries); the parser does
+    /// not enforce required keys (matching other options-list handling in
+    /// this crate).
     pub options: Vec<SqlOption>,
 }
 
-impl fmt::Display for CreateTextSearchConfiguration {
+impl fmt::Display for CreateTextSearch {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "CREATE TEXT SEARCH CONFIGURATION {name} ({options})",
+            "CREATE TEXT SEARCH {kind} {name} ({options})",
+            kind = self.kind,
             name = self.name,
             options = display_comma_separated(&self.options),
         )
     }
 }
 
-impl From<CreateTextSearchConfiguration> for crate::ast::Statement {
-    fn from(v: CreateTextSearchConfiguration) -> Self {
-        crate::ast::Statement::CreateTextSearchConfiguration(v)
-    }
-}
-
-/// `CREATE TEXT SEARCH DICTIONARY` statement.
-///
-/// Note: this is a PostgreSQL-specific statement.
-/// <https://www.postgresql.org/docs/current/sql-createtsdictionary.html>
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct CreateTextSearchDictionary {
-    /// Name of the text search dictionary being created.
-    pub name: ObjectName,
-    /// Options list. PostgreSQL requires `TEMPLATE = template_name`; the
-    /// parser does not enforce required keys.
-    pub options: Vec<SqlOption>,
-}
-
-impl fmt::Display for CreateTextSearchDictionary {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "CREATE TEXT SEARCH DICTIONARY {name} ({options})",
-            name = self.name,
-            options = display_comma_separated(&self.options),
-        )
-    }
-}
-
-impl From<CreateTextSearchDictionary> for crate::ast::Statement {
-    fn from(v: CreateTextSearchDictionary) -> Self {
-        crate::ast::Statement::CreateTextSearchDictionary(v)
-    }
-}
-
-/// `CREATE TEXT SEARCH PARSER` statement.
-///
-/// Note: this is a PostgreSQL-specific statement.
-/// <https://www.postgresql.org/docs/current/sql-createtsparser.html>
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct CreateTextSearchParser {
-    /// Name of the text search parser being created.
-    pub name: ObjectName,
-    /// Options list. PostgreSQL requires `START`, `GETTOKEN`, `END`, and
-    /// `LEXTYPES` (with `HEADLINE` optional); the parser does not enforce
-    /// required keys.
-    pub options: Vec<SqlOption>,
-}
-
-impl fmt::Display for CreateTextSearchParser {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "CREATE TEXT SEARCH PARSER {name} ({options})",
-            name = self.name,
-            options = display_comma_separated(&self.options),
-        )
-    }
-}
-
-impl From<CreateTextSearchParser> for crate::ast::Statement {
-    fn from(v: CreateTextSearchParser) -> Self {
-        crate::ast::Statement::CreateTextSearchParser(v)
-    }
-}
-
-/// `CREATE TEXT SEARCH TEMPLATE` statement.
-///
-/// Note: this is a PostgreSQL-specific statement.
-/// <https://www.postgresql.org/docs/current/sql-createtstemplate.html>
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct CreateTextSearchTemplate {
-    /// Name of the text search template being created.
-    pub name: ObjectName,
-    /// Options list. PostgreSQL requires `LEXIZE` (with `INIT` optional);
-    /// the parser does not enforce required keys.
-    pub options: Vec<SqlOption>,
-}
-
-impl fmt::Display for CreateTextSearchTemplate {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "CREATE TEXT SEARCH TEMPLATE {name} ({options})",
-            name = self.name,
-            options = display_comma_separated(&self.options),
-        )
-    }
-}
-
-impl From<CreateTextSearchTemplate> for crate::ast::Statement {
-    fn from(v: CreateTextSearchTemplate) -> Self {
-        crate::ast::Statement::CreateTextSearchTemplate(v)
+impl Spanned for CreateTextSearch {
+    fn span(&self) -> Span {
+        self.name.span()
     }
 }

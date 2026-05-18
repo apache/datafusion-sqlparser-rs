@@ -71,18 +71,18 @@ pub use self::ddl::{
     ColumnPolicyProperty, ConstraintCharacteristics, CreateCollation, CreateCollationDefinition,
     CreateConnector, CreateDomain, CreateExtension, CreateFunction, CreateIndex, CreateOperator,
     CreateOperatorClass, CreateOperatorFamily, CreatePolicy, CreatePolicyCommand, CreatePolicyType,
-    CreateTable, CreateTextSearchConfiguration, CreateTextSearchDictionary, CreateTextSearchParser,
-    CreateTextSearchTemplate, CreateTrigger, CreateView, Deduplicate, DeferrableInitial, DistStyle,
-    DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily,
-    DropOperatorSignature, DropPolicy, DropTrigger, ForValues, FunctionReturnType, GeneratedAs,
-    GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
-    IdentityPropertyKind, IdentityPropertyOrder, IndexColumn, IndexOption, IndexType,
-    KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes, OperatorClassItem,
-    OperatorFamilyDropItem, OperatorFamilyItem, OperatorOption, OperatorPurpose, Owner, Partition,
-    PartitionBoundValue, ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity,
-    TagsColumnOption, TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
-    UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
-    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, ViewColumnDef, WithData,
+    CreateTable, CreateTextSearch, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
+    DistStyle, DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass,
+    DropOperatorFamily, DropOperatorSignature, DropPolicy, DropTrigger, ForValues,
+    FunctionReturnType, GeneratedAs, GeneratedExpressionMode, IdentityParameters, IdentityProperty,
+    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, IndexColumn,
+    IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes,
+    OperatorClassItem, OperatorFamilyDropItem, OperatorFamilyItem, OperatorOption, OperatorPurpose,
+    Owner, Partition, PartitionBoundValue, ProcedureParam, ReferentialAction, RenameTableNameKind,
+    ReplicaIdentity, TagsColumnOption, TextSearchObjectType, TriggerObjectKind, Truncate,
+    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
+    UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
+    UserDefinedTypeStorage, ViewColumnDef, WithData,
 };
 pub use self::dml::{
     Delete, Insert, Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr,
@@ -4008,29 +4008,14 @@ pub enum Statement {
     /// <https://www.postgresql.org/docs/current/sql-createcollation.html>
     CreateCollation(CreateCollation),
     /// ```sql
-    /// CREATE TEXT SEARCH CONFIGURATION name ( PARSER = parser_name )
+    /// CREATE TEXT SEARCH { CONFIGURATION | DICTIONARY | PARSER | TEMPLATE } name ( option = value [, ...] )
     /// ```
     /// Note: this is a PostgreSQL-specific statement.
-    /// <https://www.postgresql.org/docs/current/sql-createtsconfig.html>
-    CreateTextSearchConfiguration(CreateTextSearchConfiguration),
-    /// ```sql
-    /// CREATE TEXT SEARCH DICTIONARY name ( TEMPLATE = template_name [, option = value, ...] )
-    /// ```
-    /// Note: this is a PostgreSQL-specific statement.
-    /// <https://www.postgresql.org/docs/current/sql-createtsdictionary.html>
-    CreateTextSearchDictionary(CreateTextSearchDictionary),
-    /// ```sql
-    /// CREATE TEXT SEARCH PARSER name ( START = start_fn, GETTOKEN = gettoken_fn, END = end_fn, LEXTYPES = lextypes_fn [, HEADLINE = headline_fn] )
-    /// ```
-    /// Note: this is a PostgreSQL-specific statement.
-    /// <https://www.postgresql.org/docs/current/sql-createtsparser.html>
-    CreateTextSearchParser(CreateTextSearchParser),
-    /// ```sql
-    /// CREATE TEXT SEARCH TEMPLATE name ( [INIT = init_fn,] LEXIZE = lexize_fn )
-    /// ```
-    /// Note: this is a PostgreSQL-specific statement.
-    /// <https://www.postgresql.org/docs/current/sql-createtstemplate.html>
-    CreateTextSearchTemplate(CreateTextSearchTemplate),
+    /// - <https://www.postgresql.org/docs/current/sql-createtsconfig.html>
+    /// - <https://www.postgresql.org/docs/current/sql-createtsdictionary.html>
+    /// - <https://www.postgresql.org/docs/current/sql-createtsparser.html>
+    /// - <https://www.postgresql.org/docs/current/sql-createtstemplate.html>
+    CreateTextSearch(CreateTextSearch),
     /// ```sql
     /// DROP EXTENSION [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
     /// ```
@@ -5514,10 +5499,7 @@ impl fmt::Display for Statement {
             Statement::CreateIndex(create_index) => create_index.fmt(f),
             Statement::CreateExtension(create_extension) => write!(f, "{create_extension}"),
             Statement::CreateCollation(create_collation) => write!(f, "{create_collation}"),
-            Statement::CreateTextSearchConfiguration(v) => write!(f, "{v}"),
-            Statement::CreateTextSearchDictionary(v) => write!(f, "{v}"),
-            Statement::CreateTextSearchParser(v) => write!(f, "{v}"),
-            Statement::CreateTextSearchTemplate(v) => write!(f, "{v}"),
+            Statement::CreateTextSearch(create_text_search) => write!(f, "{create_text_search}"),
             Statement::DropExtension(drop_extension) => write!(f, "{drop_extension}"),
             Statement::DropOperator(drop_operator) => write!(f, "{drop_operator}"),
             Statement::DropOperatorFamily(drop_operator_family) => {
@@ -12127,6 +12109,12 @@ impl From<CreateExtension> for Statement {
 impl From<CreateCollation> for Statement {
     fn from(c: CreateCollation) -> Self {
         Self::CreateCollation(c)
+    }
+}
+
+impl From<CreateTextSearch> for Statement {
+    fn from(c: CreateTextSearch) -> Self {
+        Self::CreateTextSearch(c)
     }
 }
 

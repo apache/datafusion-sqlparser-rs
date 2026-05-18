@@ -272,10 +272,6 @@ impl Spanned for Values {
 /// - [Statement::Declare]
 /// - [Statement::CreateExtension]
 /// - [Statement::CreateCollation]
-/// - [Statement::CreateTextSearchConfiguration]
-/// - [Statement::CreateTextSearchDictionary]
-/// - [Statement::CreateTextSearchParser]
-/// - [Statement::CreateTextSearchTemplate]
 /// - [Statement::AlterCollation]
 /// - [Statement::Fetch]
 /// - [Statement::Flush]
@@ -391,10 +387,7 @@ impl Spanned for Statement {
             Statement::CreateRole(create_role) => create_role.span(),
             Statement::CreateExtension(create_extension) => create_extension.span(),
             Statement::CreateCollation(create_collation) => create_collation.span(),
-            Statement::CreateTextSearchConfiguration(stmt) => stmt.name.span(),
-            Statement::CreateTextSearchDictionary(stmt) => stmt.name.span(),
-            Statement::CreateTextSearchParser(stmt) => stmt.name.span(),
-            Statement::CreateTextSearchTemplate(stmt) => stmt.name.span(),
+            Statement::CreateTextSearch(stmt) => stmt.span(),
             Statement::DropExtension(drop_extension) => drop_extension.span(),
             Statement::DropOperator(drop_operator) => drop_operator.span(),
             Statement::DropOperatorFamily(drop_operator_family) => drop_operator_family.span(),

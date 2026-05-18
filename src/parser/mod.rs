@@ -5214,17 +5214,10 @@ impl<'a> Parser<'a> {
             }
         } else if self.parse_keyword(Keyword::SERVER) {
             self.parse_pg_create_server()
-        } else if self.parse_keyword(Keyword::FOREIGN) {
-            if self.parse_keywords(&[Keyword::DATA, Keyword::WRAPPER]) {
-                self.parse_create_foreign_data_wrapper().map(Into::into)
-            } else if self.parse_keyword(Keyword::TABLE) {
-                self.parse_create_foreign_table().map(Into::into)
-            } else {
-                self.expected_ref(
-                    "DATA WRAPPER or TABLE after CREATE FOREIGN",
-                    self.peek_token_ref(),
-                )
-            }
+        } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::DATA, Keyword::WRAPPER]) {
+            self.parse_create_foreign_data_wrapper().map(Into::into)
+        } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::TABLE]) {
+            self.parse_create_foreign_table().map(Into::into)
         } else {
             self.expected_ref("an object type after CREATE", self.peek_token_ref())
         }

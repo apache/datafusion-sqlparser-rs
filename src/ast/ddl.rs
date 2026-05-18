@@ -5824,9 +5824,6 @@ impl From<AlterPolicy> for crate::ast::Statement {
 }
 
 /// The handler/validator clause of a `CREATE FOREIGN DATA WRAPPER` statement.
-///
-/// The function-or-absence portion of a `HANDLER` or `VALIDATOR` clause on a
-/// foreign data wrapper.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -5843,6 +5840,12 @@ impl FdwRoutineClause {
             FdwRoutineClause::Function(name) => write!(f, " {label} {name}"),
             FdwRoutineClause::Absent => write!(f, " NO {label}"),
         }
+    }
+}
+
+impl fmt::Display for FdwRoutineClause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.fmt_with_label(f, "HANDLER")
     }
 }
 
@@ -5885,6 +5888,20 @@ impl From<CreateForeignDataWrapper> for crate::ast::Statement {
     }
 }
 
+impl Spanned for CreateForeignDataWrapper {
+    fn span(&self) -> Span {
+        let routine_span = |clause: &Option<FdwRoutineClause>| match clause {
+            Some(FdwRoutineClause::Function(name)) => Some(name.span()),
+            _ => None,
+        };
+        Span::union_iter(
+            core::iter::once(self.name.span())
+                .chain(routine_span(&self.handler))
+                .chain(routine_span(&self.validator)),
+        )
+    }
+}
+
 /// A `CREATE FOREIGN TABLE` statement.
 ///
 /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createforeigntable.html)
@@ -5921,9 +5938,10 @@ impl fmt::Display for CreateForeignTable {
             name = self.name,
             columns = display_comma_separated(&self.columns),
         )?;
-        if !self.constraints.is_empty() {
-            write!(f, ", {}", display_comma_separated(&self.constraints))?;
+        if !self.columns.is_empty() && !self.constraints.is_empty() {
+            write!(f, ", ")?;
         }
+        write!(f, "{}", display_comma_separated(&self.constraints))?;
         write!(f, ") SERVER {}", self.server_name)?;
         if let Some(options) = &self.options {
             write!(f, " OPTIONS ({})", display_comma_separated(options))?;
@@ -5935,5 +5953,16 @@ impl fmt::Display for CreateForeignTable {
 impl From<CreateForeignTable> for crate::ast::Statement {
     fn from(v: CreateForeignTable) -> Self {
         crate::ast::Statement::CreateForeignTable(v)
+    }
+}
+
+impl Spanned for CreateForeignTable {
+    fn span(&self) -> Span {
+        Span::union_iter(
+            core::iter::once(self.name.span())
+                .chain(self.columns.iter().map(|column| column.span()))
+                .chain(self.constraints.iter().map(|constraint| constraint.span()))
+                .chain(core::iter::once(self.server_name.span)),
+        )
     }
 }

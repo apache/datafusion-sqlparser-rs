@@ -30,6 +30,7 @@ mod redshift;
 mod snowflake;
 mod spark;
 mod sqlite;
+mod teradata;
 
 use core::any::{Any, TypeId};
 use core::fmt::Debug;
@@ -54,6 +55,7 @@ pub use self::snowflake::parse_snowflake_stage_name;
 pub use self::snowflake::SnowflakeDialect;
 pub use self::spark::SparkSqlDialect;
 pub use self::sqlite::SQLiteDialect;
+pub use self::teradata::TeradataDialect;
 
 /// Macro for streamlining the creation of derived `Dialect` objects.
 /// The generated struct includes `new()` and `default()` constructors.
@@ -344,6 +346,23 @@ pub trait Dialect: Debug + Any {
     ///
     /// [`ANSI`]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#array-aggregate-function
     fn supports_within_after_array_aggregation(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports `PARTITION BY` appearing after `ORDER BY`
+    /// in a `CREATE TABLE` statement (in addition to the standard placement before `ORDER BY`).
+    ///
+    /// ClickHouse DDL uses this ordering:
+    /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table#partition-by>
+    fn supports_partition_by_after_order_by(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports ClickHouse-style `ARRAY JOIN` / `LEFT ARRAY JOIN` /
+    /// `INNER ARRAY JOIN` syntax for unnesting arrays inline.
+    ///
+    /// <https://clickhouse.com/docs/en/sql-reference/statements/select/array-join>
+    fn supports_array_join_syntax(&self) -> bool {
         false
     }
 
@@ -1205,6 +1224,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect accepts a comma-separated list of table-level
+    /// options placed between the table name and the column-list parenthesis, e.g.
+    ///
+    /// ```sql
+    /// CREATE TABLE foo, NO FALLBACK, NO BEFORE JOURNAL (col INTEGER)
+    /// ```
+    fn supports_leading_comma_before_table_options(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports PartiQL for querying semi-structured data
     /// <https://partiql.org/index.html>
     fn supports_partiql(&self) -> bool {
@@ -1382,6 +1411,14 @@ pub trait Dialect: Debug + Any {
     ///
     /// For example: ```SELECT * FROM addresses ORDER BY ALL;```.
     fn supports_order_by_all(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports PostgreSQL-style ordering operators:
+    /// `ORDER BY expr USING <operator>`.
+    ///
+    /// For example: `SELECT * FROM t ORDER BY a USING <`.
+    fn supports_order_by_using_operator(&self) -> bool {
         false
     }
 
@@ -1841,6 +1878,7 @@ pub fn dialect_from_str(dialect_name: impl AsRef<str>) -> Option<Box<dyn Dialect
         "databricks" => Some(Box::new(DatabricksDialect {})),
         "spark" | "sparksql" => Some(Box::new(SparkSqlDialect {})),
         "oracle" => Some(Box::new(OracleDialect {})),
+        "teradata" => Some(Box::new(TeradataDialect {})),
         _ => None,
     }
 }
@@ -1894,6 +1932,8 @@ mod tests {
         assert!(parse_dialect("DuckDb").is::<DuckDbDialect>());
         assert!(parse_dialect("DataBricks").is::<DatabricksDialect>());
         assert!(parse_dialect("databricks").is::<DatabricksDialect>());
+        assert!(parse_dialect("teradata").is::<TeradataDialect>());
+        assert!(parse_dialect("Teradata").is::<TeradataDialect>());
 
         // error cases
         assert!(dialect_from_str("Unknown").is_none());

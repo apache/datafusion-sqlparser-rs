@@ -822,6 +822,7 @@ define_keywords!(
     PUBLIC,
     PURCHASE,
     PURGE,
+    PUT,
     QUALIFY,
     QUARTER,
     QUERIES,

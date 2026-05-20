@@ -354,6 +354,10 @@ impl Dialect for SnowflakeDialect {
             return Some(parse_file_staging_command(kw, parser));
         }
 
+        if parser.parse_keyword(Keyword::PUT) {
+            return Some(parse_put(parser));
+        }
+
         if parser.parse_keyword(Keyword::SHOW) {
             let terse = parser.parse_keyword(Keyword::TERSE);
             if parser.parse_keyword(Keyword::OBJECTS) {
@@ -694,6 +698,21 @@ fn peek_for_limit_options(parser: &Parser) -> bool {
         Token::Word(w) if w.keyword == Keyword::NULL => true,
         _ => false,
     }
+}
+
+/// Parse a Snowflake `PUT <source> <stage> [ options ]` statement. The caller
+/// is expected to have already consumed `PUT`.
+///
+/// See <https://docs.snowflake.com/en/sql-reference/sql/put>.
+fn parse_put(parser: &mut Parser) -> Result<Statement, ParserError> {
+    let source = parser.parse_literal_string()?;
+    let stage = parse_snowflake_stage_name(parser)?;
+    let options = parser.parse_key_value_options(false, &[])?;
+    Ok(Statement::Put {
+        source,
+        stage,
+        options,
+    })
 }
 
 fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statement, ParserError> {

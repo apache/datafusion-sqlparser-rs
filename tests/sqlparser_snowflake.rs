@@ -3862,6 +3862,71 @@ fn parse_ls_and_rm() {
 }
 
 #[test]
+fn test_put() {
+    let sql = "PUT 'file:///tmp/data.csv' @my_stage";
+    match snowflake().verified_stmt(sql) {
+        Statement::Put {
+            source,
+            stage,
+            options,
+        } => {
+            assert_eq!("file:///tmp/data.csv", source);
+            assert_eq!(ObjectName::from(vec!["@my_stage".into()]), stage);
+            assert!(options.options.is_empty());
+        }
+        _ => unreachable!(),
+    };
+    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+}
+
+#[test]
+fn test_put_with_quoted_stage() {
+    // Stage names can be quoted (e.g. Snowflake driver `write_pandas`)
+    let sql = r#"PUT 'file:///tmp/data.csv' @"my stage" PARALLEL=4"#;
+    match snowflake().verified_stmt(sql) {
+        Statement::Put { stage, .. } => {
+            assert_eq!(ObjectName::from(vec![r#"@"my stage""#.into()]), stage);
+        }
+        _ => unreachable!(),
+    };
+    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+}
+
+#[test]
+fn test_put_with_options() {
+    let sql = concat!(
+        "PUT 'file:///tmp/data.csv' @my_stage ",
+        "PARALLEL=8 AUTO_COMPRESS=true SOURCE_COMPRESSION=GZIP OVERWRITE=false"
+    );
+    match snowflake().verified_stmt(sql) {
+        Statement::Put { options, .. } => {
+            assert!(options.options.contains(&KeyValueOption {
+                option_name: "PARALLEL".to_string(),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Number("8".parse().unwrap(), false).with_empty_span()
+                ),
+            }));
+            assert!(options.options.contains(&KeyValueOption {
+                option_name: "AUTO_COMPRESS".to_string(),
+                option_value: KeyValueOptionKind::Single(Value::Boolean(true).with_empty_span()),
+            }));
+            assert!(options.options.contains(&KeyValueOption {
+                option_name: "SOURCE_COMPRESSION".to_string(),
+                option_value: KeyValueOptionKind::Single(
+                    Value::Placeholder("GZIP".to_string()).with_empty_span()
+                ),
+            }));
+            assert!(options.options.contains(&KeyValueOption {
+                option_name: "OVERWRITE".to_string(),
+                option_value: KeyValueOptionKind::Single(Value::Boolean(false).with_empty_span()),
+            }));
+        }
+        _ => unreachable!(),
+    };
+    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+}
+
+#[test]
 fn test_sql_keywords_as_select_item_ident() {
     // Some keywords that should be parsed as an alias
     let unreserved_kws = vec!["CLUSTER", "FETCH", "RETURNING", "LIMIT", "EXCEPT", "SORT"];

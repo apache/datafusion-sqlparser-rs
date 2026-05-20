@@ -4852,6 +4852,20 @@ pub enum Statement {
     /// Snowflake `LIST`
     /// See: <https://docs.snowflake.com/en/sql-reference/sql/list>
     List(FileStagingCommand),
+    /// Snowflake `PUT`
+    /// ```sql
+    /// PUT 'file://<path>' <internalStage> [ <option> = <value> ... ]
+    /// ```
+    /// Options include `PARALLEL`, `AUTO_COMPRESS`, `SOURCE_COMPRESSION`, `OVERWRITE`.
+    /// See: <https://docs.snowflake.com/en/sql-reference/sql/put>
+    Put {
+        /// Local source URI as written in the statement, e.g. `file:///tmp/data.csv`.
+        source: String,
+        /// Target internal stage (e.g. `@mystage`, `@~`, `@%table`).
+        stage: ObjectName,
+        /// Trailing options (`PARALLEL=4`, `AUTO_COMPRESS=TRUE`, ...).
+        options: KeyValueOptions,
+    },
     /// Snowflake `REMOVE`
     /// See: <https://docs.snowflake.com/en/sql-reference/sql/remove>
     Remove(FileStagingCommand),
@@ -6372,6 +6386,17 @@ impl fmt::Display for Statement {
             Statement::WaitFor(s) => write!(f, "{s}"),
             Statement::Return(r) => write!(f, "{r}"),
             Statement::List(command) => write!(f, "LIST {command}"),
+            Statement::Put {
+                source,
+                stage,
+                options,
+            } => {
+                write!(f, "PUT '{source}' {stage}")?;
+                if !options.options.is_empty() {
+                    write!(f, " {options}")?;
+                }
+                Ok(())
+            }
             Statement::Remove(command) => write!(f, "REMOVE {command}"),
             Statement::ExportData(e) => write!(f, "{e}"),
             Statement::CreateUser(s) => write!(f, "{s}"),

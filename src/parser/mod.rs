@@ -2028,14 +2028,16 @@ impl<'a> Parser<'a> {
                         chain.push(AccessExpr::Dot(expr));
                         self.advance_token(); // The consumed placeholder
                     }
-                    // Fallback to parsing an arbitrary expression, but restrict to expression
-                    // types that are valid after the dot operator. This ensures that e.g.
-                    // `T.interval` is parsed as a compound identifier, not as an interval
-                    // expression.
+                    // Parse a single field component, restricted to expression types valid
+                    // after `.` (so e.g. `T.interval` is a compound identifier, not an
+                    // interval expression). Using `parse_prefix` here rather than
+                    // `parse_subexpr` avoids 2^N work on inputs like `IF a.b.c...x.#`:
+                    // the outer loop already consumes successive `.field` segments, so a
+                    // recursive `parse_subexpr` would re-walk the rest of the chain at
+                    // every dot.
                     _ => {
                         let expr = self.maybe_parse(|parser| {
-                            let expr = parser
-                                .parse_subexpr(parser.dialect.prec_value(Precedence::Period))?;
+                            let expr = parser.parse_prefix()?;
                             match &expr {
                                 Expr::CompoundFieldAccess { .. }
                                 | Expr::CompoundIdentifier(_)
@@ -2050,14 +2052,9 @@ impl<'a> Parser<'a> {
                         })?;
 
                         match expr {
-                            // If we get back a compound field access or identifier,
-                            // we flatten the nested expression.
-                            // For example if the current root is `foo`
-                            // and we get back a compound identifier expression `bar.baz`
-                            // The full expression should be `foo.bar.baz` (i.e.
-                            // a root with an access chain with 2 entries) and not
-                            // `foo.(bar.baz)` (i.e. a root with an access chain with
-                            // 1 entry`).
+                            // `parse_prefix` does not itself follow compound chains, but a
+                            // dialect override could still return a compound expression, so
+                            // keep the flatten arms for safety.
                             Some(Expr::CompoundFieldAccess { root, access_chain }) => {
                                 chain.push(AccessExpr::Dot(*root));
                                 chain.extend(access_chain);

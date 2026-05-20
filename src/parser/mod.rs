@@ -5145,6 +5145,12 @@ impl<'a> Parser<'a> {
         let create_view_params = self.parse_create_view_params()?;
         if self.peek_keywords(&[Keyword::SNAPSHOT, Keyword::TABLE]) {
             self.parse_create_snapshot_table().map(Into::into)
+        } else if self.peek_keywords(&[Keyword::UNLOGGED, Keyword::TABLE]) {
+            self.expect_keywords(&[Keyword::UNLOGGED, Keyword::TABLE])?;
+            let mut create_table = self
+                .parse_create_table(or_replace, temporary, global, transient, volatile, multiset)?;
+            create_table.unlogged = true;
+            Ok(create_table.into())
         } else if self.parse_keyword(Keyword::TABLE) {
             self.parse_create_table(or_replace, temporary, global, transient, volatile, multiset)
                 .map(Into::into)
@@ -8667,6 +8673,7 @@ impl<'a> Parser<'a> {
 
         Ok(CreateTableBuilder::new(table_name)
             .temporary(temporary)
+            .unlogged(false)
             .columns(columns)
             .constraints(constraints)
             .or_replace(or_replace)
@@ -10748,6 +10755,10 @@ impl<'a> Parser<'a> {
         } else if self.parse_keywords(&[Keyword::VALIDATE, Keyword::CONSTRAINT]) {
             let name = self.parse_identifier()?;
             AlterTableOperation::ValidateConstraint { name }
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::LOGGED]) {
+            AlterTableOperation::SetLogged
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::UNLOGGED]) {
+            AlterTableOperation::SetUnlogged
         } else {
             let mut options =
                 self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;

@@ -152,5 +152,36 @@ fn parse_many_identifiers(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, basic_queries, word_to_ident, parse_many_identifiers);
+/// Benchmark parsing pathological compound chains that previously caused 2^N
+/// work in `parse_compound_expr`. The input `IF a0.a1...aN.#` rejects at the
+/// trailing `#`, which used to force quadratic-or-worse backtracking through
+/// the chain.
+fn parse_compound_chain(c: &mut Criterion) {
+    let mut group = c.benchmark_group("parse_compound_chain");
+    let dialect = GenericDialect {};
+
+    for &n in &[10usize, 20, 30] {
+        let chain = (0..n)
+            .map(|i| format!("a{i}"))
+            .collect::<Vec<_>>()
+            .join(".");
+        let sql = format!("IF {chain}.#");
+
+        group.bench_function(format!("chain_{n}"), |b| {
+            b.iter(|| {
+                let _ = Parser::parse_sql(&dialect, std::hint::black_box(&sql));
+            });
+        });
+    }
+
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    basic_queries,
+    word_to_ident,
+    parse_many_identifiers,
+    parse_compound_chain
+);
 criterion_main!(benches);

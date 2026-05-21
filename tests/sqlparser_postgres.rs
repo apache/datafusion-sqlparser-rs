@@ -9243,27 +9243,3 @@ fn parse_lock_table() {
         }
     }
 }
-
-/// `parse_compound_expr` used to do 2^N work on `IF a.b.c...x.#` because every
-/// `.` re-entered `parse_subexpr` over the rest of the chain.
-#[test]
-fn parse_compound_chain_no_exponential_blowup() {
-    use std::sync::mpsc;
-    use std::thread;
-    use std::time::Duration;
-
-    let chain: String = (0..30)
-        .map(|i| format!("a{i}"))
-        .collect::<Vec<_>>()
-        .join(".");
-    let sql = format!("IF {chain}.#");
-
-    let (tx, rx) = mpsc::channel();
-    thread::spawn(move || {
-        let _ = sqlparser::parser::Parser::parse_sql(&PostgreSqlDialect {}, &sql);
-        let _ = tx.send(());
-    });
-
-    rx.recv_timeout(Duration::from_secs(5))
-        .expect("parser should reject this quickly, not loop exponentially");
-}

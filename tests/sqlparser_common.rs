@@ -18357,6 +18357,14 @@ fn parse_adjacent_string_literal_concatenation() {
         'd'
     )"#;
     dialects.one_statement_parses_to(sql, "SELECT 'abc' IN ('abc', 'd')");
+
+        let sql = r#"
+    SELECT 'abc' in ('a'
+        'b' -- COMMENT
+        'c',
+        'd'
+    )"#;
+    dialects.one_statement_parses_to(sql, "SELECT 'abc' IN ('abc', 'd')");
 }
 
 #[test]

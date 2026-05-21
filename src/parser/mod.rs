@@ -719,6 +719,10 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     self.parse_vacuum()
                 }
+                Keyword::REINDEX => {
+                    self.prev_token();
+                    self.parse_reindex()
+                }
                 Keyword::RESET => self.parse_reset().map(Into::into),
                 _ => self.expected("an SQL statement", next_token),
             },
@@ -4620,6 +4624,39 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// If the current token is an unquoted word matching `expected` (case-insensitive),
+    /// consume it and return `true`.
+    #[must_use]
+    pub fn peek_unquoted_word(&self, expected: &str) -> bool {
+        matches!(
+            &self.peek_token_ref().token,
+            Token::Word(word)
+                if word.quote_style.is_none() && word.value.eq_ignore_ascii_case(expected)
+        )
+    }
+
+    /// If the current token is an unquoted word matching `expected` (case-insensitive),
+    /// consume it and return `true`.
+    #[must_use]
+    pub fn parse_unquoted_word(&mut self, expected: &str) -> bool {
+        if self.peek_unquoted_word(expected) {
+            self.advance_token();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Expect the current token to be an unquoted word matching `expected`
+    /// (case-insensitive), consuming it on success.
+    pub fn expect_unquoted_word(&mut self, expected: &str) -> Result<(), ParserError> {
+        if self.parse_unquoted_word(expected) {
+            Ok(())
+        } else {
+            self.expected_ref(expected, self.peek_token_ref())
+        }
+    }
+
     #[must_use]
     /// Check if the current token is the expected keyword without consuming it.
     ///
@@ -5217,6 +5254,13 @@ impl<'a> Parser<'a> {
             }
         } else if self.parse_keyword(Keyword::SERVER) {
             self.parse_pg_create_server()
+        } else if dialect_of!(self is MySqlDialect | GenericDialect)
+            && self.parse_unquoted_word("UNDO")
+        {
+            self.expect_keyword(Keyword::TABLESPACE)?;
+            self.parse_create_tablespace(true).map(Into::into)
+        } else if self.parse_keyword(Keyword::TABLESPACE) {
+            self.parse_create_tablespace(false).map(Into::into)
         } else {
             self.expected_ref("an object type after CREATE", self.peek_token_ref())
         }
@@ -5560,6 +5604,136 @@ impl<'a> Parser<'a> {
             with_tags: None,
             with_contacts: None,
         })
+    }
+
+    /// Parse a `CREATE TABLESPACE` statement.
+    ///
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtablespace.html)
+    /// and [MySQL](https://dev.mysql.com/doc/refman/8.4/en/create-tablespace.html).
+    pub fn parse_create_tablespace(&mut self, undo: bool) -> Result<CreateTablespace, ParserError> {
+        let is_pg = dialect_of!(self is PostgreSqlDialect);
+        let is_mysql = dialect_of!(self is MySqlDialect);
+        let is_generic = dialect_of!(self is GenericDialect);
+
+        if !is_pg && !is_mysql && !is_generic {
+            return Err(ParserError::ParserError(
+                "CREATE TABLESPACE is only supported for PostgreSqlDialect, MySqlDialect, and GenericDialect"
+                    .to_string(),
+            ));
+        }
+        if undo && is_pg {
+            return Err(ParserError::ParserError(
+                "CREATE UNDO TABLESPACE is not supported in PostgreSqlDialect".to_string(),
+            ));
+        }
+
+        let name = self.parse_identifier()?;
+
+        let parse_as_postgres = if is_pg {
+            true
+        } else if is_mysql {
+            false
+        } else {
+            !undo && self.peek_keyword(Keyword::LOCATION)
+        };
+
+        if parse_as_postgres {
+            self.expect_keyword(Keyword::LOCATION)?;
+            let location = self.parse_literal_string()?;
+            let with_options = if self.peek_keyword(Keyword::WITH) {
+                self.parse_options(Keyword::WITH)?
+            } else {
+                vec![]
+            };
+
+            return Ok(CreateTablespace {
+                name,
+                definition: CreateTablespaceDefinition::PostgreSql {
+                    location,
+                    with_options,
+                },
+            });
+        }
+
+        let options = self.parse_mysql_create_tablespace_options()?;
+
+        Ok(CreateTablespace {
+            name,
+            definition: CreateTablespaceDefinition::MySql { undo, options },
+        })
+    }
+
+    fn parse_mysql_create_tablespace_options(
+        &mut self,
+    ) -> Result<Vec<MySqlCreateTablespaceOption>, ParserError> {
+        let mut options = vec![];
+
+        loop {
+            let option = if self.parse_keyword(Keyword::USE) {
+                self.expect_unquoted_word("LOGFILE")?;
+                self.expect_keyword(Keyword::GROUP)?;
+                Some(MySqlCreateTablespaceOption::UseLogfileGroup(
+                    self.parse_identifier()?,
+                ))
+            } else if self.parse_unquoted_word("FILE_BLOCK_SIZE") {
+                let _ = self.consume_token(&Token::Eq);
+                Some(MySqlCreateTablespaceOption::FileBlockSize(
+                    self.parse_expr()?,
+                ))
+            } else if self.parse_unquoted_word("EXTENT_SIZE") {
+                let _ = self.consume_token(&Token::Eq);
+                Some(MySqlCreateTablespaceOption::ExtentSize(self.parse_expr()?))
+            } else if self.parse_unquoted_word("INITIAL_SIZE") {
+                let _ = self.consume_token(&Token::Eq);
+                Some(MySqlCreateTablespaceOption::InitialSize(self.parse_expr()?))
+            } else if self.parse_keyword(Keyword::AUTOEXTEND_SIZE) {
+                let _ = self.consume_token(&Token::Eq);
+                Some(MySqlCreateTablespaceOption::AutoextendSize(
+                    self.parse_expr()?,
+                ))
+            } else if self.parse_unquoted_word("MAX_SIZE") {
+                let _ = self.consume_token(&Token::Eq);
+                Some(MySqlCreateTablespaceOption::MaxSize(self.parse_expr()?))
+            } else if self.parse_unquoted_word("NODEGROUP") {
+                let _ = self.consume_token(&Token::Eq);
+                Some(MySqlCreateTablespaceOption::Nodegroup(self.parse_expr()?))
+            } else if self.parse_unquoted_word("WAIT") {
+                Some(MySqlCreateTablespaceOption::Wait)
+            } else if self.parse_keyword(Keyword::COMMENT) {
+                let _ = self.consume_token(&Token::Eq);
+                Some(MySqlCreateTablespaceOption::Comment(
+                    self.parse_literal_string()?,
+                ))
+            } else if self.parse_keyword(Keyword::ENCRYPTION) {
+                let _ = self.consume_token(&Token::Eq);
+                Some(MySqlCreateTablespaceOption::Encryption(self.parse_expr()?))
+            } else if self.parse_keyword(Keyword::ENGINE) {
+                let _ = self.consume_token(&Token::Eq);
+                Some(MySqlCreateTablespaceOption::Engine(
+                    self.parse_identifier()?,
+                ))
+            } else if self.parse_keyword(Keyword::ENGINE_ATTRIBUTE) {
+                let _ = self.consume_token(&Token::Eq);
+                Some(MySqlCreateTablespaceOption::EngineAttribute(
+                    self.parse_literal_string()?,
+                ))
+            } else if self.parse_keyword(Keyword::ADD) {
+                self.expect_unquoted_word("DATAFILE")?;
+                Some(MySqlCreateTablespaceOption::AddDatafile(
+                    self.parse_literal_string()?,
+                ))
+            } else {
+                None
+            };
+
+            if let Some(option) = option {
+                options.push(option);
+            } else {
+                break;
+            }
+        }
+
+        Ok(options)
     }
 
     /// Parse an optional `USING` clause for `CREATE FUNCTION`.
@@ -7375,6 +7549,16 @@ impl<'a> Parser<'a> {
         let persistent = dialect_of!(self is DuckDbDialect)
             && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
 
+        if dialect_of!(self is MySqlDialect | GenericDialect) && self.parse_unquoted_word("UNDO") {
+            if temporary {
+                return Err(ParserError::ParserError(
+                    "DROP TEMPORARY UNDO TABLESPACE is not supported".to_string(),
+                ));
+            }
+            self.expect_keyword(Keyword::TABLESPACE)?;
+            return self.parse_drop_tablespace(true);
+        }
+
         let object_type = if self.parse_keyword(Keyword::TABLE) {
             ObjectType::Table
         } else if self.parse_keyword(Keyword::COLLATION) {
@@ -7401,6 +7585,13 @@ impl<'a> Parser<'a> {
             ObjectType::User
         } else if self.parse_keyword(Keyword::STREAM) {
             ObjectType::Stream
+        } else if self.parse_keyword(Keyword::TABLESPACE) {
+            if temporary {
+                return Err(ParserError::ParserError(
+                    "DROP TEMPORARY TABLESPACE is not supported".to_string(),
+                ));
+            }
+            return self.parse_drop_tablespace(false);
         } else if self.parse_keyword(Keyword::FUNCTION) {
             return self.parse_drop_function().map(Into::into);
         } else if self.parse_keyword(Keyword::POLICY) {
@@ -7428,7 +7619,7 @@ impl<'a> Parser<'a> {
             };
         } else {
             return self.expected_ref(
-                "COLLATION, CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW or USER after DROP",
+                "COLLATION, CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TABLESPACE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW or USER after DROP",
                 self.peek_token_ref(),
             );
         };
@@ -7465,6 +7656,58 @@ impl<'a> Parser<'a> {
             temporary,
             table,
         })
+    }
+
+    fn parse_drop_tablespace(&mut self, undo: bool) -> Result<Statement, ParserError> {
+        let is_pg = dialect_of!(self is PostgreSqlDialect);
+        let is_mysql = dialect_of!(self is MySqlDialect);
+        let is_generic = dialect_of!(self is GenericDialect);
+
+        if !is_pg && !is_mysql && !is_generic {
+            return Err(ParserError::ParserError(
+                "DROP TABLESPACE is only supported for PostgreSqlDialect, MySqlDialect, and GenericDialect"
+                    .to_string(),
+            ));
+        }
+        if undo && is_pg {
+            return Err(ParserError::ParserError(
+                "DROP UNDO TABLESPACE is not supported in PostgreSqlDialect".to_string(),
+            ));
+        }
+
+        let if_exists = if self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]) {
+            if is_mysql {
+                return Err(ParserError::ParserError(
+                    "DROP TABLESPACE IF EXISTS is not supported in MySqlDialect".to_string(),
+                ));
+            }
+            true
+        } else {
+            false
+        };
+        let name = self.parse_identifier()?;
+        let engine = if self.parse_keyword(Keyword::ENGINE) {
+            if is_pg {
+                return Err(ParserError::ParserError(
+                    "DROP TABLESPACE ENGINE is not supported in PostgreSqlDialect".to_string(),
+                ));
+            }
+            let _ = self.consume_token(&Token::Eq);
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+
+        if self.peek_keyword(Keyword::CASCADE) || self.peek_keyword(Keyword::RESTRICT) {
+            return self.expected_ref("end of DROP TABLESPACE statement", self.peek_token_ref());
+        }
+
+        Ok(Statement::DropTablespace(DropTablespace {
+            if_exists,
+            undo,
+            name,
+            engine,
+        }))
     }
 
     fn parse_optional_drop_behavior(&mut self) -> Option<DropBehavior> {
@@ -10802,6 +11045,11 @@ impl<'a> Parser<'a> {
 
     /// Parse an `ALTER <object>` statement and dispatch to the appropriate alter handler.
     pub fn parse_alter(&mut self) -> Result<Statement, ParserError> {
+        if dialect_of!(self is MySqlDialect | GenericDialect) && self.parse_unquoted_word("UNDO") {
+            self.expect_keyword(Keyword::TABLESPACE)?;
+            return self.parse_alter_tablespace(true).map(Into::into);
+        }
+
         let object_type = self.expect_one_of_keywords(&[
             Keyword::VIEW,
             Keyword::TYPE,
@@ -10815,6 +11063,7 @@ impl<'a> Parser<'a> {
             Keyword::CONNECTOR,
             Keyword::ICEBERG,
             Keyword::SCHEMA,
+            Keyword::TABLESPACE,
             Keyword::USER,
             Keyword::OPERATOR,
         ])?;
@@ -10824,6 +11073,7 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 self.parse_alter_schema()
             }
+            Keyword::TABLESPACE => self.parse_alter_tablespace(false).map(Into::into),
             Keyword::VIEW => self.parse_alter_view(),
             Keyword::TYPE => self.parse_alter_type(),
             Keyword::COLLATION => self.parse_alter_collation().map(Into::into),
@@ -10867,7 +11117,7 @@ impl<'a> Parser<'a> {
             Keyword::USER => self.parse_alter_user().map(Into::into),
             // unreachable because expect_one_of_keywords used above
             unexpected_keyword => Err(ParserError::ParserError(
-                format!("Internal parser error: expected any of {{VIEW, TYPE, COLLATION, TABLE, INDEX, FUNCTION, AGGREGATE, ROLE, POLICY, CONNECTOR, ICEBERG, SCHEMA, USER, OPERATOR}}, got {unexpected_keyword:?}"),
+                format!("Internal parser error: expected any of {{VIEW, TYPE, COLLATION, TABLE, INDEX, FUNCTION, AGGREGATE, ROLE, POLICY, CONNECTOR, ICEBERG, SCHEMA, TABLESPACE, USER, OPERATOR}}, got {unexpected_keyword:?}"),
             )),
         }
     }
@@ -11576,6 +11826,199 @@ impl<'a> Parser<'a> {
             if_exists,
             operations: vec![operation],
         }))
+    }
+
+    /// Parse an `ALTER TABLESPACE` statement.
+    ///
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertablespace.html)
+    /// and [MySQL](https://dev.mysql.com/doc/refman/8.4/en/alter-tablespace.html).
+    pub fn parse_alter_tablespace(&mut self, undo: bool) -> Result<AlterTablespace, ParserError> {
+        let is_pg = dialect_of!(self is PostgreSqlDialect);
+        let is_mysql = dialect_of!(self is MySqlDialect);
+        let is_generic = dialect_of!(self is GenericDialect);
+
+        if !is_pg && !is_mysql && !is_generic {
+            return Err(ParserError::ParserError(
+                "ALTER TABLESPACE is only supported for PostgreSqlDialect, MySqlDialect, and GenericDialect"
+                    .to_string(),
+            ));
+        }
+        if undo && is_pg {
+            return Err(ParserError::ParserError(
+                "ALTER UNDO TABLESPACE is not supported in PostgreSqlDialect".to_string(),
+            ));
+        }
+
+        let name = self.parse_identifier()?;
+
+        if is_mysql || (is_generic && undo) {
+            let options = self.parse_mysql_alter_tablespace_options()?;
+            return Ok(AlterTablespace {
+                name,
+                operation: AlterTablespaceOperation::MySql { undo, options },
+            });
+        }
+
+        if is_pg {
+            return Ok(AlterTablespace {
+                name,
+                operation: self.parse_postgres_alter_tablespace_operation()?,
+            });
+        }
+
+        let operation = {
+            let start_idx = self.index;
+            match self.parse_postgres_alter_tablespace_operation() {
+                Ok(operation) if !self.peek_mysql_alter_tablespace_option_start() => operation,
+                Ok(_) | Err(_) => {
+                    self.index = start_idx;
+                    let options = self.parse_mysql_alter_tablespace_options()?;
+                    AlterTablespaceOperation::MySql { undo, options }
+                }
+            }
+        };
+
+        Ok(AlterTablespace { name, operation })
+    }
+
+    fn peek_mysql_alter_tablespace_option_start(&self) -> bool {
+        if self.peek_keyword(Keyword::ADD)
+            || self.peek_keyword(Keyword::DROP)
+            || self.peek_keyword(Keyword::AUTOEXTEND_SIZE)
+            || self.peek_keyword(Keyword::ENCRYPTION)
+            || self.peek_keyword(Keyword::ENGINE)
+            || self.peek_keyword(Keyword::ENGINE_ATTRIBUTE)
+            || self.peek_unquoted_word("INITIAL_SIZE")
+            || self.peek_unquoted_word("WAIT")
+        {
+            return true;
+        }
+
+        if self.peek_keyword(Keyword::SET) {
+            match &self.peek_nth_token_ref(1).token {
+                Token::Word(word)
+                    if word.quote_style.is_none()
+                        && (word.value.eq_ignore_ascii_case("ACTIVE")
+                            || word.value.eq_ignore_ascii_case("INACTIVE")) =>
+                {
+                    return true;
+                }
+                _ => {}
+            }
+        }
+
+        false
+    }
+
+    fn parse_postgres_alter_tablespace_operation(
+        &mut self,
+    ) -> Result<AlterTablespaceOperation, ParserError> {
+        if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            Ok(AlterTablespaceOperation::RenameTo(self.parse_identifier()?))
+        } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+            Ok(AlterTablespaceOperation::OwnerTo(self.parse_owner()?))
+        } else if self.parse_keyword(Keyword::SET) {
+            self.expect_token(&Token::LParen)?;
+            let options = self.parse_comma_separated(Parser::parse_sql_option)?;
+            self.expect_token(&Token::RParen)?;
+            Ok(AlterTablespaceOperation::Set { options })
+        } else if self.parse_keyword(Keyword::RESET) {
+            self.expect_token(&Token::LParen)?;
+            let options = self.parse_comma_separated(Parser::parse_tablespace_reset_option)?;
+            self.expect_token(&Token::RParen)?;
+            Ok(AlterTablespaceOperation::Reset { options })
+        } else {
+            self.expected_ref(
+                "RENAME TO, OWNER TO, SET, or RESET after ALTER TABLESPACE",
+                self.peek_token_ref(),
+            )
+        }
+    }
+
+    fn parse_mysql_alter_tablespace_options(
+        &mut self,
+    ) -> Result<Vec<MySqlAlterTablespaceOperation>, ParserError> {
+        let mut options = vec![];
+        loop {
+            let option = if self.parse_keyword(Keyword::ADD) {
+                self.expect_unquoted_word("DATAFILE")?;
+                Some(MySqlAlterTablespaceOperation::AddDatafile(
+                    self.parse_literal_string()?,
+                ))
+            } else if self.parse_keyword(Keyword::DROP) {
+                self.expect_unquoted_word("DATAFILE")?;
+                Some(MySqlAlterTablespaceOperation::DropDatafile(
+                    self.parse_literal_string()?,
+                ))
+            } else if self.parse_unquoted_word("INITIAL_SIZE") {
+                let _ = self.consume_token(&Token::Eq);
+                Some(MySqlAlterTablespaceOperation::InitialSize(
+                    self.parse_expr()?,
+                ))
+            } else if self.parse_keyword(Keyword::AUTOEXTEND_SIZE) {
+                let _ = self.consume_token(&Token::Eq);
+                Some(MySqlAlterTablespaceOperation::AutoextendSize(
+                    self.parse_expr()?,
+                ))
+            } else if self.parse_unquoted_word("WAIT") {
+                Some(MySqlAlterTablespaceOperation::Wait)
+            } else if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+                Some(MySqlAlterTablespaceOperation::RenameTo(
+                    self.parse_identifier()?,
+                ))
+            } else if self.parse_keyword(Keyword::SET) {
+                if self.parse_unquoted_word("ACTIVE") {
+                    Some(MySqlAlterTablespaceOperation::SetActive)
+                } else if self.parse_unquoted_word("INACTIVE") {
+                    Some(MySqlAlterTablespaceOperation::SetInactive)
+                } else {
+                    return self
+                        .expected_ref("ACTIVE or INACTIVE after SET", self.peek_token_ref());
+                }
+            } else if self.parse_keyword(Keyword::ENCRYPTION) {
+                let _ = self.consume_token(&Token::Eq);
+                Some(MySqlAlterTablespaceOperation::Encryption(
+                    self.parse_expr()?,
+                ))
+            } else if self.parse_keyword(Keyword::ENGINE) {
+                let _ = self.consume_token(&Token::Eq);
+                Some(MySqlAlterTablespaceOperation::Engine(
+                    self.parse_identifier()?,
+                ))
+            } else if self.parse_keyword(Keyword::ENGINE_ATTRIBUTE) {
+                let _ = self.consume_token(&Token::Eq);
+                Some(MySqlAlterTablespaceOperation::EngineAttribute(
+                    self.parse_literal_string()?,
+                ))
+            } else {
+                None
+            };
+
+            if let Some(option) = option {
+                options.push(option);
+            } else {
+                break;
+            }
+        }
+
+        if options.is_empty() {
+            self.expected_ref(
+                "ADD DATAFILE, DROP DATAFILE, INITIAL_SIZE, AUTOEXTEND_SIZE, WAIT, RENAME TO, SET ACTIVE, SET INACTIVE, ENCRYPTION, ENGINE, or ENGINE_ATTRIBUTE after ALTER TABLESPACE",
+                self.peek_token_ref(),
+            )
+        } else {
+            Ok(options)
+        }
+    }
+
+    fn parse_tablespace_reset_option(&mut self) -> Result<TablespaceResetOption, ParserError> {
+        let key = self.parse_identifier()?;
+        if self.consume_token(&Token::Eq) {
+            let value = self.parse_expr()?;
+            Ok(TablespaceResetOption::Assign { key, value })
+        } else {
+            Ok(TablespaceResetOption::Name(key))
+        }
     }
 
     /// Parse a `CALL procedure_name(arg1, arg2, ...)`
@@ -20439,6 +20882,52 @@ impl<'a> Parser<'a> {
             table_name,
             threshold,
             boost,
+        }))
+    }
+
+    /// Parse a `REINDEX` statement.
+    ///
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-reindex.html)
+    fn parse_reindex(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword(Keyword::REINDEX)?;
+        if !dialect_of!(self is PostgreSqlDialect | GenericDialect) {
+            return Err(ParserError::ParserError(
+                "REINDEX is only supported for PostgreSqlDialect and GenericDialect".to_string(),
+            ));
+        }
+
+        let options = if self.peek_token_ref().token == Token::LParen {
+            Some(self.parse_utility_options()?)
+        } else {
+            None
+        };
+
+        let object_type = match self.expect_one_of_keywords(&[
+            Keyword::INDEX,
+            Keyword::TABLE,
+            Keyword::SCHEMA,
+            Keyword::DATABASE,
+            Keyword::SYSTEM,
+        ])? {
+            Keyword::INDEX => ReindexObjectType::Index,
+            Keyword::TABLE => ReindexObjectType::Table,
+            Keyword::SCHEMA => ReindexObjectType::Schema,
+            Keyword::DATABASE => ReindexObjectType::Database,
+            Keyword::SYSTEM => ReindexObjectType::System,
+            unexpected_keyword => {
+                return Err(ParserError::ParserError(format!(
+                    "Internal parser error: unexpected keyword `{unexpected_keyword}` in REINDEX"
+                )))
+            }
+        };
+        let concurrently = self.parse_keyword(Keyword::CONCURRENTLY);
+        let name = self.parse_object_name(false)?;
+
+        Ok(Statement::Reindex(ReindexStatement {
+            options,
+            object_type,
+            concurrently,
+            name,
         }))
     }
 

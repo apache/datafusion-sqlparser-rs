@@ -18977,3 +18977,30 @@ fn parse_non_pg_dialects_keep_xml_names_as_regular_identifiers() {
     let dialects = all_dialects_except(|d| d.supports_xml_expressions());
     dialects.verified_only_select("SELECT xml FROM t");
 }
+
+/// Regression test for the 2^N parse-time blowup in `parse_compound_expr` on
+/// inputs like `IF a0.a1...aN.#`. The parse is run on a worker thread and the
+/// main thread asserts that it reports back within a generous timeout. Post-fix
+/// the parser returns `Err` in well under a millisecond, so the timeout is a
+/// hang guard, not a perf threshold.
+#[test]
+fn parse_compound_chain_no_exponential_blowup() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    let chain: String = (0..30)
+        .map(|i| format!("a{i}"))
+        .collect::<Vec<_>>()
+        .join(".");
+    let sql = format!("IF {chain}.#");
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = Parser::parse_sql(&GenericDialect {}, &sql);
+        let _ = tx.send(());
+    });
+
+    rx.recv_timeout(Duration::from_secs(5))
+        .expect("parser should reject this quickly, not loop exponentially");
+}

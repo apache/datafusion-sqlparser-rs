@@ -2052,9 +2052,14 @@ impl<'a> Parser<'a> {
                         })?;
 
                         match expr {
-                            // `parse_prefix` does not itself follow compound chains, but a
-                            // dialect override could still return a compound expression, so
-                            // keep the flatten arms for safety.
+                            // If we get back a compound field access or identifier,
+                            // we flatten the nested expression.
+                            // For example if the current root is `foo`
+                            // and we get back a compound identifier expression `bar.baz`
+                            // The full expression should be `foo.bar.baz` (i.e.
+                            // a root with an access chain with 2 entries) and not
+                            // `foo.(bar.baz)` (i.e. a root with an access chain with
+                            // 1 entry`).
                             Some(Expr::CompoundFieldAccess { root, access_chain }) => {
                                 chain.push(AccessExpr::Dot(*root));
                                 chain.extend(access_chain);

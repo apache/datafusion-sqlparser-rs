@@ -4900,3 +4900,8 @@ fn parse_adjacent_string_literal_concatenation() {
     let sql = r#"SELECT 'M' "y" 'S' "q" 'l'"#;
     mysql().one_statement_parses_to(sql, r"SELECT 'MySql'");
 }
+
+#[test]
+fn parse_group_by_with_rollup() {
+    mysql().verified_stmt("SELECT * FROM tbl GROUP BY col1, col2 WITH ROLLUP");
+}

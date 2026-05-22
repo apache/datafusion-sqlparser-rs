@@ -439,7 +439,9 @@ fn parse_window_function_with_filter() {
                 over: Some(WindowType::WindowSpec(WindowSpec {
                     window_name: None,
                     partition_by: vec![],
+                    partition_by_kind: WindowPartitionByKind::Partition,
                     order_by: vec![],
+                    order_by_kind: WindowOrderByKind::Order,
                     window_frame: None,
                 })),
                 filter: Some(Box::new(Expr::Identifier(Ident::new("y")))),

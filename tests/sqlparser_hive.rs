@@ -562,6 +562,13 @@ fn test_tample_sample() {
     hive().verified_stmt("SELECT * FROM source TABLESAMPLE (10 ROWS)");
 }
 
+#[test]
+fn parse_row_number_window_function() {
+    hive().verified_stmt(
+        "SELECT row_number() OVER (DISTRIBUTE BY age SORT BY update_time DESC) AS row_num FROM sdl.xxx",
+    );
+}
+
 fn hive() -> TestedDialects {
     TestedDialects::new(vec![Box::new(HiveDialect {})])
 }

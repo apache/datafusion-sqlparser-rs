@@ -187,8 +187,7 @@ fn parse_named_arg_chain(c: &mut Criterion) {
     let dialect = PostgreSqlDialect {};
 
     for &n in &[5usize, 10, 15] {
-        let body = std::iter::repeat(".foo(t--,i)")
-            .take(n)
+        let body = std::iter::repeat_n(".foo(t--,i)", n)
             .collect::<Vec<_>>()
             .join("\n");
         let sql = format!("SELECT Y\n{body}");

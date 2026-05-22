@@ -2036,20 +2036,35 @@ impl<'a> Parser<'a> {
                     // recursive `parse_subexpr` would re-walk the rest of the chain at
                     // every dot.
                     _ => {
-                        let expr = self.maybe_parse(|parser| {
-                            let expr = parser.parse_prefix()?;
-                            match &expr {
-                                Expr::CompoundFieldAccess { .. }
-                                | Expr::CompoundIdentifier(_)
-                                | Expr::Identifier(_)
-                                | Expr::Value(_)
-                                | Expr::Function(_) => Ok(expr),
-                                _ => parser.expected_ref(
-                                    "an identifier or value",
-                                    parser.peek_token_ref(),
-                                ),
-                            }
-                        })?;
+                        // For a plain `Word` field (not followed by `(`), skip the
+                        // speculative `parse_prefix`. The only result the validator
+                        // below would accept is `Identifier`, which `parse_identifier`
+                        // in the None branch produces directly. This avoids 2^N work
+                        // on chains like `.not-b.not-b...` where `parse_prefix` would
+                        // descend into `parse_not` and re-walk the remaining chain at
+                        // every segment.
+                        let word_field_no_lparen =
+                            matches!(self.peek_token_ref().token, Token::Word(_))
+                                && self.peek_nth_token_ref(1).token != Token::LParen;
+
+                        let expr = if word_field_no_lparen {
+                            None
+                        } else {
+                            self.maybe_parse(|parser| {
+                                let expr = parser.parse_prefix()?;
+                                match &expr {
+                                    Expr::CompoundFieldAccess { .. }
+                                    | Expr::CompoundIdentifier(_)
+                                    | Expr::Identifier(_)
+                                    | Expr::Value(_)
+                                    | Expr::Function(_) => Ok(expr),
+                                    _ => parser.expected_ref(
+                                        "an identifier or value",
+                                        parser.peek_token_ref(),
+                                    ),
+                                }
+                            })?
+                        };
 
                         match expr {
                             // If we get back a compound field access or identifier,

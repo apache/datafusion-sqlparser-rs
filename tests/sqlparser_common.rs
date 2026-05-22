@@ -19004,3 +19004,30 @@ fn parse_compound_chain_no_exponential_blowup() {
     rx.recv_timeout(Duration::from_secs(5))
         .expect("parser should reject this quickly, not loop exponentially");
 }
+
+/// Regression test for the 2^N parse-time blowup in `parse_function_args` on
+/// dialects that allow `<expr> <op> <expr>` named args (PostgreSQL, MSSQL).
+/// Each `--<newline>` swallows the trailing `,i)`, leaving a chain of
+/// unterminated function calls that the previous `maybe_parse(parse_expr)`
+/// re-walked on rollback. Post-fix the parser returns `Err` in well under
+/// a millisecond.
+#[test]
+fn parse_named_arg_chain_no_exponential_blowup() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    let body: String = std::iter::repeat_n(".foo(t--,i)", 25)
+        .collect::<Vec<_>>()
+        .join("\n");
+    let sql = format!("SELECT Y\n{body}");
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = Parser::parse_sql(&PostgreSqlDialect {}, &sql);
+        let _ = tx.send(());
+    });
+
+    rx.recv_timeout(Duration::from_secs(5))
+        .expect("PostgreSQL parser should reject this quickly, not loop exponentially");
+}

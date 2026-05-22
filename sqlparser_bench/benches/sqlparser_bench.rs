@@ -16,7 +16,7 @@
 // under the License.
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use sqlparser::dialect::GenericDialect;
+use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::keywords::Keyword;
 use sqlparser::parser::Parser;
 use sqlparser::tokenizer::{Span, Word};
@@ -177,11 +177,38 @@ fn parse_compound_chain(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmark parsing pathological named-arg chains that previously caused
+/// 2^N work in `parse_function_args` on dialects with expression-named
+/// function arguments (PostgreSQL, MSSQL). Each `--<newline>` swallows the
+/// trailing `,i)`, leaving a chain of unterminated function calls that the
+/// previous `maybe_parse(parse_expr)` re-walked on rollback.
+fn parse_named_arg_chain(c: &mut Criterion) {
+    let mut group = c.benchmark_group("parse_named_arg_chain");
+    let dialect = PostgreSqlDialect {};
+
+    for &n in &[5usize, 10, 15] {
+        let body = std::iter::repeat(".foo(t--,i)")
+            .take(n)
+            .collect::<Vec<_>>()
+            .join("\n");
+        let sql = format!("SELECT Y\n{body}");
+
+        group.bench_function(format!("chain_{n}"), |b| {
+            b.iter(|| {
+                let _ = Parser::parse_sql(&dialect, std::hint::black_box(&sql));
+            });
+        });
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     basic_queries,
     word_to_ident,
     parse_many_identifiers,
-    parse_compound_chain
+    parse_compound_chain,
+    parse_named_arg_chain
 );
 criterion_main!(benches);

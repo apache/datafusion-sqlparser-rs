@@ -18357,19 +18357,8 @@ impl<'a> Parser<'a> {
 
     /// Parse a single function argument, handling named and unnamed variants.
     pub fn parse_function_args(&mut self) -> Result<FunctionArg, ParserError> {
-        let arg = if self.dialect.supports_named_fn_args_with_expr_name() {
-            self.maybe_parse(|p| {
-                let name = p.parse_expr()?;
-                let operator = p.parse_function_named_arg_operator()?;
-                let arg = p.parse_wildcard_expr()?.into();
-                Ok(FunctionArg::ExprNamed {
-                    name,
-                    arg,
-                    operator,
-                })
-            })?
-        } else {
-            self.maybe_parse(|p| {
+        if !self.dialect.supports_named_fn_args_with_expr_name() {
+            if let Some(arg) = self.maybe_parse(|p| {
                 let name = p.parse_identifier()?;
                 let operator = p.parse_function_named_arg_operator()?;
                 let arg = p.parse_wildcard_expr()?.into();
@@ -18378,12 +18367,35 @@ impl<'a> Parser<'a> {
                     arg,
                     operator,
                 })
-            })?
-        };
-        if let Some(arg) = arg {
-            return Ok(arg);
+            })? {
+                return Ok(arg);
+            }
         }
+
+        // Parse the leading expression once, then speculatively parse the
+        // named-arg tail `<op> <expr>`. The previous implementation also
+        // speculated on the name itself via `maybe_parse(parse_expr ...)`,
+        // which produced ~2^N work on chains like
+        // `SELECT Y\n.foo(t--\n.foo(t--\n...` because rollback re-walked
+        // deeply nested function calls. Same family of bug as #2344.
         let wildcard_expr = self.parse_wildcard_expr()?;
+        if self.dialect.supports_named_fn_args_with_expr_name()
+            && !matches!(wildcard_expr, Expr::Wildcard(_))
+        {
+            if let Some((operator, arg)) = self.maybe_parse(|p| {
+                Ok((
+                    p.parse_function_named_arg_operator()?,
+                    p.parse_wildcard_expr()?,
+                ))
+            })? {
+                return Ok(FunctionArg::ExprNamed {
+                    name: wildcard_expr,
+                    arg: arg.into(),
+                    operator,
+                });
+            }
+        }
+
         let arg_expr: FunctionArgExpr = match wildcard_expr {
             Expr::Wildcard(ref token) if self.dialect.supports_select_wildcard_exclude() => {
                 // Support `* EXCLUDE(col1, col2, ...)` inside function calls (e.g. Snowflake's

@@ -13,6 +13,8 @@
 //! SQL Parser
 
 #[cfg(not(feature = "std"))]
+use alloc::collections::BTreeSet;
+#[cfg(not(feature = "std"))]
 use alloc::{
     boxed::Box,
     format,
@@ -25,6 +27,8 @@ use core::{
     str::FromStr,
 };
 use helpers::attached_token::AttachedToken;
+#[cfg(feature = "std")]
+use std::collections::BTreeSet;
 
 use log::debug;
 
@@ -359,6 +363,14 @@ pub struct Parser<'a> {
     options: ParserOptions,
     /// Ensures the stack does not overflow by limiting recursion depth.
     recursion_counter: RecursionCounter,
+    /// Token indices where a speculative attempt to parse `NOT` as a unary
+    /// prefix operator has already failed during this parse. Re-entering
+    /// `parse_not` at the same position would repeat the same work and fail
+    /// again, so the second visit short-circuits to identifier interpretation.
+    /// Without this cache, inputs like `SELECT x-not-b.x-not-b...` (chains of
+    /// `<ident>-NOT-<ident>.` ending in a parse error) trigger 2^N exploration
+    /// because each `-NOT-` segment otherwise re-walks the rest of the chain.
+    failed_unary_not_positions: BTreeSet<usize>,
 }
 
 impl<'a> Parser<'a> {
@@ -385,6 +397,7 @@ impl<'a> Parser<'a> {
             dialect,
             recursion_counter: RecursionCounter::new(DEFAULT_REMAINING_DEPTH),
             options: ParserOptions::new().with_trailing_commas(dialect.supports_trailing_commas()),
+            failed_unary_not_positions: BTreeSet::new(),
         }
     }
 
@@ -446,6 +459,7 @@ impl<'a> Parser<'a> {
     pub fn with_tokens_with_locations(mut self, tokens: Vec<TokenWithSpan>) -> Self {
         self.tokens = tokens;
         self.index = 0;
+        self.failed_unary_not_positions.clear();
         self
     }
 
@@ -1801,6 +1815,17 @@ impl<'a> Parser<'a> {
                 // We first try to parse the word and following tokens as a special expression, and if that fails,
                 // we rollback and try to parse it as an identifier.
                 let w = w.clone();
+                // If we already tried to parse `NOT` as a unary prefix operator
+                // at this exact position and it failed, skip the speculative
+                // path and fall back to identifier interpretation directly. The
+                // speculative `parse_not` re-walks the rest of the expression,
+                // so repeating it on every visit causes 2^N work on chains
+                // like `x-not-b.x-not-b...` that end in a parse error.
+                if w.keyword == Keyword::NOT
+                    && self.failed_unary_not_positions.contains(&self.index)
+                {
+                    return self.parse_expr_prefix_by_unreserved_word(&w, span);
+                }
                 match self.try_parse(|parser| parser.parse_expr_prefix_by_reserved_word(&w, span)) {
                     // This word indicated an expression prefix and parsing was successful
                     Ok(Some(expr)) => Ok(expr),
@@ -1815,6 +1840,9 @@ impl<'a> Parser<'a> {
                     // we rollback and return the parsing error we got from trying to parse a
                     // special expression (to maintain backwards compatibility of parsing errors).
                     Err(e) => {
+                        if w.keyword == Keyword::NOT {
+                            self.failed_unary_not_positions.insert(self.index);
+                        }
                         if !self.dialect.is_reserved_for_identifier(w.keyword) {
                             if let Ok(Some(expr)) = self.maybe_parse(|parser| {
                                 parser.parse_expr_prefix_by_unreserved_word(&w, span)

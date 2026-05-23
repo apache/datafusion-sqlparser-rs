@@ -19004,3 +19004,29 @@ fn parse_compound_chain_no_exponential_blowup() {
     rx.recv_timeout(Duration::from_secs(5))
         .expect("parser should reject this quickly, not loop exponentially");
 }
+
+/// Regression test for the 2^N parse-time blowup on chains of
+/// `<ident>-NOT-<ident>.` segments ending in a parse error. Each `-NOT-`
+/// segment used to trigger a speculative `parse_not` that re-walks the rest of
+/// the chain, so re-entering it at every `NOT` doubled the work. The fix
+/// caches positions where the speculative `parse_not` already failed and
+/// skips repeating it. Post-fix the parser rejects this in well under a
+/// millisecond, so the timeout is a hang guard, not a perf threshold.
+#[test]
+fn parse_not_chain_no_exponential_blowup() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    let body: String = std::iter::repeat_n("x-not-b.", 30).collect();
+    let sql = format!("SELECT {body}");
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = Parser::parse_sql(&GenericDialect {}, &sql);
+        let _ = tx.send(());
+    });
+
+    rx.recv_timeout(Duration::from_secs(5))
+        .expect("parser should reject this quickly, not loop exponentially");
+}

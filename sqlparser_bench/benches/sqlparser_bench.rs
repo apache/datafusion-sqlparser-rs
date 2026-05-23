@@ -177,11 +177,36 @@ fn parse_compound_chain(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmark parsing pathological chains of `<ident>-NOT-<ident>.` segments
+/// that previously triggered 2^N speculative `parse_not` work. The input
+/// `SELECT x-not-b.x-not-b...` rejects at the trailing `.`. Each `-NOT-`
+/// segment used to recurse into `parse_not` which re-walks the rest of the
+/// chain, doubling the work at every level. Post-fix the cost is linear in
+/// the number of segments.
+fn parse_not_chain(c: &mut Criterion) {
+    let mut group = c.benchmark_group("parse_not_chain");
+    let dialect = GenericDialect {};
+
+    for &n in &[10usize, 20, 30] {
+        let body: String = std::iter::repeat_n("x-not-b.", n).collect();
+        let sql = format!("SELECT {body}");
+
+        group.bench_function(format!("chain_{n}"), |b| {
+            b.iter(|| {
+                let _ = Parser::parse_sql(&dialect, std::hint::black_box(&sql));
+            });
+        });
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     basic_queries,
     word_to_ident,
     parse_many_identifiers,
-    parse_compound_chain
+    parse_compound_chain,
+    parse_not_chain
 );
 criterion_main!(benches);

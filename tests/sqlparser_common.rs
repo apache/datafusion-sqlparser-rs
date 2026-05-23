@@ -19004,3 +19004,49 @@ fn parse_compound_chain_no_exponential_blowup() {
     rx.recv_timeout(Duration::from_secs(5))
         .expect("parser should reject this quickly, not loop exponentially");
 }
+
+/// Regression test for the 2^N parse-time blowup in `parse_prefix` on inputs
+/// like `IF(current_time(current_time(...x`. Each nested `current_time(` used
+/// to be explored twice at every level (once via the speculative reserved-word
+/// arm, once via the unreserved-word fallback), doubling work per level.
+/// Post-fix the failing parse short-circuits via the position-keyed cache.
+#[test]
+fn parse_prefix_keyword_call_chain_no_exponential_blowup() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    let sql = String::from("if(") + &"current_time(".repeat(30) + "x";
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = Parser::parse_sql(&PostgreSqlDialect {}, &sql);
+        let _ = tx.send(());
+    });
+
+    rx.recv_timeout(Duration::from_secs(5))
+        .expect("parser should reject this quickly, not loop exponentially");
+}
+
+/// Regression test for the 2^N parse-time blowup in `parse_prefix` on inputs
+/// like `case-case-case-...c`. Each `case` token triggers a speculative
+/// `parse_case_expr` that fails, but the unreserved-word fallback returns
+/// `Identifier(case)`, so the outer failure cache never fires. Post-fix the
+/// per-arm cache short-circuits the speculative descent.
+#[test]
+fn parse_prefix_case_chain_no_exponential_blowup() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    let sql = "case\t-".repeat(30) + "c";
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = Parser::parse_sql(&SQLiteDialect {}, &sql);
+        let _ = tx.send(());
+    });
+
+    rx.recv_timeout(Duration::from_secs(5))
+        .expect("parser should reject this quickly, not loop exponentially");
+}

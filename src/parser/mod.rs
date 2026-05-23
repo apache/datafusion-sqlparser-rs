@@ -15,6 +15,7 @@
 #[cfg(not(feature = "std"))]
 use alloc::{
     boxed::Box,
+    collections::BTreeMap,
     format,
     string::{String, ToString},
     vec,
@@ -24,6 +25,9 @@ use core::{
     fmt::{self, Display},
     str::FromStr,
 };
+#[cfg(feature = "std")]
+use std::collections::BTreeMap;
+
 use helpers::attached_token::AttachedToken;
 
 use log::debug;
@@ -359,6 +363,12 @@ pub struct Parser<'a> {
     options: ParserOptions,
     /// Ensures the stack does not overflow by limiting recursion depth.
     recursion_counter: RecursionCounter,
+    /// Cached errors from `parse_prefix` calls that returned `Err`. See
+    /// [`Parser::parse_prefix`] for the 2^N patterns this guards.
+    failed_prefix_positions: BTreeMap<usize, ParserError>,
+    /// Cached errors from the speculative reserved-word prefix arm. See
+    /// [`Parser::parse_prefix`] for the 2^N patterns this guards.
+    failed_reserved_word_prefix_positions: BTreeMap<usize, ParserError>,
 }
 
 impl<'a> Parser<'a> {
@@ -385,6 +395,8 @@ impl<'a> Parser<'a> {
             dialect,
             recursion_counter: RecursionCounter::new(DEFAULT_REMAINING_DEPTH),
             options: ParserOptions::new().with_trailing_commas(dialect.supports_trailing_commas()),
+            failed_prefix_positions: BTreeMap::new(),
+            failed_reserved_word_prefix_positions: BTreeMap::new(),
         }
     }
 
@@ -446,6 +458,8 @@ impl<'a> Parser<'a> {
     pub fn with_tokens_with_locations(mut self, tokens: Vec<TokenWithSpan>) -> Self {
         self.tokens = tokens;
         self.index = 0;
+        self.failed_prefix_positions.clear();
+        self.failed_reserved_word_prefix_positions.clear();
         self
     }
 
@@ -1717,6 +1731,23 @@ impl<'a> Parser<'a> {
             return prefix;
         }
 
+        // Memoize parse_prefix failures to break 2^N speculation when both
+        // prefix arms fail at every level (e.g. `IF(current_time(...x`).
+        // The per-arm cache in `parse_prefix_inner` complements this for
+        // chains where the reserved arm fails but the unreserved fallback
+        // succeeds (e.g. `case-case-...c`).
+        let start_index = self.index;
+        if let Some(cached) = self.failed_prefix_positions.get(&start_index) {
+            return Err(cached.clone());
+        }
+        let result = self.parse_prefix_inner();
+        if let Err(ref e) = result {
+            self.failed_prefix_positions.insert(start_index, e.clone());
+        }
+        result
+    }
+
+    fn parse_prefix_inner(&mut self) -> Result<Expr, ParserError> {
         // PostgreSQL allows any string literal to be preceded by a type name, indicating that the
         // string literal represents a literal of that type. Some examples:
         //
@@ -1801,7 +1832,21 @@ impl<'a> Parser<'a> {
                 // We first try to parse the word and following tokens as a special expression, and if that fails,
                 // we rollback and try to parse it as an identifier.
                 let w = w.clone();
-                match self.try_parse(|parser| parser.parse_expr_prefix_by_reserved_word(&w, span)) {
+                // Memoize failed speculative reserved-word parses. When
+                // the reserved arm (CASE, CURRENT_TIME, etc.) does
+                // exponential work but the unreserved fallback ultimately
+                // succeeds, the overall `parse_prefix` returns `Ok` and the
+                // outer cache never fires. Chains like `case-case-...c`
+                // need this per-arm cache to break the doubling.
+                let try_parse_result = if let Some(cached) = self
+                    .failed_reserved_word_prefix_positions
+                    .get(&next_token_index)
+                {
+                    Err(cached.clone())
+                } else {
+                    self.try_parse(|parser| parser.parse_expr_prefix_by_reserved_word(&w, span))
+                };
+                match try_parse_result {
                     // This word indicated an expression prefix and parsing was successful
                     Ok(Some(expr)) => Ok(expr),
 
@@ -1815,6 +1860,8 @@ impl<'a> Parser<'a> {
                     // we rollback and return the parsing error we got from trying to parse a
                     // special expression (to maintain backwards compatibility of parsing errors).
                     Err(e) => {
+                        self.failed_reserved_word_prefix_positions
+                            .insert(next_token_index, e.clone());
                         if !self.dialect.is_reserved_for_identifier(w.keyword) {
                             if let Ok(Some(expr)) = self.maybe_parse(|parser| {
                                 parser.parse_expr_prefix_by_unreserved_word(&w, span)

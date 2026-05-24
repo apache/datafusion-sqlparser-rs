@@ -10072,9 +10072,6 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse the operator that follows `WITH` in an `EXCLUDE` element.
-    ///
-    /// Accepts either a single operator token (e.g. `=`, `&&`, `<->`) or the
-    /// Postgres `OPERATOR(schema.op)` form for schema-qualified operators.
     fn parse_exclude_constraint_operator(
         &mut self,
     ) -> Result<ExcludeConstraintOperator, ParserError> {

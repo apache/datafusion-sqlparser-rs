@@ -4217,6 +4217,15 @@ fn parse_custom_operator() {
 }
 
 #[test]
+fn parse_operator_empty_parens_rejected() {
+    let result = pg_and_generic().parse_sql_statements("SELECT a OPERATOR() b");
+    assert_eq!(
+        ParserError::ParserError("Expected: operator name, found: )".to_string()),
+        result.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_create_role() {
     let sql = "CREATE ROLE IF NOT EXISTS mysql_a, mysql_b";
     match pg().verified_stmt(sql) {

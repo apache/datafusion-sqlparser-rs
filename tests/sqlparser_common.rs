@@ -2889,22 +2889,6 @@ fn parse_order_by_using_operator_invalid_cases() {
 }
 
 #[test]
-fn parse_operator_empty_parens_rejected() {
-    // The shared `parse_pg_operator_ident_parts` helper rejects an empty
-    // `OPERATOR()` in the binary-expression path, not only in EXCLUDE
-    // constraints. Lock in that behavior.
-    let dialects = TestedDialects::new(vec![
-        Box::new(PostgreSqlDialect {}),
-        Box::new(GenericDialect {}),
-    ]);
-    let result = dialects.parse_sql_statements("SELECT a OPERATOR() b");
-    assert_eq!(
-        ParserError::ParserError("Expected: operator name, found: )".to_string()),
-        result.unwrap_err()
-    );
-}
-
-#[test]
 fn parse_select_group_by() {
     let sql = "SELECT id, fname, lname FROM customer GROUP BY lname, fname";
     let select = verified_only_select(sql);
@@ -4478,8 +4462,6 @@ fn parse_create_table_with_multiple_on_delete_fails() {
 fn parse_exclude_constraint() {
     let dialects = all_dialects_where(|d| d.supports_exclude_constraint());
 
-    // One AST-asserting case to lock the structure of the parsed constraint;
-    // every other case below relies on `verified_stmt` round-tripping.
     let sql = "CREATE TABLE t (room INT, CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =))";
     match dialects.verified_stmt(sql) {
         Statement::CreateTable(create_table) => match &create_table.constraints[..] {
@@ -4502,10 +4484,6 @@ fn parse_exclude_constraint() {
         other => panic!("expected CreateTable, got {other:?}"),
     }
 
-    // Round-trip a representative range of forms (`USING`/no `USING`,
-    // `INCLUDE`, `WHERE`, `DEFERRABLE`, multi-element, ordering options,
-    // operator class, function expression, schema-qualified `OPERATOR(...)`,
-    // collation, `ALTER TABLE ... ADD CONSTRAINT ... EXCLUDE`).
     for sql in [
         "CREATE TABLE t (col INT, EXCLUDE (col WITH =))",
         "CREATE TABLE t (room INT, during INT, EXCLUDE USING gist (room WITH =, during WITH &&))",

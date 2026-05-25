@@ -3873,8 +3873,9 @@ impl<'a> Parser<'a> {
                 Keyword::XOR => Some(BinaryOperator::Xor),
                 Keyword::OVERLAPS => Some(BinaryOperator::Overlaps),
                 Keyword::OPERATOR if dialect_is!(dialect is PostgreSqlDialect | GenericDialect) => {
-                    // Postgres has special rules for operator names so we can
-                    // not use `parse_object` or similar.
+                    // there are special rules for operator names in
+                    // postgres so we can not use 'parse_object'
+                    // or similar.
                     // See https://www.postgresql.org/docs/current/sql-createoperator.html
                     Some(BinaryOperator::PGCustomBinaryOperator(
                         self.parse_pg_operator_ident_parts()?,
@@ -10107,8 +10108,8 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    /// Parse the body of a Postgres `OPERATOR(schema.op)` form — i.e. the
-    /// parenthesised `.`-separated path of name parts after the `OPERATOR`
+    /// Parse the body of a Postgres `OPERATOR(schema.op)` form: the
+    /// parenthesized `.`-separated path of name parts after the `OPERATOR`
     /// keyword. Shared between binary expression parsing and exclusion
     /// constraint parsing.
     fn parse_pg_operator_ident_parts(&mut self) -> Result<Vec<String>, ParserError> {

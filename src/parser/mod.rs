@@ -2028,14 +2028,16 @@ impl<'a> Parser<'a> {
                         chain.push(AccessExpr::Dot(expr));
                         self.advance_token(); // The consumed placeholder
                     }
-                    // Fallback to parsing an arbitrary expression, but restrict to expression
-                    // types that are valid after the dot operator. This ensures that e.g.
-                    // `T.interval` is parsed as a compound identifier, not as an interval
-                    // expression.
+                    // Parse a single field component, restricted to expression types valid
+                    // after `.` (so e.g. `T.interval` is a compound identifier, not an
+                    // interval expression). Using `parse_prefix` here rather than
+                    // `parse_subexpr` avoids 2^N work on inputs like `IF a.b.c...x.#`:
+                    // the outer loop already consumes successive `.field` segments, so a
+                    // recursive `parse_subexpr` would re-walk the rest of the chain at
+                    // every dot.
                     _ => {
                         let expr = self.maybe_parse(|parser| {
-                            let expr = parser
-                                .parse_subexpr(parser.dialect.prec_value(Precedence::Period))?;
+                            let expr = parser.parse_prefix()?;
                             match &expr {
                                 Expr::CompoundFieldAccess { .. }
                                 | Expr::CompoundIdentifier(_)

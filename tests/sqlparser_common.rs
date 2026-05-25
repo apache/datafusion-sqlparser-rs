@@ -4519,6 +4519,10 @@ fn parse_exclude_constraint() {
             "CREATE TABLE t (CONSTRAINT c EXCLUDE USING gist (col WITH))",
             "Expected: exclusion operator, found: )",
         ),
+        (
+            "CREATE TABLE t (CONSTRAINT c EXCLUDE foo)",
+            "Expected: (, found: foo",
+        ),
     ] {
         let result = dialects.parse_sql_statements(sql);
         assert_eq!(

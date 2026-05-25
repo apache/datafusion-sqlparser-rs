@@ -21,10 +21,10 @@
 //! is also tested (on the inputs it can handle).
 
 use sqlparser::ast::{
-    ClusteredBy, ColumnOption, CommentDef, CreateFunction, CreateFunctionBody, CreateFunctionUsing,
-    CreateTable, DataType, Expr, Function, FunctionArgumentList, FunctionArguments, Ident,
-    ObjectName, OrderByExpr, OrderByOptions, OrderBySort, SelectItem, Set, Statement, TableFactor,
-    UnaryOperator, Use, Value,
+    ClusteredBy, CommentDef, CreateFunction, CreateFunctionBody, CreateFunctionUsing, CreateTable,
+    Expr, Function, FunctionArgumentList, FunctionArguments, Ident, ObjectName, OrderByExpr,
+    OrderByOptions, OrderBySort, SelectItem, Set, Statement, TableFactor, UnaryOperator, Use,
+    Value,
 };
 use sqlparser::dialect::{AnsiDialect, GenericDialect, HiveDialect};
 use sqlparser::parser::ParserError;
@@ -564,34 +564,9 @@ fn test_tample_sample() {
 
 #[test]
 fn parse_create_table_with_map_column_comment() {
-    let sql = "create table tmp.xxx (kv_map map<string, string> comment 'kv col comment');";
-    let mut statements = hive().parse_sql_statements(sql).unwrap();
-    assert_eq!(statements.len(), 1);
-
-    match statements.pop().unwrap() {
-        Statement::CreateTable(CreateTable { name, columns, .. }) => {
-            assert_eq!(
-                name,
-                ObjectName::from(vec![Ident::new("tmp"), Ident::new("xxx")])
-            );
-            assert_eq!(columns.len(), 1);
-            let column = &columns[0];
-            assert_eq!(column.name, Ident::new("kv_map"));
-            assert_eq!(
-                column.data_type,
-                DataType::Map(
-                    Box::new(DataType::String(None)),
-                    Box::new(DataType::String(None))
-                )
-            );
-            assert_eq!(column.options.len(), 1);
-            assert_eq!(
-                column.options[0].option,
-                ColumnOption::Comment("kv col comment".to_string())
-            );
-        }
-        _ => unreachable!(),
-    }
+    hive().verified_stmt(
+        "CREATE TABLE target (kv_map MAP<STRING, STRING> COMMENT 'kv col comment') COMMENT 'this is table comment'",
+    );
 }
 
 fn hive() -> TestedDialects {

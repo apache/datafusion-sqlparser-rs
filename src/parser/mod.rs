@@ -12746,6 +12746,7 @@ impl<'a> Parser<'a> {
                     Ok(DataType::Map(
                         Box::new(key_data_type),
                         Box::new(value_data_type),
+                        MapBracketKind::AngleBrackets,
                     ))
                 }
                 Keyword::MAP if dialect_is!(dialect is ClickHouseDialect | GenericDialect) => {
@@ -12754,6 +12755,7 @@ impl<'a> Parser<'a> {
                     Ok(DataType::Map(
                         Box::new(key_data_type),
                         Box::new(value_data_type),
+                        MapBracketKind::Parentheses,
                     ))
                 }
                 Keyword::NESTED if dialect_is!(dialect is ClickHouseDialect | GenericDialect) => {

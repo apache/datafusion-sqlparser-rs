@@ -10003,7 +10003,19 @@ impl<'a> Parser<'a> {
             Token::Word(w)
                 if w.keyword == Keyword::EXCLUDE && self.dialect.supports_exclude_constraint() =>
             {
-                Ok(Some(self.parse_exclude_constraint(name)?.into()))
+                // `EXCLUDE` is a non-reserved keyword in PostgreSQL, so it is a
+                // valid column name. Only treat it as an exclusion constraint
+                // when it begins one (named, or followed by `USING` / `(`);
+                // otherwise backtrack and let it parse as a column.
+                if name.is_some()
+                    || self.peek_keyword(Keyword::USING)
+                    || self.peek_token_ref().token == Token::LParen
+                {
+                    Ok(Some(self.parse_exclude_constraint(name)?.into()))
+                } else {
+                    self.prev_token();
+                    Ok(None)
+                }
             }
             _ => {
                 if name.is_some() {

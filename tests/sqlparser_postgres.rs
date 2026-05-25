@@ -9254,13 +9254,16 @@ fn parse_lock_table() {
 }
 
 #[test]
-fn exclude_as_column_name_parses_in_mysql_and_sqlite() {
-    // `exclude` must remain usable as an identifier where it is not a
-    // reserved keyword; PG reserves it as a constraint keyword.
+fn exclude_as_column_name() {
+    // `EXCLUDE` is a non-reserved keyword, so it stays usable as a column name
+    // even on dialects that parse `EXCLUDE` constraints: a bare `exclude` not
+    // followed by `USING` or `(` must not be mistaken for a constraint.
     let sql = "CREATE TABLE t (exclude INT)";
     for dialect in [
         Box::new(MySqlDialect {}) as Box<dyn Dialect>,
         Box::new(SQLiteDialect {}),
+        Box::new(PostgreSqlDialect {}),
+        Box::new(GenericDialect {}),
     ] {
         let type_name = format!("{dialect:?}");
         let parser = TestedDialects::new(vec![dialect]);

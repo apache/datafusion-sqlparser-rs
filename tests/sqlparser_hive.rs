@@ -562,6 +562,13 @@ fn test_tample_sample() {
     hive().verified_stmt("SELECT * FROM source TABLESAMPLE (10 ROWS)");
 }
 
+#[test]
+fn parse_create_table_with_map_column_comment() {
+    hive().verified_stmt(
+        "CREATE TABLE target (kv_map MAP<STRING, STRING> COMMENT 'kv col comment') COMMENT 'this is table comment'",
+    );
+}
+
 fn hive() -> TestedDialects {
     TestedDialects::new(vec![Box::new(HiveDialect {})])
 }

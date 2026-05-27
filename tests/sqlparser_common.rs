@@ -3146,7 +3146,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::BigInt(None),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3159,7 +3158,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::TinyInt(None),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3191,7 +3189,6 @@ fn parse_cast() {
                 length: 50,
                 unit: None,
             })),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3204,7 +3201,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Clob(None),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3217,7 +3213,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Clob(Some(50)),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3230,7 +3225,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Binary(Some(50)),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3243,7 +3237,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Varbinary(Some(BinaryLength::IntegerLength { length: 50 })),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3256,7 +3249,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Blob(None),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3269,7 +3261,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Blob(Some(50)),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3282,7 +3273,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("details"))),
             data_type: DataType::JSONB,
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3298,7 +3288,6 @@ fn parse_try_cast() {
             kind: CastKind::TryCast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::BigInt(None),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -6641,7 +6630,6 @@ fn interval_disallow_interval_expr_double_colon() {
                 fractional_seconds_precision: None,
             })),
             data_type: DataType::Text,
-            array: false,
             format: None,
         }
     )
@@ -6659,7 +6647,6 @@ fn parse_text_type_modifier_double_colon_cast() {
                 ObjectName::from(vec![Ident::new("TEXT")]),
                 vec!["16777216".to_string()]
             ),
-            array: false,
             format: None,
         }
     );
@@ -9412,7 +9399,6 @@ fn parse_double_colon_cast_at_timezone() {
                         .with_empty_span()
                 )),
                 data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                array: false,
                 format: None
             }),
             time_zone: Box::new(Expr::Value(
@@ -13812,7 +13798,6 @@ fn test_dictionary_syntax() {
                         (Value::SingleQuotedString("2023-04-01".to_owned())).with_empty_span(),
                     )),
                     data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                    array: false,
                     format: None,
                 }),
             },
@@ -13824,7 +13809,6 @@ fn test_dictionary_syntax() {
                         (Value::SingleQuotedString("2023-04-05".to_owned())).with_empty_span(),
                     )),
                     data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                    array: false,
                     format: None,
                 }),
             },
@@ -14121,7 +14105,6 @@ fn test_extract_seconds_ok() {
                     fields: None,
                     precision: None
                 },
-                array: false,
                 format: None,
             }),
         }
@@ -14152,7 +14135,6 @@ fn test_extract_seconds_ok() {
                         fields: None,
                         precision: None,
                     },
-                    array: false,
                     format: None,
                 }),
             })],
@@ -14210,7 +14192,6 @@ fn test_extract_seconds_single_quote_ok() {
                     fields: None,
                     precision: None
                 },
-                array: false,
                 format: None,
             }),
         }

@@ -15994,6 +15994,7 @@ impl<'a> Parser<'a> {
                 if !self
                     .dialect
                     .supports_left_associative_joins_without_parens()
+                    && !natural
                     && self.peek_parens_less_nested_join()
                 {
                     let joins = self.parse_joins()?;

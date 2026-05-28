@@ -559,7 +559,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Consumes this parser returning comments from the parsed token stream.
-    fn into_comments(self) -> comments::Comments {
+    pub fn into_comments(self) -> comments::Comments {
         let mut comments = comments::Comments::default();
         for t in self.tokens.into_iter() {
             match t.token {

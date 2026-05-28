@@ -12184,15 +12184,6 @@ impl<'a> Parser<'a> {
                         after_newline = true;
                         self.next_token_no_skip();
                     }
-                    // Tokenizer includes the newline in the single line comment
-                    // so we need to check for it specifically here, otherwise the newline will
-                    // not be consumed as a separate token.
-                    Token::Whitespace(Whitespace::SingleLineComment { comment, .. }) => {
-                        if comment.ends_with('\n') {
-                            after_newline = true;
-                        }
-                        self.next_token_no_skip();
-                    }
                     Token::Whitespace(_) => {
                         self.next_token_no_skip();
                     }

@@ -33,7 +33,7 @@ impl Comments {
     /// last accepted comment.  In other words, this method will skip the
     /// comment if its comming out of order (as encountered in the parsed
     /// source code.)
-    pub(crate) fn offer(&mut self, comment: CommentWithSpan) {
+    pub fn offer(&mut self, comment: CommentWithSpan) {
         if self
             .0
             .last()

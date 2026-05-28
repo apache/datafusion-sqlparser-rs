@@ -116,6 +116,17 @@ impl Dialect for SparkSqlDialect {
         true
     }
 
+    /// Spark 4.0 added SQL pipe syntax (`|>`), sharing the operator set with
+    /// the Google BigQuery / Pipe-SQL paper implementations already
+    /// supported by [`BigQueryDialect`](crate::dialect::BigQueryDialect).
+    ///
+    /// See:
+    /// - <https://spark.apache.org/docs/latest/sql-pipe-syntax.html>
+    /// - <https://issues.apache.org/jira/browse/SPARK-49528>
+    fn supports_pipe_operator(&self) -> bool {
+        true
+    }
+
     /// Parse the `DIV` keyword as integer division.
     ///
     /// Example: `SELECT 10 DIV 3` returns `3`.

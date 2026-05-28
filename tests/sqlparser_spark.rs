@@ -327,3 +327,12 @@ fn test_substring() {
         "SELECT SUBSTRING(s, 1, 3) FROM t",
     );
 }
+
+// --------------------------------
+// Pipe operator (`|>`)
+// --------------------------------
+
+#[test]
+fn test_pipe_operator() {
+    spark().verified_stmt("SELECT * FROM t |> WHERE x > 1 |> SELECT x AS y |> ORDER BY y");
+}

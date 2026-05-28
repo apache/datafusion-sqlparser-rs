@@ -12085,7 +12085,8 @@ impl fmt::Display for OptimizerHint {
                 f.write_str(prefix)?;
                 f.write_str(&self.prefix)?;
                 f.write_str("+")?;
-                f.write_str(&self.text)
+                f.write_str(&self.text)?;
+                f.write_str("\n")
             }
             OptimizerHintStyle::MultiLine => {
                 f.write_str("/*")?;

@@ -1765,7 +1765,6 @@ impl<'a> Parser<'a> {
                         kind: CastKind::Cast,
                         expr: Box::new(parser.parse_expr()?),
                         data_type: DataType::Binary(None),
-                        array: false,
                         format: None,
                     })
                 }
@@ -2807,15 +2806,19 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
         self.expect_keyword_is(Keyword::AS)?;
-        let data_type = self.parse_data_type()?;
-        let array = self.parse_keyword(Keyword::ARRAY);
+        let mut data_type = self.parse_data_type()?;
+        // A trailing `ARRAY` keyword makes the target an array type, e.g. MySQL's
+        // `CAST(... AS UNSIGNED ARRAY)`. PostgreSQL already consumes it while
+        // parsing the data type, so the guard avoids wrapping it twice.
+        if !matches!(data_type, DataType::Array(_)) && self.parse_keyword(Keyword::ARRAY) {
+            data_type = DataType::Array(ArrayElemTypeDef::Keyword(Box::new(data_type), None));
+        }
         let format = self.parse_optional_cast_format()?;
         self.expect_token(&Token::RParen)?;
         Ok(Expr::Cast {
             kind,
             expr: Box::new(expr),
             data_type,
-            array,
             format,
         })
     }
@@ -4097,7 +4100,6 @@ impl<'a> Parser<'a> {
                 kind: CastKind::DoubleColon,
                 expr: Box::new(expr),
                 data_type: self.parse_data_type()?,
-                array: false,
                 format: None,
             })
         } else if Token::ExclamationMark == *tok && self.dialect.supports_factorial_operator() {
@@ -4345,7 +4347,6 @@ impl<'a> Parser<'a> {
             kind: CastKind::DoubleColon,
             expr: Box::new(expr),
             data_type: self.parse_data_type()?,
-            array: false,
             format: None,
         })
     }
@@ -12827,6 +12828,22 @@ impl<'a> Parser<'a> {
                 data = DataType::Array(ArrayElemTypeDef::SquareBracket(Box::new(data), size))
             }
         }
+
+        // Keyword form, e.g. `INT ARRAY` or `INT ARRAY[3]`. It is one-dimensional,
+        // so only a single optional size is accepted (multidimensional arrays use
+        // the bracket form above).
+        if self.dialect.supports_array_typedef_with_keyword() && self.parse_keyword(Keyword::ARRAY)
+        {
+            let size = if self.consume_token(&Token::LBracket) {
+                let size = self.maybe_parse(|p| p.parse_literal_uint())?;
+                self.expect_token(&Token::RBracket)?;
+                size
+            } else {
+                None
+            };
+            data = DataType::Array(ArrayElemTypeDef::Keyword(Box::new(data), size));
+        }
+
         Ok((data, trailing_bracket))
     }
 

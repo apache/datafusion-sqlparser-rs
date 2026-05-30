@@ -1281,7 +1281,6 @@ fn parse_array() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("a"))),
             data_type: DataType::Array(ArrayElemTypeDef::None),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -1391,7 +1390,6 @@ fn parse_semi_structured_data_traversal() {
                     }
                 }),
                 data_type: DataType::Array(ArrayElemTypeDef::None),
-                array: false,
                 format: None,
             }),
             path: JsonPath {

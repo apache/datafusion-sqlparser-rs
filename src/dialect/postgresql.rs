@@ -274,6 +274,11 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    /// See: <https://www.postgresql.org/docs/current/arrays.html#ARRAYS-DECLARATION>
+    fn supports_array_typedef_with_keyword(&self) -> bool {
+        true
+    }
+
     fn supports_geometric_types(&self) -> bool {
         true
     }

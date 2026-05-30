@@ -137,6 +137,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_exclude_constraint(&self) -> bool {
+        true
+    }
+
     fn supports_limit_comma(&self) -> bool {
         true
     }

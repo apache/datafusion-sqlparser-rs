@@ -465,6 +465,10 @@ pub enum DataType {
     ///
     /// [DuckDB]: https://duckdb.org/docs/sql/data_types/union.html
     Union(Vec<UnionField>),
+    /// Object type, see [Snowflake].
+    ///
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/data-types-semistructured#object
+    Object(Vec<StructField>),
     /// Nullable - special marker NULL represents in ClickHouse as a data type.
     ///
     /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/nullable
@@ -775,6 +779,9 @@ impl fmt::Display for DataType {
             }
             DataType::Union(fields) => {
                 write!(f, "UNION({})", display_comma_separated(fields))
+            }
+            DataType::Object(fields) => {
+                write!(f, "OBJECT({})", display_comma_separated(fields))
             }
             // ClickHouse
             DataType::Nullable(data_type) => {

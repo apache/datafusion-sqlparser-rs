@@ -14112,7 +14112,7 @@ impl<'a> Parser<'a> {
             Some(With {
                 with_token: with_token.clone().into(),
                 recursive: self.parse_keyword(Keyword::RECURSIVE),
-                cte_tables: self.parse_comma_separated(Parser::parse_cte)?,
+                exprs: self.parse_comma_separated(Parser::parse_with_expression)?,
             })
         } else {
             None
@@ -14644,6 +14644,23 @@ impl<'a> Parser<'a> {
             cte.from = Some(self.parse_identifier()?);
         }
         Ok(cte)
+    }
+
+    /// Parse a single expression in a `WITH` clause.
+    pub fn parse_with_expression(&mut self) -> Result<WithExpression, ParserError> {
+        if !self.dialect.supports_common_scalar_expressions() {
+            return self.parse_cte().map(WithExpression::Cte);
+        }
+        if let Some(cte) = self.maybe_parse(|p| p.parse_cte())? {
+            return Ok(WithExpression::Cte(cte));
+        }
+        let expr = self.parse_expr()?;
+        self.expect_keyword(Keyword::AS)?;
+        let alias = self.parse_identifier()?;
+        Ok(WithExpression::Cse(ExprWithAlias {
+            expr,
+            alias: Some(alias),
+        }))
     }
 
     /// Parse a "query body", which is an expression with roughly the

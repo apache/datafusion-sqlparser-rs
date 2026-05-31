@@ -12733,6 +12733,31 @@ impl<'a> Parser<'a> {
                     let fields = self.parse_union_type_def()?;
                     Ok(DataType::Union(fields))
                 }
+                Keyword::OBJECT if dialect_is!(dialect is SnowflakeDialect | GenericDialect) => {
+                    self.prev_token();
+                    self.expect_keyword_is(Keyword::OBJECT)?;
+                    // Object type may have no fields: OBJECT or OBJECT()
+                    if !self.peek_token_ref().token.eq(&Token::LParen) {
+                        Ok(DataType::Object(vec![]))
+                    } else {
+                        self.expect_token(&Token::LParen)?;
+                        let fields = if self.peek_token_ref().token == Token::RParen {
+                            vec![]
+                        } else {
+                            self.parse_comma_separated(|parser| {
+                                let field_name = parser.parse_identifier()?;
+                                let field_type = parser.parse_data_type()?;
+                                Ok(StructField {
+                                    field_name: Some(field_name),
+                                    field_type,
+                                    options: None,
+                                })
+                            })?
+                        };
+                        self.expect_token(&Token::RParen)?;
+                        Ok(DataType::Object(fields))
+                    }
+                }
                 Keyword::NULLABLE if dialect_is!(dialect is ClickHouseDialect | GenericDialect) => {
                     Ok(self.parse_sub_type(DataType::Nullable)?)
                 }

@@ -2392,10 +2392,10 @@ impl Spanned for SelectInto {
             temporary: _, // bool
             unlogged: _,  // bool
             table: _,     // bool
-            name,
+            targets,
         } = self;
 
-        name.span()
+        union_spans(targets.iter().map(|t| t.span()))
     }
 }
 

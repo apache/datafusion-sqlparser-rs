@@ -14108,12 +14108,31 @@ impl<'a> Parser<'a> {
     pub fn parse_query(&mut self) -> Result<Box<Query>, ParserError> {
         let _guard = self.recursion_counter.try_decrease()?;
         let with = if self.parse_keyword(Keyword::WITH) {
-            let with_token = self.get_current_token();
-            Some(With {
-                with_token: with_token.clone().into(),
-                recursive: self.parse_keyword(Keyword::RECURSIVE),
-                cte_tables: self.parse_comma_separated(Parser::parse_cte)?,
-            })
+            let with_token = self.get_current_token().clone();
+            if self.dialect.supports_with_xmlnamespaces_clause()
+                && self.parse_keyword(Keyword::XMLNAMESPACES)
+            {
+                self.expect_token(&Token::LParen)?;
+                let _namespaces =
+                    self.parse_comma_separated(Parser::parse_xml_namespace_definition)?;
+                self.expect_token(&Token::RParen)?;
+
+                if self.consume_token(&Token::Comma) {
+                    Some(With {
+                        with_token: with_token.clone().into(),
+                        recursive: self.parse_keyword(Keyword::RECURSIVE),
+                        cte_tables: self.parse_comma_separated(Parser::parse_cte)?,
+                    })
+                } else {
+                    None
+                }
+            } else {
+                Some(With {
+                    with_token: with_token.clone().into(),
+                    recursive: self.parse_keyword(Keyword::RECURSIVE),
+                    cte_tables: self.parse_comma_separated(Parser::parse_cte)?,
+                })
+            }
         } else {
             None
         };

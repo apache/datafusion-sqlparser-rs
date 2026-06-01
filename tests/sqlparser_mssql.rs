@@ -2923,3 +2923,26 @@ fn parse_mssql_money_constants() {
         expr_from_projection(only(&select.projection)),
     );
 }
+
+#[test]
+fn parse_xmlnamespaces() {
+    let sql = r#"WITH XMLNAMESPACES ('urn:test' AS ns)
+SELECT 1 AS [ns:Value]
+FOR XML PATH('ns:Root');"#;
+
+    tsql().parse_sql_statements(sql).unwrap();
+    ms().parse_sql_statements(sql).unwrap();
+
+}
+
+#[test]
+fn parse_xmlnamespaces_with_cte() {
+    let sql = r#"
+WITH XMLNAMESPACES ('urn:example' AS ns), t AS (
+    SELECT 1 AS id
+)
+SELECT id FROM t
+"#;
+
+    tsql().parse_sql_statements(sql).unwrap();
+}

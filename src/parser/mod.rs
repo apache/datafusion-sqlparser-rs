@@ -19627,13 +19627,13 @@ impl<'a> Parser<'a> {
             .is_some();
         let unlogged = self.parse_keyword(Keyword::UNLOGGED);
         let table = self.parse_keyword(Keyword::TABLE);
-        let name = self.parse_object_name(false)?;
+        let targets = self.parse_comma_separated(Parser::parse_expr)?;
 
         Ok(SelectInto {
             temporary,
             unlogged,
             table,
-            name,
+            targets,
         })
     }
 

@@ -2507,6 +2507,8 @@ pub enum CommentObject {
     Schema,
     /// A sequence.
     Sequence,
+    /// A subscription.
+    Subscription,
     /// A table.
     Table,
     /// A type.
@@ -2532,6 +2534,7 @@ impl fmt::Display for CommentObject {
             CommentObject::Role => f.write_str("ROLE"),
             CommentObject::Schema => f.write_str("SCHEMA"),
             CommentObject::Sequence => f.write_str("SEQUENCE"),
+            CommentObject::Subscription => f.write_str("SUBSCRIPTION"),
             CommentObject::Table => f.write_str("TABLE"),
             CommentObject::Type => f.write_str("TYPE"),
             CommentObject::User => f.write_str("USER"),
@@ -3731,6 +3734,12 @@ pub enum Statement {
     /// A `CREATE SERVER` statement.
     CreateServer(CreateServerStatement),
     /// ```sql
+    /// CREATE SUBSCRIPTION
+    /// ```
+    ///
+    /// Note: this is a PostgreSQL-specific statement.
+    CreateSubscription(CreateSubscription),
+    /// ```sql
     /// CREATE POLICY
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)
@@ -3828,6 +3837,12 @@ pub enum Statement {
         /// Operation to perform on the role.
         operation: AlterRoleOperation,
     },
+    /// ```sql
+    /// ALTER SUBSCRIPTION
+    /// ```
+    ///
+    /// Note: this is a PostgreSQL-specific statement.
+    AlterSubscription(AlterSubscription),
     /// ```sql
     /// ALTER POLICY <NAME> ON <TABLE NAME> [<OPERATION>]
     /// ```
@@ -5572,6 +5587,9 @@ impl fmt::Display for Statement {
             Statement::CreateServer(stmt) => {
                 write!(f, "{stmt}")
             }
+            Statement::CreateSubscription(stmt) => {
+                write!(f, "{stmt}")
+            }
             Statement::CreatePolicy(policy) => write!(f, "{policy}"),
             Statement::CreateConnector(create_connector) => create_connector.fmt(f),
             Statement::CreateOperator(create_operator) => create_operator.fmt(f),
@@ -5612,6 +5630,9 @@ impl fmt::Display for Statement {
             }
             Statement::AlterRole { name, operation } => {
                 write!(f, "ALTER ROLE {name} {operation}")
+            }
+            Statement::AlterSubscription(alter_subscription) => {
+                write!(f, "{alter_subscription}")
             }
             Statement::AlterPolicy(alter_policy) => write!(f, "{alter_policy}"),
             Statement::AlterConnector {
@@ -7054,6 +7075,11 @@ pub enum Action {
     BindServiceEndpoint,
     /// Connect permission.
     Connect,
+    /// Custom privilege name (primarily PostgreSQL).
+    Custom {
+        /// The custom privilege identifier.
+        name: Ident,
+    },
     /// Create action, optionally specifying an object type.
     Create {
         /// Optional object type to create.
@@ -7168,6 +7194,7 @@ impl fmt::Display for Action {
             Action::Audit => f.write_str("AUDIT")?,
             Action::BindServiceEndpoint => f.write_str("BIND SERVICE ENDPOINT")?,
             Action::Connect => f.write_str("CONNECT")?,
+            Action::Custom { name } => write!(f, "{name}")?,
             Action::Create { obj_type } => {
                 f.write_str("CREATE")?;
                 if let Some(obj_type) = obj_type {
@@ -8542,6 +8569,8 @@ pub enum ObjectType {
     Role,
     /// A sequence.
     Sequence,
+    /// A subscription.
+    Subscription,
     /// A stage.
     Stage,
     /// A type definition.
@@ -8564,6 +8593,7 @@ impl fmt::Display for ObjectType {
             ObjectType::Database => "DATABASE",
             ObjectType::Role => "ROLE",
             ObjectType::Sequence => "SEQUENCE",
+            ObjectType::Subscription => "SUBSCRIPTION",
             ObjectType::Stage => "STAGE",
             ObjectType::Type => "TYPE",
             ObjectType::User => "USER",
@@ -9073,6 +9103,206 @@ pub struct CreateServerOption {
 impl fmt::Display for CreateServerOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} {}", self.key, self.value)
+    }
+}
+
+/// A subscription option used by `CREATE/ALTER SUBSCRIPTION`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SubscriptionOption {
+    /// Subscription parameter name.
+    pub name: Ident,
+    /// Optional parameter value.
+    pub value: Option<Expr>,
+}
+
+impl fmt::Display for SubscriptionOption {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(value) = &self.value {
+            write!(f, "{} = {}", self.name, value)
+        } else {
+            write!(f, "{}", self.name)
+        }
+    }
+}
+
+/// A `CREATE SUBSCRIPTION` statement.
+///
+/// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createsubscription.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateSubscription {
+    /// Subscription name.
+    pub name: ObjectName,
+    /// Connection string.
+    pub connection: String,
+    /// Publication names.
+    pub publications: Vec<Ident>,
+    /// Optional subscription parameters from `WITH (...)`.
+    pub with_options: Vec<SubscriptionOption>,
+}
+
+impl fmt::Display for CreateSubscription {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "CREATE SUBSCRIPTION {} CONNECTION '{}' PUBLICATION {}",
+            self.name,
+            value::escape_single_quote_string(&self.connection),
+            display_comma_separated(&self.publications)
+        )?;
+
+        if !self.with_options.is_empty() {
+            write!(f, " WITH ({})", display_comma_separated(&self.with_options))?;
+        }
+
+        Ok(())
+    }
+}
+
+/// An `ALTER SUBSCRIPTION` statement.
+///
+/// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-altersubscription.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterSubscription {
+    /// Subscription name.
+    pub name: ObjectName,
+    /// Operation to perform.
+    pub operation: AlterSubscriptionOperation,
+}
+
+impl fmt::Display for AlterSubscription {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ALTER SUBSCRIPTION {} {}", self.name, self.operation)
+    }
+}
+
+/// Operations supported by `ALTER SUBSCRIPTION`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterSubscriptionOperation {
+    /// Update the subscription connection string.
+    Connection {
+        /// New connection string.
+        connection: String,
+    },
+    /// Replace subscription publications.
+    SetPublication {
+        /// Publication names.
+        publications: Vec<Ident>,
+        /// Optional `WITH (...)` parameters.
+        with_options: Vec<SubscriptionOption>,
+    },
+    /// Add publications to the subscription.
+    AddPublication {
+        /// Publication names.
+        publications: Vec<Ident>,
+        /// Optional `WITH (...)` parameters.
+        with_options: Vec<SubscriptionOption>,
+    },
+    /// Drop publications from the subscription.
+    DropPublication {
+        /// Publication names.
+        publications: Vec<Ident>,
+        /// Optional `WITH (...)` parameters.
+        with_options: Vec<SubscriptionOption>,
+    },
+    /// Refresh subscription publications.
+    RefreshPublication {
+        /// Optional `WITH (...)` parameters.
+        with_options: Vec<SubscriptionOption>,
+    },
+    /// Enable the subscription.
+    Enable,
+    /// Disable the subscription.
+    Disable,
+    /// Set subscription parameters.
+    SetOptions {
+        /// Parameters within `SET (...)`.
+        options: Vec<SubscriptionOption>,
+    },
+    /// Change subscription owner.
+    OwnerTo {
+        /// New owner.
+        owner: Owner,
+    },
+    /// Rename the subscription.
+    RenameTo {
+        /// New subscription name.
+        new_name: ObjectName,
+    },
+}
+
+impl fmt::Display for AlterSubscriptionOperation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fn write_with_options(
+            f: &mut fmt::Formatter<'_>,
+            with_options: &[SubscriptionOption],
+        ) -> fmt::Result {
+            if !with_options.is_empty() {
+                write!(f, " WITH ({})", display_comma_separated(with_options))?;
+            }
+            Ok(())
+        }
+
+        match self {
+            AlterSubscriptionOperation::Connection { connection } => {
+                write!(
+                    f,
+                    "CONNECTION '{}'",
+                    value::escape_single_quote_string(connection)
+                )
+            }
+            AlterSubscriptionOperation::SetPublication {
+                publications,
+                with_options,
+            } => {
+                write!(
+                    f,
+                    "SET PUBLICATION {}",
+                    display_comma_separated(publications)
+                )?;
+                write_with_options(f, with_options)
+            }
+            AlterSubscriptionOperation::AddPublication {
+                publications,
+                with_options,
+            } => {
+                write!(
+                    f,
+                    "ADD PUBLICATION {}",
+                    display_comma_separated(publications)
+                )?;
+                write_with_options(f, with_options)
+            }
+            AlterSubscriptionOperation::DropPublication {
+                publications,
+                with_options,
+            } => {
+                write!(
+                    f,
+                    "DROP PUBLICATION {}",
+                    display_comma_separated(publications)
+                )?;
+                write_with_options(f, with_options)
+            }
+            AlterSubscriptionOperation::RefreshPublication { with_options } => {
+                write!(f, "REFRESH PUBLICATION")?;
+                write_with_options(f, with_options)
+            }
+            AlterSubscriptionOperation::Enable => write!(f, "ENABLE"),
+            AlterSubscriptionOperation::Disable => write!(f, "DISABLE"),
+            AlterSubscriptionOperation::SetOptions { options } => {
+                write!(f, "SET ({})", display_comma_separated(options))
+            }
+            AlterSubscriptionOperation::OwnerTo { owner } => write!(f, "OWNER TO {owner}"),
+            AlterSubscriptionOperation::RenameTo { new_name } => write!(f, "RENAME TO {new_name}"),
+        }
     }
 }
 
@@ -12020,6 +12250,8 @@ impl fmt::Display for VacuumStatement {
 pub enum Reset {
     /// Resets all session parameters to their default values.
     ALL,
+    /// Resets session authorization to the session user.
+    SessionAuthorization,
 
     /// Resets a specific session parameter to its default value.
     ConfigurationParameter(ObjectName),
@@ -12103,6 +12335,7 @@ impl fmt::Display for ResetStatement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.reset {
             Reset::ALL => write!(f, "RESET ALL"),
+            Reset::SessionAuthorization => write!(f, "RESET SESSION AUTHORIZATION"),
             Reset::ConfigurationParameter(param) => write!(f, "RESET {}", param),
         }
     }
@@ -12246,6 +12479,12 @@ impl From<CreateServerStatement> for Statement {
     }
 }
 
+impl From<CreateSubscription> for Statement {
+    fn from(c: CreateSubscription) -> Self {
+        Self::CreateSubscription(c)
+    }
+}
+
 impl From<CreateConnector> for Statement {
     fn from(c: CreateConnector) -> Self {
         Self::CreateConnector(c)
@@ -12279,6 +12518,12 @@ impl From<AlterSchema> for Statement {
 impl From<AlterFunction> for Statement {
     fn from(a: AlterFunction) -> Self {
         Self::AlterFunction(a)
+    }
+}
+
+impl From<AlterSubscription> for Statement {
+    fn from(a: AlterSubscription) -> Self {
+        Self::AlterSubscription(a)
     }
 }
 

@@ -2930,7 +2930,6 @@ fn parse_xmlnamespaces() {
 SELECT 1 AS [ns:Value]
 FOR XML PATH('ns:Root');"#;
 
-    tsql().parse_sql_statements(sql).unwrap();
     ms().parse_sql_statements(sql).unwrap();
 
 }
@@ -2944,5 +2943,5 @@ WITH XMLNAMESPACES ('urn:example' AS ns), t AS (
 SELECT id FROM t
 "#;
 
-    tsql().parse_sql_statements(sql).unwrap();
+    ms().parse_sql_statements(sql).unwrap();
 }

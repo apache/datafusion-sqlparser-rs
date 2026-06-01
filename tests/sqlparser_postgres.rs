@@ -7108,6 +7108,30 @@ fn parse_alter_table_replica_identity() {
 }
 
 #[test]
+fn parse_fulltext_as_column_name() {
+    match pg().verified_stmt("CREATE TABLE film (fulltext TSVECTOR NOT NULL)") {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(
+                columns,
+                vec![ColumnDef {
+                    name: "fulltext".into(),
+                    data_type: DataType::TsVector,
+                    options: vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::NotNull,
+                    }],
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    pg().verified_stmt("CREATE TABLE geo (spatial TEXT NOT NULL)");
+
+    pg().verified_stmt("CREATE INDEX film_fulltext_idx ON film USING GIST (fulltext)");
+}
+
+#[test]
 fn parse_ts_datatypes() {
     match pg_and_generic().verified_stmt("CREATE TABLE foo (x TSVECTOR)") {
         Statement::CreateTable(CreateTable { columns, .. }) => {

@@ -18,8 +18,8 @@
 use crate::{
     ast::{
         ddl::AlterSchema, query::SelectItemQualifiedWildcardKind, AlterSchemaOperation, AlterTable,
-        ColumnOptions, CreateOperator, CreateOperatorClass, CreateOperatorFamily, CreateView,
-        ExportData, Owner, TypedString,
+        ColumnOptions, CreateAggregate, CreateOperator, CreateOperatorClass, CreateOperatorFamily,
+        CreateView, ExportData, Owner, TypedString,
     },
     tokenizer::TokenWithSpan,
 };
@@ -520,6 +520,7 @@ impl Spanned for Statement {
             Statement::Vacuum(..) => Span::empty(),
             Statement::AlterUser(..) => Span::empty(),
             Statement::Reset(..) => Span::empty(),
+            Statement::CreateAggregate(create_aggregate) => create_aggregate.span(),
         }
     }
 }
@@ -2496,6 +2497,12 @@ impl Spanned for AlterTable {
                 .chain(self.on_cluster.iter().map(|i| i.span))
                 .chain(core::iter::once(self.end_token.0.span)),
         )
+    }
+}
+
+impl Spanned for CreateAggregate {
+    fn span(&self) -> Span {
+        Span::empty()
     }
 }
 

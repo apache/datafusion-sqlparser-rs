@@ -1118,7 +1118,7 @@ fn parse_select_into() {
             temporary: false,
             unlogged: false,
             table: false,
-            name: ObjectName::from(vec![Ident::new("table0")]),
+            targets: vec![Expr::Identifier(Ident::new("table0"))],
         },
         only(&select.into)
     );
@@ -1128,6 +1128,10 @@ fn parse_select_into() {
         sql,
         "SELECT * INTO TEMPORARY UNLOGGED TABLE table0 FROM table1",
     );
+
+    verified_only_select("SELECT a, b INTO foo.bar, bar.baz FROM t");
+    verified_stmt("SELECT a, b, c INTO p, q, r FROM t");
+    verified_stmt("SELECT a, b INTO :h1, :h2 FROM t");
 
     // Do not allow aliases here
     let sql = "SELECT * INTO table0 asdf FROM table1";

@@ -837,6 +837,7 @@ pub trait Dialect: Debug + Any {
                     Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(p!(Like)),
                     Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(p!(Like)),
                     Token::Word(w) if w.keyword == Keyword::MATCH => Ok(p!(Like)),
+                    Token::Word(w) if w.keyword == Keyword::GLOB => Ok(p!(Like)),
                     Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
                     Token::Word(w) if w.keyword == Keyword::MEMBER => Ok(p!(Like)),
                     Token::Word(w)
@@ -859,6 +860,7 @@ pub trait Dialect: Debug + Any {
             Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(p!(Like)),
             Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(p!(Like)),
             Token::Word(w) if w.keyword == Keyword::MATCH => Ok(p!(Like)),
+            Token::Word(w) if w.keyword == Keyword::GLOB => Ok(p!(Like)),
             Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
             Token::Word(w) if w.keyword == Keyword::MEMBER => Ok(p!(Like)),
             Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(p!(Between)),

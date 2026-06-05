@@ -363,12 +363,29 @@ pub struct Parser<'a> {
     options: ParserOptions,
     /// Ensures the stack does not overflow by limiting recursion depth.
     recursion_counter: RecursionCounter,
-    /// Cached errors from `parse_prefix` calls that returned `Err`. See
+    /// Cached failures from `parse_prefix` calls that returned `Err`. See
     /// [`Parser::parse_prefix`] for the 2^N patterns this guards.
-    failed_prefix_positions: BTreeMap<usize, ParserError>,
-    /// Cached errors from the speculative reserved-word prefix arm. See
+    failed_prefix_positions: BTreeMap<usize, ExprPrefixError>,
+    /// Cached failures from the speculative reserved-word prefix arm. See
     /// [`Parser::parse_prefix`] for the 2^N patterns this guards.
-    failed_reserved_word_prefix_positions: BTreeMap<usize, ParserError>,
+    failed_reserved_word_prefix_positions: BTreeMap<usize, ExprPrefixError>,
+}
+
+/// Copy marker for a [`ParserError`] cached by the `parse_prefix` failure
+/// memoization, so the caches hold no strings.
+#[derive(Debug, Clone, Copy)]
+enum ExprPrefixError {
+    RecursionLimitExceeded,
+    Err,
+}
+
+impl From<&ParserError> for ExprPrefixError {
+    fn from(e: &ParserError) -> Self {
+        match e {
+            ParserError::RecursionLimitExceeded => Self::RecursionLimitExceeded,
+            _ => Self::Err,
+        }
+    }
 }
 
 impl<'a> Parser<'a> {
@@ -1737,14 +1754,22 @@ impl<'a> Parser<'a> {
         // chains where the reserved arm fails but the unreserved fallback
         // succeeds (e.g. `case-case-...c`).
         let start_index = self.index;
-        if let Some(cached) = self.failed_prefix_positions.get(&start_index) {
-            return Err(cached.clone());
+        if let Some(&cached) = self.failed_prefix_positions.get(&start_index) {
+            return Err(self.cached_prefix_error(cached, self.peek_token_ref()));
         }
         let result = self.parse_prefix_inner();
         if let Err(ref e) = result {
-            self.failed_prefix_positions.insert(start_index, e.clone());
+            self.failed_prefix_positions.insert(start_index, e.into());
         }
         result
+    }
+
+    /// Rebuild the error for a cached prefix failure at the `found` token.
+    fn cached_prefix_error(&self, cached: ExprPrefixError, found: &TokenWithSpan) -> ParserError {
+        match cached {
+            ExprPrefixError::RecursionLimitExceeded => ParserError::RecursionLimitExceeded,
+            ExprPrefixError::Err => self.expected_ref::<()>("an expression", found).unwrap_err(),
+        }
     }
 
     fn parse_prefix_inner(&mut self) -> Result<Expr, ParserError> {
@@ -1838,11 +1863,11 @@ impl<'a> Parser<'a> {
                 // succeeds, the overall `parse_prefix` returns `Ok` and the
                 // outer cache never fires. Chains like `case-case-...c`
                 // need this per-arm cache to break the doubling.
-                let try_parse_result = if let Some(cached) = self
+                let try_parse_result = if let Some(&cached) = self
                     .failed_reserved_word_prefix_positions
                     .get(&next_token_index)
                 {
-                    Err(cached.clone())
+                    Err(self.cached_prefix_error(cached, self.get_current_token()))
                 } else {
                     self.try_parse(|parser| parser.parse_expr_prefix_by_reserved_word(&w, span))
                 };
@@ -1861,7 +1886,7 @@ impl<'a> Parser<'a> {
                     // special expression (to maintain backwards compatibility of parsing errors).
                     Err(e) => {
                         self.failed_reserved_word_prefix_positions
-                            .insert(next_token_index, e.clone());
+                            .insert(next_token_index, (&e).into());
                         if !self.dialect.is_reserved_for_identifier(w.keyword) {
                             if let Ok(Some(expr)) = self.maybe_parse(|parser| {
                                 parser.parse_expr_prefix_by_unreserved_word(&w, span)

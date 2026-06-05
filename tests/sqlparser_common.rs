@@ -15572,13 +15572,29 @@ fn parse_create_table_select() {
 
 #[test]
 fn test_reserved_keywords_for_identifiers() {
-    let dialects = all_dialects_where(|d| d.is_reserved_for_identifier(Keyword::INTERVAL));
+    let dialects = all_dialects_where(|d| {
+        d.is_reserved_for_identifier(Keyword::INTERVAL)
+            && !d.supports_named_fn_args_with_expr_name()
+    });
     // Dialects that reserve the word INTERVAL will not allow it as an unquoted identifier
     let sql = "SELECT MAX(interval) FROM tbl";
     assert_eq!(
         dialects.parse_sql_statements(sql),
         Err(ParserError::ParserError(
             "Expected: an expression, found: )".to_string()
+        ))
+    );
+
+    // Dialects with expression-named function arguments parse the argument
+    // expression twice, so the second attempt reports the memoized failure
+    // at the start of the expression
+    let dialects = all_dialects_where(|d| {
+        d.is_reserved_for_identifier(Keyword::INTERVAL) && d.supports_named_fn_args_with_expr_name()
+    });
+    assert_eq!(
+        dialects.parse_sql_statements(sql),
+        Err(ParserError::ParserError(
+            "Expected: an expression, found: interval".to_string()
         ))
     );
 

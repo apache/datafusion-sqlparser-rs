@@ -6192,6 +6192,10 @@ fn parse_literal_string() {
 
     one_statement_parses_to("SELECT x'deadBEEF'", "SELECT X'deadBEEF'");
     one_statement_parses_to("SELECT n'national string'", "SELECT N'national string'");
+    one_statement_parses_to(
+        r#"SELECT n'Tu geres '';'' et ''"'' ?'"#,
+        r#"SELECT N'Tu geres '';'' et ''"'' ?'"#,
+    );
 }
 
 #[test]

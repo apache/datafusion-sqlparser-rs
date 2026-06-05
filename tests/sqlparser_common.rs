@@ -1118,7 +1118,7 @@ fn parse_select_into() {
             temporary: false,
             unlogged: false,
             table: false,
-            name: ObjectName::from(vec![Ident::new("table0")]),
+            targets: vec![Expr::Identifier(Ident::new("table0"))],
         },
         only(&select.into)
     );
@@ -1128,6 +1128,10 @@ fn parse_select_into() {
         sql,
         "SELECT * INTO TEMPORARY UNLOGGED TABLE table0 FROM table1",
     );
+
+    verified_only_select("SELECT a, b INTO foo.bar, bar.baz FROM t");
+    verified_stmt("SELECT a, b, c INTO p, q, r FROM t");
+    verified_stmt("SELECT a, b INTO :h1, :h2 FROM t");
 
     // Do not allow aliases here
     let sql = "SELECT * INTO table0 asdf FROM table1";
@@ -17439,8 +17443,7 @@ fn column_check_enforced() {
 
 #[test]
 fn join_precedence() {
-    all_dialects_except(|d| !d.supports_left_associative_joins_without_parens())
-        .verified_query_with_canonical(
+    all_dialects().verified_query_with_canonical(
         "SELECT *
          FROM t1
          NATURAL JOIN t5
@@ -17448,15 +17451,6 @@ fn join_precedence() {
          WHERE t0.v1 = t1.v0",
         // canonical string without parentheses
         "SELECT * FROM t1 NATURAL JOIN t5 INNER JOIN t0 ON (t0.v1 + t5.v0) > 0 WHERE t0.v1 = t1.v0",
-    );
-    all_dialects_except(|d| d.supports_left_associative_joins_without_parens()).verified_query_with_canonical(
-        "SELECT *
-         FROM t1
-         NATURAL JOIN t5
-         INNER JOIN t0 ON (t0.v1 + t5.v0) > 0
-         WHERE t0.v1 = t1.v0",
-        // canonical string with parentheses
-        "SELECT * FROM t1 NATURAL JOIN (t5 INNER JOIN t0 ON (t0.v1 + t5.v0) > 0) WHERE t0.v1 = t1.v0",
     );
 }
 

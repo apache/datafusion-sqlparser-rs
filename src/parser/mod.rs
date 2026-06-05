@@ -15994,6 +15994,7 @@ impl<'a> Parser<'a> {
                 if !self
                     .dialect
                     .supports_left_associative_joins_without_parens()
+                    && !natural
                     && self.peek_parens_less_nested_join()
                 {
                     let joins = self.parse_joins()?;
@@ -19627,13 +19628,13 @@ impl<'a> Parser<'a> {
             .is_some();
         let unlogged = self.parse_keyword(Keyword::UNLOGGED);
         let table = self.parse_keyword(Keyword::TABLE);
-        let name = self.parse_object_name(false)?;
+        let targets = self.parse_comma_separated(Parser::parse_expr)?;
 
         Ok(SelectInto {
             temporary,
             unlogged,
             table,
-            name,
+            targets,
         })
     }
 

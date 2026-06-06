@@ -53,7 +53,7 @@ use crate::{
 
 pub use self::data_type::{
     ArrayElemTypeDef, BinaryLength, CharLengthUnits, CharacterLength, DataType, EnumMember,
-    ExactNumberInfo, IntervalFields, StructBracketKind, TimezoneInfo,
+    ExactNumberInfo, IntervalFields, MapBracketKind, StructBracketKind, TimezoneInfo,
 };
 pub use self::dcl::{
     AlterRoleOperation, CreateRole, Grant, ResetConfig, Revoke, RoleOption, SecondaryRoles,
@@ -4479,6 +4479,28 @@ pub enum Statement {
         comment: Option<String>,
     },
     /// ```sql
+    /// CREATE [ OR REPLACE ] [ { TEMP | TEMPORARY | VOLATILE } ] FILE FORMAT [ IF NOT EXISTS ] <name>
+    ///   [ TYPE = { CSV | JSON | AVRO | ORC | PARQUET | XML } [ formatTypeOptions ] ]
+    ///   [ COMMENT = '<string_literal>' ]
+    /// ```
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/create-file-format>
+    CreateFileFormat {
+        /// `OR REPLACE` flag.
+        or_replace: bool,
+        /// Whether file format is temporary.
+        temporary: bool,
+        /// Whether file format is volatile.
+        volatile: bool,
+        /// `IF NOT EXISTS` flag.
+        if_not_exists: bool,
+        /// File format name.
+        name: ObjectName,
+        /// Format type options (e.g. `TYPE`, `FIELD_DELIMITER`, `COMPRESSION`, ...).
+        options: KeyValueOptions,
+        /// Optional comment.
+        comment: Option<String>,
+    },
+    /// ```sql
     /// ASSERT <condition> [AS <message>]
     /// ```
     Assert {
@@ -6171,6 +6193,31 @@ impl fmt::Display for Statement {
                 }
                 if !copy_options.options.is_empty() {
                     write!(f, " COPY_OPTIONS=({copy_options})")?;
+                }
+                if let Some(comment) = comment {
+                    write!(f, " COMMENT='{}'", comment)?;
+                }
+                Ok(())
+            }
+            Statement::CreateFileFormat {
+                or_replace,
+                temporary,
+                volatile,
+                if_not_exists,
+                name,
+                options,
+                comment,
+            } => {
+                write!(
+                    f,
+                    "CREATE {or_replace}{temp}{volatile}FILE FORMAT {if_not_exists}{name}",
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                    temp = if *temporary { "TEMPORARY " } else { "" },
+                    volatile = if *volatile { "VOLATILE " } else { "" },
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                )?;
+                if !options.options.is_empty() {
+                    write!(f, " {options}")?;
                 }
                 if let Some(comment) = comment {
                     write!(f, " COMMENT='{}'", comment)?;
@@ -12030,7 +12077,8 @@ impl fmt::Display for OptimizerHint {
                 f.write_str(prefix)?;
                 f.write_str(&self.prefix)?;
                 f.write_str("+")?;
-                f.write_str(&self.text)
+                f.write_str(&self.text)?;
+                f.write_str("\n")
             }
             OptimizerHintStyle::MultiLine => {
                 f.write_str("/*")?;

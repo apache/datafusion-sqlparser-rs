@@ -177,11 +177,35 @@ fn parse_compound_chain(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmark parsing pathological compound chains with a reserved keyword in
+/// field position, like `SELECT x.not-b.not-b...`. The `.not-b` shape used to
+/// cause 2^N work in `parse_compound_expr` because `parse_prefix` descended
+/// into `parse_not` -> `parse_subexpr`, re-walking the remaining chain at
+/// every segment.
+fn parse_compound_keyword_chain(c: &mut Criterion) {
+    let mut group = c.benchmark_group("parse_compound_keyword_chain");
+    let dialect = GenericDialect {};
+
+    for &n in &[5usize, 10, 15] {
+        let body = std::iter::repeat_n(".not-b", n).collect::<String>();
+        let sql = format!("SELECT x{body}");
+
+        group.bench_function(format!("chain_{n}"), |b| {
+            b.iter(|| {
+                let _ = Parser::parse_sql(&dialect, std::hint::black_box(&sql));
+            });
+        });
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     basic_queries,
     word_to_ident,
     parse_many_identifiers,
-    parse_compound_chain
+    parse_compound_chain,
+    parse_compound_keyword_chain
 );
 criterion_main!(benches);

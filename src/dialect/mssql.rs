@@ -248,6 +248,10 @@ impl Dialect for MsSqlDialect {
             _ => None,
         }
     }
+
+    fn supports_with_xmlnamespaces_clause(&self) -> bool {
+        true
+    }
 }
 
 impl MsSqlDialect {

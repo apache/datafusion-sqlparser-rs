@@ -1767,6 +1767,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports aliased function arguments,
+    /// e.g. `XMLFOREST(a AS x)` in PostgreSQL.
+    fn supports_aliased_function_args(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `USING <format>` in `CREATE TABLE`.
     ///
     /// Example:

@@ -16,7 +16,7 @@
 // under the License.
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use sqlparser::dialect::GenericDialect;
+use sqlparser::dialect::{GenericDialect, PostgreSqlDialect, SQLiteDialect};
 use sqlparser::keywords::Keyword;
 use sqlparser::parser::Parser;
 use sqlparser::tokenizer::{Span, Word};
@@ -152,5 +152,107 @@ fn parse_many_identifiers(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, basic_queries, word_to_ident, parse_many_identifiers);
+/// Benchmark parsing pathological compound chains that previously caused 2^N
+/// work in `parse_compound_expr`. The input `IF a0.a1...aN.#` rejects at the
+/// trailing `#`, which used to force quadratic-or-worse backtracking through
+/// the chain.
+fn parse_compound_chain(c: &mut Criterion) {
+    let mut group = c.benchmark_group("parse_compound_chain");
+    let dialect = GenericDialect {};
+
+    for &n in &[10usize, 20, 30] {
+        let chain = (0..n)
+            .map(|i| format!("a{i}"))
+            .collect::<Vec<_>>()
+            .join(".");
+        let sql = format!("IF {chain}.#");
+
+        group.bench_function(format!("chain_{n}"), |b| {
+            b.iter(|| {
+                let _ = Parser::parse_sql(&dialect, std::hint::black_box(&sql));
+            });
+        });
+    }
+
+    group.finish();
+}
+
+/// Benchmark parsing pathological compound chains with a reserved keyword in
+/// field position, like `SELECT x.not-b.not-b...`. The `.not-b` shape used to
+/// cause 2^N work in `parse_compound_expr` because `parse_prefix` descended
+/// into `parse_not` -> `parse_subexpr`, re-walking the remaining chain at
+/// every segment.
+fn parse_compound_keyword_chain(c: &mut Criterion) {
+    let mut group = c.benchmark_group("parse_compound_keyword_chain");
+    let dialect = GenericDialect {};
+
+    for &n in &[5usize, 10, 15] {
+        let body = std::iter::repeat_n(".not-b", n).collect::<String>();
+        let sql = format!("SELECT x{body}");
+
+        group.bench_function(format!("chain_{n}"), |b| {
+            b.iter(|| {
+                let _ = Parser::parse_sql(&dialect, std::hint::black_box(&sql));
+            });
+        });
+    }
+
+    group.finish();
+}
+
+/// Benchmark parsing pathological `IF(<keyword-fn>(<keyword-fn>(...x` chains
+/// that previously caused 2^N work in `parse_prefix`. Each nested
+/// `current_time(` segment used to be explored twice at every level (once via
+/// the speculative reserved-word arm, once via the unreserved-word fallback),
+/// doubling work per level. Post-fix the cost is linear in chain length.
+fn parse_prefix_keyword_call_chain(c: &mut Criterion) {
+    let mut group = c.benchmark_group("parse_prefix_keyword_call_chain");
+    let dialect = PostgreSqlDialect {};
+
+    for &n in &[10usize, 20, 30] {
+        let sql = String::from("if(") + &"current_time(".repeat(n) + "x";
+
+        group.bench_function(format!("chain_{n}"), |b| {
+            b.iter(|| {
+                let _ = Parser::parse_sql(&dialect, std::hint::black_box(&sql));
+            });
+        });
+    }
+
+    group.finish();
+}
+
+/// Benchmark parsing pathological `case-case-case-...c` chains that
+/// previously caused 2^N work in `parse_prefix`. Each `case` token used to
+/// trigger a speculative `parse_case_expr` that recursively descends the
+/// chain, but the unreserved-word fallback returns `Identifier(case)` so the
+/// overall `parse_prefix` succeeds and the failure cache never fires.
+/// Post-fix the per-arm cache short-circuits the speculative descent.
+fn parse_prefix_case_chain(c: &mut Criterion) {
+    let mut group = c.benchmark_group("parse_prefix_case_chain");
+    let dialect = SQLiteDialect {};
+
+    for &n in &[10usize, 20, 30] {
+        let sql = "case\t-".repeat(n) + "c";
+
+        group.bench_function(format!("chain_{n}"), |b| {
+            b.iter(|| {
+                let _ = Parser::parse_sql(&dialect, std::hint::black_box(&sql));
+            });
+        });
+    }
+
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    basic_queries,
+    word_to_ident,
+    parse_many_identifiers,
+    parse_compound_chain,
+    parse_compound_keyword_chain,
+    parse_prefix_keyword_call_chain,
+    parse_prefix_case_chain
+);
 criterion_main!(benches);

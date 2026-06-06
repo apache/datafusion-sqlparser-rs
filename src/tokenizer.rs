@@ -521,7 +521,7 @@ impl fmt::Display for Whitespace {
             Whitespace::Space => f.write_str(" "),
             Whitespace::Newline => f.write_str("\n"),
             Whitespace::Tab => f.write_str("\t"),
-            Whitespace::SingleLineComment { prefix, comment } => write!(f, "{prefix}{comment}"),
+            Whitespace::SingleLineComment { prefix, comment } => writeln!(f, "{prefix}{comment}"),
             Whitespace::MultiLineComment(s) => write!(f, "/*{s}*/"),
         }
     }
@@ -2037,18 +2037,11 @@ impl<'a> Tokenizer<'a> {
 
     // Consume characters until newline
     fn tokenize_single_line_comment(&self, chars: &mut State) -> String {
-        let mut comment = peeking_take_while(chars, |ch| match ch {
+        peeking_take_while(chars, |ch| match ch {
             '\n' => false,                                           // Always stop at \n
             '\r' if dialect_of!(self is PostgreSqlDialect) => false, // Stop at \r for Postgres
             _ => true, // Keep consuming for other characters
-        });
-
-        if let Some(ch) = chars.next() {
-            assert!(ch == '\n' || ch == '\r');
-            comment.push(ch);
-        }
-
-        comment
+        })
     }
 
     /// Tokenize an identifier or keyword, after the first char is already consumed.
@@ -3346,8 +3339,9 @@ mod tests {
                     Token::Number("0".to_string(), false),
                     Token::Whitespace(Whitespace::SingleLineComment {
                         prefix: "--".to_string(),
-                        comment: "this is a comment\n".to_string(),
+                        comment: "this is a comment".to_string(),
                     }),
+                    Token::Whitespace(Whitespace::Newline),
                     Token::Number("1".to_string(), false),
                 ],
             ),
@@ -3367,8 +3361,9 @@ mod tests {
                     Token::Number("0".to_string(), false),
                     Token::Whitespace(Whitespace::SingleLineComment {
                         prefix: "--".to_string(),
-                        comment: "this is a comment\r\n".to_string(),
+                        comment: "this is a comment\r".to_string(),
                     }),
+                    Token::Whitespace(Whitespace::Newline),
                     Token::Number("1".to_string(), false),
                 ],
             ),
@@ -3392,8 +3387,9 @@ mod tests {
             Token::Number("1".to_string(), false),
             Token::Whitespace(Whitespace::SingleLineComment {
                 prefix: "--".to_string(),
-                comment: "\r".to_string(),
+                comment: "".to_string(),
             }),
+            Token::Whitespace(Whitespace::Newline), // Postgres treats \r as newline in single-line comments
             Token::Number("0".to_string(), false),
         ];
         compare(expected, tokens);
@@ -4220,16 +4216,19 @@ mod tests {
             vec![
                 Token::Whitespace(Whitespace::SingleLineComment {
                     prefix: "--".to_string(),
-                    comment: "\n".to_string(),
+                    comment: "".to_string(),
                 }),
+                Token::Whitespace(Whitespace::Newline),
                 Token::Whitespace(Whitespace::SingleLineComment {
                     prefix: "--".to_string(),
-                    comment: " Table structure for table...\n".to_string(),
+                    comment: " Table structure for table...".to_string(),
                 }),
+                Token::Whitespace(Whitespace::Newline),
                 Token::Whitespace(Whitespace::SingleLineComment {
                     prefix: "--".to_string(),
-                    comment: "\n".to_string(),
+                    comment: "".to_string(),
                 }),
+                Token::Whitespace(Whitespace::Newline),
             ],
         );
     }

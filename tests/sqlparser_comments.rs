@@ -50,10 +50,10 @@ more*/
         vec![
             CommentWithSpan {
                 comment: Comment::SingleLine {
-                    content: " second line comment\n".into(),
+                    content: " second line comment".into(),
                     prefix: "--".into()
                 },
-                span: Span::new((2, 1).into(), (3, 1).into()),
+                span: Span::new((2, 1).into(), (2, 23).into()),
             },
             CommentWithSpan {
                 comment: Comment::MultiLine(" inline comment after `from` ".into()),

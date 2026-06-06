@@ -767,7 +767,8 @@ fn parse_create_table_with_nested_data_types() {
                         name: Ident::new("m"),
                         data_type: DataType::Map(
                             Box::new(DataType::String(None)),
-                            Box::new(DataType::UInt16)
+                            Box::new(DataType::UInt16),
+                            MapBracketKind::Parentheses
                         ),
                         options: vec![],
                     },

@@ -53,7 +53,7 @@ use crate::{
 
 pub use self::data_type::{
     ArrayElemTypeDef, BinaryLength, CharLengthUnits, CharacterLength, DataType, EnumMember,
-    ExactNumberInfo, IntervalFields, StructBracketKind, TimezoneInfo,
+    ExactNumberInfo, IntervalFields, MapBracketKind, StructBracketKind, TimezoneInfo,
 };
 pub use self::dcl::{
     AlterRoleOperation, CreateRole, Grant, ResetConfig, Revoke, RoleOption, SecondaryRoles,
@@ -4517,6 +4517,28 @@ pub enum Statement {
         comment: Option<String>,
     },
     /// ```sql
+    /// CREATE [ OR REPLACE ] [ { TEMP | TEMPORARY | VOLATILE } ] FILE FORMAT [ IF NOT EXISTS ] <name>
+    ///   [ TYPE = { CSV | JSON | AVRO | ORC | PARQUET | XML } [ formatTypeOptions ] ]
+    ///   [ COMMENT = '<string_literal>' ]
+    /// ```
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/create-file-format>
+    CreateFileFormat {
+        /// `OR REPLACE` flag.
+        or_replace: bool,
+        /// Whether file format is temporary.
+        temporary: bool,
+        /// Whether file format is volatile.
+        volatile: bool,
+        /// `IF NOT EXISTS` flag.
+        if_not_exists: bool,
+        /// File format name.
+        name: ObjectName,
+        /// Format type options (e.g. `TYPE`, `FIELD_DELIMITER`, `COMPRESSION`, ...).
+        options: KeyValueOptions,
+        /// Optional comment.
+        comment: Option<String>,
+    },
+    /// ```sql
     /// ASSERT <condition> [AS <message>]
     /// ```
     Assert {
@@ -4882,6 +4904,20 @@ pub enum Statement {
     /// Snowflake `LIST`
     /// See: <https://docs.snowflake.com/en/sql-reference/sql/list>
     List(FileStagingCommand),
+    /// Snowflake `PUT`
+    /// ```sql
+    /// PUT 'file://<path>' <internalStage> [ <option> = <value> ... ]
+    /// ```
+    /// Options include `PARALLEL`, `AUTO_COMPRESS`, `SOURCE_COMPRESSION`, `OVERWRITE`.
+    /// See: <https://docs.snowflake.com/en/sql-reference/sql/put>
+    Put {
+        /// Local source URI as written in the statement, e.g. `file:///tmp/data.csv`.
+        source: String,
+        /// Target internal stage (e.g. `@mystage`, `@~`, `@%table`).
+        stage: ObjectName,
+        /// Trailing options (`PARALLEL=4`, `AUTO_COMPRESS=TRUE`, ...).
+        options: KeyValueOptions,
+    },
     /// Snowflake `REMOVE`
     /// See: <https://docs.snowflake.com/en/sql-reference/sql/remove>
     Remove(FileStagingCommand),
@@ -6201,6 +6237,31 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::CreateFileFormat {
+                or_replace,
+                temporary,
+                volatile,
+                if_not_exists,
+                name,
+                options,
+                comment,
+            } => {
+                write!(
+                    f,
+                    "CREATE {or_replace}{temp}{volatile}FILE FORMAT {if_not_exists}{name}",
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                    temp = if *temporary { "TEMPORARY " } else { "" },
+                    volatile = if *volatile { "VOLATILE " } else { "" },
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                )?;
+                if !options.options.is_empty() {
+                    write!(f, " {options}")?;
+                }
+                if let Some(comment) = comment {
+                    write!(f, " COMMENT='{}'", comment)?;
+                }
+                Ok(())
+            }
             Statement::CopyIntoSnowflake {
                 kind,
                 into,
@@ -6402,6 +6463,17 @@ impl fmt::Display for Statement {
             Statement::WaitFor(s) => write!(f, "{s}"),
             Statement::Return(r) => write!(f, "{r}"),
             Statement::List(command) => write!(f, "LIST {command}"),
+            Statement::Put {
+                source,
+                stage,
+                options,
+            } => {
+                write!(f, "PUT '{source}' {stage}")?;
+                if !options.options.is_empty() {
+                    write!(f, " {options}")?;
+                }
+                Ok(())
+            }
             Statement::Remove(command) => write!(f, "REMOVE {command}"),
             Statement::ExportData(e) => write!(f, "{e}"),
             Statement::CreateUser(s) => write!(f, "{s}"),
@@ -12089,7 +12161,8 @@ impl fmt::Display for OptimizerHint {
                 f.write_str(prefix)?;
                 f.write_str(&self.prefix)?;
                 f.write_str("+")?;
-                f.write_str(&self.text)
+                f.write_str(&self.text)?;
+                f.write_str("\n")
             }
             OptimizerHintStyle::MultiLine => {
                 f.write_str("/*")?;

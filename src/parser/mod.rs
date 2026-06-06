@@ -1755,7 +1755,7 @@ impl<'a> Parser<'a> {
         // succeeds (e.g. `case-case-...c`).
         let start_index = self.index;
         if let Some(&cached) = self.failed_prefix_positions.get(&start_index) {
-            return Err(self.cached_prefix_error(cached, self.peek_token_ref()));
+            return self.cached_prefix_error(cached, self.peek_token_ref());
         }
         let result = self.parse_prefix_inner();
         if let Err(ref e) = result {
@@ -1765,10 +1765,14 @@ impl<'a> Parser<'a> {
     }
 
     /// Rebuild the error for a cached prefix failure at the `found` token.
-    fn cached_prefix_error(&self, cached: ExprPrefixError, found: &TokenWithSpan) -> ParserError {
+    fn cached_prefix_error<T>(
+        &self,
+        cached: ExprPrefixError,
+        found: &TokenWithSpan,
+    ) -> Result<T, ParserError> {
         match cached {
-            ExprPrefixError::RecursionLimitExceeded => ParserError::RecursionLimitExceeded,
-            ExprPrefixError::Err => self.expected_ref::<()>("an expression", found).unwrap_err(),
+            ExprPrefixError::RecursionLimitExceeded => Err(ParserError::RecursionLimitExceeded),
+            ExprPrefixError::Err => self.expected_ref("an expression", found),
         }
     }
 
@@ -1867,7 +1871,7 @@ impl<'a> Parser<'a> {
                     .failed_reserved_word_prefix_positions
                     .get(&next_token_index)
                 {
-                    Err(self.cached_prefix_error(cached, self.get_current_token()))
+                    self.cached_prefix_error(cached, self.get_current_token())
                 } else {
                     self.try_parse(|parser| parser.parse_expr_prefix_by_reserved_word(&w, span))
                 };

@@ -297,6 +297,7 @@ impl Spanned for Values {
 /// - [Statement::CreateProcedure]
 /// - [Statement::CreateMacro]
 /// - [Statement::CreateStage]
+/// - [Statement::CreateFileFormat]
 /// - [Statement::Assert]
 /// - [Statement::Grant]
 /// - [Statement::Revoke]
@@ -459,6 +460,7 @@ impl Spanned for Statement {
             Statement::CreateProcedure { .. } => Span::empty(),
             Statement::CreateMacro { .. } => Span::empty(),
             Statement::CreateStage { .. } => Span::empty(),
+            Statement::CreateFileFormat { .. } => Span::empty(),
             Statement::Assert { .. } => Span::empty(),
             Statement::Grant { .. } => Span::empty(),
             Statement::Deny { .. } => Span::empty(),
@@ -503,7 +505,7 @@ impl Spanned for Statement {
             Statement::Print { .. } => Span::empty(),
             Statement::WaitFor(_) => Span::empty(),
             Statement::Return { .. } => Span::empty(),
-            Statement::List(..) | Statement::Remove(..) => Span::empty(),
+            Statement::List(..) | Statement::Put { .. } | Statement::Remove(..) => Span::empty(),
             Statement::ExportData(ExportData {
                 options,
                 query,
@@ -696,6 +698,7 @@ impl Spanned for CreateIndex {
             columns,
             unique: _,        // bool
             concurrently: _,  // bool
+            r#async: _,       // bool
             if_not_exists: _, // bool
             include,
             nulls_distinct: _, // bool
@@ -2391,10 +2394,10 @@ impl Spanned for SelectInto {
             temporary: _, // bool
             unlogged: _,  // bool
             table: _,     // bool
-            name,
+            targets,
         } = self;
 
-        name.span()
+        union_spans(targets.iter().map(|t| t.span()))
     }
 }
 

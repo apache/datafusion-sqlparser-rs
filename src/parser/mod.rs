@@ -15,6 +15,7 @@
 #[cfg(not(feature = "std"))]
 use alloc::{
     boxed::Box,
+    collections::BTreeMap,
     format,
     string::{String, ToString},
     vec,
@@ -24,6 +25,9 @@ use core::{
     fmt::{self, Display},
     str::FromStr,
 };
+#[cfg(feature = "std")]
+use std::collections::BTreeMap;
+
 use helpers::attached_token::AttachedToken;
 
 use log::debug;
@@ -359,6 +363,29 @@ pub struct Parser<'a> {
     options: ParserOptions,
     /// Ensures the stack does not overflow by limiting recursion depth.
     recursion_counter: RecursionCounter,
+    /// Cached failures from `parse_prefix` calls that returned `Err`. See
+    /// [`Parser::parse_prefix`] for the 2^N patterns this guards.
+    failed_prefix_positions: BTreeMap<usize, ExprPrefixError>,
+    /// Cached failures from the speculative reserved-word prefix arm. See
+    /// [`Parser::parse_prefix`] for the 2^N patterns this guards.
+    failed_reserved_word_prefix_positions: BTreeMap<usize, ExprPrefixError>,
+}
+
+/// Copy marker for a [`ParserError`] cached by the `parse_prefix` failure
+/// memoization, so the caches hold no strings.
+#[derive(Debug, Clone, Copy)]
+enum ExprPrefixError {
+    RecursionLimitExceeded,
+    Err,
+}
+
+impl From<&ParserError> for ExprPrefixError {
+    fn from(e: &ParserError) -> Self {
+        match e {
+            ParserError::RecursionLimitExceeded => Self::RecursionLimitExceeded,
+            _ => Self::Err,
+        }
+    }
 }
 
 impl<'a> Parser<'a> {
@@ -385,6 +412,8 @@ impl<'a> Parser<'a> {
             dialect,
             recursion_counter: RecursionCounter::new(DEFAULT_REMAINING_DEPTH),
             options: ParserOptions::new().with_trailing_commas(dialect.supports_trailing_commas()),
+            failed_prefix_positions: BTreeMap::new(),
+            failed_reserved_word_prefix_positions: BTreeMap::new(),
         }
     }
 
@@ -446,6 +475,8 @@ impl<'a> Parser<'a> {
     pub fn with_tokens_with_locations(mut self, tokens: Vec<TokenWithSpan>) -> Self {
         self.tokens = tokens;
         self.index = 0;
+        self.failed_prefix_positions.clear();
+        self.failed_reserved_word_prefix_positions.clear();
         self
     }
 
@@ -559,7 +590,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Consumes this parser returning comments from the parsed token stream.
-    fn into_comments(self) -> comments::Comments {
+    pub fn into_comments(self) -> comments::Comments {
         let mut comments = comments::Comments::default();
         for t in self.tokens.into_iter() {
             match t.token {
@@ -675,6 +706,7 @@ impl<'a> Parser<'a> {
                     self.parse_throw().map(Into::into)
                 }
                 Keyword::ROLLBACK => self.parse_rollback(),
+                Keyword::ABORT => self.parse_abort(),
                 Keyword::ASSERT => self.parse_assert(),
                 // `PREPARE`, `EXECUTE` and `DEALLOCATE` are Postgres-specific
                 // syntaxes. They are used for Postgres prepared statement.
@@ -1716,6 +1748,35 @@ impl<'a> Parser<'a> {
             return prefix;
         }
 
+        // Memoize parse_prefix failures to break 2^N speculation when both
+        // prefix arms fail at every level (e.g. `IF(current_time(...x`).
+        // The per-arm cache in `parse_prefix_inner` complements this for
+        // chains where the reserved arm fails but the unreserved fallback
+        // succeeds (e.g. `case-case-...c`).
+        let start_index = self.index;
+        if let Some(&cached) = self.failed_prefix_positions.get(&start_index) {
+            return self.cached_prefix_error(cached, self.peek_token_ref());
+        }
+        let result = self.parse_prefix_inner();
+        if let Err(ref e) = result {
+            self.failed_prefix_positions.insert(start_index, e.into());
+        }
+        result
+    }
+
+    /// Rebuild the error for a cached prefix failure at the `found` token.
+    fn cached_prefix_error<T>(
+        &self,
+        cached: ExprPrefixError,
+        found: &TokenWithSpan,
+    ) -> Result<T, ParserError> {
+        match cached {
+            ExprPrefixError::RecursionLimitExceeded => Err(ParserError::RecursionLimitExceeded),
+            ExprPrefixError::Err => self.expected_ref("an expression", found),
+        }
+    }
+
+    fn parse_prefix_inner(&mut self) -> Result<Expr, ParserError> {
         // PostgreSQL allows any string literal to be preceded by a type name, indicating that the
         // string literal represents a literal of that type. Some examples:
         //
@@ -1800,7 +1861,21 @@ impl<'a> Parser<'a> {
                 // We first try to parse the word and following tokens as a special expression, and if that fails,
                 // we rollback and try to parse it as an identifier.
                 let w = w.clone();
-                match self.try_parse(|parser| parser.parse_expr_prefix_by_reserved_word(&w, span)) {
+                // Memoize failed speculative reserved-word parses. When
+                // the reserved arm (CASE, CURRENT_TIME, etc.) does
+                // exponential work but the unreserved fallback ultimately
+                // succeeds, the overall `parse_prefix` returns `Ok` and the
+                // outer cache never fires. Chains like `case-case-...c`
+                // need this per-arm cache to break the doubling.
+                let try_parse_result = if let Some(&cached) = self
+                    .failed_reserved_word_prefix_positions
+                    .get(&next_token_index)
+                {
+                    self.cached_prefix_error(cached, self.get_current_token())
+                } else {
+                    self.try_parse(|parser| parser.parse_expr_prefix_by_reserved_word(&w, span))
+                };
+                match try_parse_result {
                     // This word indicated an expression prefix and parsing was successful
                     Ok(Some(expr)) => Ok(expr),
 
@@ -1814,6 +1889,8 @@ impl<'a> Parser<'a> {
                     // we rollback and return the parsing error we got from trying to parse a
                     // special expression (to maintain backwards compatibility of parsing errors).
                     Err(e) => {
+                        self.failed_reserved_word_prefix_positions
+                            .insert(next_token_index, (&e).into());
                         if !self.dialect.is_reserved_for_identifier(w.keyword) {
                             if let Ok(Some(expr)) = self.maybe_parse(|parser| {
                                 parser.parse_expr_prefix_by_unreserved_word(&w, span)
@@ -2027,26 +2104,43 @@ impl<'a> Parser<'a> {
                         chain.push(AccessExpr::Dot(expr));
                         self.advance_token(); // The consumed placeholder
                     }
-                    // Fallback to parsing an arbitrary expression, but restrict to expression
-                    // types that are valid after the dot operator. This ensures that e.g.
-                    // `T.interval` is parsed as a compound identifier, not as an interval
-                    // expression.
+                    // Parse a single field component, restricted to expression types valid
+                    // after `.` (so e.g. `T.interval` is a compound identifier, not an
+                    // interval expression). Using `parse_prefix` here rather than
+                    // `parse_subexpr` avoids 2^N work on inputs like `IF a.b.c...x.#`:
+                    // the outer loop already consumes successive `.field` segments, so a
+                    // recursive `parse_subexpr` would re-walk the rest of the chain at
+                    // every dot.
                     _ => {
-                        let expr = self.maybe_parse(|parser| {
-                            let expr = parser
-                                .parse_subexpr(parser.dialect.prec_value(Precedence::Period))?;
-                            match &expr {
-                                Expr::CompoundFieldAccess { .. }
-                                | Expr::CompoundIdentifier(_)
-                                | Expr::Identifier(_)
-                                | Expr::Value(_)
-                                | Expr::Function(_) => Ok(expr),
-                                _ => parser.expected_ref(
-                                    "an identifier or value",
-                                    parser.peek_token_ref(),
-                                ),
-                            }
-                        })?;
+                        // For a plain `Word` field (not followed by `(`), skip the
+                        // speculative `parse_prefix`. The only result the validator
+                        // below would accept is `Identifier`, which `parse_identifier`
+                        // in the None branch produces directly. This avoids 2^N work
+                        // on chains like `.not-b.not-b...` where `parse_prefix` would
+                        // descend into `parse_not` and re-walk the remaining chain at
+                        // every segment.
+                        let word_field_no_lparen =
+                            matches!(self.peek_token_ref().token, Token::Word(_))
+                                && self.peek_nth_token_ref(1).token != Token::LParen;
+
+                        let expr = if word_field_no_lparen {
+                            None
+                        } else {
+                            self.maybe_parse(|parser| {
+                                let expr = parser.parse_prefix()?;
+                                match &expr {
+                                    Expr::CompoundFieldAccess { .. }
+                                    | Expr::CompoundIdentifier(_)
+                                    | Expr::Identifier(_)
+                                    | Expr::Value(_)
+                                    | Expr::Function(_) => Ok(expr),
+                                    _ => parser.expected_ref(
+                                        "an identifier or value",
+                                        parser.peek_token_ref(),
+                                    ),
+                                }
+                            })?
+                        };
 
                         match expr {
                             // If we get back a compound field access or identifier,
@@ -8119,6 +8213,7 @@ impl<'a> Parser<'a> {
     /// Parse a `CREATE INDEX` statement.
     pub fn parse_create_index(&mut self, unique: bool) -> Result<CreateIndex, ParserError> {
         let concurrently = self.parse_keyword(Keyword::CONCURRENTLY);
+        let r#async = self.parse_keyword(Keyword::ASYNC);
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
 
         let mut using = None;
@@ -8198,6 +8293,7 @@ impl<'a> Parser<'a> {
             columns,
             unique,
             concurrently,
+            r#async,
             if_not_exists,
             include,
             nulls_distinct,
@@ -12823,6 +12919,7 @@ impl<'a> Parser<'a> {
                     Ok(DataType::Map(
                         Box::new(key_data_type),
                         Box::new(value_data_type),
+                        MapBracketKind::AngleBrackets,
                     ))
                 }
                 Keyword::MAP if dialect_is!(dialect is ClickHouseDialect | GenericDialect) => {
@@ -12831,6 +12928,7 @@ impl<'a> Parser<'a> {
                     Ok(DataType::Map(
                         Box::new(key_data_type),
                         Box::new(value_data_type),
+                        MapBracketKind::Parentheses,
                     ))
                 }
                 Keyword::NESTED if dialect_is!(dialect is ClickHouseDialect | GenericDialect) => {
@@ -16067,6 +16165,7 @@ impl<'a> Parser<'a> {
                 if !self
                     .dialect
                     .supports_left_associative_joins_without_parens()
+                    && !natural
                     && self.peek_parens_less_nested_join()
                 {
                     let joins = self.parse_joins()?;
@@ -19471,6 +19570,20 @@ impl<'a> Parser<'a> {
         Ok(Statement::Rollback { chain, savepoint })
     }
 
+    /// Parse an 'ABORT' statement
+    ///
+    /// ```sql
+    /// ABORT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]
+    /// ```
+    pub fn parse_abort(&mut self) -> Result<Statement, ParserError> {
+        let chain = self.parse_commit_rollback_chain()?;
+
+        Ok(Statement::Rollback {
+            chain,
+            savepoint: None,
+        })
+    }
+
     /// Parse an optional `AND [NO] CHAIN` clause for `COMMIT` and `ROLLBACK` statements
     pub fn parse_commit_rollback_chain(&mut self) -> Result<bool, ParserError> {
         let _ = self.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK, Keyword::TRAN]);
@@ -19686,13 +19799,13 @@ impl<'a> Parser<'a> {
             .is_some();
         let unlogged = self.parse_keyword(Keyword::UNLOGGED);
         let table = self.parse_keyword(Keyword::TABLE);
-        let name = self.parse_object_name(false)?;
+        let targets = self.parse_comma_separated(Parser::parse_expr)?;
 
         Ok(SelectInto {
             temporary,
             unlogged,
             table,
-            name,
+            targets,
         })
     }
 

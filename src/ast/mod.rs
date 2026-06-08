@@ -844,6 +844,43 @@ impl fmt::Display for CaseWhen {
     }
 }
 
+/// Parsing mode for `XMLPARSE`.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum XmlParseMode {
+    /// `CONTENT`
+    Content,
+    /// `DOCUMENT`
+    Document,
+}
+
+impl fmt::Display for XmlParseMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            XmlParseMode::Content => write!(f, "CONTENT"),
+            XmlParseMode::Document => write!(f, "DOCUMENT"),
+        }
+    }
+}
+
+/// `XMLPARSE(CONTENT|DOCUMENT expr)`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct XmlParseExpr {
+    /// Parsing mode.
+    pub mode: XmlParseMode,
+    /// Expression to parse as XML.
+    pub expr: Box<Expr>,
+}
+
+impl fmt::Display for XmlParseExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "XMLPARSE({} {})", self.mode, self.expr)
+    }
+}
+
 /// An SQL expression of any type.
 ///
 /// # Semantics / Type Checking
@@ -1233,6 +1270,8 @@ pub enum Expr {
     /// This can represent ANSI SQL `DATE`, `TIME`, and `TIMESTAMP` literals (such as `DATE '2020-01-01'`),
     /// as well as constants of other types (a non-standard PostgreSQL extension).
     TypedString(TypedString),
+    /// XML parse expression: `XMLPARSE(CONTENT|DOCUMENT expr)`.
+    XmlParse(XmlParseExpr),
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
@@ -2015,6 +2054,7 @@ impl fmt::Display for Expr {
             Expr::Value(v) => write!(f, "{v}"),
             Expr::Prefixed { prefix, value } => write!(f, "{prefix} {value}"),
             Expr::TypedString(ts) => ts.fmt(f),
+            Expr::XmlParse(xml_parse) => xml_parse.fmt(f),
             Expr::Function(fun) => fun.fmt(f),
             Expr::Case {
                 case_token: _,

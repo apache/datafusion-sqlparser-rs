@@ -3952,6 +3952,47 @@ fn parse_xmlforest_aliased_arguments() {
 }
 
 #[test]
+fn parse_xmlparse() {
+    // Regression statements covering CONTENT and DOCUMENT modes with valid,
+    // invalid, and edge-case XML strings (parsing only, no semantic checks).
+    let statements = [
+        "SELECT XMLPARSE(CONTENT '')",
+        "SELECT XMLPARSE(CONTENT ' ')",
+        "SELECT XMLPARSE(CONTENT 'abc')",
+        "SELECT XMLPARSE(CONTENT '<abc>x</abc>')",
+        "SELECT XMLPARSE(CONTENT '<invalidentity>&</invalidentity>')",
+        "SELECT XMLPARSE(CONTENT '<undefinedentity>&idontexist;</undefinedentity>')",
+        "SELECT XMLPARSE(CONTENT '<twoerrors>&idontexist;</unbalanced>')",
+        "SELECT XMLPARSE(CONTENT '<nosuchprefix:tag/>')",
+        "SELECT XMLPARSE(DOCUMENT ' ')",
+        "SELECT XMLPARSE(DOCUMENT 'abc')",
+        "SELECT XMLPARSE(DOCUMENT '<abc>x</abc>')",
+        "SELECT XMLPARSE(DOCUMENT '<invalidentity>&</abc>')",
+        "SELECT XMLPARSE(DOCUMENT '<undefinedentity>&idontexist;</abc>')",
+        "SELECT XMLPARSE(DOCUMENT '<twoerrors>&idontexist;</unbalanced>')",
+        "SELECT XMLPARSE(DOCUMENT '<nosuchprefix:tag/>')",
+    ];
+    for sql in statements {
+        pg().verified_stmt(sql);
+    }
+
+    // Lowercase keywords canonicalize to uppercase.
+    let select = pg().verified_only_select_with_canonical(
+        "SELECT xmlparse(content '<a/>')",
+        "SELECT XMLPARSE(CONTENT '<a/>')",
+    );
+    assert_eq!(
+        expr_from_projection(&select.projection[0]),
+        &Expr::XmlParse(XmlParseExpr {
+            mode: XmlParseMode::Content,
+            expr: Box::new(Expr::Value(
+                Value::SingleQuotedString("<a/>".to_string()).into()
+            )),
+        })
+    );
+}
+
+#[test]
 fn parse_xml_typed_string() {
     // xml '...' should parse as a TypedString on PostgreSQL and Generic
     let sql = "SELECT xml '<foo/>'";

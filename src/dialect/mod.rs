@@ -1240,6 +1240,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports object-unpivot table factors in the FROM clause.
+    ///
+    /// Syntax:
+    /// ```sql
+    /// UNPIVOT expression AS value_alias [AT attribute_alias]
+    /// ```
+    fn supports_unpivot_expr_in_from(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports the `CONSTRAINT` keyword without a name
     /// in table constraint definitions.
     ///

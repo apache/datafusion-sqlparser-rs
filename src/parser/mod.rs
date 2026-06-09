@@ -16162,6 +16162,12 @@ impl<'a> Parser<'a> {
                             // `(mytable AS alias)`
                             alias.replace(outer_alias);
                         }
+                        TableFactor::UnpivotExpr { .. } => {
+                            return Err(ParserError::ParserError(
+                                "alias after parenthesized UNPIVOT expression is not supported"
+                                    .to_string(),
+                            ))
+                        }
                     };
                 }
                 // Do not store the extra set of parens in the AST
@@ -16243,6 +16249,10 @@ impl<'a> Parser<'a> {
                 with_offset_alias,
                 with_ordinality,
             })
+        } else if self.dialect.supports_unpivot_expr_in_from()
+            && self.parse_keyword(Keyword::UNPIVOT)
+        {
+            self.parse_unpivot_expr_table_factor()
         } else if self.parse_keyword_with_tokens(Keyword::JSON_TABLE, &[Token::LParen]) {
             let json_expr = self.parse_expr()?;
             self.expect_token(&Token::Comma)?;
@@ -17238,6 +17248,27 @@ impl<'a> Parser<'a> {
             name,
             columns,
             alias,
+        })
+    }
+
+    /// Parse an object UNPIVOT table factor in FROM clause.
+    ///
+    /// Syntax:
+    /// `UNPIVOT expression AS value_alias [AT attribute_alias]`
+    pub fn parse_unpivot_expr_table_factor(&mut self) -> Result<TableFactor, ParserError> {
+        let expression = self.parse_expr()?;
+        self.expect_keyword_is(Keyword::AS)?;
+        let value_alias = self.parse_identifier()?;
+        let attribute_alias = if self.parse_keyword(Keyword::AT) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+
+        Ok(TableFactor::UnpivotExpr {
+            expression,
+            value_alias,
+            attribute_alias,
         })
     }
 

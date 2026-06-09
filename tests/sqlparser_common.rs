@@ -19111,3 +19111,34 @@ fn parse_prefix_case_chain_no_exponential_blowup() {
     rx.recv_timeout(Duration::from_secs(5))
         .expect("parser should reject this quickly, not loop exponentially");
 }
+
+/// Regression test for the 2^N parse-time blowup in `parse_table_factor` on
+/// inputs like `SELECT 1 FROM ((((...`. The speculative derived-table arm
+/// and the nested-join fallback both recurse through the remaining paren
+/// chain, doubling work per level. Post-fix the per-position failure cache
+/// short-circuits the second descent.
+#[test]
+fn parse_table_factor_paren_chain_no_exponential_blowup() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    let mut sql = String::from("SELECT 1 ");
+    for _ in 0..5 {
+        sql.push_str("FROM ");
+        sql.push_str(&"(".repeat(30));
+        sql.push(' ');
+    }
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = Parser::new(&GenericDialect {})
+            .with_recursion_limit(256)
+            .try_with_sql(&sql)
+            .and_then(|mut p| p.parse_statements());
+        let _ = tx.send(());
+    });
+
+    rx.recv_timeout(Duration::from_secs(5))
+        .expect("parser should reject this quickly, not loop exponentially");
+}

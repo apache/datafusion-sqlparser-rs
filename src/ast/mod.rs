@@ -1281,13 +1281,12 @@ pub enum Expr {
         /// Struct field definitions.
         fields: Vec<StructField>,
     },
-    /// `BigQuery` specific: An named expression in a typeless struct [1]
+    /// A named expression: `1 AS A`. Used in `BigQuery` typeless structs [1]
+    /// and in aliased function arguments, e.g. `XMLFOREST(a AS x)` in
+    /// PostgreSQL [2].
     ///
-    /// Syntax
-    /// ```sql
-    /// 1 AS A
-    /// ```
     /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
+    /// [2]: https://www.postgresql.org/docs/current/functions-xml.html#FUNCTIONS-PRODUCING-XML-XMLFOREST
     Named {
         /// The expression being named.
         expr: Box<Expr>,

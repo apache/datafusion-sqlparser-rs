@@ -328,6 +328,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_aliased_function_args(&self) -> bool {
+        true
+    }
+
     /// Postgres supports query optimizer hints via the `pg_hint_plan` extension,
     /// using the same comment-prefixed-with-`+` syntax as MySQL and Oracle.
     ///

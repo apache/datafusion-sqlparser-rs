@@ -17943,6 +17943,22 @@ fn parse_create_user() {
 }
 
 #[test]
+fn key_value_option_statements_do_not_swallow_following_statement() {
+    // An unparenthesized key-value option list must not swallow the statement
+    // terminator, otherwise any following statement fails to parse. This covers
+    // every unparenthesized caller of `parse_key_value_options`: `CREATE USER`
+    // and both `ALTER USER ... SET` forms.
+    for sql in [
+        "CREATE USER user1; SELECT 1",
+        "ALTER USER user1 SET x = 'y'; SELECT 1",
+        "ALTER USER user1 SET TAG t = 'v'; SELECT 1",
+    ] {
+        let statements = all_dialects().parse_sql_statements(sql).unwrap();
+        assert_eq!(statements.len(), 2, "{sql}");
+    }
+}
+
+#[test]
 fn parse_drop_stream() {
     let sql = "DROP STREAM s1";
     match verified_stmt(sql) {

@@ -366,6 +366,18 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect treats `ALTER USER` as a synonym for `ALTER ROLE`.
+    ///
+    /// In PostgreSQL, `ALTER USER` and `ALTER ROLE` are synonyms that accept the same
+    /// option syntax, so `ALTER USER` is parsed into a [`Statement::AlterRole`].
+    ///
+    /// <https://www.postgresql.org/docs/current/sql-alteruser.html>
+    ///
+    /// [`Statement::AlterRole`]: crate::ast::Statement::AlterRole
+    fn supports_alter_user_as_alter_role(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialects supports `group sets, roll up, or cube` expressions.
     fn supports_group_by_expr(&self) -> bool {
         false

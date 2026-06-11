@@ -18576,6 +18576,19 @@ impl<'a> Parser<'a> {
             }
             other => other.into(),
         };
+        // Aliased argument, e.g. `XMLFOREST(a AS x)` in PostgreSQL
+        let arg_expr = match arg_expr {
+            FunctionArgExpr::Expr(expr)
+                if self.dialect.supports_aliased_function_args()
+                    && self.parse_keyword(Keyword::AS) =>
+            {
+                FunctionArgExpr::Expr(Expr::Named {
+                    expr: expr.into(),
+                    name: self.parse_identifier()?,
+                })
+            }
+            other => other,
+        };
         Ok(FunctionArg::Unnamed(arg_expr))
     }
 

@@ -3934,6 +3934,24 @@ fn parse_on_commit() {
 }
 
 #[test]
+fn parse_xmlforest_aliased_arguments() {
+    let select = pg_and_generic().verified_only_select("SELECT XMLFOREST(a AS x, b)");
+    assert_eq!(
+        expr_from_projection(&select.projection[0]),
+        &call(
+            "XMLFOREST",
+            [
+                Expr::Named {
+                    expr: Expr::Identifier(Ident::new("a")).into(),
+                    name: Ident::new("x"),
+                },
+                Expr::Identifier(Ident::new("b")),
+            ]
+        )
+    );
+}
+
+#[test]
 fn parse_xml_typed_string() {
     // xml '...' should parse as a TypedString on PostgreSQL and Generic
     let sql = "SELECT xml '<foo/>'";

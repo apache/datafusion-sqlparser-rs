@@ -19000,6 +19000,20 @@ fn parse_non_pg_dialects_keep_xml_names_as_regular_identifiers() {
     dialects.verified_only_select("SELECT xml FROM t");
 }
 
+#[test]
+fn parse_aliased_function_args() {
+    let dialects = all_dialects_where(|d| d.supports_aliased_function_args());
+    dialects.verified_only_select("SELECT foo(a AS x, b)");
+    dialects.verified_only_select("SELECT foo('bar' AS x)");
+    dialects.verified_only_select("SELECT foo(1 + 2 AS x)");
+    dialects.verified_only_select("SELECT foo(lower(a) AS x, b AS y)");
+    dialects.verified_only_select(r#"SELECT foo(a AS "x y")"#);
+    dialects.verified_only_select("SELECT foo(bar(a AS x) AS y)");
+    assert!(all_dialects_except(|d| d.supports_aliased_function_args())
+        .parse_sql_statements("SELECT foo(a AS x)")
+        .is_err());
+}
+
 /// Regression test for the 2^N parse-time blowup in `parse_compound_expr` on
 /// inputs like `IF a0.a1...aN.#`. The parse is run on a worker thread and the
 /// main thread asserts that it reports back within a generous timeout. Post-fix

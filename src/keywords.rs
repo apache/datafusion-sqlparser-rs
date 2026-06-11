@@ -471,6 +471,7 @@ define_keywords!(
     GET,
     GIN,
     GIST,
+    GLOB,
     GLOBAL,
     GRANT,
     GRANTED,

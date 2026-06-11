@@ -1118,7 +1118,7 @@ fn parse_select_into() {
             temporary: false,
             unlogged: false,
             table: false,
-            name: ObjectName::from(vec![Ident::new("table0")]),
+            targets: vec![Expr::Identifier(Ident::new("table0"))],
         },
         only(&select.into)
     );
@@ -1128,6 +1128,10 @@ fn parse_select_into() {
         sql,
         "SELECT * INTO TEMPORARY UNLOGGED TABLE table0 FROM table1",
     );
+
+    verified_only_select("SELECT a, b INTO foo.bar, bar.baz FROM t");
+    verified_stmt("SELECT a, b, c INTO p, q, r FROM t");
+    verified_stmt("SELECT a, b INTO :h1, :h2 FROM t");
 
     // Do not allow aliases here
     let sql = "SELECT * INTO table0 asdf FROM table1";
@@ -6188,6 +6192,10 @@ fn parse_literal_string() {
 
     one_statement_parses_to("SELECT x'deadBEEF'", "SELECT X'deadBEEF'");
     one_statement_parses_to("SELECT n'national string'", "SELECT N'national string'");
+    one_statement_parses_to(
+        r#"SELECT n'Tu geres '';'' et ''"'' ?'"#,
+        r#"SELECT N'Tu geres '';'' et ''"'' ?'"#,
+    );
 }
 
 #[test]
@@ -15568,13 +15576,29 @@ fn parse_create_table_select() {
 
 #[test]
 fn test_reserved_keywords_for_identifiers() {
-    let dialects = all_dialects_where(|d| d.is_reserved_for_identifier(Keyword::INTERVAL));
+    let dialects = all_dialects_where(|d| {
+        d.is_reserved_for_identifier(Keyword::INTERVAL)
+            && !d.supports_named_fn_args_with_expr_name()
+    });
     // Dialects that reserve the word INTERVAL will not allow it as an unquoted identifier
     let sql = "SELECT MAX(interval) FROM tbl";
     assert_eq!(
         dialects.parse_sql_statements(sql),
         Err(ParserError::ParserError(
             "Expected: an expression, found: )".to_string()
+        ))
+    );
+
+    // Dialects with expression-named function arguments parse the argument
+    // expression twice, so the second attempt reports the memoized failure
+    // at the start of the expression
+    let dialects = all_dialects_where(|d| {
+        d.is_reserved_for_identifier(Keyword::INTERVAL) && d.supports_named_fn_args_with_expr_name()
+    });
+    assert_eq!(
+        dialects.parse_sql_statements(sql),
+        Err(ParserError::ParserError(
+            "Expected: an expression, found: interval".to_string()
         ))
     );
 
@@ -18691,6 +18715,14 @@ fn parse_adjacent_string_literal_concatenation() {
         'd'
     )"#;
     dialects.one_statement_parses_to(sql, "SELECT 'abc' IN ('abc', 'd')");
+
+    let sql = r#"
+    SELECT 'abc' in ('a'
+        'b' -- COMMENT
+        'c',
+        'd'
+    )"#;
+    dialects.one_statement_parses_to(sql, "SELECT 'abc' IN ('abc', 'd')");
 }
 
 #[test]
@@ -19312,6 +19344,20 @@ fn parse_non_pg_dialects_keep_xml_names_as_regular_identifiers() {
     dialects.verified_only_select("SELECT xml FROM t");
 }
 
+#[test]
+fn parse_aliased_function_args() {
+    let dialects = all_dialects_where(|d| d.supports_aliased_function_args());
+    dialects.verified_only_select("SELECT foo(a AS x, b)");
+    dialects.verified_only_select("SELECT foo('bar' AS x)");
+    dialects.verified_only_select("SELECT foo(1 + 2 AS x)");
+    dialects.verified_only_select("SELECT foo(lower(a) AS x, b AS y)");
+    dialects.verified_only_select(r#"SELECT foo(a AS "x y")"#);
+    dialects.verified_only_select("SELECT foo(bar(a AS x) AS y)");
+    assert!(all_dialects_except(|d| d.supports_aliased_function_args())
+        .parse_sql_statements("SELECT foo(a AS x)")
+        .is_err());
+}
+
 /// Regression test for the 2^N parse-time blowup in `parse_compound_expr` on
 /// inputs like `IF a0.a1...aN.#`. The parse is run on a worker thread and the
 /// main thread asserts that it reports back within a generous timeout. Post-fix
@@ -19332,6 +19378,77 @@ fn parse_compound_chain_no_exponential_blowup() {
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
         let _ = Parser::parse_sql(&GenericDialect {}, &sql);
+        let _ = tx.send(());
+    });
+
+    rx.recv_timeout(Duration::from_secs(5))
+        .expect("parser should reject this quickly, not loop exponentially");
+}
+
+/// Regression test for the 2^N parse-time blowup in `parse_compound_expr` on
+/// chains like `x.not-b.not-b...`. The `NOT` keyword in field position drives
+/// `parse_prefix` -> `parse_not` -> `parse_subexpr`, which re-walks the
+/// remaining chain at every segment and doubles the work. Post-fix the parser
+/// handles 25 segments in well under a millisecond, so the timeout is a hang
+/// guard, not a perf threshold.
+#[test]
+fn parse_compound_keyword_chain_no_exponential_blowup() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    let body: String = std::iter::repeat_n(".not-b", 25).collect();
+    let sql = format!("SELECT x{body}");
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = Parser::parse_sql(&GenericDialect {}, &sql);
+        let _ = tx.send(());
+    });
+
+    rx.recv_timeout(Duration::from_secs(5))
+        .expect("parser should handle this quickly, not loop exponentially");
+}
+
+/// Regression test for the 2^N parse-time blowup in `parse_prefix` on inputs
+/// like `IF(current_time(current_time(...x`. Each nested `current_time(` used
+/// to be explored twice at every level (once via the speculative reserved-word
+/// arm, once via the unreserved-word fallback), doubling work per level.
+/// Post-fix the failing parse short-circuits via the position-keyed cache.
+#[test]
+fn parse_prefix_keyword_call_chain_no_exponential_blowup() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    let sql = String::from("if(") + &"current_time(".repeat(30) + "x";
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = Parser::parse_sql(&PostgreSqlDialect {}, &sql);
+        let _ = tx.send(());
+    });
+
+    rx.recv_timeout(Duration::from_secs(5))
+        .expect("parser should reject this quickly, not loop exponentially");
+}
+
+/// Regression test for the 2^N parse-time blowup in `parse_prefix` on inputs
+/// like `case-case-case-...c`. Each `case` token triggers a speculative
+/// `parse_case_expr` that fails, but the unreserved-word fallback returns
+/// `Identifier(case)`, so the outer failure cache never fires. Post-fix the
+/// per-arm cache short-circuits the speculative descent.
+#[test]
+fn parse_prefix_case_chain_no_exponential_blowup() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    let sql = "case\t-".repeat(30) + "c";
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = Parser::parse_sql(&SQLiteDialect {}, &sql);
         let _ = tx.send(());
     });
 

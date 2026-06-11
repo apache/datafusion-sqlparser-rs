@@ -33,7 +33,7 @@ impl Comments {
     /// last accepted comment.  In other words, this method will skip the
     /// comment if its comming out of order (as encountered in the parsed
     /// source code.)
-    pub(crate) fn offer(&mut self, comment: CommentWithSpan) {
+    pub fn offer(&mut self, comment: CommentWithSpan) {
         if self
             .0
             .last()
@@ -71,7 +71,7 @@ impl Comments {
     /// // all comments appearing before line seven, i.e. before the first statement itself
     /// assert_eq!(
     ///    &comments.find(..Location::new(7, 1)).map(|c| c.as_str()).collect::<Vec<_>>(),
-    ///    &["\n header comment ...\n ... spanning multiple lines\n", " first statement\n"]);
+    ///    &["\n header comment ...\n ... spanning multiple lines\n", " first statement"]);
     ///
     /// // all comments appearing within the first statement
     /// assert_eq!(
@@ -81,7 +81,7 @@ impl Comments {
     /// // all comments appearing within or after the first statement
     /// assert_eq!(
     ///    &comments.find(Location::new(7, 1)..).map(|c| c.as_str()).collect::<Vec<_>>(),
-    ///    &[" world ", " second statement\n", " trailing comment\n"]);
+    ///    &[" world ", " second statement", " trailing comment"]);
     /// ```
     ///
     /// The [Spanned](crate::ast::Spanned) trait allows you to access location

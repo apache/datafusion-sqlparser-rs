@@ -627,14 +627,14 @@ pub enum ExcludeConstraintOperator {
     /// A single operator token, e.g. `=`, `&&`, `<->`.
     Token(String),
     /// Postgres schema-qualified form: `OPERATOR(schema.op)`.
-    PGCustom(Vec<String>),
+    PGOperator(Vec<String>),
 }
 
 impl fmt::Display for ExcludeConstraintOperator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ExcludeConstraintOperator::Token(token) => f.write_str(token),
-            ExcludeConstraintOperator::PGCustom(parts) => {
+            ExcludeConstraintOperator::PGOperator(parts) => {
                 write!(f, "OPERATOR({})", display_separated(parts, "."))
             }
         }

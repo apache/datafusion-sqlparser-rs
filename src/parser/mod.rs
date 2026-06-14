@@ -10029,8 +10029,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse an `EXCLUDE` table constraint, with the leading `EXCLUDE` keyword
-    /// already consumed.
+    // The leading `EXCLUDE` keyword is already consumed by the caller.
     fn parse_exclude_constraint(
         &mut self,
         name: Option<Ident>,
@@ -10089,13 +10088,14 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<ExcludeConstraintOperator, ParserError> {
         if self.parse_keyword(Keyword::OPERATOR) {
-            return Ok(ExcludeConstraintOperator::PGCustom(
+            return Ok(ExcludeConstraintOperator::PGOperator(
                 self.parse_pg_operator_ident_parts()?,
             ));
         }
 
-        // Reject structural delimiters (`,`, `)`, `;`, EOF) since they signal a
-        // missing operator between `WITH` and the next element / end of list.
+        // Without this guard a bare `WITH` at the end of an element would
+        // consume the next structural delimiter (`,`, `)`, `;`, EOF) as the
+        // operator string, producing a silently wrong AST instead of an error.
         let operator_token = self.next_token();
         if matches!(
             operator_token.token,

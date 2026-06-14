@@ -5833,7 +5833,7 @@ pub struct CreateAggregate {
     pub or_replace: bool,
     /// The aggregate name (can be schema-qualified).
     pub name: ObjectName,
-    /// Input arguments. Empty for zero-argument aggregates or `(*)`.
+    /// Input arguments. Empty when `star_args` is true or when the argument list is empty.
     pub args: Vec<OperateFunctionArg>,
     /// True if the argument list was the wildcard form `(*)` (used by
     /// zero-argument aggregates such as `count(*)`).
@@ -5850,10 +5850,16 @@ impl fmt::Display for CreateAggregate {
             write!(f, " OR REPLACE")?;
         }
         write!(f, " AGGREGATE {}", self.name)?;
-        if self.star_args && self.args.is_empty() {
-            write!(f, " (*)")?;
-        } else {
-            write!(f, " ({})", display_comma_separated(&self.args))?;
+        let is_old_syntax = self
+            .options
+            .iter()
+            .any(|option| matches!(option, CreateAggregateOption::BaseType(_)));
+        if !is_old_syntax {
+            if self.star_args && self.args.is_empty() {
+                write!(f, " (*)")?;
+            } else {
+                write!(f, " ({})", display_comma_separated(&self.args))?;
+            }
         }
         write!(f, " ({})", display_comma_separated(&self.options))
     }
@@ -5880,7 +5886,7 @@ pub enum CreateAggregateOption {
     StateDataSize(u64),
     /// `FINALFUNC = final_function`
     FinalFunction(ObjectName),
-    /// `FINALFUNC_EXTRA` — pass extra dummy arguments to the final function.
+    /// `FINALFUNC_EXTRA`. Passes extra dummy arguments to the final function.
     FinalFunctionExtra,
     /// `FINALFUNC_MODIFY = { READ_ONLY | SHAREABLE | READ_WRITE }`
     FinalFunctionModify(AggregateModifyKind),
@@ -5912,8 +5918,10 @@ pub enum CreateAggregateOption {
     SortOperator(ObjectName),
     /// `PARALLEL = { SAFE | RESTRICTED | UNSAFE }`
     Parallel(FunctionParallel),
-    /// `HYPOTHETICAL` — marks the aggregate as hypothetical-set.
+    /// `HYPOTHETICAL`. Marks the aggregate as hypothetical-set.
     Hypothetical,
+    /// `BASETYPE = base_type` (old aggregate syntax).
+    BaseType(DataType),
 }
 
 impl fmt::Display for CreateAggregateOption {
@@ -5938,15 +5946,9 @@ impl fmt::Display for CreateAggregateOption {
             Self::MovingFinalFunctionModify(kind) => write!(f, "MFINALFUNC_MODIFY = {kind}"),
             Self::MovingInitialCondition(cond) => write!(f, "MINITCOND = {cond}"),
             Self::SortOperator(name) => write!(f, "SORTOP = {name}"),
-            Self::Parallel(parallel) => {
-                let kind = match parallel {
-                    FunctionParallel::Safe => "SAFE",
-                    FunctionParallel::Restricted => "RESTRICTED",
-                    FunctionParallel::Unsafe => "UNSAFE",
-                };
-                write!(f, "PARALLEL = {kind}")
-            }
+            Self::Parallel(parallel) => write!(f, "PARALLEL = {}", parallel.as_str()),
             Self::Hypothetical => write!(f, "HYPOTHETICAL"),
+            Self::BaseType(data_type) => write!(f, "BASETYPE = {data_type}"),
         }
     }
 }

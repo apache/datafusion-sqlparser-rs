@@ -10069,13 +10069,20 @@ pub enum FunctionParallel {
     Safe,
 }
 
+impl FunctionParallel {
+    /// Returns the bare keyword for this parallel mode, without the `PARALLEL` prefix.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            FunctionParallel::Unsafe => "UNSAFE",
+            FunctionParallel::Restricted => "RESTRICTED",
+            FunctionParallel::Safe => "SAFE",
+        }
+    }
+}
+
 impl fmt::Display for FunctionParallel {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            FunctionParallel::Unsafe => write!(f, "PARALLEL UNSAFE"),
-            FunctionParallel::Restricted => write!(f, "PARALLEL RESTRICTED"),
-            FunctionParallel::Safe => write!(f, "PARALLEL SAFE"),
-        }
+        write!(f, "PARALLEL {}", self.as_str())
     }
 }
 

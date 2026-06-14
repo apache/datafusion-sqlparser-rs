@@ -9348,3 +9348,43 @@ fn parse_create_aggregate_additional_options() {
         "CREATE AGGREGATE my_sum (INT) (SFUNC = my_sfunc, STYPE = internal, COMBINEFUNC = my_combine, SERIALFUNC = my_serial, DESERIALFUNC = my_deserial)",
     );
 }
+
+#[test]
+fn parse_create_aggregate_old_syntax_basetype() {
+    let stmt = pg_and_generic()
+        .verified_stmt("CREATE AGGREGATE my_avg (BASETYPE = INT, SFUNC = my_sfunc, STYPE = INT)");
+    match stmt {
+        Statement::CreateAggregate(agg) => {
+            assert!(agg.args.is_empty());
+            assert!(!agg.star_args);
+            assert_eq!(agg.options.len(), 3);
+            assert_eq!(
+                agg.options[0],
+                CreateAggregateOption::BaseType(DataType::Int(None))
+            );
+        }
+        _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
+    }
+
+    let stmt = pg_and_generic()
+        .verified_stmt("CREATE AGGREGATE my_avg (SFUNC = my_sfunc, BASETYPE = INT, STYPE = INT)");
+    match stmt {
+        Statement::CreateAggregate(agg) => {
+            assert!(agg.args.is_empty());
+            assert!(!agg.star_args);
+            assert_eq!(agg.options.len(), 3);
+            assert_eq!(
+                agg.options[1],
+                CreateAggregateOption::BaseType(DataType::Int(None))
+            );
+        }
+        _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
+    }
+}
+
+#[test]
+fn parse_create_aggregate_unknown_option() {
+    assert!(pg_and_generic()
+        .parse_sql_statements("CREATE AGGREGATE foo (INT) (UNKNOWN_OPTION = bar)")
+        .is_err());
+}

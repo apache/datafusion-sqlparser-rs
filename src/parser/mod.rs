@@ -7235,22 +7235,31 @@ impl<'a> Parser<'a> {
     ) -> Result<CreateAggregate, ParserError> {
         let name = self.parse_object_name(false)?;
 
-        // Argument list: `(input_arg [, ...])` or `(*)` for zero-arg.
+        // The old syntax has a single parenthesized list that carries both
+        // `BASETYPE` and the remaining options. The modern syntax has a
+        // separate `(input_arg [, ...])` argument list followed by the
+        // options list. They are distinguished by whether a second
+        // parenthesized list follows the first.
+        let checkpoint = self.index;
         self.expect_token(&Token::LParen)?;
-        let star_args = self.consume_token(&Token::Mul);
-        let args = if star_args || self.peek_token().token == Token::RParen {
+        let mut star_args = self.consume_token(&Token::Mul);
+        let mut args = if star_args || self.peek_token().token == Token::RParen {
             vec![]
         } else {
             self.parse_comma_separated(Parser::parse_function_arg)?
         };
         self.expect_token(&Token::RParen)?;
 
-        // Options block: `( SFUNC = ..., STYPE = ..., ... )`.
-        self.expect_token(&Token::LParen)?;
-        let options = self.parse_comma_separated(|parser| {
-            let key = parser.parse_identifier()?;
-            parser.parse_create_aggregate_option(&key.value.to_uppercase())
-        })?;
+        // The first list is the modern argument-type list only when a second
+        // list follows. Otherwise it was the old-syntax options list, so rewind,
+        // discard the speculatively parsed args, and re-parse it as options.
+        if !self.consume_token(&Token::LParen) {
+            self.index = checkpoint;
+            args = vec![];
+            star_args = false;
+            self.expect_token(&Token::LParen)?;
+        }
+        let options = self.parse_comma_separated(Parser::parse_create_aggregate_option_entry)?;
         self.expect_token(&Token::RParen)?;
 
         Ok(CreateAggregate {
@@ -7273,6 +7282,13 @@ impl<'a> Parser<'a> {
         } else {
             self.expected_ref("one of SAFE | RESTRICTED | UNSAFE", self.peek_token_ref())
         }
+    }
+
+    fn parse_create_aggregate_option_entry(
+        &mut self,
+    ) -> Result<CreateAggregateOption, ParserError> {
+        let key = self.parse_identifier()?;
+        self.parse_create_aggregate_option(&key.value.to_uppercase())
     }
 
     fn parse_create_aggregate_option(
@@ -7387,6 +7403,10 @@ impl<'a> Parser<'a> {
                 ))
             }
             "HYPOTHETICAL" => Ok(CreateAggregateOption::Hypothetical),
+            "BASETYPE" => {
+                self.expect_token(&Token::Eq)?;
+                Ok(CreateAggregateOption::BaseType(self.parse_data_type()?))
+            }
             other => Err(ParserError::ParserError(format!(
                 "Unknown CREATE AGGREGATE option: {other}"
             ))),

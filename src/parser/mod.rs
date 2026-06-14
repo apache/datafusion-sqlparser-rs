@@ -9810,10 +9810,9 @@ impl<'a> Parser<'a> {
             None
         };
 
-        // FULLTEXT and SPATIAL are MySQL-specific table constraint keywords. For
-        // dialects that don't support them (e.g. PostgreSQL) they are valid
-        // identifiers and must not be consumed here — the caller will parse them
-        // as column names instead.
+        // Peek instead of consuming: FULLTEXT/SPATIAL are only table constraints in
+        // MySQL/Generic, so consuming them before confirming the dialect would break
+        // the column-name fallback in other dialects (e.g. PostgreSQL).
         if name.is_none()
             && self
                 .peek_one_of_keywords(&[Keyword::FULLTEXT, Keyword::SPATIAL])

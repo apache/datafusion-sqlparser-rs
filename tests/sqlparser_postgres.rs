@@ -7129,6 +7129,8 @@ fn parse_fulltext_as_column_name() {
     pg().verified_stmt("CREATE TABLE geo (spatial TEXT NOT NULL)");
 
     pg().verified_stmt("CREATE INDEX film_fulltext_idx ON film USING GIST (fulltext)");
+
+    pg().verified_stmt("CREATE INDEX geo_spatial_idx ON geo USING GIST (spatial)");
 }
 
 #[test]

@@ -5887,6 +5887,8 @@ impl fmt::Display for CreateTextSearch {
 
 impl Spanned for CreateTextSearch {
     fn span(&self) -> Span {
-        self.name.span()
+        Span::union_iter(
+            core::iter::once(self.name.span()).chain(self.options.iter().map(|i| i.span())),
+        )
     }
 }

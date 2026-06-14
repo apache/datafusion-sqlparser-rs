@@ -5827,25 +5827,19 @@ impl From<AlterPolicy> for crate::ast::Statement {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum FdwRoutineClause {
+pub enum ForeignDataWrapperRoutineClause {
     /// A named function, e.g. `HANDLER myhandler` or `VALIDATOR myvalidator`.
     Function(ObjectName),
     /// The `NO HANDLER` / `NO VALIDATOR` form.
     Absent,
 }
 
-impl FdwRoutineClause {
+impl ForeignDataWrapperRoutineClause {
     fn fmt_with_label(&self, f: &mut fmt::Formatter<'_>, label: &str) -> fmt::Result {
         match self {
-            FdwRoutineClause::Function(name) => write!(f, " {label} {name}"),
-            FdwRoutineClause::Absent => write!(f, " NO {label}"),
+            ForeignDataWrapperRoutineClause::Function(name) => write!(f, " {label} {name}"),
+            ForeignDataWrapperRoutineClause::Absent => write!(f, " NO {label}"),
         }
-    }
-}
-
-impl fmt::Display for FdwRoutineClause {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.fmt_with_label(f, "HANDLER")
     }
 }
 
@@ -5859,9 +5853,9 @@ pub struct CreateForeignDataWrapper {
     /// The name of the foreign-data wrapper. Can be schema-qualified.
     pub name: ObjectName,
     /// Optional `HANDLER handler_function` or `NO HANDLER` clause.
-    pub handler: Option<FdwRoutineClause>,
+    pub handler: Option<ForeignDataWrapperRoutineClause>,
     /// Optional `VALIDATOR validator_function` or `NO VALIDATOR` clause.
-    pub validator: Option<FdwRoutineClause>,
+    pub validator: Option<ForeignDataWrapperRoutineClause>,
     /// Optional `OPTIONS (key 'value', ...)` clause.
     pub options: Option<Vec<CreateServerOption>>,
 }
@@ -5890,8 +5884,8 @@ impl From<CreateForeignDataWrapper> for crate::ast::Statement {
 
 impl Spanned for CreateForeignDataWrapper {
     fn span(&self) -> Span {
-        let routine_span = |clause: &Option<FdwRoutineClause>| match clause {
-            Some(FdwRoutineClause::Function(name)) => Some(name.span()),
+        let routine_span = |clause: &Option<ForeignDataWrapperRoutineClause>| match clause {
+            Some(ForeignDataWrapperRoutineClause::Function(name)) => Some(name.span()),
             _ => None,
         };
         Span::union_iter(

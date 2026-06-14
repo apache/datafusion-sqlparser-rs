@@ -74,7 +74,7 @@ pub use self::ddl::{
     CreatePolicy, CreatePolicyCommand, CreatePolicyType, CreateTable, CreateTrigger, CreateView,
     Deduplicate, DeferrableInitial, DistStyle, DropBehavior, DropExtension, DropFunction,
     DropOperator, DropOperatorClass, DropOperatorFamily, DropOperatorSignature, DropPolicy,
-    DropTrigger, FdwRoutineClause, ForValues, FunctionReturnType, GeneratedAs,
+    DropTrigger, ForValues, ForeignDataWrapperRoutineClause, FunctionReturnType, GeneratedAs,
     GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
     IdentityPropertyKind, IdentityPropertyOrder, IndexColumn, IndexOption, IndexType,
     KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes, OperatorClassItem,

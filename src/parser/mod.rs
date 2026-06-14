@@ -19872,7 +19872,7 @@ impl<'a> Parser<'a> {
         self.expect_keywords(&[Keyword::FOREIGN, Keyword::DATA, Keyword::WRAPPER])?;
         let foreign_data_wrapper = self.parse_object_name(false)?;
 
-        let options = self.parse_fdw_options_clause()?;
+        let options = self.parse_foreign_data_wrapper_options_clause()?;
 
         Ok(Statement::CreateServer(CreateServerStatement {
             name,
@@ -19886,34 +19886,36 @@ impl<'a> Parser<'a> {
 
     /// Parse an optional `OPTIONS ( key value [, ...] )` clause shared by
     /// `CREATE SERVER`, `CREATE FOREIGN DATA WRAPPER`, and `CREATE FOREIGN TABLE`.
-    fn parse_fdw_options_clause(&mut self) -> Result<Option<Vec<CreateServerOption>>, ParserError> {
+    fn parse_foreign_data_wrapper_options_clause(
+        &mut self,
+    ) -> Result<Option<Vec<CreateServerOption>>, ParserError> {
         if !self.parse_keyword(Keyword::OPTIONS) {
             return Ok(None);
         }
         self.expect_token(&Token::LParen)?;
-        let opts = self.parse_comma_separated(|p| {
+        let options = self.parse_comma_separated(|p| {
             let key = p.parse_identifier()?;
             let value = p.parse_identifier()?;
             Ok(CreateServerOption { key, value })
         })?;
         self.expect_token(&Token::RParen)?;
-        Ok(Some(opts))
+        Ok(Some(options))
     }
 
     /// Parse an optional `HANDLER f | NO HANDLER` / `VALIDATOR f | NO VALIDATOR`
     /// clause on `CREATE FOREIGN DATA WRAPPER`. The caller passes the positive
     /// keyword (`HANDLER` or `VALIDATOR`); the `NO <keyword>` form is also
-    /// recognised.
-    fn parse_fdw_routine_clause(
+    /// recognized.
+    fn parse_foreign_data_wrapper_routine_clause(
         &mut self,
         keyword: Keyword,
-    ) -> Result<Option<FdwRoutineClause>, ParserError> {
+    ) -> Result<Option<ForeignDataWrapperRoutineClause>, ParserError> {
         if self.parse_keyword(keyword) {
-            Ok(Some(FdwRoutineClause::Function(
+            Ok(Some(ForeignDataWrapperRoutineClause::Function(
                 self.parse_object_name(false)?,
             )))
         } else if self.parse_keywords(&[Keyword::NO, keyword]) {
-            Ok(Some(FdwRoutineClause::Absent))
+            Ok(Some(ForeignDataWrapperRoutineClause::Absent))
         } else {
             Ok(None)
         }
@@ -19926,9 +19928,9 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<CreateForeignDataWrapper, ParserError> {
         let name = self.parse_object_name(false)?;
-        let handler = self.parse_fdw_routine_clause(Keyword::HANDLER)?;
-        let validator = self.parse_fdw_routine_clause(Keyword::VALIDATOR)?;
-        let options = self.parse_fdw_options_clause()?;
+        let handler = self.parse_foreign_data_wrapper_routine_clause(Keyword::HANDLER)?;
+        let validator = self.parse_foreign_data_wrapper_routine_clause(Keyword::VALIDATOR)?;
+        let options = self.parse_foreign_data_wrapper_options_clause()?;
 
         Ok(CreateForeignDataWrapper {
             name,
@@ -19947,7 +19949,7 @@ impl<'a> Parser<'a> {
         let (columns, constraints) = self.parse_columns()?;
         self.expect_keyword_is(Keyword::SERVER)?;
         let server_name = self.parse_identifier()?;
-        let options = self.parse_fdw_options_clause()?;
+        let options = self.parse_foreign_data_wrapper_options_clause()?;
 
         Ok(CreateForeignTable {
             name,

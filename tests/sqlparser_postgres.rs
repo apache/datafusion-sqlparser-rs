@@ -9263,9 +9263,9 @@ fn parse_create_foreign_data_wrapper() {
     };
     assert_eq!(
         stmt.handler,
-        Some(FdwRoutineClause::Function(ObjectName::from(vec![
-            "myhandler".into()
-        ])))
+        Some(ForeignDataWrapperRoutineClause::Function(ObjectName::from(
+            vec!["myhandler".into()]
+        )))
     );
 
     // With NO HANDLER.
@@ -9273,14 +9273,17 @@ fn parse_create_foreign_data_wrapper() {
     let Statement::CreateForeignDataWrapper(stmt) = pg_and_generic().verified_stmt(sql) else {
         unreachable!()
     };
-    assert_eq!(stmt.handler, Some(FdwRoutineClause::Absent));
+    assert_eq!(stmt.handler, Some(ForeignDataWrapperRoutineClause::Absent));
 
     // With NO VALIDATOR.
     let sql = "CREATE FOREIGN DATA WRAPPER myfdw NO VALIDATOR";
     let Statement::CreateForeignDataWrapper(stmt) = pg_and_generic().verified_stmt(sql) else {
         unreachable!()
     };
-    assert_eq!(stmt.validator, Some(FdwRoutineClause::Absent));
+    assert_eq!(
+        stmt.validator,
+        Some(ForeignDataWrapperRoutineClause::Absent)
+    );
 
     // With HANDLER, VALIDATOR, and OPTIONS.
     let sql = "CREATE FOREIGN DATA WRAPPER myfdw HANDLER myhandler VALIDATOR myvalidator OPTIONS (debug 'true')";
@@ -9289,15 +9292,15 @@ fn parse_create_foreign_data_wrapper() {
     };
     assert_eq!(
         stmt.handler,
-        Some(FdwRoutineClause::Function(ObjectName::from(vec![
-            "myhandler".into()
-        ])))
+        Some(ForeignDataWrapperRoutineClause::Function(ObjectName::from(
+            vec!["myhandler".into()]
+        )))
     );
     assert_eq!(
         stmt.validator,
-        Some(FdwRoutineClause::Function(ObjectName::from(vec![
-            "myvalidator".into()
-        ])))
+        Some(ForeignDataWrapperRoutineClause::Function(ObjectName::from(
+            vec!["myvalidator".into()]
+        )))
     );
     assert_eq!(
         stmt.options,
@@ -9309,6 +9312,18 @@ fn parse_create_foreign_data_wrapper() {
                 span: Span::empty(),
             },
         }])
+    );
+
+    // Each clause must render its own label: round-tripping must not emit
+    // `NO HANDLER NO HANDLER`, which a single hardcoded Display label would.
+    let sql = "CREATE FOREIGN DATA WRAPPER myfdw NO HANDLER NO VALIDATOR";
+    let Statement::CreateForeignDataWrapper(stmt) = pg_and_generic().verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(stmt.handler, Some(ForeignDataWrapperRoutineClause::Absent));
+    assert_eq!(
+        stmt.validator,
+        Some(ForeignDataWrapperRoutineClause::Absent)
     );
 }
 

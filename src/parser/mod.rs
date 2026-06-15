@@ -10093,9 +10093,10 @@ impl<'a> Parser<'a> {
             ));
         }
 
-        // Without this guard a bare `WITH` at the end of an element would
-        // consume the next structural delimiter (`,`, `)`, `;`, EOF) as the
-        // operator string, producing a silently wrong AST instead of an error.
+        // A missing operator would otherwise stringify the next structural
+        // delimiter (`,`, `)`, `;`, EOF) as the operator. The trailing RParen
+        // still rejects it downstream, but this points the error at the missing
+        // operator instead of a later token.
         let operator_token = self.next_token();
         if matches!(
             operator_token.token,

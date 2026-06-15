@@ -15,7 +15,7 @@
 #[cfg(not(feature = "std"))]
 use alloc::{
     boxed::Box,
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     format,
     string::{String, ToString},
     vec,
@@ -26,7 +26,7 @@ use core::{
     str::FromStr,
 };
 #[cfg(feature = "std")]
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use helpers::attached_token::AttachedToken;
 
@@ -369,6 +369,10 @@ pub struct Parser<'a> {
     /// Cached failures from the speculative reserved-word prefix arm. See
     /// [`Parser::parse_prefix`] for the 2^N patterns this guards.
     failed_reserved_word_prefix_positions: BTreeMap<usize, ExprPrefixError>,
+    /// Cached failures from the speculative derived-table arm of
+    /// `parse_table_factor`. See [`Parser::parse_table_factor`] for the 2^N
+    /// pattern this guards.
+    failed_derived_table_factor_positions: BTreeSet<usize>,
 }
 
 /// Copy marker for a [`ParserError`] cached by the `parse_prefix` failure
@@ -414,6 +418,7 @@ impl<'a> Parser<'a> {
             options: ParserOptions::new().with_trailing_commas(dialect.supports_trailing_commas()),
             failed_prefix_positions: BTreeMap::new(),
             failed_reserved_word_prefix_positions: BTreeMap::new(),
+            failed_derived_table_factor_positions: BTreeSet::new(),
         }
     }
 
@@ -477,6 +482,7 @@ impl<'a> Parser<'a> {
         self.index = 0;
         self.failed_prefix_positions.clear();
         self.failed_reserved_word_prefix_positions.clear();
+        self.failed_derived_table_factor_positions.clear();
         self
     }
 
@@ -16172,9 +16178,27 @@ impl<'a> Parser<'a> {
             // `parse_derived_table_factor` below will return success after parsing the
             // subquery, followed by the closing ')', and the alias of the derived table.
             // In the example above this is case (3).
-            if let Some(mut table) =
-                self.maybe_parse(|parser| parser.parse_derived_table_factor(NotLateral))?
+            //
+            // Memoize failures to break the 2^N work on inputs like
+            // `FROM ((((...`, where the nested-join fallback recurses back into
+            // `parse_table_factor` and re-attempts the same speculative parse.
+            let derived_pos = self.index;
+            let derived = if self
+                .failed_derived_table_factor_positions
+                .contains(&derived_pos)
             {
+                None
+            } else {
+                match self.maybe_parse(|parser| parser.parse_derived_table_factor(NotLateral))? {
+                    Some(t) => Some(t),
+                    None => {
+                        self.failed_derived_table_factor_positions
+                            .insert(derived_pos);
+                        None
+                    }
+                }
+            };
+            if let Some(mut table) = derived {
                 while let Some(kw) = self.parse_one_of_keywords(&[Keyword::PIVOT, Keyword::UNPIVOT])
                 {
                     table = match kw {

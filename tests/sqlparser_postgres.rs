@@ -9436,3 +9436,20 @@ fn exclude_as_column_name() {
         }
     }
 }
+
+#[test]
+fn parse_right_deep_join_chain() {
+    // PostgreSQL supports right-deep join syntax where ON clauses follow all JOIN keywords:
+    //   t0 JOIN t1 JOIN t2 ON c1 ON c2
+    // which is equivalent to (and serialized as) t0 JOIN (t1 JOIN t2 ON c1) ON c2.
+    pg().one_statement_parses_to(
+        "SELECT * FROM t0 INNER JOIN t1 INNER JOIN t2 ON true ON true",
+        "SELECT * FROM t0 INNER JOIN (t1 INNER JOIN t2 ON true) ON true",
+    );
+    pg().one_statement_parses_to(
+        "SELECT * FROM t0 INNER JOIN t1 INNER JOIN t2 INNER JOIN t3 ON true ON true ON true",
+        "SELECT * FROM t0 INNER JOIN (t1 INNER JOIN (t2 INNER JOIN t3 ON true) ON true) ON true",
+    );
+    // NATURAL JOIN followed by a constrained join must stay left-associative.
+    pg().verified_stmt("SELECT * FROM t0 NATURAL JOIN t1 INNER JOIN t2 ON true");
+}

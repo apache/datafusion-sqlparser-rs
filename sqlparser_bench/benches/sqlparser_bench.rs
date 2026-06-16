@@ -245,6 +245,34 @@ fn parse_prefix_case_chain(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmark parsing pathological paren chains that previously caused 2^N
+/// work in `parse_table_factor`. The input `SELECT 1 FROM ((((...` rejects
+/// at EOF, which used to force exponential backtracking through the chain.
+fn parse_table_factor_paren_chain(c: &mut Criterion) {
+    let mut group = c.benchmark_group("parse_table_factor_paren_chain");
+    let dialect = GenericDialect {};
+
+    for &n in &[10usize, 20, 30] {
+        let mut sql = String::from("SELECT 1 ");
+        for _ in 0..5 {
+            sql.push_str("FROM ");
+            sql.push_str(&"(".repeat(n));
+            sql.push(' ');
+        }
+
+        group.bench_function(format!("chain_{n}"), |b| {
+            b.iter(|| {
+                let _ = Parser::new(&dialect)
+                    .with_recursion_limit(256)
+                    .try_with_sql(std::hint::black_box(&sql))
+                    .and_then(|mut p| p.parse_statements());
+            });
+        });
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     basic_queries,
@@ -253,6 +281,7 @@ criterion_group!(
     parse_compound_chain,
     parse_compound_keyword_chain,
     parse_prefix_keyword_call_chain,
-    parse_prefix_case_chain
+    parse_prefix_case_chain,
+    parse_table_factor_paren_chain
 );
 criterion_main!(benches);

@@ -15590,15 +15590,15 @@ fn test_reserved_keywords_for_identifiers() {
     );
 
     // Dialects with expression-named function arguments parse the argument
-    // expression twice, so the second attempt reports the memoized failure
-    // at the start of the expression
+    // expression once and report the same error: INTERVAL begins an interval
+    // expression, which then fails on the closing paren.
     let dialects = all_dialects_where(|d| {
         d.is_reserved_for_identifier(Keyword::INTERVAL) && d.supports_named_fn_args_with_expr_name()
     });
     assert_eq!(
         dialects.parse_sql_statements(sql),
         Err(ParserError::ParserError(
-            "Expected: an expression, found: interval".to_string()
+            "Expected: an expression, found: )".to_string()
         ))
     );
 
@@ -19485,4 +19485,32 @@ fn parse_table_factor_paren_chain_no_exponential_blowup() {
 
     rx.recv_timeout(Duration::from_secs(5))
         .expect("parser should reject this quickly, not loop exponentially");
+}
+
+/// Regression test for the 2^N parse-time blowup in `parse_function_args` on
+/// nested function-call arguments like `replace(replace(replace(...x...)))`.
+/// On dialects with expression-named arguments, each positional argument was
+/// speculatively parsed as a named-argument name (a full expression) and,
+/// when no `=>`/`:=` operator followed, rewound and re-parsed as a positional
+/// argument -- doubling work at every nesting level. Post-fix the leading
+/// expression is parsed once.
+#[test]
+fn parse_function_call_arg_chain_no_exponential_blowup() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    let sql = String::from("SELECT ") + &"replace(".repeat(30) + "x" + &",'a','b')".repeat(30);
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = Parser::new(&PostgreSqlDialect {})
+            .with_recursion_limit(256)
+            .try_with_sql(&sql)
+            .and_then(|mut p| p.parse_statements());
+        let _ = tx.send(());
+    });
+
+    rx.recv_timeout(Duration::from_secs(5))
+        .expect("parser should handle this quickly, not loop exponentially");
 }

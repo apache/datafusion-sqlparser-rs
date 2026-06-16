@@ -18555,33 +18555,58 @@ impl<'a> Parser<'a> {
 
     /// Parse a single function argument, handling named and unnamed variants.
     pub fn parse_function_args(&mut self) -> Result<FunctionArg, ParserError> {
-        let arg = if self.dialect.supports_named_fn_args_with_expr_name() {
-            self.maybe_parse(|p| {
-                let name = p.parse_expr()?;
-                let operator = p.parse_function_named_arg_operator()?;
-                let arg = p.parse_wildcard_expr()?.into();
-                Ok(FunctionArg::ExprNamed {
-                    name,
-                    arg,
-                    operator,
-                })
-            })?
-        } else {
-            self.maybe_parse(|p| {
-                let name = p.parse_identifier()?;
-                let operator = p.parse_function_named_arg_operator()?;
-                let arg = p.parse_wildcard_expr()?.into();
-                Ok(FunctionArg::Named {
-                    name,
-                    arg,
-                    operator,
-                })
-            })?
-        };
+        // For dialects where a named-argument name may be an arbitrary
+        // expression (e.g. MSSQL `JSON_OBJECT`, PostgreSQL), parse the leading
+        // expression once and then check for a named-argument operator: when one
+        // follows it is a named argument, otherwise the same expression is the
+        // positional argument. Parsing once avoids speculatively parsing the
+        // whole expression and re-parsing it on the positional path, which was
+        // O(2^n) on deeply nested function-call arguments.
+        if self.dialect.supports_named_fn_args_with_expr_name() {
+            let expr = self.parse_wildcard_expr()?;
+            // A wildcard (`*`, `t.*`) can never be a named-argument name.
+            if !matches!(expr, Expr::Wildcard(_)) {
+                if let Some(operator) =
+                    self.maybe_parse(|p| p.parse_function_named_arg_operator())?
+                {
+                    let arg = self.parse_wildcard_expr()?.into();
+                    return Ok(FunctionArg::ExprNamed {
+                        name: expr,
+                        arg,
+                        operator,
+                    });
+                }
+            }
+            return self.parse_unnamed_function_arg(expr);
+        }
+
+        // Dialects where the name must be a bare identifier: the speculative
+        // parse only consumes a single token, so re-parsing on the positional
+        // path is cheap.
+        let arg = self.maybe_parse(|p| {
+            let name = p.parse_identifier()?;
+            let operator = p.parse_function_named_arg_operator()?;
+            let arg = p.parse_wildcard_expr()?.into();
+            Ok(FunctionArg::Named {
+                name,
+                arg,
+                operator,
+            })
+        })?;
         if let Some(arg) = arg {
             return Ok(arg);
         }
         let wildcard_expr = self.parse_wildcard_expr()?;
+        self.parse_unnamed_function_arg(wildcard_expr)
+    }
+
+    /// Build an unnamed [`FunctionArg`] from an already-parsed argument
+    /// expression, applying wildcard options (`* EXCLUDE (...)`) and aliasing
+    /// (`expr AS name`) where the dialect supports them.
+    fn parse_unnamed_function_arg(
+        &mut self,
+        wildcard_expr: Expr,
+    ) -> Result<FunctionArg, ParserError> {
         let arg_expr: FunctionArgExpr = match wildcard_expr {
             Expr::Wildcard(ref token) if self.dialect.supports_select_wildcard_exclude() => {
                 // Support `* EXCLUDE(col1, col2, ...)` inside function calls (e.g. Snowflake's

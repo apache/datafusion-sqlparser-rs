@@ -4653,8 +4653,11 @@ fn parse_table_command() {
     dialects.verified_stmt("TABLE films");
     // Schema-qualified.
     dialects.verified_stmt("TABLE myschema.films");
-    // Database-qualified (three-part name).
-    dialects.verified_stmt("TABLE mydb.myschema.films");
+    // Database-qualified (three-part name) — only for dialects without a parts limit.
+    let permissive = all_dialects_where(|d| {
+        d.supports_table_command() && d.table_command_max_name_parts().is_none()
+    });
+    permissive.verified_stmt("TABLE mydb.myschema.films");
     // Quoted identifiers — round-trip preserves quoting and case.
     dialects.verified_stmt("TABLE \"MyTable\"");
     dialects.verified_stmt("TABLE \"My Schema\".\"My Table\"");

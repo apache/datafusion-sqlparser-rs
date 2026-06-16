@@ -15191,6 +15191,15 @@ impl<'a> Parser<'a> {
 
         let name = self.parse_object_name(true)?;
 
+        if let Some(max) = self.dialect.table_command_max_name_parts() {
+            if name.0.len() > max {
+                return self.expected_ref(
+                    "a table name (optionally schema-qualified)",
+                    self.peek_token_ref(),
+                );
+            }
+        }
+
         if parenthesized {
             self.expect_token(&Token::RParen)?;
         }

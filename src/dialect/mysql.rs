@@ -221,6 +221,15 @@ impl Dialect for MySqlDialect {
     fn supports_group_by_with_modifier(&self) -> bool {
         true
     }
+
+    /// See: <https://dev.mysql.com/doc/refman/8.0/en/table.html>
+    fn supports_table_command(&self) -> bool {
+        true
+    }
+
+    fn table_command_max_name_parts(&self) -> Option<usize> {
+        Some(2)
+    }
 }
 
 /// `LOCK TABLES`

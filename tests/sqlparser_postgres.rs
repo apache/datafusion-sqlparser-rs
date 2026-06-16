@@ -9269,6 +9269,12 @@ fn parse_table_command_rejects_invalid() {
         "expected PG parser to reject: TABLE ONLY films *"
     );
 
+    // Three-part (catalog-qualified) names are not valid in PostgreSQL.
+    assert!(
+        pg().parse_sql_statements("TABLE db.schema.films").is_err(),
+        "expected PG parser to reject: TABLE db.schema.films"
+    );
+
     for sql in [
         "TABLE films WHERE x > 0",
         "TABLE films GROUP BY x",

@@ -2014,9 +2014,6 @@ fn parse_create_table_with_valid_options() {
                 distkey: None,
                 sortkey: None,
                 backup: None,
-                multiset: None,
-                fallback: None,
-                with_data: None,
             })
         );
     }
@@ -2192,9 +2189,6 @@ fn parse_create_table_with_identity_column() {
                 distkey: None,
                 sortkey: None,
                 backup: None,
-                multiset: None,
-                fallback: None,
-                with_data: None,
             }),
         );
     }

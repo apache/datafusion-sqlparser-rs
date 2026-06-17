@@ -417,7 +417,6 @@ define_keywords!(
     FACTS,
     FAIL,
     FAILOVER,
-    FALLBACK,
     FALSE,
     FAMILY,
     FETCH,

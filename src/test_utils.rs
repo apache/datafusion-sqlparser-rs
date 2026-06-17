@@ -292,7 +292,6 @@ pub fn all_dialects() -> TestedDialects {
         Box::new(DatabricksDialect {}),
         Box::new(ClickHouseDialect {}),
         Box::new(OracleDialect {}),
-        Box::new(TeradataDialect {}),
     ])
 }
 

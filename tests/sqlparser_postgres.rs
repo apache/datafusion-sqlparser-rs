@@ -6753,9 +6753,6 @@ fn parse_trigger_related_functions() {
             distkey: None,
             sortkey: None,
             backup: None,
-            multiset: None,
-            fallback: None,
-            with_data: None,
         }
     );
 

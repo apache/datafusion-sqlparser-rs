@@ -20811,7 +20811,11 @@ impl<'a> Parser<'a> {
                         return self.expected_ref(" another option or EOF", self.peek_token_ref());
                     }
                 }
-                Token::EOF | Token::SemiColon => break,
+                Token::EOF => break,
+                Token::SemiColon => {
+                    self.prev_token();
+                    break;
+                }
                 Token::Comma => {
                     delimiter = KeyValueOptionsDelimiter::Comma;
                     continue;

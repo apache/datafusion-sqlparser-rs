@@ -2375,9 +2375,11 @@ fn parse_in_unnest() {
 
 #[test]
 fn parse_in_error() {
-    // <expr> IN <expr> is no valid
+    // <expr> IN <expr> is no valid, except in dialects that accept an
+    // unparenthesized expression as the IN right-hand side (e.g. ClickHouse).
     let sql = "SELECT * FROM customers WHERE segment in segment";
-    let res = parse_sql_statements(sql);
+    let res =
+        all_dialects_except(|d| d.supports_in_unparenthesized_expr()).parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError("Expected: (, found: segment".to_string()),
         res.unwrap_err()
@@ -10834,8 +10836,11 @@ fn parse_position() {
 
 #[test]
 fn parse_position_negative() {
+    // Dialects that accept an unparenthesized IN right-hand side (e.g. ClickHouse)
+    // report a different error here, so exclude them.
     let sql = "SELECT POSITION(foo IN) from bar";
-    let res = parse_sql_statements(sql);
+    let res =
+        all_dialects_except(|d| d.supports_in_unparenthesized_expr()).parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError("Expected: (, found: )".to_string()),
         res.unwrap_err()

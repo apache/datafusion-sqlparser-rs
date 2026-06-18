@@ -4392,6 +4392,17 @@ impl<'a> Parser<'a> {
                 negated,
             });
         }
+        // ClickHouse accepts a bare expression as the IN RHS (e.g. `x IN 'a'` or
+        // a `{name:Type}` placeholder), wrapping it into a single-element list.
+        if self.dialect.supports_in_unparenthesized_expr()
+            && self.peek_token_ref().token != Token::LParen
+        {
+            return Ok(Expr::InList {
+                expr: Box::new(expr),
+                list: vec![self.parse_expr()?],
+                negated,
+            });
+        }
         self.expect_token(&Token::LParen)?;
         let in_op = match self.maybe_parse(|p| p.parse_query())? {
             Some(subquery) => Expr::InSubquery {

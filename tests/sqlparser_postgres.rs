@@ -24,7 +24,7 @@ mod test_utils;
 
 use helpers::attached_token::AttachedToken;
 use sqlparser::ast::*;
-use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
+use sqlparser::dialect::{Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect};
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Span;
 use test_utils::*;
@@ -591,6 +591,92 @@ fn parse_create_table_constraints_only() {
         }
         _ => unreachable!(),
     };
+}
+
+#[test]
+fn parse_exclude_constraint() {
+    let dialects = pg_and_generic();
+
+    let sql = "CREATE TABLE t (room INT, CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =))";
+    match dialects.verified_stmt(sql) {
+        Statement::CreateTable(create_table) => match &create_table.constraints[..] {
+            [TableConstraint::Exclude(c)] => {
+                assert_eq!(c.name, Some(Ident::new("no_overlap")));
+                assert_eq!(c.index_method, Some(Ident::new("gist")));
+                assert_eq!(c.elements.len(), 1);
+                assert_eq!(
+                    c.elements[0].column.column.expr,
+                    Expr::Identifier(Ident::new("room"))
+                );
+                assert_eq!(c.elements[0].operator.to_string(), "=");
+                assert!(c.elements[0].column.operator_class.is_none());
+                assert!(c.include.is_empty());
+                assert!(c.where_clause.is_none());
+                assert!(c.characteristics.is_none());
+            }
+            other => panic!("expected single Exclude constraint, got {other:?}"),
+        },
+        other => panic!("expected CreateTable, got {other:?}"),
+    }
+
+    for sql in [
+        "CREATE TABLE t (col INT, EXCLUDE (col WITH =))",
+        "CREATE TABLE t (room INT, during INT, EXCLUDE USING gist (room WITH =, during WITH &&))",
+        "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =) INCLUDE (col))",
+        "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =) WHERE (col > 0))",
+        "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =) DEFERRABLE INITIALLY DEFERRED)",
+        "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =) NOT DEFERRABLE INITIALLY IMMEDIATE)",
+        "CREATE TABLE t (col INT, EXCLUDE USING btree (col ASC NULLS LAST WITH =))",
+        "CREATE TABLE t (col INT, EXCLUDE USING btree (col DESC NULLS FIRST WITH =))",
+        "CREATE TABLE t (col TEXT, EXCLUDE USING gist (col text_pattern_ops WITH =))",
+        "CREATE TABLE t (name TEXT, EXCLUDE USING gist ((lower(name)) text_pattern_ops WITH =))",
+        "CREATE TABLE t (name TEXT, EXCLUDE USING btree (name COLLATE \"C\" WITH =))",
+        "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH OPERATOR(pg_catalog.=)))",
+        "CREATE TABLE t (col INT, CONSTRAINT c EXCLUDE USING gist (col ASC WITH OPERATOR(pg_catalog.=)))",
+        "CREATE TABLE t (CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =, during WITH &&) INCLUDE (id) WHERE (active = true))",
+        "ALTER TABLE t ADD CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =)",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+
+    // Error cases: malformed EXCLUDE syntax must be rejected with a useful
+    // message rather than silently accepted.
+    for (sql, expected_message) in [
+        (
+            "CREATE TABLE t (CONSTRAINT c EXCLUDE USING gist (col))",
+            "Expected: WITH, found: )",
+        ),
+        (
+            "CREATE TABLE t (CONSTRAINT c EXCLUDE USING gist ())",
+            "Expected: an expression, found: )",
+        ),
+        (
+            "CREATE TABLE t (CONSTRAINT c EXCLUDE USING gist (col WITH))",
+            "Expected: ',' or ')' after column definition, found: EOF",
+        ),
+        (
+            "CREATE TABLE t (CONSTRAINT c EXCLUDE foo)",
+            "Expected: (, found: foo",
+        ),
+    ] {
+        let result = dialects.parse_sql_statements(sql);
+        assert_eq!(
+            ParserError::ParserError(expected_message.to_string()),
+            result.unwrap_err()
+        );
+    }
+
+    // Dialects that do not opt in via `supports_exclude_constraint` must
+    // refuse to parse `EXCLUDE` constraints.
+    let unsupported = all_dialects_where(|d| !d.supports_exclude_constraint());
+    let sql = "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =))";
+    for dialect in unsupported.dialects {
+        let parser = TestedDialects::new(vec![dialect]);
+        assert!(
+            parser.parse_sql_statements(sql).is_err(),
+            "dialect unexpectedly accepted EXCLUDE: {sql}"
+        );
+    }
 }
 
 #[test]
@@ -4231,6 +4317,15 @@ fn parse_custom_operator() {
                 (Value::SingleQuotedString("^(table)$".into())).with_empty_span()
             ))
         })
+    );
+}
+
+#[test]
+fn parse_operator_empty_parens_rejected() {
+    let result = pg_and_generic().parse_sql_statements("SELECT a OPERATOR() b");
+    assert_eq!(
+        ParserError::ParserError("Expected: operator name, found: )".to_string()),
+        result.unwrap_err()
     );
 }
 
@@ -9311,6 +9406,33 @@ fn parse_lock_table() {
                 assert!(!lock.nowait);
             }
             _ => panic!("Expected Lock, got: {stmt:?}"),
+        }
+    }
+}
+
+#[test]
+fn exclude_as_column_name() {
+    // `EXCLUDE` is a non-reserved keyword, so it stays usable as a column name
+    // even on dialects that parse `EXCLUDE` constraints: a bare `exclude` not
+    // followed by `USING` or `(` must not be mistaken for a constraint.
+    let sql = "CREATE TABLE t (exclude INT)";
+    for dialect in [
+        Box::new(MySqlDialect {}) as Box<dyn Dialect>,
+        Box::new(SQLiteDialect {}),
+        Box::new(PostgreSqlDialect {}),
+        Box::new(GenericDialect {}),
+    ] {
+        let type_name = format!("{dialect:?}");
+        let parser = TestedDialects::new(vec![dialect]);
+        let stmts = parser
+            .parse_sql_statements(sql)
+            .unwrap_or_else(|e| panic!("{type_name} failed to parse {sql}: {e}"));
+        match &stmts[0] {
+            Statement::CreateTable(create_table) => {
+                assert_eq!(create_table.columns.len(), 1);
+                assert_eq!(create_table.columns[0].name.value, "exclude");
+            }
+            other => panic!("{type_name}: expected CreateTable, got {other:?}"),
         }
     }
 }

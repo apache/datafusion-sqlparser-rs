@@ -50,4 +50,12 @@ impl Dialect for DorisDialect {
     fn supports_numeric_prefix(&self) -> bool {
         true
     }
+
+    fn supports_parenthesized_auto_increment_column_option(&self) -> bool {
+        true
+    }
+
+    fn supports_column_aggregation_function_option(&self) -> bool {
+        true
+    }
 }

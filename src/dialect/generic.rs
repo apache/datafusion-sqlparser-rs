@@ -173,6 +173,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_column_aggregation_function_option(&self) -> bool {
+        true
+    }
+
     fn supports_named_fn_args_with_assignment_operator(&self) -> bool {
         true
     }

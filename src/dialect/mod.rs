@@ -1228,6 +1228,18 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `AUTO_INCREMENT` with an optional
+    /// parenthesized start value in column definitions.
+    fn supports_parenthesized_auto_increment_column_option(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports aggregate column option functions in
+    /// `CREATE TABLE`, such as `SUM`, `REPLACE`, or `BITMAP_UNION`.
+    fn supports_column_aggregation_function_option(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect accepts a comma-separated list of table-level
     /// options placed between the table name and the column-list parenthesis, e.g.
     ///

@@ -2269,10 +2269,56 @@ pub struct WindowSpec {
     pub window_name: Option<Ident>,
     /// `OVER (PARTITION BY ...)`
     pub partition_by: Vec<Expr>,
+    /// The kind of partitioning clause used in the window specification.
+    pub partition_by_kind: WindowPartitionByKind,
     /// `OVER (ORDER BY ...)`
     pub order_by: Vec<OrderByExpr>,
+    /// The kind of ordering clause used in the window specification.
+    pub order_by_kind: WindowOrderByKind,
     /// `OVER (window frame)`
     pub window_frame: Option<WindowFrame>,
+}
+
+/// The kind of partitioning clause in a window specification.
+#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum WindowPartitionByKind {
+    /// `PARTITION BY`
+    #[default]
+    Partition,
+    /// Hive `DISTRIBUTE BY`
+    Distribute,
+}
+
+impl fmt::Display for WindowPartitionByKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            Self::Partition => "PARTITION BY",
+            Self::Distribute => "DISTRIBUTE BY",
+        })
+    }
+}
+
+/// The kind of ordering clause in a window specification.
+#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum WindowOrderByKind {
+    /// `ORDER BY`
+    #[default]
+    Order,
+    /// Hive `SORT BY`
+    Sort,
+}
+
+impl fmt::Display for WindowOrderByKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            Self::Order => "ORDER BY",
+            Self::Sort => "SORT BY",
+        })
+    }
 }
 
 impl fmt::Display for WindowSpec {
@@ -2292,7 +2338,8 @@ impl fmt::Display for WindowSpec {
             is_first = false;
             write!(
                 f,
-                "PARTITION BY {}",
+                "{} {}",
+                self.partition_by_kind,
                 display_comma_separated(&self.partition_by)
             )?;
         }
@@ -2301,7 +2348,12 @@ impl fmt::Display for WindowSpec {
                 SpaceOrNewline.fmt(f)?;
             }
             is_first = false;
-            write!(f, "ORDER BY {}", display_comma_separated(&self.order_by))?;
+            write!(
+                f,
+                "{} {}",
+                self.order_by_kind,
+                display_comma_separated(&self.order_by)
+            )?;
         }
         if let Some(window_frame) = &self.window_frame {
             if !is_first {

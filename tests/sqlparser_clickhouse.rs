@@ -293,6 +293,34 @@ fn parse_create_table_partition_by_after_order_by() {
 }
 
 #[test]
+fn parse_create_table_engine_order_by_is_not_doris_engine() {
+    match clickhouse_and_generic()
+        .verified_stmt("CREATE TABLE x (a INT) ENGINE = MergeTree ORDER BY a")
+    {
+        Statement::CreateTable(CreateTable {
+            table_model,
+            table_options,
+            order_by,
+            ..
+        }) => {
+            assert!(table_model.is_none());
+            assert!(order_by.is_some());
+            match table_options {
+                CreateTableOptions::Plain(options) => assert!(options.contains(
+                    &SqlOption::NamedParenthesizedList(NamedParenthesizedList {
+                        key: Ident::new("ENGINE"),
+                        name: Some(Ident::new("MergeTree")),
+                        values: vec![],
+                    })
+                )),
+                other => panic!("Expected Plain table options, got {:?}", other),
+            }
+        }
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
 fn parse_insert_into_function() {
     clickhouse().verified_stmt(r#"INSERT INTO TABLE FUNCTION remote('localhost', default.simple_table) VALUES (100, 'inserted via remote()')"#);
     clickhouse().verified_stmt(r#"INSERT INTO FUNCTION remote('localhost', default.simple_table) VALUES (100, 'inserted via remote()')"#);

@@ -763,6 +763,7 @@ fn test_duckdb_union_datatype() {
             order_by: Default::default(),
             partition_by: Default::default(),
             cluster_by: Default::default(),
+            table_model: Default::default(),
             clustered_by: Default::default(),
             inherits: Default::default(),
             partition_of: Default::default(),

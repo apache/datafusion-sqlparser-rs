@@ -5692,6 +5692,7 @@ fn parse_create_table_with_partition_by() {
     match pg_and_generic().verified_stmt(sql) {
         Statement::CreateTable(create_table) => {
             assert_eq!("t1", create_table.name.to_string());
+            assert!(create_table.table_model.is_none());
             assert_eq!(
                 vec![
                     ColumnDef {
@@ -6721,6 +6722,7 @@ fn parse_trigger_related_functions() {
             order_by: None,
             partition_by: None,
             cluster_by: None,
+            table_model: None,
             clustered_by: None,
             inherits: None,
             partition_of: None,

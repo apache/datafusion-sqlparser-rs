@@ -29,7 +29,7 @@ use crate::ast::{
     DistStyle, Expr, FileFormat, ForValues, HiveDistributionStyle, HiveFormat, Ident,
     InitializeKind, ObjectName, OnCommit, OneOrManyWithParens, Query, RefreshModeKind,
     RowAccessPolicy, Statement, StorageLifecyclePolicy, StorageSerializationPolicy,
-    TableConstraint, TableVersion, Tag, WithData, WrappedCollection,
+    TableConstraint, TableModel, TableVersion, Tag, WithData, WrappedCollection,
 };
 
 use crate::parser::ParserError;
@@ -123,6 +123,8 @@ pub struct CreateTableBuilder {
     pub partition_by: Option<Box<Expr>>,
     /// Optional `CLUSTER BY` expressions.
     pub cluster_by: Option<WrappedCollection<Vec<Expr>>>,
+    /// Optional grouped table model clauses.
+    pub table_model: Option<TableModel>,
     /// Optional `CLUSTERED BY` clause.
     pub clustered_by: Option<ClusteredBy>,
     /// Optional parent tables (`INHERITS`).
@@ -227,6 +229,7 @@ impl CreateTableBuilder {
             order_by: None,
             partition_by: None,
             cluster_by: None,
+            table_model: None,
             clustered_by: None,
             inherits: None,
             partition_of: None,
@@ -402,6 +405,11 @@ impl CreateTableBuilder {
     /// Set `CLUSTER BY` expression(s).
     pub fn cluster_by(mut self, cluster_by: Option<WrappedCollection<Vec<Expr>>>) -> Self {
         self.cluster_by = cluster_by;
+        self
+    }
+    /// Set grouped table model clauses.
+    pub fn table_model(mut self, table_model: Option<TableModel>) -> Self {
+        self.table_model = table_model;
         self
     }
     /// Set `CLUSTERED BY` clause.
@@ -622,6 +630,7 @@ impl CreateTableBuilder {
             order_by: self.order_by,
             partition_by: self.partition_by,
             cluster_by: self.cluster_by,
+            table_model: self.table_model,
             clustered_by: self.clustered_by,
             inherits: self.inherits,
             partition_of: self.partition_of,
@@ -707,6 +716,7 @@ impl From<CreateTable> for CreateTableBuilder {
             order_by: table.order_by,
             partition_by: table.partition_by,
             cluster_by: table.cluster_by,
+            table_model: table.table_model,
             clustered_by: table.clustered_by,
             inherits: table.inherits,
             partition_of: table.partition_of,
@@ -757,7 +767,12 @@ pub(crate) struct CreateTableConfiguration {
 #[cfg(test)]
 mod tests {
     use crate::ast::helpers::stmt_create_table::CreateTableBuilder;
-    use crate::ast::{Ident, ObjectName, Statement};
+    use crate::ast::{
+        BucketCount, Expr, Ident, ObjectName, SqlOption, Statement, TableDistribution,
+        TableKeyModel, TableKeyModelKind, TableModel, TablePartitioning,
+        TablePartitioningDefinition, TablePartitioningEntry, TablePartitioningKind,
+        TablePartitioningValues, Value,
+    };
     use crate::parser::ParserError;
 
     #[test]
@@ -784,5 +799,54 @@ mod tests {
                 "Expected create table statement, but received: COMMIT".to_owned()
             )
         );
+    }
+
+    #[test]
+    fn test_table_model_builder_fields_round_trip() {
+        let key = Ident::new("k");
+        let partition_expr = Expr::Identifier(Ident::new("dt"));
+        let partition_value = Expr::Value(Value::SingleQuotedString("2024-01-01".into()).into());
+        let property_value = Expr::Value(Value::SingleQuotedString("1".into()).into());
+
+        let builder = CreateTableBuilder::new(ObjectName::from(vec![Ident::new("t")])).table_model(
+            Some(TableModel {
+                engine: Some(Ident::new("OLAP")),
+                key_model: Some(TableKeyModel {
+                    kind: TableKeyModelKind::Aggregate,
+                    columns: vec![key.clone()],
+                    order_by: None,
+                }),
+                comment: None,
+                partitioning: Some(TablePartitioning {
+                    auto: true,
+                    kind: TablePartitioningKind::Range,
+                    columns: vec![partition_expr],
+                    partitions: vec![TablePartitioningEntry::Definition(
+                        TablePartitioningDefinition {
+                            if_not_exists: false,
+                            name: Ident::new("p1"),
+                            values: TablePartitioningValues::LessThan(vec![partition_value]),
+                            properties: vec![],
+                        },
+                    )],
+                }),
+                distribution: Some(TableDistribution::Hash {
+                    columns: vec![key.clone()],
+                    buckets: Some(BucketCount::Auto),
+                }),
+                properties: vec![SqlOption::KeyValue {
+                    key: Ident::new("replication_num"),
+                    value: property_value,
+                }],
+            }),
+        );
+
+        let create_table = builder.clone().build();
+
+        assert_eq!(
+            create_table.to_string(),
+            "CREATE TABLE t () ENGINE = OLAP AGGREGATE KEY(k) AUTO PARTITION BY RANGE(dt) (PARTITION p1 VALUES LESS THAN ('2024-01-01')) DISTRIBUTED BY HASH(k) BUCKETS AUTO PROPERTIES (replication_num = '1')"
+        );
+        assert_eq!(builder, CreateTableBuilder::from(create_table));
     }
 }

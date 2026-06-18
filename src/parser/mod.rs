@@ -10093,17 +10093,7 @@ impl<'a> Parser<'a> {
             ));
         }
 
-        // A missing operator would otherwise stringify the next structural
-        // delimiter (`,`, `)`, `;`, EOF) as the operator. The trailing RParen
-        // still rejects it downstream, but this points the error at the missing
-        // operator instead of a later token.
         let operator_token = self.next_token();
-        if matches!(
-            operator_token.token,
-            Token::EOF | Token::RParen | Token::Comma | Token::SemiColon
-        ) {
-            return self.expected("exclusion operator", operator_token);
-        }
         Ok(ExcludeConstraintOperator::Token(
             operator_token.token.to_string(),
         ))

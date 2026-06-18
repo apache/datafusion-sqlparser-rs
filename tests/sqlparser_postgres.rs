@@ -652,7 +652,7 @@ fn parse_exclude_constraint() {
         ),
         (
             "CREATE TABLE t (CONSTRAINT c EXCLUDE USING gist (col WITH))",
-            "Expected: exclusion operator, found: )",
+            "Expected: ',' or ')' after column definition, found: EOF",
         ),
         (
             "CREATE TABLE t (CONSTRAINT c EXCLUDE foo)",

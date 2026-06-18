@@ -27,7 +27,6 @@ use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MySqlDialect};
 use sqlparser::parser::{ParserError, ParserOptions};
 use sqlparser::tokenizer::Span;
-use sqlparser::tokenizer::Token;
 use test_utils::*;
 
 #[macro_use]
@@ -661,9 +660,7 @@ fn parse_create_table_auto_increment() {
                         },
                         ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::DialectSpecific(vec![Token::make_keyword(
-                                "AUTO_INCREMENT"
-                            )]),
+                            option: ColumnOption::AutoIncrement(None),
                         },
                     ],
                 }],
@@ -770,9 +767,7 @@ fn parse_create_table_primary_and_unique_key() {
                                 },
                                 ColumnOptionDef {
                                     name: None,
-                                    option: ColumnOption::DialectSpecific(vec![
-                                        Token::make_keyword("AUTO_INCREMENT")
-                                    ]),
+                                    option: ColumnOption::AutoIncrement(None),
                                 },
                             ],
                         },

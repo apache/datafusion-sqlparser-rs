@@ -2280,12 +2280,11 @@ pub struct WindowSpec {
 }
 
 /// The kind of partitioning clause in a window specification.
-#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum WindowPartitionByKind {
     /// `PARTITION BY`
-    #[default]
     Partition,
     /// Hive `DISTRIBUTE BY`
     Distribute,

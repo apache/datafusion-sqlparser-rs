@@ -2300,12 +2300,11 @@ impl fmt::Display for WindowPartitionByKind {
 }
 
 /// The kind of ordering clause in a window specification.
-#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum WindowOrderByKind {
     /// `ORDER BY`
-    #[default]
     Order,
     /// Hive `SORT BY`
     Sort,

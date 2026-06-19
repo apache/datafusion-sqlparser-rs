@@ -18292,12 +18292,22 @@ fn key_value_option_statements_do_not_swallow_following_statement() {
     // terminator, otherwise any following statement fails to parse. This covers
     // every unparenthesized caller of `parse_key_value_options`: `CREATE USER`
     // and both `ALTER USER ... SET` forms.
+
+    // `CREATE USER` parses identically across all dialects.
+    let statements = all_dialects()
+        .parse_sql_statements("CREATE USER user1; SELECT 1")
+        .unwrap();
+    assert_eq!(statements.len(), 2);
+
+    // `ALTER USER ... SET` routes through the same key-value option list, but
+    // PostgreSQL parses `ALTER USER` as a synonym for `ALTER ROLE` (a different
+    // code path), so scope these to dialects that keep the Snowflake grammar.
+    let dialects = all_dialects_except(|d| d.supports_alter_user_as_alter_role());
     for sql in [
-        "CREATE USER user1; SELECT 1",
         "ALTER USER user1 SET x = 'y'; SELECT 1",
         "ALTER USER user1 SET TAG t = 'v'; SELECT 1",
     ] {
-        let statements = all_dialects().parse_sql_statements(sql).unwrap();
+        let statements = dialects.parse_sql_statements(sql).unwrap();
         assert_eq!(statements.len(), 2, "{sql}");
     }
 }

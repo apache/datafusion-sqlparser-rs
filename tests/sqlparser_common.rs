@@ -18292,12 +18292,22 @@ fn key_value_option_statements_do_not_swallow_following_statement() {
     // terminator, otherwise any following statement fails to parse. This covers
     // every unparenthesized caller of `parse_key_value_options`: `CREATE USER`
     // and both `ALTER USER ... SET` forms.
+
+    // `CREATE USER` parses identically across all dialects.
+    let statements = all_dialects()
+        .parse_sql_statements("CREATE USER user1; SELECT 1")
+        .unwrap();
+    assert_eq!(statements.len(), 2);
+
+    // `ALTER USER ... SET` routes through the same key-value option list, but
+    // PostgreSQL parses `ALTER USER` as a synonym for `ALTER ROLE` (a different
+    // code path), so scope these to dialects that keep the Snowflake grammar.
+    let dialects = all_dialects_except(|d| d.supports_alter_user_as_alter_role());
     for sql in [
-        "CREATE USER user1; SELECT 1",
         "ALTER USER user1 SET x = 'y'; SELECT 1",
         "ALTER USER user1 SET TAG t = 'v'; SELECT 1",
     ] {
-        let statements = all_dialects().parse_sql_statements(sql).unwrap();
+        let statements = dialects.parse_sql_statements(sql).unwrap();
         assert_eq!(statements.len(), 2, "{sql}");
     }
 }
@@ -18839,9 +18849,10 @@ fn parse_create_index_different_using_positions() {
 
 #[test]
 fn test_parse_alter_user() {
-    verified_stmt("ALTER USER u1");
-    verified_stmt("ALTER USER IF EXISTS u1");
-    let stmt = verified_stmt("ALTER USER IF EXISTS u1 RENAME TO u2");
+    let dialects = all_dialects_except(|d| d.supports_alter_user_as_alter_role());
+    dialects.verified_stmt("ALTER USER u1");
+    dialects.verified_stmt("ALTER USER IF EXISTS u1");
+    let stmt = dialects.verified_stmt("ALTER USER IF EXISTS u1 RENAME TO u2");
     match stmt {
         Statement::AlterUser(alter) => {
             assert!(alter.if_exists);
@@ -18850,35 +18861,35 @@ fn test_parse_alter_user() {
         }
         _ => unreachable!(),
     }
-    verified_stmt("ALTER USER IF EXISTS u1 RESET PASSWORD");
-    verified_stmt("ALTER USER IF EXISTS u1 ABORT ALL QUERIES");
-    verified_stmt(
+    dialects.verified_stmt("ALTER USER IF EXISTS u1 RESET PASSWORD");
+    dialects.verified_stmt("ALTER USER IF EXISTS u1 ABORT ALL QUERIES");
+    dialects.verified_stmt(
         "ALTER USER IF EXISTS u1 ADD DELEGATED AUTHORIZATION OF ROLE r1 TO SECURITY INTEGRATION i1",
     );
-    verified_stmt("ALTER USER IF EXISTS u1 REMOVE DELEGATED AUTHORIZATION OF ROLE r1 FROM SECURITY INTEGRATION i1");
-    verified_stmt(
+    dialects.verified_stmt("ALTER USER IF EXISTS u1 REMOVE DELEGATED AUTHORIZATION OF ROLE r1 FROM SECURITY INTEGRATION i1");
+    dialects.verified_stmt(
         "ALTER USER IF EXISTS u1 REMOVE DELEGATED AUTHORIZATIONS FROM SECURITY INTEGRATION i1",
     );
-    verified_stmt("ALTER USER IF EXISTS u1 ENROLL MFA");
-    let stmt = verified_stmt("ALTER USER u1 SET DEFAULT_MFA_METHOD PASSKEY");
+    dialects.verified_stmt("ALTER USER IF EXISTS u1 ENROLL MFA");
+    let stmt = dialects.verified_stmt("ALTER USER u1 SET DEFAULT_MFA_METHOD PASSKEY");
     match stmt {
         Statement::AlterUser(alter) => {
             assert_eq!(alter.set_default_mfa_method, Some(MfaMethodKind::PassKey))
         }
         _ => unreachable!(),
     }
-    verified_stmt("ALTER USER u1 SET DEFAULT_MFA_METHOD TOTP");
-    verified_stmt("ALTER USER u1 SET DEFAULT_MFA_METHOD DUO");
-    let stmt = verified_stmt("ALTER USER u1 REMOVE MFA METHOD PASSKEY");
+    dialects.verified_stmt("ALTER USER u1 SET DEFAULT_MFA_METHOD TOTP");
+    dialects.verified_stmt("ALTER USER u1 SET DEFAULT_MFA_METHOD DUO");
+    let stmt = dialects.verified_stmt("ALTER USER u1 REMOVE MFA METHOD PASSKEY");
     match stmt {
         Statement::AlterUser(alter) => {
             assert_eq!(alter.remove_mfa_method, Some(MfaMethodKind::PassKey))
         }
         _ => unreachable!(),
     }
-    verified_stmt("ALTER USER u1 REMOVE MFA METHOD TOTP");
-    verified_stmt("ALTER USER u1 REMOVE MFA METHOD DUO");
-    let stmt = verified_stmt("ALTER USER u1 MODIFY MFA METHOD PASSKEY SET COMMENT 'abc'");
+    dialects.verified_stmt("ALTER USER u1 REMOVE MFA METHOD TOTP");
+    dialects.verified_stmt("ALTER USER u1 REMOVE MFA METHOD DUO");
+    let stmt = dialects.verified_stmt("ALTER USER u1 MODIFY MFA METHOD PASSKEY SET COMMENT 'abc'");
     match stmt {
         Statement::AlterUser(alter) => {
             assert_eq!(
@@ -18891,10 +18902,10 @@ fn test_parse_alter_user() {
         }
         _ => unreachable!(),
     }
-    verified_stmt("ALTER USER u1 ADD MFA METHOD OTP");
-    verified_stmt("ALTER USER u1 ADD MFA METHOD OTP COUNT = 8");
+    dialects.verified_stmt("ALTER USER u1 ADD MFA METHOD OTP");
+    dialects.verified_stmt("ALTER USER u1 ADD MFA METHOD OTP COUNT = 8");
 
-    let stmt = verified_stmt("ALTER USER u1 SET AUTHENTICATION POLICY p1");
+    let stmt = dialects.verified_stmt("ALTER USER u1 SET AUTHENTICATION POLICY p1");
     match stmt {
         Statement::AlterUser(alter) => {
             assert_eq!(
@@ -18907,19 +18918,19 @@ fn test_parse_alter_user() {
         }
         _ => unreachable!(),
     }
-    verified_stmt("ALTER USER u1 SET PASSWORD POLICY p1");
-    verified_stmt("ALTER USER u1 SET SESSION POLICY p1");
-    let stmt = verified_stmt("ALTER USER u1 UNSET AUTHENTICATION POLICY");
+    dialects.verified_stmt("ALTER USER u1 SET PASSWORD POLICY p1");
+    dialects.verified_stmt("ALTER USER u1 SET SESSION POLICY p1");
+    let stmt = dialects.verified_stmt("ALTER USER u1 UNSET AUTHENTICATION POLICY");
     match stmt {
         Statement::AlterUser(alter) => {
             assert_eq!(alter.unset_policy, Some(UserPolicyKind::Authentication));
         }
         _ => unreachable!(),
     }
-    verified_stmt("ALTER USER u1 UNSET PASSWORD POLICY");
-    verified_stmt("ALTER USER u1 UNSET SESSION POLICY");
+    dialects.verified_stmt("ALTER USER u1 UNSET PASSWORD POLICY");
+    dialects.verified_stmt("ALTER USER u1 UNSET SESSION POLICY");
 
-    let stmt = verified_stmt("ALTER USER u1 SET TAG k1='v1'");
+    let stmt = dialects.verified_stmt("ALTER USER u1 SET TAG k1='v1'");
     match stmt {
         Statement::AlterUser(alter) => {
             assert_eq!(
@@ -18934,23 +18945,25 @@ fn test_parse_alter_user() {
         }
         _ => unreachable!(),
     }
-    verified_stmt("ALTER USER u1 SET TAG k1='v1', k2='v2'");
-    let stmt = verified_stmt("ALTER USER u1 UNSET TAG k1");
+    dialects.verified_stmt("ALTER USER u1 SET TAG k1='v1', k2='v2'");
+    let stmt = dialects.verified_stmt("ALTER USER u1 UNSET TAG k1");
     match stmt {
         Statement::AlterUser(alter) => {
             assert_eq!(alter.unset_tag, vec!["k1".to_string()]);
         }
         _ => unreachable!(),
     }
-    verified_stmt("ALTER USER u1 UNSET TAG k1, k2, k3");
+    dialects.verified_stmt("ALTER USER u1 UNSET TAG k1, k2, k3");
 
-    let dialects = all_dialects_where(|d| d.supports_boolean_literals());
-    dialects.one_statement_parses_to(
+    let bool_dialects = all_dialects_where(|d| {
+        d.supports_boolean_literals() && !d.supports_alter_user_as_alter_role()
+    });
+    bool_dialects.one_statement_parses_to(
         "ALTER USER u1 SET PASSWORD='secret', MUST_CHANGE_PASSWORD=TRUE, MINS_TO_UNLOCK=10",
         "ALTER USER u1 SET PASSWORD='secret', MUST_CHANGE_PASSWORD=true, MINS_TO_UNLOCK=10",
     );
 
-    let stmt = dialects.verified_stmt(
+    let stmt = bool_dialects.verified_stmt(
         "ALTER USER u1 SET PASSWORD='secret', MUST_CHANGE_PASSWORD=true, MINS_TO_UNLOCK=10",
     );
     match stmt {
@@ -18985,16 +18998,16 @@ fn test_parse_alter_user() {
         _ => unreachable!(),
     }
 
-    let stmt = verified_stmt("ALTER USER u1 UNSET PASSWORD");
+    let stmt = dialects.verified_stmt("ALTER USER u1 UNSET PASSWORD");
     match stmt {
         Statement::AlterUser(alter) => {
             assert_eq!(alter.unset_props, vec!["PASSWORD".to_string()]);
         }
         _ => unreachable!(),
     }
-    verified_stmt("ALTER USER u1 UNSET PASSWORD, MUST_CHANGE_PASSWORD, MINS_TO_UNLOCK");
+    dialects.verified_stmt("ALTER USER u1 UNSET PASSWORD, MUST_CHANGE_PASSWORD, MINS_TO_UNLOCK");
 
-    let stmt = verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL')");
+    let stmt = dialects.verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL')");
     match stmt {
         Statement::AlterUser(alter) => {
             assert_eq!(
@@ -19010,11 +19023,11 @@ fn test_parse_alter_user() {
         }
         _ => unreachable!(),
     }
-    verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=()");
-    verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('R1', 'R2', 'R3')");
-    verified_stmt("ALTER USER u1 SET PASSWORD='secret', DEFAULT_SECONDARY_ROLES=('ALL')");
-    verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL'), PASSWORD='secret'");
-    let stmt = verified_stmt(
+    dialects.verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=()");
+    dialects.verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('R1', 'R2', 'R3')");
+    dialects.verified_stmt("ALTER USER u1 SET PASSWORD='secret', DEFAULT_SECONDARY_ROLES=('ALL')");
+    dialects.verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL'), PASSWORD='secret'");
+    let stmt = dialects.verified_stmt(
         "ALTER USER u1 SET WORKLOAD_IDENTITY=(TYPE=AWS, ARN='arn:aws:iam::123456789:r1/')",
     );
     match stmt {
@@ -19048,13 +19061,13 @@ fn test_parse_alter_user() {
         }
         _ => unreachable!(),
     }
-    verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL'), PASSWORD='secret', WORKLOAD_IDENTITY=(TYPE=AWS, ARN='arn:aws:iam::123456789:r1/')");
+    dialects.verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL'), PASSWORD='secret', WORKLOAD_IDENTITY=(TYPE=AWS, ARN='arn:aws:iam::123456789:r1/')");
 
-    verified_stmt("ALTER USER u1 PASSWORD 'AAA'");
-    verified_stmt("ALTER USER u1 ENCRYPTED PASSWORD 'AAA'");
-    verified_stmt("ALTER USER u1 PASSWORD NULL");
+    dialects.verified_stmt("ALTER USER u1 PASSWORD 'AAA'");
+    dialects.verified_stmt("ALTER USER u1 ENCRYPTED PASSWORD 'AAA'");
+    dialects.verified_stmt("ALTER USER u1 PASSWORD NULL");
 
-    one_statement_parses_to(
+    dialects.one_statement_parses_to(
         "ALTER USER u1 WITH PASSWORD 'AAA'",
         "ALTER USER u1 PASSWORD 'AAA'",
     );

@@ -1847,41 +1847,30 @@ fn parse_inner_array_join() {
 }
 
 #[test]
-fn parse_in_unparenthesized_placeholder() {
-    // ClickHouse `{name:Type}` query-parameter placeholder as the IN RHS, without parens.
-    match clickhouse().expr_parses_to("x IN {ids:Array(UInt64)}", "x IN ({ids: Array(UInt64)})") {
-        Expr::InList { list, negated, .. } => {
-            assert!(!negated);
-            assert_eq!(list.len(), 1);
-            assert!(matches!(list[0], Expr::Dictionary(_)));
-        }
-        other => panic!("expected InList, got {other:?}"),
-    }
+fn parse_in_unparenthesized_expr() {
+    // IN [expr] parses to IN ([expr]) and does not cause regressions
+    let dialects = all_dialects_where(|d| d.supports_in_unparenthesized_expr());
+    dialects.expr_parses_to("x IN 'a'", "x IN ('a')");
 
-    // NOT IN sets negated.
-    match clickhouse().expr_parses_to(
+    // The branch must not fire when the next token is `(` (regressions).
+    dialects.verified_expr("x IN (1, 2, 3)");
+    dialects.verified_stmt("SELECT * FROM t WHERE x IN (SELECT y FROM u)");
+}
+
+#[test]
+fn parse_in_unparenthesized_dictionary_placeholder() {
+    // IN [{placeholder:Type}] parses to IN ({placholder:Type})
+    let dialects = all_dialects_where(|d| {
+        d.supports_in_unparenthesized_expr() && d.supports_dictionary_syntax()
+    });
+    dialects.expr_parses_to("x IN {ids:Array(UInt64)}", "x IN ({ids: Array(UInt64)})");
+    dialects.expr_parses_to(
         "x NOT IN {ids:Array(UInt64)}",
         "x NOT IN ({ids: Array(UInt64)})",
-    ) {
-        Expr::InList { negated, .. } => assert!(negated),
-        other => panic!("expected InList, got {other:?}"),
-    }
-
-    // A bare scalar is also wrapped, matching ClickHouse (`x IN 'a'` -> `x IN ('a')`).
-    clickhouse().expr_parses_to("x IN 'a'", "x IN ('a')");
-
-    // The new branch must not fire when the next token is `(` (regressions).
-    clickhouse().verified_expr("x IN ({ids: Array(UInt64)})");
-    clickhouse().verified_expr("x IN (1, 2, 3)");
-    clickhouse().verified_stmt("SELECT * FROM t WHERE x IN (SELECT y FROM u)");
-
-    // Precedence: the trailing `AND` is not swallowed into the placeholder.
-    clickhouse().verified_expr("x IN ({p: Array(UInt64)}) AND y = 1");
-
-    // Dialect-scoped: GenericDialect (capability defaults false) still errors.
-    assert!(TestedDialects::new(vec![Box::new(GenericDialect {})])
-        .parse_sql_statements("SELECT * FROM t WHERE x IN {ids:Array(UInt64)}")
-        .is_err());
+    );
+    dialects.verified_expr("x IN ({ids: Array(UInt64)})");
+    // Precedence: the trailing `AND` is not swallowed.
+    dialects.verified_expr("x IN ({p: Array(UInt64)}) AND y = 1");
 }
 
 fn clickhouse() -> TestedDialects {

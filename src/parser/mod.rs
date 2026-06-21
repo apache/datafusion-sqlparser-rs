@@ -4392,8 +4392,6 @@ impl<'a> Parser<'a> {
                 negated,
             });
         }
-        // ClickHouse accepts a bare expression as the IN RHS (e.g. `x IN 'a'` or
-        // a `{name:Type}` placeholder), wrapping it into a single-element list.
         if self.dialect.supports_in_unparenthesized_expr()
             && self.peek_token_ref().token != Token::LParen
         {

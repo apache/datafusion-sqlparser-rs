@@ -436,10 +436,7 @@ pub trait Dialect: Debug + Any {
     }
 
     /// Returns true if the dialect supports a bare expression as the right-hand
-    /// side of `IN`, without a parenthesized list — as in `x IN 'a'` or the
-    /// ClickHouse `{name:Type}` query-parameter placeholder `x IN {ids:Array(UInt64)}`.
-    /// The expression is wrapped into a single-element list, matching ClickHouse,
-    /// which reformats `x IN 'a'` to `x IN ('a')`.
+    /// side of `IN`, without a parenthesized list — as in `x IN 'a'`.
     fn supports_in_unparenthesized_expr(&self) -> bool {
         false
     }

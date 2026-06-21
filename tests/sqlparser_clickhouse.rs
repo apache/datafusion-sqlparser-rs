@@ -1849,28 +1849,24 @@ fn parse_inner_array_join() {
 #[test]
 fn parse_in_unparenthesized_expr() {
     // IN [expr] parses to IN ([expr]) and does not cause regressions
-    let dialects = all_dialects_where(|d| d.supports_in_unparenthesized_expr());
-    dialects.expr_parses_to("x IN 'a'", "x IN ('a')");
+    clickhouse().expr_parses_to("x IN 'a'", "x IN ('a')");
 
     // The branch must not fire when the next token is `(` (regressions).
-    dialects.verified_expr("x IN (1, 2, 3)");
-    dialects.verified_stmt("SELECT * FROM t WHERE x IN (SELECT y FROM u)");
+    clickhouse().verified_expr("x IN (1, 2, 3)");
+    clickhouse().verified_stmt("SELECT * FROM t WHERE x IN (SELECT y FROM u)");
 }
 
 #[test]
 fn parse_in_unparenthesized_dictionary_placeholder() {
     // IN [{placeholder:Type}] parses to IN ({placholder:Type})
-    let dialects = all_dialects_where(|d| {
-        d.supports_in_unparenthesized_expr() && d.supports_dictionary_syntax()
-    });
-    dialects.expr_parses_to("x IN {ids:Array(UInt64)}", "x IN ({ids: Array(UInt64)})");
-    dialects.expr_parses_to(
+    clickhouse().expr_parses_to("x IN {ids:Array(UInt64)}", "x IN ({ids: Array(UInt64)})");
+    clickhouse().expr_parses_to(
         "x NOT IN {ids:Array(UInt64)}",
         "x NOT IN ({ids: Array(UInt64)})",
     );
-    dialects.verified_expr("x IN ({ids: Array(UInt64)})");
+    clickhouse().verified_expr("x IN ({ids: Array(UInt64)})");
     // Precedence: the trailing `AND` is not swallowed.
-    dialects.verified_expr("x IN ({p: Array(UInt64)}) AND y = 1");
+    clickhouse().verified_expr("x IN ({p: Array(UInt64)}) AND y = 1");
 }
 
 fn clickhouse() -> TestedDialects {

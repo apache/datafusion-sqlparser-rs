@@ -161,6 +161,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_alter_user_as_alter_role(&self) -> bool {
+        true
+    }
+
     fn prec_value(&self, prec: Precedence) -> u8 {
         match prec {
             Precedence::Period => PERIOD_PREC,

@@ -4642,6 +4642,56 @@ fn parse_alter_role() {
 }
 
 #[test]
+fn parse_alter_user() {
+    // `ALTER USER` is a PostgreSQL synonym for `ALTER ROLE`, so it round-trips to `ALTER ROLE`.
+    let canonical = "ALTER ROLE old_name RENAME TO new_name";
+    assert_eq!(
+        pg().one_statement_parses_to("ALTER USER old_name RENAME TO new_name", canonical),
+        Statement::AlterRole {
+            name: Ident::new("old_name"),
+            operation: AlterRoleOperation::RenameRole {
+                role_name: Ident::new("new_name"),
+            },
+        }
+    );
+
+    let canonical = "ALTER ROLE bob WITH SUPERUSER PASSWORD 'x' CONNECTION LIMIT 5";
+    assert_eq!(
+        pg().one_statement_parses_to(
+            "ALTER USER bob WITH SUPERUSER PASSWORD 'x' CONNECTION LIMIT 5",
+            canonical
+        ),
+        Statement::AlterRole {
+            name: Ident::new("bob"),
+            operation: AlterRoleOperation::WithOptions {
+                options: vec![
+                    RoleOption::SuperUser(true),
+                    RoleOption::Password(Password::Password(Expr::Value(
+                        Value::SingleQuotedString("x".into()).with_empty_span()
+                    ))),
+                    RoleOption::ConnectionLimit(Expr::value(number("5"))),
+                ]
+            },
+        }
+    );
+
+    assert_eq!(
+        pg().one_statement_parses_to(
+            "ALTER USER bob SET search_path TO public",
+            "ALTER ROLE bob SET search_path TO public"
+        ),
+        Statement::AlterRole {
+            name: Ident::new("bob"),
+            operation: AlterRoleOperation::Set {
+                config_name: ObjectName::from(vec![Ident::new("search_path")]),
+                config_value: SetConfigValue::Value(Expr::Identifier(Ident::new("public"))),
+                in_database: None,
+            },
+        }
+    );
+}
+
+#[test]
 fn parse_delimited_identifiers() {
     // check that quoted identifiers in any position remain quoted after serialization
     let select = pg().verified_only_select(

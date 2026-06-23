@@ -8840,6 +8840,19 @@ fn parse_drop_user() {
 }
 
 #[test]
+fn parse_create_warehouse() {
+    verified_stmt("CREATE WAREHOUSE my_wh");
+    verified_stmt("CREATE OR REPLACE WAREHOUSE IF NOT EXISTS my_wh");
+    verified_stmt("CREATE WAREHOUSE my_wh WAREHOUSE_SIZE='XSMALL' AUTO_SUSPEND=60");
+    one_statement_parses_to(
+        "CREATE WAREHOUSE my_wh WITH WAREHOUSE_SIZE = 'XSMALL' AUTO_SUSPEND = 60",
+        "CREATE WAREHOUSE my_wh WAREHOUSE_SIZE='XSMALL' AUTO_SUSPEND=60",
+    );
+    verified_stmt("DROP WAREHOUSE my_wh");
+    verified_stmt("DROP WAREHOUSE IF EXISTS my_wh");
+}
+
+#[test]
 fn parse_invalid_subquery_without_parens() {
     let res = parse_sql_statements("SELECT SELECT 1 FROM bar WHERE 1=1 FROM baz");
     assert_eq!(

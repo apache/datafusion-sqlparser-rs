@@ -4536,6 +4536,23 @@ pub enum Statement {
         comment: Option<String>,
     },
     /// ```sql
+    /// CREATE [ OR REPLACE ] WAREHOUSE [ IF NOT EXISTS ] <name>
+    ///   [ [ WITH ] <property> = <value> [ ... ] ]
+    /// ```
+    /// Snowflake-specific statement to create a virtual warehouse.
+    ///
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/create-warehouse>
+    CreateWarehouse {
+        /// `OR REPLACE` flag.
+        or_replace: bool,
+        /// `IF NOT EXISTS` flag.
+        if_not_exists: bool,
+        /// Warehouse name.
+        name: ObjectName,
+        /// Warehouse properties and parameters (e.g. `WAREHOUSE_SIZE = 'XSMALL'`).
+        options: KeyValueOptions,
+    },
+    /// ```sql
     /// ASSERT <condition> [AS <message>]
     /// ```
     Assert {
@@ -6258,6 +6275,23 @@ impl fmt::Display for Statement {
                 }
                 if let Some(comment) = comment {
                     write!(f, " COMMENT='{}'", comment)?;
+                }
+                Ok(())
+            }
+            Statement::CreateWarehouse {
+                or_replace,
+                if_not_exists,
+                name,
+                options,
+            } => {
+                write!(
+                    f,
+                    "CREATE {or_replace}WAREHOUSE {if_not_exists}{name}",
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                )?;
+                if !options.options.is_empty() {
+                    write!(f, " {options}")?;
                 }
                 Ok(())
             }
@@ -8579,6 +8613,8 @@ pub enum ObjectType {
     User,
     /// A stream.
     Stream,
+    /// A warehouse.
+    Warehouse,
 }
 
 impl fmt::Display for ObjectType {
@@ -8597,6 +8633,7 @@ impl fmt::Display for ObjectType {
             ObjectType::Type => "TYPE",
             ObjectType::User => "USER",
             ObjectType::Stream => "STREAM",
+            ObjectType::Warehouse => "WAREHOUSE",
         })
     }
 }

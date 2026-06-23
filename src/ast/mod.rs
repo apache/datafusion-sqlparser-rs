@@ -4034,6 +4034,15 @@ pub enum Statement {
     /// <https://www.postgresql.org/docs/current/sql-createcollation.html>
     CreateCollation(CreateCollation),
     /// ```sql
+    /// CREATE TEXT SEARCH { CONFIGURATION | DICTIONARY | PARSER | TEMPLATE } name ( option = value [, ...] )
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement.
+    /// - <https://www.postgresql.org/docs/current/sql-createtsconfig.html>
+    /// - <https://www.postgresql.org/docs/current/sql-createtsdictionary.html>
+    /// - <https://www.postgresql.org/docs/current/sql-createtsparser.html>
+    /// - <https://www.postgresql.org/docs/current/sql-createtstemplate.html>
+    CreateTextSearch(CreateTextSearch),
+    /// ```sql
     /// DROP EXTENSION [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
     /// ```
     /// Note: this is a PostgreSQL-specific statement.
@@ -5552,6 +5561,7 @@ impl fmt::Display for Statement {
             Statement::CreateIndex(create_index) => create_index.fmt(f),
             Statement::CreateExtension(create_extension) => write!(f, "{create_extension}"),
             Statement::CreateCollation(create_collation) => write!(f, "{create_collation}"),
+            Statement::CreateTextSearch(create_text_search) => write!(f, "{create_text_search}"),
             Statement::DropExtension(drop_extension) => write!(f, "{drop_extension}"),
             Statement::DropOperator(drop_operator) => write!(f, "{drop_operator}"),
             Statement::DropOperatorFamily(drop_operator_family) => {
@@ -12200,6 +12210,12 @@ impl From<CreateExtension> for Statement {
 impl From<CreateCollation> for Statement {
     fn from(c: CreateCollation) -> Self {
         Self::CreateCollation(c)
+    }
+}
+
+impl From<CreateTextSearch> for Statement {
+    fn from(c: CreateTextSearch) -> Self {
+        Self::CreateTextSearch(c)
     }
 }
 

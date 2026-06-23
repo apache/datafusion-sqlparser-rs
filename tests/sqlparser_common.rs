@@ -2375,13 +2375,43 @@ fn parse_in_unnest() {
 
 #[test]
 fn parse_in_error() {
-    // <expr> IN <expr> is no valid
+    // <expr> IN <expr> is no valid, except in dialects that accept an
+    // unparenthesized expression as the IN right-hand side (e.g. ClickHouse).
     let sql = "SELECT * FROM customers WHERE segment in segment";
-    let res = parse_sql_statements(sql);
+    let res =
+        all_dialects_except(|d| d.supports_in_unparenthesized_expr()).parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError("Expected: (, found: segment".to_string()),
         res.unwrap_err()
     );
+}
+
+#[test]
+fn parse_in_unparenthesized_expr() {
+    // Dialects supporting an unparenthesized IN right-hand side wrap a bare expression
+    // into a single-element list (e.g. `x IN 'a'` -> `x IN ('a')`).
+    let dialects = all_dialects_where(|d| d.supports_in_unparenthesized_expr());
+    dialects.expr_parses_to("x IN 'a'", "x IN ('a')");
+
+    // The branch must not fire when the next token is `(` (regressions).
+    dialects.verified_expr("x IN (1, 2, 3)");
+    dialects.verified_stmt("SELECT * FROM t WHERE x IN (SELECT y FROM u)");
+}
+
+#[test]
+fn parse_in_unparenthesized_dictionary_placeholder() {
+    // The `{name:Type}` placeholder form additionally requires dictionary syntax.
+    let dialects = all_dialects_where(|d| {
+        d.supports_in_unparenthesized_expr() && d.supports_dictionary_syntax()
+    });
+    dialects.expr_parses_to("x IN {ids:Array(UInt64)}", "x IN ({ids: Array(UInt64)})");
+    dialects.expr_parses_to(
+        "x NOT IN {ids:Array(UInt64)}",
+        "x NOT IN ({ids: Array(UInt64)})",
+    );
+    dialects.verified_expr("x IN ({ids: Array(UInt64)})");
+    // Precedence: the trailing `AND` is not swallowed.
+    dialects.verified_expr("x IN ({p: Array(UInt64)}) AND y = 1");
 }
 
 #[test]
@@ -10834,8 +10864,11 @@ fn parse_position() {
 
 #[test]
 fn parse_position_negative() {
+    // Dialects that accept an unparenthesized IN right-hand side (e.g. ClickHouse)
+    // report a different error here, so exclude them.
     let sql = "SELECT POSITION(foo IN) from bar";
-    let res = parse_sql_statements(sql);
+    let res =
+        all_dialects_except(|d| d.supports_in_unparenthesized_expr()).parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError("Expected: (, found: )".to_string()),
         res.unwrap_err()

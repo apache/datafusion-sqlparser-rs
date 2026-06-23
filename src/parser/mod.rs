@@ -9649,9 +9649,7 @@ impl<'a> Parser<'a> {
             && dialect_of!(self is MySqlDialect | GenericDialect)
         {
             // Support AUTO_INCREMENT for MySQL
-            Ok(Some(ColumnOption::DialectSpecific(vec![
-                Token::make_keyword("AUTO_INCREMENT"),
-            ])))
+            Ok(Some(ColumnOption::AutoIncrement(None)))
         } else if self.parse_keyword(Keyword::AUTOINCREMENT)
             && dialect_of!(self is SQLiteDialect |  GenericDialect)
         {

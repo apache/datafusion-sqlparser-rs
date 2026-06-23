@@ -19,6 +19,7 @@ mod ansi;
 mod bigquery;
 mod clickhouse;
 mod databricks;
+mod doris;
 mod duckdb;
 mod generic;
 mod hive;
@@ -43,6 +44,7 @@ pub use self::ansi::AnsiDialect;
 pub use self::bigquery::BigQueryDialect;
 pub use self::clickhouse::ClickHouseDialect;
 pub use self::databricks::DatabricksDialect;
+pub use self::doris::DorisDialect;
 pub use self::duckdb::DuckDbDialect;
 pub use self::generic::GenericDialect;
 pub use self::hive::HiveDialect;
@@ -1902,6 +1904,7 @@ pub fn dialect_from_str(dialect_name: impl AsRef<str>) -> Option<Box<dyn Dialect
         "bigquery" => Some(Box::new(BigQueryDialect)),
         "ansi" => Some(Box::new(AnsiDialect {})),
         "duckdb" => Some(Box::new(DuckDbDialect {})),
+        "doris" => Some(Box::new(DorisDialect {})),
         "databricks" => Some(Box::new(DatabricksDialect {})),
         "spark" | "sparksql" => Some(Box::new(SparkSqlDialect {})),
         "oracle" => Some(Box::new(OracleDialect {})),
@@ -1957,6 +1960,8 @@ mod tests {
         assert!(parse_dialect("ANSI").is::<AnsiDialect>());
         assert!(parse_dialect("duckdb").is::<DuckDbDialect>());
         assert!(parse_dialect("DuckDb").is::<DuckDbDialect>());
+        assert!(parse_dialect("doris").is::<DorisDialect>());
+        assert!(parse_dialect("Doris").is::<DorisDialect>());
         assert!(parse_dialect("DataBricks").is::<DatabricksDialect>());
         assert!(parse_dialect("databricks").is::<DatabricksDialect>());
         assert!(parse_dialect("teradata").is::<TeradataDialect>());

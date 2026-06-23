@@ -829,6 +829,7 @@ impl Spanned for RaiseStatementValue {
 /// - [ColumnOption::PrimaryKey]
 /// - [ColumnOption::Unique]
 /// - [ColumnOption::DialectSpecific]
+/// - [ColumnOption::AutoIncrement]
 /// - [ColumnOption::Generated]
 impl Spanned for ColumnOption {
     fn span(&self) -> Span {
@@ -856,6 +857,7 @@ impl Spanned for ColumnOption {
             ColumnOption::Tags(..) => Span::empty(),
             ColumnOption::Srid(..) => Span::empty(),
             ColumnOption::Invisible => Span::empty(),
+            ColumnOption::AutoIncrement(_) => Span::empty(),
         }
     }
 }

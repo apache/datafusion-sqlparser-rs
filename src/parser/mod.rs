@@ -18476,24 +18476,19 @@ impl<'a> Parser<'a> {
     }
 
     /// Returns true if the immediate tokens look like the
-    /// beginning of a subquery. `(SELECT ...`
+    /// beginning of a subquery. `(SELECT ...` or `((SELECT ...` etc.
     fn peek_subquery_start(&mut self) -> bool {
-        matches!(
-            self.peek_tokens_ref(),
-            [
-                TokenWithSpan {
-                    token: Token::LParen,
-                    ..
-                },
-                TokenWithSpan {
-                    token: Token::Word(Word {
-                        keyword: Keyword::SELECT,
-                        ..
-                    }),
-                    ..
-                },
-            ]
-        )
+        // Handle (SELECT, ((SELECT, (((SELECT, etc.
+        // This makes INSERT consistent with other contexts where nested
+        // parentheses around subqueries are handled by recursive descent.
+        let mut i = 0;
+        loop {
+            match &self.peek_nth_token_ref(i).token {
+                Token::LParen => i += 1,
+                Token::Word(w) if w.keyword == Keyword::SELECT => return i > 0,
+                _ => return false,
+            }
+        }
     }
 
     /// Returns true if the immediate tokens look like the

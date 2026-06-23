@@ -352,6 +352,14 @@ fn parse_insert_select_from_returning() {
 }
 
 #[test]
+fn parse_insert_nested_parenthesized_subquery() {
+    // The source query may be wrapped in one or more layers of parentheses;
+    // the leading parens must not be mistaken for a column list.
+    verified_stmt("INSERT INTO t ((SELECT 1))");
+    verified_stmt("INSERT INTO t (((SELECT 1)))");
+}
+
+#[test]
 fn parse_returning_as_column_alias() {
     verified_stmt("SELECT 1 AS RETURNING");
 }

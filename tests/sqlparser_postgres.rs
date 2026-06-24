@@ -792,6 +792,50 @@ fn parse_alter_table_constraint_using_index() {
 }
 
 #[test]
+fn parse_constraint_include_columns() {
+    // INCLUDE covering columns on PRIMARY KEY / UNIQUE table constraints.
+    // https://www.postgresql.org/docs/current/sql-createtable.html
+    pg_and_generic().verified_stmt(
+        "CREATE TABLE t (id INT, payload TEXT, CONSTRAINT t_pk PRIMARY KEY (id) INCLUDE (payload))",
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE TABLE t (id INT, email TEXT, payload TEXT, CONSTRAINT t_uk UNIQUE (email) INCLUDE (payload))",
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE TABLE t (a INT, b INT, c INT, d INT, CONSTRAINT t_pk PRIMARY KEY (a, b) INCLUDE (c, d))",
+    );
+    pg_and_generic()
+        .verified_stmt("ALTER TABLE t ADD CONSTRAINT t_pk PRIMARY KEY (id) INCLUDE (payload)");
+    pg_and_generic()
+        .verified_stmt("ALTER TABLE t ADD CONSTRAINT t_uk UNIQUE (email) INCLUDE (payload)");
+    pg_and_generic().verified_stmt(
+        "ALTER TABLE t ADD CONSTRAINT t_pk PRIMARY KEY (id) INCLUDE (payload) DEFERRABLE INITIALLY DEFERRED",
+    );
+
+    match pg_and_generic().verified_stmt(
+        "ALTER TABLE t ADD CONSTRAINT t_pk PRIMARY KEY (id) INCLUDE (payload, extra)",
+    ) {
+        Statement::AlterTable(alter_table) => match &alter_table.operations[0] {
+            AlterTableOperation::AddConstraint {
+                constraint: TableConstraint::PrimaryKey(pk),
+                ..
+            } => {
+                assert_eq!(pk.name.as_ref().unwrap().to_string(), "t_pk");
+                assert_eq!(
+                    pk.include
+                        .iter()
+                        .map(|i| i.value.clone())
+                        .collect::<Vec<_>>(),
+                    vec!["payload".to_string(), "extra".to_string()]
+                );
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_alter_table_disable() {
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE ROW LEVEL SECURITY");
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE RULE rule_name");

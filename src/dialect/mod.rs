@@ -1766,6 +1766,18 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports Common Scalar Expressions in a `WITH` clause.
+    ///
+    /// For example:
+    /// ```sql
+    /// WITH 42 AS answer SELECT answer FROM t
+    /// ```
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/sql-reference/statements/select/with#common-scalar-expressions)
+    fn supports_common_scalar_expressions(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports parenthesized multi-column
     /// aliases in SELECT items. For example:
     /// ```sql

@@ -47,7 +47,7 @@ use super::{
     ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
     SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
     TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Values, ViewColumnDef,
-    WhileStatement, WildcardAdditionalOptions, With, WithFill,
+    WhileStatement, WildcardAdditionalOptions, With, WithExpression, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -185,12 +185,19 @@ impl Spanned for With {
         let With {
             with_token,
             recursive: _, // bool
-            cte_tables,
+            exprs,
         } = self;
 
-        union_spans(
-            core::iter::once(with_token.0.span).chain(cte_tables.iter().map(|item| item.span())),
-        )
+        union_spans(core::iter::once(with_token.0.span).chain(exprs.iter().map(|item| item.span())))
+    }
+}
+
+impl Spanned for WithExpression {
+    fn span(&self) -> Span {
+        match self {
+            WithExpression::Cte(cte) => cte.span(),
+            WithExpression::Cse(cse) => cse.span(),
+        }
     }
 }
 
@@ -2728,8 +2735,12 @@ pub mod tests {
         );
 
         let query = test.0.parse_query().unwrap();
-        let cte_span = query.clone().with.unwrap().cte_tables[0].span();
-        let cte_query_span = query.clone().with.unwrap().cte_tables[0].query.span();
+        let cte = match &query.with.as_ref().unwrap().exprs[0] {
+            WithExpression::Cte(cte) => cte,
+            _ => panic!("expected a CTE"),
+        };
+        let cte_span = cte.span();
+        let cte_query_span = cte.query.span();
         let body_span = query.body.span();
 
         // the WITH keyboard is part of the query

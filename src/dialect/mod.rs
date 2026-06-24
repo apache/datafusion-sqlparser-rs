@@ -491,6 +491,18 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports ClickHouse-style positional tuple
+    /// element access such as `tup.1`, `arr[1].2`, or `(1, 2, 3).3`. When
+    /// enabled, the tokenizer emits a standalone `.` (instead of fusing it
+    /// into a decimal literal) when the previous token can be the left-hand
+    /// side of a tuple access an identifier, `]`, `)`, or another integer
+    /// already inside the chain.
+    ///
+    /// See <https://clickhouse.com/docs/sql-reference/functions/tuple-functions#tupleelement>
+    fn supports_tuple_element_access(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports numbers containing underscores, e.g. `10_000_000`
     fn supports_numeric_literal_underscores(&self) -> bool {
         false

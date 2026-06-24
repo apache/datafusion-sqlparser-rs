@@ -273,6 +273,32 @@ fn parse_table_factor_paren_chain(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmark parsing pathological nested function-call arguments that
+/// previously caused 2^N work in `parse_function_args`. Each positional
+/// argument was speculatively parsed as a named-argument name (a full
+/// expression), and when no `=>`/`:=` operator followed, rewound and
+/// re-parsed as a positional argument -- doubling work at every nesting
+/// level. PostgreSQL is used because it enables expression-named arguments.
+fn parse_function_call_arg_chain(c: &mut Criterion) {
+    let mut group = c.benchmark_group("parse_function_call_arg_chain");
+    let dialect = PostgreSqlDialect {};
+
+    for &n in &[10usize, 20, 30] {
+        let sql = String::from("SELECT ") + &"replace(".repeat(n) + "x" + &",'a','b')".repeat(n);
+
+        group.bench_function(format!("chain_{n}"), |b| {
+            b.iter(|| {
+                let _ = Parser::new(&dialect)
+                    .with_recursion_limit(256)
+                    .try_with_sql(std::hint::black_box(&sql))
+                    .and_then(|mut p| p.parse_statements());
+            });
+        });
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     basic_queries,
@@ -282,6 +308,7 @@ criterion_group!(
     parse_compound_keyword_chain,
     parse_prefix_keyword_call_chain,
     parse_prefix_case_chain,
-    parse_table_factor_paren_chain
+    parse_table_factor_paren_chain,
+    parse_function_call_arg_chain
 );
 criterion_main!(benches);

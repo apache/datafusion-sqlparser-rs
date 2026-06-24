@@ -2053,6 +2053,15 @@ impl Spanned for TableFactor {
                     .chain(columns.iter().map(|ilist| ilist.span()))
                     .chain(alias.as_ref().map(|alias| alias.span())),
             ),
+            TableFactor::UnpivotExpr {
+                expression,
+                value_alias,
+                attribute_alias,
+            } => union_spans(
+                core::iter::once(expression.span())
+                    .chain(core::iter::once(value_alias.span))
+                    .chain(attribute_alias.as_ref().map(|alias| alias.span)),
+            ),
             TableFactor::MatchRecognize {
                 table,
                 partition_by,

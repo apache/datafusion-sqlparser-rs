@@ -17479,6 +17479,109 @@ fn join_precedence() {
 }
 
 #[test]
+fn parse_left_join_chain_with_and_without_left_associativity() {
+    let query = "SELECT 'ORIGINAL' AS src, o.order_id, c.customer_id, p.product_id FROM orders AS o JOIN customers AS c LEFT JOIN products AS p ON p.order_id = o.order_id ORDER BY o.order_id, c.customer_id, p.product_id";
+
+    let generic_ast = Parser::parse_sql(&GenericDialect {}, query)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let generic_canonical = generic_ast.to_string();
+    println!("Generic AST:\n{generic_ast:#?}");
+    println!("Generic canonical:\n{generic_canonical}");
+
+    assert_eq!(
+        generic_canonical,
+        "SELECT 'ORIGINAL' AS src, o.order_id, c.customer_id, p.product_id FROM orders AS o JOIN customers AS c LEFT JOIN products AS p ON p.order_id = o.order_id ORDER BY o.order_id, c.customer_id, p.product_id"
+    );
+
+    let Statement::Query(generic_query) = &generic_ast else {
+        unreachable!()
+    };
+    let SetExpr::Select(generic_select) = generic_query.body.as_ref() else {
+        unreachable!()
+    };
+    let generic_from = only(&generic_select.from);
+    assert_eq!(generic_from.joins.len(), 2);
+
+    let snowflake_ast = Parser::parse_sql(&SnowflakeDialect {}, query)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let snowflake_canonical = snowflake_ast.to_string();
+    println!("Snowflake AST:\n{snowflake_ast:#?}");
+    println!("Snowflake canonical:\n{snowflake_canonical}");
+
+    assert_eq!(
+        snowflake_canonical,
+        "SELECT 'ORIGINAL' AS src, o.order_id, c.customer_id, p.product_id FROM orders AS o JOIN customers AS c LEFT JOIN products AS p ON p.order_id = o.order_id ORDER BY o.order_id, c.customer_id, p.product_id"
+    );
+
+    let Statement::Query(snowflake_query) = &snowflake_ast else {
+        unreachable!()
+    };
+    let SetExpr::Select(snowflake_select) = snowflake_query.body.as_ref() else {
+        unreachable!()
+    };
+    let snowflake_from = only(&snowflake_select.from);
+    assert_eq!(snowflake_from.joins.len(), 2);
+}
+
+
+#[test]
+fn parse_left_join_chain_with_and_without_left_associativity_cross_join() {
+    let query = "SELECT 'ORIGINAL' AS src, o.order_id, c.customer_id, p.product_id FROM orders AS o CROSS JOIN customers AS c LEFT JOIN products AS p ON p.order_id = o.order_id ORDER BY o.order_id, c.customer_id, p.product_id";
+
+    let generic_ast = Parser::parse_sql(&GenericDialect {}, query)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let generic_canonical = generic_ast.to_string();
+    println!("Generic AST:\n{generic_ast:#?}");
+    println!("Generic canonical:\n{generic_canonical}");
+
+    assert_eq!(
+        generic_canonical,
+        "SELECT 'ORIGINAL' AS src, o.order_id, c.customer_id, p.product_id FROM orders AS o CROSS JOIN customers AS c LEFT JOIN products AS p ON p.order_id = o.order_id ORDER BY o.order_id, c.customer_id, p.product_id"
+    );
+
+    let Statement::Query(generic_query) = &generic_ast else {
+        unreachable!()
+    };
+    let SetExpr::Select(generic_select) = generic_query.body.as_ref() else {
+        unreachable!()
+    };
+    let generic_from = only(&generic_select.from);
+    assert_eq!(generic_from.joins.len(), 2);
+
+    let snowflake_ast = Parser::parse_sql(&SnowflakeDialect {}, query)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let snowflake_canonical = snowflake_ast.to_string();
+    println!("Snowflake AST:\n{snowflake_ast:#?}");
+    println!("Snowflake canonical:\n{snowflake_canonical}");
+
+    assert_eq!(
+        snowflake_canonical,
+        "SELECT 'ORIGINAL' AS src, o.order_id, c.customer_id, p.product_id FROM orders AS o CROSS JOIN customers AS c LEFT JOIN products AS p ON p.order_id = o.order_id ORDER BY o.order_id, c.customer_id, p.product_id"
+    );
+
+    let Statement::Query(snowflake_query) = &snowflake_ast else {
+        unreachable!()
+    };
+    let SetExpr::Select(snowflake_select) = snowflake_query.body.as_ref() else {
+        unreachable!()
+    };
+    let snowflake_from = only(&snowflake_select.from);
+    assert_eq!(snowflake_from.joins.len(), 2);
+}
+
+#[test]
 fn test_nested_join_without_parentheses() {
     let query = "SELECT DISTINCT p.product_id FROM orders AS o INNER JOIN customers AS c INNER JOIN products AS p ON p.customer_id = c.customer_id ON c.order_id = o.order_id";
     assert_eq!(

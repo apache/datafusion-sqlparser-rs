@@ -19387,6 +19387,46 @@ fn parse_aliased_function_args() {
         .is_err());
 }
 
+#[test]
+fn parse_xmlparse() {
+    let dialects = all_dialects_where(|d| d.supports_xml_expressions());
+
+    let select = dialects.verified_only_select_with_canonical(
+        "SELECT xmlparse(content '<a/>')",
+        "SELECT XMLPARSE(CONTENT '<a/>')",
+    );
+    match &select.projection[0] {
+        UnnamedExpr(Expr::XmlParse(XmlParseExpr { mode, .. })) => {
+            assert_eq!(*mode, XmlParseMode::Content);
+        }
+        item => panic!("expected XmlParse expression, got {item:?}"),
+    }
+
+    let select = dialects.verified_only_select_with_canonical(
+        "SELECT xmlparse(document '<a/>')",
+        "SELECT XMLPARSE(DOCUMENT '<a/>')",
+    );
+    match &select.projection[0] {
+        UnnamedExpr(Expr::XmlParse(XmlParseExpr { mode, .. })) => {
+            assert_eq!(*mode, XmlParseMode::Document);
+        }
+        item => panic!("expected XmlParse expression, got {item:?}"),
+    }
+
+    // XMLPARSE requires a CONTENT or DOCUMENT mode.
+    assert!(dialects
+        .parse_sql_statements("SELECT xmlparse('<a/>')")
+        .is_err());
+
+    // On dialects without XML support, `xmlparse` stays a regular function
+    // and the special `CONTENT <expr>` syntax is rejected.
+    let others = all_dialects_except(|d| d.supports_xml_expressions());
+    others.verified_only_select("SELECT xmlparse(1)");
+    assert!(others
+        .parse_sql_statements("SELECT xmlparse(content '<a/>')")
+        .is_err());
+}
+
 /// Regression test for the 2^N parse-time blowup in `parse_compound_expr` on
 /// inputs like `IF a0.a1...aN.#`. The parse is run on a worker thread and the
 /// main thread asserts that it reports back within a generous timeout. Post-fix

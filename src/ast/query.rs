@@ -3715,8 +3715,11 @@ pub struct SelectInto {
     pub unlogged: bool,
     /// `TABLE` keyword present.
     pub table: bool,
-    /// Name of the target table.
-    pub name: ObjectName,
+    /// Target(s) of the `INTO` clause.
+    ///
+    /// [Postgres]: https://www.postgresql.org/docs/current/sql-selectinto.html
+    /// [MySQL]: https://dev.mysql.com/doc/refman/9.7/en/select-into.html
+    pub targets: Vec<Expr>,
 }
 
 impl fmt::Display for SelectInto {
@@ -3725,7 +3728,14 @@ impl fmt::Display for SelectInto {
         let unlogged = if self.unlogged { " UNLOGGED" } else { "" };
         let table = if self.table { " TABLE" } else { "" };
 
-        write!(f, "INTO{}{}{} {}", temporary, unlogged, table, self.name)
+        write!(
+            f,
+            "INTO{}{}{} {}",
+            temporary,
+            unlogged,
+            table,
+            display_comma_separated(&self.targets)
+        )
     }
 }
 

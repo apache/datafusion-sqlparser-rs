@@ -40,6 +40,8 @@ use core::{
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "visitor")]
+use core::ops::ControlFlow;
+#[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::{
@@ -247,7 +249,6 @@ impl<T> DerefMut for Parens<T> {
 /// An identifier, decomposed into its value or character data and the quote style.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Ident {
     /// The value of the identifier without quotes.
     pub value: String,
@@ -390,6 +391,22 @@ impl fmt::Display for Ident {
             None => f.write_str(&self.value),
             _ => panic!("unexpected quote style"),
         }
+    }
+}
+
+#[cfg(feature = "visitor")]
+impl Visit for Ident {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        visitor.pre_visit_ident(self)?;
+        visitor.post_visit_ident(self)
+    }
+}
+
+#[cfg(feature = "visitor")]
+impl VisitMut for Ident {
+    fn visit<V: VisitorMut>(&mut self, visitor: &mut V) -> ControlFlow<V::Break> {
+        visitor.pre_visit_ident(self)?;
+        visitor.post_visit_ident(self)
     }
 }
 

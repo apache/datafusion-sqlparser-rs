@@ -21,7 +21,7 @@
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::ops::ControlFlow;
 
-use crate::ast::{Expr, ObjectName, Query, Select, Statement, TableFactor, ValueWithSpan};
+use crate::ast::{Expr, Ident, ObjectName, Query, Select, Statement, TableFactor, ValueWithSpan};
 
 /// A type that can be visited by a [`Visitor`]. See [`Visitor`] for
 /// recursively visiting parsed SQL statements.
@@ -269,6 +269,16 @@ pub trait Visitor {
     fn post_visit_value(&mut self, _value: &ValueWithSpan) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
     }
+
+    /// Invoked for any identifiers that appear in the AST before visiting children
+    fn pre_visit_ident(&mut self, _ident: &Ident) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for any identifiers that appear in the AST after visiting children
+    fn post_visit_ident(&mut self, _ident: &Ident) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
 }
 
 /// A visitor that can be used to mutate an AST tree.
@@ -395,6 +405,16 @@ pub trait VisitorMut {
 
     /// Invoked for any statements that appear in the AST after visiting children
     fn post_visit_value(&mut self, _value: &mut ValueWithSpan) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for any identifiers that appear in the AST before visiting children
+    fn pre_visit_ident(&mut self, _ident: &mut Ident) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for any identifiers that appear in the AST after visiting children
+    fn post_visit_ident(&mut self, _ident: &mut Ident) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
     }
 }
@@ -1014,11 +1034,32 @@ mod tests {
         let flow = s.visit(&mut visitor);
         assert_eq!(flow, ControlFlow::Continue(()));
     }
+
+    #[derive(Default)]
+    struct IdentVisitor {
+        idents: Vec<String>,
+    }
+
+    impl Visitor for IdentVisitor {
+        type Break = ();
+
+        fn pre_visit_ident(&mut self, ident: &Ident) -> ControlFlow<Self::Break> {
+            self.idents.push(ident.value.clone());
+            ControlFlow::Continue(())
+        }
+    }
+
+    #[test]
+    fn test_pre_visit_ident() {
+        let mut visitor = IdentVisitor::default();
+        do_visit("SELECT a, b FROM t", &mut visitor);
+        assert_eq!(visitor.idents, vec!["a", "b", "t"]);
+    }
 }
 
 #[cfg(test)]
 mod visit_mut_tests {
-    use crate::ast::{Statement, Value, ValueWithSpan, VisitMut, VisitorMut};
+    use crate::ast::{Ident, Statement, Value, ValueWithSpan, VisitMut, VisitorMut};
     use crate::dialect::GenericDialect;
     use crate::parser::Parser;
     use crate::tokenizer::Tokenizer;
@@ -1078,5 +1119,24 @@ mod visit_mut_tests {
             let mutated = do_visit_mut(sql, &mut visitor);
             assert_eq!(mutated.to_string(), expected)
         }
+    }
+
+    #[derive(Default)]
+    struct IdentMutator;
+
+    impl VisitorMut for IdentMutator {
+        type Break = ();
+
+        fn pre_visit_ident(&mut self, ident: &mut Ident) -> ControlFlow<Self::Break> {
+            ident.value = ident.value.to_uppercase();
+            ControlFlow::Continue(())
+        }
+    }
+
+    #[test]
+    fn test_pre_visit_ident_mut() {
+        let mut visitor = IdentMutator;
+        let mutated = do_visit_mut("SELECT a, b FROM t", &mut visitor);
+        assert_eq!(mutated.to_string(), "SELECT A, B FROM T");
     }
 }

@@ -5977,3 +5977,158 @@ impl From<AlterPolicy> for crate::ast::Statement {
         crate::ast::Statement::AlterPolicy(v)
     }
 }
+
+/// CREATE AGGREGATE statement.
+/// See <https://www.postgresql.org/docs/current/sql-createaggregate.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateAggregate {
+    /// True if `OR REPLACE` was specified.
+    pub or_replace: bool,
+    /// The aggregate name (can be schema-qualified).
+    pub name: ObjectName,
+    /// Input arguments. Empty when `star_args` is true or when the argument list is empty.
+    pub args: Vec<OperateFunctionArg>,
+    /// True if the argument list was the wildcard form `(*)` (used by
+    /// zero-argument aggregates such as `count(*)`).
+    pub star_args: bool,
+    /// The options listed inside the required parentheses after the argument
+    /// list (e.g. `SFUNC`, `STYPE`, `FINALFUNC`, `PARALLEL`, …).
+    pub options: Vec<CreateAggregateOption>,
+}
+
+impl fmt::Display for CreateAggregate {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CREATE")?;
+        if self.or_replace {
+            write!(f, " OR REPLACE")?;
+        }
+        write!(f, " AGGREGATE {}", self.name)?;
+        let is_old_syntax = self
+            .options
+            .iter()
+            .any(|option| matches!(option, CreateAggregateOption::BaseType(_)));
+        if !is_old_syntax {
+            if self.star_args && self.args.is_empty() {
+                write!(f, " (*)")?;
+            } else {
+                write!(f, " ({})", display_comma_separated(&self.args))?;
+            }
+        }
+        write!(f, " ({})", display_comma_separated(&self.options))
+    }
+}
+
+impl From<CreateAggregate> for crate::ast::Statement {
+    fn from(v: CreateAggregate) -> Self {
+        crate::ast::Statement::CreateAggregate(v)
+    }
+}
+
+/// A single option in a `CREATE AGGREGATE` options list.
+///
+/// See <https://www.postgresql.org/docs/current/sql-createaggregate.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreateAggregateOption {
+    /// `SFUNC = state_transition_function`
+    StateTransitionFunction(ObjectName),
+    /// `STYPE = state_data_type`
+    StateDataType(DataType),
+    /// `SSPACE = state_data_size` (in bytes)
+    StateDataSize(u64),
+    /// `FINALFUNC = final_function`
+    FinalFunction(ObjectName),
+    /// `FINALFUNC_EXTRA`. Passes extra dummy arguments to the final function.
+    FinalFunctionExtra,
+    /// `FINALFUNC_MODIFY = { READ_ONLY | SHAREABLE | READ_WRITE }`
+    FinalFunctionModify(AggregateModifyKind),
+    /// `COMBINEFUNC = combine_function`
+    CombineFunction(ObjectName),
+    /// `SERIALFUNC = serial_function`
+    SerialFunction(ObjectName),
+    /// `DESERIALFUNC = deserial_function`
+    DeserialFunction(ObjectName),
+    /// `INITCOND = initial_condition` (a string literal)
+    InitialCondition(ValueWithSpan),
+    /// `MSFUNC = moving_state_transition_function`
+    MovingStateTransitionFunction(ObjectName),
+    /// `MINVFUNC = moving_inverse_transition_function`
+    MovingInverseTransitionFunction(ObjectName),
+    /// `MSTYPE = moving_state_data_type`
+    MovingStateDataType(DataType),
+    /// `MSSPACE = moving_state_data_size` (in bytes)
+    MovingStateDataSize(u64),
+    /// `MFINALFUNC = moving_final_function`
+    MovingFinalFunction(ObjectName),
+    /// `MFINALFUNC_EXTRA`
+    MovingFinalFunctionExtra,
+    /// `MFINALFUNC_MODIFY = { READ_ONLY | SHAREABLE | READ_WRITE }`
+    MovingFinalFunctionModify(AggregateModifyKind),
+    /// `MINITCOND = moving_initial_condition` (a string literal)
+    MovingInitialCondition(ValueWithSpan),
+    /// `SORTOP = sort_operator`
+    SortOperator(ObjectName),
+    /// `PARALLEL = { SAFE | RESTRICTED | UNSAFE }`
+    Parallel(FunctionParallel),
+    /// `HYPOTHETICAL`. Marks the aggregate as hypothetical-set.
+    Hypothetical,
+    /// `BASETYPE = base_type` (old aggregate syntax).
+    BaseType(DataType),
+}
+
+impl fmt::Display for CreateAggregateOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::StateTransitionFunction(name) => write!(f, "SFUNC = {name}"),
+            Self::StateDataType(data_type) => write!(f, "STYPE = {data_type}"),
+            Self::StateDataSize(size) => write!(f, "SSPACE = {size}"),
+            Self::FinalFunction(name) => write!(f, "FINALFUNC = {name}"),
+            Self::FinalFunctionExtra => write!(f, "FINALFUNC_EXTRA"),
+            Self::FinalFunctionModify(kind) => write!(f, "FINALFUNC_MODIFY = {kind}"),
+            Self::CombineFunction(name) => write!(f, "COMBINEFUNC = {name}"),
+            Self::SerialFunction(name) => write!(f, "SERIALFUNC = {name}"),
+            Self::DeserialFunction(name) => write!(f, "DESERIALFUNC = {name}"),
+            Self::InitialCondition(cond) => write!(f, "INITCOND = {cond}"),
+            Self::MovingStateTransitionFunction(name) => write!(f, "MSFUNC = {name}"),
+            Self::MovingInverseTransitionFunction(name) => write!(f, "MINVFUNC = {name}"),
+            Self::MovingStateDataType(data_type) => write!(f, "MSTYPE = {data_type}"),
+            Self::MovingStateDataSize(size) => write!(f, "MSSPACE = {size}"),
+            Self::MovingFinalFunction(name) => write!(f, "MFINALFUNC = {name}"),
+            Self::MovingFinalFunctionExtra => write!(f, "MFINALFUNC_EXTRA"),
+            Self::MovingFinalFunctionModify(kind) => write!(f, "MFINALFUNC_MODIFY = {kind}"),
+            Self::MovingInitialCondition(cond) => write!(f, "MINITCOND = {cond}"),
+            Self::SortOperator(name) => write!(f, "SORTOP = {name}"),
+            Self::Parallel(parallel) => write!(f, "PARALLEL = {}", parallel.as_str()),
+            Self::Hypothetical => write!(f, "HYPOTHETICAL"),
+            Self::BaseType(data_type) => write!(f, "BASETYPE = {data_type}"),
+        }
+    }
+}
+
+/// Modifier kind for `FINALFUNC_MODIFY` / `MFINALFUNC_MODIFY` in `CREATE AGGREGATE`.
+///
+/// See <https://www.postgresql.org/docs/current/sql-createaggregate.html>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AggregateModifyKind {
+    /// The final function does not modify the transition state.
+    ReadOnly,
+    /// The transition state may be shared between aggregate calls.
+    Shareable,
+    /// The final function may modify the transition state.
+    ReadWrite,
+}
+
+impl fmt::Display for AggregateModifyKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::ReadOnly => write!(f, "READ_ONLY"),
+            Self::Shareable => write!(f, "SHAREABLE"),
+            Self::ReadWrite => write!(f, "READ_WRITE"),
+        }
+    }
+}

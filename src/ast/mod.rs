@@ -1108,14 +1108,10 @@ pub enum Expr {
         kind: CastKind,
         /// Expression being cast.
         expr: Box<Expr>,
-        /// Target data type.
+        /// Target data type. A trailing `ARRAY` keyword (e.g.
+        /// `CAST(... AS UNSIGNED ARRAY)`) is captured as [`DataType::Array`]
+        /// with [`ArrayElemTypeDef::Keyword`].
         data_type: DataType,
-        /// [MySQL] allows CAST(... AS type ARRAY) in functional index definitions for InnoDB
-        /// multi-valued indices. It's not really a datatype, and is only allowed in `CAST` in key
-        /// specifications, so it's a flag here.
-        ///
-        /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/cast-functions.html#function_cast
-        array: bool,
         /// Optional CAST(string_expression AS type FORMAT format_string_expression) as used by [BigQuery]
         ///
         /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#formatting_syntax
@@ -1976,14 +1972,10 @@ impl fmt::Display for Expr {
                 kind,
                 expr,
                 data_type,
-                array,
                 format,
             } => match kind {
                 CastKind::Cast => {
                     write!(f, "CAST({expr} AS {data_type}")?;
-                    if *array {
-                        write!(f, " ARRAY")?;
-                    }
                     if let Some(format) = format {
                         write!(f, " FORMAT {format}")?;
                     }

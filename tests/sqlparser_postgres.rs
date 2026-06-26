@@ -2102,7 +2102,6 @@ fn parse_execute() {
                             (Value::Number("1337".parse().unwrap(), false)).with_empty_span()
                         )),
                         data_type: DataType::SmallInt(None),
-                        array: false,
                         format: None
                     },
                     alias: None
@@ -2114,7 +2113,6 @@ fn parse_execute() {
                             (Value::Number("7331".parse().unwrap(), false)).with_empty_span()
                         )),
                         data_type: DataType::SmallInt(None),
-                        array: false,
                         format: None
                     },
                     alias: None
@@ -2741,7 +2739,6 @@ fn parse_array_index_expr() {
                     ))),
                     None
                 )),
-                array: false,
                 format: None,
             }))),
             access_chain: vec![
@@ -2765,6 +2762,25 @@ fn parse_array_index_expr() {
         }),
         expr_from_projection(only(&select.projection)),
     );
+}
+
+#[test]
+fn parse_array_type_def_with_keyword() {
+    // SQL-standard `ARRAY` keyword with an optional size, in a column
+    // definition and as a CAST target. See:
+    // https://www.postgresql.org/docs/current/arrays.html#ARRAYS-DECLARATION
+    pg().verified_stmt("CREATE TABLE sal_emp (pay_by_quarter INTEGER ARRAY)");
+    pg().verified_stmt("CREATE TABLE sal_emp (pay_by_quarter INTEGER ARRAY[4])");
+    pg().verified_stmt("CREATE TABLE genome (codons CHAR(3) ARRAY[1000])");
+    pg().verified_stmt("CREATE TABLE t (a VARCHAR(10) ARRAY[2])");
+    pg().verified_stmt("CREATE TABLE genome (codons CHAR(3) ARRAY[1000] NOT NULL)");
+    pg().verified_stmt(
+        "CREATE TEMPORARY TABLE arrtest2 (i INTEGER ARRAY[4], f FLOAT8[], n NUMERIC[], t TEXT[], d TIMESTAMP[])",
+    );
+    pg().verified_stmt("CREATE TABLE p (e MONEY ARRAY, f MONEY ARRAY[7])");
+    pg().verified_only_select("SELECT CAST(ARRAY[1, 2, 3] AS INTEGER ARRAY)");
+    pg().verified_only_select("SELECT CAST(ARRAY[1, 2, 3] AS INTEGER ARRAY[3])");
+    pg().verified_only_select("SELECT foo::INTEGER ARRAY[3]");
 }
 
 #[test]
@@ -6203,7 +6219,6 @@ fn parse_at_time_zone() {
                     Value::SingleQuotedString("America/Los_Angeles".to_owned()).with_empty_span(),
                 )),
                 data_type: DataType::Text,
-                array: false,
                 format: None,
             }),
         }),
@@ -7064,7 +7079,6 @@ fn arrow_cast_precedence() {
                     (Value::SingleQuotedString("bar".to_string())).with_empty_span()
                 )),
                 data_type: DataType::Text,
-                array: false,
                 format: None,
             }),
         }

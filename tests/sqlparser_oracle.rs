@@ -364,10 +364,7 @@ fn test_optimizer_hints() {
         "SELECT --+ one two three /* asdf */\n 1 FROM dual",
     );
     assert_eq!(select.optimizer_hints.len(), 1);
-    assert_eq!(
-        select.optimizer_hints[0].text,
-        " one two three /* asdf */\n"
-    );
+    assert_eq!(select.optimizer_hints[0].text, " one two three /* asdf */");
     assert_eq!(select.optimizer_hints[0].prefix, "");
 
     // inserts
@@ -396,7 +393,7 @@ fn test_optimizer_hints() {
     );
     assert_eq!(select.optimizer_hints.len(), 1);
     assert_eq!(select.optimizer_hints[0].prefix, "abc");
-    assert_eq!(select.optimizer_hints[0].text, " text\n");
+    assert_eq!(select.optimizer_hints[0].text, " text");
 }
 
 #[test]

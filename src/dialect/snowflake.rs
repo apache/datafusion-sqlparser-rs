@@ -326,6 +326,10 @@ impl Dialect for SnowflakeDialect {
                 );
             } else if parser.parse_keyword(Keyword::DATABASE) {
                 return Some(parse_create_database(or_replace, transient, parser));
+            } else if parser.parse_keywords(&[Keyword::FILE, Keyword::FORMAT]) {
+                return Some(parse_create_file_format(
+                    or_replace, temporary, volatile, parser,
+                ));
             } else {
                 // need to go back with the cursor
                 let mut back = 1;
@@ -352,6 +356,10 @@ impl Dialect for SnowflakeDialect {
             Keyword::RM,
         ]) {
             return Some(parse_file_staging_command(kw, parser));
+        }
+
+        if parser.parse_keyword(Keyword::PUT) {
+            return Some(parse_put(parser));
         }
 
         if parser.parse_keyword(Keyword::SHOW) {
@@ -694,6 +702,21 @@ fn peek_for_limit_options(parser: &Parser) -> bool {
         Token::Word(w) if w.keyword == Keyword::NULL => true,
         _ => false,
     }
+}
+
+/// Parse a Snowflake `PUT <source> <stage> [ options ]` statement. The caller
+/// is expected to have already consumed `PUT`.
+///
+/// See <https://docs.snowflake.com/en/sql-reference/sql/put>.
+fn parse_put(parser: &mut Parser) -> Result<Statement, ParserError> {
+    let source = parser.parse_literal_string()?;
+    let stage = parse_snowflake_stage_name(parser)?;
+    let options = parser.parse_key_value_options(false, &[])?;
+    Ok(Statement::Put {
+        source,
+        stage,
+        options,
+    })
 }
 
 fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statement, ParserError> {
@@ -1249,6 +1272,35 @@ pub fn parse_create_stage(
             options: copy_options,
             delimiter: KeyValueOptionsDelimiter::Space,
         },
+        comment,
+    })
+}
+
+/// Parse a Snowflake `CREATE FILE FORMAT` statement.
+/// See <https://docs.snowflake.com/en/sql-reference/sql/create-file-format>
+pub fn parse_create_file_format(
+    or_replace: bool,
+    temporary: bool,
+    volatile: bool,
+    parser: &mut Parser,
+) -> Result<Statement, ParserError> {
+    let if_not_exists = parser.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+    let name = parser.parse_object_name(true)?;
+    let options = parser.parse_key_value_options(false, &[Keyword::COMMENT])?;
+    let comment = if parser.parse_keyword(Keyword::COMMENT) {
+        parser.expect_token(&Token::Eq)?;
+        Some(parser.parse_comment_value()?)
+    } else {
+        None
+    };
+
+    Ok(Statement::CreateFileFormat {
+        or_replace,
+        temporary,
+        volatile,
+        if_not_exists,
+        name,
+        options,
         comment,
     })
 }

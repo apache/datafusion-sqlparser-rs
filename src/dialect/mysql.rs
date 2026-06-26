@@ -216,6 +216,15 @@ impl Dialect for MySqlDialect {
     fn supports_key_column_option(&self) -> bool {
         true
     }
+
+    /// See: <https://dev.mysql.com/doc/refman/9.7/en/group-by-modifiers.html>
+    fn supports_group_by_with_modifier(&self) -> bool {
+        true
+    }
+
+    fn supports_left_associative_joins_without_parens(&self) -> bool {
+        false
+    }
 }
 
 /// `LOCK TABLES`

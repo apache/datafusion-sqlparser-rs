@@ -9486,3 +9486,20 @@ fn exclude_as_column_name() {
         }
     }
 }
+
+#[test]
+fn parse_limit_after_locking_clause() {
+    // PostgreSQL accepts `LIMIT`/`OFFSET` after the row-locking clause as well
+    // as before it; both orderings are semantically identical. The AST renders
+    // the limit in its canonical position (before the locking clause).
+    pg().one_statement_parses_to(
+        "SELECT * FROM t ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 5",
+        "SELECT * FROM t ORDER BY id LIMIT 5 FOR UPDATE SKIP LOCKED",
+    );
+    pg().one_statement_parses_to(
+        "SELECT * FROM t FOR UPDATE LIMIT 5",
+        "SELECT * FROM t LIMIT 5 FOR UPDATE",
+    );
+    // The pre-existing ordering keeps round-tripping unchanged.
+    pg().verified_stmt("SELECT * FROM t ORDER BY id LIMIT 5 FOR UPDATE SKIP LOCKED");
+}

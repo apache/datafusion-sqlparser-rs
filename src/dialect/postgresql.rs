@@ -291,6 +291,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_limit_after_locking_clause(&self) -> bool {
+        true
+    }
+
     fn supports_set_names(&self) -> bool {
         true
     }

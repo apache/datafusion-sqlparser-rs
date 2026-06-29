@@ -10857,6 +10857,14 @@ fn parse_position_negative() {
         ParserError::ParserError("Expected: (, found: )".to_string()),
         res.unwrap_err()
     );
+
+    let result_unparenthesized =
+        all_dialects_where(|d| d.supports_in_unparenthesized_expr()).parse_sql_statements(sql);
+
+    assert_eq!(
+        ParserError::ParserError("Expected: an expression, found: )".to_string()),
+        result_unparenthesized.unwrap_err()
+    );
 }
 
 #[test]

@@ -3870,6 +3870,96 @@ fn parse_negative_value() {
 }
 
 #[test]
+fn parse_create_sequence_clause_order_independent() {
+    // pg_dump emits options in an order a positional parser could not handle
+    // (START before INCREMENT); it must parse cleanly.
+    let pg_dump_sql = "CREATE SEQUENCE public.t_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1";
+    let canonical = "CREATE SEQUENCE public.t_id_seq AS INTEGER START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1";
+    match one_statement_parses_to(pg_dump_sql, canonical) {
+        Statement::CreateSequence {
+            temporary,
+            if_not_exists,
+            name,
+            data_type,
+            sequence_options,
+            owned_by,
+        } => {
+            assert!(!temporary);
+            assert!(!if_not_exists);
+            assert_eq!(name.to_string(), "public.t_id_seq");
+            assert_eq!(data_type, Some(DataType::Integer(None)));
+            assert_eq!(owned_by, None);
+            let expected = vec![
+                SequenceOptions::StartWith(Expr::value(number("1")), true),
+                SequenceOptions::IncrementBy(Expr::value(number("1")), true),
+                SequenceOptions::MinValue(None),
+                SequenceOptions::MaxValue(None),
+                SequenceOptions::Cache(Expr::value(number("1"))),
+            ];
+            assert_eq!(sequence_options, expected);
+        }
+        other => panic!("expected CreateSequence, got {other:?}"),
+    }
+
+    // The AST vector reflects source order, so two reorderings of the same
+    // logical sequence parse into different vectors, each matching its input.
+    fn options_of(sql: &str) -> Vec<SequenceOptions> {
+        match verified_stmt(sql) {
+            Statement::CreateSequence {
+                sequence_options, ..
+            } => sequence_options,
+            other => panic!("expected CreateSequence, got {other:?}"),
+        }
+    }
+
+    let a = options_of("CREATE SEQUENCE s INCREMENT BY 2 START WITH 5 CACHE 1");
+    assert_eq!(
+        a,
+        vec![
+            SequenceOptions::IncrementBy(Expr::value(number("2")), true),
+            SequenceOptions::StartWith(Expr::value(number("5")), true),
+            SequenceOptions::Cache(Expr::value(number("1"))),
+        ]
+    );
+
+    let b = options_of("CREATE SEQUENCE s CACHE 1 START WITH 5 INCREMENT BY 2");
+    assert_eq!(
+        b,
+        vec![
+            SequenceOptions::Cache(Expr::value(number("1"))),
+            SequenceOptions::StartWith(Expr::value(number("5")), true),
+            SequenceOptions::IncrementBy(Expr::value(number("2")), true),
+        ]
+    );
+
+    // Regression: the original INCREMENT-first ordering must still round-trip.
+    verified_stmt(
+        "CREATE SEQUENCE IF NOT EXISTS name2 AS BIGINT INCREMENT 1 MINVALUE 1 MAXVALUE 20 START WITH 10 CACHE 2 NO CYCLE",
+    );
+}
+
+#[test]
+fn parse_create_sequence_repeated_clause_kept() {
+    // Characterization: the loop accepts and preserves repeated clauses.
+    // Documents current permissive behavior, not a requirement.
+    match verified_stmt("CREATE SEQUENCE s INCREMENT 1 INCREMENT 2 CACHE 1") {
+        Statement::CreateSequence {
+            sequence_options, ..
+        } => {
+            assert_eq!(
+                sequence_options,
+                vec![
+                    SequenceOptions::IncrementBy(Expr::value(number("1")), false),
+                    SequenceOptions::IncrementBy(Expr::value(number("2")), false),
+                    SequenceOptions::Cache(Expr::value(number("1"))),
+                ]
+            );
+        }
+        other => panic!("expected CreateSequence, got {other:?}"),
+    }
+}
+
+#[test]
 fn parse_create_table() {
     let sql = "CREATE TABLE uk_cities (\
                name VARCHAR(100) NOT NULL,\

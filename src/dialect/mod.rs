@@ -19,6 +19,7 @@ mod ansi;
 mod bigquery;
 mod clickhouse;
 mod databricks;
+mod doris;
 mod duckdb;
 mod generic;
 mod hive;
@@ -43,6 +44,7 @@ pub use self::ansi::AnsiDialect;
 pub use self::bigquery::BigQueryDialect;
 pub use self::clickhouse::ClickHouseDialect;
 pub use self::databricks::DatabricksDialect;
+pub use self::doris::DorisDialect;
 pub use self::duckdb::DuckDbDialect;
 pub use self::generic::GenericDialect;
 pub use self::hive::HiveDialect;
@@ -1245,6 +1247,18 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `AUTO_INCREMENT` with an optional
+    /// parenthesized start value in column definitions.
+    fn supports_parenthesized_auto_increment_column_option(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports aggregate column option functions in
+    /// `CREATE TABLE`, such as `SUM`, `REPLACE`, or `BITMAP_UNION`.
+    fn supports_column_aggregation_function_option(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect accepts a comma-separated list of table-level
     /// options placed between the table name and the column-list parenthesis, e.g.
     ///
@@ -1902,6 +1916,7 @@ pub fn dialect_from_str(dialect_name: impl AsRef<str>) -> Option<Box<dyn Dialect
         "bigquery" => Some(Box::new(BigQueryDialect)),
         "ansi" => Some(Box::new(AnsiDialect {})),
         "duckdb" => Some(Box::new(DuckDbDialect {})),
+        "doris" => Some(Box::new(DorisDialect {})),
         "databricks" => Some(Box::new(DatabricksDialect {})),
         "spark" | "sparksql" => Some(Box::new(SparkSqlDialect {})),
         "oracle" => Some(Box::new(OracleDialect {})),
@@ -1957,6 +1972,8 @@ mod tests {
         assert!(parse_dialect("ANSI").is::<AnsiDialect>());
         assert!(parse_dialect("duckdb").is::<DuckDbDialect>());
         assert!(parse_dialect("DuckDb").is::<DuckDbDialect>());
+        assert!(parse_dialect("doris").is::<DorisDialect>());
+        assert!(parse_dialect("Doris").is::<DorisDialect>());
         assert!(parse_dialect("DataBricks").is::<DatabricksDialect>());
         assert!(parse_dialect("databricks").is::<DatabricksDialect>());
         assert!(parse_dialect("teradata").is::<TeradataDialect>());

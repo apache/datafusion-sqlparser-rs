@@ -9645,13 +9645,25 @@ impl<'a> Parser<'a> {
                 }
                 .into(),
             ))
-        } else if self.parse_keyword(Keyword::AUTO_INCREMENT)
-            && dialect_of!(self is MySqlDialect | GenericDialect)
-        {
-            // Support AUTO_INCREMENT for MySQL
-            Ok(Some(ColumnOption::DialectSpecific(vec![
-                Token::make_keyword("AUTO_INCREMENT"),
-            ])))
+        } else if self.parse_keyword(Keyword::AUTO_INCREMENT) {
+            if self
+                .dialect
+                .supports_parenthesized_auto_increment_column_option()
+            {
+                let start = if self.consume_token(&Token::LParen) {
+                    let value = self.parse_literal_uint()?;
+                    self.expect_token(&Token::RParen)?;
+                    Some(value)
+                } else {
+                    None
+                };
+                Ok(Some(ColumnOption::AutoIncrement(start)))
+            } else if dialect_of!(self is MySqlDialect | GenericDialect) {
+                Ok(Some(ColumnOption::AutoIncrement(None)))
+            } else {
+                self.prev_token();
+                Ok(None)
+            }
         } else if self.parse_keyword(Keyword::AUTOINCREMENT)
             && dialect_of!(self is SQLiteDialect |  GenericDialect)
         {
@@ -9732,8 +9744,40 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::INVISIBLE) {
             Ok(Some(ColumnOption::Invisible))
         } else {
-            Ok(None)
+            self.parse_optional_doris_aggregate_column_option()
         }
+    }
+
+    fn parse_optional_doris_aggregate_column_option(
+        &mut self,
+    ) -> Result<Option<ColumnOption>, ParserError> {
+        if !self.dialect.supports_column_aggregation_function_option() {
+            return Ok(None);
+        }
+
+        let token = self.peek_token();
+        let option_name = match token.token {
+            Token::Word(word)
+                if matches!(
+                    word.keyword,
+                    Keyword::SUM
+                        | Keyword::MAX
+                        | Keyword::MIN
+                        | Keyword::REPLACE
+                        | Keyword::HLL_UNION
+                        | Keyword::BITMAP_UNION
+                        | Keyword::QUANTILE_UNION
+                ) =>
+            {
+                word.value
+            }
+            _ => return Ok(None),
+        };
+
+        self.next_token();
+        Ok(Some(ColumnOption::DialectSpecific(vec![
+            Token::make_keyword(&option_name),
+        ])))
     }
 
     pub(crate) fn parse_tag(&mut self) -> Result<Tag, ParserError> {

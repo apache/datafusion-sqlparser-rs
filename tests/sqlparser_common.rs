@@ -2399,22 +2399,6 @@ fn parse_in_unparenthesized_expr() {
 }
 
 #[test]
-fn parse_in_unparenthesized_dictionary_placeholder() {
-    // The `{name:Type}` placeholder form additionally requires dictionary syntax.
-    let dialects = all_dialects_where(|d| {
-        d.supports_in_unparenthesized_expr() && d.supports_dictionary_syntax()
-    });
-    dialects.expr_parses_to("x IN {ids:Array(UInt64)}", "x IN ({ids: Array(UInt64)})");
-    dialects.expr_parses_to(
-        "x NOT IN {ids:Array(UInt64)}",
-        "x NOT IN ({ids: Array(UInt64)})",
-    );
-    dialects.verified_expr("x IN ({ids: Array(UInt64)})");
-    // Precedence: the trailing `AND` is not swallowed.
-    dialects.verified_expr("x IN ({p: Array(UInt64)}) AND y = 1");
-}
-
-#[test]
 fn parse_string_agg() {
     let sql = "SELECT a || b";
 

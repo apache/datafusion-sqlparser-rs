@@ -230,6 +230,10 @@ impl Dialect for MySqlDialect {
     fn table_command_max_name_parts(&self) -> Option<usize> {
         Some(2)
     }
+
+    fn supports_left_associative_joins_without_parens(&self) -> bool {
+        false
+    }
 }
 
 /// `LOCK TABLES`

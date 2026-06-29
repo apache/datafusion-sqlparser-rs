@@ -137,6 +137,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_exclude_constraint(&self) -> bool {
+        true
+    }
+
     fn supports_limit_comma(&self) -> bool {
         true
     }
@@ -318,6 +322,10 @@ impl Dialect for GenericDialect {
     }
 
     fn supports_explicit_table_inheritance_modifiers(&self) -> bool {
+        true
+    }
+
+    fn supports_aliased_function_args(&self) -> bool {
         true
     }
 }

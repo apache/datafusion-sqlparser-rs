@@ -2674,6 +2674,58 @@ mod tests {
     }
 
     #[test]
+    fn tokenize_sql_pgq_keywords() {
+        for (word, keyword) in [
+            ("ACYCLIC", Keyword::ACYCLIC),
+            ("ALL_DIFFERENT", Keyword::ALL_DIFFERENT),
+            ("BINDINGS", Keyword::BINDINGS),
+            ("BINDING_COUNT", Keyword::BINDING_COUNT),
+            ("BOUND", Keyword::BOUND),
+            ("DESTINATION", Keyword::DESTINATION),
+            ("DIFFERENT", Keyword::DIFFERENT),
+            ("DIRECTED", Keyword::DIRECTED),
+            ("EDGE", Keyword::EDGE),
+            ("EDGES", Keyword::EDGES),
+            ("ELEMENT_ID", Keyword::ELEMENT_ID),
+            ("ELEMENT_NUMBER", Keyword::ELEMENT_NUMBER),
+            ("GRAPH", Keyword::GRAPH),
+            ("GRAPH_TABLE", Keyword::GRAPH_TABLE),
+            ("KEEP", Keyword::KEEP),
+            ("LABEL", Keyword::LABEL),
+            ("LABELED", Keyword::LABELED),
+            ("MATCHNUM", Keyword::MATCHNUM),
+            ("NODE", Keyword::NODE),
+            ("PATHS", Keyword::PATHS),
+            ("PATH_LENGTH", Keyword::PATH_LENGTH),
+            ("PATH_NAME", Keyword::PATH_NAME),
+            ("PROPERTIES", Keyword::PROPERTIES),
+            ("PROPERTY", Keyword::PROPERTY),
+            ("PROPERTY_EXISTS", Keyword::PROPERTY_EXISTS),
+            ("PROPERTY_GRAPH_CATALOG", Keyword::PROPERTY_GRAPH_CATALOG),
+            ("PROPERTY_GRAPH_NAME", Keyword::PROPERTY_GRAPH_NAME),
+            ("PROPERTY_GRAPH_SCHEMA", Keyword::PROPERTY_GRAPH_SCHEMA),
+            ("RELATIONSHIP", Keyword::RELATIONSHIP),
+            ("RELATIONSHIPS", Keyword::RELATIONSHIPS),
+            ("SAME", Keyword::SAME),
+            ("SHORTEST", Keyword::SHORTEST),
+            ("SINGLETONS", Keyword::SINGLETONS),
+            ("TRAIL", Keyword::TRAIL),
+            ("VERTEX", Keyword::VERTEX),
+            ("WALK", Keyword::WALK),
+        ] {
+            assert_eq!(Token::make_keyword(word), Token::make_word(word, None));
+            assert_eq!(
+                Token::make_keyword(word.to_lowercase().as_str()),
+                Token::Word(Word {
+                    value: word.to_lowercase(),
+                    quote_style: None,
+                    keyword,
+                })
+            );
+        }
+    }
+
+    #[test]
     fn tokenize_select_float() {
         let sql = String::from("SELECT .1");
         let dialect = GenericDialect {};

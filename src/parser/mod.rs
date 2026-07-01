@@ -4392,6 +4392,15 @@ impl<'a> Parser<'a> {
                 negated,
             });
         }
+        if self.dialect.supports_in_unparenthesized_expr()
+            && self.peek_token_ref().token != Token::LParen
+        {
+            return Ok(Expr::InList {
+                expr: Box::new(expr),
+                list: vec![self.parse_expr()?],
+                negated,
+            });
+        }
         self.expect_token(&Token::LParen)?;
         let in_op = match self.maybe_parse(|p| p.parse_query())? {
             Some(subquery) => Expr::InSubquery {

@@ -601,6 +601,7 @@ define_keywords!(
     LOCK,
     LOCKED,
     LOG,
+    LOGGED,
     LOGIN,
     LOGS,
     LONG,

@@ -5231,6 +5231,10 @@ impl<'a> Parser<'a> {
             .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
             .is_some();
         let volatile = self.parse_keyword(Keyword::VOLATILE);
+        let unlogged = self.peek_keywords(&[Keyword::UNLOGGED, Keyword::TABLE]);
+        if unlogged {
+            self.expect_keyword(Keyword::UNLOGGED)?;
+        }
         let persistent = dialect_of!(self is DuckDbDialect)
             && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
         let create_view_params = self.parse_create_view_params()?;
@@ -5239,8 +5243,10 @@ impl<'a> Parser<'a> {
         } else if self.peek_keywords(&[Keyword::TEXT, Keyword::SEARCH]) {
             self.parse_create_text_search().map(Into::into)
         } else if self.parse_keyword(Keyword::TABLE) {
-            self.parse_create_table(or_replace, temporary, global, transient, volatile, multiset)
-                .map(Into::into)
+            self.parse_create_table(
+                or_replace, temporary, unlogged, global, transient, volatile, multiset,
+            )
+            .map(Into::into)
         } else if self.peek_keyword(Keyword::MATERIALIZED)
             || self.peek_keyword(Keyword::VIEW)
             || self.peek_keywords(&[Keyword::SECURE, Keyword::MATERIALIZED, Keyword::VIEW])
@@ -8649,10 +8655,12 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse `CREATE TABLE` statement.
+    #[allow(clippy::too_many_arguments)]
     pub fn parse_create_table(
         &mut self,
         or_replace: bool,
         temporary: bool,
+        unlogged: bool,
         global: Option<bool>,
         transient: bool,
         volatile: bool,
@@ -8834,6 +8842,7 @@ impl<'a> Parser<'a> {
 
         Ok(CreateTableBuilder::new(table_name)
             .temporary(temporary)
+            .unlogged(unlogged)
             .columns(columns)
             .constraints(constraints)
             .or_replace(or_replace)
@@ -11024,6 +11033,10 @@ impl<'a> Parser<'a> {
         } else if self.parse_keywords(&[Keyword::VALIDATE, Keyword::CONSTRAINT]) {
             let name = self.parse_identifier()?;
             AlterTableOperation::ValidateConstraint { name }
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::LOGGED]) {
+            AlterTableOperation::SetLogged
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::UNLOGGED]) {
+            AlterTableOperation::SetUnlogged
         } else {
             let mut options =
                 self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;

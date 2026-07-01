@@ -111,6 +111,29 @@ fn parse_map_access_expr() {
 }
 
 #[test]
+fn parse_tuple_element_access() {
+    // Single-level access on an array of tuples.
+    let sql = "SELECT arr[1].1 FROM t";
+    let select = clickhouse().verified_only_select(sql);
+    assert_eq!(
+        &Expr::CompoundFieldAccess {
+            root: Box::new(Expr::Identifier(Ident::new("arr"))),
+            access_chain: vec![
+                AccessExpr::Subscript(Subscript::Index {
+                    index: Expr::value(Value::Number("1".parse().unwrap(), false)),
+                }),
+                AccessExpr::Dot(Expr::value(Value::Number("1".parse().unwrap(), false))),
+            ],
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    clickhouse().verified_stmt("SELECT t.1 FROM x");
+    clickhouse().verified_stmt("SELECT (1, 2, 3).2");
+    clickhouse().verified_stmt("SELECT arr[1].1.2 FROM t");
+}
+
+#[test]
 fn parse_array_expr() {
     let sql = "SELECT ['1', '2'] FROM test";
     let select = clickhouse().verified_only_select(sql);

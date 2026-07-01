@@ -1375,6 +1375,13 @@ impl<'a> Parser<'a> {
                                 AttachedToken(next_token),
                             ));
                         }
+                        Token::Number(_, _) if self.dialect.supports_tuple_element_access() => {
+                            // ClickHouse-style positional tuple access (`t.1`,
+                            // `t.1.2`). Exit the wildcard-detection loop and let
+                            // `parse_expr` handle the expression via the
+                            // index-rewind fall-through below.
+                            break;
+                        }
                         _ => {
                             return self.expected("an identifier or a '*' after '.'", next_token);
                         }

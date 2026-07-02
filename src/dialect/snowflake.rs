@@ -27,14 +27,16 @@ use crate::ast::helpers::stmt_data_loading::{
     FileStagingCommand, StageLoadSelectItem, StageLoadSelectItemKind, StageParamsObject,
 };
 use crate::ast::{
-    AlterTable, AlterTableOperation, AlterTableType, CatalogSyncNamespaceMode, ColumnOption,
-    ColumnPolicy, ColumnPolicyProperty, ContactEntry, CopyIntoSnowflakeKind, CreateTable,
-    CreateTableLikeKind, DollarQuotedString, Ident, IdentityParameters, IdentityProperty,
-    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, InitializeKind,
-    Insert, MultiTableInsertIntoClause, MultiTableInsertType, MultiTableInsertValue,
-    MultiTableInsertValues, MultiTableInsertWhenClause, ObjectName, ObjectNamePart,
-    RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement, StorageLifecyclePolicy,
-    StorageSerializationPolicy, TableObject, TagsColumnOption, Value, WrappedCollection,
+    AlterExternalVolumeOperation, AlterTable, AlterTableOperation, AlterTableType,
+    CatalogSyncNamespaceMode, ColumnOption, ColumnPolicy, ColumnPolicyProperty, ContactEntry,
+    CopyIntoSnowflakeKind, CreateTable, CreateTableLikeKind, DollarQuotedString,
+    ExternalVolumeEncryption, ExternalVolumeStorageLocation, Ident, IdentityParameters,
+    IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
+    InitializeKind, Insert, MultiTableInsertIntoClause, MultiTableInsertType,
+    MultiTableInsertValue, MultiTableInsertValues, MultiTableInsertWhenClause, ObjectName,
+    ObjectNamePart, RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement,
+    StorageLifecyclePolicy, StorageSerializationPolicy, TableObject, TagsColumnOption, Value,
+    WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
@@ -266,6 +268,11 @@ impl Dialect for SnowflakeDialect {
             return Some(parse_alter_dynamic_table(parser));
         }
 
+        if parser.parse_keywords(&[Keyword::ALTER, Keyword::EXTERNAL, Keyword::VOLUME]) {
+            // ALTER EXTERNAL VOLUME
+            return Some(parse_alter_external_volume(parser));
+        }
+
         if parser.parse_keywords(&[Keyword::ALTER, Keyword::EXTERNAL, Keyword::TABLE]) {
             // ALTER EXTERNAL TABLE
             return Some(parse_alter_external_table(parser));
@@ -281,10 +288,33 @@ impl Dialect for SnowflakeDialect {
             return Some(parse_alter_session(parser, set));
         }
 
+        if parser.parse_keywords(&[Keyword::DROP, Keyword::EXTERNAL, Keyword::VOLUME]) {
+            // DROP EXTERNAL VOLUME
+            return Some(parse_drop_external_volume(parser));
+        }
+
+        if parser
+            .parse_one_of_keywords(&[Keyword::DESC, Keyword::DESCRIBE])
+            .is_some()
+        {
+            if parser.parse_keywords(&[Keyword::EXTERNAL, Keyword::VOLUME]) {
+                // DESC[RIBE] EXTERNAL VOLUME
+                return Some(parse_describe_external_volume(parser));
+            }
+            // not EXTERNAL VOLUME — put back DESC/DESCRIBE
+            parser.prev_token();
+        }
+
         if parser.parse_keyword(Keyword::CREATE) {
             // possibly CREATE STAGE
             //[ OR  REPLACE ]
             let or_replace = parser.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
+
+            // CREATE [OR REPLACE] EXTERNAL VOLUME
+            if parser.parse_keywords(&[Keyword::EXTERNAL, Keyword::VOLUME]) {
+                return Some(parse_create_external_volume(or_replace, parser));
+            }
+
             // LOCAL | GLOBAL
             let global = match parser.parse_one_of_keywords(&[Keyword::LOCAL, Keyword::GLOBAL]) {
                 Some(Keyword::LOCAL) => Some(false),
@@ -363,6 +393,9 @@ impl Dialect for SnowflakeDialect {
         }
 
         if parser.parse_keyword(Keyword::SHOW) {
+            if parser.parse_keywords(&[Keyword::EXTERNAL, Keyword::VOLUMES]) {
+                return Some(parse_show_external_volumes(parser));
+            }
             let terse = parser.parse_keyword(Keyword::TERSE);
             if parser.parse_keyword(Keyword::OBJECTS) {
                 return Some(parse_show_objects(terse, parser));
@@ -1982,4 +2015,205 @@ fn parse_multi_table_insert_when_clauses(
     }
 
     Ok((when_clauses, else_clause))
+}
+
+/// Parse `CREATE [OR REPLACE] EXTERNAL VOLUME [IF NOT EXISTS] <name> ...`
+fn parse_create_external_volume(
+    or_replace: bool,
+    parser: &mut Parser,
+) -> Result<Statement, ParserError> {
+    let if_not_exists = parser.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+    let name = parser.parse_object_name(false)?;
+
+    parser.expect_keyword(Keyword::STORAGE_LOCATIONS)?;
+    parser.expect_token(&Token::Eq)?;
+    parser.expect_token(&Token::LParen)?;
+
+    let mut storage_locations = vec![];
+    loop {
+        parser.expect_token(&Token::LParen)?;
+        storage_locations.push(parse_external_volume_storage_location(parser)?);
+        parser.expect_token(&Token::RParen)?;
+        if !parser.consume_token(&Token::Comma) {
+            break;
+        }
+    }
+    parser.expect_token(&Token::RParen)?;
+
+    let mut allow_writes = None;
+    let mut comment = None;
+
+    if parser.parse_keyword(Keyword::ALLOW_WRITES) {
+        parser.expect_token(&Token::Eq)?;
+        allow_writes = Some(parser.parse_boolean_string()?);
+    }
+
+    if parser.parse_keyword(Keyword::COMMENT) {
+        parser.expect_token(&Token::Eq)?;
+        comment = Some(parser.parse_comment_value()?);
+    }
+
+    Ok(Statement::CreateExternalVolume {
+        or_replace,
+        if_not_exists,
+        name,
+        storage_locations,
+        allow_writes,
+        comment,
+    })
+}
+
+/// Parse a single storage location: `NAME = '...' STORAGE_PROVIDER = '...' ...`
+///
+/// `NAME` and `STORAGE_PROVIDER` must appear first (in that order). After
+/// those two, `STORAGE_BASE_URL` (required) and the optional fields
+/// (`STORAGE_AWS_ROLE_ARN`, `STORAGE_AWS_EXTERNAL_ID`, `ENCRYPTION`) may
+/// appear in any order, separated by commas or whitespace. Real Snowflake
+/// accepts the flexible ordering — mirror that here so fixtures like
+/// `NAME = '…' STORAGE_PROVIDER = '…' STORAGE_AWS_ROLE_ARN = '…'
+///  STORAGE_BASE_URL = '…'` parse correctly.
+fn parse_external_volume_storage_location(
+    parser: &mut Parser,
+) -> Result<ExternalVolumeStorageLocation, ParserError> {
+    parser.expect_keyword(Keyword::NAME)?;
+    parser.expect_token(&Token::Eq)?;
+    let name = parser.parse_literal_string()?;
+
+    // separators may be commas or whitespace — consume optional comma
+    let _ = parser.consume_token(&Token::Comma);
+
+    parser.expect_keyword(Keyword::STORAGE_PROVIDER)?;
+    parser.expect_token(&Token::Eq)?;
+    let storage_provider = parser.parse_literal_string()?;
+
+    let mut storage_base_url: Option<String> = None;
+    let mut storage_aws_role_arn = None;
+    let mut storage_aws_external_id = None;
+    let mut encryption = None;
+
+    // Parse the remaining fields (STORAGE_BASE_URL + optionals) in any order
+    // (comma-or-whitespace separated). Duplicates are rejected.
+    loop {
+        let _ = parser.consume_token(&Token::Comma);
+        if parser.parse_keyword(Keyword::STORAGE_BASE_URL) {
+            if storage_base_url.is_some() {
+                return Err(ParserError::ParserError(
+                    "duplicate STORAGE_BASE_URL in STORAGE_LOCATION".to_string(),
+                ));
+            }
+            parser.expect_token(&Token::Eq)?;
+            storage_base_url = Some(parser.parse_literal_string()?);
+        } else if parser.parse_keyword(Keyword::STORAGE_AWS_ROLE_ARN) {
+            if storage_aws_role_arn.is_some() {
+                return Err(ParserError::ParserError(
+                    "duplicate STORAGE_AWS_ROLE_ARN in STORAGE_LOCATION".to_string(),
+                ));
+            }
+            parser.expect_token(&Token::Eq)?;
+            storage_aws_role_arn = Some(parser.parse_literal_string()?);
+        } else if parser.parse_keyword(Keyword::STORAGE_AWS_EXTERNAL_ID) {
+            if storage_aws_external_id.is_some() {
+                return Err(ParserError::ParserError(
+                    "duplicate STORAGE_AWS_EXTERNAL_ID in STORAGE_LOCATION".to_string(),
+                ));
+            }
+            parser.expect_token(&Token::Eq)?;
+            storage_aws_external_id = Some(parser.parse_literal_string()?);
+        } else if parser.parse_keyword(Keyword::ENCRYPTION) {
+            if encryption.is_some() {
+                return Err(ParserError::ParserError(
+                    "duplicate ENCRYPTION in STORAGE_LOCATION".to_string(),
+                ));
+            }
+            parser.expect_token(&Token::Eq)?;
+            parser.expect_token(&Token::LParen)?;
+            encryption = Some(parse_external_volume_encryption(parser)?);
+            parser.expect_token(&Token::RParen)?;
+        } else {
+            break;
+        }
+    }
+
+    let storage_base_url = storage_base_url.ok_or_else(|| {
+        ParserError::ParserError("STORAGE_BASE_URL is required in STORAGE_LOCATION".to_string())
+    })?;
+
+    Ok(ExternalVolumeStorageLocation {
+        name,
+        storage_provider,
+        storage_base_url,
+        storage_aws_role_arn,
+        storage_aws_external_id,
+        encryption,
+    })
+}
+
+/// Parse encryption options: `TYPE = '...' [KMS_KEY_ID = '...']`
+fn parse_external_volume_encryption(
+    parser: &mut Parser,
+) -> Result<ExternalVolumeEncryption, ParserError> {
+    parser.expect_keyword(Keyword::TYPE)?;
+    parser.expect_token(&Token::Eq)?;
+    let kind = parser.parse_literal_string()?;
+
+    let mut kms_key_id = None;
+    if parser.parse_keyword(Keyword::KMS_KEY_ID) {
+        parser.expect_token(&Token::Eq)?;
+        kms_key_id = Some(parser.parse_literal_string()?);
+    }
+
+    Ok(ExternalVolumeEncryption { kind, kms_key_id })
+}
+
+/// Parse `ALTER EXTERNAL VOLUME [IF EXISTS] <name> ...`
+fn parse_alter_external_volume(parser: &mut Parser) -> Result<Statement, ParserError> {
+    let if_exists = parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+    let name = parser.parse_object_name(false)?;
+
+    let operation = if parser.parse_keyword(Keyword::ADD) {
+        parser.expect_keyword(Keyword::STORAGE_LOCATION)?;
+        parser.expect_token(&Token::Eq)?;
+        parser.expect_token(&Token::LParen)?;
+        let loc = parse_external_volume_storage_location(parser)?;
+        parser.expect_token(&Token::RParen)?;
+        AlterExternalVolumeOperation::AddStorageLocation(loc)
+    } else if parser.parse_keyword(Keyword::SET) {
+        parser.expect_keyword(Keyword::ALLOW_WRITES)?;
+        parser.expect_token(&Token::Eq)?;
+        AlterExternalVolumeOperation::SetAllowWrites(parser.parse_boolean_string()?)
+    } else if parser.parse_keyword(Keyword::REMOVE) {
+        parser.expect_keyword(Keyword::STORAGE_LOCATION)?;
+        let loc_name = parser.parse_literal_string()?;
+        AlterExternalVolumeOperation::RemoveStorageLocation(loc_name)
+    } else {
+        return parser.expected(
+            "ADD, SET, or REMOVE after ALTER EXTERNAL VOLUME <name>",
+            parser.peek_token(),
+        );
+    };
+
+    Ok(Statement::AlterExternalVolume {
+        name,
+        if_exists,
+        operation,
+    })
+}
+
+/// Parse `DROP EXTERNAL VOLUME [IF EXISTS] <name>`
+fn parse_drop_external_volume(parser: &mut Parser) -> Result<Statement, ParserError> {
+    let if_exists = parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+    let name = parser.parse_object_name(false)?;
+    Ok(Statement::DropExternalVolume { name, if_exists })
+}
+
+/// Parse `DESC[RIBE] EXTERNAL VOLUME <name>`
+fn parse_describe_external_volume(parser: &mut Parser) -> Result<Statement, ParserError> {
+    let name = parser.parse_object_name(false)?;
+    Ok(Statement::DescribeExternalVolume { name })
+}
+
+/// Parse `SHOW EXTERNAL VOLUMES [LIKE '<pattern>']`
+fn parse_show_external_volumes(parser: &mut Parser) -> Result<Statement, ParserError> {
+    let filter = parser.parse_show_statement_filter()?;
+    Ok(Statement::ShowExternalVolumes { filter })
 }

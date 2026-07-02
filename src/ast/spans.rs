@@ -522,6 +522,11 @@ impl Spanned for Statement {
             Statement::Vacuum(..) => Span::empty(),
             Statement::AlterUser(..) => Span::empty(),
             Statement::Reset(..) => Span::empty(),
+            Statement::CreateExternalVolume { .. } => Span::empty(),
+            Statement::AlterExternalVolume { .. } => Span::empty(),
+            Statement::DropExternalVolume { .. } => Span::empty(),
+            Statement::DescribeExternalVolume { .. } => Span::empty(),
+            Statement::ShowExternalVolumes { .. } => Span::empty(),
         }
     }
 }

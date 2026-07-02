@@ -9540,6 +9540,151 @@ fn parse_lock_table() {
 }
 
 #[test]
+fn parse_create_aggregate_basic() {
+    let sql = "CREATE AGGREGATE myavg (NUMERIC) (SFUNC = numeric_avg_accum, STYPE = internal, FINALFUNC = numeric_avg, INITCOND = '0')";
+    let stmt = pg_and_generic().verified_stmt(sql);
+    match stmt {
+        Statement::CreateAggregate(agg) => {
+            assert!(!agg.or_replace);
+            assert!(!agg.star_args);
+            assert_eq!(agg.name.to_string(), "myavg");
+            assert_eq!(agg.args.len(), 1);
+            assert_eq!(agg.args[0].to_string(), "NUMERIC");
+            assert_eq!(agg.options.len(), 4);
+            assert_eq!(agg.options[0].to_string(), "SFUNC = numeric_avg_accum");
+            assert_eq!(agg.options[1].to_string(), "STYPE = internal");
+            assert_eq!(agg.options[2].to_string(), "FINALFUNC = numeric_avg");
+            assert_eq!(agg.options[3].to_string(), "INITCOND = '0'");
+        }
+        _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
+    }
+}
+
+#[test]
+fn parse_create_aggregate_or_replace_with_parallel() {
+    let sql = "CREATE OR REPLACE AGGREGATE sum2 (INT4, INT4) (SFUNC = int4pl, STYPE = INT4, PARALLEL = SAFE)";
+    let stmt = pg_and_generic().verified_stmt(sql);
+    match stmt {
+        Statement::CreateAggregate(agg) => {
+            assert!(agg.or_replace);
+            assert_eq!(agg.name.to_string(), "sum2");
+            assert_eq!(agg.args.len(), 2);
+            assert_eq!(agg.options.len(), 3);
+            assert_eq!(agg.options[2].to_string(), "PARALLEL = SAFE");
+        }
+        _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
+    }
+}
+
+#[test]
+fn parse_create_aggregate_with_moving_aggregate_options() {
+    let sql = "CREATE AGGREGATE moving_sum (FLOAT8) (SFUNC = float8pl, STYPE = FLOAT8, MSFUNC = float8pl, MINVFUNC = float8mi, MSTYPE = FLOAT8, MFINALFUNC_EXTRA, MFINALFUNC_MODIFY = READ_ONLY)";
+    let stmt = pg_and_generic().verified_stmt(sql);
+    match stmt {
+        Statement::CreateAggregate(agg) => {
+            assert!(!agg.or_replace);
+            assert_eq!(agg.name.to_string(), "moving_sum");
+            assert_eq!(agg.args.len(), 1);
+            assert_eq!(agg.options.len(), 7);
+            assert_eq!(agg.options[4].to_string(), "MSTYPE = FLOAT8");
+            assert_eq!(agg.options[5].to_string(), "MFINALFUNC_EXTRA");
+            assert_eq!(agg.options[6].to_string(), "MFINALFUNC_MODIFY = READ_ONLY");
+        }
+        _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
+    }
+}
+
+#[test]
+fn parse_create_aggregate_star_args() {
+    let canonical = "CREATE AGGREGATE my_count (*) (SFUNC = int8inc, STYPE = INT8, INITCOND = '0')";
+    let stmt = pg_and_generic().verified_stmt(canonical);
+    match stmt {
+        Statement::CreateAggregate(agg) => {
+            assert!(agg.star_args);
+            assert!(agg.args.is_empty());
+            assert_eq!(agg.name.to_string(), "my_count");
+        }
+        _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
+    }
+
+    pg_and_generic().one_statement_parses_to(
+        "CREATE AGGREGATE my_count ( * ) (SFUNC = int8inc, STYPE = INT8)",
+        "CREATE AGGREGATE my_count (*) (SFUNC = int8inc, STYPE = INT8)",
+    );
+}
+
+#[test]
+fn parse_create_aggregate_named_and_variadic_args() {
+    let sql =
+        "CREATE AGGREGATE my_agg (input INT, VARIADIC tail TEXT) (SFUNC = my_sfunc, STYPE = INT)";
+    let stmt = pg_and_generic().verified_stmt(sql);
+    match stmt {
+        Statement::CreateAggregate(agg) => {
+            assert_eq!(agg.args.len(), 2);
+            assert_eq!(agg.args[0].to_string(), "input INT");
+            assert_eq!(agg.args[1].to_string(), "VARIADIC tail TEXT");
+        }
+        _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
+    }
+}
+
+#[test]
+fn parse_create_aggregate_additional_options() {
+    pg_and_generic().verified_stmt(
+        "CREATE AGGREGATE percentile (FLOAT8) (SFUNC = ordered_set_transition, STYPE = internal, FINALFUNC = percentile_final, FINALFUNC_MODIFY = READ_WRITE, HYPOTHETICAL)",
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE AGGREGATE my_min (INT) (SFUNC = my_sfunc, STYPE = INT, SSPACE = 128, SORTOP = <)",
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE AGGREGATE my_min2 (INT) (SFUNC = my_sfunc, STYPE = INT, SORTOP = pg_catalog.<)",
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE AGGREGATE my_sum (INT) (SFUNC = my_sfunc, STYPE = internal, COMBINEFUNC = my_combine, SERIALFUNC = my_serial, DESERIALFUNC = my_deserial)",
+    );
+}
+
+#[test]
+fn parse_create_aggregate_old_syntax_basetype() {
+    let stmt = pg_and_generic()
+        .verified_stmt("CREATE AGGREGATE my_avg (BASETYPE = INT, SFUNC = my_sfunc, STYPE = INT)");
+    match stmt {
+        Statement::CreateAggregate(agg) => {
+            assert!(agg.args.is_empty());
+            assert!(!agg.star_args);
+            assert_eq!(agg.options.len(), 3);
+            assert_eq!(
+                agg.options[0],
+                CreateAggregateOption::BaseType(DataType::Int(None))
+            );
+        }
+        _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
+    }
+
+    let stmt = pg_and_generic()
+        .verified_stmt("CREATE AGGREGATE my_avg (SFUNC = my_sfunc, BASETYPE = INT, STYPE = INT)");
+    match stmt {
+        Statement::CreateAggregate(agg) => {
+            assert!(agg.args.is_empty());
+            assert!(!agg.star_args);
+            assert_eq!(agg.options.len(), 3);
+            assert_eq!(
+                agg.options[1],
+                CreateAggregateOption::BaseType(DataType::Int(None))
+            );
+        }
+        _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
+    }
+}
+
+#[test]
+fn parse_create_aggregate_unknown_option() {
+    assert!(pg_and_generic()
+        .parse_sql_statements("CREATE AGGREGATE foo (INT) (UNKNOWN_OPTION = bar)")
+        .is_err());
+}
+
+#[test]
 fn exclude_as_column_name() {
     // `EXCLUDE` is a non-reserved keyword, so it stays usable as a column name
     // even on dialects that parse `EXCLUDE` constraints: a bare `exclude` not

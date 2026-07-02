@@ -4396,6 +4396,15 @@ impl<'a> Parser<'a> {
                 negated,
             });
         }
+        if self.dialect.supports_in_unparenthesized_expr()
+            && self.peek_token_ref().token != Token::LParen
+        {
+            return Ok(Expr::InList {
+                expr: Box::new(expr),
+                list: vec![self.parse_expr()?],
+                negated,
+            });
+        }
         self.expect_token(&Token::LParen)?;
         let in_op = match self.maybe_parse(|p| p.parse_query())? {
             Some(subquery) => Expr::InSubquery {
@@ -5235,6 +5244,10 @@ impl<'a> Parser<'a> {
             .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
             .is_some();
         let volatile = self.parse_keyword(Keyword::VOLATILE);
+        let unlogged = self.peek_keywords(&[Keyword::UNLOGGED, Keyword::TABLE]);
+        if unlogged {
+            self.expect_keyword(Keyword::UNLOGGED)?;
+        }
         let persistent = dialect_of!(self is DuckDbDialect)
             && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
         let create_view_params = self.parse_create_view_params()?;
@@ -5243,8 +5256,10 @@ impl<'a> Parser<'a> {
         } else if self.peek_keywords(&[Keyword::TEXT, Keyword::SEARCH]) {
             self.parse_create_text_search().map(Into::into)
         } else if self.parse_keyword(Keyword::TABLE) {
-            self.parse_create_table(or_replace, temporary, global, transient, volatile, multiset)
-                .map(Into::into)
+            self.parse_create_table(
+                or_replace, temporary, unlogged, global, transient, volatile, multiset,
+            )
+            .map(Into::into)
         } else if self.peek_keyword(Keyword::MATERIALIZED)
             || self.peek_keyword(Keyword::VIEW)
             || self.peek_keywords(&[Keyword::SECURE, Keyword::MATERIALIZED, Keyword::VIEW])
@@ -8653,10 +8668,12 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse `CREATE TABLE` statement.
+    #[allow(clippy::too_many_arguments)]
     pub fn parse_create_table(
         &mut self,
         or_replace: bool,
         temporary: bool,
+        unlogged: bool,
         global: Option<bool>,
         transient: bool,
         volatile: bool,
@@ -8838,6 +8855,7 @@ impl<'a> Parser<'a> {
 
         Ok(CreateTableBuilder::new(table_name)
             .temporary(temporary)
+            .unlogged(unlogged)
             .columns(columns)
             .constraints(constraints)
             .or_replace(or_replace)
@@ -11028,6 +11046,10 @@ impl<'a> Parser<'a> {
         } else if self.parse_keywords(&[Keyword::VALIDATE, Keyword::CONSTRAINT]) {
             let name = self.parse_identifier()?;
             AlterTableOperation::ValidateConstraint { name }
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::LOGGED]) {
+            AlterTableOperation::SetLogged
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::UNLOGGED]) {
+            AlterTableOperation::SetUnlogged
         } else {
             let mut options =
                 self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;
@@ -18649,37 +18671,59 @@ impl<'a> Parser<'a> {
 
     /// Parse a single function argument, handling named and unnamed variants.
     pub fn parse_function_args(&mut self) -> Result<FunctionArg, ParserError> {
-        let arg = if self.dialect.supports_named_fn_args_with_expr_name() {
-            self.maybe_parse(|p| {
-                let name = p.parse_expr()?;
-                let operator = p.parse_function_named_arg_operator()?;
-                let arg = p.parse_wildcard_expr()?.into();
-                Ok(FunctionArg::ExprNamed {
-                    name,
-                    arg,
-                    operator,
-                })
-            })?
-        } else {
-            self.maybe_parse(|p| {
-                let name = p.parse_identifier()?;
-                let operator = p.parse_function_named_arg_operator()?;
-                let arg = p.parse_wildcard_expr()?.into();
-                Ok(FunctionArg::Named {
-                    name,
-                    arg,
-                    operator,
-                })
-            })?
-        };
+        // Parse the argument expression once, then check for a named-arg
+        // operator. Parsing it speculatively and re-parsing on the unnamed
+        // path is O(2^depth) on nested calls like `CAST(CASE (CAST(CASE (…`.
+        if self.dialect.supports_named_fn_args_with_expr_name() {
+            let expr = self.parse_wildcard_expr()?;
+            // A wildcard is never a named-arg name; only the unnamed form applies.
+            if !matches!(expr, Expr::Wildcard(_) | Expr::QualifiedWildcard(..)) {
+                if let Some(operator) =
+                    self.maybe_parse(|p| p.parse_function_named_arg_operator())?
+                {
+                    let arg = self.parse_wildcard_expr()?.into();
+                    return Ok(FunctionArg::ExprNamed {
+                        name: expr,
+                        arg,
+                        operator,
+                    });
+                }
+            }
+            let arg_expr = self.function_arg_expr_from_wildcard(expr)?;
+            return Ok(FunctionArg::Unnamed(
+                self.maybe_parse_aliased_function_arg(arg_expr)?,
+            ));
+        }
+
+        let arg = self.maybe_parse(|p| {
+            let name = p.parse_identifier()?;
+            let operator = p.parse_function_named_arg_operator()?;
+            let arg = p.parse_wildcard_expr()?.into();
+            Ok(FunctionArg::Named {
+                name,
+                arg,
+                operator,
+            })
+        })?;
         if let Some(arg) = arg {
             return Ok(arg);
         }
         let wildcard_expr = self.parse_wildcard_expr()?;
-        let arg_expr: FunctionArgExpr = match wildcard_expr {
+        let arg_expr = self.function_arg_expr_from_wildcard(wildcard_expr)?;
+        Ok(FunctionArg::Unnamed(
+            self.maybe_parse_aliased_function_arg(arg_expr)?,
+        ))
+    }
+
+    /// Wrap an already-parsed expression as a function argument, parsing any
+    /// trailing wildcard options (e.g. Snowflake's `HASH(* EXCLUDE(col))`).
+    fn function_arg_expr_from_wildcard(
+        &mut self,
+        wildcard_expr: Expr,
+    ) -> Result<FunctionArgExpr, ParserError> {
+        Ok(match wildcard_expr {
             Expr::Wildcard(ref token) if self.dialect.supports_select_wildcard_exclude() => {
-                // Support `* EXCLUDE(col1, col2, ...)` inside function calls (e.g. Snowflake's
-                // `HASH(* EXCLUDE(col))`).  Parse the options the same way SELECT items do.
+                // Parse the options the same way SELECT items do.
                 let opts = self.parse_wildcard_additional_options(token.0.clone())?;
                 if opts.opt_exclude.is_some()
                     || opts.opt_except.is_some()
@@ -18693,9 +18737,16 @@ impl<'a> Parser<'a> {
                 }
             }
             other => other.into(),
-        };
-        // Aliased argument, e.g. `XMLFOREST(a AS x)` in PostgreSQL
-        let arg_expr = match arg_expr {
+        })
+    }
+
+    /// Parse an optional `AS <alias>` on an unnamed function argument
+    /// (e.g. `XMLFOREST(a AS x)` in PostgreSQL).
+    fn maybe_parse_aliased_function_arg(
+        &mut self,
+        arg_expr: FunctionArgExpr,
+    ) -> Result<FunctionArgExpr, ParserError> {
+        Ok(match arg_expr {
             FunctionArgExpr::Expr(expr)
                 if self.dialect.supports_aliased_function_args()
                     && self.parse_keyword(Keyword::AS) =>
@@ -18706,8 +18757,7 @@ impl<'a> Parser<'a> {
                 })
             }
             other => other,
-        };
-        Ok(FunctionArg::Unnamed(arg_expr))
+        })
     }
 
     fn parse_function_named_arg_operator(&mut self) -> Result<FunctionArgOperator, ParserError> {

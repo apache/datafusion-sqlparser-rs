@@ -543,7 +543,6 @@ impl<'a> Parser<'a> {
 
             match &self.peek_token_ref().token {
                 Token::EOF => break,
-
                 // end of statement
                 Token::Word(word)
                     if expecting_statement_delimiter && word.keyword == Keyword::END =>
@@ -4078,13 +4077,23 @@ impl<'a> Parser<'a> {
                     {
                         let expr2 = self.parse_expr()?;
                         Ok(Expr::IsNotDistinctFrom(Box::new(expr), Box::new(expr2)))
+                    } else if self.dialect.supports_is_json_predicate()
+                        && self.parse_keyword(Keyword::JSON)
+                    {
+                        self.parse_is_json_predicate(expr, false)
+                    } else if self.dialect.supports_is_json_predicate()
+                        && self.parse_keywords(&[Keyword::NOT, Keyword::JSON])
+                    {
+                        self.parse_is_json_predicate(expr, true)
                     } else if let Ok(is_normalized) = self.parse_unicode_is_normalized(expr) {
                         Ok(is_normalized)
                     } else {
-                        self.expected_ref(
-                            "[NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS",
-                            self.peek_token_ref(),
-                        )
+                        let expected = if self.dialect.supports_is_json_predicate() {
+                            "[NOT] NULL | TRUE | FALSE | DISTINCT | [NOT] JSON [VALUE | SCALAR | ARRAY | OBJECT] [WITH | WITHOUT UNIQUE [KEYS]] | [form] NORMALIZED FROM after IS"
+                        } else {
+                            "[NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS"
+                        };
+                        self.expected_ref(expected, self.peek_token_ref())
                     }
                 }
                 Keyword::AT => {
@@ -8642,6 +8651,7 @@ impl<'a> Parser<'a> {
                                 char: self.parse_identifier()?,
                             });
                         }
+                        Some(Keyword::NULL) => break,
                         _ => {
                             break;
                         }
@@ -12624,6 +12634,43 @@ impl<'a> Parser<'a> {
             Some(Keyword::FALSE) => Ok(false),
             _ => self.expected_ref("TRUE or FALSE", self.peek_token_ref()),
         }
+    }
+
+    /// Parse the `IS [NOT] JSON` predicate after `JSON` (and optional `NOT`) was consumed.
+    fn parse_is_json_predicate(&mut self, expr: Expr, negated: bool) -> Result<Expr, ParserError> {
+        let kind = match self.parse_one_of_keywords(&[
+            Keyword::VALUE,
+            Keyword::SCALAR,
+            Keyword::ARRAY,
+            Keyword::OBJECT,
+        ]) {
+            Some(Keyword::VALUE) => Some(JsonPredicateType::Value),
+            Some(Keyword::SCALAR) => Some(JsonPredicateType::Scalar),
+            Some(Keyword::ARRAY) => Some(JsonPredicateType::Array),
+            Some(Keyword::OBJECT) => Some(JsonPredicateType::Object),
+            _ => None,
+        };
+
+        let unique_keys = match self.parse_one_of_keywords(&[Keyword::WITH, Keyword::WITHOUT]) {
+            Some(Keyword::WITH) => {
+                self.expect_keyword_is(Keyword::UNIQUE)?;
+                let _ = self.parse_keyword(Keyword::KEYS);
+                Some(JsonKeyUniqueness::WithUniqueKeys)
+            }
+            Some(Keyword::WITHOUT) => {
+                self.expect_keyword_is(Keyword::UNIQUE)?;
+                let _ = self.parse_keyword(Keyword::KEYS);
+                Some(JsonKeyUniqueness::WithoutUniqueKeys)
+            }
+            _ => None,
+        };
+
+        Ok(Expr::IsJson {
+            expr: Box::new(expr),
+            kind,
+            unique_keys,
+            negated,
+        })
     }
 
     /// Parse a literal unicode normalization clause
@@ -21717,9 +21764,32 @@ mod tests {
         assert_eq!(
             ast,
             Err(ParserError::ParserError(
-                "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: a at Line: 1, Column: 16"
+                "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [NOT] JSON [VALUE | SCALAR | ARRAY | OBJECT] [WITH | WITHOUT UNIQUE [KEYS]] | [form] NORMALIZED FROM after IS, found: a at Line: 1, Column: 16"
                     .to_string()
             ))
+        );
+    }
+
+    #[test]
+    fn test_is_predicate_error_hint_depends_on_dialect() {
+        let sql = "SELECT this is a syntax error";
+
+        let generic_err = Parser::parse_sql(&GenericDialect, sql).unwrap_err();
+        let ParserError::ParserError(generic_msg) = generic_err else {
+            panic!("Expected ParserError::ParserError, got: {generic_err:?}");
+        };
+        assert!(
+            generic_msg.contains("[NOT] JSON [VALUE | SCALAR | ARRAY | OBJECT]"),
+            "Expected Generic dialect to include JSON predicate hint, got: {generic_msg}"
+        );
+
+        let mysql_err = Parser::parse_sql(&MySqlDialect {}, sql).unwrap_err();
+        let ParserError::ParserError(mysql_msg) = mysql_err else {
+            panic!("Expected ParserError::ParserError, got: {mysql_err:?}");
+        };
+        assert!(
+            !mysql_msg.contains("[NOT] JSON [VALUE | SCALAR | ARRAY | OBJECT]"),
+            "Expected MySQL dialect to exclude JSON predicate hint, got: {mysql_msg}"
         );
     }
 

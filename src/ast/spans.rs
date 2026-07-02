@@ -394,6 +394,7 @@ impl Spanned for Statement {
             Statement::DropOperatorClass(drop_operator_class) => drop_operator_class.span(),
             Statement::CreateSecret { .. } => Span::empty(),
             Statement::CreateServer { .. } => Span::empty(),
+            Statement::CreateTablespace(..) => Span::empty(),
             Statement::CreateConnector { .. } => Span::empty(),
             Statement::CreateOperator(create_operator) => create_operator.span(),
             Statement::CreateOperatorFamily(create_operator_family) => {
@@ -428,6 +429,7 @@ impl Spanned for Statement {
             Statement::AttachDuckDBDatabase { .. } => Span::empty(),
             Statement::DetachDuckDBDatabase { .. } => Span::empty(),
             Statement::Drop { .. } => Span::empty(),
+            Statement::DropTablespace(_) => Span::empty(),
             Statement::DropFunction(drop_function) => drop_function.span(),
             Statement::DropDomain { .. } => Span::empty(),
             Statement::DropProcedure { .. } => Span::empty(),
@@ -519,7 +521,9 @@ impl Spanned for Statement {
             ),
             Statement::CreateUser(..) => Span::empty(),
             Statement::AlterSchema(s) => s.span(),
+            Statement::AlterTablespace(..) => Span::empty(),
             Statement::Vacuum(..) => Span::empty(),
+            Statement::Reindex(..) => Span::empty(),
             Statement::AlterUser(..) => Span::empty(),
             Statement::Reset(..) => Span::empty(),
         }

@@ -67,25 +67,27 @@ pub use self::ddl::{
     AlterIndexOperation, AlterOperator, AlterOperatorClass, AlterOperatorClassOperation,
     AlterOperatorFamily, AlterOperatorFamilyOperation, AlterOperatorOperation, AlterPolicy,
     AlterPolicyOperation, AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm,
-    AlterTableLock, AlterTableOperation, AlterTableType, AlterTextSearch, AlterTextSearchOperation,
-    AlterTextSearchOption, AlterType, AlterTypeAddValue, AlterTypeAddValuePosition,
-    AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue, ClusteredBy, ColumnDef,
-    ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy, ColumnPolicyProperty,
-    ConstraintCharacteristics, CreateCollation, CreateCollationDefinition, CreateConnector,
-    CreateDomain, CreateExtension, CreateFunction, CreateIndex, CreateOperator,
+    AlterTableLock, AlterTableOperation, AlterTableType, AlterTablespace, AlterTablespaceOperation,
+    AlterTextSearch, AlterTextSearchOperation, AlterTextSearchOption, AlterType, AlterTypeAddValue,
+    AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
+    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy,
+    ColumnPolicyProperty, ConstraintCharacteristics, CreateCollation, CreateCollationDefinition,
+    CreateConnector, CreateDomain, CreateExtension, CreateFunction, CreateIndex, CreateOperator,
     CreateOperatorClass, CreateOperatorFamily, CreatePolicy, CreatePolicyCommand, CreatePolicyType,
-    CreateTable, CreateTextSearch, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
-    DistStyle, DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass,
-    DropOperatorFamily, DropOperatorSignature, DropPolicy, DropTrigger, ForValues,
-    FunctionReturnType, GeneratedAs, GeneratedExpressionMode, IdentityParameters, IdentityProperty,
-    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, IndexColumn,
-    IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes,
-    OperatorClassItem, OperatorFamilyDropItem, OperatorFamilyItem, OperatorOption, OperatorPurpose,
-    Owner, Partition, PartitionBoundValue, ProcedureParam, ReferentialAction, RenameTableNameKind,
-    ReplicaIdentity, TagsColumnOption, TextSearchObjectType, TriggerObjectKind, Truncate,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
-    UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
-    UserDefinedTypeStorage, ViewColumnDef, WithData,
+    CreateTable, CreateTablespace, CreateTablespaceDefinition, CreateTextSearch, CreateTrigger,
+    CreateView, Deduplicate, DeferrableInitial, DistStyle, DropBehavior, DropExtension,
+    DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily, DropOperatorSignature,
+    DropPolicy, DropTablespace, DropTrigger, ForValues, FunctionReturnType, GeneratedAs,
+    GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
+    IdentityPropertyKind, IdentityPropertyOrder, IndexColumn, IndexOption, IndexType,
+    KeyOrIndexDisplay, Msck, MySqlAlterTablespaceOperation, MySqlCreateTablespaceOption,
+    NullsDistinctOption, OperatorArgTypes, OperatorClassItem, OperatorFamilyDropItem,
+    OperatorFamilyItem, OperatorOption, OperatorPurpose, Owner, Partition, PartitionBoundValue,
+    ProcedureParam, ReferentialAction, ReindexObjectType, ReindexStatement, RenameTableNameKind,
+    ReplicaIdentity, TablespaceResetOption, TagsColumnOption, TextSearchObjectType,
+    TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
+    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, ViewColumnDef, WithData,
 };
 pub use self::dml::{
     Delete, Insert, Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr,
@@ -3750,6 +3752,11 @@ pub enum Statement {
     /// A `CREATE SERVER` statement.
     CreateServer(CreateServerStatement),
     /// ```sql
+    /// CREATE TABLESPACE
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtablespace.html)
+    CreateTablespace(CreateTablespace),
+    /// ```sql
     /// CREATE POLICY
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)
@@ -3787,6 +3794,11 @@ pub enum Statement {
     /// ```
     /// See [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_schema_collate_statement)
     AlterSchema(AlterSchema),
+    /// ```sql
+    /// ALTER TABLESPACE
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertablespace.html)
+    AlterTablespace(AlterTablespace),
     /// ```sql
     /// ALTER INDEX
     /// ```
@@ -3956,6 +3968,10 @@ pub enum Statement {
         /// See <https://dev.mysql.com/doc/refman/8.4/en/drop-index.html>
         table: Option<ObjectName>,
     },
+    /// ```sql
+    /// DROP [UNDO] TABLESPACE
+    /// ```
+    DropTablespace(DropTablespace),
     /// ```sql
     /// DROP FUNCTION
     /// ```
@@ -4980,6 +4996,13 @@ pub enum Statement {
     /// ```
     /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/r_VACUUM_command.html)
     Vacuum(VacuumStatement),
+    /// Rebuild indexes.
+    ///
+    /// ```sql
+    /// REINDEX
+    /// ```
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-reindex.html)
+    Reindex(ReindexStatement),
     /// Restore the value of a run-time parameter to the default value.
     ///
     /// ```sql
@@ -5599,6 +5622,7 @@ impl fmt::Display for Statement {
             Statement::CreateServer(stmt) => {
                 write!(f, "{stmt}")
             }
+            Statement::CreateTablespace(stmt) => write!(f, "{stmt}"),
             Statement::CreatePolicy(policy) => write!(f, "{policy}"),
             Statement::CreateConnector(create_connector) => create_connector.fmt(f),
             Statement::CreateOperator(create_operator) => create_operator.fmt(f),
@@ -5714,6 +5738,7 @@ impl fmt::Display for Statement {
                 };
                 Ok(())
             }
+            Statement::DropTablespace(drop_tablespace) => write!(f, "{drop_tablespace}"),
             Statement::DropFunction(drop_function) => write!(f, "{drop_function}"),
             Statement::DropDomain(DropDomain {
                 if_exists,
@@ -6477,7 +6502,9 @@ impl fmt::Display for Statement {
             Statement::ExportData(e) => write!(f, "{e}"),
             Statement::CreateUser(s) => write!(f, "{s}"),
             Statement::AlterSchema(s) => write!(f, "{s}"),
+            Statement::AlterTablespace(s) => write!(f, "{s}"),
             Statement::Vacuum(s) => write!(f, "{s}"),
+            Statement::Reindex(s) => write!(f, "{s}"),
             Statement::AlterUser(s) => write!(f, "{s}"),
             Statement::Reset(s) => write!(f, "{s}"),
         }
@@ -8579,6 +8606,8 @@ pub enum ObjectType {
     User,
     /// A stream.
     Stream,
+    /// A tablespace.
+    Tablespace,
 }
 
 impl fmt::Display for ObjectType {
@@ -8597,6 +8626,7 @@ impl fmt::Display for ObjectType {
             ObjectType::Type => "TYPE",
             ObjectType::User => "USER",
             ObjectType::Stream => "STREAM",
+            ObjectType::Tablespace => "TABLESPACE",
         })
     }
 }
@@ -12275,6 +12305,12 @@ impl From<CreateServerStatement> for Statement {
     }
 }
 
+impl From<CreateTablespace> for Statement {
+    fn from(c: CreateTablespace) -> Self {
+        Self::CreateTablespace(c)
+    }
+}
+
 impl From<CreateConnector> for Statement {
     fn from(c: CreateConnector) -> Self {
         Self::CreateConnector(c)
@@ -12314,6 +12350,12 @@ impl From<AlterSchema> for Statement {
 impl From<AlterFunction> for Statement {
     fn from(a: AlterFunction) -> Self {
         Self::AlterFunction(a)
+    }
+}
+
+impl From<AlterTablespace> for Statement {
+    fn from(a: AlterTablespace) -> Self {
+        Self::AlterTablespace(a)
     }
 }
 
@@ -12368,6 +12410,12 @@ impl From<AlterUser> for Statement {
 impl From<DropDomain> for Statement {
     fn from(d: DropDomain) -> Self {
         Self::DropDomain(d)
+    }
+}
+
+impl From<DropTablespace> for Statement {
+    fn from(d: DropTablespace) -> Self {
+        Self::DropTablespace(d)
     }
 }
 
@@ -12476,6 +12524,12 @@ impl From<CreateUser> for Statement {
 impl From<VacuumStatement> for Statement {
     fn from(v: VacuumStatement) -> Self {
         Self::Vacuum(v)
+    }
+}
+
+impl From<ReindexStatement> for Statement {
+    fn from(r: ReindexStatement) -> Self {
+        Self::Reindex(r)
     }
 }
 

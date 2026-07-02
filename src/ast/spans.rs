@@ -1567,6 +1567,7 @@ impl Spanned for Expr {
             Expr::Nested(expr) => expr.span(),
             Expr::Value(value) => value.span(),
             Expr::TypedString(TypedString { value, .. }) => value.span(),
+            Expr::XmlParse(xml_parse) => xml_parse.expr.span(),
             Expr::Function(function) => function.span(),
             Expr::GroupingSets(vec) => {
                 union_spans(vec.iter().flat_map(|i| i.iter().map(|k| k.span())))

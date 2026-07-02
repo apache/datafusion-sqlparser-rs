@@ -1712,20 +1712,6 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if this dialect supports a `LIMIT`/`OFFSET` clause placed
-    /// after the row-locking clause (`FOR UPDATE`/`FOR SHARE`/...), in addition
-    /// to the usual position before it.
-    ///
-    /// Example:
-    /// ```sql
-    /// SELECT * FROM t ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 5;
-    /// ```
-    ///
-    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-select.html)
-    fn supports_limit_after_locking_clause(&self) -> bool {
-        false
-    }
-
     /// Returns true if this dialect supports the `INTERPOLATE` clause
     /// in `ORDER BY` expressions.
     ///

@@ -14480,9 +14480,12 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            // PostgreSQL accepts `LIMIT`/`OFFSET` after the row-locking clause
-            // (e.g. `... FOR UPDATE SKIP LOCKED LIMIT 5`) as well as before it.
-            if limit_clause.is_none() && self.dialect.supports_limit_after_locking_clause() {
+            // Some databases (e.g. PostgreSQL) accept `LIMIT`/`OFFSET` after the
+            // row-locking clause (`... FOR UPDATE SKIP LOCKED LIMIT 5`) as well
+            // as before it. The locking clause above is parsed for every
+            // dialect, so accept a trailing limit here too rather than gating it
+            // behind a dialect flag.
+            if limit_clause.is_none() {
                 limit_clause = self.parse_optional_limit_clause()?;
             }
 

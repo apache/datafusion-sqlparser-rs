@@ -542,3 +542,21 @@ fn test_partiql_from_alias_with_at_index() {
         _ => panic!("expected table factor"),
     }
 }
+
+#[test]
+fn parse_unpivot_expression() {
+    let sql = r#"SELECT t.id, k, v FROM test_colors as t, UNPIVOT t.count_by_color AS v AT k;
+"#;
+
+    redshift().parse_sql_statements(sql).unwrap();
+
+}
+
+#[test]
+fn parse_unpivot_no_brackets() {
+    let sql = r#"SELECT t.id, k, v FROM test_colors as t, UNPIVOT t AS v AT k;
+"#;
+
+    redshift().parse_sql_statements(sql).unwrap();
+
+}

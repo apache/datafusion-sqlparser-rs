@@ -1425,6 +1425,13 @@ pub trait Dialect: Debug + Any {
     fn supports_array_typedef_with_brackets(&self) -> bool {
         false
     }
+    /// Returns true if the dialect supports array type definition with the
+    /// `ARRAY` keyword and an optional size. For example:
+    /// ```CREATE TABLE my_table (arr1 INT ARRAY, arr2 INT ARRAY[3])```
+    /// ```SELECT x::INT ARRAY[3]```
+    fn supports_array_typedef_with_keyword(&self) -> bool {
+        false
+    }
     /// Returns true if the dialect supports geometric types.
     ///
     /// Postgres: <https://www.postgresql.org/docs/9.5/functions-geometry.html>

@@ -886,7 +886,6 @@ fn test_functional_key_part() {
                 )),
             }),
             data_type: DataType::Unsigned,
-            array: false,
             format: None,
         })),
     );
@@ -903,8 +902,10 @@ fn test_functional_key_part() {
                     Value::SingleQuotedString("$.fields".to_string()).with_empty_span()
                 )),
             }),
-            data_type: DataType::Unsigned,
-            array: true,
+            data_type: DataType::Array(ArrayElemTypeDef::Keyword(
+                Box::new(DataType::Unsigned),
+                None,
+            )),
             format: None,
         })),
     );
@@ -4278,10 +4279,45 @@ fn parse_cast_integers() {
 
 #[test]
 fn parse_cast_array() {
-    mysql().verified_expr("CAST(foo AS SIGNED ARRAY)");
+    // The element type may be any type accepted by CAST().
+    for ty in [
+        "SIGNED",
+        "UNSIGNED",
+        "CHAR",
+        "CHAR(10)",
+        "BINARY",
+        "BINARY(5)",
+        "DATE",
+        "TIME",
+        "DATETIME",
+        "DECIMAL",
+        "DECIMAL(10,2)",
+        "DOUBLE",
+        "FLOAT",
+        "YEAR",
+    ] {
+        mysql().verified_expr(&format!("CAST(foo AS {ty} ARRAY)"));
+    }
+
+    // `ARRAY` on its own is not a valid CAST target type.
     mysql()
         .run_parser_method("CAST(foo AS ARRAY)", |p| p.parse_expr())
         .expect_err("ARRAY alone is not a type");
+}
+
+#[test]
+fn parse_multi_valued_index() {
+    // `CAST(... AS <type> ARRAY)` key part in CREATE TABLE, CREATE INDEX, and
+    // ALTER TABLE. See https://dev.mysql.com/doc/refman/8.0/en/create-index.html
+    mysql_and_generic().verified_stmt(
+        "CREATE TABLE customers (id BIGINT, custinfo JSON, INDEX zips ((CAST(custinfo -> '$.zipcode' AS UNSIGNED ARRAY))))",
+    );
+    mysql_and_generic().verified_stmt(
+        "CREATE INDEX zips ON customers((CAST(custinfo -> '$.zipcode' AS UNSIGNED ARRAY)))",
+    );
+    mysql_and_generic().verified_stmt(
+        "ALTER TABLE customers ADD INDEX zips ((CAST(custinfo -> '$.zipcode' AS UNSIGNED ARRAY)))",
+    );
 }
 
 #[test]

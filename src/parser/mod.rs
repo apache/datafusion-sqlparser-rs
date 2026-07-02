@@ -18676,37 +18676,59 @@ impl<'a> Parser<'a> {
 
     /// Parse a single function argument, handling named and unnamed variants.
     pub fn parse_function_args(&mut self) -> Result<FunctionArg, ParserError> {
-        let arg = if self.dialect.supports_named_fn_args_with_expr_name() {
-            self.maybe_parse(|p| {
-                let name = p.parse_expr()?;
-                let operator = p.parse_function_named_arg_operator()?;
-                let arg = p.parse_wildcard_expr()?.into();
-                Ok(FunctionArg::ExprNamed {
-                    name,
-                    arg,
-                    operator,
-                })
-            })?
-        } else {
-            self.maybe_parse(|p| {
-                let name = p.parse_identifier()?;
-                let operator = p.parse_function_named_arg_operator()?;
-                let arg = p.parse_wildcard_expr()?.into();
-                Ok(FunctionArg::Named {
-                    name,
-                    arg,
-                    operator,
-                })
-            })?
-        };
+        // Parse the argument expression once, then check for a named-arg
+        // operator. Parsing it speculatively and re-parsing on the unnamed
+        // path is O(2^depth) on nested calls like `CAST(CASE (CAST(CASE (…`.
+        if self.dialect.supports_named_fn_args_with_expr_name() {
+            let expr = self.parse_wildcard_expr()?;
+            // A wildcard is never a named-arg name; only the unnamed form applies.
+            if !matches!(expr, Expr::Wildcard(_) | Expr::QualifiedWildcard(..)) {
+                if let Some(operator) =
+                    self.maybe_parse(|p| p.parse_function_named_arg_operator())?
+                {
+                    let arg = self.parse_wildcard_expr()?.into();
+                    return Ok(FunctionArg::ExprNamed {
+                        name: expr,
+                        arg,
+                        operator,
+                    });
+                }
+            }
+            let arg_expr = self.function_arg_expr_from_wildcard(expr)?;
+            return Ok(FunctionArg::Unnamed(
+                self.maybe_parse_aliased_function_arg(arg_expr)?,
+            ));
+        }
+
+        let arg = self.maybe_parse(|p| {
+            let name = p.parse_identifier()?;
+            let operator = p.parse_function_named_arg_operator()?;
+            let arg = p.parse_wildcard_expr()?.into();
+            Ok(FunctionArg::Named {
+                name,
+                arg,
+                operator,
+            })
+        })?;
         if let Some(arg) = arg {
             return Ok(arg);
         }
         let wildcard_expr = self.parse_wildcard_expr()?;
-        let arg_expr: FunctionArgExpr = match wildcard_expr {
+        let arg_expr = self.function_arg_expr_from_wildcard(wildcard_expr)?;
+        Ok(FunctionArg::Unnamed(
+            self.maybe_parse_aliased_function_arg(arg_expr)?,
+        ))
+    }
+
+    /// Wrap an already-parsed expression as a function argument, parsing any
+    /// trailing wildcard options (e.g. Snowflake's `HASH(* EXCLUDE(col))`).
+    fn function_arg_expr_from_wildcard(
+        &mut self,
+        wildcard_expr: Expr,
+    ) -> Result<FunctionArgExpr, ParserError> {
+        Ok(match wildcard_expr {
             Expr::Wildcard(ref token) if self.dialect.supports_select_wildcard_exclude() => {
-                // Support `* EXCLUDE(col1, col2, ...)` inside function calls (e.g. Snowflake's
-                // `HASH(* EXCLUDE(col))`).  Parse the options the same way SELECT items do.
+                // Parse the options the same way SELECT items do.
                 let opts = self.parse_wildcard_additional_options(token.0.clone())?;
                 if opts.opt_exclude.is_some()
                     || opts.opt_except.is_some()
@@ -18720,9 +18742,16 @@ impl<'a> Parser<'a> {
                 }
             }
             other => other.into(),
-        };
-        // Aliased argument, e.g. `XMLFOREST(a AS x)` in PostgreSQL
-        let arg_expr = match arg_expr {
+        })
+    }
+
+    /// Parse an optional `AS <alias>` on an unnamed function argument
+    /// (e.g. `XMLFOREST(a AS x)` in PostgreSQL).
+    fn maybe_parse_aliased_function_arg(
+        &mut self,
+        arg_expr: FunctionArgExpr,
+    ) -> Result<FunctionArgExpr, ParserError> {
+        Ok(match arg_expr {
             FunctionArgExpr::Expr(expr)
                 if self.dialect.supports_aliased_function_args()
                     && self.parse_keyword(Keyword::AS) =>
@@ -18733,8 +18762,7 @@ impl<'a> Parser<'a> {
                 })
             }
             other => other,
-        };
-        Ok(FunctionArg::Unnamed(arg_expr))
+        })
     }
 
     fn parse_function_named_arg_operator(&mut self) -> Result<FunctionArgOperator, ParserError> {

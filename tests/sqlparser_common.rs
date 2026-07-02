@@ -352,6 +352,14 @@ fn parse_insert_select_from_returning() {
 }
 
 #[test]
+fn parse_insert_nested_parenthesized_subquery() {
+    // The source query may be wrapped in one or more layers of parentheses;
+    // the leading parens must not be mistaken for a column list.
+    verified_stmt("INSERT INTO t ((SELECT 1))");
+    verified_stmt("INSERT INTO t (((SELECT 1)))");
+}
+
+#[test]
 fn parse_returning_as_column_alias() {
     verified_stmt("SELECT 1 AS RETURNING");
 }
@@ -2375,13 +2383,27 @@ fn parse_in_unnest() {
 
 #[test]
 fn parse_in_error() {
-    // <expr> IN <expr> is no valid
+    // <expr> IN <expr> is no valid, except in dialects that accept an
+    // unparenthesized expression as the IN right-hand side (e.g. ClickHouse).
     let sql = "SELECT * FROM customers WHERE segment in segment";
-    let res = parse_sql_statements(sql);
+    let res =
+        all_dialects_except(|d| d.supports_in_unparenthesized_expr()).parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError("Expected: (, found: segment".to_string()),
         res.unwrap_err()
     );
+}
+
+#[test]
+fn parse_in_unparenthesized_expr() {
+    // Dialects supporting an unparenthesized IN right-hand side wrap a bare expression
+    // into a single-element list (e.g. `x IN 'a'` -> `x IN ('a')`).
+    let dialects = all_dialects_where(|d| d.supports_in_unparenthesized_expr());
+    dialects.expr_parses_to("x IN 'a'", "x IN ('a')");
+
+    // The branch must not fire when the next token is `(` (regressions).
+    dialects.verified_expr("x IN (1, 2, 3)");
+    dialects.verified_stmt("SELECT * FROM t WHERE x IN (SELECT y FROM u)");
 }
 
 #[test]
@@ -10820,11 +10842,22 @@ fn parse_position() {
 
 #[test]
 fn parse_position_negative() {
+    // Dialects that accept an unparenthesized IN right-hand side (e.g. ClickHouse)
+    // report a different error here, so exclude them.
     let sql = "SELECT POSITION(foo IN) from bar";
-    let res = parse_sql_statements(sql);
+    let res =
+        all_dialects_except(|d| d.supports_in_unparenthesized_expr()).parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError("Expected: (, found: )".to_string()),
         res.unwrap_err()
+    );
+
+    let result_unparenthesized =
+        all_dialects_where(|d| d.supports_in_unparenthesized_expr()).parse_sql_statements(sql);
+
+    assert_eq!(
+        ParserError::ParserError("Expected: an expression, found: )".to_string()),
+        result_unparenthesized.unwrap_err()
     );
 }
 
@@ -15557,29 +15590,15 @@ fn parse_create_table_select() {
 
 #[test]
 fn test_reserved_keywords_for_identifiers() {
-    let dialects = all_dialects_where(|d| {
-        d.is_reserved_for_identifier(Keyword::INTERVAL)
-            && !d.supports_named_fn_args_with_expr_name()
-    });
-    // Dialects that reserve the word INTERVAL will not allow it as an unquoted identifier
+    // Dialects that reserve INTERVAL will not allow it as an unquoted
+    // identifier, and report the failure consistently at the token that fails
+    // to start an expression (`)`), independent of named-argument support.
+    let dialects = all_dialects_where(|d| d.is_reserved_for_identifier(Keyword::INTERVAL));
     let sql = "SELECT MAX(interval) FROM tbl";
     assert_eq!(
         dialects.parse_sql_statements(sql),
         Err(ParserError::ParserError(
             "Expected: an expression, found: )".to_string()
-        ))
-    );
-
-    // Dialects with expression-named function arguments parse the argument
-    // expression twice, so the second attempt reports the memoized failure
-    // at the start of the expression
-    let dialects = all_dialects_where(|d| {
-        d.is_reserved_for_identifier(Keyword::INTERVAL) && d.supports_named_fn_args_with_expr_name()
-    });
-    assert_eq!(
-        dialects.parse_sql_statements(sql),
-        Err(ParserError::ParserError(
-            "Expected: an expression, found: interval".to_string()
         ))
     );
 
@@ -19487,6 +19506,56 @@ fn parse_table_factor_paren_chain_no_exponential_blowup() {
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
         let _ = Parser::new(&GenericDialect {})
+            .with_recursion_limit(256)
+            .try_with_sql(&sql)
+            .and_then(|mut p| p.parse_statements());
+        let _ = tx.send(());
+    });
+
+    rx.recv_timeout(Duration::from_secs(5))
+        .expect("parser should reject this quickly, not loop exponentially");
+}
+
+#[test]
+fn parse_unlogged_table_logging_controls_in_all_dialects() {
+    match all_dialects().verified_stmt("CREATE UNLOGGED TABLE t (a INT)") {
+        Statement::CreateTable(CreateTable { unlogged, .. }) => {
+            assert!(unlogged);
+        }
+        _ => unreachable!("Expected CREATE TABLE"),
+    }
+
+    match all_dialects().verified_stmt("ALTER TABLE t SET LOGGED") {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
+            assert_eq!(vec![AlterTableOperation::SetLogged], operations);
+        }
+        _ => unreachable!("Expected ALTER TABLE"),
+    }
+
+    match all_dialects().verified_stmt("ALTER TABLE t SET UNLOGGED") {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
+            assert_eq!(vec![AlterTableOperation::SetUnlogged], operations);
+        }
+        _ => unreachable!("Expected ALTER TABLE"),
+    }
+}
+
+/// Regression test for the 2^N parse-time blowup in `parse_function_args` on
+/// inputs like `CAST(CASE (CAST(CASE (...`. On dialects with expression-named
+/// function arguments (e.g. PostgreSQL), the named-arg arm parsed the whole
+/// argument expression and then re-parsed it on the unnamed path, doubling
+/// work per level. Post-fix the leading expression is parsed exactly once.
+#[test]
+fn parse_function_arg_call_chain_no_exponential_blowup() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    let sql = String::from("SELECT ") + &"CAST(CASE (".repeat(30) + &")".repeat(30);
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = Parser::new(&PostgreSqlDialect {})
             .with_recursion_limit(256)
             .try_with_sql(&sql)
             .and_then(|mut p| p.parse_statements());

@@ -1425,6 +1425,29 @@ pub trait Dialect: Debug + Any {
     fn supports_array_typedef_with_brackets(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect supports the `TABLE` command
+    /// (SQL:2016 `<explicit table>`). See [`ExplicitTable`].
+    fn supports_table_command(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports Postgres inheritance modifiers
+    /// (`ONLY` prefix and trailing `*`) on the `TABLE` command.
+    /// See [`InheritanceModifier`].
+    fn supports_explicit_table_inheritance_modifiers(&self) -> bool {
+        false
+    }
+
+    /// Returns the maximum number of dot-separated parts allowed in a
+    /// table name for the `TABLE` command. For example, `2` means only
+    /// `schema.table` is accepted; `3` would allow `catalog.schema.table`.
+    ///
+    /// Returns `None` if the dialect does not restrict the number of parts.
+    fn table_command_max_name_parts(&self) -> Option<usize> {
+        None
+    }
+
     /// Returns true if the dialect supports geometric types.
     ///
     /// Postgres: <https://www.postgresql.org/docs/9.5/functions-geometry.html>

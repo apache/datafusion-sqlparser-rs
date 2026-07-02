@@ -317,6 +317,14 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_table_command(&self) -> bool {
+        true
+    }
+
+    fn supports_explicit_table_inheritance_modifiers(&self) -> bool {
+        true
+    }
+
     fn supports_aliased_function_args(&self) -> bool {
         true
     }

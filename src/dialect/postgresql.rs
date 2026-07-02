@@ -343,4 +343,16 @@ impl Dialect for PostgreSqlDialect {
     fn supports_comment_optimizer_hint(&self) -> bool {
         true
     }
+
+    fn supports_table_command(&self) -> bool {
+        true
+    }
+
+    fn supports_explicit_table_inheritance_modifiers(&self) -> bool {
+        true
+    }
+
+    fn table_command_max_name_parts(&self) -> Option<usize> {
+        Some(2)
+    }
 }

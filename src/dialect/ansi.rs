@@ -39,4 +39,9 @@ impl Dialect for AnsiDialect {
     fn supports_nested_comments(&self) -> bool {
         true
     }
+
+    /// SQL:2016 `<explicit table>`.
+    fn supports_table_command(&self) -> bool {
+        true
+    }
 }

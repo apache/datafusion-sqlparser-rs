@@ -15521,6 +15521,7 @@ fn parse_comments() {
         ("ROLE", CommentObject::Role),
         ("SCHEMA", CommentObject::Schema),
         ("SEQUENCE", CommentObject::Sequence),
+        ("STATISTICS", CommentObject::Statistics),
         ("TABLE", CommentObject::Table),
         ("TYPE", CommentObject::Type),
         ("USER", CommentObject::User),

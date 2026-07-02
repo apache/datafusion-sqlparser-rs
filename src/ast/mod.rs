@@ -402,7 +402,7 @@ impl Visit for Ident {
 
 #[cfg(feature = "visitor")]
 impl VisitMut for Ident {
-    fn visit<V: VisitorMut>(&mut self, visitor: &mut V) -> ControlFlow<V::Break> {
+    fn visit_mut<V: VisitorMut>(&mut self, visitor: &mut V) -> ControlFlow<V::Break> {
         visitor.pre_visit_ident(self)?;
         visitor.post_visit_ident(self)
     }

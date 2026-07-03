@@ -5363,12 +5363,11 @@ fn test_show_external_volumes() {
 #[test]
 fn test_show_external_volumes_like() {
     match snowflake().verified_stmt("SHOW EXTERNAL VOLUMES LIKE 'my_%'") {
-        Statement::ShowExternalVolumes { filter } => match filter {
-            Some(ShowStatementFilter::Like(pattern)) => {
-                assert_eq!("my_%", pattern);
-            }
-            _ => unreachable!(),
-        },
+        Statement::ShowExternalVolumes {
+            filter: Some(ShowStatementFilter::Like(pattern)),
+        } => {
+            assert_eq!("my_%", pattern);
+        }
         _ => unreachable!(),
     }
 }

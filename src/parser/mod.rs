@@ -15115,7 +15115,8 @@ impl<'a> Parser<'a> {
 
         let mut top_before_distinct = false;
         let mut top = None;
-        if self.dialect.supports_top_before_distinct() && self.parse_keyword(Keyword::TOP) {
+        if self.dialect.supports_top_before_distinct() && self.peek_top_clause() {
+            self.expect_keyword(Keyword::TOP)?;
             top = Some(self.parse_top()?);
             top_before_distinct = true;
         }
@@ -15126,7 +15127,8 @@ impl<'a> Parser<'a> {
             self.parse_all_or_distinct()?
         };
 
-        if !self.dialect.supports_top_before_distinct() && self.parse_keyword(Keyword::TOP) {
+        if !self.dialect.supports_top_before_distinct() && self.peek_top_clause() {
+            self.expect_keyword(Keyword::TOP)?;
             top = Some(self.parse_top()?);
         }
 
@@ -19384,6 +19386,18 @@ impl<'a> Parser<'a> {
             None
         };
         Ok(InterpolateExpr { column, expr })
+    }
+
+    /// Returns true if the parser is positioned at a `TOP` clause, i.e. the
+    /// `TOP` keyword followed by `(` or a number. When `TOP` is followed by
+    /// anything else it is an ordinary identifier (column, alias, or table
+    /// name), not the row-limit clause parsed by [`Self::parse_top`].
+    fn peek_top_clause(&self) -> bool {
+        self.peek_keyword(Keyword::TOP)
+            && matches!(
+                self.peek_nth_token_ref(1).token,
+                Token::LParen | Token::Number(_, _)
+            )
     }
 
     /// Parse a TOP clause, MSSQL equivalent of LIMIT,

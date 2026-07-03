@@ -15377,6 +15377,23 @@ fn test_select_top() {
 }
 
 #[test]
+fn parse_top_as_identifier() {
+    // `TOP` is only the row-limit clause when followed by `(` or a number.
+    // Otherwise it is an ordinary identifier and must remain usable as a
+    // column name, alias, or table name. Covers both the `TOP`-before-distinct
+    // dialects and the general case.
+    let dialects = all_dialects_where(|d| d.supports_top_before_distinct());
+    dialects.verified_stmt("SELECT top FROM tbl");
+    dialects.verified_stmt("SELECT top, bottom FROM tbl");
+    dialects.verified_stmt("SELECT top.val FROM tbl AS top");
+
+    let dialects = all_dialects_where(|d| !d.supports_top_before_distinct());
+    dialects.verified_stmt("SELECT top FROM tbl");
+    dialects.verified_stmt("SELECT top, bottom FROM tbl");
+    dialects.verified_stmt("SELECT top.val FROM tbl AS top");
+}
+
+#[test]
 fn parse_bang_not() {
     let dialects = all_dialects_where(|d| d.supports_bang_not_operator());
     let sql = "SELECT !a, !(b > 3)";

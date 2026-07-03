@@ -5177,6 +5177,36 @@ fn test_create_external_volume_empty_storage_locations() {
 }
 
 #[test]
+fn test_create_external_volume_empty_storage_location() {
+    let sql = "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = (())";
+    snowflake()
+        .parse_sql_statements(sql)
+        .expect_err("parser must reject an empty storage location");
+}
+
+#[test]
+fn test_create_external_volume_comment_before_allow_writes() {
+    // ALLOW_WRITES and COMMENT parse in either order; display order is canonical.
+    let sql = "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = \
+               ((NAME='loc1' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket/')) \
+               COMMENT = 'my comment' ALLOW_WRITES = TRUE";
+    let canonical = "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = \
+                     ((NAME='loc1' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket/')) \
+                     ALLOW_WRITES = TRUE COMMENT = 'my comment'";
+    match snowflake().one_statement_parses_to(sql, canonical) {
+        Statement::CreateExternalVolume {
+            allow_writes,
+            comment,
+            ..
+        } => {
+            assert_eq!(Some(true), allow_writes);
+            assert_eq!(Some("my comment".to_string()), comment);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn test_create_external_volume_allow_writes_non_boolean() {
     let sql = "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = \
                ((NAME='loc1' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket/')) \
@@ -5276,6 +5306,17 @@ fn test_alter_external_volume_remove_storage_location() {
 }
 
 #[test]
+fn test_alter_external_volume_add_empty_storage_location() {
+    let err = snowflake()
+        .parse_sql_statements("ALTER EXTERNAL VOLUME my_vol ADD STORAGE_LOCATION = ()")
+        .expect_err("parser must reject an empty storage location");
+    assert!(
+        err.to_string().contains("storage location options"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
 fn test_alter_external_volume_allow_writes_non_boolean() {
     let err = snowflake()
         .parse_sql_statements("ALTER EXTERNAL VOLUME my_vol SET ALLOW_WRITES = 1")
@@ -5332,7 +5373,11 @@ fn test_drop_external_volume_if_exists() {
 #[test]
 fn test_describe_external_volume() {
     match snowflake().verified_stmt("DESCRIBE EXTERNAL VOLUME my_vol") {
-        Statement::DescribeExternalVolume { name } => {
+        Statement::DescribeExternalVolume {
+            describe_alias,
+            name,
+        } => {
+            assert_eq!(DescribeAlias::Describe, describe_alias);
             assert_eq!("my_vol", name.to_string());
         }
         _ => unreachable!(),
@@ -5341,9 +5386,13 @@ fn test_describe_external_volume() {
 
 #[test]
 fn test_desc_external_volume() {
-    let canonical = "DESCRIBE EXTERNAL VOLUME my_vol";
-    match snowflake().one_statement_parses_to("DESC EXTERNAL VOLUME my_vol", canonical) {
-        Statement::DescribeExternalVolume { name } => {
+    // The DESC spelling is preserved on round-trip.
+    match snowflake().verified_stmt("DESC EXTERNAL VOLUME my_vol") {
+        Statement::DescribeExternalVolume {
+            describe_alias,
+            name,
+        } => {
+            assert_eq!(DescribeAlias::Desc, describe_alias);
             assert_eq!("my_vol", name.to_string());
         }
         _ => unreachable!(),

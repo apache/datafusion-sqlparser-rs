@@ -29,8 +29,8 @@ use crate::ast::helpers::stmt_data_loading::{
 use crate::ast::{
     AlterExternalVolumeOperation, AlterTable, AlterTableOperation, AlterTableType,
     CatalogSyncNamespaceMode, ColumnOption, ColumnPolicy, ColumnPolicyProperty, ContactEntry,
-    CopyIntoSnowflakeKind, CreateTable, CreateTableLikeKind, DollarQuotedString, Ident,
-    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
+    CopyIntoSnowflakeKind, CreateTable, CreateTableLikeKind, DescribeAlias, DollarQuotedString,
+    Ident, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
     IdentityPropertyOrder, InitializeKind, Insert, MultiTableInsertIntoClause,
     MultiTableInsertType, MultiTableInsertValue, MultiTableInsertValues,
     MultiTableInsertWhenClause, ObjectName, ObjectNamePart, RefreshModeKind, RowAccessPolicy,
@@ -287,13 +287,15 @@ impl Dialect for SnowflakeDialect {
             return Some(parse_alter_session(parser, set));
         }
 
-        if parser
-            .parse_one_of_keywords(&[Keyword::DESC, Keyword::DESCRIBE])
-            .is_some()
-        {
+        if let Some(kw) = parser.parse_one_of_keywords(&[Keyword::DESC, Keyword::DESCRIBE]) {
             if parser.parse_keywords(&[Keyword::EXTERNAL, Keyword::VOLUME]) {
                 // DESC[RIBE] EXTERNAL VOLUME
-                return Some(parse_describe_external_volume(parser));
+                let describe_alias = if kw == Keyword::DESC {
+                    DescribeAlias::Desc
+                } else {
+                    DescribeAlias::Describe
+                };
+                return Some(parse_describe_external_volume(describe_alias, parser));
             }
             // not EXTERNAL VOLUME — put back DESC/DESCRIBE
             parser.prev_token();
@@ -2013,10 +2015,9 @@ fn parse_multi_table_insert_when_clauses(
 
 /// Parse `CREATE [OR REPLACE] EXTERNAL VOLUME [IF NOT EXISTS] <name> ...`
 ///
-/// Each storage location is a parenthesized `KEY = value` option list; the
-/// options (and the `ENCRYPTION = (...)` sub-list) are parsed generically via
-/// [`Parser::parse_key_value_options`], so field order and the exact option
-/// set are left to the caller rather than validated here.
+/// Each storage location is parsed by [`parse_external_volume_storage_location`];
+/// the trailing `ALLOW_WRITES` and `COMMENT` properties are accepted in any
+/// order.
 fn parse_create_external_volume(
     or_replace: bool,
     parser: &mut Parser,
@@ -2028,26 +2029,22 @@ fn parse_create_external_volume(
     parser.expect_token(&Token::Eq)?;
     parser.expect_token(&Token::LParen)?;
 
-    let mut storage_locations = vec![];
-    loop {
-        storage_locations.push(parser.parse_key_value_options(true, &[])?);
-        if !parser.consume_token(&Token::Comma) {
-            break;
-        }
-    }
+    let storage_locations = parser.parse_comma_separated(parse_external_volume_storage_location)?;
     parser.expect_token(&Token::RParen)?;
 
     let mut allow_writes = None;
     let mut comment = None;
 
-    if parser.parse_keyword(Keyword::ALLOW_WRITES) {
-        parser.expect_token(&Token::Eq)?;
-        allow_writes = Some(parser.parse_boolean_string()?);
-    }
-
-    if parser.parse_keyword(Keyword::COMMENT) {
-        parser.expect_token(&Token::Eq)?;
-        comment = Some(parser.parse_comment_value()?);
+    loop {
+        if parser.parse_keyword(Keyword::ALLOW_WRITES) {
+            parser.expect_token(&Token::Eq)?;
+            allow_writes = Some(parser.parse_boolean_string()?);
+        } else if parser.parse_keyword(Keyword::COMMENT) {
+            parser.expect_token(&Token::Eq)?;
+            comment = Some(parser.parse_comment_value()?);
+        } else {
+            break;
+        }
     }
 
     Ok(Statement::CreateExternalVolume {
@@ -2068,7 +2065,9 @@ fn parse_alter_external_volume(parser: &mut Parser) -> Result<Statement, ParserE
     let operation = if parser.parse_keyword(Keyword::ADD) {
         parser.expect_keyword_is(Keyword::STORAGE_LOCATION)?;
         parser.expect_token(&Token::Eq)?;
-        AlterExternalVolumeOperation::AddStorageLocation(parser.parse_key_value_options(true, &[])?)
+        AlterExternalVolumeOperation::AddStorageLocation(parse_external_volume_storage_location(
+            parser,
+        )?)
     } else if parser.parse_keyword(Keyword::SET) {
         parser.expect_keyword_is(Keyword::ALLOW_WRITES)?;
         parser.expect_token(&Token::Eq)?;
@@ -2091,10 +2090,31 @@ fn parse_alter_external_volume(parser: &mut Parser) -> Result<Statement, ParserE
     })
 }
 
+/// Parse one parenthesized storage-location option list, e.g.
+/// `(NAME='loc1' STORAGE_PROVIDER='S3' ...)`. The options (and the
+/// `ENCRYPTION = (...)` sub-list) are parsed generically via
+/// [`Parser::parse_key_value_options`]; only an empty list is rejected,
+/// field order and the exact option set are left to the consumer.
+fn parse_external_volume_storage_location(
+    parser: &mut Parser,
+) -> Result<KeyValueOptions, ParserError> {
+    let location = parser.parse_key_value_options(true, &[])?;
+    if location.options.is_empty() {
+        return parser.expected("storage location options", parser.peek_token());
+    }
+    Ok(location)
+}
+
 /// Parse `DESC[RIBE] EXTERNAL VOLUME <name>`
-fn parse_describe_external_volume(parser: &mut Parser) -> Result<Statement, ParserError> {
+fn parse_describe_external_volume(
+    describe_alias: DescribeAlias,
+    parser: &mut Parser,
+) -> Result<Statement, ParserError> {
     let name = parser.parse_object_name(false)?;
-    Ok(Statement::DescribeExternalVolume { name })
+    Ok(Statement::DescribeExternalVolume {
+        describe_alias,
+        name,
+    })
 }
 
 /// Parse `SHOW EXTERNAL VOLUMES [LIKE '<pattern>']`

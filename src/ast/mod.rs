@@ -4569,6 +4569,8 @@ pub enum Statement {
     /// DESC[RIBE] EXTERNAL VOLUME <name>
     /// ```
     DescribeExternalVolume {
+        /// The keyword used, `DESC` or `DESCRIBE`.
+        describe_alias: DescribeAlias,
         /// External volume name.
         name: ObjectName,
     },
@@ -6345,8 +6347,11 @@ impl fmt::Display for Statement {
                     if_exists = if *if_exists { "IF EXISTS " } else { "" },
                 )
             }
-            Statement::DescribeExternalVolume { name } => {
-                write!(f, "DESCRIBE EXTERNAL VOLUME {name}")
+            Statement::DescribeExternalVolume {
+                describe_alias,
+                name,
+            } => {
+                write!(f, "{describe_alias} EXTERNAL VOLUME {name}")
             }
             Statement::ShowExternalVolumes { filter } => {
                 write!(f, "SHOW EXTERNAL VOLUMES")?;

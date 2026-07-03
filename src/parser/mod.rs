@@ -14481,7 +14481,7 @@ impl<'a> Parser<'a> {
 
             let order_by = self.parse_optional_order_by()?;
 
-            let limit_clause = self.parse_optional_limit_clause()?;
+            let mut limit_clause = self.parse_optional_limit_clause()?;
 
             let settings = self.parse_settings()?;
 
@@ -14501,6 +14501,16 @@ impl<'a> Parser<'a> {
                     locks.push(self.parse_lock()?);
                 }
             }
+
+            // Some databases (e.g. PostgreSQL) accept `LIMIT`/`OFFSET` after the
+            // row-locking clause (`... FOR UPDATE SKIP LOCKED LIMIT 5`) as well
+            // as before it. The locking clause above is parsed for every
+            // dialect, so accept a trailing limit here too rather than gating it
+            // behind a dialect flag.
+            if limit_clause.is_none() {
+                limit_clause = self.parse_optional_limit_clause()?;
+            }
+
             let format_clause =
                 if self.dialect.supports_select_format() && self.parse_keyword(Keyword::FORMAT) {
                     if self.parse_keyword(Keyword::NULL) {

@@ -4546,8 +4546,9 @@ pub enum Statement {
         if_not_exists: bool,
         /// External volume name.
         name: ObjectName,
-        /// Storage locations.
-        storage_locations: Vec<ExternalVolumeStorageLocation>,
+        /// Storage locations, each a parenthesized list of key-value options
+        /// (e.g. `(NAME='loc1' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket/')`).
+        storage_locations: Vec<KeyValueOptions>,
         /// Optional `ALLOW_WRITES` setting.
         allow_writes: Option<bool>,
         /// Optional comment.
@@ -4563,15 +4564,6 @@ pub enum Statement {
         if_exists: bool,
         /// The alter operation.
         operation: AlterExternalVolumeOperation,
-    },
-    /// ```sql
-    /// DROP EXTERNAL VOLUME [IF EXISTS] <name>
-    /// ```
-    DropExternalVolume {
-        /// External volume name.
-        name: ObjectName,
-        /// `IF EXISTS` flag.
-        if_exists: bool,
     },
     /// ```sql
     /// DESC[RIBE] EXTERNAL VOLUME <name>
@@ -6350,13 +6342,6 @@ impl fmt::Display for Statement {
                 write!(
                     f,
                     "ALTER EXTERNAL VOLUME {if_exists}{name} {operation}",
-                    if_exists = if *if_exists { "IF EXISTS " } else { "" },
-                )
-            }
-            Statement::DropExternalVolume { name, if_exists } => {
-                write!(
-                    f,
-                    "DROP EXTERNAL VOLUME {if_exists}{name}",
                     if_exists = if *if_exists { "IF EXISTS " } else { "" },
                 )
             }
@@ -8688,6 +8673,8 @@ pub enum ObjectType {
     User,
     /// A stream.
     Stream,
+    /// A Snowflake external volume.
+    ExternalVolume,
 }
 
 impl fmt::Display for ObjectType {
@@ -8706,6 +8693,7 @@ impl fmt::Display for ObjectType {
             ObjectType::Type => "TYPE",
             ObjectType::User => "USER",
             ObjectType::Stream => "STREAM",
+            ObjectType::ExternalVolume => "EXTERNAL VOLUME",
         })
     }
 }
@@ -11130,91 +11118,13 @@ pub struct ShowObjects {
     pub show_options: ShowStatementOptions,
 }
 
-/// A storage location within a Snowflake `EXTERNAL VOLUME`.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct ExternalVolumeStorageLocation {
-    /// The `NAME` of the storage location.
-    pub name: String,
-    /// The `STORAGE_PROVIDER` (e.g. `'S3'`).
-    pub storage_provider: String,
-    /// The `STORAGE_BASE_URL` (e.g. `'s3://bucket/path/'`).
-    pub storage_base_url: String,
-    /// Optional `STORAGE_AWS_ROLE_ARN`.
-    pub storage_aws_role_arn: Option<String>,
-    /// Optional `STORAGE_AWS_EXTERNAL_ID`.
-    pub storage_aws_external_id: Option<String>,
-    /// Optional `ENCRYPTION` settings.
-    pub encryption: Option<ExternalVolumeEncryption>,
-}
-
-impl fmt::Display for ExternalVolumeStorageLocation {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "NAME = '{}' STORAGE_PROVIDER = '{}' STORAGE_BASE_URL = '{}'",
-            value::escape_single_quote_string(&self.name),
-            value::escape_single_quote_string(&self.storage_provider),
-            value::escape_single_quote_string(&self.storage_base_url),
-        )?;
-        if let Some(ref arn) = self.storage_aws_role_arn {
-            write!(
-                f,
-                " STORAGE_AWS_ROLE_ARN = '{}'",
-                value::escape_single_quote_string(arn)
-            )?;
-        }
-        if let Some(ref ext_id) = self.storage_aws_external_id {
-            write!(
-                f,
-                " STORAGE_AWS_EXTERNAL_ID = '{}'",
-                value::escape_single_quote_string(ext_id)
-            )?;
-        }
-        if let Some(ref enc) = self.encryption {
-            write!(f, " ENCRYPTION = ({enc})")?;
-        }
-        Ok(())
-    }
-}
-
-/// Encryption settings for an `EXTERNAL VOLUME` storage location.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct ExternalVolumeEncryption {
-    /// Encryption type: `'AWS_SSE_S3'`, `'AWS_SSE_KMS'`, or `'NONE'`.
-    pub kind: String,
-    /// Optional `KMS_KEY_ID`.
-    pub kms_key_id: Option<String>,
-}
-
-impl fmt::Display for ExternalVolumeEncryption {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "TYPE = '{}'",
-            value::escape_single_quote_string(&self.kind)
-        )?;
-        if let Some(ref key_id) = self.kms_key_id {
-            write!(
-                f,
-                " KMS_KEY_ID = '{}'",
-                value::escape_single_quote_string(key_id)
-            )?;
-        }
-        Ok(())
-    }
-}
-
 /// Operations for `ALTER EXTERNAL VOLUME`.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AlterExternalVolumeOperation {
     /// `ADD STORAGE_LOCATION = ( ... )`
-    AddStorageLocation(ExternalVolumeStorageLocation),
+    AddStorageLocation(KeyValueOptions),
     /// `SET ALLOW_WRITES = TRUE|FALSE`
     SetAllowWrites(bool),
     /// `REMOVE STORAGE_LOCATION '<name>'`

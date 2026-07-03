@@ -4915,13 +4915,24 @@ fn test_select_dollar_column_from_stage() {
     snowflake().verified_stmt("SELECT $1, $2 FROM @mystage1(file_format => 'myformat')");
 }
 
+/// Return the string value of a single-valued option by name, if present.
+fn ext_vol_option<'a>(options: &'a [KeyValueOption], name: &str) -> Option<&'a str> {
+    options
+        .iter()
+        .find(|o| o.option_name == name)
+        .and_then(|o| match &o.option_value {
+            KeyValueOptionKind::Single(v) => match &v.value {
+                Value::SingleQuotedString(s) => Some(s.as_str()),
+                _ => None,
+            },
+            _ => None,
+        })
+}
+
 #[test]
 fn test_create_external_volume_basic() {
-    let sql = concat!(
-        "CREATE EXTERNAL VOLUME my_vol ",
-        "STORAGE_LOCATIONS = (",
-        "(NAME = 'loc1' STORAGE_PROVIDER = 'S3' STORAGE_BASE_URL = 's3://bucket/path/'))",
-    );
+    let sql = "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = \
+               ((NAME='loc1' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket/path/'))";
     match snowflake().verified_stmt(sql) {
         Statement::CreateExternalVolume {
             or_replace,
@@ -4935,11 +4946,13 @@ fn test_create_external_volume_basic() {
             assert!(!if_not_exists);
             assert_eq!("my_vol", name.to_string());
             assert_eq!(1, storage_locations.len());
-            assert_eq!("loc1", storage_locations[0].name);
-            assert_eq!("S3", storage_locations[0].storage_provider);
-            assert_eq!("s3://bucket/path/", storage_locations[0].storage_base_url);
-            assert!(storage_locations[0].storage_aws_role_arn.is_none());
-            assert!(storage_locations[0].encryption.is_none());
+            let loc = &storage_locations[0].options;
+            assert_eq!(Some("loc1"), ext_vol_option(loc, "NAME"));
+            assert_eq!(Some("S3"), ext_vol_option(loc, "STORAGE_PROVIDER"));
+            assert_eq!(
+                Some("s3://bucket/path/"),
+                ext_vol_option(loc, "STORAGE_BASE_URL")
+            );
             assert!(allow_writes.is_none());
             assert!(comment.is_none());
         }
@@ -4949,11 +4962,8 @@ fn test_create_external_volume_basic() {
 
 #[test]
 fn test_create_external_volume_or_replace() {
-    let sql = concat!(
-        "CREATE OR REPLACE EXTERNAL VOLUME my_vol ",
-        "STORAGE_LOCATIONS = (",
-        "(NAME = 'loc1' STORAGE_PROVIDER = 'S3' STORAGE_BASE_URL = 's3://bucket/'))",
-    );
+    let sql = "CREATE OR REPLACE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = \
+               ((NAME='loc1' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket/'))";
     match snowflake().verified_stmt(sql) {
         Statement::CreateExternalVolume { or_replace, .. } => {
             assert!(or_replace);
@@ -4964,11 +4974,8 @@ fn test_create_external_volume_or_replace() {
 
 #[test]
 fn test_create_external_volume_if_not_exists() {
-    let sql = concat!(
-        "CREATE EXTERNAL VOLUME IF NOT EXISTS my_vol ",
-        "STORAGE_LOCATIONS = (",
-        "(NAME = 'loc1' STORAGE_PROVIDER = 'S3' STORAGE_BASE_URL = 's3://bucket/'))",
-    );
+    let sql = "CREATE EXTERNAL VOLUME IF NOT EXISTS my_vol STORAGE_LOCATIONS = \
+               ((NAME='loc1' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket/'))";
     match snowflake().verified_stmt(sql) {
         Statement::CreateExternalVolume { if_not_exists, .. } => {
             assert!(if_not_exists);
@@ -4979,23 +4986,26 @@ fn test_create_external_volume_if_not_exists() {
 
 #[test]
 fn test_create_external_volume_multi_location() {
-    let sql = concat!(
-        "CREATE EXTERNAL VOLUME my_vol ",
-        "STORAGE_LOCATIONS = (",
-        "(NAME = 'loc1' STORAGE_PROVIDER = 'S3' STORAGE_BASE_URL = 's3://bucket1/'), ",
-        "(NAME = 'loc2' STORAGE_PROVIDER = 'S3' STORAGE_BASE_URL = 's3://bucket2/' ",
-        "STORAGE_AWS_ROLE_ARN = 'arn:aws:iam::role/myrole'))",
-    );
+    let sql = "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = \
+               ((NAME='loc1' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket1/'), \
+               (NAME='loc2' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket2/' \
+               STORAGE_AWS_ROLE_ARN='arn:aws:iam::role/myrole'))";
     match snowflake().verified_stmt(sql) {
         Statement::CreateExternalVolume {
             storage_locations, ..
         } => {
             assert_eq!(2, storage_locations.len());
-            assert_eq!("loc1", storage_locations[0].name);
-            assert_eq!("loc2", storage_locations[1].name);
             assert_eq!(
-                Some("arn:aws:iam::role/myrole".to_string()),
-                storage_locations[1].storage_aws_role_arn
+                Some("loc1"),
+                ext_vol_option(&storage_locations[0].options, "NAME")
+            );
+            assert_eq!(
+                Some("loc2"),
+                ext_vol_option(&storage_locations[1].options, "NAME")
+            );
+            assert_eq!(
+                Some("arn:aws:iam::role/myrole"),
+                ext_vol_option(&storage_locations[1].options, "STORAGE_AWS_ROLE_ARN")
             );
         }
         _ => unreachable!(),
@@ -5004,39 +5014,38 @@ fn test_create_external_volume_multi_location() {
 
 #[test]
 fn test_create_external_volume_with_encryption_sse_s3() {
-    let sql = concat!(
-        "CREATE EXTERNAL VOLUME my_vol ",
-        "STORAGE_LOCATIONS = (",
-        "(NAME = 'loc1' STORAGE_PROVIDER = 'S3' STORAGE_BASE_URL = 's3://bucket/' ",
-        "ENCRYPTION = (TYPE = 'AWS_SSE_S3')))",
+    snowflake().verified_stmt(
+        "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = \
+         ((NAME='loc1' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket/' \
+         ENCRYPTION=(TYPE='AWS_SSE_S3')))",
     );
-    match snowflake().verified_stmt(sql) {
-        Statement::CreateExternalVolume {
-            storage_locations, ..
-        } => {
-            let enc = storage_locations[0].encryption.as_ref().unwrap();
-            assert_eq!("AWS_SSE_S3", enc.kind);
-            assert!(enc.kms_key_id.is_none());
-        }
-        _ => unreachable!(),
-    }
 }
 
 #[test]
 fn test_create_external_volume_with_encryption_kms() {
-    let sql = concat!(
-        "CREATE EXTERNAL VOLUME my_vol ",
-        "STORAGE_LOCATIONS = (",
-        "(NAME = 'loc1' STORAGE_PROVIDER = 'S3' STORAGE_BASE_URL = 's3://bucket/' ",
-        "ENCRYPTION = (TYPE = 'AWS_SSE_KMS' KMS_KEY_ID = 'my-key-id')))",
-    );
+    let sql = "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = \
+               ((NAME='loc1' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket/' \
+               ENCRYPTION=(TYPE='AWS_SSE_KMS' KMS_KEY_ID='my-key-id')))";
     match snowflake().verified_stmt(sql) {
         Statement::CreateExternalVolume {
             storage_locations, ..
         } => {
-            let enc = storage_locations[0].encryption.as_ref().unwrap();
-            assert_eq!("AWS_SSE_KMS", enc.kind);
-            assert_eq!(Some("my-key-id".to_string()), enc.kms_key_id);
+            // ENCRYPTION is parsed as a nested key-value option list.
+            let enc = storage_locations[0]
+                .options
+                .iter()
+                .find(|o| o.option_name == "ENCRYPTION")
+                .expect("ENCRYPTION option present");
+            match &enc.option_value {
+                KeyValueOptionKind::KeyValueOptions(inner) => {
+                    assert_eq!(Some("AWS_SSE_KMS"), ext_vol_option(&inner.options, "TYPE"));
+                    assert_eq!(
+                        Some("my-key-id"),
+                        ext_vol_option(&inner.options, "KMS_KEY_ID")
+                    );
+                }
+                _ => unreachable!("ENCRYPTION should be a nested option list"),
+            }
         }
         _ => unreachable!(),
     }
@@ -5044,35 +5053,21 @@ fn test_create_external_volume_with_encryption_kms() {
 
 #[test]
 fn test_create_external_volume_with_encryption_none() {
-    let sql = concat!(
-        "CREATE EXTERNAL VOLUME my_vol ",
-        "STORAGE_LOCATIONS = (",
-        "(NAME = 'loc1' STORAGE_PROVIDER = 'S3' STORAGE_BASE_URL = 's3://bucket/' ",
-        "ENCRYPTION = (TYPE = 'NONE')))",
+    snowflake().verified_stmt(
+        "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = \
+         ((NAME='loc1' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket/' \
+         ENCRYPTION=(TYPE='NONE')))",
     );
-    match snowflake().verified_stmt(sql) {
-        Statement::CreateExternalVolume {
-            storage_locations, ..
-        } => {
-            let enc = storage_locations[0].encryption.as_ref().unwrap();
-            assert_eq!("NONE", enc.kind);
-        }
-        _ => unreachable!(),
-    }
 }
 
 #[test]
 fn test_create_external_volume_full() {
-    let sql = concat!(
-        "CREATE OR REPLACE EXTERNAL VOLUME IF NOT EXISTS my_vol ",
-        "STORAGE_LOCATIONS = (",
-        "(NAME = 'loc1' STORAGE_PROVIDER = 'S3' STORAGE_BASE_URL = 's3://bucket/' ",
-        "STORAGE_AWS_ROLE_ARN = 'arn:aws:iam::role/r' ",
-        "STORAGE_AWS_EXTERNAL_ID = 'ext-id' ",
-        "ENCRYPTION = (TYPE = 'AWS_SSE_KMS' KMS_KEY_ID = 'key'))) ",
-        "ALLOW_WRITES = TRUE ",
-        "COMMENT = 'my comment'",
-    );
+    let sql = "CREATE OR REPLACE EXTERNAL VOLUME IF NOT EXISTS my_vol STORAGE_LOCATIONS = \
+               ((NAME='loc1' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket/' \
+               STORAGE_AWS_ROLE_ARN='arn:aws:iam::role/r' \
+               STORAGE_AWS_EXTERNAL_ID='ext-id' \
+               ENCRYPTION=(TYPE='AWS_SSE_KMS' KMS_KEY_ID='key'))) \
+               ALLOW_WRITES = TRUE COMMENT = 'my comment'";
     match snowflake().verified_stmt(sql) {
         Statement::CreateExternalVolume {
             or_replace,
@@ -5086,8 +5081,8 @@ fn test_create_external_volume_full() {
             assert!(if_not_exists);
             assert_eq!(1, storage_locations.len());
             assert_eq!(
-                Some("ext-id".to_string()),
-                storage_locations[0].storage_aws_external_id
+                Some("ext-id"),
+                ext_vol_option(&storage_locations[0].options, "STORAGE_AWS_EXTERNAL_ID")
             );
             assert_eq!(Some(true), allow_writes);
             assert_eq!(Some("my comment".to_string()), comment);
@@ -5098,12 +5093,9 @@ fn test_create_external_volume_full() {
 
 #[test]
 fn test_create_external_volume_allow_writes_false() {
-    let sql = concat!(
-        "CREATE EXTERNAL VOLUME my_vol ",
-        "STORAGE_LOCATIONS = (",
-        "(NAME = 'loc1' STORAGE_PROVIDER = 'S3' STORAGE_BASE_URL = 's3://bucket/')) ",
-        "ALLOW_WRITES = FALSE",
-    );
+    let sql = "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = \
+               ((NAME='loc1' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket/')) \
+               ALLOW_WRITES = FALSE";
     match snowflake().verified_stmt(sql) {
         Statement::CreateExternalVolume { allow_writes, .. } => {
             assert_eq!(Some(false), allow_writes);
@@ -5113,284 +5105,66 @@ fn test_create_external_volume_allow_writes_false() {
 }
 
 #[test]
-fn test_alter_external_volume_add_storage_location() {
-    let sql = concat!(
-        "ALTER EXTERNAL VOLUME my_vol ADD STORAGE_LOCATION = ",
-        "(NAME = 'loc2' STORAGE_PROVIDER = 'S3' STORAGE_BASE_URL = 's3://bucket2/')",
-    );
-    match snowflake().verified_stmt(sql) {
-        Statement::AlterExternalVolume {
-            name,
-            if_exists,
-            operation,
-        } => {
-            assert_eq!("my_vol", name.to_string());
-            assert!(!if_exists);
-            match operation {
-                AlterExternalVolumeOperation::AddStorageLocation(loc) => {
-                    assert_eq!("loc2", loc.name);
-                    assert_eq!("S3", loc.storage_provider);
-                }
-                _ => unreachable!(),
-            }
-        }
-        _ => unreachable!(),
-    }
-}
-
-#[test]
-fn test_alter_external_volume_set_allow_writes() {
-    let sql = "ALTER EXTERNAL VOLUME my_vol SET ALLOW_WRITES = TRUE";
-    match snowflake().verified_stmt(sql) {
-        Statement::AlterExternalVolume { operation, .. } => {
-            assert_eq!(
-                AlterExternalVolumeOperation::SetAllowWrites(true),
-                operation
-            );
-        }
-        _ => unreachable!(),
-    }
-
-    let sql = "ALTER EXTERNAL VOLUME my_vol SET ALLOW_WRITES = FALSE";
-    match snowflake().verified_stmt(sql) {
-        Statement::AlterExternalVolume { operation, .. } => {
-            assert_eq!(
-                AlterExternalVolumeOperation::SetAllowWrites(false),
-                operation
-            );
-        }
-        _ => unreachable!(),
-    }
-}
-
-#[test]
-fn test_alter_external_volume_if_exists() {
-    let sql = "ALTER EXTERNAL VOLUME IF EXISTS my_vol SET ALLOW_WRITES = TRUE";
-    match snowflake().verified_stmt(sql) {
-        Statement::AlterExternalVolume { if_exists, .. } => {
-            assert!(if_exists);
-        }
-        _ => unreachable!(),
-    }
-}
-
-#[test]
-fn test_alter_external_volume_remove_storage_location() {
-    let sql = "ALTER EXTERNAL VOLUME my_vol REMOVE STORAGE_LOCATION 'loc1'";
-    match snowflake().verified_stmt(sql) {
-        Statement::AlterExternalVolume { operation, .. } => {
-            assert_eq!(
-                AlterExternalVolumeOperation::RemoveStorageLocation("loc1".to_string()),
-                operation
-            );
-        }
-        _ => unreachable!(),
-    }
-}
-
-#[test]
-fn test_drop_external_volume() {
-    let sql = "DROP EXTERNAL VOLUME my_vol";
-    match snowflake().verified_stmt(sql) {
-        Statement::DropExternalVolume { name, if_exists } => {
-            assert_eq!("my_vol", name.to_string());
-            assert!(!if_exists);
-        }
-        _ => unreachable!(),
-    }
-}
-
-#[test]
-fn test_drop_external_volume_if_exists() {
-    let sql = "DROP EXTERNAL VOLUME IF EXISTS my_vol";
-    match snowflake().verified_stmt(sql) {
-        Statement::DropExternalVolume { if_exists, .. } => {
-            assert!(if_exists);
-        }
-        _ => unreachable!(),
-    }
-}
-
-#[test]
-fn test_describe_external_volume() {
-    let sql = "DESCRIBE EXTERNAL VOLUME my_vol";
-    match snowflake().verified_stmt(sql) {
-        Statement::DescribeExternalVolume { name } => {
-            assert_eq!("my_vol", name.to_string());
-        }
-        _ => unreachable!(),
-    }
-}
-
-#[test]
-fn test_show_external_volumes() {
-    let sql = "SHOW EXTERNAL VOLUMES";
-    match snowflake().verified_stmt(sql) {
-        Statement::ShowExternalVolumes { filter } => {
-            assert!(filter.is_none());
-        }
-        _ => unreachable!(),
-    }
-}
-
-#[test]
-fn test_show_external_volumes_like() {
-    let sql = "SHOW EXTERNAL VOLUMES LIKE 'my_%'";
-    match snowflake().verified_stmt(sql) {
-        Statement::ShowExternalVolumes { filter } => {
-            assert!(filter.is_some());
-            match filter.unwrap() {
-                ShowStatementFilter::Like(pattern) => {
-                    assert_eq!("my_%", pattern);
-                }
-                _ => unreachable!(),
-            }
-        }
-        _ => unreachable!(),
-    }
-}
-
-#[test]
-fn test_desc_external_volume() {
-    let sql = "DESC EXTERNAL VOLUME my_vol";
-    let canonical = "DESCRIBE EXTERNAL VOLUME my_vol";
-    match snowflake().one_statement_parses_to(sql, canonical) {
-        Statement::DescribeExternalVolume { name } => {
-            assert_eq!("my_vol", name.to_string());
-        }
-        _ => unreachable!(),
-    }
-}
-
-#[test]
 fn test_create_external_volume_comma_separated_fields() {
-    let sql = concat!(
-        "CREATE EXTERNAL VOLUME my_vol ",
-        "STORAGE_LOCATIONS = (",
-        "(NAME = 'loc1', STORAGE_PROVIDER = 'S3', STORAGE_BASE_URL = 's3://bucket/', ",
-        "STORAGE_AWS_ROLE_ARN = 'arn:aws:iam::role/r'))",
+    // Options within a location may be comma-separated; the comma delimiter
+    // is preserved on round-trip.
+    snowflake().verified_stmt(
+        "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = \
+         ((NAME='loc1', STORAGE_PROVIDER='S3', STORAGE_BASE_URL='s3://bucket/', \
+         STORAGE_AWS_ROLE_ARN='arn:aws:iam::role/r'))",
     );
-    let canonical = concat!(
-        "CREATE EXTERNAL VOLUME my_vol ",
-        "STORAGE_LOCATIONS = (",
-        "(NAME = 'loc1' STORAGE_PROVIDER = 'S3' STORAGE_BASE_URL = 's3://bucket/' ",
-        "STORAGE_AWS_ROLE_ARN = 'arn:aws:iam::role/r'))",
-    );
-    match snowflake().one_statement_parses_to(sql, canonical) {
-        Statement::CreateExternalVolume {
-            storage_locations, ..
-        } => {
-            assert_eq!(1, storage_locations.len());
-            assert_eq!("loc1", storage_locations[0].name);
-            assert_eq!("S3", storage_locations[0].storage_provider);
-            assert_eq!("s3://bucket/", storage_locations[0].storage_base_url);
-            assert_eq!(
-                Some("arn:aws:iam::role/r".to_string()),
-                storage_locations[0].storage_aws_role_arn
-            );
-        }
-        _ => unreachable!(),
-    }
 }
 
 #[test]
 fn test_create_external_volume_flexible_field_ordering() {
-    // Real Snowflake accepts STORAGE_BASE_URL anywhere after STORAGE_PROVIDER.
-    // Here STORAGE_AWS_ROLE_ARN appears before STORAGE_BASE_URL.
-    let sql = concat!(
-        "CREATE EXTERNAL VOLUME my_vol ",
-        "STORAGE_LOCATIONS = (",
-        "(NAME = 'loc1' STORAGE_PROVIDER = 'S3' ",
-        "STORAGE_AWS_ROLE_ARN = 'arn:aws:iam::role/r' ",
-        "STORAGE_BASE_URL = 's3://bucket/'))",
+    // Field order within a location is preserved as written (not normalized).
+    snowflake().verified_stmt(
+        "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = \
+         ((NAME='loc1' STORAGE_PROVIDER='S3' \
+         STORAGE_AWS_ROLE_ARN='arn:aws:iam::role/r' STORAGE_BASE_URL='s3://bucket/'))",
     );
-    let canonical = concat!(
-        "CREATE EXTERNAL VOLUME my_vol ",
-        "STORAGE_LOCATIONS = (",
-        "(NAME = 'loc1' STORAGE_PROVIDER = 'S3' STORAGE_BASE_URL = 's3://bucket/' ",
-        "STORAGE_AWS_ROLE_ARN = 'arn:aws:iam::role/r'))",
+}
+
+#[test]
+fn test_create_external_volume_spaces_around_equals_normalized() {
+    // Snowflake accepts spaces around `=`; they are removed on round-trip,
+    // matching the rest of the dialect's key-value option rendering.
+    let sql = "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = \
+               ((NAME = 'loc1' STORAGE_PROVIDER = 'S3' STORAGE_BASE_URL = 's3://bucket/'))";
+    let canonical = "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = \
+                     ((NAME='loc1' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket/'))";
+    snowflake().one_statement_parses_to(sql, canonical);
+}
+
+#[test]
+fn test_create_external_volume_minimal_location_accepted() {
+    // Parsing is syntax-only: a location with no STORAGE_BASE_URL is accepted
+    // (semantic validation is left to the consumer).
+    snowflake().verified_stmt(
+        "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = \
+         ((NAME='loc1' STORAGE_PROVIDER='S3'))",
     );
-    match snowflake().one_statement_parses_to(sql, canonical) {
+}
+
+#[test]
+fn test_create_external_volume_escaped_single_quotes() {
+    // Single quotes inside string values round-trip through escaping.
+    let sql = "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = \
+               ((NAME='lo''c1' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket/')) \
+               COMMENT = 'it''s mine'";
+    match snowflake().verified_stmt(sql) {
         Statement::CreateExternalVolume {
-            storage_locations, ..
+            storage_locations,
+            comment,
+            ..
         } => {
-            assert_eq!(1, storage_locations.len());
-            assert_eq!("loc1", storage_locations[0].name);
-            assert_eq!("S3", storage_locations[0].storage_provider);
-            assert_eq!("s3://bucket/", storage_locations[0].storage_base_url);
             assert_eq!(
-                Some("arn:aws:iam::role/r".to_string()),
-                storage_locations[0].storage_aws_role_arn
+                Some("lo'c1"),
+                ext_vol_option(&storage_locations[0].options, "NAME")
             );
+            assert_eq!(Some("it's mine".to_string()), comment);
         }
         _ => unreachable!(),
-    }
-}
-
-#[test]
-fn test_create_external_volume_missing_storage_base_url() {
-    let sql = concat!(
-        "CREATE EXTERNAL VOLUME my_vol ",
-        "STORAGE_LOCATIONS = (",
-        "(NAME = 'loc1' STORAGE_PROVIDER = 'S3' ",
-        "STORAGE_AWS_ROLE_ARN = 'arn:aws:iam::role/r'))",
-    );
-    let err = snowflake()
-        .parse_sql_statements(sql)
-        .expect_err("parser must reject STORAGE_LOCATION without STORAGE_BASE_URL");
-    assert!(
-        err.to_string().contains("STORAGE_BASE_URL"),
-        "unexpected error: {err}"
-    );
-}
-
-#[test]
-fn test_create_external_volume_duplicate_storage_base_url() {
-    let sql = concat!(
-        "CREATE EXTERNAL VOLUME my_vol ",
-        "STORAGE_LOCATIONS = (",
-        "(NAME = 'loc1' STORAGE_PROVIDER = 'S3' ",
-        "STORAGE_BASE_URL = 's3://bucket/' ",
-        "STORAGE_BASE_URL = 's3://other/'))",
-    );
-    let err = snowflake()
-        .parse_sql_statements(sql)
-        .expect_err("parser must reject duplicate STORAGE_BASE_URL");
-    assert!(
-        err.to_string().contains("duplicate STORAGE_BASE_URL"),
-        "unexpected error: {err}"
-    );
-}
-
-#[test]
-fn test_create_external_volume_duplicate_optional_fields() {
-    // Each optional field is rejected when repeated within a STORAGE_LOCATION.
-    let cases = [
-        (
-            "STORAGE_AWS_ROLE_ARN = 'a' STORAGE_AWS_ROLE_ARN = 'b'",
-            "duplicate STORAGE_AWS_ROLE_ARN",
-        ),
-        (
-            "STORAGE_AWS_EXTERNAL_ID = 'a' STORAGE_AWS_EXTERNAL_ID = 'b'",
-            "duplicate STORAGE_AWS_EXTERNAL_ID",
-        ),
-        (
-            "ENCRYPTION = (TYPE = 'NONE') ENCRYPTION = (TYPE = 'NONE')",
-            "duplicate ENCRYPTION",
-        ),
-    ];
-    for (fields, expected) in cases {
-        let sql = format!(
-            "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = (\
-             (NAME = 'loc1' STORAGE_PROVIDER = 'S3' STORAGE_BASE_URL = 's3://bucket/' {fields}))"
-        );
-        let err = snowflake()
-            .parse_sql_statements(&sql)
-            .expect_err("parser must reject duplicate field");
-        assert!(
-            err.to_string().contains(expected),
-            "expected `{expected}`, got: {err}"
-        );
     }
 }
 
@@ -5404,12 +5178,9 @@ fn test_create_external_volume_empty_storage_locations() {
 
 #[test]
 fn test_create_external_volume_allow_writes_non_boolean() {
-    let sql = concat!(
-        "CREATE EXTERNAL VOLUME my_vol ",
-        "STORAGE_LOCATIONS = (",
-        "(NAME = 'loc1' STORAGE_PROVIDER = 'S3' STORAGE_BASE_URL = 's3://bucket/')) ",
-        "ALLOW_WRITES = 1",
-    );
+    let sql = "CREATE EXTERNAL VOLUME my_vol STORAGE_LOCATIONS = \
+               ((NAME='loc1' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket/')) \
+               ALLOW_WRITES = 1";
     let err = snowflake()
         .parse_sql_statements(sql)
         .expect_err("parser must reject non-boolean ALLOW_WRITES");
@@ -5420,22 +5191,24 @@ fn test_create_external_volume_allow_writes_non_boolean() {
 }
 
 #[test]
-fn test_create_external_volume_escaped_single_quotes() {
-    // Single quotes inside string values round-trip through escaping.
-    let sql = concat!(
-        "CREATE EXTERNAL VOLUME my_vol ",
-        "STORAGE_LOCATIONS = (",
-        "(NAME = 'lo''c1' STORAGE_PROVIDER = 'S3' STORAGE_BASE_URL = 's3://bucket/')) ",
-        "COMMENT = 'it''s mine'",
-    );
+fn test_alter_external_volume_add_storage_location() {
+    let sql = "ALTER EXTERNAL VOLUME my_vol ADD STORAGE_LOCATION = \
+               (NAME='loc2' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket2/')";
     match snowflake().verified_stmt(sql) {
-        Statement::CreateExternalVolume {
-            storage_locations,
-            comment,
-            ..
+        Statement::AlterExternalVolume {
+            name,
+            if_exists,
+            operation,
         } => {
-            assert_eq!("lo'c1", storage_locations[0].name);
-            assert_eq!(Some("it's mine".to_string()), comment);
+            assert_eq!("my_vol", name.to_string());
+            assert!(!if_exists);
+            match operation {
+                AlterExternalVolumeOperation::AddStorageLocation(loc) => {
+                    assert_eq!(Some("loc2"), ext_vol_option(&loc.options, "NAME"));
+                    assert_eq!(Some("S3"), ext_vol_option(&loc.options, "STORAGE_PROVIDER"));
+                }
+                _ => unreachable!(),
+            }
         }
         _ => unreachable!(),
     }
@@ -5443,51 +5216,69 @@ fn test_create_external_volume_escaped_single_quotes() {
 
 #[test]
 fn test_alter_external_volume_add_storage_location_full() {
-    // The ADD path reuses the storage-location parser, so exercise the
-    // optional fields (external id + encryption) through it too.
-    let sql = concat!(
-        "ALTER EXTERNAL VOLUME my_vol ADD STORAGE_LOCATION = ",
-        "(NAME = 'loc2' STORAGE_PROVIDER = 'S3' STORAGE_BASE_URL = 's3://bucket2/' ",
-        "STORAGE_AWS_ROLE_ARN = 'arn:aws:iam::role/r' ",
-        "STORAGE_AWS_EXTERNAL_ID = 'ext-id' ",
-        "ENCRYPTION = (TYPE = 'AWS_SSE_KMS' KMS_KEY_ID = 'key'))",
+    // The ADD path reuses the same option parser, so exercise the optional
+    // fields (external id + encryption) through it too.
+    snowflake().verified_stmt(
+        "ALTER EXTERNAL VOLUME my_vol ADD STORAGE_LOCATION = \
+         (NAME='loc2' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket2/' \
+         STORAGE_AWS_ROLE_ARN='arn:aws:iam::role/r' \
+         STORAGE_AWS_EXTERNAL_ID='ext-id' \
+         ENCRYPTION=(TYPE='AWS_SSE_KMS' KMS_KEY_ID='key'))",
     );
-    match snowflake().verified_stmt(sql) {
-        Statement::AlterExternalVolume { operation, .. } => match operation {
-            AlterExternalVolumeOperation::AddStorageLocation(loc) => {
-                assert_eq!("loc2", loc.name);
-                assert_eq!(Some("ext-id".to_string()), loc.storage_aws_external_id);
-                let enc = loc.encryption.as_ref().unwrap();
-                assert_eq!("AWS_SSE_KMS", enc.kind);
-                assert_eq!(Some("key".to_string()), enc.kms_key_id);
-            }
-            _ => unreachable!(),
-        },
+}
+
+#[test]
+fn test_alter_external_volume_set_allow_writes() {
+    match snowflake().verified_stmt("ALTER EXTERNAL VOLUME my_vol SET ALLOW_WRITES = TRUE") {
+        Statement::AlterExternalVolume { operation, .. } => {
+            assert_eq!(
+                AlterExternalVolumeOperation::SetAllowWrites(true),
+                operation
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match snowflake().verified_stmt("ALTER EXTERNAL VOLUME my_vol SET ALLOW_WRITES = FALSE") {
+        Statement::AlterExternalVolume { operation, .. } => {
+            assert_eq!(
+                AlterExternalVolumeOperation::SetAllowWrites(false),
+                operation
+            );
+        }
         _ => unreachable!(),
     }
 }
 
 #[test]
-fn test_alter_external_volume_add_missing_storage_base_url() {
-    // The ADD path enforces the same required-field rule as CREATE.
-    let sql = concat!(
-        "ALTER EXTERNAL VOLUME my_vol ADD STORAGE_LOCATION = ",
-        "(NAME = 'loc2' STORAGE_PROVIDER = 'S3')",
-    );
-    let err = snowflake()
-        .parse_sql_statements(sql)
-        .expect_err("parser must reject ADD STORAGE_LOCATION without STORAGE_BASE_URL");
-    assert!(
-        err.to_string().contains("STORAGE_BASE_URL"),
-        "unexpected error: {err}"
-    );
+fn test_alter_external_volume_if_exists() {
+    match snowflake()
+        .verified_stmt("ALTER EXTERNAL VOLUME IF EXISTS my_vol SET ALLOW_WRITES = TRUE")
+    {
+        Statement::AlterExternalVolume { if_exists, .. } => {
+            assert!(if_exists);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_alter_external_volume_remove_storage_location() {
+    match snowflake().verified_stmt("ALTER EXTERNAL VOLUME my_vol REMOVE STORAGE_LOCATION 'loc1'") {
+        Statement::AlterExternalVolume { operation, .. } => {
+            assert_eq!(
+                AlterExternalVolumeOperation::RemoveStorageLocation("loc1".to_string()),
+                operation
+            );
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]
 fn test_alter_external_volume_allow_writes_non_boolean() {
-    let sql = "ALTER EXTERNAL VOLUME my_vol SET ALLOW_WRITES = 1";
     let err = snowflake()
-        .parse_sql_statements(sql)
+        .parse_sql_statements("ALTER EXTERNAL VOLUME my_vol SET ALLOW_WRITES = 1")
         .expect_err("parser must reject non-boolean ALLOW_WRITES");
     assert!(
         err.to_string().contains("TRUE or FALSE"),
@@ -5497,12 +5288,87 @@ fn test_alter_external_volume_allow_writes_non_boolean() {
 
 #[test]
 fn test_alter_external_volume_missing_operation() {
-    let sql = "ALTER EXTERNAL VOLUME my_vol";
     let err = snowflake()
-        .parse_sql_statements(sql)
+        .parse_sql_statements("ALTER EXTERNAL VOLUME my_vol")
         .expect_err("parser must reject ALTER EXTERNAL VOLUME without an operation");
     assert!(
         err.to_string().contains("ADD, SET, or REMOVE"),
         "unexpected error: {err}"
     );
+}
+
+#[test]
+fn test_drop_external_volume() {
+    match snowflake().verified_stmt("DROP EXTERNAL VOLUME my_vol") {
+        Statement::Drop {
+            object_type,
+            if_exists,
+            names,
+            ..
+        } => {
+            assert_eq!(ObjectType::ExternalVolume, object_type);
+            assert!(!if_exists);
+            assert_eq!("my_vol", names[0].to_string());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_drop_external_volume_if_exists() {
+    match snowflake().verified_stmt("DROP EXTERNAL VOLUME IF EXISTS my_vol") {
+        Statement::Drop {
+            object_type,
+            if_exists,
+            ..
+        } => {
+            assert_eq!(ObjectType::ExternalVolume, object_type);
+            assert!(if_exists);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_describe_external_volume() {
+    match snowflake().verified_stmt("DESCRIBE EXTERNAL VOLUME my_vol") {
+        Statement::DescribeExternalVolume { name } => {
+            assert_eq!("my_vol", name.to_string());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_desc_external_volume() {
+    let canonical = "DESCRIBE EXTERNAL VOLUME my_vol";
+    match snowflake().one_statement_parses_to("DESC EXTERNAL VOLUME my_vol", canonical) {
+        Statement::DescribeExternalVolume { name } => {
+            assert_eq!("my_vol", name.to_string());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_show_external_volumes() {
+    match snowflake().verified_stmt("SHOW EXTERNAL VOLUMES") {
+        Statement::ShowExternalVolumes { filter } => {
+            assert!(filter.is_none());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_show_external_volumes_like() {
+    match snowflake().verified_stmt("SHOW EXTERNAL VOLUMES LIKE 'my_%'") {
+        Statement::ShowExternalVolumes { filter } => match filter {
+            Some(ShowStatementFilter::Like(pattern)) => {
+                assert_eq!("my_%", pattern);
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
 }

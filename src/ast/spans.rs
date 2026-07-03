@@ -524,7 +524,6 @@ impl Spanned for Statement {
             Statement::Reset(..) => Span::empty(),
             Statement::CreateExternalVolume { .. } => Span::empty(),
             Statement::AlterExternalVolume { .. } => Span::empty(),
-            Statement::DropExternalVolume { .. } => Span::empty(),
             Statement::DescribeExternalVolume { .. } => Span::empty(),
             Statement::ShowExternalVolumes { .. } => Span::empty(),
         }

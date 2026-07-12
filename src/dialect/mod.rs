@@ -366,6 +366,18 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect treats `ALTER USER` as a synonym for `ALTER ROLE`.
+    ///
+    /// In PostgreSQL, `ALTER USER` and `ALTER ROLE` are synonyms that accept the same
+    /// option syntax, so `ALTER USER` is parsed into a [`Statement::AlterRole`].
+    ///
+    /// <https://www.postgresql.org/docs/current/sql-alteruser.html>
+    ///
+    /// [`Statement::AlterRole`]: crate::ast::Statement::AlterRole
+    fn supports_alter_user_as_alter_role(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialects supports `group sets, roll up, or cube` expressions.
     fn supports_group_by_expr(&self) -> bool {
         false
@@ -432,6 +444,12 @@ pub trait Dialect: Debug + Any {
 
     /// Returns true if the dialect supports `(NOT) IN ()` expressions
     fn supports_in_empty_list(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports a bare expression as the right-hand
+    /// side of `IN`, without a parenthesized list — as in `x IN 'a'`.
+    fn supports_in_unparenthesized_expr(&self) -> bool {
         false
     }
 
@@ -837,6 +855,7 @@ pub trait Dialect: Debug + Any {
                     Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(p!(Like)),
                     Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(p!(Like)),
                     Token::Word(w) if w.keyword == Keyword::MATCH => Ok(p!(Like)),
+                    Token::Word(w) if w.keyword == Keyword::GLOB => Ok(p!(Like)),
                     Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
                     Token::Word(w) if w.keyword == Keyword::MEMBER => Ok(p!(Like)),
                     Token::Word(w)
@@ -859,6 +878,7 @@ pub trait Dialect: Debug + Any {
             Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(p!(Like)),
             Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(p!(Like)),
             Token::Word(w) if w.keyword == Keyword::MATCH => Ok(p!(Like)),
+            Token::Word(w) if w.keyword == Keyword::GLOB => Ok(p!(Like)),
             Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
             Token::Word(w) if w.keyword == Keyword::MEMBER => Ok(p!(Like)),
             Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(p!(Between)),
@@ -1183,6 +1203,13 @@ pub trait Dialect: Debug + Any {
 
     /// Returns true if the dialect supports the `LISTEN`, `UNLISTEN` and `NOTIFY` statements
     fn supports_listen_notify(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports `EXCLUDE` table constraints, e.g.
+    /// `EXCLUDE USING gist (c WITH &&)` in `CREATE TABLE`/`ALTER TABLE`.
+    /// See <https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE>.
+    fn supports_exclude_constraint(&self) -> bool {
         false
     }
 
@@ -1767,6 +1794,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports aliased function arguments,
+    /// e.g. `XMLFOREST(a AS x)` in PostgreSQL.
+    fn supports_aliased_function_args(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `USING <format>` in `CREATE TABLE`.
     ///
     /// Example:
@@ -2034,6 +2067,10 @@ mod tests {
 
             fn supports_in_empty_list(&self) -> bool {
                 self.0.supports_in_empty_list()
+            }
+
+            fn supports_in_unparenthesized_expr(&self) -> bool {
+                self.0.supports_in_unparenthesized_expr()
             }
 
             fn convert_type_before_value(&self) -> bool {

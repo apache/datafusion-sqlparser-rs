@@ -80,6 +80,11 @@ impl Dialect for ClickHouseDialect {
         true
     }
 
+    // See <https://clickhouse.com/docs/sql-reference/operators/in>
+    fn supports_in_unparenthesized_expr(&self) -> bool {
+        true
+    }
+
     /// See <https://clickhouse.com/docs/en/sql-reference/functions#higher-order-functions---operator-and-lambdaparams-expr-function>
     fn supports_lambda_functions(&self) -> bool {
         true

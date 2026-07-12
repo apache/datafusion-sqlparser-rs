@@ -31,6 +31,11 @@ impl Dialect for DatabricksDialect {
         matches!(ch, '`')
     }
 
+    /// See <https://docs.databricks.com/en/sql/language-manual/sql-ref-identifiers.html>
+    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+        Some('`')
+    }
+
     fn is_identifier_start(&self, ch: char) -> bool {
         matches!(ch, 'a'..='z' | 'A'..='Z' | '_')
     }

@@ -3545,7 +3545,7 @@ pub struct LockClause {
 
 impl fmt::Display for LockClause {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "FOR {}", &self.lock_type)?;
+        write!(f, "FOR {}", self.lock_type)?;
         if let Some(ref of) = self.of {
             write!(f, " OF {of}")?;
         }

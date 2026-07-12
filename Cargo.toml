@@ -36,6 +36,9 @@ edition = "2021"
 name = "sqlparser"
 path = "src/lib.rs"
 
+[lints.rust]
+unsafe_code = "forbid"
+
 [features]
 default = ["std", "recursive-protection"]
 std = []

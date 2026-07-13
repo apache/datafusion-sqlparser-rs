@@ -1353,6 +1353,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect supports `INSERT INTO ... BY NAME ...`.
+    ///
+    /// Databricks: <https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-dml-insert-into>
+    fn supports_insert_by_name(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports `SET` statements without an explicit
     /// assignment operator such as `=`. For example: `SET SHOWPLAN_XML ON`.
     fn supports_set_stmt_without_operator(&self) -> bool {

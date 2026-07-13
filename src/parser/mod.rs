@@ -18350,7 +18350,7 @@ impl<'a> Parser<'a> {
 
                     let partitioned = self.parse_insert_partition()?;
                     by_name = columns.is_empty()
-                        && dialect_of!(self is DatabricksDialect | GenericDialect)
+                        && self.dialect.supports_insert_by_name()
                         && self.parse_keywords(&[Keyword::BY, Keyword::NAME]);
                     // Hive allows you to specify columns after partitions as well if you want.
                     let after_columns = if dialect_of!(self is HiveDialect) {

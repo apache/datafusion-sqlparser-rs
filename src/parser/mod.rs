@@ -18338,6 +18338,7 @@ impl<'a> Parser<'a> {
 
             let is_mysql = dialect_of!(self is MySqlDialect);
 
+            let mut by_name = false;
             let (columns, partitioned, after_columns, output, source, assignments) = if self
                 .parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES])
             {
@@ -18348,6 +18349,9 @@ impl<'a> Parser<'a> {
                         self.parse_parenthesized_qualified_column_list(Optional, is_mysql)?;
 
                     let partitioned = self.parse_insert_partition()?;
+                    by_name = columns.is_empty()
+                        && dialect_of!(self is DatabricksDialect | GenericDialect)
+                        && self.parse_keywords(&[Keyword::BY, Keyword::NAME]);
                     // Hive allows you to specify columns after partitions as well if you want.
                     let after_columns = if dialect_of!(self is HiveDialect) {
                         self.parse_parenthesized_column_list(Optional, false)?
@@ -18472,6 +18476,7 @@ impl<'a> Parser<'a> {
                 ignore,
                 into,
                 overwrite,
+                by_name,
                 partitioned,
                 columns,
                 after_columns,

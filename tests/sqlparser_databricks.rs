@@ -169,6 +169,37 @@ fn test_databricks_lambdas() {
 }
 
 #[test]
+fn test_databricks_insert_by_name() {
+    match databricks().verified_stmt("INSERT INTO target BY NAME SELECT 1 AS a") {
+        Statement::Insert(Insert {
+            by_name,
+            columns,
+            has_table_keyword,
+            ..
+        }) => {
+            assert!(by_name);
+            assert!(columns.is_empty());
+            assert!(!has_table_keyword);
+        }
+        _ => unreachable!(),
+    }
+
+    match databricks().verified_stmt(
+        "INSERT INTO TABLE lakehouse.dwd.dwd_event_quality_sla_metric_di BY NAME WITH day AS (SELECT 1 AS event_data_id) SELECT event_data_id FROM day",
+    ) {
+        Statement::Insert(Insert {
+            by_name,
+            has_table_keyword,
+            ..
+        }) => {
+            assert!(by_name);
+            assert!(has_table_keyword);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn test_values_clause() {
     let values = Values {
         value_keyword: false,

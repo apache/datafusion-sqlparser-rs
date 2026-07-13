@@ -1353,6 +1353,7 @@ impl Spanned for Insert {
             table,
             table_alias,
             columns,
+            by_name: _,   // bool
             overwrite: _, // bool
             source,
             partitioned,

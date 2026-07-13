@@ -6027,6 +6027,7 @@ fn test_simple_postgres_insert_with_alias() {
                     span: Span::empty(),
                 })
             ],
+            by_name: false,
             overwrite: false,
             source: Some(Box::new(Query {
                 with: None,
@@ -6107,6 +6108,7 @@ fn test_simple_postgres_insert_with_alias() {
                     span: Span::empty(),
                 })
             ],
+            by_name: false,
             overwrite: false,
             source: Some(Box::new(Query {
                 with: None,
@@ -6189,6 +6191,7 @@ fn test_simple_insert_with_quoted_alias() {
                     span: Span::empty(),
                 })
             ],
+            by_name: false,
             overwrite: false,
             source: Some(Box::new(Query {
                 with: None,

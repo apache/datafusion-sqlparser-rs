@@ -18870,6 +18870,14 @@ impl<'a> Parser<'a> {
         let duplicate_treatment = self.parse_duplicate_treatment()?;
         let args = self.parse_comma_separated(Parser::parse_function_args)?;
 
+        // GoogleSQL inline aggregate filter: `AGG(expr WHERE cond [ORDER BY ..])`.
+        // Precedes ORDER BY / LIMIT / HAVING; equivalent to `AGG(expr) FILTER (WHERE cond)`.
+        if dialect_of!(self is GenericDialect | BigQueryDialect)
+            && self.parse_keyword(Keyword::WHERE)
+        {
+            clauses.push(FunctionArgumentClause::Where(self.parse_expr()?));
+        }
+
         if self.dialect.supports_window_function_null_treatment_arg() {
             if let Some(null_treatment) = self.parse_null_treatment()? {
                 clauses.push(FunctionArgumentClause::IgnoreOrRespectNulls(null_treatment));

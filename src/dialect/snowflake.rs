@@ -27,15 +27,16 @@ use crate::ast::helpers::stmt_data_loading::{
     FileStagingCommand, StageLoadSelectItem, StageLoadSelectItemKind, StageParamsObject,
 };
 use crate::ast::{
-    AlterExternalVolumeOperation, AlterTable, AlterTableOperation, AlterTableType,
-    CatalogSyncNamespaceMode, ColumnOption, ColumnPolicy, ColumnPolicyProperty, ContactEntry,
-    CopyIntoSnowflakeKind, CreateTable, CreateTableLikeKind, DescribeAlias, DollarQuotedString,
-    Ident, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
-    IdentityPropertyOrder, InitializeKind, Insert, MultiTableInsertIntoClause,
-    MultiTableInsertType, MultiTableInsertValue, MultiTableInsertValues,
-    MultiTableInsertWhenClause, ObjectName, ObjectNamePart, RefreshModeKind, RowAccessPolicy,
-    ShowObjects, SqlOption, Statement, StorageLifecyclePolicy, StorageSerializationPolicy,
-    TableObject, TagsColumnOption, Value, WrappedCollection,
+    AlterExternalVolume, AlterExternalVolumeOperation, AlterTable, AlterTableOperation,
+    AlterTableType, CatalogSyncNamespaceMode, ColumnOption, ColumnPolicy, ColumnPolicyProperty,
+    ContactEntry, CopyIntoSnowflakeKind, CreateExternalVolume, CreateTable, CreateTableLikeKind,
+    DescribeAlias, DescribeExternalVolume, DollarQuotedString, Ident, IdentityParameters,
+    IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
+    InitializeKind, Insert, MultiTableInsertIntoClause, MultiTableInsertType,
+    MultiTableInsertValue, MultiTableInsertValues, MultiTableInsertWhenClause, ObjectName,
+    ObjectNamePart, RefreshModeKind, RowAccessPolicy, ShowExternalVolumes, ShowObjects, SqlOption,
+    Statement, StorageLifecyclePolicy, StorageSerializationPolicy, TableObject, TagsColumnOption,
+    Value, WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
@@ -2047,14 +2048,15 @@ fn parse_create_external_volume(
         }
     }
 
-    Ok(Statement::CreateExternalVolume {
+    Ok(CreateExternalVolume {
         or_replace,
         if_not_exists,
         name,
         storage_locations,
         allow_writes,
         comment,
-    })
+    }
+    .into())
 }
 
 /// Parse `ALTER EXTERNAL VOLUME [IF EXISTS] <name> ...`
@@ -2083,11 +2085,12 @@ fn parse_alter_external_volume(parser: &mut Parser) -> Result<Statement, ParserE
         );
     };
 
-    Ok(Statement::AlterExternalVolume {
+    Ok(AlterExternalVolume {
         name,
         if_exists,
         operation,
-    })
+    }
+    .into())
 }
 
 /// Parse one parenthesized storage-location option list, e.g.
@@ -2111,14 +2114,15 @@ fn parse_describe_external_volume(
     parser: &mut Parser,
 ) -> Result<Statement, ParserError> {
     let name = parser.parse_object_name(false)?;
-    Ok(Statement::DescribeExternalVolume {
+    Ok(DescribeExternalVolume {
         describe_alias,
         name,
-    })
+    }
+    .into())
 }
 
 /// Parse `SHOW EXTERNAL VOLUMES [LIKE '<pattern>']`
 fn parse_show_external_volumes(parser: &mut Parser) -> Result<Statement, ParserError> {
     let filter = parser.parse_show_statement_filter()?;
-    Ok(Statement::ShowExternalVolumes { filter })
+    Ok(ShowExternalVolumes { filter }.into())
 }

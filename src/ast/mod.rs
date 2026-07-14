@@ -4539,48 +4539,19 @@ pub enum Statement {
     /// CREATE [OR REPLACE] EXTERNAL VOLUME [IF NOT EXISTS] <name>
     /// ```
     /// See <https://docs.snowflake.com/en/sql-reference/sql/create-external-volume>
-    CreateExternalVolume {
-        /// `OR REPLACE` flag.
-        or_replace: bool,
-        /// `IF NOT EXISTS` flag.
-        if_not_exists: bool,
-        /// External volume name.
-        name: ObjectName,
-        /// Storage locations, each a parenthesized list of key-value options
-        /// (e.g. `(NAME='loc1' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket/')`).
-        storage_locations: Vec<KeyValueOptions>,
-        /// Optional `ALLOW_WRITES` setting.
-        allow_writes: Option<bool>,
-        /// Optional comment.
-        comment: Option<String>,
-    },
+    CreateExternalVolume(CreateExternalVolume),
     /// ```sql
     /// ALTER EXTERNAL VOLUME [IF EXISTS] <name> ...
     /// ```
-    AlterExternalVolume {
-        /// External volume name.
-        name: ObjectName,
-        /// `IF EXISTS` flag.
-        if_exists: bool,
-        /// The alter operation.
-        operation: AlterExternalVolumeOperation,
-    },
+    AlterExternalVolume(AlterExternalVolume),
     /// ```sql
     /// DESC[RIBE] EXTERNAL VOLUME <name>
     /// ```
-    DescribeExternalVolume {
-        /// The keyword used, `DESC` or `DESCRIBE`.
-        describe_alias: DescribeAlias,
-        /// External volume name.
-        name: ObjectName,
-    },
+    DescribeExternalVolume(DescribeExternalVolume),
     /// ```sql
     /// SHOW EXTERNAL VOLUMES [LIKE '<pattern>']
     /// ```
-    ShowExternalVolumes {
-        /// Optional filter (e.g. `LIKE`).
-        filter: Option<ShowStatementFilter>,
-    },
+    ShowExternalVolumes(ShowExternalVolumes),
     /// ```sql
     /// ASSERT <condition> [AS <message>]
     /// ```
@@ -6307,59 +6278,10 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateExternalVolume {
-                or_replace,
-                if_not_exists,
-                name,
-                storage_locations,
-                allow_writes,
-                comment,
-            } => {
-                write!(
-                    f,
-                    "CREATE {or_replace}EXTERNAL VOLUME {if_not_exists}{name} STORAGE_LOCATIONS = (",
-                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
-                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                )?;
-                for (i, loc) in storage_locations.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "({loc})")?;
-                }
-                write!(f, ")")?;
-                if let Some(val) = allow_writes {
-                    write!(f, " ALLOW_WRITES = {}", if *val { "TRUE" } else { "FALSE" })?;
-                }
-                if let Some(ref c) = comment {
-                    write!(f, " COMMENT = '{}'", value::escape_single_quote_string(c))?;
-                }
-                Ok(())
-            }
-            Statement::AlterExternalVolume {
-                name,
-                if_exists,
-                operation,
-            } => {
-                write!(
-                    f,
-                    "ALTER EXTERNAL VOLUME {if_exists}{name} {operation}",
-                    if_exists = if *if_exists { "IF EXISTS " } else { "" },
-                )
-            }
-            Statement::DescribeExternalVolume {
-                describe_alias,
-                name,
-            } => {
-                write!(f, "{describe_alias} EXTERNAL VOLUME {name}")
-            }
-            Statement::ShowExternalVolumes { filter } => {
-                write!(f, "SHOW EXTERNAL VOLUMES")?;
-                if let Some(ref filter) = filter {
-                    write!(f, " {filter}")?;
-                }
-                Ok(())
-            }
+            Statement::CreateExternalVolume(s) => write!(f, "{s}"),
+            Statement::AlterExternalVolume(s) => write!(f, "{s}"),
+            Statement::DescribeExternalVolume(s) => write!(f, "{s}"),
+            Statement::ShowExternalVolumes(s) => write!(f, "{s}"),
             Statement::CopyIntoSnowflake {
                 kind,
                 into,
@@ -11123,6 +11045,129 @@ pub struct ShowObjects {
     pub show_options: ShowStatementOptions,
 }
 
+/// ```sql
+/// CREATE [OR REPLACE] EXTERNAL VOLUME [IF NOT EXISTS] <name>
+/// ```
+/// See <https://docs.snowflake.com/en/sql-reference/sql/create-external-volume>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateExternalVolume {
+    /// `OR REPLACE` flag.
+    pub or_replace: bool,
+    /// `IF NOT EXISTS` flag.
+    pub if_not_exists: bool,
+    /// External volume name.
+    pub name: ObjectName,
+    /// Storage locations, each a parenthesized list of key-value options
+    /// (e.g. `(NAME='loc1' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket/')`).
+    pub storage_locations: Vec<KeyValueOptions>,
+    /// Optional `ALLOW_WRITES` setting.
+    pub allow_writes: Option<bool>,
+    /// Optional comment.
+    pub comment: Option<String>,
+}
+
+impl fmt::Display for CreateExternalVolume {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CREATE {or_replace}EXTERNAL VOLUME {if_not_exists}{name} STORAGE_LOCATIONS = (",
+            or_replace = if self.or_replace { "OR REPLACE " } else { "" },
+            if_not_exists = if self.if_not_exists {
+                "IF NOT EXISTS "
+            } else {
+                ""
+            },
+            name = self.name,
+        )?;
+        for (i, loc) in self.storage_locations.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "({loc})")?;
+        }
+        write!(f, ")")?;
+        if let Some(val) = self.allow_writes {
+            write!(f, " ALLOW_WRITES = {}", if val { "TRUE" } else { "FALSE" })?;
+        }
+        if let Some(ref c) = self.comment {
+            write!(f, " COMMENT = '{}'", value::escape_single_quote_string(c))?;
+        }
+        Ok(())
+    }
+}
+
+/// ```sql
+/// ALTER EXTERNAL VOLUME [IF EXISTS] <name> ...
+/// ```
+/// See <https://docs.snowflake.com/en/sql-reference/sql/alter-external-volume>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterExternalVolume {
+    /// External volume name.
+    pub name: ObjectName,
+    /// `IF EXISTS` flag.
+    pub if_exists: bool,
+    /// The alter operation.
+    pub operation: AlterExternalVolumeOperation,
+}
+
+impl fmt::Display for AlterExternalVolume {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "ALTER EXTERNAL VOLUME {if_exists}{name} {operation}",
+            if_exists = if self.if_exists { "IF EXISTS " } else { "" },
+            name = self.name,
+            operation = self.operation,
+        )
+    }
+}
+
+/// ```sql
+/// DESC[RIBE] EXTERNAL VOLUME <name>
+/// ```
+/// See <https://docs.snowflake.com/en/sql-reference/sql/desc-external-volume>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DescribeExternalVolume {
+    /// The keyword used, `DESC` or `DESCRIBE`.
+    pub describe_alias: DescribeAlias,
+    /// External volume name.
+    pub name: ObjectName,
+}
+
+impl fmt::Display for DescribeExternalVolume {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} EXTERNAL VOLUME {}", self.describe_alias, self.name)
+    }
+}
+
+/// ```sql
+/// SHOW EXTERNAL VOLUMES [LIKE '<pattern>']
+/// ```
+/// See <https://docs.snowflake.com/en/sql-reference/sql/show-external-volumes>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowExternalVolumes {
+    /// Optional filter (e.g. `LIKE`).
+    pub filter: Option<ShowStatementFilter>,
+}
+
+impl fmt::Display for ShowExternalVolumes {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "SHOW EXTERNAL VOLUMES")?;
+        if let Some(ref filter) = self.filter {
+            write!(f, " {filter}")?;
+        }
+        Ok(())
+    }
+}
+
 /// Operations for `ALTER EXTERNAL VOLUME`.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -12609,6 +12654,30 @@ impl From<ExportData> for Statement {
 impl From<CreateUser> for Statement {
     fn from(c: CreateUser) -> Self {
         Self::CreateUser(c)
+    }
+}
+
+impl From<CreateExternalVolume> for Statement {
+    fn from(c: CreateExternalVolume) -> Self {
+        Self::CreateExternalVolume(c)
+    }
+}
+
+impl From<AlterExternalVolume> for Statement {
+    fn from(a: AlterExternalVolume) -> Self {
+        Self::AlterExternalVolume(a)
+    }
+}
+
+impl From<DescribeExternalVolume> for Statement {
+    fn from(d: DescribeExternalVolume) -> Self {
+        Self::DescribeExternalVolume(d)
+    }
+}
+
+impl From<ShowExternalVolumes> for Statement {
+    fn from(s: ShowExternalVolumes) -> Self {
+        Self::ShowExternalVolumes(s)
     }
 }
 

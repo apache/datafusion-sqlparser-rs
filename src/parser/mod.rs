@@ -5269,7 +5269,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::USER) {
             self.parse_create_user(or_replace).map(Into::into)
         } else if self.parse_keyword(Keyword::WAREHOUSE) {
-            self.parse_create_warehouse(or_replace)
+            self.parse_create_warehouse(or_replace).map(Into::into)
         } else if or_replace {
             self.expected_ref(
                 "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION or WAREHOUSE after CREATE OR REPLACE",
@@ -5420,12 +5420,12 @@ impl<'a> Parser<'a> {
     /// Parse a `CREATE WAREHOUSE` statement.
     ///
     /// See <https://docs.snowflake.com/en/sql-reference/sql/create-warehouse>
-    fn parse_create_warehouse(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
+    fn parse_create_warehouse(&mut self, or_replace: bool) -> Result<CreateWarehouse, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let name = self.parse_object_name(false)?;
         let _ = self.parse_keyword(Keyword::WITH);
         let options = self.parse_key_value_options(false, &[])?;
-        Ok(Statement::CreateWarehouse {
+        Ok(CreateWarehouse {
             or_replace,
             if_not_exists,
             name,

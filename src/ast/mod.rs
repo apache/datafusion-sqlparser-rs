@@ -4542,16 +4542,7 @@ pub enum Statement {
     /// Snowflake-specific statement to create a virtual warehouse.
     ///
     /// See <https://docs.snowflake.com/en/sql-reference/sql/create-warehouse>
-    CreateWarehouse {
-        /// `OR REPLACE` flag.
-        or_replace: bool,
-        /// `IF NOT EXISTS` flag.
-        if_not_exists: bool,
-        /// Warehouse name.
-        name: ObjectName,
-        /// Warehouse properties and parameters (e.g. `WAREHOUSE_SIZE = 'XSMALL'`).
-        options: KeyValueOptions,
-    },
+    CreateWarehouse(CreateWarehouse),
     /// ```sql
     /// ASSERT <condition> [AS <message>]
     /// ```
@@ -6278,23 +6269,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateWarehouse {
-                or_replace,
-                if_not_exists,
-                name,
-                options,
-            } => {
-                write!(
-                    f,
-                    "CREATE {or_replace}WAREHOUSE {if_not_exists}{name}",
-                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
-                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                )?;
-                if !options.options.is_empty() {
-                    write!(f, " {options}")?;
-                }
-                Ok(())
-            }
+            Statement::CreateWarehouse(s) => write!(f, "{s}"),
             Statement::CopyIntoSnowflake {
                 kind,
                 into,
@@ -11639,6 +11614,45 @@ impl fmt::Display for CreateUser {
     }
 }
 
+/// ```sql
+/// CREATE [ OR REPLACE ] WAREHOUSE [ IF NOT EXISTS ] <name>
+///   [ [ WITH ] <property> = <value> [ ... ] ]
+/// ```
+/// Snowflake-specific statement to create a virtual warehouse.
+///
+/// See <https://docs.snowflake.com/en/sql-reference/sql/create-warehouse>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateWarehouse {
+    /// `OR REPLACE` flag.
+    pub or_replace: bool,
+    /// `IF NOT EXISTS` flag.
+    pub if_not_exists: bool,
+    /// Warehouse name.
+    pub name: ObjectName,
+    /// Warehouse properties and parameters (e.g. `WAREHOUSE_SIZE = 'XSMALL'`).
+    pub options: KeyValueOptions,
+}
+
+impl fmt::Display for CreateWarehouse {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CREATE")?;
+        if self.or_replace {
+            write!(f, " OR REPLACE")?;
+        }
+        write!(f, " WAREHOUSE")?;
+        if self.if_not_exists {
+            write!(f, " IF NOT EXISTS")?;
+        }
+        write!(f, " {}", self.name)?;
+        if !self.options.options.is_empty() {
+            write!(f, " {}", self.options)?;
+        }
+        Ok(())
+    }
+}
+
 /// Modifies the properties of a user
 ///
 /// [Snowflake Syntax:](https://docs.snowflake.com/en/sql-reference/sql/alter-user)
@@ -12507,6 +12521,12 @@ impl From<ExportData> for Statement {
 impl From<CreateUser> for Statement {
     fn from(c: CreateUser) -> Self {
         Self::CreateUser(c)
+    }
+}
+
+impl From<CreateWarehouse> for Statement {
+    fn from(c: CreateWarehouse) -> Self {
+        Self::CreateWarehouse(c)
     }
 }
 

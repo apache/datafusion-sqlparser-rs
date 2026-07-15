@@ -2950,28 +2950,3 @@ fn test_create_snapshot_table() {
         "CREATE SNAPSHOT TABLE IF NOT EXISTS dataset_id.table1 CLONE dataset_id.table2 FOR SYSTEM_TIME AS OF TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 HOUR) OPTIONS(expiration_timestamp = TIMESTAMP '2025-01-01 00:00:00 UTC')",
     );
 }
-
-#[test]
-fn parse_aggregate_with_where_filter() {
-    // GoogleSQL allows an inline `WHERE` filter inside an aggregate call,
-    // e.g. `COUNT(* WHERE cond)` / `SUM(x WHERE cond)`. It is the in-argument
-    // spelling of the standard `AGG(x) FILTER (WHERE cond)`. Round-trips via
-    // the `FunctionArgumentClause::Where` clause.
-    bigquery().verified_stmt("SELECT COUNT(* WHERE x > 1) FROM t");
-    bigquery().verified_stmt("SELECT SUM(x WHERE y > 0) FROM t");
-    // Co-occurs with (and precedes) an in-argument ORDER BY.
-    bigquery().verified_stmt("SELECT ARRAY_AGG(x WHERE x > 100 ORDER BY x DESC) FROM t");
-
-    // The filter is captured as a FunctionArgumentClause::Where.
-    let select = bigquery().verified_only_select("SELECT SUM(salary WHERE dept = 1) FROM emp");
-    let SelectItem::UnnamedExpr(Expr::Function(func)) = &select.projection[0] else {
-        panic!("expected a function projection");
-    };
-    let FunctionArguments::List(list) = &func.args else {
-        panic!("expected a function argument list");
-    };
-    assert!(list
-        .clauses
-        .iter()
-        .any(|c| matches!(c, FunctionArgumentClause::Where(_))));
-}

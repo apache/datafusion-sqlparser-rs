@@ -8294,11 +8294,12 @@ pub enum FunctionArgumentClause {
     ///
     /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#first_value
     IgnoreOrRespectNulls(NullTreatment),
-    /// The inline `WHERE` filter clause on a GoogleSQL aggregate, e.g.
+    /// The inline `WHERE` filter clause on an aggregate call, e.g.
     /// `COUNT(* WHERE cond)` / `SUM(x WHERE cond)` / `ARRAY_AGG(x WHERE cond ORDER BY ..)`.
-    /// Equivalent to the standard `AGG(x) FILTER (WHERE cond)`.
+    /// Popularized by [GoogleSQL]; equivalent to the standard `AGG(x) FILTER (WHERE cond)`.
+    /// Accepted for all dialects since `WHERE` cannot otherwise begin a function argument.
     ///
-    /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#grouping_and_filtering
+    /// [GoogleSQL]: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#grouping_and_filtering
     Where(Expr),
     /// Specifies the the ordering for some ordered set aggregates, e.g. `ARRAY_AGG` on [BigQuery].
     ///

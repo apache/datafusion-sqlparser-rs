@@ -18870,10 +18870,6 @@ impl<'a> Parser<'a> {
         let duplicate_treatment = self.parse_duplicate_treatment()?;
         let args = self.parse_comma_separated(Parser::parse_function_args)?;
 
-        // Inline aggregate filter: `AGG(expr WHERE cond [ORDER BY ..])`, popularized by
-        // GoogleSQL. Precedes ORDER BY / LIMIT / HAVING; equivalent to the standard
-        // `AGG(expr) FILTER (WHERE cond)`. Accepted for all dialects: `WHERE` is a reserved
-        // keyword that cannot begin a function argument, so the syntax is unambiguous.
         if self.parse_keyword(Keyword::WHERE) {
             clauses.push(FunctionArgumentClause::Where(self.parse_expr()?));
         }

@@ -18870,6 +18870,10 @@ impl<'a> Parser<'a> {
         let duplicate_treatment = self.parse_duplicate_treatment()?;
         let args = self.parse_comma_separated(Parser::parse_function_args)?;
 
+        if self.parse_keyword(Keyword::WHERE) {
+            clauses.push(FunctionArgumentClause::Where(self.parse_expr()?));
+        }
+
         if self.dialect.supports_window_function_null_treatment_arg() {
             if let Some(null_treatment) = self.parse_null_treatment()? {
                 clauses.push(FunctionArgumentClause::IgnoreOrRespectNulls(null_treatment));

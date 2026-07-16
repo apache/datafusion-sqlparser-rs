@@ -6149,6 +6149,33 @@ fn parse_aggregate_with_group_by() {
 }
 
 #[test]
+fn parse_aggregate_with_where_filter() {
+    // The inline `WHERE` filter inside an aggregate call, e.g. `COUNT(* WHERE cond)` /
+    // `SUM(x WHERE cond)`, is the in-argument spelling of the standard
+    // `AGG(x) FILTER (WHERE cond)`. Popularized by GoogleSQL, it is accepted for all
+    // dialects (`verified_stmt` round-trips through every dialect).
+    verified_stmt("SELECT COUNT(* WHERE x > 1) FROM t");
+    verified_stmt("SELECT SUM(x WHERE y > 0) FROM t");
+    // Co-occurs with (and precedes) an in-argument ORDER BY.
+    verified_stmt("SELECT ARRAY_AGG(x WHERE x > 100 ORDER BY x DESC) FROM t");
+    // A compound predicate referencing multiple columns round-trips intact.
+    verified_stmt("SELECT ARRAY_AGG(a WHERE b > 0 AND c < 10) FROM t");
+
+    // The filter is captured as a FunctionArgumentClause::Where holding the predicate.
+    let select = verified_only_select("SELECT SUM(salary WHERE dept = 1) FROM emp");
+    let Expr::Function(func) = expr_from_projection(&select.projection[0]) else {
+        panic!("expected a function projection");
+    };
+    let FunctionArguments::List(list) = &func.args else {
+        panic!("expected a function argument list");
+    };
+    assert!(list
+        .clauses
+        .iter()
+        .any(|c| matches!(c, FunctionArgumentClause::Where(Expr::BinaryOp { .. }))));
+}
+
+#[test]
 fn parse_literal_integer() {
     let sql = "SELECT 1, -10, +20";
     let select = verified_only_select(sql);

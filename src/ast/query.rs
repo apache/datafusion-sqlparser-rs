@@ -3778,6 +3778,7 @@ impl fmt::Display for GroupByWithModifier {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "visitor", visit(with = "visit_group_by"))]
 /// Represents the two syntactic forms that `GROUP BY` can take, including
 /// `GROUP BY ALL` with optional modifiers and ordinary `GROUP BY <exprs>`.
 pub enum GroupByExpr {

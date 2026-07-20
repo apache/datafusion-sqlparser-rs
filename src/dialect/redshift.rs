@@ -92,6 +92,11 @@ impl Dialect for RedshiftSqlDialect {
         PostgreSqlDialect {}.is_identifier_part(ch) || ch == '#'
     }
 
+    /// See <https://docs.aws.amazon.com/redshift/latest/dg/r_names.html>
+    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+        Some('"')
+    }
+
     /// redshift has `CONVERT(type, value)` instead of `CONVERT(value, type)`
     /// <https://docs.aws.amazon.com/redshift/latest/dg/r_CONVERT_function.html>
     fn convert_type_before_value(&self) -> bool {
@@ -145,6 +150,10 @@ impl Dialect for RedshiftSqlDialect {
     /// <https://docs.aws.amazon.com/redshift/latest/dg/r_SELECT_list.html>
     fn supports_select_wildcard_with_alias(&self) -> bool {
         true
+    }
+
+    fn supports_left_associative_joins_without_parens(&self) -> bool {
+        false
     }
 
     fn supports_select_exclude(&self) -> bool {

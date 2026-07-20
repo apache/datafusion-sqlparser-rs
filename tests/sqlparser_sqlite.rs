@@ -613,6 +613,24 @@ fn test_regexp_operator() {
 }
 
 #[test]
+fn test_glob_operator() {
+    assert_eq!(
+        sqlite().verified_expr("col GLOB 'pattern'"),
+        Expr::BinaryOp {
+            op: BinaryOperator::Glob,
+            left: Box::new(Expr::Identifier(Ident::new("col"))),
+            right: Box::new(Expr::Value(
+                (Value::SingleQuotedString("pattern".to_string())).with_empty_span()
+            ))
+        }
+    );
+    sqlite().verified_only_select(r#"SELECT count(*) FROM files WHERE name GLOB '*.txt'"#);
+
+    // Should return an error, not panic
+    assert!(sqlite().parse_sql_statements("SELECT 1 GLOB").is_err());
+}
+
+#[test]
 fn test_update_delete_limit() {
     match sqlite().verified_stmt("UPDATE foo SET bar = 1 LIMIT 99") {
         Statement::Update(Update { limit, .. }) => {

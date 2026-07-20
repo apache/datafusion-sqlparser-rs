@@ -15,30 +15,34 @@
 # specific language governing permissions and limitations
 # under the License.
 
-[package]
-name = "sqlparser_derive"
-description = "Procedural (proc) macros for sqlparser"
-version = "0.5.0"
-authors = ["sqlparser-rs authors"]
-homepage = "https://github.com/sqlparser-rs/sqlparser-rs"
-documentation = "https://docs.rs/sqlparser_derive/"
-keywords = ["ansi", "sql", "lexer", "parser"]
-repository = "https://github.com/sqlparser-rs/sqlparser-rs"
-license = "Apache-2.0"
-include = [
-    "src/**/*.rs",
-    "Cargo.toml",
-    "LICENSE.TXT",
-]
-edition = "2021"
+name: Security audit
 
-[lib]
-proc-macro = true
+on:
+  push:
+    branches-ignore:
+      - 'gh-readonly-queue/**'
+    paths:
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+  pull_request:
+    paths:
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+  merge_group:
+  schedule:
+    # Run every day so newly published advisories are caught even when the
+    # dependency tree has not changed.
+    - cron: '0 0 * * *'
 
-[lints.rust]
-unsafe_code = "forbid"
+permissions:
+  contents: read
 
-[dependencies]
-syn = { version = "2.0", default-features = false, features = ["full", "printing", "parsing", "derive", "proc-macro", "clone-impls"] }
-proc-macro2 = "1.0"
-quote = "1.0"
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Run cargo audit
+        run: cargo audit --deny warnings

@@ -176,7 +176,7 @@ pub enum SetExpr {
     /// `MERGE` statement
     Merge(Statement),
     /// `TABLE` command
-    Table(Box<Table>),
+    Table(Box<ExplicitTable>),
 }
 
 impl SetExpr {
@@ -293,28 +293,49 @@ impl fmt::Display for SetQuantifier {
     }
 }
 
+/// SQL:2016 `<explicit table>`: `TABLE <name>`, shorthand for `SELECT * FROM <name>`.
+/// Postgres extends with `ONLY` and trailing `*`; see [`InheritanceModifier`].
+///
+/// <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#explicit-table>
+/// <https://www.postgresql.org/docs/current/sql-select.html#SQL-TABLE>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// A [`TABLE` command]( https://www.postgresql.org/docs/current/sql-select.html#SQL-TABLE)
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-/// A (possibly schema-qualified) table reference used in `FROM` clauses.
-pub struct Table {
-    /// Optional table name (absent for e.g. `TABLE` command without argument).
-    pub table_name: Option<String>,
-    /// Optional schema/catalog name qualifying the table.
-    pub schema_name: Option<String>,
+pub struct ExplicitTable {
+    /// The (possibly schema-qualified) table name.
+    pub name: ObjectName,
+    /// Postgres inheritance modifier (`ONLY` or trailing `*`), if present.
+    pub inheritance: InheritanceModifier,
 }
 
-impl fmt::Display for Table {
+/// Postgres inheritance-hierarchy modifier for table references.
+///
+/// Controls whether a query against a table includes rows from descendant
+/// tables (inheritance children or partitions). See
+/// <https://www.postgresql.org/docs/current/ddl-inherit.html>.
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum InheritanceModifier {
+    /// No modifier — default behavior (descendants included).
+    None,
+    /// `ONLY` prefix — exclude rows from descendant tables.
+    Only,
+    /// Trailing `*` — explicitly include descendant rows. Same effect as
+    /// `None`, preserved as a distinct variant so round-tripping echoes
+    /// what the user wrote.
+    IncludeDescendants,
+}
+
+impl fmt::Display for ExplicitTable {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if let Some(ref table_name) = self.table_name {
-            if let Some(ref schema_name) = self.schema_name {
-                write!(f, "TABLE {}.{}", schema_name, table_name,)?;
-            } else {
-                write!(f, "TABLE {}", table_name)?;
-            }
-        } else {
-            write!(f, "TABLE")?;
+        f.write_str("TABLE ")?;
+        if self.inheritance == InheritanceModifier::Only {
+            f.write_str("ONLY ")?;
+        }
+        write!(f, "{}", self.name)?;
+        if self.inheritance == InheritanceModifier::IncludeDescendants {
+            f.write_str(" *")?;
         }
         Ok(())
     }

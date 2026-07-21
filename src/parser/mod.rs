@@ -565,7 +565,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Convenience method to parse a string with one or more SQL
-    /// statements into produce an Abstract Syntax Tree (AST).
+    /// statements to produce an Abstract Syntax Tree (AST).
     ///
     /// Example
     /// ```
@@ -657,6 +657,10 @@ impl<'a> Parser<'a> {
                     self.parse_raise_stmt().map(Into::into)
                 }
                 Keyword::SELECT | Keyword::WITH | Keyword::VALUES | Keyword::FROM => {
+                    self.prev_token();
+                    self.parse_query().map(Into::into)
+                }
+                Keyword::TABLE if self.dialect.supports_table_command() => {
                     self.prev_token();
                     self.parse_query().map(Into::into)
                 }
@@ -15005,8 +15009,8 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::VALUE) {
             let is_mysql = dialect_of!(self is MySqlDialect);
             SetExpr::Values(self.parse_values(is_mysql, true)?)
-        } else if self.parse_keyword(Keyword::TABLE) {
-            SetExpr::Table(Box::new(self.parse_as_table()?))
+        } else if self.dialect.supports_table_command() && self.parse_keyword(Keyword::TABLE) {
+            SetExpr::Table(Box::new(self.parse_explicit_table()?))
         } else {
             return self.expected_ref(
                 "SELECT, VALUES, or a subquery in the query body",
@@ -15510,49 +15514,40 @@ impl<'a> Parser<'a> {
         Ok(clauses)
     }
 
-    /// Parse `CREATE TABLE x AS TABLE y`
-    pub fn parse_as_table(&mut self) -> Result<Table, ParserError> {
-        let token1 = self.next_token();
-        let token2 = self.next_token();
-        let token3 = self.next_token();
+    /// Parse the body of a TABLE query expression.
+    /// Called after the `TABLE` keyword has been consumed.
+    pub fn parse_explicit_table(&mut self) -> Result<ExplicitTable, ParserError> {
+        let allow_inheritance = self.dialect.supports_explicit_table_inheritance_modifiers();
 
-        let table_name;
-        let schema_name;
-        if token2 == Token::Period {
-            match token1.token {
-                Token::Word(w) => {
-                    schema_name = w.value;
-                }
-                _ => {
-                    return self.expected("Schema name", token1);
-                }
+        let has_only = allow_inheritance && self.parse_keyword(Keyword::ONLY);
+        let parenthesized = has_only && self.consume_token(&Token::LParen);
+
+        let name = self.parse_object_name(true)?;
+
+        if let Some(max) = self.dialect.table_command_max_name_parts() {
+            if name.0.len() > max {
+                return self.expected_ref(
+                    "a table name (optionally schema-qualified)",
+                    self.peek_token_ref(),
+                );
             }
-            match token3.token {
-                Token::Word(w) => {
-                    table_name = w.value;
-                }
-                _ => {
-                    return self.expected("Table name", token3);
-                }
-            }
-            Ok(Table {
-                table_name: Some(table_name),
-                schema_name: Some(schema_name),
-            })
-        } else {
-            match token1.token {
-                Token::Word(w) => {
-                    table_name = w.value;
-                }
-                _ => {
-                    return self.expected("Table name", token1);
-                }
-            }
-            Ok(Table {
-                table_name: Some(table_name),
-                schema_name: None,
-            })
         }
+
+        if parenthesized {
+            self.expect_token(&Token::RParen)?;
+        }
+
+        let has_star = allow_inheritance && !has_only && self.consume_token(&Token::Mul);
+
+        let inheritance = if has_only {
+            InheritanceModifier::Only
+        } else if has_star {
+            InheritanceModifier::IncludeDescendants
+        } else {
+            InheritanceModifier::None
+        };
+
+        Ok(ExplicitTable { name, inheritance })
     }
 
     /// Parse a `SET ROLE` statement. Expects SET to be consumed already.

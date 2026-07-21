@@ -9540,6 +9540,52 @@ fn parse_lock_table() {
 }
 
 #[test]
+fn parse_table_command_inheritance_modifiers() {
+    // ONLY (exclude descendants).
+    pg().verified_stmt("TABLE ONLY films");
+    pg().verified_stmt("TABLE ONLY myschema.films");
+    // Trailing * (explicitly include descendants).
+    pg().verified_stmt("TABLE films *");
+    pg().verified_stmt("TABLE myschema.films *");
+    // Parenthesized ONLY — SQL-standard form, canonicalized to parens-less.
+    pg().one_statement_parses_to("TABLE ONLY (films)", "TABLE ONLY films");
+    // Inheritance modifiers are usable in all contexts the TABLE command is.
+    pg().verified_stmt("CREATE TABLE new_t AS TABLE ONLY old_t");
+    pg().verified_stmt("CREATE TABLE new_t AS TABLE old_t *");
+    pg().verified_stmt("CREATE VIEW v AS TABLE ONLY films");
+    pg().verified_stmt("SELECT * FROM (TABLE ONLY films) AS x");
+}
+
+#[test]
+fn parse_table_command_rejects_invalid() {
+    // Inheritance modifiers are mutually exclusive.
+    assert!(
+        pg().parse_sql_statements("TABLE ONLY films *").is_err(),
+        "expected PG parser to reject: TABLE ONLY films *"
+    );
+
+    // Three-part (catalog-qualified) names are not valid in PostgreSQL.
+    assert!(
+        pg().parse_sql_statements("TABLE db.schema.films").is_err(),
+        "expected PG parser to reject: TABLE db.schema.films"
+    );
+
+    for sql in [
+        "TABLE films WHERE x > 0",
+        "TABLE films GROUP BY x",
+        "TABLE films HAVING count(*) > 1",
+        "TABLE films WINDOW w AS ()",
+        "TABLE films (a, b)",
+        "TABLE films AS f",
+    ] {
+        assert!(
+            pg().parse_sql_statements(sql).is_err(),
+            "expected PG parser to reject: {sql}"
+        );
+    }
+}
+
+#[test]
 fn exclude_as_column_name() {
     // `EXCLUDE` is a non-reserved keyword, so it stays usable as a column name
     // even on dialects that parse `EXCLUDE` constraints: a bare `exclude` not

@@ -4612,13 +4612,15 @@ fn parse_create_table_as() {
 
 #[test]
 fn parse_create_table_as_table() {
+    let dialects = all_dialects_where(|d| d.supports_table_command());
+
     let sql1 = "CREATE TABLE new_table AS TABLE old_table";
 
     let expected_query1 = Box::new(Query {
         with: None,
-        body: Box::new(SetExpr::Table(Box::new(Table {
-            table_name: Some("old_table".to_string()),
-            schema_name: None,
+        body: Box::new(SetExpr::Table(Box::new(ExplicitTable {
+            name: ObjectName::from(vec![Ident::new("old_table")]),
+            inheritance: InheritanceModifier::None,
         }))),
         order_by: None,
         limit_clause: None,
@@ -4630,7 +4632,7 @@ fn parse_create_table_as_table() {
         pipe_operators: vec![],
     });
 
-    match verified_stmt(sql1) {
+    match dialects.verified_stmt(sql1) {
         Statement::CreateTable(CreateTable { query, name, .. }) => {
             assert_eq!(name, ObjectName::from(vec![Ident::new("new_table")]));
             assert_eq!(query.unwrap(), expected_query1);
@@ -4642,9 +4644,9 @@ fn parse_create_table_as_table() {
 
     let expected_query2 = Box::new(Query {
         with: None,
-        body: Box::new(SetExpr::Table(Box::new(Table {
-            table_name: Some("old_table".to_string()),
-            schema_name: Some("schema_name".to_string()),
+        body: Box::new(SetExpr::Table(Box::new(ExplicitTable {
+            name: ObjectName::from(vec![Ident::new("schema_name"), Ident::new("old_table")]),
+            inheritance: InheritanceModifier::None,
         }))),
         order_by: None,
         limit_clause: None,
@@ -4656,13 +4658,52 @@ fn parse_create_table_as_table() {
         pipe_operators: vec![],
     });
 
-    match verified_stmt(sql2) {
+    match dialects.verified_stmt(sql2) {
         Statement::CreateTable(CreateTable { query, name, .. }) => {
             assert_eq!(name, ObjectName::from(vec![Ident::new("new_table")]));
             assert_eq!(query.unwrap(), expected_query2);
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_table_command() {
+    let dialects = all_dialects_where(|d| d.supports_table_command());
+
+    // Top-level.
+    dialects.verified_stmt("TABLE films");
+    // Schema-qualified.
+    dialects.verified_stmt("TABLE myschema.films");
+    // Database-qualified (three-part name) — only for dialects without a parts limit.
+    let permissive = all_dialects_where(|d| {
+        d.supports_table_command() && d.table_command_max_name_parts().is_none()
+    });
+    permissive.verified_stmt("TABLE mydb.myschema.films");
+    // Quoted identifiers — round-trip preserves quoting and case.
+    dialects.verified_stmt("TABLE \"MyTable\"");
+    dialects.verified_stmt("TABLE \"My Schema\".\"My Table\"");
+    // ORDER BY + LIMIT + OFFSET.
+    dialects.verified_stmt("TABLE films ORDER BY did LIMIT 10 OFFSET 2");
+    // FETCH.
+    dialects.verified_stmt("TABLE films FETCH FIRST 3 ROWS ONLY");
+    // UNION of TABLE commands.
+    dialects.verified_stmt("TABLE a UNION TABLE b");
+    // INTERSECT, EXCEPT.
+    dialects.verified_stmt("TABLE a INTERSECT TABLE b");
+    dialects.verified_stmt("TABLE a EXCEPT TABLE b");
+    // Mixed with SELECT.
+    dialects.verified_stmt("TABLE a UNION ALL SELECT * FROM b");
+    // CTE body is TABLE.
+    dialects.verified_stmt("WITH x AS (TABLE films) SELECT * FROM x");
+    // WITH prefix + TABLE at top level.
+    dialects.verified_stmt("WITH x AS (SELECT 1) TABLE films");
+    // Derived table.
+    dialects.verified_stmt("SELECT * FROM (TABLE films) AS x");
+    // FOR locking clauses.
+    dialects.verified_stmt("TABLE films FOR UPDATE");
+    dialects.verified_stmt("TABLE films FOR SHARE");
+    dialects.verified_stmt("TABLE films FOR UPDATE OF films");
 }
 
 #[test]

@@ -4905,3 +4905,33 @@ fn parse_adjacent_string_literal_concatenation() {
 fn parse_group_by_with_rollup() {
     mysql().verified_stmt("SELECT * FROM tbl GROUP BY col1, col2 WITH ROLLUP");
 }
+
+#[test]
+fn parse_table_command() {
+    // Basic.
+    mysql().verified_stmt("TABLE films");
+    // Schema-qualified.
+    mysql().verified_stmt("TABLE myschema.films");
+    // ORDER BY + LIMIT.
+    mysql().verified_stmt("TABLE films ORDER BY title LIMIT 10");
+    // LIMIT with OFFSET.
+    mysql().verified_stmt("TABLE films LIMIT 10 OFFSET 5");
+    // UNION of TABLE commands.
+    mysql().verified_stmt("TABLE a UNION TABLE b");
+    // INTERSECT, EXCEPT.
+    mysql().verified_stmt("TABLE a INTERSECT TABLE b");
+    mysql().verified_stmt("TABLE a EXCEPT TABLE b");
+    // Mixed with SELECT.
+    mysql().verified_stmt("TABLE a UNION ALL SELECT * FROM b");
+    // CREATE TABLE ... AS TABLE.
+    mysql().verified_stmt("CREATE TABLE new_t AS TABLE old_t");
+    // INSERT ... TABLE.
+    mysql().verified_stmt("INSERT INTO t TABLE films");
+    // Three-part (catalog-qualified) names are not valid in MySQL.
+    assert!(
+        mysql()
+            .parse_sql_statements("TABLE db.schema.films")
+            .is_err(),
+        "expected MySQL parser to reject: TABLE db.schema.films"
+    );
+}

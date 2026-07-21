@@ -20,11 +20,12 @@
 //! Test SQL syntax specific to Hive. The parser based on the generic dialect
 //! is also tested (on the inputs it can handle).
 
+use sqlparser::ast::helpers::stmt_create_table::CreateTableBuilder;
 use sqlparser::ast::{
-    ClusteredBy, CommentDef, CreateFunction, CreateFunctionBody, CreateFunctionUsing, CreateTable,
-    Expr, Function, FunctionArgumentList, FunctionArguments, Ident, ObjectName, OrderByExpr,
-    OrderByOptions, OrderBySort, SelectItem, Set, Statement, TableFactor, UnaryOperator, Use,
-    Value,
+    ClusteredBy, ColumnDef, CommentDef, CreateFunction, CreateFunctionBody, CreateFunctionUsing,
+    CreateTable, DataType, Expr, Function, FunctionArgumentList, FunctionArguments,
+    HiveDistributionStyle, Ident, ObjectName, OrderByExpr, OrderByOptions, OrderBySort, SelectItem,
+    Set, Statement, TableFactor, UnaryOperator, Use, Value,
 };
 use sqlparser::dialect::{AnsiDialect, GenericDialect, HiveDialect};
 use sqlparser::parser::ParserError;
@@ -223,6 +224,28 @@ fn create_table_with_clustered_by() {
           "CREATE TABLE db.table_name (a INT, b STRING) PARTITIONED BY (a INT, b STRING) CLUSTERED BY (a, b) SORTED BY (a ASC, b DESC) INTO"
      ).unwrap_err(),
           ParserError::ParserError("Expected: a value, found: EOF".to_string())
+    );
+}
+
+#[test]
+fn display_create_table_with_skewed_by() {
+    let column = |name| ColumnDef {
+        name: Ident::new(name),
+        data_type: DataType::String(None),
+        options: vec![],
+    };
+    let stmt = CreateTableBuilder::new(ObjectName::from(vec![Ident::new("test")]))
+        .columns(vec![column("id")])
+        .hive_distribution(HiveDistributionStyle::SKEWED {
+            columns: vec![column("id")],
+            on: vec![column("id")],
+            stored_as_directories: true,
+        })
+        .build();
+
+    assert_eq!(
+        stmt.to_string(),
+        "CREATE TABLE test (id STRING) SKEWED BY (id STRING) ON (id STRING) STORED AS DIRECTORIES"
     );
 }
 

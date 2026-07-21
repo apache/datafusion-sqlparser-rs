@@ -4780,7 +4780,7 @@ impl fmt::Display for AlterTable {
         if self.only {
             write!(f, "ONLY ")?;
         }
-        write!(f, "{} ", &self.name)?;
+        write!(f, "{} ", self.name)?;
         if let Some(cluster) = &self.on_cluster {
             write!(f, "ON CLUSTER {cluster} ")?;
         }

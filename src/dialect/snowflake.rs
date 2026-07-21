@@ -142,6 +142,11 @@ impl Dialect for SnowflakeDialect {
         ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_'
     }
 
+    /// See <https://docs.snowflake.com/en/sql-reference/identifiers-syntax>
+    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+        Some('"')
+    }
+
     fn supports_projection_trailing_commas(&self) -> bool {
         true
     }

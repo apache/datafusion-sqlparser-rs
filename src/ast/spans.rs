@@ -461,6 +461,7 @@ impl Spanned for Statement {
             Statement::CreateMacro { .. } => Span::empty(),
             Statement::CreateStage { .. } => Span::empty(),
             Statement::CreateFileFormat { .. } => Span::empty(),
+            Statement::CreateWarehouse(..) => Span::empty(),
             Statement::Assert { .. } => Span::empty(),
             Statement::Grant { .. } => Span::empty(),
             Statement::Deny { .. } => Span::empty(),
@@ -1810,6 +1811,7 @@ impl Spanned for FunctionArgumentClause {
     fn span(&self) -> Span {
         match self {
             FunctionArgumentClause::IgnoreOrRespectNulls(_) => Span::empty(),
+            FunctionArgumentClause::Where(expr) => expr.span(),
             FunctionArgumentClause::OrderBy(vec) => union_spans(vec.iter().map(|i| i.expr.span())),
             FunctionArgumentClause::Limit(expr) => expr.span(),
             FunctionArgumentClause::OnOverflow(_) => Span::empty(),

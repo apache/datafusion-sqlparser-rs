@@ -4553,6 +4553,14 @@ pub enum Statement {
     /// ```
     ShowExternalVolumes(ShowExternalVolumes),
     /// ```sql
+    /// CREATE [ OR REPLACE ] WAREHOUSE [ IF NOT EXISTS ] <name>
+    ///   [ [ WITH ] <property> = <value> [ ... ] ]
+    /// ```
+    /// Snowflake-specific statement to create a virtual warehouse.
+    ///
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/create-warehouse>
+    CreateWarehouse(CreateWarehouse),
+    /// ```sql
     /// ASSERT <condition> [AS <message>]
     /// ```
     Assert {
@@ -6282,6 +6290,7 @@ impl fmt::Display for Statement {
             Statement::AlterExternalVolume(s) => write!(f, "{s}"),
             Statement::DescribeExternalVolume(s) => write!(f, "{s}"),
             Statement::ShowExternalVolumes(s) => write!(f, "{s}"),
+            Statement::CreateWarehouse(s) => write!(f, "{s}"),
             Statement::CopyIntoSnowflake {
                 kind,
                 into,
@@ -8315,6 +8324,13 @@ pub enum FunctionArgumentClause {
     ///
     /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#first_value
     IgnoreOrRespectNulls(NullTreatment),
+    /// The inline `WHERE` filter clause on an aggregate call, e.g.
+    /// `COUNT(* WHERE cond)` / `SUM(x WHERE cond)` / `ARRAY_AGG(x WHERE cond ORDER BY ..)`.
+    /// Popularized by [GoogleSQL]; equivalent to the standard `AGG(x) FILTER (WHERE cond)`.
+    /// Accepted for all dialects since `WHERE` cannot otherwise begin a function argument.
+    ///
+    /// [GoogleSQL]: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#grouping_and_filtering
+    Where(Expr),
     /// Specifies the the ordering for some ordered set aggregates, e.g. `ARRAY_AGG` on [BigQuery].
     ///
     /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#array_agg
@@ -8356,6 +8372,7 @@ impl fmt::Display for FunctionArgumentClause {
             FunctionArgumentClause::IgnoreOrRespectNulls(null_treatment) => {
                 write!(f, "{null_treatment}")
             }
+            FunctionArgumentClause::Where(expr) => write!(f, "WHERE {expr}"),
             FunctionArgumentClause::OrderBy(order_by) => {
                 write!(f, "ORDER BY {}", display_comma_separated(order_by))
             }
@@ -8602,6 +8619,8 @@ pub enum ObjectType {
     Stream,
     /// A Snowflake external volume.
     ExternalVolume,
+    /// A warehouse.
+    Warehouse,
 }
 
 impl fmt::Display for ObjectType {
@@ -8621,6 +8640,7 @@ impl fmt::Display for ObjectType {
             ObjectType::User => "USER",
             ObjectType::Stream => "STREAM",
             ObjectType::ExternalVolume => "EXTERNAL VOLUME",
+            ObjectType::Warehouse => "WAREHOUSE",
         })
     }
 }
@@ -11786,6 +11806,45 @@ impl fmt::Display for CreateUser {
     }
 }
 
+/// ```sql
+/// CREATE [ OR REPLACE ] WAREHOUSE [ IF NOT EXISTS ] <name>
+///   [ [ WITH ] <property> = <value> [ ... ] ]
+/// ```
+/// Snowflake-specific statement to create a virtual warehouse.
+///
+/// See <https://docs.snowflake.com/en/sql-reference/sql/create-warehouse>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateWarehouse {
+    /// `OR REPLACE` flag.
+    pub or_replace: bool,
+    /// `IF NOT EXISTS` flag.
+    pub if_not_exists: bool,
+    /// Warehouse name.
+    pub name: ObjectName,
+    /// Warehouse properties and parameters (e.g. `WAREHOUSE_SIZE = 'XSMALL'`).
+    pub options: KeyValueOptions,
+}
+
+impl fmt::Display for CreateWarehouse {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CREATE")?;
+        if self.or_replace {
+            write!(f, " OR REPLACE")?;
+        }
+        write!(f, " WAREHOUSE")?;
+        if self.if_not_exists {
+            write!(f, " IF NOT EXISTS")?;
+        }
+        write!(f, " {}", self.name)?;
+        if !self.options.options.is_empty() {
+            write!(f, " {}", self.options)?;
+        }
+        Ok(())
+    }
+}
+
 /// Modifies the properties of a user
 ///
 /// [Snowflake Syntax:](https://docs.snowflake.com/en/sql-reference/sql/alter-user)
@@ -12026,7 +12085,7 @@ impl fmt::Display for AlterUser {
         let has_props = !self.set_props.options.is_empty();
         if has_props {
             write!(f, " SET")?;
-            write!(f, " {}", &self.set_props)?;
+            write!(f, " {}", self.set_props)?;
         }
         if !self.unset_props.is_empty() {
             write!(f, " UNSET {}", display_comma_separated(&self.unset_props))?;
@@ -12678,6 +12737,12 @@ impl From<DescribeExternalVolume> for Statement {
 impl From<ShowExternalVolumes> for Statement {
     fn from(s: ShowExternalVolumes) -> Self {
         Self::ShowExternalVolumes(s)
+    }
+}
+
+impl From<CreateWarehouse> for Statement {
+    fn from(c: CreateWarehouse) -> Self {
+        Self::CreateWarehouse(c)
     }
 }
 

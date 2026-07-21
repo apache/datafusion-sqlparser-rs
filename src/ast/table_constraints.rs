@@ -456,6 +456,8 @@ pub struct PrimaryKeyConstraint {
     pub index_type: Option<IndexType>,
     /// Identifiers of the columns that form the primary key.
     pub columns: Vec<IndexColumn>,
+    /// INCLUDE clause: <https://www.postgresql.org/docs/current/sql-createtable.html>
+    pub include: Vec<Ident>,
     /// Optional index options such as `USING`.
     pub index_options: Vec<IndexOption>,
     /// Optional characteristics like `DEFERRABLE`.
@@ -473,6 +475,10 @@ impl fmt::Display for PrimaryKeyConstraint {
             display_option(" USING ", "", &self.index_type),
             display_comma_separated(&self.columns),
         )?;
+
+        if !self.include.is_empty() {
+            write!(f, " INCLUDE ({})", display_comma_separated(&self.include))?;
+        }
 
         if !self.index_options.is_empty() {
             write!(f, " {}", display_separated(&self.index_options, " "))?;
@@ -495,6 +501,7 @@ impl crate::ast::Spanned for PrimaryKeyConstraint {
                 .map(|i| i.span)
                 .chain(self.index_name.iter().map(|i| i.span))
                 .chain(self.columns.iter().map(|i| i.span()))
+                .chain(self.include.iter().map(|i| i.span))
                 .chain(self.characteristics.iter().map(|i| i.span())),
         )
     }
@@ -519,6 +526,8 @@ pub struct UniqueConstraint {
     pub index_type: Option<IndexType>,
     /// Identifiers of the columns that are unique.
     pub columns: Vec<IndexColumn>,
+    /// INCLUDE clause: <https://www.postgresql.org/docs/current/sql-createtable.html>
+    pub include: Vec<Ident>,
     /// Optional index options such as `USING`.
     pub index_options: Vec<IndexOption>,
     /// Optional characteristics like `DEFERRABLE`.
@@ -541,6 +550,10 @@ impl fmt::Display for UniqueConstraint {
             display_comma_separated(&self.columns),
         )?;
 
+        if !self.include.is_empty() {
+            write!(f, " INCLUDE ({})", display_comma_separated(&self.include))?;
+        }
+
         if !self.index_options.is_empty() {
             write!(f, " {}", display_separated(&self.index_options, " "))?;
         }
@@ -562,6 +575,7 @@ impl crate::ast::Spanned for UniqueConstraint {
                 .map(|i| i.span)
                 .chain(self.index_name.iter().map(|i| i.span))
                 .chain(self.columns.iter().map(|i| i.span()))
+                .chain(self.include.iter().map(|i| i.span))
                 .chain(self.characteristics.iter().map(|i| i.span())),
         )
     }

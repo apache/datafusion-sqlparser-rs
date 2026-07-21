@@ -4730,6 +4730,10 @@ pub enum Statement {
     /// CREATE [ { TEMPORARY | TEMP } ] SEQUENCE [ IF NOT EXISTS ] <sequence_name>
     /// ```
     /// Define a new sequence:
+    ///
+    /// Note: PostgreSQL allows the option clauses (`INCREMENT`, `MINVALUE`,
+    /// `START`, etc.) to appear in any order.
+    /// See <https://www.postgresql.org/docs/current/sql-createsequence.html>
     CreateSequence {
         /// Whether the sequence is temporary.
         temporary: bool,

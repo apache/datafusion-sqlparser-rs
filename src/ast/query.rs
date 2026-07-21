@@ -1653,6 +1653,21 @@ pub enum TableFactor {
         /// Optional alias for the resulting table.
         alias: Option<TableAlias>,
     },
+    /// Object unpivoting on a SUPER expression in the FROM clause.
+    ///
+    /// Syntax:
+    /// ```sql
+    /// UNPIVOT expression AS value_alias [AT attribute_alias]
+    /// ```
+    /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/query-super.html#unpivoting)
+    UnpivotExpr {
+        /// SUPER expression to unpivot.
+        expression: Expr,
+        /// Alias for the generated unpivoted value.
+        value_alias: Ident,
+        /// Optional alias for the generated attribute key/index.
+        attribute_alias: Option<Ident>,
+    },
     /// A `MATCH_RECOGNIZE` operation on a table.
     ///
     /// See <https://docs.snowflake.com/en/sql-reference/constructs/match_recognize>.
@@ -2419,6 +2434,17 @@ impl fmt::Display for TableFactor {
                 )?;
                 if let Some(alias) = alias {
                     write!(f, " {alias}")?;
+                }
+                Ok(())
+            }
+            TableFactor::UnpivotExpr {
+                expression,
+                value_alias,
+                attribute_alias,
+            } => {
+                write!(f, "UNPIVOT {expression} AS {value_alias}")?;
+                if let Some(attribute_alias) = attribute_alias {
+                    write!(f, " AT {attribute_alias}")?;
                 }
                 Ok(())
             }

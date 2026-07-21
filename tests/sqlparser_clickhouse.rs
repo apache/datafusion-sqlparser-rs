@@ -1846,6 +1846,29 @@ fn parse_inner_array_join() {
     }
 }
 
+#[test]
+fn parse_in_unparenthesized_expr() {
+    // IN [expr] parses to IN ([expr]) and does not cause regressions
+    clickhouse().expr_parses_to("x IN 'a'", "x IN ('a')");
+
+    // The branch must not fire when the next token is `(` (regressions).
+    clickhouse().verified_expr("x IN (1, 2, 3)");
+    clickhouse().verified_stmt("SELECT * FROM t WHERE x IN (SELECT y FROM u)");
+}
+
+#[test]
+fn parse_in_unparenthesized_dictionary_placeholder() {
+    // IN [{placeholder:Type}] parses to IN ({placholder:Type})
+    clickhouse().expr_parses_to("x IN {ids:Array(UInt64)}", "x IN ({ids: Array(UInt64)})");
+    clickhouse().expr_parses_to(
+        "x NOT IN {ids:Array(UInt64)}",
+        "x NOT IN ({ids: Array(UInt64)})",
+    );
+    clickhouse().verified_expr("x IN ({ids: Array(UInt64)})");
+    // Precedence: the trailing `AND` is not swallowed.
+    clickhouse().verified_expr("x IN ({p: Array(UInt64)}) AND y = 1");
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects::new(vec![Box::new(ClickHouseDialect {})])
 }

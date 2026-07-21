@@ -442,6 +442,14 @@ pub enum AlterTableOperation {
         /// Table properties specified as SQL options.
         table_properties: Vec<SqlOption>,
     },
+    /// `SET LOGGED`
+    ///
+    /// Note: this is PostgreSQL-specific.
+    SetLogged,
+    /// `SET UNLOGGED`
+    ///
+    /// Note: this is PostgreSQL-specific.
+    SetUnlogged,
     /// `OWNER TO { <new_owner> | CURRENT_ROLE | CURRENT_USER | SESSION_USER }`
     ///
     /// Note: this is PostgreSQL-specific <https://www.postgresql.org/docs/current/sql-altertable.html>
@@ -970,6 +978,12 @@ impl fmt::Display for AlterTableOperation {
                     "SET TBLPROPERTIES({})",
                     display_comma_separated(table_properties)
                 )
+            }
+            AlterTableOperation::SetLogged => {
+                write!(f, "SET LOGGED")
+            }
+            AlterTableOperation::SetUnlogged => {
+                write!(f, "SET UNLOGGED")
             }
             AlterTableOperation::FreezePartition {
                 partition,
@@ -2903,6 +2917,8 @@ pub struct CreateTable {
     pub or_replace: bool,
     /// `TEMP` or `TEMPORARY` clause
     pub temporary: bool,
+    /// `UNLOGGED` clause
+    pub unlogged: bool,
     /// `EXTERNAL` clause
     pub external: bool,
     /// `DYNAMIC` clause
@@ -3094,7 +3110,7 @@ impl fmt::Display for CreateTable {
         //   `CREATE TABLE t (a INT) AS SELECT a from t2`
         write!(
             f,
-            "CREATE {or_replace}{external}{global}{multiset}{temporary}{transient}{volatile}{dynamic}{iceberg}{snapshot}TABLE {if_not_exists}{name}",
+            "CREATE {or_replace}{external}{global}{multiset}{temporary}{unlogged}{transient}{volatile}{dynamic}{iceberg}{snapshot}TABLE {if_not_exists}{name}",
             or_replace = if self.or_replace { "OR REPLACE " } else { "" },
             external = if self.external { "EXTERNAL " } else { "" },
             snapshot = if self.snapshot { "SNAPSHOT " } else { "" },
@@ -3113,6 +3129,7 @@ impl fmt::Display for CreateTable {
                 .map(|m| if m { "MULTISET " } else { "SET " })
                 .unwrap_or(""),
             temporary = if self.temporary { "TEMPORARY " } else { "" },
+            unlogged = if self.unlogged { "UNLOGGED " } else { "" },
             transient = if self.transient { "TRANSIENT " } else { "" },
             volatile = if self.volatile { "VOLATILE " } else { "" },
             iceberg = if self.iceberg { "ICEBERG " } else { "" },
@@ -4763,7 +4780,7 @@ impl fmt::Display for AlterTable {
         if self.only {
             write!(f, "ONLY ")?;
         }
-        write!(f, "{} ", &self.name)?;
+        write!(f, "{} ", self.name)?;
         if let Some(cluster) = &self.on_cluster {
             write!(f, "ON CLUSTER {cluster} ")?;
         }
@@ -5627,6 +5644,161 @@ impl fmt::Display for AlterFunctionAction {
 }
 
 impl Spanned for AlterFunction {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}
+
+/// Text search object kind.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/textsearch-intro.html).
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TextSearchObjectType {
+    /// `DICTIONARY`
+    Dictionary,
+    /// `CONFIGURATION`
+    Configuration,
+    /// `TEMPLATE`
+    Template,
+    /// `PARSER`
+    Parser,
+}
+
+impl fmt::Display for TextSearchObjectType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TextSearchObjectType::Dictionary => write!(f, "DICTIONARY"),
+            TextSearchObjectType::Configuration => write!(f, "CONFIGURATION"),
+            TextSearchObjectType::Template => write!(f, "TEMPLATE"),
+            TextSearchObjectType::Parser => write!(f, "PARSER"),
+        }
+    }
+}
+
+/// `CREATE TEXT SEARCH ...` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtsdictionary.html).
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateTextSearch {
+    /// The specific text search object type.
+    pub object_type: TextSearchObjectType,
+    /// Object name.
+    pub name: ObjectName,
+    /// Parenthesized options.
+    pub options: Vec<SqlOption>,
+}
+
+impl fmt::Display for CreateTextSearch {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CREATE TEXT SEARCH {} {} ({})",
+            self.object_type,
+            self.name,
+            display_comma_separated(&self.options)
+        )
+    }
+}
+
+impl Spanned for CreateTextSearch {
+    fn span(&self) -> Span {
+        Span::empty()
+    }
+}
+
+/// Option assignment used by `ALTER TEXT SEARCH ... ( ... )`.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertsdictionary.html).
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterTextSearchOption {
+    /// Option name.
+    pub key: Ident,
+    /// Optional value (`option [= value]`).
+    pub value: Option<Expr>,
+}
+
+impl fmt::Display for AlterTextSearchOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.value {
+            Some(value) => write!(f, "{} = {}", self.key, value),
+            None => write!(f, "{}", self.key),
+        }
+    }
+}
+
+/// Operation for `ALTER TEXT SEARCH ...`.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertsdictionary.html).
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterTextSearchOperation {
+    /// `RENAME TO new_name`
+    RenameTo {
+        /// New name.
+        new_name: Ident,
+    },
+    /// `OWNER TO ...`
+    OwnerTo(Owner),
+    /// `SET SCHEMA schema_name`
+    SetSchema {
+        /// Target schema.
+        schema_name: ObjectName,
+    },
+    /// `( option [= value] [, ...] )`
+    SetOptions {
+        /// Text search options to apply.
+        options: Vec<AlterTextSearchOption>,
+    },
+}
+
+impl fmt::Display for AlterTextSearchOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterTextSearchOperation::RenameTo { new_name } => write!(f, "RENAME TO {new_name}"),
+            AlterTextSearchOperation::OwnerTo(owner) => write!(f, "OWNER TO {owner}"),
+            AlterTextSearchOperation::SetSchema { schema_name } => {
+                write!(f, "SET SCHEMA {schema_name}")
+            }
+            AlterTextSearchOperation::SetOptions { options } => {
+                write!(f, "({})", display_comma_separated(options))
+            }
+        }
+    }
+}
+
+/// `ALTER TEXT SEARCH ...` statement.
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertsdictionary.html).
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterTextSearch {
+    /// The specific text search object type.
+    pub object_type: TextSearchObjectType,
+    /// Object name.
+    pub name: ObjectName,
+    /// Operation to apply.
+    pub operation: AlterTextSearchOperation,
+}
+
+impl fmt::Display for AlterTextSearch {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "ALTER TEXT SEARCH {} {} {}",
+            self.object_type, self.name, self.operation
+        )
+    }
+}
+
+impl Spanned for AlterTextSearch {
     fn span(&self) -> Span {
         Span::empty()
     }

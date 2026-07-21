@@ -151,6 +151,10 @@ impl Dialect for RedshiftSqlDialect {
         true
     }
 
+    fn supports_left_associative_joins_without_parens(&self) -> bool {
+        false
+    }
+
     fn supports_select_exclude(&self) -> bool {
         true
     }

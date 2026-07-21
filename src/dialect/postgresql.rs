@@ -161,6 +161,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_alter_user_as_alter_role(&self) -> bool {
+        true
+    }
+
     fn prec_value(&self, prec: Precedence) -> u8 {
         match prec {
             Precedence::Period => PERIOD_PREC,
@@ -205,6 +209,11 @@ impl Dialect for PostgreSqlDialect {
     /// see <https://www.postgresql.org/docs/current/sql-unlisten.html>
     /// see <https://www.postgresql.org/docs/current/sql-notify.html>
     fn supports_listen_notify(&self) -> bool {
+        true
+    }
+
+    /// see <https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE>
+    fn supports_exclude_constraint(&self) -> bool {
         true
     }
 
@@ -320,6 +329,10 @@ impl Dialect for PostgreSqlDialect {
     }
 
     fn supports_xml_expressions(&self) -> bool {
+        true
+    }
+
+    fn supports_aliased_function_args(&self) -> bool {
         true
     }
 

@@ -1659,6 +1659,7 @@ pub enum TableFactor {
     /// ```sql
     /// UNPIVOT expression AS value_alias [AT attribute_alias]
     /// ```
+    /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/query-super.html#unpivoting)
     UnpivotExpr {
         /// SUPER expression to unpivot.
         expression: Expr,

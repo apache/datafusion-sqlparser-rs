@@ -113,7 +113,7 @@ impl Dialect for RedshiftSqlDialect {
         true
     }
 
-    fn supports_unpivot_expr_in_from(&self) -> bool {
+    fn supports_unpivot_expr(&self) -> bool {
         true
     }
 

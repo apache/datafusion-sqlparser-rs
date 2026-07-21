@@ -16249,7 +16249,7 @@ impl<'a> Parser<'a> {
                 with_offset_alias,
                 with_ordinality,
             })
-        } else if self.dialect.supports_unpivot_expr_in_from()
+        } else if self.dialect.supports_unpivot_expr()
             && self.parse_keyword(Keyword::UNPIVOT)
         {
             self.parse_unpivot_expr_table_factor()

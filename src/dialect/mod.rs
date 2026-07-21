@@ -1246,7 +1246,7 @@ pub trait Dialect: Debug + Any {
     /// ```sql
     /// UNPIVOT expression AS value_alias [AT attribute_alias]
     /// ```
-    fn supports_unpivot_expr_in_from(&self) -> bool {
+    fn supports_unpivot_expr(&self) -> bool {
         false
     }
 

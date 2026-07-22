@@ -2533,8 +2533,43 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Consume the next token if it is an unquoted word matching `expected`
+    /// (case-insensitive), returning whether it was consumed.
+    fn parse_unquoted_word_value(&mut self, expected: &str) -> bool {
+        if let Token::Word(word) = &self.peek_token_ref().token {
+            if word.quote_style.is_none() && word.value.eq_ignore_ascii_case(expected) {
+                self.next_token();
+                return true;
+            }
+        }
+        false
+    }
+
+    fn parse_xml_parse_mode(&mut self) -> Result<XmlParseMode, ParserError> {
+        if self.parse_unquoted_word_value("content") {
+            Ok(XmlParseMode::Content)
+        } else if self.parse_unquoted_word_value("document") {
+            Ok(XmlParseMode::Document)
+        } else {
+            self.expected_ref("CONTENT or DOCUMENT", self.peek_token_ref())
+        }
+    }
+
+    fn parse_xmlparse_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let mode = self.parse_xml_parse_mode()?;
+        let expr = Box::new(self.parse_expr()?);
+        self.expect_token(&Token::RParen)?;
+        Ok(Expr::XmlParse(XmlParseExpr { mode, expr }))
+    }
+
     /// Parse a function call expression named by `name` and return it as an `Expr`.
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
+        if self.dialect.supports_xml_expressions()
+            && Self::is_simple_unquoted_object_name(&name, "xmlparse")
+        {
+            return self.parse_xmlparse_expr();
+        }
         self.parse_function_call(name).map(Expr::Function)
     }
 

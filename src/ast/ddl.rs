@@ -2015,6 +2015,12 @@ pub enum ColumnOption {
     /// ```
     /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/invisible-columns.html
     Invisible,
+    /// Column-level auto-increment option with an optional start value.
+    ///
+    /// MySQL and Generic use this unified AST node without a start value.
+    /// Dialects that support a start value can use `Some`.
+    /// Syntax: `AUTO_INCREMENT` or `AUTO_INCREMENT(<start_value>)`.
+    AutoIncrement(Option<u64>),
 }
 
 impl From<UniqueConstraint> for ColumnOption {
@@ -2162,6 +2168,13 @@ impl fmt::Display for ColumnOption {
             }
             Invisible => {
                 write!(f, "INVISIBLE")
+            }
+            AutoIncrement(start) => {
+                f.write_str("AUTO_INCREMENT")?;
+                if let Some(start) = start {
+                    write!(f, "({start})")?;
+                }
+                Ok(())
             }
         }
     }

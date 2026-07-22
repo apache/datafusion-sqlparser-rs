@@ -5325,6 +5325,8 @@ impl<'a> Parser<'a> {
             }
         } else if self.parse_keyword(Keyword::SERVER) {
             self.parse_pg_create_server()
+        } else if self.parse_keywords(&[Keyword::TEXT, Keyword::SEARCH]) {
+            self.parse_create_text_search()
         } else {
             self.expected_ref("an object type after CREATE", self.peek_token_ref())
         }
@@ -8394,6 +8396,38 @@ impl<'a> Parser<'a> {
             name,
             definition,
         })
+    }
+
+    /// Parse a PostgreSQL-specific `CREATE TEXT SEARCH CONFIGURATION | DICTIONARY | PARSER | TEMPLATE` statement.
+    pub fn parse_create_text_search(&mut self) -> Result<Statement, ParserError> {
+        let kind = match self.parse_one_of_keywords(&[
+            Keyword::CONFIGURATION,
+            Keyword::DICTIONARY,
+            Keyword::PARSER,
+            Keyword::TEMPLATE,
+        ]) {
+            Some(Keyword::CONFIGURATION) => TextSearchObjectType::Configuration,
+            Some(Keyword::DICTIONARY) => TextSearchObjectType::Dictionary,
+            Some(Keyword::PARSER) => TextSearchObjectType::Parser,
+            Some(Keyword::TEMPLATE) => TextSearchObjectType::Template,
+            _ => {
+                return self.expected_ref(
+                    "CONFIGURATION, DICTIONARY, PARSER, or TEMPLATE after CREATE TEXT SEARCH",
+                    self.peek_token_ref(),
+                )
+            }
+        };
+
+        let name = self.parse_object_name(false)?;
+        self.expect_token(&Token::LParen)?;
+        let options = self.parse_comma_separated(Parser::parse_sql_option)?;
+        self.expect_token(&Token::RParen)?;
+
+        Ok(Statement::CreateTextSearch(CreateTextSearch {
+            kind,
+            name,
+            options,
+        }))
     }
 
     /// Parse a PostgreSQL-specific [Statement::DropExtension] statement.

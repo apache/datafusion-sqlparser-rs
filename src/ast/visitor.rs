@@ -59,7 +59,7 @@ pub trait VisitMut {
     /// Implementations should call the appropriate mutable visitor hooks to
     /// traverse and allow in-place mutation of child nodes. Returning a
     /// `ControlFlow` value permits early termination of the traversal.
-    fn visit<V: VisitorMut>(&mut self, visitor: &mut V) -> ControlFlow<V::Break>;
+    fn visit_mut<V: VisitorMut>(&mut self, visitor: &mut V) -> ControlFlow<V::Break>;
 }
 
 impl<T: Visit> Visit for Option<T> {
@@ -87,26 +87,26 @@ impl<T: Visit> Visit for Box<T> {
 }
 
 impl<T: VisitMut> VisitMut for Option<T> {
-    fn visit<V: VisitorMut>(&mut self, visitor: &mut V) -> ControlFlow<V::Break> {
+    fn visit_mut<V: VisitorMut>(&mut self, visitor: &mut V) -> ControlFlow<V::Break> {
         if let Some(s) = self {
-            s.visit(visitor)?;
+            s.visit_mut(visitor)?;
         }
         ControlFlow::Continue(())
     }
 }
 
 impl<T: VisitMut> VisitMut for Vec<T> {
-    fn visit<V: VisitorMut>(&mut self, visitor: &mut V) -> ControlFlow<V::Break> {
+    fn visit_mut<V: VisitorMut>(&mut self, visitor: &mut V) -> ControlFlow<V::Break> {
         for v in self {
-            v.visit(visitor)?;
+            v.visit_mut(visitor)?;
         }
         ControlFlow::Continue(())
     }
 }
 
 impl<T: VisitMut> VisitMut for Box<T> {
-    fn visit<V: VisitorMut>(&mut self, visitor: &mut V) -> ControlFlow<V::Break> {
-        T::visit(self, visitor)
+    fn visit_mut<V: VisitorMut>(&mut self, visitor: &mut V) -> ControlFlow<V::Break> {
+        T::visit_mut(self, visitor)
     }
 }
 
@@ -118,7 +118,7 @@ macro_rules! visit_noop {
             }
         })+
         $(impl VisitMut for $t {
-            fn visit<V: VisitorMut>(&mut self, _visitor: &mut V) -> ControlFlow<V::Break> {
+            fn visit_mut<V: VisitorMut>(&mut self, _visitor: &mut V) -> ControlFlow<V::Break> {
                ControlFlow::Continue(())
             }
         })+
@@ -320,7 +320,7 @@ pub trait Visitor {
 /// let mut statements = Parser::parse_sql(&GenericDialect{}, sql).unwrap();
 ///
 /// // Drive the visitor through the AST
-/// statements.visit(&mut Replacer);
+/// statements.visit_mut(&mut Replacer);
 ///
 /// assert_eq!(statements[0].to_string(), "SELECT replaced FROM foo WHERE replaced IN (SELECT replaced FROM bar)");
 /// ```
@@ -503,7 +503,7 @@ where
     F: FnMut(&mut ObjectName) -> ControlFlow<E>,
 {
     let mut visitor = RelationVisitor(f);
-    v.visit(&mut visitor)?;
+    v.visit_mut(&mut visitor)?;
     ControlFlow::Continue(())
 }
 
@@ -633,7 +633,7 @@ where
     V: VisitMut,
     F: FnMut(&mut Expr) -> ControlFlow<E>,
 {
-    v.visit(&mut ExprVisitor(f))?;
+    v.visit_mut(&mut ExprVisitor(f))?;
     ControlFlow::Continue(())
 }
 
@@ -720,7 +720,7 @@ where
     V: VisitMut,
     F: FnMut(&mut Statement) -> ControlFlow<E>,
 {
-    v.visit(&mut StatementVisitor(f))?;
+    v.visit_mut(&mut StatementVisitor(f))?;
     ControlFlow::Continue(())
 }
 
@@ -1059,7 +1059,7 @@ mod tests {
 
 #[cfg(test)]
 mod visit_mut_tests {
-    use crate::ast::{Ident, Statement, Value, ValueWithSpan, VisitMut, VisitorMut};
+    use crate::ast::{Ident, Statement, Value, ValueWithSpan, Visit, VisitMut, Visitor, VisitorMut};
     use crate::dialect::GenericDialect;
     use crate::parser::Parser;
     use crate::tokenizer::Tokenizer;
@@ -1092,7 +1092,7 @@ mod visit_mut_tests {
             .parse_statement()
             .unwrap();
 
-        let flow = s.visit(visitor);
+        let flow = s.visit_mut(visitor);
         assert_eq!(flow, ControlFlow::Continue(()));
         s
     }
@@ -1138,5 +1138,27 @@ mod visit_mut_tests {
         let mut visitor = IdentMutator;
         let mutated = do_visit_mut("SELECT a, b FROM t", &mut visitor);
         assert_eq!(mutated.to_string(), "SELECT A, B FROM T");
+    }
+
+    struct DummyVisitor;
+    impl Visitor for DummyVisitor {
+        type Break = ();
+    }
+
+    struct DummyVisitorMut;
+    impl VisitorMut for DummyVisitorMut {
+        type Break = ();
+    }
+
+    #[test]
+    fn test_both_visit_and_visit_mut() {
+        let mut visitor = DummyVisitor;
+        let mut visitor_mut = DummyVisitorMut;
+        let mut statements = Parser::parse_sql(&GenericDialect {}, "SELECT 1").unwrap();
+
+        let _ = statements.visit(&mut visitor);
+        let _ = statements.visit_mut(&mut visitor_mut);
+
+        assert_eq!(statements[0].to_string(), "SELECT 1");
     }
 }

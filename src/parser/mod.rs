@@ -20354,15 +20354,32 @@ impl<'a> Parser<'a> {
             _ => None,
         };
 
-        let partition_by = if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
-            self.parse_comma_separated(Parser::parse_expr)?
+        let (partition_by_kind, partition_by) =
+            if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
+                (
+                    WindowPartitionByKind::Partition,
+                    self.parse_comma_separated(Parser::parse_expr)?,
+                )
+            } else if self.parse_keywords(&[Keyword::DISTRIBUTE, Keyword::BY]) {
+                (
+                    WindowPartitionByKind::Distribute,
+                    self.parse_comma_separated(Parser::parse_expr)?,
+                )
+            } else {
+                (WindowPartitionByKind::Partition, vec![])
+            };
+        let (order_by_kind, order_by) = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+            (
+                WindowOrderByKind::Order,
+                self.parse_comma_separated(Parser::parse_order_by_expr)?,
+            )
+        } else if self.parse_keywords(&[Keyword::SORT, Keyword::BY]) {
+            (
+                WindowOrderByKind::Sort,
+                self.parse_comma_separated(Parser::parse_order_by_expr)?,
+            )
         } else {
-            vec![]
-        };
-        let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-            self.parse_comma_separated(Parser::parse_order_by_expr)?
-        } else {
-            vec![]
+            (WindowOrderByKind::Order, vec![])
         };
 
         let window_frame = if !self.consume_token(&Token::RParen) {
@@ -20375,7 +20392,9 @@ impl<'a> Parser<'a> {
         Ok(WindowSpec {
             window_name,
             partition_by,
+            partition_by_kind,
             order_by,
+            order_by_kind,
             window_frame,
         })
     }

@@ -569,6 +569,13 @@ fn parse_create_table_with_map_column_comment() {
     );
 }
 
+#[test]
+fn parse_row_number_window_function() {
+    hive().verified_stmt(
+        "SELECT row_number() OVER (DISTRIBUTE BY age SORT BY update_time DESC) AS row_num FROM sdl.xxx",
+    );
+}
+
 fn hive() -> TestedDialects {
     TestedDialects::new(vec![Box::new(HiveDialect {})])
 }

@@ -4392,6 +4392,15 @@ impl<'a> Parser<'a> {
                 negated,
             });
         }
+        if self.dialect.supports_in_unparenthesized_expr()
+            && self.peek_token_ref().token != Token::LParen
+        {
+            return Ok(Expr::InList {
+                expr: Box::new(expr),
+                list: vec![self.parse_expr()?],
+                negated,
+            });
+        }
         self.expect_token(&Token::LParen)?;
         let in_op = match self.maybe_parse(|p| p.parse_query())? {
             Some(subquery) => Expr::InSubquery {
@@ -4836,7 +4845,7 @@ impl<'a> Parser<'a> {
         if self.parse_keyword(expected) {
             Ok(self.get_current_token().clone())
         } else {
-            self.expected_ref(format!("{:?}", &expected).as_str(), self.peek_token_ref())
+            self.expected_ref(format!("{:?}", expected).as_str(), self.peek_token_ref())
         }
     }
 
@@ -4849,7 +4858,7 @@ impl<'a> Parser<'a> {
         if self.parse_keyword(expected) {
             Ok(())
         } else {
-            self.expected_ref(format!("{:?}", &expected).as_str(), self.peek_token_ref())
+            self.expected_ref(format!("{:?}", expected).as_str(), self.peek_token_ref())
         }
     }
 
@@ -5231,6 +5240,10 @@ impl<'a> Parser<'a> {
             .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
             .is_some();
         let volatile = self.parse_keyword(Keyword::VOLATILE);
+        let unlogged = self.peek_keywords(&[Keyword::UNLOGGED, Keyword::TABLE]);
+        if unlogged {
+            self.expect_keyword(Keyword::UNLOGGED)?;
+        }
         let persistent = dialect_of!(self is DuckDbDialect)
             && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
         let create_view_params = self.parse_create_view_params()?;
@@ -5239,8 +5252,10 @@ impl<'a> Parser<'a> {
         } else if self.peek_keywords(&[Keyword::TEXT, Keyword::SEARCH]) {
             self.parse_create_text_search().map(Into::into)
         } else if self.parse_keyword(Keyword::TABLE) {
-            self.parse_create_table(or_replace, temporary, global, transient, volatile, multiset)
-                .map(Into::into)
+            self.parse_create_table(
+                or_replace, temporary, unlogged, global, transient, volatile, multiset,
+            )
+            .map(Into::into)
         } else if self.peek_keyword(Keyword::MATERIALIZED)
             || self.peek_keyword(Keyword::VIEW)
             || self.peek_keywords(&[Keyword::SECURE, Keyword::MATERIALIZED, Keyword::VIEW])
@@ -5270,9 +5285,11 @@ impl<'a> Parser<'a> {
             self.parse_create_user(or_replace).map(Into::into)
         } else if self.parse_keyword(Keyword::AGGREGATE) {
             self.parse_create_aggregate(or_replace).map(Into::into)
+        } else if self.parse_keyword(Keyword::WAREHOUSE) {
+            self.parse_create_warehouse(or_replace).map(Into::into)
         } else if or_replace {
             self.expected_ref(
-                "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION or AGGREGATE after CREATE OR REPLACE",
+                "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION or AGGREGATE or WAREHOUSE after CREATE OR REPLACE",
                 self.peek_token_ref(),
             )
         } else if self.parse_keyword(Keyword::EXTENSION) {
@@ -5414,6 +5431,22 @@ impl<'a> Parser<'a> {
                 options: tags,
                 delimiter: KeyValueOptionsDelimiter::Comma,
             },
+        })
+    }
+
+    /// Parse a `CREATE WAREHOUSE` statement.
+    ///
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/create-warehouse>
+    fn parse_create_warehouse(&mut self, or_replace: bool) -> Result<CreateWarehouse, ParserError> {
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let name = self.parse_object_name(false)?;
+        let _ = self.parse_keyword(Keyword::WITH);
+        let options = self.parse_key_value_options(false, &[])?;
+        Ok(CreateWarehouse {
+            or_replace,
+            if_not_exists,
+            name,
+            options,
         })
     }
 
@@ -7772,6 +7805,8 @@ impl<'a> Parser<'a> {
             ObjectType::User
         } else if self.parse_keyword(Keyword::STREAM) {
             ObjectType::Stream
+        } else if self.parse_keyword(Keyword::WAREHOUSE) {
+            ObjectType::Warehouse
         } else if self.parse_keyword(Keyword::FUNCTION) {
             return self.parse_drop_function().map(Into::into);
         } else if self.parse_keyword(Keyword::POLICY) {
@@ -7799,7 +7834,7 @@ impl<'a> Parser<'a> {
             };
         } else {
             return self.expected_ref(
-                "COLLATION, CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW or USER after DROP",
+                "COLLATION, CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP",
                 self.peek_token_ref(),
             );
         };
@@ -8855,10 +8890,12 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse `CREATE TABLE` statement.
+    #[allow(clippy::too_many_arguments)]
     pub fn parse_create_table(
         &mut self,
         or_replace: bool,
         temporary: bool,
+        unlogged: bool,
         global: Option<bool>,
         transient: bool,
         volatile: bool,
@@ -9040,6 +9077,7 @@ impl<'a> Parser<'a> {
 
         Ok(CreateTableBuilder::new(table_name)
             .temporary(temporary)
+            .unlogged(unlogged)
             .columns(columns)
             .constraints(constraints)
             .or_replace(or_replace)
@@ -11230,6 +11268,10 @@ impl<'a> Parser<'a> {
         } else if self.parse_keywords(&[Keyword::VALIDATE, Keyword::CONSTRAINT]) {
             let name = self.parse_identifier()?;
             AlterTableOperation::ValidateConstraint { name }
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::LOGGED]) {
+            AlterTableOperation::SetLogged
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::UNLOGGED]) {
+            AlterTableOperation::SetUnlogged
         } else {
             let mut options =
                 self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;
@@ -13908,7 +13950,7 @@ impl<'a> Parser<'a> {
                 }
                 Token::EOF => break,
                 token => {
-                    return Err(ParserError::ParserError(format!(
+                    Err(ParserError::ParserError(format!(
                         "Unexpected token in identifier: {token}"
                     )))?;
                 }
@@ -14665,7 +14707,7 @@ impl<'a> Parser<'a> {
 
             let order_by = self.parse_optional_order_by()?;
 
-            let limit_clause = self.parse_optional_limit_clause()?;
+            let mut limit_clause = self.parse_optional_limit_clause()?;
 
             let settings = self.parse_settings()?;
 
@@ -14685,6 +14727,16 @@ impl<'a> Parser<'a> {
                     locks.push(self.parse_lock()?);
                 }
             }
+
+            // Some databases (e.g. PostgreSQL) accept `LIMIT`/`OFFSET` after the
+            // row-locking clause (`... FOR UPDATE SKIP LOCKED LIMIT 5`) as well
+            // as before it. The locking clause above is parsed for every
+            // dialect, so accept a trailing limit here too rather than gating it
+            // behind a dialect flag.
+            if limit_clause.is_none() {
+                limit_clause = self.parse_optional_limit_clause()?;
+            }
+
             let format_clause =
                 if self.dialect.supports_select_format() && self.parse_keyword(Keyword::FORMAT) {
                     if self.parse_keyword(Keyword::NULL) {
@@ -17186,7 +17238,7 @@ impl<'a> Parser<'a> {
                 where_clause = Some(self.parse_expr()?);
             } else {
                 let tok = self.peek_token_ref();
-                return parser_err!(
+                parser_err!(
                     format!(
                         "Expected one of DIMENSIONS, METRICS, FACTS or WHERE, got {}",
                         tok.token
@@ -18682,24 +18734,19 @@ impl<'a> Parser<'a> {
     }
 
     /// Returns true if the immediate tokens look like the
-    /// beginning of a subquery. `(SELECT ...`
+    /// beginning of a subquery. `(SELECT ...` or `((SELECT ...` etc.
     fn peek_subquery_start(&mut self) -> bool {
-        matches!(
-            self.peek_tokens_ref(),
-            [
-                TokenWithSpan {
-                    token: Token::LParen,
-                    ..
-                },
-                TokenWithSpan {
-                    token: Token::Word(Word {
-                        keyword: Keyword::SELECT,
-                        ..
-                    }),
-                    ..
-                },
-            ]
-        )
+        // Handle (SELECT, ((SELECT, (((SELECT, etc.
+        // This makes INSERT consistent with other contexts where nested
+        // parentheses around subqueries are handled by recursive descent.
+        let mut i = 0;
+        loop {
+            match &self.peek_nth_token_ref(i).token {
+                Token::LParen => i += 1,
+                Token::Word(w) if w.keyword == Keyword::SELECT => return i > 0,
+                _ => return false,
+            }
+        }
     }
 
     /// Returns true if the immediate tokens look like the
@@ -18865,37 +18912,59 @@ impl<'a> Parser<'a> {
 
     /// Parse a single function argument, handling named and unnamed variants.
     pub fn parse_function_args(&mut self) -> Result<FunctionArg, ParserError> {
-        let arg = if self.dialect.supports_named_fn_args_with_expr_name() {
-            self.maybe_parse(|p| {
-                let name = p.parse_expr()?;
-                let operator = p.parse_function_named_arg_operator()?;
-                let arg = p.parse_wildcard_expr()?.into();
-                Ok(FunctionArg::ExprNamed {
-                    name,
-                    arg,
-                    operator,
-                })
-            })?
-        } else {
-            self.maybe_parse(|p| {
-                let name = p.parse_identifier()?;
-                let operator = p.parse_function_named_arg_operator()?;
-                let arg = p.parse_wildcard_expr()?.into();
-                Ok(FunctionArg::Named {
-                    name,
-                    arg,
-                    operator,
-                })
-            })?
-        };
+        // Parse the argument expression once, then check for a named-arg
+        // operator. Parsing it speculatively and re-parsing on the unnamed
+        // path is O(2^depth) on nested calls like `CAST(CASE (CAST(CASE (…`.
+        if self.dialect.supports_named_fn_args_with_expr_name() {
+            let expr = self.parse_wildcard_expr()?;
+            // A wildcard is never a named-arg name; only the unnamed form applies.
+            if !matches!(expr, Expr::Wildcard(_) | Expr::QualifiedWildcard(..)) {
+                if let Some(operator) =
+                    self.maybe_parse(|p| p.parse_function_named_arg_operator())?
+                {
+                    let arg = self.parse_wildcard_expr()?.into();
+                    return Ok(FunctionArg::ExprNamed {
+                        name: expr,
+                        arg,
+                        operator,
+                    });
+                }
+            }
+            let arg_expr = self.function_arg_expr_from_wildcard(expr)?;
+            return Ok(FunctionArg::Unnamed(
+                self.maybe_parse_aliased_function_arg(arg_expr)?,
+            ));
+        }
+
+        let arg = self.maybe_parse(|p| {
+            let name = p.parse_identifier()?;
+            let operator = p.parse_function_named_arg_operator()?;
+            let arg = p.parse_wildcard_expr()?.into();
+            Ok(FunctionArg::Named {
+                name,
+                arg,
+                operator,
+            })
+        })?;
         if let Some(arg) = arg {
             return Ok(arg);
         }
         let wildcard_expr = self.parse_wildcard_expr()?;
-        let arg_expr: FunctionArgExpr = match wildcard_expr {
+        let arg_expr = self.function_arg_expr_from_wildcard(wildcard_expr)?;
+        Ok(FunctionArg::Unnamed(
+            self.maybe_parse_aliased_function_arg(arg_expr)?,
+        ))
+    }
+
+    /// Wrap an already-parsed expression as a function argument, parsing any
+    /// trailing wildcard options (e.g. Snowflake's `HASH(* EXCLUDE(col))`).
+    fn function_arg_expr_from_wildcard(
+        &mut self,
+        wildcard_expr: Expr,
+    ) -> Result<FunctionArgExpr, ParserError> {
+        Ok(match wildcard_expr {
             Expr::Wildcard(ref token) if self.dialect.supports_select_wildcard_exclude() => {
-                // Support `* EXCLUDE(col1, col2, ...)` inside function calls (e.g. Snowflake's
-                // `HASH(* EXCLUDE(col))`).  Parse the options the same way SELECT items do.
+                // Parse the options the same way SELECT items do.
                 let opts = self.parse_wildcard_additional_options(token.0.clone())?;
                 if opts.opt_exclude.is_some()
                     || opts.opt_except.is_some()
@@ -18909,9 +18978,16 @@ impl<'a> Parser<'a> {
                 }
             }
             other => other.into(),
-        };
-        // Aliased argument, e.g. `XMLFOREST(a AS x)` in PostgreSQL
-        let arg_expr = match arg_expr {
+        })
+    }
+
+    /// Parse an optional `AS <alias>` on an unnamed function argument
+    /// (e.g. `XMLFOREST(a AS x)` in PostgreSQL).
+    fn maybe_parse_aliased_function_arg(
+        &mut self,
+        arg_expr: FunctionArgExpr,
+    ) -> Result<FunctionArgExpr, ParserError> {
+        Ok(match arg_expr {
             FunctionArgExpr::Expr(expr)
                 if self.dialect.supports_aliased_function_args()
                     && self.parse_keyword(Keyword::AS) =>
@@ -18922,8 +18998,7 @@ impl<'a> Parser<'a> {
                 })
             }
             other => other,
-        };
-        Ok(FunctionArg::Unnamed(arg_expr))
+        })
     }
 
     fn parse_function_named_arg_operator(&mut self) -> Result<FunctionArgOperator, ParserError> {
@@ -19020,6 +19095,10 @@ impl<'a> Parser<'a> {
 
         let duplicate_treatment = self.parse_duplicate_treatment()?;
         let args = self.parse_comma_separated(Parser::parse_function_args)?;
+
+        if self.parse_keyword(Keyword::WHERE) {
+            clauses.push(FunctionArgumentClause::Where(self.parse_expr()?));
+        }
 
         if self.dialect.supports_window_function_null_treatment_arg() {
             if let Some(null_treatment) = self.parse_null_treatment()? {

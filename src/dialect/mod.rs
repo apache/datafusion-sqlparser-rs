@@ -447,6 +447,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports a bare expression as the right-hand
+    /// side of `IN`, without a parenthesized list — as in `x IN 'a'`.
+    fn supports_in_unparenthesized_expr(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `BEGIN {DEFERRED | IMMEDIATE | EXCLUSIVE | TRY | CATCH} [TRANSACTION]` statements
     fn supports_start_transaction_modifier(&self) -> bool {
         false
@@ -1995,9 +2001,22 @@ mod tests {
     #[test]
     fn identifier_quote_style() {
         let tests: Vec<(&dyn Dialect, &str, Option<char>)> = vec![
+            (&AnsiDialect {}, "id", Some('"')),
+            (&BigQueryDialect {}, "id", Some('`')),
+            (&ClickHouseDialect {}, "id", Some('`')),
+            (&DatabricksDialect {}, "id", Some('`')),
+            (&DuckDbDialect {}, "id", Some('"')),
             (&GenericDialect {}, "id", None),
-            (&SQLiteDialect {}, "id", Some('`')),
+            (&HiveDialect {}, "id", Some('`')),
+            (&MsSqlDialect {}, "id", Some('[')),
+            (&MySqlDialect {}, "id", Some('`')),
+            (&OracleDialect {}, "id", Some('"')),
             (&PostgreSqlDialect {}, "id", Some('"')),
+            (&RedshiftSqlDialect {}, "id", Some('"')),
+            (&SnowflakeDialect {}, "id", Some('"')),
+            (&SQLiteDialect {}, "id", Some('`')),
+            (&SparkSqlDialect {}, "id", Some('`')),
+            (&TeradataDialect {}, "id", Some('"')),
         ];
 
         for (dialect, ident, expected) in tests {
@@ -2061,6 +2080,10 @@ mod tests {
 
             fn supports_in_empty_list(&self) -> bool {
                 self.0.supports_in_empty_list()
+            }
+
+            fn supports_in_unparenthesized_expr(&self) -> bool {
+                self.0.supports_in_unparenthesized_expr()
             }
 
             fn convert_type_before_value(&self) -> bool {

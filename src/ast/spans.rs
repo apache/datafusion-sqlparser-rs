@@ -461,6 +461,7 @@ impl Spanned for Statement {
             Statement::CreateMacro { .. } => Span::empty(),
             Statement::CreateStage { .. } => Span::empty(),
             Statement::CreateFileFormat { .. } => Span::empty(),
+            Statement::CreateWarehouse(..) => Span::empty(),
             Statement::Assert { .. } => Span::empty(),
             Statement::Grant { .. } => Span::empty(),
             Statement::Deny { .. } => Span::empty(),
@@ -552,6 +553,7 @@ impl Spanned for CreateTable {
         let CreateTable {
             or_replace: _,    // bool
             temporary: _,     // bool
+            unlogged: _,      // bool
             external: _,      // bool
             global: _,        // bool
             dynamic: _,       // bool
@@ -1229,6 +1231,8 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::SetTblProperties { table_properties } => {
                 union_spans(table_properties.iter().map(|i| i.span()))
             }
+            AlterTableOperation::SetLogged => Span::empty(),
+            AlterTableOperation::SetUnlogged => Span::empty(),
             AlterTableOperation::OwnerTo { .. } => Span::empty(),
             AlterTableOperation::ClusterBy { exprs } => union_spans(exprs.iter().map(|e| e.span())),
             AlterTableOperation::DropClusteringKey => Span::empty(),
@@ -1804,6 +1808,7 @@ impl Spanned for FunctionArgumentClause {
     fn span(&self) -> Span {
         match self {
             FunctionArgumentClause::IgnoreOrRespectNulls(_) => Span::empty(),
+            FunctionArgumentClause::Where(expr) => expr.span(),
             FunctionArgumentClause::OrderBy(vec) => union_spans(vec.iter().map(|i| i.expr.span())),
             FunctionArgumentClause::Limit(expr) => expr.span(),
             FunctionArgumentClause::OnOverflow(_) => Span::empty(),

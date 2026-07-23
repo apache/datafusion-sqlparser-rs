@@ -1279,6 +1279,33 @@ fn parse_alter_table_owner_to() {
 }
 
 #[test]
+fn parse_alter_table_set_logged_unlogged() {
+    let sql = "ALTER TABLE unlogged1 SET LOGGED";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::AlterTable(AlterTable {
+            name, operations, ..
+        }) => {
+            assert_eq!("unlogged1", name.to_string());
+            assert_eq!(vec![AlterTableOperation::SetLogged], operations);
+        }
+        _ => unreachable!(),
+    }
+    pg_and_generic().one_statement_parses_to(sql, sql);
+
+    let sql = "ALTER TABLE unlogged1 SET UNLOGGED";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::AlterTable(AlterTable {
+            name, operations, ..
+        }) => {
+            assert_eq!("unlogged1", name.to_string());
+            assert_eq!(vec![AlterTableOperation::SetUnlogged], operations);
+        }
+        _ => unreachable!(),
+    }
+    pg_and_generic().one_statement_parses_to(sql, sql);
+}
+
+#[test]
 fn parse_create_table_if_not_exists() {
     let sql = "CREATE TABLE IF NOT EXISTS uk_cities ()";
     let ast = pg_and_generic().verified_stmt(sql);
@@ -2547,7 +2574,7 @@ fn parse_pg_unary_ops() {
         ("@", UnaryOperator::PGAbs),
     ];
     for (str_op, op) in pg_unary_ops {
-        let select = pg().verified_only_select(&format!("SELECT {}a", &str_op));
+        let select = pg().verified_only_select(&format!("SELECT {}a", str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::UnaryOp {
                 op: *op,
@@ -2563,7 +2590,7 @@ fn parse_pg_postfix_factorial() {
     let postfix_factorial = &[("!", UnaryOperator::PGPostfixFactorial)];
 
     for (str_op, op) in postfix_factorial {
-        let select = pg().verified_only_select(&format!("SELECT a{}", &str_op));
+        let select = pg().verified_only_select(&format!("SELECT a{}", str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::UnaryOp {
                 op: *op,
@@ -5874,6 +5901,57 @@ fn parse_create_table_with_partition_by() {
 }
 
 #[test]
+fn parse_create_unlogged_table() {
+    let sql = "CREATE UNLOGGED TABLE public.unlogged2 (a int primary key)";
+    match pg_and_generic().one_statement_parses_to(
+        sql,
+        "CREATE UNLOGGED TABLE public.unlogged2 (a INT PRIMARY KEY)",
+    ) {
+        Statement::CreateTable(CreateTable { name, unlogged, .. }) => {
+            assert!(unlogged);
+            assert_eq!("public.unlogged2", name.to_string());
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "CREATE UNLOGGED TABLE pg_temp.unlogged3 (a int primary key)";
+    match pg_and_generic().one_statement_parses_to(
+        sql,
+        "CREATE UNLOGGED TABLE pg_temp.unlogged3 (a INT PRIMARY KEY)",
+    ) {
+        Statement::CreateTable(CreateTable { name, unlogged, .. }) => {
+            assert!(unlogged);
+            assert_eq!("pg_temp.unlogged3", name.to_string());
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "CREATE UNLOGGED TABLE unlogged1 (a int) PARTITION BY RANGE (a)";
+    match pg_and_generic().one_statement_parses_to(
+        sql,
+        "CREATE UNLOGGED TABLE unlogged1 (a INT) PARTITION BY RANGE(a)",
+    ) {
+        Statement::CreateTable(CreateTable {
+            name,
+            unlogged,
+            partition_by,
+            ..
+        }) => {
+            assert!(unlogged);
+            assert_eq!("unlogged1", name.to_string());
+            assert!(partition_by.is_some());
+        }
+        _ => unreachable!(),
+    }
+
+    let res = pg().parse_sql_statements("CREATE UNLOGGED VIEW v AS SELECT 1");
+    assert_eq!(
+        ParserError::ParserError("Expected: an object type after CREATE, found: UNLOGGED".into()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_join_constraint_unnest_alias() {
     assert_eq!(
         only(
@@ -6819,6 +6897,7 @@ fn parse_trigger_related_functions() {
         CreateTable {
             or_replace: false,
             temporary: false,
+            unlogged: false,
             external: false,
             global: None,
             dynamic: false,
@@ -9630,4 +9709,38 @@ fn exclude_as_column_name() {
             other => panic!("{type_name}: expected CreateTable, got {other:?}"),
         }
     }
+}
+
+#[test]
+fn parse_limit_after_locking_clause() {
+    // PostgreSQL accepts `LIMIT`/`OFFSET` after the row-locking clause as well
+    // as before it; both orderings are semantically identical. The AST renders
+    // the limit in its canonical position (before the locking clause).
+    pg().one_statement_parses_to(
+        "SELECT * FROM t ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 5",
+        "SELECT * FROM t ORDER BY id LIMIT 5 FOR UPDATE SKIP LOCKED",
+    );
+    pg().one_statement_parses_to(
+        "SELECT * FROM t FOR UPDATE LIMIT 5",
+        "SELECT * FROM t LIMIT 5 FOR UPDATE",
+    );
+    // The pre-existing ordering keeps round-tripping unchanged.
+    pg().verified_stmt("SELECT * FROM t ORDER BY id LIMIT 5 FOR UPDATE SKIP LOCKED");
+}
+
+#[test]
+fn parse_right_deep_join_chain() {
+    // PostgreSQL supports right-deep join syntax where ON clauses follow all JOIN keywords:
+    //   t0 JOIN t1 JOIN t2 ON c1 ON c2
+    // which is equivalent to (and serialized as) t0 JOIN (t1 JOIN t2 ON c1) ON c2.
+    pg().one_statement_parses_to(
+        "SELECT * FROM t0 INNER JOIN t1 INNER JOIN t2 ON true ON true",
+        "SELECT * FROM t0 INNER JOIN (t1 INNER JOIN t2 ON true) ON true",
+    );
+    pg().one_statement_parses_to(
+        "SELECT * FROM t0 INNER JOIN t1 INNER JOIN t2 INNER JOIN t3 ON true ON true ON true",
+        "SELECT * FROM t0 INNER JOIN (t1 INNER JOIN (t2 INNER JOIN t3 ON true) ON true) ON true",
+    );
+    // NATURAL JOIN followed by a constrained join must stay left-associative.
+    pg().verified_stmt("SELECT * FROM t0 NATURAL JOIN t1 INNER JOIN t2 ON true");
 }

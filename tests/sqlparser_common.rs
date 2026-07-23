@@ -352,6 +352,14 @@ fn parse_insert_select_from_returning() {
 }
 
 #[test]
+fn parse_insert_nested_parenthesized_subquery() {
+    // The source query may be wrapped in one or more layers of parentheses;
+    // the leading parens must not be mistaken for a column list.
+    verified_stmt("INSERT INTO t ((SELECT 1))");
+    verified_stmt("INSERT INTO t (((SELECT 1)))");
+}
+
+#[test]
 fn parse_returning_as_column_alias() {
     verified_stmt("SELECT 1 AS RETURNING");
 }
@@ -1723,7 +1731,7 @@ fn parse_json_ops_without_colon() {
     ];
 
     for (str_op, op, dialects) in binary_ops {
-        let select = dialects.verified_only_select(&format!("SELECT a {} b", &str_op));
+        let select = dialects.verified_only_select(&format!("SELECT a {} b", str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("a"))),
@@ -2375,13 +2383,27 @@ fn parse_in_unnest() {
 
 #[test]
 fn parse_in_error() {
-    // <expr> IN <expr> is no valid
+    // <expr> IN <expr> is no valid, except in dialects that accept an
+    // unparenthesized expression as the IN right-hand side (e.g. ClickHouse).
     let sql = "SELECT * FROM customers WHERE segment in segment";
-    let res = parse_sql_statements(sql);
+    let res =
+        all_dialects_except(|d| d.supports_in_unparenthesized_expr()).parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError("Expected: (, found: segment".to_string()),
         res.unwrap_err()
     );
+}
+
+#[test]
+fn parse_in_unparenthesized_expr() {
+    // Dialects supporting an unparenthesized IN right-hand side wrap a bare expression
+    // into a single-element list (e.g. `x IN 'a'` -> `x IN ('a')`).
+    let dialects = all_dialects_where(|d| d.supports_in_unparenthesized_expr());
+    dialects.expr_parses_to("x IN 'a'", "x IN ('a')");
+
+    // The branch must not fire when the next token is `(` (regressions).
+    dialects.verified_expr("x IN (1, 2, 3)");
+    dialects.verified_stmt("SELECT * FROM t WHERE x IN (SELECT y FROM u)");
 }
 
 #[test]
@@ -2419,7 +2441,7 @@ fn parse_bitwise_ops() {
     ];
 
     for (str_op, op, dialects) in bitwise_ops {
-        let select = dialects.verified_only_select(&format!("SELECT a {} b", &str_op));
+        let select = dialects.verified_only_select(&format!("SELECT a {} b", str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("a"))),
@@ -6127,6 +6149,33 @@ fn parse_aggregate_with_group_by() {
 }
 
 #[test]
+fn parse_aggregate_with_where_filter() {
+    // The inline `WHERE` filter inside an aggregate call, e.g. `COUNT(* WHERE cond)` /
+    // `SUM(x WHERE cond)`, is the in-argument spelling of the standard
+    // `AGG(x) FILTER (WHERE cond)`. Popularized by GoogleSQL, it is accepted for all
+    // dialects (`verified_stmt` round-trips through every dialect).
+    verified_stmt("SELECT COUNT(* WHERE x > 1) FROM t");
+    verified_stmt("SELECT SUM(x WHERE y > 0) FROM t");
+    // Co-occurs with (and precedes) an in-argument ORDER BY.
+    verified_stmt("SELECT ARRAY_AGG(x WHERE x > 100 ORDER BY x DESC) FROM t");
+    // A compound predicate referencing multiple columns round-trips intact.
+    verified_stmt("SELECT ARRAY_AGG(a WHERE b > 0 AND c < 10) FROM t");
+
+    // The filter is captured as a FunctionArgumentClause::Where holding the predicate.
+    let select = verified_only_select("SELECT SUM(salary WHERE dept = 1) FROM emp");
+    let Expr::Function(func) = expr_from_projection(&select.projection[0]) else {
+        panic!("expected a function projection");
+    };
+    let FunctionArguments::List(list) = &func.args else {
+        panic!("expected a function argument list");
+    };
+    assert!(list
+        .clauses
+        .iter()
+        .any(|c| matches!(c, FunctionArgumentClause::Where(Expr::BinaryOp { .. }))));
+}
+
+#[test]
 fn parse_literal_integer() {
     let sql = "SELECT 1, -10, +20";
     let select = verified_only_select(sql);
@@ -8840,6 +8889,19 @@ fn parse_drop_user() {
 }
 
 #[test]
+fn parse_create_warehouse() {
+    verified_stmt("CREATE WAREHOUSE my_wh");
+    verified_stmt("CREATE OR REPLACE WAREHOUSE IF NOT EXISTS my_wh");
+    verified_stmt("CREATE WAREHOUSE my_wh WAREHOUSE_SIZE='XSMALL' AUTO_SUSPEND=60");
+    one_statement_parses_to(
+        "CREATE WAREHOUSE my_wh WITH WAREHOUSE_SIZE = 'XSMALL' AUTO_SUSPEND = 60",
+        "CREATE WAREHOUSE my_wh WAREHOUSE_SIZE='XSMALL' AUTO_SUSPEND=60",
+    );
+    verified_stmt("DROP WAREHOUSE my_wh");
+    verified_stmt("DROP WAREHOUSE IF EXISTS my_wh");
+}
+
+#[test]
 fn parse_invalid_subquery_without_parens() {
     let res = parse_sql_statements("SELECT SELECT 1 FROM bar WHERE 1=1 FROM baz");
     assert_eq!(
@@ -10834,11 +10896,22 @@ fn parse_position() {
 
 #[test]
 fn parse_position_negative() {
+    // Dialects that accept an unparenthesized IN right-hand side (e.g. ClickHouse)
+    // report a different error here, so exclude them.
     let sql = "SELECT POSITION(foo IN) from bar";
-    let res = parse_sql_statements(sql);
+    let res =
+        all_dialects_except(|d| d.supports_in_unparenthesized_expr()).parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError("Expected: (, found: )".to_string()),
         res.unwrap_err()
+    );
+
+    let result_unparenthesized =
+        all_dialects_where(|d| d.supports_in_unparenthesized_expr()).parse_sql_statements(sql);
+
+    assert_eq!(
+        ParserError::ParserError("Expected: an expression, found: )".to_string()),
+        result_unparenthesized.unwrap_err()
     );
 }
 
@@ -15576,29 +15649,15 @@ fn parse_create_table_select() {
 
 #[test]
 fn test_reserved_keywords_for_identifiers() {
-    let dialects = all_dialects_where(|d| {
-        d.is_reserved_for_identifier(Keyword::INTERVAL)
-            && !d.supports_named_fn_args_with_expr_name()
-    });
-    // Dialects that reserve the word INTERVAL will not allow it as an unquoted identifier
+    // Dialects that reserve INTERVAL will not allow it as an unquoted
+    // identifier, and report the failure consistently at the token that fails
+    // to start an expression (`)`), independent of named-argument support.
+    let dialects = all_dialects_where(|d| d.is_reserved_for_identifier(Keyword::INTERVAL));
     let sql = "SELECT MAX(interval) FROM tbl";
     assert_eq!(
         dialects.parse_sql_statements(sql),
         Err(ParserError::ParserError(
             "Expected: an expression, found: )".to_string()
-        ))
-    );
-
-    // Dialects with expression-named function arguments parse the argument
-    // expression twice, so the second attempt reports the memoized failure
-    // at the start of the expression
-    let dialects = all_dialects_where(|d| {
-        d.is_reserved_for_identifier(Keyword::INTERVAL) && d.supports_named_fn_args_with_expr_name()
-    });
-    assert_eq!(
-        dialects.parse_sql_statements(sql),
-        Err(ParserError::ParserError(
-            "Expected: an expression, found: interval".to_string()
         ))
     );
 
@@ -19081,7 +19140,7 @@ fn parse_generic_unary_ops() {
         ("+", UnaryOperator::Plus),
     ];
     for (str_op, op) in unary_ops {
-        let select = verified_only_select(&format!("SELECT {}expr", &str_op));
+        let select = verified_only_select(&format!("SELECT {}expr", str_op));
         assert_eq!(
             UnnamedExpr(UnaryOp {
                 op: *op,
@@ -19506,6 +19565,56 @@ fn parse_table_factor_paren_chain_no_exponential_blowup() {
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
         let _ = Parser::new(&GenericDialect {})
+            .with_recursion_limit(256)
+            .try_with_sql(&sql)
+            .and_then(|mut p| p.parse_statements());
+        let _ = tx.send(());
+    });
+
+    rx.recv_timeout(Duration::from_secs(5))
+        .expect("parser should reject this quickly, not loop exponentially");
+}
+
+#[test]
+fn parse_unlogged_table_logging_controls_in_all_dialects() {
+    match all_dialects().verified_stmt("CREATE UNLOGGED TABLE t (a INT)") {
+        Statement::CreateTable(CreateTable { unlogged, .. }) => {
+            assert!(unlogged);
+        }
+        _ => unreachable!("Expected CREATE TABLE"),
+    }
+
+    match all_dialects().verified_stmt("ALTER TABLE t SET LOGGED") {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
+            assert_eq!(vec![AlterTableOperation::SetLogged], operations);
+        }
+        _ => unreachable!("Expected ALTER TABLE"),
+    }
+
+    match all_dialects().verified_stmt("ALTER TABLE t SET UNLOGGED") {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
+            assert_eq!(vec![AlterTableOperation::SetUnlogged], operations);
+        }
+        _ => unreachable!("Expected ALTER TABLE"),
+    }
+}
+
+/// Regression test for the 2^N parse-time blowup in `parse_function_args` on
+/// inputs like `CAST(CASE (CAST(CASE (...`. On dialects with expression-named
+/// function arguments (e.g. PostgreSQL), the named-arg arm parsed the whole
+/// argument expression and then re-parsed it on the unnamed path, doubling
+/// work per level. Post-fix the leading expression is parsed exactly once.
+#[test]
+fn parse_function_arg_call_chain_no_exponential_blowup() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    let sql = String::from("SELECT ") + &"CAST(CASE (".repeat(30) + &")".repeat(30);
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = Parser::new(&PostgreSqlDialect {})
             .with_recursion_limit(256)
             .try_with_sql(&sql)
             .and_then(|mut p| p.parse_statements());

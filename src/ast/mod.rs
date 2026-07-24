@@ -9101,7 +9101,10 @@ impl fmt::Display for CreateServerStatement {
     }
 }
 
-/// A key/value option for `CREATE SERVER`.
+/// A key/value entry in a Postgres `OPTIONS ( ... )` clause. The name is
+/// historical (introduced in 0.62.0 for `CREATE SERVER`); it is now the
+/// shared OPTIONS element for `CREATE SERVER`, `CREATE FOREIGN DATA WRAPPER`,
+/// and `CREATE FOREIGN TABLE`.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

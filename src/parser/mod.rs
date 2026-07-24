@@ -7427,56 +7427,26 @@ impl<'a> Parser<'a> {
     ) -> Result<CreateAggregate, ParserError> {
         let name = self.parse_object_name(false)?;
 
-        // The keys accepted inside the options list.
-        const OPTIONS: &[Keyword] = &[
-            Keyword::SFUNC,
-            Keyword::STYPE,
-            Keyword::SSPACE,
-            Keyword::FINALFUNC,
-            Keyword::FINALFUNC_EXTRA,
-            Keyword::FINALFUNC_MODIFY,
-            Keyword::COMBINEFUNC,
-            Keyword::SERIALFUNC,
-            Keyword::DESERIALFUNC,
-            Keyword::INITCOND,
-            Keyword::MSFUNC,
-            Keyword::MINVFUNC,
-            Keyword::MSTYPE,
-            Keyword::MSSPACE,
-            Keyword::MFINALFUNC,
-            Keyword::MFINALFUNC_EXTRA,
-            Keyword::MFINALFUNC_MODIFY,
-            Keyword::MINITCOND,
-            Keyword::SORTOP,
-            Keyword::PARALLEL,
-            Keyword::HYPOTHETICAL,
-            Keyword::BASETYPE,
-        ];
-
-        // The legacy syntax has a single parenthesized list that carries both
-        // `BASETYPE` and the remaining options. The modern syntax has a
-        // separate `(input_arg [, ...])` argument list followed by the options
-        // list. They are only distinguishable by whether a second parenthesized
-        // list follows the first, so parse the argument list speculatively and
-        // fall back to the legacy form when no options list follows it.
-        let args = match self.maybe_parse(|parser| {
-            let args = parser.parse_create_aggregate_args()?;
-            parser.expect_token(&Token::LParen)?;
-            Ok(args)
-        })? {
-            Some(args) => args,
-            None => {
-                self.expect_token(&Token::LParen)?;
-                CreateAggregateArgs::Legacy
-            }
+        // The modern syntax is `name (arg [, ...]) (option [, ...])`; the legacy
+        // one drops the argument list and packs everything, `BASETYPE` included,
+        // into a single list. Only the number of parenthesized lists tells them
+        // apart, so look that far ahead before committing to either branch.
+        let args = if self.peek_second_paren_list() {
+            self.parse_create_aggregate_args()?
+        } else {
+            CreateAggregateArgs::Legacy
         };
+        self.expect_token(&Token::LParen)?;
 
         let mut seen: Vec<Keyword> = Vec::new();
         let options = self.parse_comma_separated(|parser| {
             let token = parser.peek_token();
-            let keyword = parser.expect_one_of_keywords(OPTIONS)?;
+            let keyword = parser.parse_create_aggregate_option_key()?;
             if seen.contains(&keyword) {
-                return parser.expected("no duplicate CREATE AGGREGATE option", token);
+                return parser_err!(
+                    format!("Duplicate CREATE AGGREGATE option: {keyword:?}"),
+                    token.span.start
+                );
             }
             seen.push(keyword);
             parser.parse_create_aggregate_option(keyword)
@@ -7505,6 +7475,29 @@ impl<'a> Parser<'a> {
         Ok(args)
     }
 
+    /// True when the parenthesized list starting at the current position is
+    /// followed by a second one.
+    fn peek_second_paren_list(&self) -> bool {
+        if self.peek_token_ref().token != Token::LParen {
+            return false;
+        }
+        let mut depth = 0usize;
+        for offset in 0.. {
+            match self.peek_nth_token_ref(offset).token {
+                Token::LParen => depth += 1,
+                Token::RParen => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return self.peek_nth_token_ref(offset + 1).token == Token::LParen;
+                    }
+                }
+                Token::EOF => break,
+                _ => {}
+            }
+        }
+        false
+    }
+
     /// Parse `PARALLEL` qualifier value: `{ SAFE | RESTRICTED | UNSAFE }`.
     fn parse_function_parallel(&mut self) -> Result<FunctionParallel, ParserError> {
         match self.expect_one_of_keywords(&[Keyword::SAFE, Keyword::RESTRICTED, Keyword::UNSAFE])? {
@@ -7515,6 +7508,35 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse the key of a single `CREATE AGGREGATE` option. Every key listed
+    /// here needs an arm in [`Self::parse_create_aggregate_option`].
+    fn parse_create_aggregate_option_key(&mut self) -> Result<Keyword, ParserError> {
+        self.expect_one_of_keywords(&[
+            Keyword::SFUNC,
+            Keyword::STYPE,
+            Keyword::SSPACE,
+            Keyword::FINALFUNC,
+            Keyword::FINALFUNC_EXTRA,
+            Keyword::FINALFUNC_MODIFY,
+            Keyword::COMBINEFUNC,
+            Keyword::SERIALFUNC,
+            Keyword::DESERIALFUNC,
+            Keyword::INITCOND,
+            Keyword::MSFUNC,
+            Keyword::MINVFUNC,
+            Keyword::MSTYPE,
+            Keyword::MSSPACE,
+            Keyword::MFINALFUNC,
+            Keyword::MFINALFUNC_EXTRA,
+            Keyword::MFINALFUNC_MODIFY,
+            Keyword::MINITCOND,
+            Keyword::SORTOP,
+            Keyword::PARALLEL,
+            Keyword::HYPOTHETICAL,
+            Keyword::BASETYPE,
+        ])
+    }
+
     /// Parse the value of a single `CREATE AGGREGATE` option, given its
     /// already-consumed key.
     fn parse_create_aggregate_option(
@@ -7522,11 +7544,10 @@ impl<'a> Parser<'a> {
         keyword: Keyword,
     ) -> Result<CreateAggregateOption, ParserError> {
         // Every option but the three valueless flags is spelled `KEY = value`.
-        let is_flag = matches!(
+        if !matches!(
             keyword,
             Keyword::FINALFUNC_EXTRA | Keyword::MFINALFUNC_EXTRA | Keyword::HYPOTHETICAL
-        );
-        if !is_flag {
+        ) {
             self.expect_token(&Token::Eq)?;
         }
 

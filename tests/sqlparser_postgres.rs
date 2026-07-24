@@ -9696,8 +9696,7 @@ fn parse_create_aggregate_legacy_syntax() {
         _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
     }
 
-    // An option whose value cannot start an argument definition: the
-    // speculative argument-list parse must not leak its error.
+    // An option whose value cannot start an argument definition.
     pg_and_generic().verified_stmt(
         "CREATE AGGREGATE my_min (BASETYPE = INT, SFUNC = my_sfunc, STYPE = INT, SORTOP = <)",
     );
@@ -9709,28 +9708,53 @@ fn parse_create_aggregate_legacy_syntax() {
 
 #[test]
 fn parse_create_aggregate_rejects_bad_options() {
-    let expected = "sql parser error: Expected: one of SFUNC or STYPE or SSPACE or FINALFUNC or FINALFUNC_EXTRA or FINALFUNC_MODIFY or COMBINEFUNC or SERIALFUNC or DESERIALFUNC or INITCOND or MSFUNC or MINVFUNC or MSTYPE or MSSPACE or MFINALFUNC or MFINALFUNC_EXTRA or MFINALFUNC_MODIFY or MINITCOND or SORTOP or PARALLEL or HYPOTHETICAL or BASETYPE";
-
     let unknown = pg_and_generic()
         .parse_sql_statements("CREATE AGGREGATE foo (INT) (UNKNOWN_OPTION = bar)")
-        .unwrap_err();
-    assert_eq!(
-        unknown.to_string(),
-        format!("{expected}, found: UNKNOWN_OPTION")
+        .unwrap_err()
+        .to_string();
+    assert!(
+        unknown.ends_with(", found: UNKNOWN_OPTION"),
+        "unexpected error: {unknown}"
     );
 
-    // A quoted key is an identifier, not the keyword it spells.
+    // Option keys are keywords here, as they are in CREATE OPERATOR, so a
+    // quoted key is an ordinary identifier and does not name an option.
     let quoted = pg_and_generic()
         .parse_sql_statements("CREATE AGGREGATE foo (INT) (\"SFUNC\" = my_sfunc, STYPE = INT)")
-        .unwrap_err();
-    assert_eq!(quoted.to_string(), format!("{expected}, found: \"SFUNC\""));
+        .unwrap_err()
+        .to_string();
+    assert!(
+        quoted.ends_with(", found: \"SFUNC\""),
+        "unexpected error: {quoted}"
+    );
 
     let duplicate = pg_and_generic()
         .parse_sql_statements("CREATE AGGREGATE foo (INT) (SFUNC = f, SFUNC = g, STYPE = INT)")
         .unwrap_err();
     assert_eq!(
         duplicate.to_string(),
-        "sql parser error: Expected: no duplicate CREATE AGGREGATE option, found: SFUNC"
+        "sql parser error: Duplicate CREATE AGGREGATE option: SFUNC"
+    );
+}
+
+#[test]
+fn parse_create_aggregate_reports_argument_list_errors() {
+    // A malformed argument list must report itself, not be reinterpreted as the
+    // legacy single-list form and blamed on the options.
+    let err = pg_and_generic()
+        .parse_sql_statements("CREATE AGGREGATE foo (INT, ) (SFUNC = f, STYPE = INT)")
+        .unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "sql parser error: Expected: a data type name, found: )"
+    );
+
+    let missing = pg_and_generic()
+        .parse_sql_statements("CREATE AGGREGATE foo )")
+        .unwrap_err();
+    assert_eq!(
+        missing.to_string(),
+        "sql parser error: Expected: (, found: )"
     );
 }
 

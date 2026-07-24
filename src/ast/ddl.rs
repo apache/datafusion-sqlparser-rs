@@ -6033,8 +6033,8 @@ impl fmt::Display for CreateAggregate {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CreateAggregateArgs {
-    /// No argument list at all: the pre-8.2 syntax that instead carries a
-    /// `BASETYPE` entry in the options list.
+    /// No argument-list parentheses: the historical form that packs everything,
+    /// usually including a `BASETYPE` option, into a single list.
     Legacy,
     /// The wildcard form `(*)`, used by zero-argument aggregates such as
     /// `count(*)`.

@@ -1606,7 +1606,6 @@ impl Spanned for Expr {
                 kind: _,
                 expr,
                 data_type: _,
-                array: _,
                 format: _,
             } => expr.span(),
             Expr::AtTimeZone {

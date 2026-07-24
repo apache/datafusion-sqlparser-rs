@@ -304,6 +304,12 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    /// PostgreSQL supports right-deep join chains: `t0 JOIN t1 JOIN t2 ON c1 ON c2`
+    /// See: <https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-JOIN>
+    fn supports_left_associative_joins_without_parens(&self) -> bool {
+        false
+    }
+
     /// Postgres supports `NOTNULL` as an alias for `IS NOT NULL`
     /// See: <https://www.postgresql.org/docs/17/functions-comparison.html>
     fn supports_notnull_operator(&self) -> bool {

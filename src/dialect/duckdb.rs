@@ -36,6 +36,11 @@ impl Dialect for DuckDbDialect {
         ch.is_alphabetic() || ch.is_ascii_digit() || ch == '$' || ch == '_'
     }
 
+    /// See <https://duckdb.org/docs/stable/sql/dialect/keywords_and_identifiers>
+    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+        Some('"')
+    }
+
     fn supports_filter_during_aggregation(&self) -> bool {
         true
     }

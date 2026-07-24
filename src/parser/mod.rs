@@ -7485,22 +7485,23 @@ impl<'a> Parser<'a> {
             .tokens
             .iter()
             .skip(self.index)
-            .map(|token| &token.token)
-            .filter(|token| !matches!(token, Token::Whitespace(_)));
-        if tokens.next() != Some(&Token::LParen) {
+            .filter(|token| !matches!(token.token, Token::Whitespace(_)));
+        if tokens.next().map(|token| &token.token) != Some(&Token::LParen) {
             return Ok(false);
         }
         let mut depth = 1usize;
         while let Some(token) = tokens.next() {
-            match token {
+            match token.token {
                 Token::LParen => depth += 1,
                 Token::RParen => {
                     depth -= 1;
                     if depth == 0 {
-                        return Ok(tokens.next() == Some(&Token::LParen));
+                        return Ok(tokens.next().map(|token| &token.token) == Some(&Token::LParen));
                     }
                 }
-                Token::SemiColon => break,
+                // The list is still open at the statement boundary, so stop
+                // before the next statement's parentheses answer for this one.
+                Token::SemiColon => return self.expected_ref(")", token),
                 _ => {}
             }
         }

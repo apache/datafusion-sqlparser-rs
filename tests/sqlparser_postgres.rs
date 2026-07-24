@@ -9676,6 +9676,9 @@ fn parse_create_aggregate_parenthesized_arg_type() {
     pg_and_generic().verified_stmt(
         "CREATE AGGREGATE my_numeric (NUMERIC(10,2)) (SFUNC = my_sfunc, STYPE = NUMERIC(10,2))",
     );
+    pg_and_generic().verified_stmt(
+        "CREATE AGGREGATE my_numeric2 (BASETYPE = NUMERIC(10,2), SFUNC = my_sfunc, STYPE = INT)",
+    );
 }
 
 #[test]
@@ -9763,8 +9766,8 @@ fn parse_create_aggregate_reports_argument_list_errors() {
         "sql parser error: Expected: a data type name, found: )"
     );
 
-    // An unclosed list is reported as the missing `)` it is, whichever form it
-    // was shaping up to be.
+    // Every unclosed-list shape reports the same missing `)`, rather than the
+    // form-specific error a guessed branch would hit first.
     for sql in [
         "CREATE AGGREGATE foo (INT",
         "CREATE AGGREGATE foo (SORTOP = <, SFUNC = f, STYPE = INT",
@@ -9777,6 +9780,16 @@ fn parse_create_aggregate_reports_argument_list_errors() {
             "unexpected error for {sql}"
         );
     }
+
+    // A statement boundary ends the search, so the following statement's
+    // parentheses cannot answer for this one.
+    let semicolon = pg_and_generic()
+        .parse_sql_statements("CREATE AGGREGATE foo (INT; SELECT (1) (2)")
+        .unwrap_err();
+    assert_eq!(
+        semicolon.to_string(),
+        "sql parser error: Expected: ), found: ;"
+    );
 
     let missing = pg_and_generic()
         .parse_sql_statements("CREATE AGGREGATE foo )")

@@ -9662,6 +9662,17 @@ fn parse_create_aggregate_additional_options() {
         "CREATE AGGREGATE my_sum (INT) (SFUNC = my_sfunc, STYPE = internal, COMBINEFUNC = my_combine, SERIALFUNC = my_serial, DESERIALFUNC = my_deserial)",
     );
     pg_and_generic().verified_stmt(
+        "CREATE AGGREGATE my_extra (INT) (SFUNC = my_sfunc, STYPE = internal, FINALFUNC = my_final, FINALFUNC_EXTRA)",
+    );
+
+    // Parenthesized types must not close the argument list early.
+    pg_and_generic().verified_stmt(
+        "CREATE AGGREGATE my_numeric (NUMERIC(10,2)) (SFUNC = my_sfunc, STYPE = NUMERIC(10,2))",
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE AGGREGATE my_numeric2 (BASETYPE = NUMERIC(10,2), SFUNC = my_sfunc, STYPE = INT)",
+    );
+    pg_and_generic().verified_stmt(
         "CREATE AGGREGATE my_shareable (INT) (SFUNC = my_sfunc, STYPE = internal, FINALFUNC_MODIFY = SHAREABLE, MFINALFUNC = my_mfinal, MSSPACE = 64, MINITCOND = '0')",
     );
 }
@@ -9713,7 +9724,8 @@ fn parse_create_aggregate_rejects_bad_options() {
         .unwrap_err()
         .to_string();
     assert!(
-        unknown.ends_with(", found: UNKNOWN_OPTION"),
+        unknown.starts_with("sql parser error: Expected: one of SFUNC")
+            && unknown.ends_with(", found: UNKNOWN_OPTION"),
         "unexpected error: {unknown}"
     );
 
@@ -9724,7 +9736,8 @@ fn parse_create_aggregate_rejects_bad_options() {
         .unwrap_err()
         .to_string();
     assert!(
-        quoted.ends_with(", found: \"SFUNC\""),
+        quoted.starts_with("sql parser error: Expected: one of SFUNC")
+            && quoted.ends_with(", found: \"SFUNC\""),
         "unexpected error: {quoted}"
     );
 
@@ -9747,6 +9760,15 @@ fn parse_create_aggregate_reports_argument_list_errors() {
     assert_eq!(
         err.to_string(),
         "sql parser error: Expected: a data type name, found: )"
+    );
+
+    // An unclosed argument list is not the legacy single-list form either.
+    let unclosed = pg_and_generic()
+        .parse_sql_statements("CREATE AGGREGATE foo (INT")
+        .unwrap_err();
+    assert_eq!(
+        unclosed.to_string(),
+        "sql parser error: Expected: ), found: EOF"
     );
 
     let missing = pg_and_generic()

@@ -7427,10 +7427,9 @@ impl<'a> Parser<'a> {
     ) -> Result<CreateAggregate, ParserError> {
         let name = self.parse_object_name(false)?;
 
-        // The modern syntax is `name (arg [, ...]) (option [, ...])`; the legacy
-        // one drops the argument list and packs everything, `BASETYPE` included,
-        // into a single list. Only the number of parenthesized lists tells them
-        // apart, so look that far ahead before committing to either branch.
+        // The legacy and modern forms (see [`CreateAggregateArgs::Legacy`]) differ
+        // only in whether a second parenthesized list follows the first, so look
+        // that far ahead before committing to either branch.
         let args = if self.peek_second_paren_list() {
             self.parse_create_aggregate_args()?
         } else {
@@ -7440,12 +7439,12 @@ impl<'a> Parser<'a> {
 
         let mut seen: Vec<Keyword> = Vec::new();
         let options = self.parse_comma_separated(|parser| {
-            let token = parser.peek_token();
+            let start = parser.peek_token_ref().span.start;
             let keyword = parser.parse_create_aggregate_option_key()?;
             if seen.contains(&keyword) {
                 return parser_err!(
                     format!("Duplicate CREATE AGGREGATE option: {keyword:?}"),
-                    token.span.start
+                    start
                 );
             }
             seen.push(keyword);
@@ -7476,26 +7475,33 @@ impl<'a> Parser<'a> {
     }
 
     /// True when the parenthesized list starting at the current position is
-    /// followed by a second one.
+    /// followed by a second one, or is never closed.
     fn peek_second_paren_list(&self) -> bool {
-        if self.peek_token_ref().token != Token::LParen {
+        let mut tokens = self
+            .tokens
+            .iter()
+            .skip(self.index)
+            .map(|token| &token.token)
+            .filter(|token| !matches!(token, Token::Whitespace(_)));
+        if tokens.next() != Some(&Token::LParen) {
             return false;
         }
-        let mut depth = 0usize;
-        for offset in 0.. {
-            match self.peek_nth_token_ref(offset).token {
+        let mut depth = 1usize;
+        for token in tokens.by_ref() {
+            match token {
                 Token::LParen => depth += 1,
                 Token::RParen => {
                     depth -= 1;
                     if depth == 0 {
-                        return self.peek_nth_token_ref(offset + 1).token == Token::LParen;
+                        return tokens.next() == Some(&Token::LParen);
                     }
                 }
-                Token::EOF => break,
                 _ => {}
             }
         }
-        false
+        // An unclosed list is not the single-list form either, so report it as
+        // the missing `)` it is rather than as an unknown option.
+        true
     }
 
     /// Parse `PARALLEL` qualifier value: `{ SAFE | RESTRICTED | UNSAFE }`.
@@ -7508,8 +7514,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse the key of a single `CREATE AGGREGATE` option. Every key listed
-    /// here needs an arm in [`Self::parse_create_aggregate_option`].
+    /// Every key listed here needs an arm in [`Self::parse_create_aggregate_option`].
     fn parse_create_aggregate_option_key(&mut self) -> Result<Keyword, ParserError> {
         self.expect_one_of_keywords(&[
             Keyword::SFUNC,

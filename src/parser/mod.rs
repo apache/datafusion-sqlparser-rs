@@ -2903,13 +2903,7 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
         self.expect_keyword_is(Keyword::AS)?;
-        let mut data_type = self.parse_data_type()?;
-        // A trailing `ARRAY` keyword makes the target an array type, e.g. MySQL's
-        // `CAST(... AS UNSIGNED ARRAY)`. PostgreSQL already consumes it while
-        // parsing the data type, so the guard avoids wrapping it twice.
-        if !matches!(data_type, DataType::Array(_)) && self.parse_keyword(Keyword::ARRAY) {
-            data_type = DataType::Array(ArrayElemTypeDef::Keyword(Box::new(data_type), None));
-        }
+        let data_type = self.parse_data_type()?;
         let format = self.parse_optional_cast_format()?;
         self.expect_token(&Token::RParen)?;
         Ok(Expr::Cast {
@@ -13152,11 +13146,9 @@ impl<'a> Parser<'a> {
             }
         }
 
-        // Keyword form, e.g. `INT ARRAY` or `INT ARRAY[3]`. It is one-dimensional,
-        // so only a single optional size is accepted (multidimensional arrays use
-        // the bracket form above).
-        if self.dialect.supports_array_typedef_with_keyword() && self.parse_keyword(Keyword::ARRAY)
-        {
+        // Type-qualified array, e.g. `INT ARRAY` or `INT ARRAY[3]`. One-dimensional
+        // with a single optional size. The `ARRAY` keyword is unambiguous everywhere.
+        if self.parse_keyword(Keyword::ARRAY) {
             let size = if self.consume_token(&Token::LBracket) {
                 let size = self.maybe_parse(|p| p.parse_literal_uint())?;
                 self.expect_token(&Token::RBracket)?;
@@ -13164,7 +13156,7 @@ impl<'a> Parser<'a> {
             } else {
                 None
             };
-            data = DataType::Array(ArrayElemTypeDef::Keyword(Box::new(data), size));
+            data = DataType::Array(ArrayElemTypeDef::Qualified(Box::new(data), size));
         }
 
         Ok((data, trailing_bracket))

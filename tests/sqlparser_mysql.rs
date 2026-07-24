@@ -902,7 +902,7 @@ fn test_functional_key_part() {
                     Value::SingleQuotedString("$.fields".to_string()).with_empty_span()
                 )),
             }),
-            data_type: DataType::Array(ArrayElemTypeDef::Keyword(
+            data_type: DataType::Array(ArrayElemTypeDef::Qualified(
                 Box::new(DataType::Unsigned),
                 None,
             )),

@@ -2793,9 +2793,8 @@ fn parse_array_index_expr() {
 
 #[test]
 fn parse_array_type_def_with_keyword() {
-    // SQL-standard `ARRAY` keyword with an optional size, in a column
-    // definition and as a CAST target. See:
-    // https://www.postgresql.org/docs/current/arrays.html#ARRAYS-DECLARATION
+    // SQL-standard `ARRAY` keyword with optional size, in column definitions and
+    // CAST targets. See https://www.postgresql.org/docs/current/arrays.html
     pg().verified_stmt("CREATE TABLE sal_emp (pay_by_quarter INTEGER ARRAY)");
     pg().verified_stmt("CREATE TABLE sal_emp (pay_by_quarter INTEGER ARRAY[4])");
     pg().verified_stmt("CREATE TABLE genome (codons CHAR(3) ARRAY[1000])");
@@ -2808,6 +2807,13 @@ fn parse_array_type_def_with_keyword() {
     pg().verified_only_select("SELECT CAST(ARRAY[1, 2, 3] AS INTEGER ARRAY)");
     pg().verified_only_select("SELECT CAST(ARRAY[1, 2, 3] AS INTEGER ARRAY[3])");
     pg().verified_only_select("SELECT foo::INTEGER ARRAY[3]");
+    // Custom and schema-qualified types, ALTER TABLE, typmods, and the
+    // suffix-vs-constructor case.
+    pg_and_generic().verified_stmt("CREATE TABLE t (c currency ARRAY)");
+    pg_and_generic().verified_stmt("CREATE TABLE t (c public.currency ARRAY)");
+    pg_and_generic().verified_stmt("ALTER TABLE t ADD COLUMN c currency ARRAY");
+    pg_and_generic().verified_stmt("CREATE TABLE t (c NUMERIC(10,2) ARRAY)");
+    pg_and_generic().verified_stmt("CREATE TABLE t (c INT ARRAY DEFAULT ARRAY[]::INT[])");
 }
 
 #[test]

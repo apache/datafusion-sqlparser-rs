@@ -62,16 +62,17 @@ pub use self::dcl::{
     SetConfigValue, Use,
 };
 pub use self::ddl::{
-    Alignment, AlterCollation, AlterCollationOperation, AlterColumnOperation, AlterConnectorOwner,
-    AlterFunction, AlterFunctionAction, AlterFunctionKind, AlterFunctionOperation,
-    AlterIndexOperation, AlterOperator, AlterOperatorClass, AlterOperatorClassOperation,
-    AlterOperatorFamily, AlterOperatorFamilyOperation, AlterOperatorOperation, AlterPolicy,
-    AlterPolicyOperation, AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm,
-    AlterTableLock, AlterTableOperation, AlterTableType, AlterTextSearch, AlterTextSearchOperation,
-    AlterTextSearchOption, AlterType, AlterTypeAddValue, AlterTypeAddValuePosition,
-    AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue, ClusteredBy, ColumnDef,
-    ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy, ColumnPolicyProperty,
-    ConstraintCharacteristics, CreateCollation, CreateCollationDefinition, CreateConnector,
+    AggregateModifyKind, Alignment, AlterCollation, AlterCollationOperation, AlterColumnOperation,
+    AlterConnectorOwner, AlterFunction, AlterFunctionAction, AlterFunctionKind,
+    AlterFunctionOperation, AlterIndexOperation, AlterOperator, AlterOperatorClass,
+    AlterOperatorClassOperation, AlterOperatorFamily, AlterOperatorFamilyOperation,
+    AlterOperatorOperation, AlterPolicy, AlterPolicyOperation, AlterSchema, AlterSchemaOperation,
+    AlterTable, AlterTableAlgorithm, AlterTableLock, AlterTableOperation, AlterTableType,
+    AlterTextSearch, AlterTextSearchOperation, AlterTextSearchOption, AlterType, AlterTypeAddValue,
+    AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
+    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy,
+    ColumnPolicyProperty, ConstraintCharacteristics, CreateAggregate, CreateAggregateArgs,
+    CreateAggregateOption, CreateCollation, CreateCollationDefinition, CreateConnector,
     CreateDomain, CreateExtension, CreateFunction, CreateIndex, CreateOperator,
     CreateOperatorClass, CreateOperatorFamily, CreatePolicy, CreatePolicyCommand, CreatePolicyType,
     CreateTable, CreateTextSearch, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
@@ -3779,6 +3780,11 @@ pub enum Statement {
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/textsearch-intro.html)
     CreateTextSearch(CreateTextSearch),
     /// ```sql
+    /// CREATE AGGREGATE
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createaggregate.html)
+    CreateAggregate(CreateAggregate),
+    /// ```sql
     /// ALTER TABLE
     /// ```
     AlterTable(AlterTable),
@@ -5614,6 +5620,7 @@ impl fmt::Display for Statement {
                 create_operator_family.fmt(f)
             }
             Statement::CreateOperatorClass(create_operator_class) => create_operator_class.fmt(f),
+            Statement::CreateAggregate(create_aggregate) => create_aggregate.fmt(f),
             Statement::CreateTextSearch(create_text_search) => create_text_search.fmt(f),
             Statement::AlterTable(alter_table) => write!(f, "{alter_table}"),
             Statement::AlterIndex { name, operation } => {
@@ -10183,13 +10190,20 @@ pub enum FunctionParallel {
     Safe,
 }
 
+impl FunctionParallel {
+    /// Returns the bare keyword for this parallel mode, without the `PARALLEL` prefix.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            FunctionParallel::Unsafe => "UNSAFE",
+            FunctionParallel::Restricted => "RESTRICTED",
+            FunctionParallel::Safe => "SAFE",
+        }
+    }
+}
+
 impl fmt::Display for FunctionParallel {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            FunctionParallel::Unsafe => write!(f, "PARALLEL UNSAFE"),
-            FunctionParallel::Restricted => write!(f, "PARALLEL RESTRICTED"),
-            FunctionParallel::Safe => write!(f, "PARALLEL SAFE"),
-        }
+        write!(f, "PARALLEL {}", self.as_str())
     }
 }
 

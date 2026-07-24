@@ -5283,11 +5283,13 @@ impl<'a> Parser<'a> {
             self.parse_create_secret(or_replace, temporary, persistent)
         } else if self.parse_keyword(Keyword::USER) {
             self.parse_create_user(or_replace).map(Into::into)
+        } else if self.parse_keyword(Keyword::AGGREGATE) {
+            self.parse_create_aggregate(or_replace).map(Into::into)
         } else if self.parse_keyword(Keyword::WAREHOUSE) {
             self.parse_create_warehouse(or_replace).map(Into::into)
         } else if or_replace {
             self.expected_ref(
-                "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION or WAREHOUSE after CREATE OR REPLACE",
+                "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION or AGGREGATE or WAREHOUSE after CREATE OR REPLACE",
                 self.peek_token_ref(),
             )
         } else if self.parse_keyword(Keyword::EXTENSION) {
@@ -5900,16 +5902,7 @@ impl<'a> Parser<'a> {
                 body.called_on_null = Some(FunctionCalledOnNull::Strict);
             } else if self.parse_keyword(Keyword::PARALLEL) {
                 ensure_not_set(&body.parallel, "PARALLEL { UNSAFE | RESTRICTED | SAFE }")?;
-                if self.parse_keyword(Keyword::UNSAFE) {
-                    body.parallel = Some(FunctionParallel::Unsafe);
-                } else if self.parse_keyword(Keyword::RESTRICTED) {
-                    body.parallel = Some(FunctionParallel::Restricted);
-                } else if self.parse_keyword(Keyword::SAFE) {
-                    body.parallel = Some(FunctionParallel::Safe);
-                } else {
-                    return self
-                        .expected_ref("one of UNSAFE | RESTRICTED | SAFE", self.peek_token_ref());
-                }
+                body.parallel = Some(self.parse_function_parallel()?);
             } else if self.parse_keyword(Keyword::SECURITY) {
                 ensure_not_set(&body.security, "SECURITY { DEFINER | INVOKER }")?;
                 if self.parse_keyword(Keyword::DEFINER) {
@@ -7423,6 +7416,218 @@ impl<'a> Parser<'a> {
             right_arg,
             options,
         })
+    }
+
+    /// Parse a [Statement::CreateAggregate]
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createaggregate.html)
+    pub fn parse_create_aggregate(
+        &mut self,
+        or_replace: bool,
+    ) -> Result<CreateAggregate, ParserError> {
+        let name = self.parse_object_name(false)?;
+
+        // The legacy and modern forms (see [`CreateAggregateArgs::Legacy`]) differ
+        // only in whether a second parenthesized list follows the first, so look
+        // that far ahead before committing to either branch.
+        let args = if self.peek_create_aggregate_arg_list()? {
+            self.parse_create_aggregate_args()?
+        } else {
+            CreateAggregateArgs::Legacy
+        };
+        self.expect_token(&Token::LParen)?;
+
+        let mut seen: Vec<Keyword> = Vec::new();
+        let options = self.parse_comma_separated(|parser| {
+            let start = parser.peek_token_ref().span.start;
+            let keyword = parser.parse_create_aggregate_option_key()?;
+            if seen.contains(&keyword) {
+                return parser_err!(
+                    format!("Duplicate CREATE AGGREGATE option: {keyword:?}"),
+                    start
+                );
+            }
+            seen.push(keyword);
+            parser.parse_create_aggregate_option(keyword)
+        })?;
+        self.expect_token(&Token::RParen)?;
+
+        Ok(CreateAggregate {
+            or_replace,
+            name,
+            args,
+            options,
+        })
+    }
+
+    /// Parse the argument list of a `CREATE AGGREGATE`: `(*)` or `(arg [, ...])`.
+    fn parse_create_aggregate_args(&mut self) -> Result<CreateAggregateArgs, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let args = if self.consume_token(&Token::Mul) {
+            CreateAggregateArgs::Star
+        } else {
+            CreateAggregateArgs::List(
+                self.parse_comma_separated0(Parser::parse_function_arg, Token::RParen)?,
+            )
+        };
+        self.expect_token(&Token::RParen)?;
+        Ok(args)
+    }
+
+    /// True when the list at the current position is the modern form's argument
+    /// list, meaning a second parenthesized list follows it.
+    ///
+    /// Errors when the list is never closed rather than guessing a form, since
+    /// committing to either one buries the missing `)` under whichever error
+    /// that branch happens to hit first.
+    fn peek_create_aggregate_arg_list(&self) -> Result<bool, ParserError> {
+        let mut tokens = self
+            .tokens
+            .iter()
+            .skip(self.index)
+            .filter(|token| !matches!(token.token, Token::Whitespace(_)));
+        if tokens.next().map(|token| &token.token) != Some(&Token::LParen) {
+            return Ok(false);
+        }
+        let mut depth = 1usize;
+        while let Some(token) = tokens.next() {
+            match token.token {
+                Token::LParen => depth += 1,
+                Token::RParen => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Ok(tokens.next().map(|token| &token.token) == Some(&Token::LParen));
+                    }
+                }
+                // The list is still open at the statement boundary, so stop
+                // before the next statement's parentheses answer for this one.
+                Token::SemiColon => return self.expected_ref(")", token),
+                _ => {}
+            }
+        }
+        self.expected_ref(")", &EOF_TOKEN)
+    }
+
+    /// Parse `PARALLEL` qualifier value: `{ SAFE | RESTRICTED | UNSAFE }`.
+    fn parse_function_parallel(&mut self) -> Result<FunctionParallel, ParserError> {
+        match self.expect_one_of_keywords(&[Keyword::SAFE, Keyword::RESTRICTED, Keyword::UNSAFE])? {
+            Keyword::SAFE => Ok(FunctionParallel::Safe),
+            Keyword::RESTRICTED => Ok(FunctionParallel::Restricted),
+            Keyword::UNSAFE => Ok(FunctionParallel::Unsafe),
+            _ => self.expected_ref("one of SAFE | RESTRICTED | UNSAFE", self.peek_token_ref()),
+        }
+    }
+
+    /// Every key listed here needs an arm in [`Self::parse_create_aggregate_option`].
+    fn parse_create_aggregate_option_key(&mut self) -> Result<Keyword, ParserError> {
+        self.expect_one_of_keywords(&[
+            Keyword::SFUNC,
+            Keyword::STYPE,
+            Keyword::SSPACE,
+            Keyword::FINALFUNC,
+            Keyword::FINALFUNC_EXTRA,
+            Keyword::FINALFUNC_MODIFY,
+            Keyword::COMBINEFUNC,
+            Keyword::SERIALFUNC,
+            Keyword::DESERIALFUNC,
+            Keyword::INITCOND,
+            Keyword::MSFUNC,
+            Keyword::MINVFUNC,
+            Keyword::MSTYPE,
+            Keyword::MSSPACE,
+            Keyword::MFINALFUNC,
+            Keyword::MFINALFUNC_EXTRA,
+            Keyword::MFINALFUNC_MODIFY,
+            Keyword::MINITCOND,
+            Keyword::SORTOP,
+            Keyword::PARALLEL,
+            Keyword::HYPOTHETICAL,
+            Keyword::BASETYPE,
+        ])
+    }
+
+    /// Parse the value of a single `CREATE AGGREGATE` option, given its
+    /// already-consumed key.
+    fn parse_create_aggregate_option(
+        &mut self,
+        keyword: Keyword,
+    ) -> Result<CreateAggregateOption, ParserError> {
+        // Every option but the three valueless flags is spelled `KEY = value`.
+        if !matches!(
+            keyword,
+            Keyword::FINALFUNC_EXTRA | Keyword::MFINALFUNC_EXTRA | Keyword::HYPOTHETICAL
+        ) {
+            self.expect_token(&Token::Eq)?;
+        }
+
+        Ok(match keyword {
+            Keyword::FINALFUNC_EXTRA => CreateAggregateOption::FinalFunctionExtra,
+            Keyword::MFINALFUNC_EXTRA => CreateAggregateOption::MovingFinalFunctionExtra,
+            Keyword::HYPOTHETICAL => CreateAggregateOption::Hypothetical,
+            Keyword::SFUNC => {
+                CreateAggregateOption::StateTransitionFunction(self.parse_object_name(false)?)
+            }
+            Keyword::STYPE => CreateAggregateOption::StateDataType(self.parse_data_type()?),
+            Keyword::SSPACE => CreateAggregateOption::StateDataSize(self.parse_literal_uint()?),
+            Keyword::FINALFUNC => {
+                CreateAggregateOption::FinalFunction(self.parse_object_name(false)?)
+            }
+            Keyword::FINALFUNC_MODIFY => {
+                CreateAggregateOption::FinalFunctionModify(self.parse_aggregate_modify_kind()?)
+            }
+            Keyword::COMBINEFUNC => {
+                CreateAggregateOption::CombineFunction(self.parse_object_name(false)?)
+            }
+            Keyword::SERIALFUNC => {
+                CreateAggregateOption::SerialFunction(self.parse_object_name(false)?)
+            }
+            Keyword::DESERIALFUNC => {
+                CreateAggregateOption::DeserialFunction(self.parse_object_name(false)?)
+            }
+            Keyword::INITCOND => CreateAggregateOption::InitialCondition(self.parse_value()?),
+            Keyword::MSFUNC => {
+                CreateAggregateOption::MovingStateTransitionFunction(self.parse_object_name(false)?)
+            }
+            Keyword::MINVFUNC => CreateAggregateOption::MovingInverseTransitionFunction(
+                self.parse_object_name(false)?,
+            ),
+            Keyword::MSTYPE => CreateAggregateOption::MovingStateDataType(self.parse_data_type()?),
+            Keyword::MSSPACE => {
+                CreateAggregateOption::MovingStateDataSize(self.parse_literal_uint()?)
+            }
+            Keyword::MFINALFUNC => {
+                CreateAggregateOption::MovingFinalFunction(self.parse_object_name(false)?)
+            }
+            Keyword::MFINALFUNC_MODIFY => CreateAggregateOption::MovingFinalFunctionModify(
+                self.parse_aggregate_modify_kind()?,
+            ),
+            Keyword::MINITCOND => {
+                CreateAggregateOption::MovingInitialCondition(self.parse_value()?)
+            }
+            Keyword::SORTOP => CreateAggregateOption::SortOperator(self.parse_operator_name()?),
+            Keyword::PARALLEL => CreateAggregateOption::Parallel(self.parse_function_parallel()?),
+            Keyword::BASETYPE => CreateAggregateOption::BaseType(self.parse_data_type()?),
+            _ => {
+                return self.expected_ref("a CREATE AGGREGATE option", self.peek_token_ref());
+            }
+        })
+    }
+
+    /// Parse the value of `FINALFUNC_MODIFY` / `MFINALFUNC_MODIFY`.
+    fn parse_aggregate_modify_kind(&mut self) -> Result<AggregateModifyKind, ParserError> {
+        match self.expect_one_of_keywords(&[
+            Keyword::READ_ONLY,
+            Keyword::SHAREABLE,
+            Keyword::READ_WRITE,
+        ])? {
+            Keyword::READ_ONLY => Ok(AggregateModifyKind::ReadOnly),
+            Keyword::SHAREABLE => Ok(AggregateModifyKind::Shareable),
+            Keyword::READ_WRITE => Ok(AggregateModifyKind::ReadWrite),
+            _ => self.expected_ref(
+                "one of READ_ONLY | SHAREABLE | READ_WRITE",
+                self.peek_token_ref(),
+            ),
+        }
     }
 
     /// Parse a [Statement::CreateOperatorFamily]
@@ -11298,17 +11503,9 @@ impl<'a> Parser<'a> {
                 security,
             })
         } else if self.parse_keyword(Keyword::PARALLEL) {
-            let parallel = if self.parse_keyword(Keyword::UNSAFE) {
-                FunctionParallel::Unsafe
-            } else if self.parse_keyword(Keyword::RESTRICTED) {
-                FunctionParallel::Restricted
-            } else if self.parse_keyword(Keyword::SAFE) {
-                FunctionParallel::Safe
-            } else {
-                return self
-                    .expected_ref("one of UNSAFE | RESTRICTED | SAFE", self.peek_token_ref());
-            };
-            Some(AlterFunctionAction::Parallel(parallel))
+            Some(AlterFunctionAction::Parallel(
+                self.parse_function_parallel()?,
+            ))
         } else if self.parse_keyword(Keyword::COST) {
             Some(AlterFunctionAction::Cost(self.parse_number()?))
         } else if self.parse_keyword(Keyword::ROWS) {

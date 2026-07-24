@@ -9539,6 +9539,15 @@ fn parse_lock_table() {
     }
 }
 
+/// The rendered argument list of a `CREATE AGGREGATE`, which must not be the
+/// legacy or wildcard form.
+fn aggregate_args(args: &CreateAggregateArgs) -> Vec<String> {
+    match args {
+        CreateAggregateArgs::List(args) => args.iter().map(ToString::to_string).collect(),
+        other => panic!("Expected an argument list, got: {other:?}"),
+    }
+}
+
 #[test]
 fn parse_create_aggregate_basic() {
     let sql = "CREATE AGGREGATE myavg (NUMERIC) (SFUNC = numeric_avg_accum, STYPE = internal, FINALFUNC = numeric_avg, INITCOND = '0')";
@@ -9546,10 +9555,8 @@ fn parse_create_aggregate_basic() {
     match stmt {
         Statement::CreateAggregate(agg) => {
             assert!(!agg.or_replace);
-            assert!(!agg.star_args);
             assert_eq!(agg.name.to_string(), "myavg");
-            assert_eq!(agg.args.len(), 1);
-            assert_eq!(agg.args[0].to_string(), "NUMERIC");
+            assert_eq!(aggregate_args(&agg.args), ["NUMERIC"]);
             assert_eq!(agg.options.len(), 4);
             assert_eq!(agg.options[0].to_string(), "SFUNC = numeric_avg_accum");
             assert_eq!(agg.options[1].to_string(), "STYPE = internal");
@@ -9568,7 +9575,7 @@ fn parse_create_aggregate_or_replace_with_parallel() {
         Statement::CreateAggregate(agg) => {
             assert!(agg.or_replace);
             assert_eq!(agg.name.to_string(), "sum2");
-            assert_eq!(agg.args.len(), 2);
+            assert_eq!(aggregate_args(&agg.args), ["INT4", "INT4"]);
             assert_eq!(agg.options.len(), 3);
             assert_eq!(agg.options[2].to_string(), "PARALLEL = SAFE");
         }
@@ -9584,7 +9591,7 @@ fn parse_create_aggregate_with_moving_aggregate_options() {
         Statement::CreateAggregate(agg) => {
             assert!(!agg.or_replace);
             assert_eq!(agg.name.to_string(), "moving_sum");
-            assert_eq!(agg.args.len(), 1);
+            assert_eq!(aggregate_args(&agg.args), ["FLOAT8"]);
             assert_eq!(agg.options.len(), 7);
             assert_eq!(agg.options[4].to_string(), "MSTYPE = FLOAT8");
             assert_eq!(agg.options[5].to_string(), "MFINALFUNC_EXTRA");
@@ -9600,8 +9607,7 @@ fn parse_create_aggregate_star_args() {
     let stmt = pg_and_generic().verified_stmt(canonical);
     match stmt {
         Statement::CreateAggregate(agg) => {
-            assert!(agg.star_args);
-            assert!(agg.args.is_empty());
+            assert_eq!(agg.args, CreateAggregateArgs::Star);
             assert_eq!(agg.name.to_string(), "my_count");
         }
         _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
@@ -9614,15 +9620,28 @@ fn parse_create_aggregate_star_args() {
 }
 
 #[test]
+fn parse_create_aggregate_empty_args() {
+    let stmt = pg_and_generic()
+        .verified_stmt("CREATE AGGREGATE my_agg () (SFUNC = my_sfunc, STYPE = INT)");
+    match stmt {
+        Statement::CreateAggregate(agg) => {
+            assert_eq!(agg.args, CreateAggregateArgs::List(vec![]));
+        }
+        _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
+    }
+}
+
+#[test]
 fn parse_create_aggregate_named_and_variadic_args() {
     let sql =
         "CREATE AGGREGATE my_agg (input INT, VARIADIC tail TEXT) (SFUNC = my_sfunc, STYPE = INT)";
     let stmt = pg_and_generic().verified_stmt(sql);
     match stmt {
         Statement::CreateAggregate(agg) => {
-            assert_eq!(agg.args.len(), 2);
-            assert_eq!(agg.args[0].to_string(), "input INT");
-            assert_eq!(agg.args[1].to_string(), "VARIADIC tail TEXT");
+            assert_eq!(
+                aggregate_args(&agg.args),
+                ["input INT", "VARIADIC tail TEXT"]
+            );
         }
         _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
     }
@@ -9642,16 +9661,18 @@ fn parse_create_aggregate_additional_options() {
     pg_and_generic().verified_stmt(
         "CREATE AGGREGATE my_sum (INT) (SFUNC = my_sfunc, STYPE = internal, COMBINEFUNC = my_combine, SERIALFUNC = my_serial, DESERIALFUNC = my_deserial)",
     );
+    pg_and_generic().verified_stmt(
+        "CREATE AGGREGATE my_shareable (INT) (SFUNC = my_sfunc, STYPE = internal, FINALFUNC_MODIFY = SHAREABLE, MFINALFUNC = my_mfinal, MSSPACE = 64, MINITCOND = '0')",
+    );
 }
 
 #[test]
-fn parse_create_aggregate_old_syntax_basetype() {
+fn parse_create_aggregate_legacy_syntax() {
     let stmt = pg_and_generic()
         .verified_stmt("CREATE AGGREGATE my_avg (BASETYPE = INT, SFUNC = my_sfunc, STYPE = INT)");
     match stmt {
         Statement::CreateAggregate(agg) => {
-            assert!(agg.args.is_empty());
-            assert!(!agg.star_args);
+            assert_eq!(agg.args, CreateAggregateArgs::Legacy);
             assert_eq!(agg.options.len(), 3);
             assert_eq!(
                 agg.options[0],
@@ -9665,8 +9686,7 @@ fn parse_create_aggregate_old_syntax_basetype() {
         .verified_stmt("CREATE AGGREGATE my_avg (SFUNC = my_sfunc, BASETYPE = INT, STYPE = INT)");
     match stmt {
         Statement::CreateAggregate(agg) => {
-            assert!(agg.args.is_empty());
-            assert!(!agg.star_args);
+            assert_eq!(agg.args, CreateAggregateArgs::Legacy);
             assert_eq!(agg.options.len(), 3);
             assert_eq!(
                 agg.options[1],
@@ -9675,13 +9695,43 @@ fn parse_create_aggregate_old_syntax_basetype() {
         }
         _ => panic!("Expected CreateAggregate, got: {stmt:?}"),
     }
+
+    // An option whose value cannot start an argument definition: the
+    // speculative argument-list parse must not leak its error.
+    pg_and_generic().verified_stmt(
+        "CREATE AGGREGATE my_min (BASETYPE = INT, SFUNC = my_sfunc, STYPE = INT, SORTOP = <)",
+    );
+
+    // Without BASETYPE the statement is still a single-list one, and must not
+    // gain an empty argument list on the way back out.
+    pg_and_generic().verified_stmt("CREATE AGGREGATE my_avg (SFUNC = my_sfunc, STYPE = INT)");
 }
 
 #[test]
-fn parse_create_aggregate_unknown_option() {
-    assert!(pg_and_generic()
+fn parse_create_aggregate_rejects_bad_options() {
+    let expected = "sql parser error: Expected: one of SFUNC or STYPE or SSPACE or FINALFUNC or FINALFUNC_EXTRA or FINALFUNC_MODIFY or COMBINEFUNC or SERIALFUNC or DESERIALFUNC or INITCOND or MSFUNC or MINVFUNC or MSTYPE or MSSPACE or MFINALFUNC or MFINALFUNC_EXTRA or MFINALFUNC_MODIFY or MINITCOND or SORTOP or PARALLEL or HYPOTHETICAL or BASETYPE";
+
+    let unknown = pg_and_generic()
         .parse_sql_statements("CREATE AGGREGATE foo (INT) (UNKNOWN_OPTION = bar)")
-        .is_err());
+        .unwrap_err();
+    assert_eq!(
+        unknown.to_string(),
+        format!("{expected}, found: UNKNOWN_OPTION")
+    );
+
+    // A quoted key is an identifier, not the keyword it spells.
+    let quoted = pg_and_generic()
+        .parse_sql_statements("CREATE AGGREGATE foo (INT) (\"SFUNC\" = my_sfunc, STYPE = INT)")
+        .unwrap_err();
+    assert_eq!(quoted.to_string(), format!("{expected}, found: \"SFUNC\""));
+
+    let duplicate = pg_and_generic()
+        .parse_sql_statements("CREATE AGGREGATE foo (INT) (SFUNC = f, SFUNC = g, STYPE = INT)")
+        .unwrap_err();
+    assert_eq!(
+        duplicate.to_string(),
+        "sql parser error: Expected: no duplicate CREATE AGGREGATE option, found: SFUNC"
+    );
 }
 
 #[test]

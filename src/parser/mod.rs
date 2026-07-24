@@ -5902,16 +5902,7 @@ impl<'a> Parser<'a> {
                 body.called_on_null = Some(FunctionCalledOnNull::Strict);
             } else if self.parse_keyword(Keyword::PARALLEL) {
                 ensure_not_set(&body.parallel, "PARALLEL { UNSAFE | RESTRICTED | SAFE }")?;
-                if self.parse_keyword(Keyword::UNSAFE) {
-                    body.parallel = Some(FunctionParallel::Unsafe);
-                } else if self.parse_keyword(Keyword::RESTRICTED) {
-                    body.parallel = Some(FunctionParallel::Restricted);
-                } else if self.parse_keyword(Keyword::SAFE) {
-                    body.parallel = Some(FunctionParallel::Safe);
-                } else {
-                    return self
-                        .expected_ref("one of UNSAFE | RESTRICTED | SAFE", self.peek_token_ref());
-                }
+                body.parallel = Some(self.parse_function_parallel()?);
             } else if self.parse_keyword(Keyword::SECURITY) {
                 ensure_not_set(&body.security, "SECURITY { DEFINER | INVOKER }")?;
                 if self.parse_keyword(Keyword::DEFINER) {
@@ -7436,198 +7427,176 @@ impl<'a> Parser<'a> {
     ) -> Result<CreateAggregate, ParserError> {
         let name = self.parse_object_name(false)?;
 
-        // The old syntax has a single parenthesized list that carries both
-        // `BASETYPE` and the remaining options. The modern syntax has a
-        // separate `(input_arg [, ...])` argument list followed by the
-        // options list. They are distinguished by whether a second
-        // parenthesized list follows the first.
-        let checkpoint = self.index;
-        self.expect_token(&Token::LParen)?;
-        let mut star_args = self.consume_token(&Token::Mul);
-        let mut args = if star_args || self.peek_token().token == Token::RParen {
-            vec![]
-        } else {
-            self.parse_comma_separated(Parser::parse_function_arg)?
-        };
-        self.expect_token(&Token::RParen)?;
+        // The keys accepted inside the options list.
+        const OPTIONS: &[Keyword] = &[
+            Keyword::SFUNC,
+            Keyword::STYPE,
+            Keyword::SSPACE,
+            Keyword::FINALFUNC,
+            Keyword::FINALFUNC_EXTRA,
+            Keyword::FINALFUNC_MODIFY,
+            Keyword::COMBINEFUNC,
+            Keyword::SERIALFUNC,
+            Keyword::DESERIALFUNC,
+            Keyword::INITCOND,
+            Keyword::MSFUNC,
+            Keyword::MINVFUNC,
+            Keyword::MSTYPE,
+            Keyword::MSSPACE,
+            Keyword::MFINALFUNC,
+            Keyword::MFINALFUNC_EXTRA,
+            Keyword::MFINALFUNC_MODIFY,
+            Keyword::MINITCOND,
+            Keyword::SORTOP,
+            Keyword::PARALLEL,
+            Keyword::HYPOTHETICAL,
+            Keyword::BASETYPE,
+        ];
 
-        // The first list is the modern argument-type list only when a second
-        // list follows. Otherwise it was the old-syntax options list, so rewind,
-        // discard the speculatively parsed args, and re-parse it as options.
-        if !self.consume_token(&Token::LParen) {
-            self.index = checkpoint;
-            args = vec![];
-            star_args = false;
-            self.expect_token(&Token::LParen)?;
-        }
-        let options = self.parse_comma_separated(Parser::parse_create_aggregate_option_entry)?;
+        // The legacy syntax has a single parenthesized list that carries both
+        // `BASETYPE` and the remaining options. The modern syntax has a
+        // separate `(input_arg [, ...])` argument list followed by the options
+        // list. They are only distinguishable by whether a second parenthesized
+        // list follows the first, so parse the argument list speculatively and
+        // fall back to the legacy form when no options list follows it.
+        let args = match self.maybe_parse(|parser| {
+            let args = parser.parse_create_aggregate_args()?;
+            parser.expect_token(&Token::LParen)?;
+            Ok(args)
+        })? {
+            Some(args) => args,
+            None => {
+                self.expect_token(&Token::LParen)?;
+                CreateAggregateArgs::Legacy
+            }
+        };
+
+        let mut seen: Vec<Keyword> = Vec::new();
+        let options = self.parse_comma_separated(|parser| {
+            let token = parser.peek_token();
+            let keyword = parser.expect_one_of_keywords(OPTIONS)?;
+            if seen.contains(&keyword) {
+                return parser.expected("no duplicate CREATE AGGREGATE option", token);
+            }
+            seen.push(keyword);
+            parser.parse_create_aggregate_option(keyword)
+        })?;
         self.expect_token(&Token::RParen)?;
 
         Ok(CreateAggregate {
             or_replace,
             name,
             args,
-            star_args,
             options,
         })
     }
 
+    /// Parse the argument list of a `CREATE AGGREGATE`: `(*)` or `(arg [, ...])`.
+    fn parse_create_aggregate_args(&mut self) -> Result<CreateAggregateArgs, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let args = if self.consume_token(&Token::Mul) {
+            CreateAggregateArgs::Star
+        } else {
+            CreateAggregateArgs::List(
+                self.parse_comma_separated0(Parser::parse_function_arg, Token::RParen)?,
+            )
+        };
+        self.expect_token(&Token::RParen)?;
+        Ok(args)
+    }
+
     /// Parse `PARALLEL` qualifier value: `{ SAFE | RESTRICTED | UNSAFE }`.
     fn parse_function_parallel(&mut self) -> Result<FunctionParallel, ParserError> {
-        if self.parse_keyword(Keyword::SAFE) {
-            Ok(FunctionParallel::Safe)
-        } else if self.parse_keyword(Keyword::RESTRICTED) {
-            Ok(FunctionParallel::Restricted)
-        } else if self.parse_keyword(Keyword::UNSAFE) {
-            Ok(FunctionParallel::Unsafe)
-        } else {
-            self.expected_ref("one of SAFE | RESTRICTED | UNSAFE", self.peek_token_ref())
+        match self.expect_one_of_keywords(&[Keyword::SAFE, Keyword::RESTRICTED, Keyword::UNSAFE])? {
+            Keyword::SAFE => Ok(FunctionParallel::Safe),
+            Keyword::RESTRICTED => Ok(FunctionParallel::Restricted),
+            Keyword::UNSAFE => Ok(FunctionParallel::Unsafe),
+            _ => self.expected_ref("one of SAFE | RESTRICTED | UNSAFE", self.peek_token_ref()),
         }
     }
 
-    fn parse_create_aggregate_option_entry(
-        &mut self,
-    ) -> Result<CreateAggregateOption, ParserError> {
-        let key = self.parse_identifier()?;
-        self.parse_create_aggregate_option(&key.value.to_uppercase())
-    }
-
+    /// Parse the value of a single `CREATE AGGREGATE` option, given its
+    /// already-consumed key.
     fn parse_create_aggregate_option(
         &mut self,
-        key: &str,
+        keyword: Keyword,
     ) -> Result<CreateAggregateOption, ParserError> {
-        match key {
-            "SFUNC" => {
-                self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::StateTransitionFunction(
-                    self.parse_object_name(false)?,
-                ))
-            }
-            "STYPE" => {
-                self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::StateDataType(
-                    self.parse_data_type()?,
-                ))
-            }
-            "SSPACE" => {
-                self.expect_token(&Token::Eq)?;
-                let size = self.parse_literal_uint()?;
-                Ok(CreateAggregateOption::StateDataSize(size))
-            }
-            "FINALFUNC" => {
-                self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::FinalFunction(
-                    self.parse_object_name(false)?,
-                ))
-            }
-            "FINALFUNC_EXTRA" => Ok(CreateAggregateOption::FinalFunctionExtra),
-            "FINALFUNC_MODIFY" => {
-                self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::FinalFunctionModify(
-                    self.parse_aggregate_modify_kind()?,
-                ))
-            }
-            "COMBINEFUNC" => {
-                self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::CombineFunction(
-                    self.parse_object_name(false)?,
-                ))
-            }
-            "SERIALFUNC" => {
-                self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::SerialFunction(
-                    self.parse_object_name(false)?,
-                ))
-            }
-            "DESERIALFUNC" => {
-                self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::DeserialFunction(
-                    self.parse_object_name(false)?,
-                ))
-            }
-            "INITCOND" => {
-                self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::InitialCondition(self.parse_value()?))
-            }
-            "MSFUNC" => {
-                self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::MovingStateTransitionFunction(
-                    self.parse_object_name(false)?,
-                ))
-            }
-            "MINVFUNC" => {
-                self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::MovingInverseTransitionFunction(
-                    self.parse_object_name(false)?,
-                ))
-            }
-            "MSTYPE" => {
-                self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::MovingStateDataType(
-                    self.parse_data_type()?,
-                ))
-            }
-            "MSSPACE" => {
-                self.expect_token(&Token::Eq)?;
-                let size = self.parse_literal_uint()?;
-                Ok(CreateAggregateOption::MovingStateDataSize(size))
-            }
-            "MFINALFUNC" => {
-                self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::MovingFinalFunction(
-                    self.parse_object_name(false)?,
-                ))
-            }
-            "MFINALFUNC_EXTRA" => Ok(CreateAggregateOption::MovingFinalFunctionExtra),
-            "MFINALFUNC_MODIFY" => {
-                self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::MovingFinalFunctionModify(
-                    self.parse_aggregate_modify_kind()?,
-                ))
-            }
-            "MINITCOND" => {
-                self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::MovingInitialCondition(
-                    self.parse_value()?,
-                ))
-            }
-            "SORTOP" => {
-                self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::SortOperator(
-                    self.parse_operator_name()?,
-                ))
-            }
-            "PARALLEL" => {
-                self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::Parallel(
-                    self.parse_function_parallel()?,
-                ))
-            }
-            "HYPOTHETICAL" => Ok(CreateAggregateOption::Hypothetical),
-            "BASETYPE" => {
-                self.expect_token(&Token::Eq)?;
-                Ok(CreateAggregateOption::BaseType(self.parse_data_type()?))
-            }
-            other => Err(ParserError::ParserError(format!(
-                "Unknown CREATE AGGREGATE option: {other}"
-            ))),
+        // Every option but the three valueless flags is spelled `KEY = value`.
+        let is_flag = matches!(
+            keyword,
+            Keyword::FINALFUNC_EXTRA | Keyword::MFINALFUNC_EXTRA | Keyword::HYPOTHETICAL
+        );
+        if !is_flag {
+            self.expect_token(&Token::Eq)?;
         }
+
+        Ok(match keyword {
+            Keyword::FINALFUNC_EXTRA => CreateAggregateOption::FinalFunctionExtra,
+            Keyword::MFINALFUNC_EXTRA => CreateAggregateOption::MovingFinalFunctionExtra,
+            Keyword::HYPOTHETICAL => CreateAggregateOption::Hypothetical,
+            Keyword::SFUNC => {
+                CreateAggregateOption::StateTransitionFunction(self.parse_object_name(false)?)
+            }
+            Keyword::STYPE => CreateAggregateOption::StateDataType(self.parse_data_type()?),
+            Keyword::SSPACE => CreateAggregateOption::StateDataSize(self.parse_literal_uint()?),
+            Keyword::FINALFUNC => {
+                CreateAggregateOption::FinalFunction(self.parse_object_name(false)?)
+            }
+            Keyword::FINALFUNC_MODIFY => {
+                CreateAggregateOption::FinalFunctionModify(self.parse_aggregate_modify_kind()?)
+            }
+            Keyword::COMBINEFUNC => {
+                CreateAggregateOption::CombineFunction(self.parse_object_name(false)?)
+            }
+            Keyword::SERIALFUNC => {
+                CreateAggregateOption::SerialFunction(self.parse_object_name(false)?)
+            }
+            Keyword::DESERIALFUNC => {
+                CreateAggregateOption::DeserialFunction(self.parse_object_name(false)?)
+            }
+            Keyword::INITCOND => CreateAggregateOption::InitialCondition(self.parse_value()?),
+            Keyword::MSFUNC => {
+                CreateAggregateOption::MovingStateTransitionFunction(self.parse_object_name(false)?)
+            }
+            Keyword::MINVFUNC => CreateAggregateOption::MovingInverseTransitionFunction(
+                self.parse_object_name(false)?,
+            ),
+            Keyword::MSTYPE => CreateAggregateOption::MovingStateDataType(self.parse_data_type()?),
+            Keyword::MSSPACE => {
+                CreateAggregateOption::MovingStateDataSize(self.parse_literal_uint()?)
+            }
+            Keyword::MFINALFUNC => {
+                CreateAggregateOption::MovingFinalFunction(self.parse_object_name(false)?)
+            }
+            Keyword::MFINALFUNC_MODIFY => CreateAggregateOption::MovingFinalFunctionModify(
+                self.parse_aggregate_modify_kind()?,
+            ),
+            Keyword::MINITCOND => {
+                CreateAggregateOption::MovingInitialCondition(self.parse_value()?)
+            }
+            Keyword::SORTOP => CreateAggregateOption::SortOperator(self.parse_operator_name()?),
+            Keyword::PARALLEL => CreateAggregateOption::Parallel(self.parse_function_parallel()?),
+            Keyword::BASETYPE => CreateAggregateOption::BaseType(self.parse_data_type()?),
+            _ => {
+                return self.expected_ref("a CREATE AGGREGATE option", self.peek_token_ref());
+            }
+        })
     }
 
+    /// Parse the value of `FINALFUNC_MODIFY` / `MFINALFUNC_MODIFY`.
     fn parse_aggregate_modify_kind(&mut self) -> Result<AggregateModifyKind, ParserError> {
-        let token = self.next_token();
-        match &token.token {
-            Token::Word(word) => match word.value.to_uppercase().as_str() {
-                "READ_ONLY" => Ok(AggregateModifyKind::ReadOnly),
-                "SHAREABLE" => Ok(AggregateModifyKind::Shareable),
-                "READ_WRITE" => Ok(AggregateModifyKind::ReadWrite),
-                other => Err(ParserError::ParserError(format!(
-                    "Expected READ_ONLY, SHAREABLE, or READ_WRITE, got: {other}"
-                ))),
-            },
-            other => Err(ParserError::ParserError(format!(
-                "Expected READ_ONLY, SHAREABLE, or READ_WRITE, got: {other:?}"
-            ))),
+        match self.expect_one_of_keywords(&[
+            Keyword::READ_ONLY,
+            Keyword::SHAREABLE,
+            Keyword::READ_WRITE,
+        ])? {
+            Keyword::READ_ONLY => Ok(AggregateModifyKind::ReadOnly),
+            Keyword::SHAREABLE => Ok(AggregateModifyKind::Shareable),
+            Keyword::READ_WRITE => Ok(AggregateModifyKind::ReadWrite),
+            _ => self.expected_ref(
+                "one of READ_ONLY | SHAREABLE | READ_WRITE",
+                self.peek_token_ref(),
+            ),
         }
     }
 
@@ -11504,17 +11473,9 @@ impl<'a> Parser<'a> {
                 security,
             })
         } else if self.parse_keyword(Keyword::PARALLEL) {
-            let parallel = if self.parse_keyword(Keyword::UNSAFE) {
-                FunctionParallel::Unsafe
-            } else if self.parse_keyword(Keyword::RESTRICTED) {
-                FunctionParallel::Restricted
-            } else if self.parse_keyword(Keyword::SAFE) {
-                FunctionParallel::Safe
-            } else {
-                return self
-                    .expected_ref("one of UNSAFE | RESTRICTED | SAFE", self.peek_token_ref());
-            };
-            Some(AlterFunctionAction::Parallel(parallel))
+            Some(AlterFunctionAction::Parallel(
+                self.parse_function_parallel()?,
+            ))
         } else if self.parse_keyword(Keyword::COST) {
             Some(AlterFunctionAction::Cost(self.parse_number()?))
         } else if self.parse_keyword(Keyword::ROWS) {

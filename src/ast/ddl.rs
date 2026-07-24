@@ -6005,11 +6005,8 @@ pub struct CreateAggregate {
     pub or_replace: bool,
     /// The aggregate name (can be schema-qualified).
     pub name: ObjectName,
-    /// Input arguments. Empty when `star_args` is true or when the argument list is empty.
-    pub args: Vec<OperateFunctionArg>,
-    /// True if the argument list was the wildcard form `(*)` (used by
-    /// zero-argument aggregates such as `count(*)`).
-    pub star_args: bool,
+    /// The argument list preceding the options list.
+    pub args: CreateAggregateArgs,
     /// The options listed inside the required parentheses after the argument
     /// list (e.g. `SFUNC`, `STYPE`, `FINALFUNC`, `PARALLEL`, …).
     pub options: Vec<CreateAggregateOption>,
@@ -6022,19 +6019,29 @@ impl fmt::Display for CreateAggregate {
             write!(f, " OR REPLACE")?;
         }
         write!(f, " AGGREGATE {}", self.name)?;
-        let is_old_syntax = self
-            .options
-            .iter()
-            .any(|option| matches!(option, CreateAggregateOption::BaseType(_)));
-        if !is_old_syntax {
-            if self.star_args && self.args.is_empty() {
-                write!(f, " (*)")?;
-            } else {
-                write!(f, " ({})", display_comma_separated(&self.args))?;
-            }
+        match &self.args {
+            CreateAggregateArgs::Legacy => {}
+            CreateAggregateArgs::Star => write!(f, " (*)")?,
+            CreateAggregateArgs::List(args) => write!(f, " ({})", display_comma_separated(args))?,
         }
         write!(f, " ({})", display_comma_separated(&self.options))
     }
+}
+
+/// The argument list of a [`CreateAggregate`] statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreateAggregateArgs {
+    /// No argument list at all: the pre-8.2 syntax that instead carries a
+    /// `BASETYPE` entry in the options list.
+    Legacy,
+    /// The wildcard form `(*)`, used by zero-argument aggregates such as
+    /// `count(*)`.
+    Star,
+    /// An explicit argument list, possibly empty: `()`, `(NUMERIC)`,
+    /// `(input INT, VARIADIC tail TEXT)`.
+    List(Vec<OperateFunctionArg>),
 }
 
 impl From<CreateAggregate> for crate::ast::Statement {

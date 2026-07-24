@@ -2808,6 +2808,14 @@ fn parse_array_type_def_with_keyword() {
     pg().verified_only_select("SELECT CAST(ARRAY[1, 2, 3] AS INTEGER ARRAY)");
     pg().verified_only_select("SELECT CAST(ARRAY[1, 2, 3] AS INTEGER ARRAY[3])");
     pg().verified_only_select("SELECT foo::INTEGER ARRAY[3]");
+    // Custom and schema-qualified element types, ALTER TABLE, parenthesized
+    // typmods, and the suffix-vs-constructor ambiguity. Enabled for the generic
+    // dialect too, matching the bracket form.
+    pg_and_generic().verified_stmt("CREATE TABLE t (c currency ARRAY)");
+    pg_and_generic().verified_stmt("CREATE TABLE t (c public.currency ARRAY)");
+    pg_and_generic().verified_stmt("ALTER TABLE t ADD COLUMN c currency ARRAY");
+    pg_and_generic().verified_stmt("CREATE TABLE t (c NUMERIC(10,2) ARRAY)");
+    pg_and_generic().verified_stmt("CREATE TABLE t (c INT ARRAY DEFAULT ARRAY[]::INT[])");
 }
 
 #[test]

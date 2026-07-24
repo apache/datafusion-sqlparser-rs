@@ -6005,8 +6005,9 @@ impl ForeignDataWrapperRoutineClause {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct CreateForeignDataWrapper {
-    /// The name of the foreign-data wrapper. Can be schema-qualified.
-    pub name: ObjectName,
+    /// The name of the foreign-data wrapper. Per PostgreSQL this is a bare
+    /// identifier and cannot be schema-qualified.
+    pub name: Ident,
     /// Optional `HANDLER handler_function` or `NO HANDLER` clause.
     pub handler: Option<ForeignDataWrapperRoutineClause>,
     /// Optional `VALIDATOR validator_function` or `NO VALIDATOR` clause.
@@ -6044,7 +6045,7 @@ impl Spanned for CreateForeignDataWrapper {
             _ => None,
         };
         Span::union_iter(
-            core::iter::once(self.name.span())
+            core::iter::once(self.name.span)
                 .chain(routine_span(&self.handler))
                 .chain(routine_span(&self.validator)),
         )

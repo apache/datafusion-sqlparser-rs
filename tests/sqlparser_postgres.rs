@@ -9607,19 +9607,6 @@ fn parse_create_foreign_table_with_check_constraint() {
 }
 
 #[test]
-fn parse_create_foreign_data_wrapper_with_schema_qualified_name() {
-    // NOTE: PostgreSQL FDW names are unqualified per the spec; a schema-qualified
-    // name like `myschema.myfdw` is non-conformant input. This is a deliberate
-    // parser relaxation (we accept and round-trip it via ObjectName rather than
-    // rejecting it), so this test enshrines that relaxation on purpose.
-    let sql = "CREATE FOREIGN DATA WRAPPER myschema.myfdw";
-    let Statement::CreateForeignDataWrapper(stmt) = pg_and_generic().verified_stmt(sql) else {
-        unreachable!()
-    };
-    assert_eq!(stmt.name.to_string(), "myschema.myfdw");
-}
-
-#[test]
 fn exclude_as_column_name() {
     // `EXCLUDE` is a non-reserved keyword, so it stays usable as a column name
     // even on dialects that parse `EXCLUDE` constraints: a bare `exclude` not

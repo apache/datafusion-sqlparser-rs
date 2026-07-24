@@ -20204,7 +20204,7 @@ impl<'a> Parser<'a> {
         self.expect_keywords(&[Keyword::FOREIGN, Keyword::DATA, Keyword::WRAPPER])?;
         let foreign_data_wrapper = self.parse_object_name(false)?;
 
-        let options = self.parse_options_clause()?;
+        let options = self.parse_generic_options_clause()?;
 
         Ok(Statement::CreateServer(CreateServerStatement {
             name,
@@ -20218,7 +20218,9 @@ impl<'a> Parser<'a> {
 
     /// Parse an optional `OPTIONS ( key value [, ...] )` clause shared by
     /// `CREATE SERVER`, `CREATE FOREIGN DATA WRAPPER`, and `CREATE FOREIGN TABLE`.
-    fn parse_options_clause(&mut self) -> Result<Option<Vec<CreateServerOption>>, ParserError> {
+    fn parse_generic_options_clause(
+        &mut self,
+    ) -> Result<Option<Vec<CreateServerOption>>, ParserError> {
         if !self.parse_keyword(Keyword::OPTIONS) {
             return Ok(None);
         }
@@ -20260,7 +20262,7 @@ impl<'a> Parser<'a> {
         let name = self.parse_identifier()?;
         let handler = self.parse_foreign_data_wrapper_routine_clause(Keyword::HANDLER)?;
         let validator = self.parse_foreign_data_wrapper_routine_clause(Keyword::VALIDATOR)?;
-        let options = self.parse_options_clause()?;
+        let options = self.parse_generic_options_clause()?;
 
         Ok(CreateForeignDataWrapper {
             name,
@@ -20279,7 +20281,7 @@ impl<'a> Parser<'a> {
         let (columns, constraints) = self.parse_columns()?;
         self.expect_keyword_is(Keyword::SERVER)?;
         let server_name = self.parse_identifier()?;
-        let options = self.parse_options_clause()?;
+        let options = self.parse_generic_options_clause()?;
 
         Ok(CreateForeignTable {
             name,

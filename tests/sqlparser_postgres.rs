@@ -9541,6 +9541,12 @@ fn parse_create_foreign_data_wrapper() {
         stmt.validator,
         Some(ForeignDataWrapperRoutineClause::Absent)
     );
+
+    // A schema-qualified name is not valid: FDW names are bare identifiers.
+    assert!(matches!(
+        pg_and_generic().parse_sql_statements("CREATE FOREIGN DATA WRAPPER myschema.myfdw"),
+        Err(ParserError::ParserError(_))
+    ));
 }
 
 #[test]

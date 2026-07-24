@@ -7430,7 +7430,7 @@ impl<'a> Parser<'a> {
         // The legacy and modern forms (see [`CreateAggregateArgs::Legacy`]) differ
         // only in whether a second parenthesized list follows the first, so look
         // that far ahead before committing to either branch.
-        let args = if self.peek_second_paren_list() {
+        let args = if self.peek_create_aggregate_arg_list()? {
             self.parse_create_aggregate_args()?
         } else {
             CreateAggregateArgs::Legacy
@@ -7474,9 +7474,13 @@ impl<'a> Parser<'a> {
         Ok(args)
     }
 
-    /// True when the parenthesized list starting at the current position is
-    /// followed by a second one, or is never closed.
-    fn peek_second_paren_list(&self) -> bool {
+    /// True when the list at the current position is the modern form's argument
+    /// list, meaning a second parenthesized list follows it.
+    ///
+    /// Errors when the list is never closed rather than guessing a form, since
+    /// committing to either one buries the missing `)` under whichever error
+    /// that branch happens to hit first.
+    fn peek_create_aggregate_arg_list(&self) -> Result<bool, ParserError> {
         let mut tokens = self
             .tokens
             .iter()
@@ -7484,24 +7488,23 @@ impl<'a> Parser<'a> {
             .map(|token| &token.token)
             .filter(|token| !matches!(token, Token::Whitespace(_)));
         if tokens.next() != Some(&Token::LParen) {
-            return false;
+            return Ok(false);
         }
         let mut depth = 1usize;
-        for token in tokens.by_ref() {
+        while let Some(token) = tokens.next() {
             match token {
                 Token::LParen => depth += 1,
                 Token::RParen => {
                     depth -= 1;
                     if depth == 0 {
-                        return tokens.next() == Some(&Token::LParen);
+                        return Ok(tokens.next() == Some(&Token::LParen));
                     }
                 }
+                Token::SemiColon => break,
                 _ => {}
             }
         }
-        // An unclosed list is not the single-list form either, so report it as
-        // the missing `)` it is rather than as an unknown option.
-        true
+        self.expected_ref(")", &EOF_TOKEN)
     }
 
     /// Parse `PARALLEL` qualifier value: `{ SAFE | RESTRICTED | UNSAFE }`.

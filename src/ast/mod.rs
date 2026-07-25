@@ -1108,8 +1108,7 @@ pub enum Expr {
         kind: CastKind,
         /// Expression being cast.
         expr: Box<Expr>,
-        /// Target data type. A trailing `ARRAY` keyword (e.g.
-        /// `CAST(... AS UNSIGNED ARRAY)`) becomes [`ArrayElemTypeDef::Qualified`].
+        /// Target data type.
         data_type: DataType,
         /// Optional CAST(string_expression AS type FORMAT format_string_expression) as used by [BigQuery]
         ///

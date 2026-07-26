@@ -1831,7 +1831,6 @@ impl<'a> Parser<'a> {
                         kind: CastKind::Cast,
                         expr: Box::new(parser.parse_expr()?),
                         data_type: DataType::Binary(None),
-                        array: false,
                         format: None,
                     })
                 }
@@ -2905,14 +2904,12 @@ impl<'a> Parser<'a> {
         let expr = self.parse_expr()?;
         self.expect_keyword_is(Keyword::AS)?;
         let data_type = self.parse_data_type()?;
-        let array = self.parse_keyword(Keyword::ARRAY);
         let format = self.parse_optional_cast_format()?;
         self.expect_token(&Token::RParen)?;
         Ok(Expr::Cast {
             kind,
             expr: Box::new(expr),
             data_type,
-            array,
             format,
         })
     }
@@ -4186,7 +4183,6 @@ impl<'a> Parser<'a> {
                 kind: CastKind::DoubleColon,
                 expr: Box::new(expr),
                 data_type: self.parse_data_type()?,
-                array: false,
                 format: None,
             })
         } else if Token::ExclamationMark == *tok && self.dialect.supports_factorial_operator() {
@@ -4443,7 +4439,6 @@ impl<'a> Parser<'a> {
             kind: CastKind::DoubleColon,
             expr: Box::new(expr),
             data_type: self.parse_data_type()?,
-            array: false,
             format: None,
         })
     }
@@ -13150,6 +13145,20 @@ impl<'a> Parser<'a> {
                 data = DataType::Array(ArrayElemTypeDef::SquareBracket(Box::new(data), size))
             }
         }
+
+        // Type-qualified array, e.g. `INT ARRAY` or `INT ARRAY[3]`. One-dimensional
+        // with a single optional size. The `ARRAY` keyword is unambiguous everywhere.
+        if self.parse_keyword(Keyword::ARRAY) {
+            let size = if self.consume_token(&Token::LBracket) {
+                let size = self.maybe_parse(|p| p.parse_literal_uint())?;
+                self.expect_token(&Token::RBracket)?;
+                size
+            } else {
+                None
+            };
+            data = DataType::Array(ArrayElemTypeDef::Qualified(Box::new(data), size));
+        }
+
         Ok((data, trailing_bracket))
     }
 

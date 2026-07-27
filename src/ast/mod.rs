@@ -4346,6 +4346,8 @@ pub enum Statement {
     CreateSchema {
         /// `<schema name> | AUTHORIZATION <schema authorization identifier>  | <schema name>  AUTHORIZATION <schema authorization identifier>`
         schema_name: SchemaName,
+        /// `true` when `OR REPLACE` was present.
+        or_replace: bool,
         /// `true` when `IF NOT EXISTS` was present.
         if_not_exists: bool,
         /// Schema properties.
@@ -6016,6 +6018,7 @@ impl fmt::Display for Statement {
             }
             Statement::CreateSchema {
                 schema_name,
+                or_replace,
                 if_not_exists,
                 with,
                 options,
@@ -6024,7 +6027,8 @@ impl fmt::Display for Statement {
             } => {
                 write!(
                     f,
-                    "CREATE SCHEMA {if_not_exists}{name}",
+                    "CREATE {or_replace}SCHEMA {if_not_exists}{name}",
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                     name = schema_name
                 )?;

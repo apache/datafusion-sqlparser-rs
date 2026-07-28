@@ -36,6 +36,11 @@ impl Dialect for SparkSqlDialect {
         matches!(ch, '`')
     }
 
+    /// See <https://spark.apache.org/docs/latest/sql-ref-identifier.html>
+    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+        Some('`')
+    }
+
     fn is_identifier_start(&self, ch: char) -> bool {
         matches!(ch, 'a'..='z' | 'A'..='Z' | '_')
     }

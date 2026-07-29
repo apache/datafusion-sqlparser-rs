@@ -756,11 +756,23 @@ pub struct With {
     pub recursive: bool,
     /// The list of CTEs declared by this `WITH` clause.
     pub cte_tables: Vec<Cte>,
+    /// Optional XML namespace definitions (`WITH XMLNAMESPACES (...)`).
+    pub xml_namespaces: Vec<XmlNamespaceDefinition>,
 }
 
 impl fmt::Display for With {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("WITH ")?;
+        if !self.xml_namespaces.is_empty() {
+            write!(
+                f,
+                "XMLNAMESPACES ({})",
+                display_comma_separated(&self.xml_namespaces)
+            )?;
+            if !self.cte_tables.is_empty() {
+                f.write_str(", ")?;
+            }
+        }
         if self.recursive {
             f.write_str("RECURSIVE ")?;
         }

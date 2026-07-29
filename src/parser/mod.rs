@@ -14113,7 +14113,7 @@ impl<'a> Parser<'a> {
                 && self.parse_keyword(Keyword::XMLNAMESPACES)
             {
                 self.expect_token(&Token::LParen)?;
-                let _namespaces =
+                let namespaces =
                     self.parse_comma_separated(Parser::parse_xml_namespace_definition)?;
                 self.expect_token(&Token::RParen)?;
 
@@ -14122,15 +14122,22 @@ impl<'a> Parser<'a> {
                         with_token: with_token.clone().into(),
                         recursive: self.parse_keyword(Keyword::RECURSIVE),
                         cte_tables: self.parse_comma_separated(Parser::parse_cte)?,
+                        xml_namespaces: namespaces,
                     })
                 } else {
-                    None
+                    Some(With {
+                        with_token: with_token.clone().into(),
+                        recursive: false,
+                        cte_tables: vec![],
+                        xml_namespaces: namespaces,
+                    })
                 }
             } else {
                 Some(With {
                     with_token: with_token.clone().into(),
                     recursive: self.parse_keyword(Keyword::RECURSIVE),
                     cte_tables: self.parse_comma_separated(Parser::parse_cte)?,
+                    xml_namespaces: vec![],
                 })
             }
         } else {

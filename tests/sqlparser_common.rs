@@ -19210,6 +19210,12 @@ fn parse_reset_statement() {
         Statement::Reset(ResetStatement { reset }) => assert_eq!(reset, Reset::ALL),
         _ => unreachable!(),
     }
+    match verified_stmt("RESET SESSION AUTHORIZATION") {
+        Statement::Reset(ResetStatement { reset }) => {
+            assert_eq!(reset, Reset::SessionAuthorization)
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]

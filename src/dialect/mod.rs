@@ -1271,7 +1271,7 @@ pub trait Dialect: Debug + Any {
     ///
     /// Syntax:
     /// ```sql
-    /// UNPIVOT expression AS value_alias [AT attribute_alias]
+    /// SELECT * FROM T UNPIVOT expression AS value_alias [AT attribute_alias]
     /// ```
     fn supports_unpivot_expr(&self) -> bool {
         false

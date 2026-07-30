@@ -16653,7 +16653,6 @@ impl<'a> Parser<'a> {
                 with_ordinality,
             })
         } else if self.dialect.supports_unpivot_expr() && self.peek_keyword(Keyword::UNPIVOT)
-            && self.parse_keyword(Keyword::UNPIVOT)
         {
             self.parse_unpivot_expr_table_factor()
         } else if self.parse_keyword_with_tokens(Keyword::JSON_TABLE, &[Token::LParen]) {
@@ -17659,6 +17658,7 @@ impl<'a> Parser<'a> {
     /// Syntax:
     /// `UNPIVOT expression AS value_alias [AT attribute_alias]`
     pub fn parse_unpivot_expr_table_factor(&mut self) -> Result<TableFactor, ParserError> {
+        self.expect_keyword_is(Keyword::UNPIVOT)?;
         let expression = self.parse_expr()?;
         self.expect_keyword_is(Keyword::AS)?;
         let value_alias = self.parse_identifier()?;

@@ -273,7 +273,7 @@ impl fmt::Display for Value {
             Value::DollarQuotedString(v) => write!(f, "{v}"),
             Value::EscapedStringLiteral(v) => write!(f, "E'{}'", escape_escaped_string(v)),
             Value::UnicodeStringLiteral(v) => write!(f, "U&'{}'", escape_unicode_string(v)),
-            Value::NationalStringLiteral(v) => write!(f, "N'{v}'"),
+            Value::NationalStringLiteral(v) => write!(f, "N'{}'", escape_single_quote_string(v)),
             Value::QuoteDelimitedStringLiteral(v) => v.fmt(f),
             Value::NationalQuoteDelimitedStringLiteral(v) => write!(f, "N{v}"),
             Value::HexStringLiteral(v) => write!(f, "X'{v}'"),

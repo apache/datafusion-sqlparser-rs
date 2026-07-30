@@ -223,6 +223,7 @@ fn parse_create_table_auto_increment() {
                                 index_name: None,
                                 index_type: None,
                                 columns: vec![],
+                                include: vec![],
                                 index_options: vec![],
                                 characteristics: None,
                             }),
@@ -255,6 +256,7 @@ fn parse_create_table_primary_key_asc_desc() {
                     index_name: None,
                     index_type: None,
                     columns: vec![],
+                    include: vec![],
                     index_options: vec![],
                     characteristics: None,
                 }),
@@ -608,6 +610,24 @@ fn test_regexp_operator() {
     // Should return an error, not panic
     assert!(sqlite().parse_sql_statements("SELECT 1 REGEXP").is_err());
     assert!(sqlite().parse_sql_statements("SELECT 1 MATCH").is_err());
+}
+
+#[test]
+fn test_glob_operator() {
+    assert_eq!(
+        sqlite().verified_expr("col GLOB 'pattern'"),
+        Expr::BinaryOp {
+            op: BinaryOperator::Glob,
+            left: Box::new(Expr::Identifier(Ident::new("col"))),
+            right: Box::new(Expr::Value(
+                (Value::SingleQuotedString("pattern".to_string())).with_empty_span()
+            ))
+        }
+    );
+    sqlite().verified_only_select(r#"SELECT count(*) FROM files WHERE name GLOB '*.txt'"#);
+
+    // Should return an error, not panic
+    assert!(sqlite().parse_sql_statements("SELECT 1 GLOB").is_err());
 }
 
 #[test]

@@ -33,11 +33,11 @@ use super::{
     AttachedToken, BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef,
     ColumnOption, ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements,
     ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
-    CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr,
-    ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr,
-    FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
-    IfStatement, IlikeSelectItem, IndexColumn, Insert, Interpolate, InterpolateExpr, Join,
-    JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
+    CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeConstraintElement,
+    ExcludeSelectItem, Expr, ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg,
+    FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr,
+    HavingBound, IfStatement, IlikeSelectItem, IndexColumn, Insert, Interpolate, InterpolateExpr,
+    Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
     MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
     MergeInsertKind, MergeUpdateExpr, MergeUpdateKind, NamedParenthesizedList,
     NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
@@ -401,6 +401,7 @@ impl Spanned for Statement {
                 create_operator_family.span()
             }
             Statement::CreateOperatorClass(create_operator_class) => create_operator_class.span(),
+            Statement::CreateTextSearch(create_text_search) => create_text_search.span(),
             Statement::AlterTable(alter_table) => alter_table.span(),
             Statement::AlterIndex { name, operation } => name.span().union(&operation.span()),
             Statement::AlterView {
@@ -421,6 +422,7 @@ impl Spanned for Statement {
             Statement::AlterOperator { .. } => Span::empty(),
             Statement::AlterOperatorFamily { .. } => Span::empty(),
             Statement::AlterOperatorClass { .. } => Span::empty(),
+            Statement::AlterTextSearch { .. } => Span::empty(),
             Statement::AlterRole { .. } => Span::empty(),
             Statement::AlterSession { .. } => Span::empty(),
             Statement::AttachDatabase { .. } => Span::empty(),
@@ -460,6 +462,7 @@ impl Spanned for Statement {
             Statement::CreateMacro { .. } => Span::empty(),
             Statement::CreateStage { .. } => Span::empty(),
             Statement::CreateFileFormat { .. } => Span::empty(),
+            Statement::CreateWarehouse(..) => Span::empty(),
             Statement::Assert { .. } => Span::empty(),
             Statement::Grant { .. } => Span::empty(),
             Statement::Deny { .. } => Span::empty(),
@@ -550,6 +553,7 @@ impl Spanned for CreateTable {
         let CreateTable {
             or_replace: _,    // bool
             temporary: _,     // bool
+            unlogged: _,      // bool
             external: _,      // bool
             global: _,        // bool
             dynamic: _,       // bool
@@ -657,6 +661,7 @@ impl Spanned for TableConstraint {
             TableConstraint::FulltextOrSpatial(constraint) => constraint.span(),
             TableConstraint::PrimaryKeyUsingIndex(constraint)
             | TableConstraint::UniqueUsingIndex(constraint) => constraint.span(),
+            TableConstraint::Exclude(constraint) => constraint.span(),
         }
     }
 }
@@ -721,6 +726,12 @@ impl Spanned for CreateIndex {
 }
 
 impl Spanned for IndexColumn {
+    fn span(&self) -> Span {
+        self.column.span()
+    }
+}
+
+impl Spanned for ExcludeConstraintElement {
     fn span(&self) -> Span {
         self.column.span()
     }
@@ -1220,6 +1231,8 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::SetTblProperties { table_properties } => {
                 union_spans(table_properties.iter().map(|i| i.span()))
             }
+            AlterTableOperation::SetLogged => Span::empty(),
+            AlterTableOperation::SetUnlogged => Span::empty(),
             AlterTableOperation::OwnerTo { .. } => Span::empty(),
             AlterTableOperation::ClusterBy { exprs } => union_spans(exprs.iter().map(|e| e.span())),
             AlterTableOperation::DropClusteringKey => Span::empty(),
@@ -1484,6 +1497,12 @@ impl Spanned for Expr {
             Expr::IsNotNull(expr) => expr.span(),
             Expr::IsUnknown(expr) => expr.span(),
             Expr::IsNotUnknown(expr) => expr.span(),
+            Expr::IsJson {
+                expr,
+                kind: _,
+                unique_keys: _,
+                negated: _,
+            } => expr.span(),
             Expr::IsDistinctFrom(lhs, rhs) => lhs.span().union(&rhs.span()),
             Expr::IsNotDistinctFrom(lhs, rhs) => lhs.span().union(&rhs.span()),
             Expr::InList {
@@ -1594,7 +1613,6 @@ impl Spanned for Expr {
                 kind: _,
                 expr,
                 data_type: _,
-                array: _,
                 format: _,
             } => expr.span(),
             Expr::AtTimeZone {
@@ -1795,6 +1813,7 @@ impl Spanned for FunctionArgumentClause {
     fn span(&self) -> Span {
         match self {
             FunctionArgumentClause::IgnoreOrRespectNulls(_) => Span::empty(),
+            FunctionArgumentClause::Where(expr) => expr.span(),
             FunctionArgumentClause::OrderBy(vec) => union_spans(vec.iter().map(|i| i.expr.span())),
             FunctionArgumentClause::Limit(expr) => expr.span(),
             FunctionArgumentClause::OnOverflow(_) => Span::empty(),
@@ -2393,10 +2412,10 @@ impl Spanned for SelectInto {
             temporary: _, // bool
             unlogged: _,  // bool
             table: _,     // bool
-            name,
+            targets,
         } = self;
 
-        name.span()
+        union_spans(targets.iter().map(|t| t.span()))
     }
 }
 

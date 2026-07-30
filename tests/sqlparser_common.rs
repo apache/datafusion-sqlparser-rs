@@ -10061,6 +10061,9 @@ fn parse_grant() {
     verified_stmt("GRANT ROLE role1 TO ROLE role2");
     verified_stmt("GRANT ROLE role1 TO USER user");
     verified_stmt("GRANT CREATE SCHEMA ON DATABASE db1 TO ROLE role1");
+    // PUBLIC takes no name, so it must not trail a space. MsSql reserves it as
+    // an ordinary grantee name.
+    all_dialects_except(|d| d.is::<MsSqlDialect>()).verified_stmt("GRANT SELECT ON t TO PUBLIC");
 }
 
 #[test]

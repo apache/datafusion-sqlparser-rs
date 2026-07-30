@@ -9918,3 +9918,81 @@ fn parse_non_reserved_keywords_as_table_alias() {
         ));
     }
 }
+
+#[test]
+fn parse_create_sequence_options_in_any_order() {
+    // PostgreSQL treats the sequence options as an unordered list, so every
+    // permutation below is accepted and round-trips in the order written.
+    pg().verified_stmt("CREATE SEQUENCE sa START WITH 1 INCREMENT BY 1");
+    pg().verified_stmt("CREATE SEQUENCE sb INCREMENT BY 1 START WITH 1");
+    pg().verified_stmt("CREATE SEQUENCE sc CACHE 1 START WITH 1");
+    pg().verified_stmt("CREATE SEQUENCE sd CYCLE INCREMENT BY 2");
+    pg().verified_stmt("CREATE SEQUENCE se NO MAXVALUE NO MINVALUE NO CYCLE INCREMENT 1");
+    pg().verified_stmt(
+        "CREATE SEQUENCE sf AS INTEGER START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1",
+    );
+    // `AS` and `OWNED BY` are options too, so they interleave with the rest.
+    pg().verified_stmt("CREATE SEQUENCE sg START WITH 1 AS BIGINT");
+    pg().verified_stmt("CREATE SEQUENCE sh OWNED BY t.c START WITH 5");
+    pg().verified_stmt("CREATE SEQUENCE si OWNED BY NONE INCREMENT BY 2");
+    pg().verified_stmt("CREATE SEQUENCE sj CACHE 1 AS BIGINT OWNED BY a.b START WITH 3");
+
+    // This is what `pg_dump -s` emits for a table with a SERIAL column.
+    pg().one_statement_parses_to(
+        r#"CREATE SEQUENCE public.accounts_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1"#,
+        "CREATE SEQUENCE public.accounts_id_seq AS INTEGER START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1",
+    );
+
+    // The parsed options keep the order they were written in, and `OWNED BY NONE`
+    // is distinct from being owned by something called `NONE`.
+    let Statement::CreateSequence {
+        sequence_options, ..
+    } = pg().verified_stmt("CREATE SEQUENCE sk CACHE 1 OWNED BY NONE AS BIGINT INCREMENT BY 3")
+    else {
+        panic!("expected a CREATE SEQUENCE statement");
+    };
+    assert!(matches!(
+        sequence_options.as_slice(),
+        [
+            SequenceOptions::Cache(_),
+            SequenceOptions::OwnedBy(None),
+            SequenceOptions::DataType(DataType::BigInt(None)),
+            SequenceOptions::IncrementBy(_, true),
+        ]
+    ));
+
+    // Each option may still appear only once.
+    for (sql, expected) in [
+        (
+            "CREATE SEQUENCE s START WITH 1 START 2",
+            "START specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s MINVALUE 1 NO MINVALUE",
+            "MINVALUE | NO MINVALUE specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s CYCLE NO CYCLE",
+            "CYCLE | NO CYCLE specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s AS INT AS BIGINT",
+            "AS specified more than once",
+        ),
+        (
+            "CREATE SEQUENCE s OWNED BY a.b OWNED BY NONE",
+            "OWNED BY specified more than once",
+        ),
+    ] {
+        assert_eq!(
+            pg().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+        );
+    }
+}

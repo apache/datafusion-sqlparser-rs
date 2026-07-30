@@ -4762,12 +4762,8 @@ pub enum Statement {
         if_not_exists: bool,
         /// Sequence name.
         name: ObjectName,
-        /// Optional data type for the sequence.
-        data_type: Option<DataType>,
-        /// Sequence options (INCREMENT, MINVALUE, etc.).
+        /// Sequence options, in the order they were written.
         sequence_options: Vec<SequenceOptions>,
-        /// Optional `OWNED BY` target.
-        owned_by: Option<ObjectName>,
     },
     /// A `CREATE DOMAIN` statement.
     CreateDomain(CreateDomain),
@@ -6211,32 +6207,19 @@ impl fmt::Display for Statement {
                 temporary,
                 if_not_exists,
                 name,
-                data_type,
                 sequence_options,
-                owned_by,
             } => {
-                let as_type: String = if let Some(dt) = data_type.as_ref() {
-                    //Cannot use format!(" AS {}", dt), due to format! is not available in --target thumbv6m-none-eabi
-                    // " AS ".to_owned() + &dt.to_string()
-                    [" AS ", &dt.to_string()].concat()
-                } else {
-                    "".to_string()
-                };
                 write!(
                     f,
-                    "CREATE {temporary}SEQUENCE {if_not_exists}{name}{as_type}",
+                    "CREATE {temporary}SEQUENCE {if_not_exists}{name}",
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                     temporary = if *temporary { "TEMPORARY " } else { "" },
                     name = name,
-                    as_type = as_type
                 )?;
                 for sequence_option in sequence_options {
                     write!(f, "{sequence_option}")?;
                 }
-                if let Some(ob) = owned_by.as_ref() {
-                    write!(f, " OWNED BY {ob}")?;
-                }
-                write!(f, "")
+                Ok(())
             }
             Statement::CreateStage {
                 or_replace,
@@ -6522,14 +6505,21 @@ impl fmt::Display for Statement {
 
 /// Can use to describe options in create sequence or table column type identity
 /// ```sql
-/// [ INCREMENT [ BY ] increment ]
+/// [ AS data_type ] [ INCREMENT [ BY ] increment ]
 ///     [ MINVALUE minvalue | NO MINVALUE ] [ MAXVALUE maxvalue | NO MAXVALUE ]
 ///     [ START [ WITH ] start ] [ CACHE cache ] [ [ NO ] CYCLE ]
+///     [ OWNED BY { table_name.column_name | NONE } ]
 /// ```
+///
+/// The options form an unordered list, so they are stored in the order written.
+/// `AS` and `OWNED BY` are only accepted by `CREATE SEQUENCE`, not by an
+/// identity column.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum SequenceOptions {
+    /// `AS <data_type>` option.
+    DataType(DataType),
     /// `INCREMENT [BY] <expr>` option; second value indicates presence of `BY` keyword.
     IncrementBy(Expr, bool),
     /// `MINVALUE <expr>` or `NO MINVALUE`.
@@ -6542,11 +6532,16 @@ pub enum SequenceOptions {
     Cache(Expr),
     /// `CYCLE` or `NO CYCLE` option.
     Cycle(bool),
+    /// `OWNED BY <object_name>`, or `OWNED BY NONE` when no target is given.
+    OwnedBy(Option<ObjectName>),
 }
 
 impl fmt::Display for SequenceOptions {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            SequenceOptions::DataType(data_type) => {
+                write!(f, " AS {data_type}")
+            }
             SequenceOptions::IncrementBy(increment, by) => {
                 write!(
                     f,
@@ -6580,6 +6575,12 @@ impl fmt::Display for SequenceOptions {
             }
             SequenceOptions::Cycle(no) => {
                 write!(f, " {}CYCLE", if *no { "NO " } else { "" })
+            }
+            SequenceOptions::OwnedBy(Some(object_name)) => {
+                write!(f, " OWNED BY {object_name}")
+            }
+            SequenceOptions::OwnedBy(None) => {
+                write!(f, " OWNED BY NONE")
             }
         }
     }

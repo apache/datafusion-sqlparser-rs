@@ -385,7 +385,19 @@ impl fmt::Display for Ident {
                 let escaped = value::escape_quoted_string(&self.value, q);
                 write!(f, "{q}{escaped}{q}")
             }
-            Some('[') => write!(f, "[{}]", self.value),
+            Some('[') => {
+                // Redshift nested quoted identifiers (e.g. `["a]b"]`) store the
+                // value as a complete double-quoted string whose inner `]` is
+                // literal, so leave those unchanged. Otherwise double each `]`,
+                // mirroring the tokenizer folding `]]` into `]`, so the
+                // identifier round-trips (#2409).
+                let v = &self.value;
+                if v.len() >= 2 && v.starts_with('"') && v.ends_with('"') {
+                    write!(f, "[{v}]")
+                } else {
+                    write!(f, "[{}]", v.replace(']', "]]"))
+                }
+            }
             None => f.write_str(&self.value),
             _ => panic!("unexpected quote style"),
         }

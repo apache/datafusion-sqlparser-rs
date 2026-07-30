@@ -11160,6 +11160,10 @@ impl<'a> Parser<'a> {
             return self.parse_alter_text_search().map(Into::into);
         }
 
+        if self.parse_keywords(&[Keyword::DEFAULT, Keyword::PRIVILEGES]) {
+            return self.parse_alter_default_privileges().map(Into::into);
+        }
+
         let object_type = self.expect_one_of_keywords(&[
             Keyword::VIEW,
             Keyword::TYPE,
@@ -17842,14 +17846,7 @@ impl<'a> Parser<'a> {
     pub fn parse_grant_deny_revoke_privileges_objects(
         &mut self,
     ) -> Result<(Privileges, Option<GrantObjects>), ParserError> {
-        let privileges = if self.parse_keyword(Keyword::ALL) {
-            Privileges::All {
-                with_privileges_keyword: self.parse_keyword(Keyword::PRIVILEGES),
-            }
-        } else {
-            let actions = self.parse_actions_list()?;
-            Privileges::Actions(actions)
-        };
+        let privileges = self.parse_privileges()?;
 
         let objects = if self.parse_keyword(Keyword::ON) {
             if self.parse_keywords(&[Keyword::ALL, Keyword::TABLES, Keyword::IN, Keyword::SCHEMA]) {
@@ -18379,6 +18376,102 @@ impl<'a> Parser<'a> {
             granted_by,
             cascade,
         })
+    }
+
+    /// Parse `ALTER DEFAULT PRIVILEGES`, whose keywords are already consumed.
+    ///
+    /// See [PostgreSQL docs](https://www.postgresql.org/docs/current/sql-alterdefaultprivileges.html).
+    pub fn parse_alter_default_privileges(
+        &mut self,
+    ) -> Result<AlterDefaultPrivileges, ParserError> {
+        // `FOR USER` is a synonym of `FOR ROLE` and is normalised to it.
+        let for_roles = if self.parse_keyword(Keyword::FOR) {
+            self.expect_one_of_keywords(&[Keyword::ROLE, Keyword::USER])?;
+            self.parse_comma_separated(|p| p.parse_identifier())?
+        } else {
+            vec![]
+        };
+
+        let in_schemas = if self.parse_keywords(&[Keyword::IN, Keyword::SCHEMA]) {
+            self.parse_comma_separated(|p| p.parse_object_name(false))?
+        } else {
+            vec![]
+        };
+
+        let is_grant = if self.parse_keyword(Keyword::GRANT) {
+            true
+        } else if self.parse_keyword(Keyword::REVOKE) {
+            false
+        } else {
+            return self.expected_ref("GRANT or REVOKE", self.peek_token_ref());
+        };
+
+        let grant_option_for =
+            !is_grant && self.parse_keywords(&[Keyword::GRANT, Keyword::OPTION, Keyword::FOR]);
+        let privileges = self.parse_privileges()?;
+        self.expect_keyword_is(Keyword::ON)?;
+        let object_type = self.parse_default_privileges_object_type()?;
+        self.expect_keyword_is(if is_grant { Keyword::TO } else { Keyword::FROM })?;
+        let grantees = self.parse_grantees()?;
+
+        let operation = if is_grant {
+            AlterDefaultPrivilegesOperation::Grant {
+                privileges,
+                object_type,
+                grantees,
+                with_grant_option: self.parse_keywords(&[
+                    Keyword::WITH,
+                    Keyword::GRANT,
+                    Keyword::OPTION,
+                ]),
+            }
+        } else {
+            AlterDefaultPrivilegesOperation::Revoke {
+                grant_option_for,
+                privileges,
+                object_type,
+                grantees,
+                cascade: self.parse_cascade_option(),
+            }
+        };
+
+        Ok(AlterDefaultPrivileges {
+            for_roles,
+            in_schemas,
+            operation,
+        })
+    }
+
+    /// Parse `ALL [PRIVILEGES]` or a comma separated privilege list.
+    fn parse_privileges(&mut self) -> Result<Privileges, ParserError> {
+        if self.parse_keyword(Keyword::ALL) {
+            Ok(Privileges::All {
+                with_privileges_keyword: self.parse_keyword(Keyword::PRIVILEGES),
+            })
+        } else {
+            Ok(Privileges::Actions(self.parse_actions_list()?))
+        }
+    }
+
+    fn parse_default_privileges_object_type(
+        &mut self,
+    ) -> Result<DefaultPrivilegesObjectType, ParserError> {
+        for (keyword, object_type) in [
+            (Keyword::TABLES, DefaultPrivilegesObjectType::Tables),
+            (Keyword::SEQUENCES, DefaultPrivilegesObjectType::Sequences),
+            (Keyword::FUNCTIONS, DefaultPrivilegesObjectType::Functions),
+            (Keyword::ROUTINES, DefaultPrivilegesObjectType::Routines),
+            (Keyword::TYPES, DefaultPrivilegesObjectType::Types),
+            (Keyword::SCHEMAS, DefaultPrivilegesObjectType::Schemas),
+        ] {
+            if self.parse_keyword(keyword) {
+                return Ok(object_type);
+            }
+        }
+        self.expected_ref(
+            "TABLES, SEQUENCES, FUNCTIONS, ROUTINES, TYPES or SCHEMAS",
+            self.peek_token_ref(),
+        )
     }
 
     /// Parse an REPLACE statement

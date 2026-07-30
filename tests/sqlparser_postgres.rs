@@ -9918,3 +9918,33 @@ fn parse_non_reserved_keywords_as_table_alias() {
         ));
     }
 }
+
+#[test]
+fn parse_alter_default_privileges() {
+    // What `pg_dump -s` emits for a default ACL.
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON TABLES TO app_user");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES FOR ROLE a, b IN SCHEMA s1, s2 GRANT SELECT, INSERT ON TABLES TO app WITH GRANT OPTION");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT ALL PRIVILEGES ON SEQUENCES TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON FUNCTIONS TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON ROUTINES TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT USAGE ON TYPES TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES GRANT USAGE, CREATE ON SCHEMAS TO app");
+    pg().verified_stmt("ALTER DEFAULT PRIVILEGES REVOKE SELECT ON TABLES FROM app");
+    pg().verified_stmt(
+        "ALTER DEFAULT PRIVILEGES REVOKE GRANT OPTION FOR ALL ON TABLES FROM app CASCADE",
+    );
+    // `FOR USER` normalises to `FOR ROLE`.
+    pg().one_statement_parses_to(
+        "ALTER DEFAULT PRIVILEGES FOR USER bob GRANT SELECT ON TABLES TO app",
+        "ALTER DEFAULT PRIVILEGES FOR ROLE bob GRANT SELECT ON TABLES TO app",
+    );
+
+    // `TABLES` is a keyword only here, so a table named `tables` still parses.
+    pg().verified_stmt("GRANT SELECT ON TABLES TO app");
+    assert_eq!(
+        pg().parse_sql_statements("ALTER DEFAULT PRIVILEGES FOR ROLE a")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: GRANT or REVOKE, found: EOF".to_string()),
+    );
+}

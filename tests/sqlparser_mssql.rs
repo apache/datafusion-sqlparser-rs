@@ -938,6 +938,18 @@ fn parse_table_name_in_square_brackets() {
 }
 
 #[test]
+fn parse_bracket_identifier_with_escaped_closing_bracket() {
+    // A bracket-quoted identifier whose value contains `]` must serialize
+    // with the bracket doubled so it round-trips. See #2409.
+    let select = ms().verified_only_select("SELECT [a]]b]");
+    assert_eq!(
+        &Expr::Identifier(Ident::with_quote('[', "a]b")),
+        expr_from_projection(&select.projection[0]),
+    );
+    ms().verified_stmt("SELECT [a]]b] FROM [c]]d]");
+}
+
+#[test]
 fn parse_for_clause() {
     ms_and_generic().verified_stmt("SELECT a FROM t FOR JSON PATH");
     ms_and_generic().verified_stmt("SELECT b FROM t FOR JSON AUTO");

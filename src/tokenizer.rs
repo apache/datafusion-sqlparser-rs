@@ -757,6 +757,7 @@ impl TokenWithSpan {
     }
 
     /// Wrap a token with a location from `start` to `end`
+    #[inline]
     pub fn at(token: Token, start: Location, end: Location) -> Self {
         Self::new(token, Span::new(start, end))
     }

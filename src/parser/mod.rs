@@ -21181,6 +21181,7 @@ impl Word {
     /// Use this method when you need to keep the original `Word` around.
     /// If you can consume the `Word`, prefer [`into_ident`](Self::into_ident) instead
     /// to avoid cloning.
+    #[inline]
     pub fn to_ident(&self, span: Span) -> Ident {
         Ident {
             value: self.value.clone(),

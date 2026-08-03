@@ -1372,12 +1372,24 @@ impl<'a> Tokenizer<'a> {
                         ch.is_ascii_digit() || is_number_separator(ch, next_ch)
                     });
 
+                    if self.dialect.supports_numeric_literal_underscores()
+                        && chars.peek() == Some(&'_')
+                    {
+                        return self.tokenizer_error(chars.location(), "Unexpected character '_'");
+                    }
+
                     // match binary literal that starts with 0x
                     if s == "0" && chars.peek() == Some(&'x') {
                         chars.next();
                         let s2 = peeking_next_take_while(chars, |ch, next_ch| {
                             ch.is_ascii_hexdigit() || is_number_separator(ch, next_ch)
                         });
+                        if self.dialect.supports_numeric_literal_underscores()
+                            && chars.peek() == Some(&'_')
+                        {
+                            return self
+                                .tokenizer_error(chars.location(), "Unexpected character '_'");
+                        }
                         return Ok(Some(Token::HexStringLiteral(s2)));
                     }
 
@@ -1398,10 +1410,23 @@ impl<'a> Tokenizer<'a> {
                         }
                     }
 
+                    if s != "."
+                        && self.dialect.supports_numeric_literal_underscores()
+                        && chars.peek() == Some(&'_')
+                    {
+                        return self.tokenizer_error(chars.location(), "Unexpected character '_'");
+                    }
+
                     // Consume fractional digits.
                     s += &peeking_next_take_while(chars, |ch, next_ch| {
                         ch.is_ascii_digit() || is_number_separator(ch, next_ch)
                     });
+
+                    if self.dialect.supports_numeric_literal_underscores()
+                        && chars.peek() == Some(&'_')
+                    {
+                        return self.tokenizer_error(chars.location(), "Unexpected character '_'");
+                    }
 
                     // No fraction -> Token::Period
                     if s == "." {
@@ -2756,8 +2781,11 @@ mod tests {
         ];
         compare(expected, tokens);
 
-        all_dialects_where(|dialect| dialect.supports_numeric_literal_underscores()).tokenizes_to(
-            "SELECT 10_000, _10_000, 10_00_, 10___0, 1_000.123, 1_000.123_456",
+        let numeric_underscore_dialects =
+            all_dialects_where(|dialect| dialect.supports_numeric_literal_underscores());
+
+        numeric_underscore_dialects.tokenizes_to(
+            "SELECT 10_000, _10_000, 1_000.123, 1_000.123_456",
             vec![
                 Token::make_keyword("SELECT"),
                 Token::Whitespace(Whitespace::Space),
@@ -2767,20 +2795,24 @@ mod tests {
                 Token::make_word("_10_000", None), // leading underscore tokenizes as a word (parsed as column identifier)
                 Token::Comma,
                 Token::Whitespace(Whitespace::Space),
-                Token::Number("10_00".to_string(), false),
-                Token::make_word("_", None), // trailing underscores tokenizes as a word (syntax error in some dialects)
-                Token::Comma,
-                Token::Whitespace(Whitespace::Space),
-                Token::Number("10".to_string(), false),
-                Token::make_word("___0", None), // multiple underscores tokenizes as a word (syntax error in some dialects)
-                Token::Comma,
-                Token::Whitespace(Whitespace::Space),
                 Token::Number("1_000.123".to_string(), false), // with decimal digits
                 Token::Comma,
                 Token::Whitespace(Whitespace::Space),
                 Token::Number("1_000.123_456".to_string(), false), // with an underscore in the decimal digits
             ],
         );
+
+        for dialect in &numeric_underscore_dialects.dialects {
+            for sql in [
+                "SELECT 10_00_",
+                "SELECT 10___0",
+                "SELECT 1_000.123_",
+                "SELECT 1._000",
+            ] {
+                let err = Tokenizer::new(&**dialect, sql).tokenize().unwrap_err();
+                assert_eq!("Unexpected character '_'", err.message);
+            }
+        }
     }
 
     #[test]

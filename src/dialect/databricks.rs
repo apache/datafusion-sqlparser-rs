@@ -95,10 +95,6 @@ impl Dialect for DatabricksDialect {
         true
     }
 
-    fn supports_insert_by_name(&self) -> bool {
-        true
-    }
-
     /// See <https://docs.databricks.com/aws/en/sql/language-manual/functions/bangsign>
     fn supports_bang_not_operator(&self) -> bool {
         true

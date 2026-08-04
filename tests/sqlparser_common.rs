@@ -19667,7 +19667,7 @@ fn parse_function_arg_call_chain_no_exponential_blowup() {
 }
 
 #[test]
-fn parse_insert_by_name_in_all_dialects() {
+fn parse_insert_by_name() {
     verified_stmt("INSERT INTO target BY NAME SELECT 1 AS a");
 
     match verified_stmt("INSERT INTO target (a) BY NAME SELECT 1 AS a") {

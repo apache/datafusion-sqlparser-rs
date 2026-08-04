@@ -11420,6 +11420,20 @@ fn parse_deeply_nested_subquery_expr_hits_recursion_limits() {
 }
 
 #[test]
+fn parse_deeply_nested_interval_hits_recursion_limits() {
+    let dialect = GenericDialect {};
+
+    let sql = format!("SELECT {}1", "INTERVAL ".repeat(1000));
+
+    let res = Parser::new(&dialect)
+        .try_with_sql(&sql)
+        .expect("tokenize to work")
+        .parse_statements();
+
+    assert_eq!(res, Err(ParserError::RecursionLimitExceeded));
+}
+
+#[test]
 fn parse_with_recursion_limit() {
     let dialect = GenericDialect {};
 

@@ -937,6 +937,7 @@ define_keywords!(
     SAFE_CAST,
     SAMPLE,
     SAVEPOINT,
+    SCALAR,
     SCHEMA,
     SCHEMAS,
     SCOPE,

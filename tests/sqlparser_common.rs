@@ -3172,7 +3172,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::BigInt(None),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3185,7 +3184,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::TinyInt(None),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3217,7 +3215,6 @@ fn parse_cast() {
                 length: 50,
                 unit: None,
             })),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3230,7 +3227,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Clob(None),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3243,7 +3239,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Clob(Some(50)),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3256,7 +3251,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Binary(Some(50)),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3269,7 +3263,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Varbinary(Some(BinaryLength::IntegerLength { length: 50 })),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3282,7 +3275,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Blob(None),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3295,7 +3287,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Blob(Some(50)),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3308,7 +3299,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("details"))),
             data_type: DataType::JSONB,
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3324,7 +3314,6 @@ fn parse_try_cast() {
             kind: CastKind::TryCast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::BigInt(None),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3966,6 +3955,7 @@ fn parse_create_table() {
                                     index_name: None,
                                     index_type: None,
                                     columns: vec![],
+                                    include: vec![],
                                     index_options: vec![],
                                     characteristics: None,
                                 }),
@@ -3982,6 +3972,7 @@ fn parse_create_table() {
                                     index_type_display: KeyOrIndexDisplay::None,
                                     index_type: None,
                                     columns: vec![],
+                                    include: vec![],
                                     index_options: vec![],
                                     characteristics: None,
                                     nulls_distinct: NullsDistinctOption::None,
@@ -4320,6 +4311,7 @@ fn parse_create_table_column_constraint_characteristics() {
                                 index_type_display: KeyOrIndexDisplay::None,
                                 index_type: None,
                                 columns: vec![],
+                                include: vec![],
                                 index_options: vec![],
                                 characteristics: expected_value,
                                 nulls_distinct: NullsDistinctOption::None,
@@ -4543,6 +4535,25 @@ fn parse_create_schema() {
     verified_stmt(r#"CREATE SCHEMA IF NOT EXISTS a WITH (key1 = 'value1')"#);
     verified_stmt(r#"CREATE SCHEMA IF NOT EXISTS a WITH ()"#);
     verified_stmt(r#"CREATE SCHEMA a CLONE b"#);
+}
+
+#[test]
+fn parse_create_or_replace_schema() {
+    match verified_stmt("CREATE OR REPLACE SCHEMA X") {
+        Statement::CreateSchema {
+            schema_name,
+            or_replace,
+            if_not_exists,
+            ..
+        } => {
+            assert_eq!(schema_name.to_string(), "X".to_owned());
+            assert!(or_replace);
+            assert!(!if_not_exists);
+        }
+        _ => unreachable!(),
+    }
+
+    verified_stmt("CREATE OR REPLACE SCHEMA IF NOT EXISTS X");
 }
 
 #[test]
@@ -6698,7 +6709,6 @@ fn interval_disallow_interval_expr_double_colon() {
                 fractional_seconds_precision: None,
             })),
             data_type: DataType::Text,
-            array: false,
             format: None,
         }
     )
@@ -6716,7 +6726,6 @@ fn parse_text_type_modifier_double_colon_cast() {
                 ObjectName::from(vec![Ident::new("TEXT")]),
                 vec!["16777216".to_string()]
             ),
-            array: false,
             format: None,
         }
     );
@@ -9482,7 +9491,6 @@ fn parse_double_colon_cast_at_timezone() {
                         .with_empty_span()
                 )),
                 data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                array: false,
                 format: None
             }),
             time_zone: Box::new(Expr::Value(
@@ -11010,45 +11018,83 @@ fn parse_is_boolean() {
     verified_stmt("SELECT f FROM foo WHERE field IS UNKNOWN");
     verified_stmt("SELECT f FROM foo WHERE field IS NOT UNKNOWN");
 
-    let sql = "SELECT f from foo where field is 0";
-    let res = parse_sql_statements(sql);
+    for sql in [
+        "SELECT f from foo where field is 0",
+        "SELECT s, s IS XYZ NORMALIZED FROM foo",
+        "SELECT s, s IS NFKC FROM foo",
+        "SELECT s, s IS TRIM(' NFKC ') FROM foo",
+    ] {
+        assert!(
+            parse_sql_statements(sql).is_err(),
+            "expected a parse failure for `{sql}`"
+        );
+    }
+}
+
+#[test]
+fn parse_is_json_predicate() {
+    use self::Expr::*;
+
+    // Assert the full AST once for a case that exercises every field.
+    let sql = "a IS NOT JSON OBJECT WITHOUT UNIQUE KEYS";
     assert_eq!(
-        ParserError::ParserError(
-            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: 0"
-                .to_string()
-        ),
-        res.unwrap_err()
+        IsJson {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            kind: Some(JsonPredicateType::Object),
+            unique_keys: Some(JsonKeyUniqueness::WithoutUniqueKeys),
+            negated: true,
+        },
+        verified_expr(sql)
     );
 
-    let sql = "SELECT s, s IS XYZ NORMALIZED FROM foo";
-    let res = parse_sql_statements(sql);
-    assert_eq!(
-        ParserError::ParserError(
-            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: XYZ"
-                .to_string()
-        ),
-        res.unwrap_err()
-    );
+    // The remaining forms only need to round-trip.
+    verified_expr("a IS JSON");
+    verified_expr("a IS NOT JSON");
+    verified_expr("a IS JSON VALUE");
+    verified_expr("a IS JSON SCALAR");
+    verified_expr("a IS JSON ARRAY");
+    verified_expr("a IS JSON OBJECT");
+    verified_expr("a IS JSON WITH UNIQUE KEYS");
+    verified_expr("a IS JSON WITHOUT UNIQUE KEYS");
 
-    let sql = "SELECT s, s IS NFKC FROM foo";
-    let res = parse_sql_statements(sql);
-    assert_eq!(
-        ParserError::ParserError(
-            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: FROM"
-                .to_string()
-        ),
-        res.unwrap_err()
-    );
+    all_dialects().expr_parses_to("a IS JSON WITH UNIQUE", "a IS JSON WITH UNIQUE KEYS");
+    all_dialects().expr_parses_to("a IS JSON WITHOUT UNIQUE", "a IS JSON WITHOUT UNIQUE KEYS");
 
-    let sql = "SELECT s, s IS TRIM(' NFKC ') FROM foo";
-    let res = parse_sql_statements(sql);
-    assert_eq!(
-        ParserError::ParserError(
-            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: TRIM"
-                .to_string()
-        ),
-        res.unwrap_err()
+    assert_matches!(
+        verified_expr("NOT a IS JSON"),
+        Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            expr
+        } if matches!(&*expr, Expr::IsJson { .. })
     );
+}
+
+#[test]
+fn parse_is_json_predicate_invalid() {
+    let dialects = all_dialects();
+
+    let invalid = [
+        "SELECT * FROM t WHERE a IS JSON WITH FROM",
+        "SELECT * FROM t WHERE a IS JSON WITH KEYS",
+        "SELECT * FROM t WHERE a IS JSON WITHOUT FROM",
+        "SELECT * FROM t WHERE a IS JSON WITHOUT KEYS",
+        "SELECT * FROM t WHERE a IS NOT JSON WITH FROM",
+        "SELECT * FROM t WHERE a IS JSON VALUE ARRAY",
+        "SELECT * FROM t WHERE a IS JSON OBJECT VALUE",
+        "SELECT * FROM t WHERE a IS JSON WITH UNIQUE EXTRA",
+        "SELECT * FROM t WHERE a IS JSON WITH UNIQUE KEYS EXTRA",
+        "SELECT * FROM t WHERE a IS JSON WITHOUT UNIQUE EXTRA",
+        "SELECT * FROM t WHERE a IS JSON WITHOUT UNIQUE KEYS EXTRA",
+        "SELECT * FROM t WHERE a IS JSON WITH UNIQUE KEYS WITH UNIQUE KEYS",
+        "SELECT * FROM t WHERE a IS JSON WITHOUT UNIQUE KEYS WITHOUT UNIQUE KEYS",
+    ];
+
+    for sql in invalid {
+        assert!(
+            dialects.parse_sql_statements(sql).is_err(),
+            "expected a parse failure for `{sql}`"
+        );
+    }
 }
 
 #[test]
@@ -13897,7 +13943,6 @@ fn test_dictionary_syntax() {
                         (Value::SingleQuotedString("2023-04-01".to_owned())).with_empty_span(),
                     )),
                     data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                    array: false,
                     format: None,
                 }),
             },
@@ -13909,7 +13954,6 @@ fn test_dictionary_syntax() {
                         (Value::SingleQuotedString("2023-04-05".to_owned())).with_empty_span(),
                     )),
                     data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                    array: false,
                     format: None,
                 }),
             },
@@ -14206,7 +14250,6 @@ fn test_extract_seconds_ok() {
                     fields: None,
                     precision: None
                 },
-                array: false,
                 format: None,
             }),
         }
@@ -14237,7 +14280,6 @@ fn test_extract_seconds_ok() {
                         fields: None,
                         precision: None,
                     },
-                    array: false,
                     format: None,
                 }),
             })],
@@ -14295,7 +14337,6 @@ fn test_extract_seconds_single_quote_ok() {
                     fields: None,
                     precision: None
                 },
-                array: false,
                 format: None,
             }),
         }

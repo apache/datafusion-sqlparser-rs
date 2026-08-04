@@ -1497,6 +1497,12 @@ impl Spanned for Expr {
             Expr::IsNotNull(expr) => expr.span(),
             Expr::IsUnknown(expr) => expr.span(),
             Expr::IsNotUnknown(expr) => expr.span(),
+            Expr::IsJson {
+                expr,
+                kind: _,
+                unique_keys: _,
+                negated: _,
+            } => expr.span(),
             Expr::IsDistinctFrom(lhs, rhs) => lhs.span().union(&rhs.span()),
             Expr::IsNotDistinctFrom(lhs, rhs) => lhs.span().union(&rhs.span()),
             Expr::InList {
@@ -1607,7 +1613,6 @@ impl Spanned for Expr {
                 kind: _,
                 expr,
                 data_type: _,
-                array: _,
                 format: _,
             } => expr.span(),
             Expr::AtTimeZone {

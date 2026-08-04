@@ -138,4 +138,8 @@ impl Dialect for DuckDbDialect {
     fn supports_comma_separated_trim(&self) -> bool {
         true
     }
+
+    fn supports_numeric_literal_underscores(&self) -> bool {
+        true
+    }
 }

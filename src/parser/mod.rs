@@ -543,7 +543,6 @@ impl<'a> Parser<'a> {
 
             match &self.peek_token_ref().token {
                 Token::EOF => break,
-
                 // end of statement
                 Token::Word(word)
                     if expecting_statement_delimiter && word.keyword == Keyword::END =>
@@ -1831,7 +1830,6 @@ impl<'a> Parser<'a> {
                         kind: CastKind::Cast,
                         expr: Box::new(parser.parse_expr()?),
                         data_type: DataType::Binary(None),
-                        array: false,
                         format: None,
                     })
                 }
@@ -2905,14 +2903,12 @@ impl<'a> Parser<'a> {
         let expr = self.parse_expr()?;
         self.expect_keyword_is(Keyword::AS)?;
         let data_type = self.parse_data_type()?;
-        let array = self.parse_keyword(Keyword::ARRAY);
         let format = self.parse_optional_cast_format()?;
         self.expect_token(&Token::RParen)?;
         Ok(Expr::Cast {
             kind,
             expr: Box::new(expr),
             data_type,
-            array,
             format,
         })
     }
@@ -4078,11 +4074,15 @@ impl<'a> Parser<'a> {
                     {
                         let expr2 = self.parse_expr()?;
                         Ok(Expr::IsNotDistinctFrom(Box::new(expr), Box::new(expr2)))
+                    } else if self.parse_keyword(Keyword::JSON) {
+                        self.parse_is_json_predicate(expr, false)
+                    } else if self.parse_keywords(&[Keyword::NOT, Keyword::JSON]) {
+                        self.parse_is_json_predicate(expr, true)
                     } else if let Ok(is_normalized) = self.parse_unicode_is_normalized(expr) {
                         Ok(is_normalized)
                     } else {
                         self.expected_ref(
-                            "[NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS",
+                            "[NOT] NULL | TRUE | FALSE | DISTINCT | [NOT] JSON [VALUE | SCALAR | ARRAY | OBJECT] [WITH | WITHOUT UNIQUE [KEYS]] | [form] NORMALIZED FROM after IS",
                             self.peek_token_ref(),
                         )
                     }
@@ -4186,7 +4186,6 @@ impl<'a> Parser<'a> {
                 kind: CastKind::DoubleColon,
                 expr: Box::new(expr),
                 data_type: self.parse_data_type()?,
-                array: false,
                 format: None,
             })
         } else if Token::ExclamationMark == *tok && self.dialect.supports_factorial_operator() {
@@ -4443,7 +4442,6 @@ impl<'a> Parser<'a> {
             kind: CastKind::DoubleColon,
             expr: Box::new(expr),
             data_type: self.parse_data_type()?,
-            array: false,
             format: None,
         })
     }
@@ -5285,11 +5283,13 @@ impl<'a> Parser<'a> {
             self.parse_create_user(or_replace).map(Into::into)
         } else if self.parse_keyword(Keyword::AGGREGATE) {
             self.parse_create_aggregate(or_replace).map(Into::into)
+        } else if self.parse_keyword(Keyword::SCHEMA) {
+            self.parse_create_schema(or_replace)
         } else if self.parse_keyword(Keyword::WAREHOUSE) {
             self.parse_create_warehouse(or_replace).map(Into::into)
         } else if or_replace {
             self.expected_ref(
-                "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION or AGGREGATE or WAREHOUSE after CREATE OR REPLACE",
+                "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION or AGGREGATE or SCHEMA or WAREHOUSE after CREATE OR REPLACE",
                 self.peek_token_ref(),
             )
         } else if self.parse_keyword(Keyword::EXTENSION) {
@@ -5300,8 +5300,6 @@ impl<'a> Parser<'a> {
             self.parse_create_index(true).map(Into::into)
         } else if self.parse_keyword(Keyword::VIRTUAL) {
             self.parse_create_virtual_table()
-        } else if self.parse_keyword(Keyword::SCHEMA) {
-            self.parse_create_schema()
         } else if self.parse_keyword(Keyword::DATABASE) {
             self.parse_create_database()
         } else if self.parse_keyword(Keyword::ROLE) {
@@ -5631,7 +5629,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a `CREATE SCHEMA` statement.
-    pub fn parse_create_schema(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_create_schema(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
 
         let schema_name = self.parse_schema_name()?;
@@ -5662,6 +5660,7 @@ impl<'a> Parser<'a> {
 
         Ok(Statement::CreateSchema {
             schema_name,
+            or_replace,
             if_not_exists,
             with,
             options,
@@ -8867,6 +8866,7 @@ impl<'a> Parser<'a> {
                                 char: self.parse_identifier()?,
                             });
                         }
+                        Some(Keyword::NULL) => break,
                         _ => {
                             break;
                         }
@@ -9786,6 +9786,7 @@ impl<'a> Parser<'a> {
                     index_name: None,
                     index_type: None,
                     columns: vec![],
+                    include: vec![],
                     index_options: vec![],
                     characteristics,
                 }
@@ -9806,6 +9807,7 @@ impl<'a> Parser<'a> {
                     index_type_display,
                     index_type: None,
                     columns: vec![],
+                    include: vec![],
                     index_options: vec![],
                     characteristics,
                     nulls_distinct: NullsDistinctOption::None,
@@ -9822,6 +9824,7 @@ impl<'a> Parser<'a> {
                     index_name: None,
                     index_type: None,
                     columns: vec![],
+                    include: vec![],
                     index_options: vec![],
                     characteristics,
                 }
@@ -10249,6 +10252,7 @@ impl<'a> Parser<'a> {
                 let index_type = self.parse_optional_using_then_index_type()?;
 
                 let columns = self.parse_parenthesized_index_column_list()?;
+                let include = self.parse_optional_include_columns()?;
                 let index_options = self.parse_index_options()?;
                 let characteristics = self.parse_constraint_characteristics()?;
                 Ok(Some(
@@ -10258,6 +10262,7 @@ impl<'a> Parser<'a> {
                         index_type_display,
                         index_type,
                         columns,
+                        include,
                         index_options,
                         characteristics,
                         nulls_distinct,
@@ -10282,6 +10287,7 @@ impl<'a> Parser<'a> {
                 let index_type = self.parse_optional_using_then_index_type()?;
 
                 let columns = self.parse_parenthesized_index_column_list()?;
+                let include = self.parse_optional_include_columns()?;
                 let index_options = self.parse_index_options()?;
                 let characteristics = self.parse_constraint_characteristics()?;
                 Ok(Some(
@@ -10290,6 +10296,7 @@ impl<'a> Parser<'a> {
                         index_name,
                         index_type,
                         columns,
+                        include,
                         index_options,
                         characteristics,
                     }
@@ -10671,6 +10678,18 @@ impl<'a> Parser<'a> {
                 Some(index_option) => options.push(index_option),
                 None => return Ok(options),
             }
+        }
+    }
+
+    /// Parse an optional `INCLUDE (col, ...)` clause on a table constraint.
+    pub fn parse_optional_include_columns(&mut self) -> Result<Vec<Ident>, ParserError> {
+        if self.parse_keyword(Keyword::INCLUDE) {
+            self.expect_token(&Token::LParen)?;
+            let columns = self.parse_comma_separated(|p| p.parse_identifier())?;
+            self.expect_token(&Token::RParen)?;
+            Ok(columns)
+        } else {
+            Ok(vec![])
         }
     }
 
@@ -12843,6 +12862,43 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse the `IS [NOT] JSON` predicate after `JSON` (and optional `NOT`) was consumed.
+    fn parse_is_json_predicate(&mut self, expr: Expr, negated: bool) -> Result<Expr, ParserError> {
+        let kind = match self.parse_one_of_keywords(&[
+            Keyword::VALUE,
+            Keyword::SCALAR,
+            Keyword::ARRAY,
+            Keyword::OBJECT,
+        ]) {
+            Some(Keyword::VALUE) => Some(JsonPredicateType::Value),
+            Some(Keyword::SCALAR) => Some(JsonPredicateType::Scalar),
+            Some(Keyword::ARRAY) => Some(JsonPredicateType::Array),
+            Some(Keyword::OBJECT) => Some(JsonPredicateType::Object),
+            _ => None,
+        };
+
+        let unique_keys = match self.parse_one_of_keywords(&[Keyword::WITH, Keyword::WITHOUT]) {
+            Some(Keyword::WITH) => {
+                self.expect_keyword_is(Keyword::UNIQUE)?;
+                let _ = self.parse_keyword(Keyword::KEYS);
+                Some(JsonKeyUniqueness::WithUniqueKeys)
+            }
+            Some(Keyword::WITHOUT) => {
+                self.expect_keyword_is(Keyword::UNIQUE)?;
+                let _ = self.parse_keyword(Keyword::KEYS);
+                Some(JsonKeyUniqueness::WithoutUniqueKeys)
+            }
+            _ => None,
+        };
+
+        Ok(Expr::IsJson {
+            expr: Box::new(expr),
+            kind,
+            unique_keys,
+            negated,
+        })
+    }
+
     /// Parse a literal unicode normalization clause
     pub fn parse_unicode_is_normalized(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         let neg = self.parse_keyword(Keyword::NOT);
@@ -13347,6 +13403,20 @@ impl<'a> Parser<'a> {
                 data = DataType::Array(ArrayElemTypeDef::SquareBracket(Box::new(data), size))
             }
         }
+
+        // Type-qualified array, e.g. `INT ARRAY` or `INT ARRAY[3]`. One-dimensional
+        // with a single optional size. The `ARRAY` keyword is unambiguous everywhere.
+        if self.parse_keyword(Keyword::ARRAY) {
+            let size = if self.consume_token(&Token::LBracket) {
+                let size = self.maybe_parse(|p| p.parse_literal_uint())?;
+                self.expect_token(&Token::RBracket)?;
+                size
+            } else {
+                None
+            };
+            data = DataType::Array(ArrayElemTypeDef::Qualified(Box::new(data), size));
+        }
+
         Ok((data, trailing_bracket))
     }
 
@@ -21944,13 +22014,13 @@ mod tests {
     #[test]
     fn test_parser_error_loc() {
         let sql = "SELECT this is a syntax error";
-        let ast = Parser::parse_sql(&GenericDialect, sql);
-        assert_eq!(
-            ast,
-            Err(ParserError::ParserError(
-                "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: a at Line: 1, Column: 16"
-                    .to_string()
-            ))
+        let ParserError::ParserError(msg) = Parser::parse_sql(&GenericDialect, sql).unwrap_err()
+        else {
+            panic!("expected ParserError::ParserError");
+        };
+        assert!(
+            msg.ends_with("found: a at Line: 1, Column: 16"),
+            "unexpected error message: {msg}"
         );
     }
 

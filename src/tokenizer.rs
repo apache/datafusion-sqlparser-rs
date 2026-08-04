@@ -2757,7 +2757,7 @@ mod tests {
         compare(expected, tokens);
 
         all_dialects_where(|dialect| dialect.supports_numeric_literal_underscores()).tokenizes_to(
-            "SELECT 10_000, _10_000, 10_00_, 10___0",
+            "SELECT 10_000, _10_000, 10_00_, 10___0, 1_000.123, 1_000.123_456",
             vec![
                 Token::make_keyword("SELECT"),
                 Token::Whitespace(Whitespace::Space),
@@ -2773,6 +2773,12 @@ mod tests {
                 Token::Whitespace(Whitespace::Space),
                 Token::Number("10".to_string(), false),
                 Token::make_word("___0", None), // multiple underscores tokenizes as a word (syntax error in some dialects)
+                Token::Comma,
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("1_000.123".to_string(), false), // with decimal digits
+                Token::Comma,
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("1_000.123_456".to_string(), false), // with an underscore in the decimal digits
             ],
         );
     }

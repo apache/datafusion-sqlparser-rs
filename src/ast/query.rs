@@ -2888,6 +2888,7 @@ pub enum OrderByKind {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "visitor", visit(with = "visit_order_by"))]
 /// Represents an `ORDER BY` clause with its kind and optional `INTERPOLATE`.
 pub struct OrderBy {
     /// The kind of ordering (expressions or `ALL`).
@@ -2924,6 +2925,7 @@ impl fmt::Display for OrderBy {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "visitor", visit(with = "visit_order_by_expr"))]
 pub struct OrderByExpr {
     /// The expression to order by.
     pub expr: Expr,
@@ -3545,7 +3547,7 @@ pub struct LockClause {
 
 impl fmt::Display for LockClause {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "FOR {}", &self.lock_type)?;
+        write!(f, "FOR {}", self.lock_type)?;
         if let Some(ref of) = self.of {
             write!(f, " OF {of}")?;
         }
@@ -3776,6 +3778,7 @@ impl fmt::Display for GroupByWithModifier {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "visitor", visit(with = "visit_group_by"))]
 /// Represents the two syntactic forms that `GROUP BY` can take, including
 /// `GROUP BY ALL` with optional modifiers and ordinary `GROUP BY <exprs>`.
 pub enum GroupByExpr {

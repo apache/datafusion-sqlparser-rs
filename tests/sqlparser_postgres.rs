@@ -24,7 +24,7 @@ mod test_utils;
 
 use helpers::attached_token::AttachedToken;
 use sqlparser::ast::*;
-use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
+use sqlparser::dialect::{Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect};
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Span;
 use test_utils::*;
@@ -594,6 +594,92 @@ fn parse_create_table_constraints_only() {
 }
 
 #[test]
+fn parse_exclude_constraint() {
+    let dialects = pg_and_generic();
+
+    let sql = "CREATE TABLE t (room INT, CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =))";
+    match dialects.verified_stmt(sql) {
+        Statement::CreateTable(create_table) => match &create_table.constraints[..] {
+            [TableConstraint::Exclude(c)] => {
+                assert_eq!(c.name, Some(Ident::new("no_overlap")));
+                assert_eq!(c.index_method, Some(Ident::new("gist")));
+                assert_eq!(c.elements.len(), 1);
+                assert_eq!(
+                    c.elements[0].column.column.expr,
+                    Expr::Identifier(Ident::new("room"))
+                );
+                assert_eq!(c.elements[0].operator.to_string(), "=");
+                assert!(c.elements[0].column.operator_class.is_none());
+                assert!(c.include.is_empty());
+                assert!(c.where_clause.is_none());
+                assert!(c.characteristics.is_none());
+            }
+            other => panic!("expected single Exclude constraint, got {other:?}"),
+        },
+        other => panic!("expected CreateTable, got {other:?}"),
+    }
+
+    for sql in [
+        "CREATE TABLE t (col INT, EXCLUDE (col WITH =))",
+        "CREATE TABLE t (room INT, during INT, EXCLUDE USING gist (room WITH =, during WITH &&))",
+        "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =) INCLUDE (col))",
+        "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =) WHERE (col > 0))",
+        "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =) DEFERRABLE INITIALLY DEFERRED)",
+        "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =) NOT DEFERRABLE INITIALLY IMMEDIATE)",
+        "CREATE TABLE t (col INT, EXCLUDE USING btree (col ASC NULLS LAST WITH =))",
+        "CREATE TABLE t (col INT, EXCLUDE USING btree (col DESC NULLS FIRST WITH =))",
+        "CREATE TABLE t (col TEXT, EXCLUDE USING gist (col text_pattern_ops WITH =))",
+        "CREATE TABLE t (name TEXT, EXCLUDE USING gist ((lower(name)) text_pattern_ops WITH =))",
+        "CREATE TABLE t (name TEXT, EXCLUDE USING btree (name COLLATE \"C\" WITH =))",
+        "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH OPERATOR(pg_catalog.=)))",
+        "CREATE TABLE t (col INT, CONSTRAINT c EXCLUDE USING gist (col ASC WITH OPERATOR(pg_catalog.=)))",
+        "CREATE TABLE t (CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =, during WITH &&) INCLUDE (id) WHERE (active = true))",
+        "ALTER TABLE t ADD CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =)",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+
+    // Error cases: malformed EXCLUDE syntax must be rejected with a useful
+    // message rather than silently accepted.
+    for (sql, expected_message) in [
+        (
+            "CREATE TABLE t (CONSTRAINT c EXCLUDE USING gist (col))",
+            "Expected: WITH, found: )",
+        ),
+        (
+            "CREATE TABLE t (CONSTRAINT c EXCLUDE USING gist ())",
+            "Expected: an expression, found: )",
+        ),
+        (
+            "CREATE TABLE t (CONSTRAINT c EXCLUDE USING gist (col WITH))",
+            "Expected: ',' or ')' after column definition, found: EOF",
+        ),
+        (
+            "CREATE TABLE t (CONSTRAINT c EXCLUDE foo)",
+            "Expected: (, found: foo",
+        ),
+    ] {
+        let result = dialects.parse_sql_statements(sql);
+        assert_eq!(
+            ParserError::ParserError(expected_message.to_string()),
+            result.unwrap_err()
+        );
+    }
+
+    // Dialects that do not opt in via `supports_exclude_constraint` must
+    // refuse to parse `EXCLUDE` constraints.
+    let unsupported = all_dialects_where(|d| !d.supports_exclude_constraint());
+    let sql = "CREATE TABLE t (col INT, EXCLUDE USING gist (col WITH =))";
+    for dialect in unsupported.dialects {
+        let parser = TestedDialects::new(vec![dialect]);
+        assert!(
+            parser.parse_sql_statements(sql).is_err(),
+            "dialect unexpectedly accepted EXCLUDE: {sql}"
+        );
+    }
+}
+
+#[test]
 fn parse_create_table_like_with_defaults() {
     let sql = "CREATE TABLE new (LIKE old INCLUDING DEFAULTS)";
     match pg().verified_stmt(sql) {
@@ -703,6 +789,50 @@ fn parse_alter_table_constraint_using_index() {
     pg_and_generic().verified_stmt(
         "ALTER TABLE tab ADD CONSTRAINT c PRIMARY KEY USING INDEX my_index DEFERRABLE INITIALLY DEFERRED",
     );
+}
+
+#[test]
+fn parse_constraint_include_columns() {
+    // INCLUDE covering columns on PRIMARY KEY / UNIQUE table constraints.
+    // https://www.postgresql.org/docs/current/sql-createtable.html
+    pg_and_generic().verified_stmt(
+        "CREATE TABLE t (id INT, payload TEXT, CONSTRAINT t_pk PRIMARY KEY (id) INCLUDE (payload))",
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE TABLE t (id INT, email TEXT, payload TEXT, CONSTRAINT t_uk UNIQUE (email) INCLUDE (payload))",
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE TABLE t (a INT, b INT, c INT, d INT, CONSTRAINT t_pk PRIMARY KEY (a, b) INCLUDE (c, d))",
+    );
+    pg_and_generic()
+        .verified_stmt("ALTER TABLE t ADD CONSTRAINT t_pk PRIMARY KEY (id) INCLUDE (payload)");
+    pg_and_generic()
+        .verified_stmt("ALTER TABLE t ADD CONSTRAINT t_uk UNIQUE (email) INCLUDE (payload)");
+    pg_and_generic().verified_stmt(
+        "ALTER TABLE t ADD CONSTRAINT t_pk PRIMARY KEY (id) INCLUDE (payload) DEFERRABLE INITIALLY DEFERRED",
+    );
+
+    match pg_and_generic().verified_stmt(
+        "ALTER TABLE t ADD CONSTRAINT t_pk PRIMARY KEY (id) INCLUDE (payload, extra)",
+    ) {
+        Statement::AlterTable(alter_table) => match &alter_table.operations[0] {
+            AlterTableOperation::AddConstraint {
+                constraint: TableConstraint::PrimaryKey(pk),
+                ..
+            } => {
+                assert_eq!(pk.name.as_ref().unwrap().to_string(), "t_pk");
+                assert_eq!(
+                    pk.include
+                        .iter()
+                        .map(|i| i.value.clone())
+                        .collect::<Vec<_>>(),
+                    vec!["payload".to_string(), "extra".to_string()]
+                );
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
 }
 
 #[test]
@@ -1190,6 +1320,33 @@ fn parse_alter_table_owner_to() {
         ParserError::ParserError("Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. sql parser error: Expected: identifier, found: 4".to_string()),
         res.unwrap_err()
     );
+}
+
+#[test]
+fn parse_alter_table_set_logged_unlogged() {
+    let sql = "ALTER TABLE unlogged1 SET LOGGED";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::AlterTable(AlterTable {
+            name, operations, ..
+        }) => {
+            assert_eq!("unlogged1", name.to_string());
+            assert_eq!(vec![AlterTableOperation::SetLogged], operations);
+        }
+        _ => unreachable!(),
+    }
+    pg_and_generic().one_statement_parses_to(sql, sql);
+
+    let sql = "ALTER TABLE unlogged1 SET UNLOGGED";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::AlterTable(AlterTable {
+            name, operations, ..
+        }) => {
+            assert_eq!("unlogged1", name.to_string());
+            assert_eq!(vec![AlterTableOperation::SetUnlogged], operations);
+        }
+        _ => unreachable!(),
+    }
+    pg_and_generic().one_statement_parses_to(sql, sql);
 }
 
 #[test]
@@ -2016,7 +2173,6 @@ fn parse_execute() {
                             (Value::Number("1337".parse().unwrap(), false)).with_empty_span()
                         )),
                         data_type: DataType::SmallInt(None),
-                        array: false,
                         format: None
                     },
                     alias: None
@@ -2028,7 +2184,6 @@ fn parse_execute() {
                             (Value::Number("7331".parse().unwrap(), false)).with_empty_span()
                         )),
                         data_type: DataType::SmallInt(None),
-                        array: false,
                         format: None
                     },
                     alias: None
@@ -2461,7 +2616,7 @@ fn parse_pg_unary_ops() {
         ("@", UnaryOperator::PGAbs),
     ];
     for (str_op, op) in pg_unary_ops {
-        let select = pg().verified_only_select(&format!("SELECT {}a", &str_op));
+        let select = pg().verified_only_select(&format!("SELECT {}a", str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::UnaryOp {
                 op: *op,
@@ -2477,7 +2632,7 @@ fn parse_pg_postfix_factorial() {
     let postfix_factorial = &[("!", UnaryOperator::PGPostfixFactorial)];
 
     for (str_op, op) in postfix_factorial {
-        let select = pg().verified_only_select(&format!("SELECT a{}", &str_op));
+        let select = pg().verified_only_select(&format!("SELECT a{}", str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::UnaryOp {
                 op: *op,
@@ -2655,7 +2810,6 @@ fn parse_array_index_expr() {
                     ))),
                     None
                 )),
-                array: false,
                 format: None,
             }))),
             access_chain: vec![
@@ -2679,6 +2833,31 @@ fn parse_array_index_expr() {
         }),
         expr_from_projection(only(&select.projection)),
     );
+}
+
+#[test]
+fn parse_array_type_def_with_keyword() {
+    // SQL-standard `ARRAY` keyword with optional size, in column definitions and
+    // CAST targets. See https://www.postgresql.org/docs/current/arrays.html
+    pg().verified_stmt("CREATE TABLE sal_emp (pay_by_quarter INTEGER ARRAY)");
+    pg().verified_stmt("CREATE TABLE sal_emp (pay_by_quarter INTEGER ARRAY[4])");
+    pg().verified_stmt("CREATE TABLE genome (codons CHAR(3) ARRAY[1000])");
+    pg().verified_stmt("CREATE TABLE t (a VARCHAR(10) ARRAY[2])");
+    pg().verified_stmt("CREATE TABLE genome (codons CHAR(3) ARRAY[1000] NOT NULL)");
+    pg().verified_stmt(
+        "CREATE TEMPORARY TABLE arrtest2 (i INTEGER ARRAY[4], f FLOAT8[], n NUMERIC[], t TEXT[], d TIMESTAMP[])",
+    );
+    pg().verified_stmt("CREATE TABLE p (e MONEY ARRAY, f MONEY ARRAY[7])");
+    pg().verified_only_select("SELECT CAST(ARRAY[1, 2, 3] AS INTEGER ARRAY)");
+    pg().verified_only_select("SELECT CAST(ARRAY[1, 2, 3] AS INTEGER ARRAY[3])");
+    pg().verified_only_select("SELECT foo::INTEGER ARRAY[3]");
+    // Custom and schema-qualified types, ALTER TABLE, typmods, and the
+    // suffix-vs-constructor case.
+    pg_and_generic().verified_stmt("CREATE TABLE t (c currency ARRAY)");
+    pg_and_generic().verified_stmt("CREATE TABLE t (c public.currency ARRAY)");
+    pg_and_generic().verified_stmt("ALTER TABLE t ADD COLUMN c currency ARRAY");
+    pg_and_generic().verified_stmt("CREATE TABLE t (c NUMERIC(10,2) ARRAY)");
+    pg_and_generic().verified_stmt("CREATE TABLE t (c INT ARRAY DEFAULT ARRAY[]::INT[])");
 }
 
 #[test]
@@ -4250,6 +4429,15 @@ fn parse_custom_operator() {
 }
 
 #[test]
+fn parse_operator_empty_parens_rejected() {
+    let result = pg_and_generic().parse_sql_statements("SELECT a OPERATOR() b");
+    assert_eq!(
+        ParserError::ParserError("Expected: operator name, found: )".to_string()),
+        result.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_create_role() {
     let sql = "CREATE ROLE IF NOT EXISTS mysql_a, mysql_b";
     match pg().verified_stmt(sql) {
@@ -4556,6 +4744,56 @@ fn parse_alter_role() {
                     quote_style: None,
                     span: Span::empty(),
                 }]))
+            },
+        }
+    );
+}
+
+#[test]
+fn parse_alter_user() {
+    // `ALTER USER` is a PostgreSQL synonym for `ALTER ROLE`, so it round-trips to `ALTER ROLE`.
+    let canonical = "ALTER ROLE old_name RENAME TO new_name";
+    assert_eq!(
+        pg().one_statement_parses_to("ALTER USER old_name RENAME TO new_name", canonical),
+        Statement::AlterRole {
+            name: Ident::new("old_name"),
+            operation: AlterRoleOperation::RenameRole {
+                role_name: Ident::new("new_name"),
+            },
+        }
+    );
+
+    let canonical = "ALTER ROLE bob WITH SUPERUSER PASSWORD 'x' CONNECTION LIMIT 5";
+    assert_eq!(
+        pg().one_statement_parses_to(
+            "ALTER USER bob WITH SUPERUSER PASSWORD 'x' CONNECTION LIMIT 5",
+            canonical
+        ),
+        Statement::AlterRole {
+            name: Ident::new("bob"),
+            operation: AlterRoleOperation::WithOptions {
+                options: vec![
+                    RoleOption::SuperUser(true),
+                    RoleOption::Password(Password::Password(Expr::Value(
+                        Value::SingleQuotedString("x".into()).with_empty_span()
+                    ))),
+                    RoleOption::ConnectionLimit(Expr::value(number("5"))),
+                ]
+            },
+        }
+    );
+
+    assert_eq!(
+        pg().one_statement_parses_to(
+            "ALTER USER bob SET search_path TO public",
+            "ALTER ROLE bob SET search_path TO public"
+        ),
+        Statement::AlterRole {
+            name: Ident::new("bob"),
+            operation: AlterRoleOperation::Set {
+                config_name: ObjectName::from(vec![Ident::new("search_path")]),
+                config_value: SetConfigValue::Value(Expr::Identifier(Ident::new("public"))),
+                in_database: None,
             },
         }
     );
@@ -5744,6 +5982,57 @@ fn parse_create_table_with_partition_by() {
 }
 
 #[test]
+fn parse_create_unlogged_table() {
+    let sql = "CREATE UNLOGGED TABLE public.unlogged2 (a int primary key)";
+    match pg_and_generic().one_statement_parses_to(
+        sql,
+        "CREATE UNLOGGED TABLE public.unlogged2 (a INT PRIMARY KEY)",
+    ) {
+        Statement::CreateTable(CreateTable { name, unlogged, .. }) => {
+            assert!(unlogged);
+            assert_eq!("public.unlogged2", name.to_string());
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "CREATE UNLOGGED TABLE pg_temp.unlogged3 (a int primary key)";
+    match pg_and_generic().one_statement_parses_to(
+        sql,
+        "CREATE UNLOGGED TABLE pg_temp.unlogged3 (a INT PRIMARY KEY)",
+    ) {
+        Statement::CreateTable(CreateTable { name, unlogged, .. }) => {
+            assert!(unlogged);
+            assert_eq!("pg_temp.unlogged3", name.to_string());
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "CREATE UNLOGGED TABLE unlogged1 (a int) PARTITION BY RANGE (a)";
+    match pg_and_generic().one_statement_parses_to(
+        sql,
+        "CREATE UNLOGGED TABLE unlogged1 (a INT) PARTITION BY RANGE(a)",
+    ) {
+        Statement::CreateTable(CreateTable {
+            name,
+            unlogged,
+            partition_by,
+            ..
+        }) => {
+            assert!(unlogged);
+            assert_eq!("unlogged1", name.to_string());
+            assert!(partition_by.is_some());
+        }
+        _ => unreachable!(),
+    }
+
+    let res = pg().parse_sql_statements("CREATE UNLOGGED VIEW v AS SELECT 1");
+    assert_eq!(
+        ParserError::ParserError("Expected: an object type after CREATE, found: UNLOGGED".into()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_join_constraint_unnest_alias() {
     assert_eq!(
         only(
@@ -6073,7 +6362,6 @@ fn parse_at_time_zone() {
                     Value::SingleQuotedString("America/Los_Angeles".to_owned()).with_empty_span(),
                 )),
                 data_type: DataType::Text,
-                array: false,
                 format: None,
             }),
         }),
@@ -6689,6 +6977,7 @@ fn parse_trigger_related_functions() {
         CreateTable {
             or_replace: false,
             temporary: false,
+            unlogged: false,
             external: false,
             global: None,
             dynamic: false,
@@ -6934,7 +7223,6 @@ fn arrow_cast_precedence() {
                     (Value::SingleQuotedString("bar".to_string())).with_empty_span()
                 )),
                 data_type: DataType::Text,
-                array: false,
                 format: None,
             }),
         }
@@ -8547,6 +8835,59 @@ fn parse_alter_function_and_aggregate() {
 }
 
 #[test]
+fn parse_create_text_search() {
+    // CREATE: one per object type
+    let stmt =
+        pg_and_generic().verified_stmt("CREATE TEXT SEARCH DICTIONARY d (template = simple)");
+    assert_eq!(Span::empty(), stmt.span());
+    pg_and_generic().verified_stmt("CREATE TEXT SEARCH CONFIGURATION c (copy = english)");
+    pg_and_generic().verified_stmt("CREATE TEXT SEARCH TEMPLATE t (lexize = dsimple_lexize)");
+    pg_and_generic().verified_stmt(
+        "CREATE TEXT SEARCH PARSER p (start = prsd_start, gettoken = prsd_nexttoken, end = prsd_end, lextypes = prsd_lextype)",
+    );
+
+    // CREATE with quoted option key
+    pg_and_generic().verified_stmt(r#"CREATE TEXT SEARCH TEMPLATE t ("Init" = init_function)"#);
+
+    // Object type must be an unquoted keyword-like token in this position.
+    assert!(pg()
+        .parse_sql_statements(r#"CREATE TEXT SEARCH "DICTIONARY" d (template = simple)"#)
+        .is_err());
+
+    // CREATE options are key-value pairs in PostgreSQL syntax.
+    assert!(pg()
+        .parse_sql_statements("CREATE TEXT SEARCH DICTIONARY d (template)")
+        .is_err());
+}
+
+#[test]
+fn parse_alter_text_search() {
+    // One test per operation kind.
+    let stmt = pg_and_generic().verified_stmt("ALTER TEXT SEARCH DICTIONARY d (opt = val)");
+    assert_eq!(Span::empty(), stmt.span());
+    if let Statement::AlterTextSearch(alter_text_search) = stmt {
+        assert_eq!(Span::empty(), alter_text_search.span());
+    } else {
+        unreachable!("expected ALTER TEXT SEARCH statement");
+    }
+    pg_and_generic().verified_stmt("ALTER TEXT SEARCH DICTIONARY d (opt)");
+    pg_and_generic().verified_stmt("ALTER TEXT SEARCH CONFIGURATION c OWNER TO some_user");
+    pg_and_generic().verified_stmt("ALTER TEXT SEARCH TEMPLATE t SET SCHEMA s");
+    pg_and_generic().verified_stmt("ALTER TEXT SEARCH PARSER p RENAME TO p2");
+
+    // The parser accepts text search operations permissively across object types.
+    pg_and_generic().verified_stmt("ALTER TEXT SEARCH TEMPLATE t OWNER TO some_user");
+    pg_and_generic().verified_stmt("ALTER TEXT SEARCH PARSER p (opt = val)");
+
+    let err = pg()
+        .parse_sql_statements("ALTER TEXT SEARCH DICTIONARY d RESET foo")
+        .unwrap_err();
+    assert!(err
+        .to_string()
+        .contains("RENAME TO, OWNER TO, SET SCHEMA, or (...) after ALTER TEXT SEARCH"));
+}
+
+#[test]
 fn parse_drop_operator_family() {
     for if_exists in [true, false] {
         for drop_behavior in [
@@ -9275,4 +9616,65 @@ fn parse_lock_table() {
             _ => panic!("Expected Lock, got: {stmt:?}"),
         }
     }
+}
+
+#[test]
+fn exclude_as_column_name() {
+    // `EXCLUDE` is a non-reserved keyword, so it stays usable as a column name
+    // even on dialects that parse `EXCLUDE` constraints: a bare `exclude` not
+    // followed by `USING` or `(` must not be mistaken for a constraint.
+    let sql = "CREATE TABLE t (exclude INT)";
+    for dialect in [
+        Box::new(MySqlDialect {}) as Box<dyn Dialect>,
+        Box::new(SQLiteDialect {}),
+        Box::new(PostgreSqlDialect {}),
+        Box::new(GenericDialect {}),
+    ] {
+        let type_name = format!("{dialect:?}");
+        let parser = TestedDialects::new(vec![dialect]);
+        let stmts = parser
+            .parse_sql_statements(sql)
+            .unwrap_or_else(|e| panic!("{type_name} failed to parse {sql}: {e}"));
+        match &stmts[0] {
+            Statement::CreateTable(create_table) => {
+                assert_eq!(create_table.columns.len(), 1);
+                assert_eq!(create_table.columns[0].name.value, "exclude");
+            }
+            other => panic!("{type_name}: expected CreateTable, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn parse_limit_after_locking_clause() {
+    // PostgreSQL accepts `LIMIT`/`OFFSET` after the row-locking clause as well
+    // as before it; both orderings are semantically identical. The AST renders
+    // the limit in its canonical position (before the locking clause).
+    pg().one_statement_parses_to(
+        "SELECT * FROM t ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 5",
+        "SELECT * FROM t ORDER BY id LIMIT 5 FOR UPDATE SKIP LOCKED",
+    );
+    pg().one_statement_parses_to(
+        "SELECT * FROM t FOR UPDATE LIMIT 5",
+        "SELECT * FROM t LIMIT 5 FOR UPDATE",
+    );
+    // The pre-existing ordering keeps round-tripping unchanged.
+    pg().verified_stmt("SELECT * FROM t ORDER BY id LIMIT 5 FOR UPDATE SKIP LOCKED");
+}
+
+#[test]
+fn parse_right_deep_join_chain() {
+    // PostgreSQL supports right-deep join syntax where ON clauses follow all JOIN keywords:
+    //   t0 JOIN t1 JOIN t2 ON c1 ON c2
+    // which is equivalent to (and serialized as) t0 JOIN (t1 JOIN t2 ON c1) ON c2.
+    pg().one_statement_parses_to(
+        "SELECT * FROM t0 INNER JOIN t1 INNER JOIN t2 ON true ON true",
+        "SELECT * FROM t0 INNER JOIN (t1 INNER JOIN t2 ON true) ON true",
+    );
+    pg().one_statement_parses_to(
+        "SELECT * FROM t0 INNER JOIN t1 INNER JOIN t2 INNER JOIN t3 ON true ON true ON true",
+        "SELECT * FROM t0 INNER JOIN (t1 INNER JOIN (t2 INNER JOIN t3 ON true) ON true) ON true",
+    );
+    // NATURAL JOIN followed by a constrained join must stay left-associative.
+    pg().verified_stmt("SELECT * FROM t0 NATURAL JOIN t1 INNER JOIN t2 ON true");
 }

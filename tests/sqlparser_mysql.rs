@@ -4946,3 +4946,19 @@ fn parse_adjacent_string_literal_concatenation() {
 fn parse_group_by_with_rollup() {
     mysql().verified_stmt("SELECT * FROM tbl GROUP BY col1, col2 WITH ROLLUP");
 }
+
+#[test]
+fn parse_table_partition_selection() {
+    mysql_and_generic().verified_stmt("SELECT * FROM employees PARTITION (p0, p2)");
+    mysql_and_generic().verified_stmt("SELECT * FROM employees PARTITION (p0) AS e");
+    mysql_and_generic().verified_stmt(
+        "SELECT * FROM employees PARTITION (p0) JOIN departments PARTITION (p1) ON employees.dept_id = departments.id",
+    );
+    mysql_and_generic().verified_stmt("UPDATE employees PARTITION (p0) SET salary = 1");
+    mysql_and_generic().verified_stmt("DELETE FROM employees PARTITION (p0) WHERE id = 1");
+
+    let err = mysql_and_generic()
+        .parse_sql_statements("SELECT * FROM employees PARTITION")
+        .expect_err("expected an error");
+    assert_matches!(err, ParserError::ParserError(_));
+}

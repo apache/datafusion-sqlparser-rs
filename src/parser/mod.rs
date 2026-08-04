@@ -3391,7 +3391,10 @@ impl<'a> Parser<'a> {
     /// ```
     ///
     /// Note that we do not currently attempt to parse the quoted value.
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     pub fn parse_interval(&mut self) -> Result<Expr, ParserError> {
+        let _guard = self.recursion_counter.try_decrease()?;
+
         // The SQL standard allows an optional sign before the value string, but
         // it is not clear if any implementations support that syntax, so we
         // don't currently try to parse it. (The sign can instead be included

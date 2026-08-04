@@ -113,4 +113,21 @@ impl Dialect for DatabricksDialect {
     fn supports_select_item_multi_column_alias(&self) -> bool {
         true
     }
+
+    /// See <https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-ddl-create-table-using>
+    fn supports_create_table_using(&self) -> bool {
+        true
+    }
+
+    /// `LONG` is an alias for `BIGINT` in Databricks SQL.
+    ///
+    /// See <https://docs.databricks.com/aws/en/sql/language-manual/data-types/bigint-type>
+    fn supports_long_type_as_bigint(&self) -> bool {
+        true
+    }
+
+    /// See <https://docs.databricks.com/aws/en/sql/language-manual/data-types/map-type>
+    fn supports_map_literal_with_angle_brackets(&self) -> bool {
+        true
+    }
 }

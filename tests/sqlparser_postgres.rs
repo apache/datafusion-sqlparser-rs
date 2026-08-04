@@ -9663,3 +9663,29 @@ fn parse_right_deep_join_chain() {
     // NATURAL JOIN followed by a constrained join must stay left-associative.
     pg().verified_stmt("SELECT * FROM t0 NATURAL JOIN t1 INNER JOIN t2 ON true");
 }
+
+#[test]
+fn parse_nested_pg_unary_ops() {
+    let select = pg().verified_only_select("SELECT @ @1");
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::UnaryOp {
+            op: UnaryOperator::PGAbs,
+            expr: Box::new(Expr::UnaryOp {
+                op: UnaryOperator::PGAbs,
+                expr: Box::new(Expr::value(number("1"))),
+            }),
+        }),
+        select.projection[0]
+    );
+
+    let select = pg().verified_only_select("SELECT @@ 1");
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::UnaryOp {
+            op: UnaryOperator::DoubleAt,
+            expr: Box::new(Expr::value(number("1"))),
+        }),
+        select.projection[0]
+    );
+
+    pg().verified_stmt("SELECT |/ |/1");
+}

@@ -1963,7 +1963,8 @@ impl fmt::Display for Expr {
                         | UnaryOperator::DoubleAt
                         | UnaryOperator::QuestionDash
                         | UnaryOperator::QuestionPipe
-                ) {
+                ) || matches!(expr.as_ref(), Expr::UnaryOp { .. })
+                {
                     write!(f, "{op} {expr}")
                 } else {
                     write!(f, "{op}{expr}")

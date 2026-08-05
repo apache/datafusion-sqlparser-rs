@@ -5316,7 +5316,11 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::DATABASE) {
             self.parse_create_database()
         } else if self.parse_keyword(Keyword::ROLE) {
-            self.parse_create_role().map(Into::into)
+            self.parse_create_role(RoleKeyword::Role).map(Into::into)
+        } else if self.dialect.supports_user_group_statements()
+            && self.parse_keyword(Keyword::GROUP)
+        {
+            self.parse_create_role(RoleKeyword::Group).map(Into::into)
         } else if self.parse_keyword(Keyword::SEQUENCE) {
             self.parse_create_sequence(temporary)
         } else if self.parse_keyword(Keyword::COLLATION) {
@@ -6896,8 +6900,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a `CREATE ROLE` statement.
-    pub fn parse_create_role(&mut self) -> Result<CreateRole, ParserError> {
+    /// Parse a `CREATE ROLE` or `CREATE GROUP` statement, after the keyword has been consumed.
+    pub fn parse_create_role(
+        &mut self,
+        role_keyword: RoleKeyword,
+    ) -> Result<CreateRole, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let names = self.parse_comma_separated(|p| p.parse_object_name(false))?;
 
@@ -7100,6 +7107,7 @@ impl<'a> Parser<'a> {
         }
 
         Ok(CreateRole {
+            keyword: role_keyword,
             names,
             if_not_exists,
             login,
@@ -7599,6 +7607,10 @@ impl<'a> Parser<'a> {
             ObjectType::Index
         } else if self.parse_keyword(Keyword::ROLE) {
             ObjectType::Role
+        } else if self.dialect.supports_user_group_statements()
+            && self.parse_keyword(Keyword::GROUP)
+        {
+            ObjectType::Group
         } else if self.parse_keyword(Keyword::SCHEMA) {
             ObjectType::Schema
         } else if self.parse_keyword(Keyword::DATABASE) {
@@ -7642,7 +7654,7 @@ impl<'a> Parser<'a> {
             };
         } else {
             return self.expected_ref(
-                "COLLATION, CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP",
+                "COLLATION, CONNECTOR, DATABASE, EXTENSION, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP",
                 self.peek_token_ref(),
             );
         };
@@ -7658,9 +7670,11 @@ impl<'a> Parser<'a> {
         if cascade && restrict {
             return parser_err!("Cannot specify both CASCADE and RESTRICT in DROP", loc);
         }
-        if object_type == ObjectType::Role && (cascade || restrict || purge) {
+        if matches!(object_type, ObjectType::Role | ObjectType::Group)
+            && (cascade || restrict || purge)
+        {
             return parser_err!(
-                "Cannot specify CASCADE, RESTRICT, or PURGE in DROP ROLE",
+                format!("Cannot specify CASCADE, RESTRICT, or PURGE in DROP {object_type}"),
                 loc
             );
         }

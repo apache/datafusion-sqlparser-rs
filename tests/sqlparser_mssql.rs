@@ -939,14 +939,28 @@ fn parse_table_name_in_square_brackets() {
 
 #[test]
 fn parse_bracket_identifier_with_escaped_closing_bracket() {
-    // A bracket-quoted identifier whose value contains `]` must serialize
-    // with the bracket doubled so it round-trips. See #2409.
+    // A `]` inside a bracket-quoted identifier is escaped by doubling it, so
+    // `[a]]b]` denotes the identifier `a]b`.
     let select = ms().verified_only_select("SELECT [a]]b]");
     assert_eq!(
         &Expr::Identifier(Ident::with_quote('[', "a]b")),
         expr_from_projection(&select.projection[0]),
     );
-    ms().verified_stmt("SELECT [a]]b] FROM [c]]d]");
+
+    // Round-trips regardless of where the escaped `]` sits.
+    for sql in [
+        "SELECT [a]]b] FROM [c]]d]",
+        "SELECT []]]",      // the identifier is a single `]`
+        "SELECT [a]]]",     // trailing `]`
+        "SELECT []]b]",     // leading `]`
+        "SELECT [a]]b]]c]", // several escaped `]`
+    ] {
+        ms().verified_stmt(sql);
+    }
+
+    // In no-escape mode the parsed value keeps the raw `]]`, so serializing it
+    // must not double the brackets again.
+    ms_no_unescape().verified_stmt("SELECT [a]]b]");
 }
 
 #[test]
@@ -2445,6 +2459,13 @@ fn parse_mssql_table_identifier_with_default_schema() {
 
 fn ms() -> TestedDialects {
     TestedDialects::new(vec![Box::new(MsSqlDialect {})])
+}
+
+fn ms_no_unescape() -> TestedDialects {
+    TestedDialects::new_with_options(
+        vec![Box::new(MsSqlDialect {})],
+        ParserOptions::new().with_unescape(false),
+    )
 }
 
 // MS SQL dialect with support for optional semi-colon statement delimiters

@@ -10096,6 +10096,7 @@ fn test_revoke() {
     let sql = "REVOKE ALL PRIVILEGES ON users, auth FROM analyst";
     match verified_stmt(sql) {
         Statement::Revoke(Revoke {
+            grant_option_for: false,
             privileges,
             objects: Some(GrantObjects::Tables(tables)),
             grantees,
@@ -10120,8 +10121,9 @@ fn test_revoke() {
 #[test]
 fn test_revoke_with_cascade() {
     let sql = "REVOKE ALL PRIVILEGES ON users, auth FROM analyst CASCADE";
-    match all_dialects_except(|d| d.is::<MySqlDialect>()).verified_stmt(sql) {
+    match verified_stmt(sql) {
         Statement::Revoke(Revoke {
+            grant_option_for: false,
             privileges,
             objects: Some(GrantObjects::Tables(tables)),
             grantees,
@@ -10141,6 +10143,26 @@ fn test_revoke_with_cascade() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn test_revoke_grant_option_for() {
+    let Statement::Revoke(mut revoke) = verified_stmt("REVOKE GRANT OPTION FOR SELECT ON t FROM r")
+    else {
+        unreachable!()
+    };
+    assert!(revoke.grant_option_for);
+
+    // Clearing the flag must yield exactly the plain revoke.
+    revoke.grant_option_for = false;
+    assert_eq!(
+        Statement::Revoke(revoke),
+        verified_stmt("REVOKE SELECT ON t FROM r")
+    );
+
+    verified_stmt("REVOKE GRANT OPTION FOR ALL ON t FROM r");
+    verified_stmt("REVOKE GRANT OPTION FOR SELECT ON t FROM r CASCADE");
+    verified_stmt("REVOKE GRANT OPTION FOR SELECT ON t FROM r RESTRICT");
 }
 
 #[test]

@@ -792,6 +792,50 @@ fn parse_alter_table_constraint_using_index() {
 }
 
 #[test]
+fn parse_constraint_include_columns() {
+    // INCLUDE covering columns on PRIMARY KEY / UNIQUE table constraints.
+    // https://www.postgresql.org/docs/current/sql-createtable.html
+    pg_and_generic().verified_stmt(
+        "CREATE TABLE t (id INT, payload TEXT, CONSTRAINT t_pk PRIMARY KEY (id) INCLUDE (payload))",
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE TABLE t (id INT, email TEXT, payload TEXT, CONSTRAINT t_uk UNIQUE (email) INCLUDE (payload))",
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE TABLE t (a INT, b INT, c INT, d INT, CONSTRAINT t_pk PRIMARY KEY (a, b) INCLUDE (c, d))",
+    );
+    pg_and_generic()
+        .verified_stmt("ALTER TABLE t ADD CONSTRAINT t_pk PRIMARY KEY (id) INCLUDE (payload)");
+    pg_and_generic()
+        .verified_stmt("ALTER TABLE t ADD CONSTRAINT t_uk UNIQUE (email) INCLUDE (payload)");
+    pg_and_generic().verified_stmt(
+        "ALTER TABLE t ADD CONSTRAINT t_pk PRIMARY KEY (id) INCLUDE (payload) DEFERRABLE INITIALLY DEFERRED",
+    );
+
+    match pg_and_generic().verified_stmt(
+        "ALTER TABLE t ADD CONSTRAINT t_pk PRIMARY KEY (id) INCLUDE (payload, extra)",
+    ) {
+        Statement::AlterTable(alter_table) => match &alter_table.operations[0] {
+            AlterTableOperation::AddConstraint {
+                constraint: TableConstraint::PrimaryKey(pk),
+                ..
+            } => {
+                assert_eq!(pk.name.as_ref().unwrap().to_string(), "t_pk");
+                assert_eq!(
+                    pk.include
+                        .iter()
+                        .map(|i| i.value.clone())
+                        .collect::<Vec<_>>(),
+                    vec!["payload".to_string(), "extra".to_string()]
+                );
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_alter_table_disable() {
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE ROW LEVEL SECURITY");
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE RULE rule_name");
@@ -2129,7 +2173,6 @@ fn parse_execute() {
                             (Value::Number("1337".parse().unwrap(), false)).with_empty_span()
                         )),
                         data_type: DataType::SmallInt(None),
-                        array: false,
                         format: None
                     },
                     alias: None
@@ -2141,7 +2184,6 @@ fn parse_execute() {
                             (Value::Number("7331".parse().unwrap(), false)).with_empty_span()
                         )),
                         data_type: DataType::SmallInt(None),
-                        array: false,
                         format: None
                     },
                     alias: None
@@ -2574,7 +2616,7 @@ fn parse_pg_unary_ops() {
         ("@", UnaryOperator::PGAbs),
     ];
     for (str_op, op) in pg_unary_ops {
-        let select = pg().verified_only_select(&format!("SELECT {}a", &str_op));
+        let select = pg().verified_only_select(&format!("SELECT {}a", str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::UnaryOp {
                 op: *op,
@@ -2590,7 +2632,7 @@ fn parse_pg_postfix_factorial() {
     let postfix_factorial = &[("!", UnaryOperator::PGPostfixFactorial)];
 
     for (str_op, op) in postfix_factorial {
-        let select = pg().verified_only_select(&format!("SELECT a{}", &str_op));
+        let select = pg().verified_only_select(&format!("SELECT a{}", str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::UnaryOp {
                 op: *op,
@@ -2768,7 +2810,6 @@ fn parse_array_index_expr() {
                     ))),
                     None
                 )),
-                array: false,
                 format: None,
             }))),
             access_chain: vec![
@@ -2792,6 +2833,31 @@ fn parse_array_index_expr() {
         }),
         expr_from_projection(only(&select.projection)),
     );
+}
+
+#[test]
+fn parse_array_type_def_with_keyword() {
+    // SQL-standard `ARRAY` keyword with optional size, in column definitions and
+    // CAST targets. See https://www.postgresql.org/docs/current/arrays.html
+    pg().verified_stmt("CREATE TABLE sal_emp (pay_by_quarter INTEGER ARRAY)");
+    pg().verified_stmt("CREATE TABLE sal_emp (pay_by_quarter INTEGER ARRAY[4])");
+    pg().verified_stmt("CREATE TABLE genome (codons CHAR(3) ARRAY[1000])");
+    pg().verified_stmt("CREATE TABLE t (a VARCHAR(10) ARRAY[2])");
+    pg().verified_stmt("CREATE TABLE genome (codons CHAR(3) ARRAY[1000] NOT NULL)");
+    pg().verified_stmt(
+        "CREATE TEMPORARY TABLE arrtest2 (i INTEGER ARRAY[4], f FLOAT8[], n NUMERIC[], t TEXT[], d TIMESTAMP[])",
+    );
+    pg().verified_stmt("CREATE TABLE p (e MONEY ARRAY, f MONEY ARRAY[7])");
+    pg().verified_only_select("SELECT CAST(ARRAY[1, 2, 3] AS INTEGER ARRAY)");
+    pg().verified_only_select("SELECT CAST(ARRAY[1, 2, 3] AS INTEGER ARRAY[3])");
+    pg().verified_only_select("SELECT foo::INTEGER ARRAY[3]");
+    // Custom and schema-qualified types, ALTER TABLE, typmods, and the
+    // suffix-vs-constructor case.
+    pg_and_generic().verified_stmt("CREATE TABLE t (c currency ARRAY)");
+    pg_and_generic().verified_stmt("CREATE TABLE t (c public.currency ARRAY)");
+    pg_and_generic().verified_stmt("ALTER TABLE t ADD COLUMN c currency ARRAY");
+    pg_and_generic().verified_stmt("CREATE TABLE t (c NUMERIC(10,2) ARRAY)");
+    pg_and_generic().verified_stmt("CREATE TABLE t (c INT ARRAY DEFAULT ARRAY[]::INT[])");
 }
 
 #[test]
@@ -6281,7 +6347,6 @@ fn parse_at_time_zone() {
                     Value::SingleQuotedString("America/Los_Angeles".to_owned()).with_empty_span(),
                 )),
                 data_type: DataType::Text,
-                array: false,
                 format: None,
             }),
         }),
@@ -7143,7 +7208,6 @@ fn arrow_cast_precedence() {
                     (Value::SingleQuotedString("bar".to_string())).with_empty_span()
                 )),
                 data_type: DataType::Text,
-                array: false,
                 format: None,
             }),
         }
@@ -9564,4 +9628,38 @@ fn exclude_as_column_name() {
             other => panic!("{type_name}: expected CreateTable, got {other:?}"),
         }
     }
+}
+
+#[test]
+fn parse_limit_after_locking_clause() {
+    // PostgreSQL accepts `LIMIT`/`OFFSET` after the row-locking clause as well
+    // as before it; both orderings are semantically identical. The AST renders
+    // the limit in its canonical position (before the locking clause).
+    pg().one_statement_parses_to(
+        "SELECT * FROM t ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 5",
+        "SELECT * FROM t ORDER BY id LIMIT 5 FOR UPDATE SKIP LOCKED",
+    );
+    pg().one_statement_parses_to(
+        "SELECT * FROM t FOR UPDATE LIMIT 5",
+        "SELECT * FROM t LIMIT 5 FOR UPDATE",
+    );
+    // The pre-existing ordering keeps round-tripping unchanged.
+    pg().verified_stmt("SELECT * FROM t ORDER BY id LIMIT 5 FOR UPDATE SKIP LOCKED");
+}
+
+#[test]
+fn parse_right_deep_join_chain() {
+    // PostgreSQL supports right-deep join syntax where ON clauses follow all JOIN keywords:
+    //   t0 JOIN t1 JOIN t2 ON c1 ON c2
+    // which is equivalent to (and serialized as) t0 JOIN (t1 JOIN t2 ON c1) ON c2.
+    pg().one_statement_parses_to(
+        "SELECT * FROM t0 INNER JOIN t1 INNER JOIN t2 ON true ON true",
+        "SELECT * FROM t0 INNER JOIN (t1 INNER JOIN t2 ON true) ON true",
+    );
+    pg().one_statement_parses_to(
+        "SELECT * FROM t0 INNER JOIN t1 INNER JOIN t2 INNER JOIN t3 ON true ON true ON true",
+        "SELECT * FROM t0 INNER JOIN (t1 INNER JOIN (t2 INNER JOIN t3 ON true) ON true) ON true",
+    );
+    // NATURAL JOIN followed by a constrained join must stay left-associative.
+    pg().verified_stmt("SELECT * FROM t0 NATURAL JOIN t1 INNER JOIN t2 ON true");
 }

@@ -1269,6 +1269,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports object-unpivot table factors in the FROM clause.
+    ///
+    /// Syntax:
+    /// ```sql
+    /// SELECT * FROM T UNPIVOT expression AS value_alias [AT attribute_alias]
+    /// ```
+    fn supports_unpivot_expr(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports the `CONSTRAINT` keyword without a name
     /// in table constraint definitions.
     ///
@@ -2006,9 +2016,22 @@ mod tests {
     #[test]
     fn identifier_quote_style() {
         let tests: Vec<(&dyn Dialect, &str, Option<char>)> = vec![
+            (&AnsiDialect {}, "id", Some('"')),
+            (&BigQueryDialect {}, "id", Some('`')),
+            (&ClickHouseDialect {}, "id", Some('`')),
+            (&DatabricksDialect {}, "id", Some('`')),
+            (&DuckDbDialect {}, "id", Some('"')),
             (&GenericDialect {}, "id", None),
-            (&SQLiteDialect {}, "id", Some('`')),
+            (&HiveDialect {}, "id", Some('`')),
+            (&MsSqlDialect {}, "id", Some('[')),
+            (&MySqlDialect {}, "id", Some('`')),
+            (&OracleDialect {}, "id", Some('"')),
             (&PostgreSqlDialect {}, "id", Some('"')),
+            (&RedshiftSqlDialect {}, "id", Some('"')),
+            (&SnowflakeDialect {}, "id", Some('"')),
+            (&SQLiteDialect {}, "id", Some('`')),
+            (&SparkSqlDialect {}, "id", Some('`')),
+            (&TeradataDialect {}, "id", Some('"')),
         ];
 
         for (dialect, ident, expected) in tests {

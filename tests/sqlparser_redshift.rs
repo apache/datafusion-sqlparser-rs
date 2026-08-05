@@ -542,3 +542,13 @@ fn test_partiql_from_alias_with_at_index() {
         _ => panic!("expected table factor"),
     }
 }
+
+#[test]
+fn parse_unpivot_expression() {
+    let dialects = all_dialects_where(|d| d.supports_unpivot_expr());
+
+    dialects.verified_stmt(
+        "SELECT t.id, k, v FROM test_colors AS t, UNPIVOT t.count_by_color AS v AT k",
+    );
+    dialects.verified_stmt("SELECT t.id, k, v FROM test_colors AS t, UNPIVOT t AS v AT k");
+}

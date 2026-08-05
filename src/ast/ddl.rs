@@ -1913,8 +1913,8 @@ pub enum ColumnOption {
     /// `DEFAULT <restricted-expr>`
     Default(Expr),
 
-    /// `MATERIALIZE <expr>`
-    /// Syntax: `b INT MATERIALIZE (a + 1)`
+    /// `MATERIALIZED <expr>`
+    /// Syntax: `b INT MATERIALIZED (a + 1)`
     ///
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/create/table#default_values)
     Materialized(Expr),
@@ -4780,7 +4780,7 @@ impl fmt::Display for AlterTable {
         if self.only {
             write!(f, "ONLY ")?;
         }
-        write!(f, "{} ", &self.name)?;
+        write!(f, "{} ", self.name)?;
         if let Some(cluster) = &self.on_cluster {
             write!(f, "ON CLUSTER {cluster} ")?;
         }

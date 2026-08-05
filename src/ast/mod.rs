@@ -68,11 +68,11 @@ pub use self::ddl::{
     AlterOperatorFamily, AlterOperatorFamilyOperation, AlterOperatorOperation, AlterPolicy,
     AlterPolicyOperation, AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm,
     AlterTableLock, AlterTableOperation, AlterTableType, AlterTextSearch, AlterTextSearchOperation,
-    AlterTextSearchOption, AlterType, AlterTypeAddValue, AlterTypeAddValuePosition,
-    AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue, ClusteredBy, ColumnDef,
-    ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy, ColumnPolicyProperty,
-    ConstraintCharacteristics, CreateCollation, CreateCollationDefinition, CreateConnector,
-    CreateDomain, CreateExtension, CreateFunction, CreateIndex, CreateOperator,
+    AlterTextSearchOption, AlterTrigger, AlterTriggerOperation, AlterType, AlterTypeAddValue,
+    AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
+    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnOptions, ColumnPolicy,
+    ColumnPolicyProperty, ConstraintCharacteristics, CreateCollation, CreateCollationDefinition,
+    CreateConnector, CreateDomain, CreateExtension, CreateFunction, CreateIndex, CreateOperator,
     CreateOperatorClass, CreateOperatorFamily, CreatePolicy, CreatePolicyCommand, CreatePolicyType,
     CreateTable, CreateTextSearch, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
     DistStyle, DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass,
@@ -3881,6 +3881,11 @@ pub enum Statement {
     /// (Postgresql-specific)
     AlterPolicy(AlterPolicy),
     /// ```sql
+    /// ALTER TRIGGER <NAME> ON <TABLE NAME> <OPERATION>
+    /// ```
+    /// (Postgresql-specific)
+    AlterTrigger(AlterTrigger),
+    /// ```sql
     /// ALTER CONNECTOR connector_name SET DCPROPERTIES(property_name=property_value, ...);
     /// or
     /// ALTER CONNECTOR connector_name SET URL new_url;
@@ -5673,6 +5678,7 @@ impl fmt::Display for Statement {
                 write!(f, "ALTER ROLE {name} {operation}")
             }
             Statement::AlterPolicy(alter_policy) => write!(f, "{alter_policy}"),
+            Statement::AlterTrigger(alter_trigger) => write!(f, "{alter_trigger}"),
             Statement::AlterConnector {
                 name,
                 properties,

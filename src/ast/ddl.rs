@@ -593,6 +593,43 @@ impl fmt::Display for AlterPolicyOperation {
     }
 }
 
+/// An `ALTER TRIGGER` (`Statement::AlterTrigger`) operation
+///
+/// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-altertrigger.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterTriggerOperation {
+    /// `RENAME TO new_name`
+    Rename {
+        /// The new identifier for the trigger.
+        new_name: Ident,
+    },
+    /// `[ NO ] DEPENDS ON EXTENSION extension_name`
+    DependsOnExtension {
+        /// `true` when `NO DEPENDS ON EXTENSION`.
+        no: bool,
+        /// Extension name.
+        extension_name: ObjectName,
+    },
+}
+
+impl fmt::Display for AlterTriggerOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterTriggerOperation::Rename { new_name } => {
+                write!(f, "RENAME TO {new_name}")
+            }
+            AlterTriggerOperation::DependsOnExtension { no, extension_name } => {
+                if *no {
+                    write!(f, "NO ")?;
+                }
+                write!(f, "DEPENDS ON EXTENSION {extension_name}")
+            }
+        }
+    }
+}
+
 /// [MySQL] `ALTER TABLE` algorithm.
 ///
 /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
@@ -5992,5 +6029,42 @@ impl fmt::Display for AlterPolicy {
 impl From<AlterPolicy> for crate::ast::Statement {
     fn from(v: AlterPolicy) -> Self {
         crate::ast::Statement::AlterPolicy(v)
+    }
+}
+
+/// ALTER TRIGGER statement.
+///
+/// ```sql
+/// ALTER TRIGGER <NAME> ON <TABLE NAME> <OPERATION>
+/// ```
+/// (Postgresql-specific)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterTrigger {
+    /// Trigger name to alter.
+    pub name: Ident,
+    /// Target table name the trigger is defined on.
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub table_name: ObjectName,
+    /// Operation specific to the trigger alteration.
+    pub operation: AlterTriggerOperation,
+}
+
+impl fmt::Display for AlterTrigger {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "ALTER TRIGGER {name} ON {table_name} {operation}",
+            name = self.name,
+            table_name = self.table_name,
+            operation = self.operation
+        )
+    }
+}
+
+impl From<AlterTrigger> for crate::ast::Statement {
+    fn from(v: AlterTrigger) -> Self {
+        crate::ast::Statement::AlterTrigger(v)
     }
 }

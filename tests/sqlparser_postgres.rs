@@ -9953,3 +9953,14 @@ fn parse_insert_by_name_keywords_as_table_and_alias() {
         statement => panic!("Expected INSERT statement, got: {statement:?}"),
     }
 }
+
+#[test]
+fn parse_create_rule() {
+    // Example from the PostgreSQL documentation. NOTIFY parsing is limited to
+    // dialects with `supports_listen_notify`.
+    pg().verified_stmt("CREATE RULE notify_me AS ON UPDATE TO mytable DO ALSO NOTIFY mytable");
+    // OLD and NEW parse as plain identifiers inside rule conditions and actions.
+    pg_and_generic().verified_stmt(
+        "CREATE RULE r AS ON UPDATE TO t WHERE old.balance <> new.balance DO INSTEAD UPDATE shadow SET balance = new.balance WHERE id = old.id",
+    );
+}

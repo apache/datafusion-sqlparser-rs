@@ -19679,3 +19679,34 @@ fn parse_function_arg_call_chain_no_exponential_blowup() {
     rx.recv_timeout(Duration::from_secs(5))
         .expect("parser should reject this quickly, not loop exponentially");
 }
+
+#[test]
+fn parse_drop_rule() {
+    let sql = "DROP RULE r ON t";
+    match all_dialects().verified_stmt(sql) {
+        Statement::DropRule(DropRule {
+            if_exists,
+            name,
+            table_name,
+            drop_behavior,
+        }) => {
+            assert!(!if_exists);
+            assert_eq!(name.to_string(), "r");
+            assert_eq!(table_name.to_string(), "t");
+            assert_eq!(drop_behavior, None);
+        }
+        _ => unreachable!("Expected DROP RULE"),
+    }
+
+    all_dialects().verified_stmt("DROP RULE IF EXISTS r ON s1.t CASCADE");
+    all_dialects().verified_stmt("DROP RULE r ON t RESTRICT");
+
+    // the table name is mandatory
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("DROP RULE r")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: ON, found: EOF"
+    );
+}

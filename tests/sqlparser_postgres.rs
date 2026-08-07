@@ -6546,6 +6546,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            no_inherit: false,
             enforced: None,
         }
         .into()],
@@ -6566,6 +6567,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            no_inherit: false,
             enforced: None,
         }
         .into()],
@@ -6586,6 +6588,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            no_inherit: false,
             enforced: None,
         }
         .into()],
@@ -6606,6 +6609,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            no_inherit: false,
             enforced: None,
         }
         .into()],
@@ -6626,6 +6630,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            no_inherit: false,
             enforced: None,
         }
         .into()],
@@ -9817,4 +9822,33 @@ fn parse_quoted_argument_names_in_function_signatures() {
             default_expr: None,
         }])
     );
+}
+
+#[test]
+fn parse_alter_table_constraint_check_no_inherit() {
+    match pg_and_generic()
+        .verified_stmt("ALTER TABLE docs ADD CONSTRAINT c CHECK (id > 0) NO INHERIT NOT VALID")
+    {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::AddConstraint {
+                    constraint: CheckConstraint {
+                        name: Some("c".into()),
+                        expr: Box::new(Expr::BinaryOp {
+                            left: Box::new(Expr::Identifier(Ident::new("id"))),
+                            op: BinaryOperator::Gt,
+                            right: Box::new(Expr::Value(test_utils::number("0").into())),
+                        }),
+                        no_inherit: true,
+                        enforced: None,
+                    }
+                    .into(),
+                    not_valid: true,
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+    pg_and_generic().verified_stmt("ALTER TABLE docs ADD CONSTRAINT c CHECK (id > 0) NO INHERIT");
 }

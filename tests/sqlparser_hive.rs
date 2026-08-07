@@ -228,7 +228,7 @@ fn create_table_with_clustered_by() {
 }
 
 #[test]
-fn display_create_table_with_skewed_by() {
+fn create_table_with_skewed_by() {
     let column = |name| ColumnDef {
         name: Ident::new(name),
         data_type: DataType::String(None),

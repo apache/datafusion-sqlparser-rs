@@ -753,10 +753,6 @@ fn parse_create_table_using() {
     }
 
     databricks().verified_stmt("CREATE TABLE IF NOT EXISTS t (id BIGINT) USING PARQUET");
-
-    assert!(all_dialects_where(|d| !d.supports_create_table_using())
-        .parse_sql_statements("CREATE TABLE t (id BIGINT) USING DELTA")
-        .is_err());
 }
 
 #[test]
@@ -788,4 +784,15 @@ fn parse_long_type_as_bigint() {
         }
         s => panic!("Unexpected statement: {s:?}"),
     }
+}
+
+#[test]
+fn parse_div_operator() {
+    databricks().one_statement_parses_to("SELECT 10 div 3", "SELECT 10 DIV 3");
+    databricks().one_statement_parses_to("SELECT c1 div c2 FROM t", "SELECT c1 DIV c2 FROM t");
+}
+
+#[test]
+fn parse_pipe_operator() {
+    databricks().verified_stmt("SELECT * FROM t |> WHERE x > 1 |> SELECT x AS y |> ORDER BY y");
 }

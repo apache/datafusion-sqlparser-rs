@@ -19687,3 +19687,11 @@ fn parse_nested_unary_ops() {
     all_dialects().verified_stmt("SELECT NOT NOT a");
     all_dialects().one_statement_parses_to("SELECT ~ ~ 1", "SELECT ~ ~1");
 }
+
+#[test]
+fn parse_adjacent_unary_ops_that_do_not_combine() {
+    all_dialects().verified_stmt("SELECT ++a");
+    all_dialects().verified_stmt("SELECT +~a");
+    all_dialects().verified_stmt("SELECT -NOT a");
+    all_dialects().verified_stmt("SELECT ~NOT a");
+}

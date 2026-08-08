@@ -9689,3 +9689,11 @@ fn parse_nested_pg_unary_ops() {
 
     pg().verified_stmt("SELECT |/ |/1");
 }
+
+#[test]
+fn parse_adjacent_pg_unary_ops_that_do_not_combine() {
+    pg().verified_stmt("SELECT +@a");
+    pg().verified_stmt("SELECT !!~a");
+    pg().verified_stmt("SELECT @~a");
+    pg().verified_stmt("SELECT !!|/a");
+}

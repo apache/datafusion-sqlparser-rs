@@ -4946,3 +4946,48 @@ fn parse_adjacent_string_literal_concatenation() {
 fn parse_group_by_with_rollup() {
     mysql().verified_stmt("SELECT * FROM tbl GROUP BY col1, col2 WITH ROLLUP");
 }
+
+#[test]
+fn parse_is_distinct_from_json_arrow_precedence() {
+    // MySQL's `->` binds tighter than `IS [NOT] DISTINCT FROM`, so the JSON
+    // extraction must stay inside the right operand.
+    assert_eq!(
+        Expr::IsDistinctFrom(
+            Box::new(Expr::Identifier(Ident::new("a"))),
+            Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("b"))),
+                op: BinaryOperator::Arrow,
+                right: Box::new(Expr::Value(
+                    Value::SingleQuotedString("k".into()).with_empty_span()
+                )),
+            }),
+        ),
+        mysql().verified_expr("a IS DISTINCT FROM b -> 'k'")
+    );
+}
+
+#[test]
+fn parse_json_arrow_comparison_precedence() {
+    // The same "any other operator" class also binds tighter than the
+    // comparison operators and `LIKE`, so the JSON extraction is the left
+    // operand rather than swallowing the right-hand side.
+    assert_eq!(
+        Expr::BinaryOp {
+            left: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                op: BinaryOperator::Arrow,
+                right: Box::new(Expr::Value(
+                    Value::SingleQuotedString("k".into()).with_empty_span()
+                )),
+            }),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::value(number("1"))),
+        },
+        mysql().verified_expr("a -> 'k' = 1")
+    );
+
+    assert_matches!(
+        mysql().verified_expr("a -> 'k' LIKE 'x'"),
+        Expr::Like { .. }
+    );
+}

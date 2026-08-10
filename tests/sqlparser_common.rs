@@ -2051,7 +2051,9 @@ fn parse_is_distinct_from_precedence() {
         verified_expr("a IS DISTINCT FROM (1 AND b)")
     );
 
-    // The `IS` family is left-associative.
+    // sqlparser resolves the IS family left-associatively, consistent with how
+    // `a IS NULL IS NULL` already parses. Deliberately more permissive than
+    // PostgreSQL, which declares IS as %nonassoc and rejects the chain.
     assert_eq!(
         IsNull(Box::new(IsDistinctFrom(
             Box::new(Identifier(Ident::new("a"))),

@@ -118,6 +118,10 @@ impl Dialect for RedshiftSqlDialect {
         true
     }
 
+    fn supports_unpivot_expr(&self) -> bool {
+        true
+    }
+
     fn supports_string_escape_constant(&self) -> bool {
         true
     }

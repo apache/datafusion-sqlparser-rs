@@ -62,7 +62,19 @@ pub struct Insert {
     pub table_alias: Option<TableAliasWithoutColumns>,
     /// COLUMNS
     pub columns: Vec<ObjectName>,
-    /// BY NAME
+    /// `BY NAME` clause used by Databricks SQL.
+    ///
+    /// When present, columns from the source query are matched to columns in
+    /// the target table by name instead of by position. The syntax is:
+    ///
+    /// ```sql
+    /// INSERT INTO [TABLE] table_name
+    ///     [PARTITION (...)]
+    ///     [(column_name [, ...]) | BY NAME]
+    ///     query
+    /// ```
+    ///
+    /// See <https://docs.databricks.com/gcp/en/sql/language-manual/sql-ref-syntax-dml-insert-into>.
     pub by_name: bool,
     /// Overwrite (Hive)
     pub overwrite: bool,

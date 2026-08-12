@@ -2827,6 +2827,10 @@ pub struct CreateIndex {
     pub using: Option<IndexType>,
     /// columns included in the index
     pub columns: Vec<IndexColumn>,
+    /// whether this is a BigQuery `CREATE VECTOR INDEX`
+    pub vector: bool,
+    /// whether the statement is `CREATE OR REPLACE`
+    pub or_replace: bool,
     /// whether the index is unique
     pub unique: bool,
     /// whether the index is created concurrently
@@ -2843,6 +2847,8 @@ pub struct CreateIndex {
     pub nulls_distinct: Option<bool>,
     /// WITH clause: <https://www.postgresql.org/docs/current/sql-createindex.html>
     pub with: Vec<Expr>,
+    /// BigQuery `OPTIONS(...)` clause, e.g. on `CREATE VECTOR INDEX`
+    pub options: Vec<SqlOption>,
     /// WHERE clause: <https://www.postgresql.org/docs/current/sql-createindex.html>
     pub predicate: Option<Expr>,
     /// Index options: <https://www.postgresql.org/docs/current/sql-createindex.html>
@@ -2860,8 +2866,10 @@ impl fmt::Display for CreateIndex {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "CREATE {unique}INDEX {concurrently}{async_}{if_not_exists}",
+            "CREATE {or_replace}{unique}{vector}INDEX {concurrently}{async_}{if_not_exists}",
+            or_replace = if self.or_replace { "OR REPLACE " } else { "" },
             unique = if self.unique { "UNIQUE " } else { "" },
+            vector = if self.vector { "VECTOR " } else { "" },
             concurrently = if self.concurrently {
                 "CONCURRENTLY "
             } else {
@@ -2882,6 +2890,9 @@ impl fmt::Display for CreateIndex {
             write!(f, " USING {value} ")?;
         }
         write!(f, "({})", display_comma_separated(&self.columns))?;
+        if !self.options.is_empty() {
+            write!(f, " OPTIONS({})", display_comma_separated(&self.options))?;
+        }
         if !self.include.is_empty() {
             write!(f, " INCLUDE ({})", display_comma_separated(&self.include))?;
         }

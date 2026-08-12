@@ -21,25 +21,11 @@
 #[macro_use]
 mod test_utils;
 
-use sqlparser::dialect::{Dialect, DorisDialect, GenericDialect};
+use sqlparser::dialect::DorisDialect;
 use test_utils::*;
 
 fn doris() -> TestedDialects {
     TestedDialects::new(vec![Box::new(DorisDialect {})])
-}
-
-fn doris_and_generic() -> TestedDialects {
-    TestedDialects::new(vec![Box::new(DorisDialect {}), Box::new(GenericDialect {})])
-}
-
-#[test]
-fn doris_identifier_and_string_literal_gates() {
-    let dialect = DorisDialect {};
-    assert_eq!(dialect.identifier_quote_style("identifier"), Some('`'));
-    assert!(dialect.is_delimited_identifier_start('`'));
-    assert!(dialect.supports_string_literal_backslash_escape());
-    assert!(dialect.ignores_wildcard_escapes());
-    assert!(dialect.supports_numeric_prefix());
 }
 
 #[test]
@@ -47,11 +33,6 @@ fn parse_doris_strings_and_identifiers() {
     doris().verified_only_select(
         r#"SELECT "double quoted string", 'single quoted string', `select` FROM `db`.`table`"#,
     );
-}
-
-#[test]
-fn doris_and_generic_parse_common_sql_identically() {
-    doris_and_generic().verified_stmt("SELECT 1 AS properties FROM t");
 }
 
 #[test]

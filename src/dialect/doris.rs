@@ -15,7 +15,11 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::dialect::Dialect;
+use crate::{
+    ast::Expr,
+    dialect::{Dialect, MySqlDialect},
+    parser::{Parser, ParserError},
+};
 
 /// A [`Dialect`] for [Apache Doris](https://doris.apache.org/).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -24,30 +28,47 @@ pub struct DorisDialect {}
 
 impl Dialect for DorisDialect {
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
-        ch == '`'
+        MySqlDialect {}.is_delimited_identifier_start(ch)
     }
 
-    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
-        Some('`')
+    fn identifier_quote_style(&self, identifier: &str) -> Option<char> {
+        MySqlDialect {}.identifier_quote_style(identifier)
     }
 
     fn is_identifier_start(&self, ch: char) -> bool {
-        ch.is_ascii_alphabetic() || ch == '_' || !ch.is_ascii()
+        MySqlDialect {}.is_identifier_start(ch)
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
-        self.is_identifier_start(ch) || ch.is_ascii_digit()
+        MySqlDialect {}.is_identifier_part(ch)
     }
 
     fn supports_string_literal_backslash_escape(&self) -> bool {
-        true
+        MySqlDialect {}.supports_string_literal_backslash_escape()
     }
 
     fn ignores_wildcard_escapes(&self) -> bool {
-        true
+        MySqlDialect {}.ignores_wildcard_escapes()
     }
 
     fn supports_numeric_prefix(&self) -> bool {
-        true
+        MySqlDialect {}.supports_numeric_prefix()
+    }
+
+    fn supports_limit_comma(&self) -> bool {
+        MySqlDialect {}.supports_limit_comma()
+    }
+
+    fn parse_infix(
+        &self,
+        parser: &mut Parser,
+        expr: &Expr,
+        precedence: u8,
+    ) -> Option<Result<Expr, ParserError>> {
+        MySqlDialect {}.parse_infix(parser, expr, precedence)
+    }
+
+    fn supports_group_by_with_modifier(&self) -> bool {
+        MySqlDialect {}.supports_group_by_with_modifier()
     }
 }

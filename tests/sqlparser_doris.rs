@@ -44,7 +44,7 @@ fn doris_identifier_and_string_literal_gates() {
 
 #[test]
 fn parse_doris_strings_and_identifiers() {
-    doris().verified_stmt(
+    doris().verified_only_select(
         r#"SELECT "double quoted string", 'single quoted string', `select` FROM `db`.`table`"#,
     );
 }
@@ -52,4 +52,19 @@ fn parse_doris_strings_and_identifiers() {
 #[test]
 fn doris_and_generic_parse_common_sql_identically() {
     doris_and_generic().verified_stmt("SELECT 1 AS properties FROM t");
+}
+
+#[test]
+fn parse_doris_limit_comma() {
+    doris().verified_only_select("SELECT * FROM t LIMIT 5, 10");
+}
+
+#[test]
+fn parse_doris_div_infix() {
+    doris().verified_only_select("SELECT 5 DIV 2");
+}
+
+#[test]
+fn parse_doris_group_by_with_rollup() {
+    doris().verified_only_select("SELECT * FROM t GROUP BY col1, col2 WITH ROLLUP");
 }

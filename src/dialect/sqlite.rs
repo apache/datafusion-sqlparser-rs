@@ -79,7 +79,7 @@ impl Dialect for SQLiteDialect {
         &self,
         parser: &mut crate::parser::Parser,
         expr: &crate::ast::Expr,
-        _precedence: u8,
+        precedence: u8,
     ) -> Option<Result<crate::ast::Expr, ParserError>> {
         // Parse MATCH, REGEXP and GLOB as operators
         // See <https://www.sqlite.org/lang_expr.html#the_like_glob_regexp_match_and_extract_operators>
@@ -90,7 +90,7 @@ impl Dialect for SQLiteDialect {
         ] {
             if parser.parse_keyword(keyword) {
                 let left = Box::new(expr.clone());
-                let right = Box::new(match parser.parse_expr() {
+                let right = Box::new(match parser.parse_subexpr(precedence) {
                     Ok(expr) => expr,
                     Err(e) => return Some(Err(e)),
                 });
@@ -123,6 +123,10 @@ impl Dialect for SQLiteDialect {
     }
 
     fn supports_comma_separated_trim(&self) -> bool {
+        true
+    }
+
+    fn supports_numeric_literal_underscores(&self) -> bool {
         true
     }
 }

@@ -948,6 +948,17 @@ pub enum Expr {
     IsDistinctFrom(Box<Expr>, Box<Expr>),
     /// `IS NOT DISTINCT FROM` operator
     IsNotDistinctFrom(Box<Expr>, Box<Expr>),
+    /// `<expr> IS [NOT] JSON [VALUE|SCALAR|ARRAY|OBJECT] [WITH|WITHOUT UNIQUE [KEYS]]`
+    IsJson {
+        /// Expression being tested.
+        expr: Box<Expr>,
+        /// Optional JSON shape constraint.
+        kind: Option<JsonPredicateType>,
+        /// Optional duplicate-key handling constraint for JSON objects.
+        unique_keys: Option<JsonKeyUniqueness>,
+        /// `true` when `NOT` is present.
+        negated: bool,
+    },
     /// `<expr> IS [ NOT ] [ form ] NORMALIZED`
     IsNormalized {
         /// Expression being tested.
@@ -1110,12 +1121,6 @@ pub enum Expr {
         expr: Box<Expr>,
         /// Target data type.
         data_type: DataType,
-        /// [MySQL] allows CAST(... AS type ARRAY) in functional index definitions for InnoDB
-        /// multi-valued indices. It's not really a datatype, and is only allowed in `CAST` in key
-        /// specifications, so it's a flag here.
-        ///
-        /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/cast-functions.html#function_cast
-        array: bool,
         /// Optional CAST(string_expression AS type FORMAT format_string_expression) as used by [BigQuery]
         ///
         /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#formatting_syntax
@@ -1756,6 +1761,25 @@ impl fmt::Display for Expr {
             Expr::IsNotNull(ast) => write!(f, "{ast} IS NOT NULL"),
             Expr::IsUnknown(ast) => write!(f, "{ast} IS UNKNOWN"),
             Expr::IsNotUnknown(ast) => write!(f, "{ast} IS NOT UNKNOWN"),
+            Expr::IsJson {
+                expr,
+                kind,
+                unique_keys,
+                negated,
+            } => {
+                write!(f, "{expr} IS ")?;
+                if *negated {
+                    write!(f, "NOT ")?;
+                }
+                write!(f, "JSON")?;
+                if let Some(kind) = kind {
+                    write!(f, " {kind}")?;
+                }
+                if let Some(unique_keys) = unique_keys {
+                    write!(f, " {unique_keys}")?;
+                }
+                Ok(())
+            }
             Expr::InList {
                 expr,
                 list,
@@ -1976,14 +2000,10 @@ impl fmt::Display for Expr {
                 kind,
                 expr,
                 data_type,
-                array,
                 format,
             } => match kind {
                 CastKind::Cast => {
                     write!(f, "CAST({expr} AS {data_type}")?;
-                    if *array {
-                        write!(f, " ARRAY")?;
-                    }
                     if let Some(format) = format {
                         write!(f, " FORMAT {format}")?;
                     }
@@ -4356,6 +4376,8 @@ pub enum Statement {
     CreateSchema {
         /// `<schema name> | AUTHORIZATION <schema authorization identifier>  | <schema name>  AUTHORIZATION <schema authorization identifier>`
         schema_name: SchemaName,
+        /// `true` when `OR REPLACE` was present.
+        or_replace: bool,
         /// `true` when `IF NOT EXISTS` was present.
         if_not_exists: bool,
         /// Schema properties.
@@ -4535,6 +4557,14 @@ pub enum Statement {
         /// Optional comment.
         comment: Option<String>,
     },
+    /// ```sql
+    /// CREATE [ OR REPLACE ] WAREHOUSE [ IF NOT EXISTS ] <name>
+    ///   [ [ WITH ] <property> = <value> [ ... ] ]
+    /// ```
+    /// Snowflake-specific statement to create a virtual warehouse.
+    ///
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/create-warehouse>
+    CreateWarehouse(CreateWarehouse),
     /// ```sql
     /// ASSERT <condition> [AS <message>]
     /// ```
@@ -6018,6 +6048,7 @@ impl fmt::Display for Statement {
             }
             Statement::CreateSchema {
                 schema_name,
+                or_replace,
                 if_not_exists,
                 with,
                 options,
@@ -6026,7 +6057,8 @@ impl fmt::Display for Statement {
             } => {
                 write!(
                     f,
-                    "CREATE SCHEMA {if_not_exists}{name}",
+                    "CREATE {or_replace}SCHEMA {if_not_exists}{name}",
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                     name = schema_name
                 )?;
@@ -6261,6 +6293,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::CreateWarehouse(s) => write!(f, "{s}"),
             Statement::CopyIntoSnowflake {
                 kind,
                 into,
@@ -8294,6 +8327,13 @@ pub enum FunctionArgumentClause {
     ///
     /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#first_value
     IgnoreOrRespectNulls(NullTreatment),
+    /// The inline `WHERE` filter clause on an aggregate call, e.g.
+    /// `COUNT(* WHERE cond)` / `SUM(x WHERE cond)` / `ARRAY_AGG(x WHERE cond ORDER BY ..)`.
+    /// Popularized by [GoogleSQL]; equivalent to the standard `AGG(x) FILTER (WHERE cond)`.
+    /// Accepted for all dialects since `WHERE` cannot otherwise begin a function argument.
+    ///
+    /// [GoogleSQL]: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#grouping_and_filtering
+    Where(Expr),
     /// Specifies the the ordering for some ordered set aggregates, e.g. `ARRAY_AGG` on [BigQuery].
     ///
     /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#array_agg
@@ -8335,6 +8375,7 @@ impl fmt::Display for FunctionArgumentClause {
             FunctionArgumentClause::IgnoreOrRespectNulls(null_treatment) => {
                 write!(f, "{null_treatment}")
             }
+            FunctionArgumentClause::Where(expr) => write!(f, "WHERE {expr}"),
             FunctionArgumentClause::OrderBy(order_by) => {
                 write!(f, "ORDER BY {}", display_comma_separated(order_by))
             }
@@ -8428,6 +8469,52 @@ pub enum AnalyzeFormat {
     TRADITIONAL,
     /// Tree-style explain output.
     TREE,
+}
+
+/// Optional type constraint for `IS JSON`.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum JsonPredicateType {
+    /// `VALUE` form.
+    Value,
+    /// `SCALAR` form.
+    Scalar,
+    /// `ARRAY` form.
+    Array,
+    /// `OBJECT` form.
+    Object,
+}
+
+impl fmt::Display for JsonPredicateType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JsonPredicateType::Value => write!(f, "VALUE"),
+            JsonPredicateType::Scalar => write!(f, "SCALAR"),
+            JsonPredicateType::Array => write!(f, "ARRAY"),
+            JsonPredicateType::Object => write!(f, "OBJECT"),
+        }
+    }
+}
+
+/// Optional duplicate-key handling for `IS JSON`.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum JsonKeyUniqueness {
+    /// `WITH UNIQUE KEYS` form.
+    WithUniqueKeys,
+    /// `WITHOUT UNIQUE KEYS` form.
+    WithoutUniqueKeys,
+}
+
+impl fmt::Display for JsonKeyUniqueness {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JsonKeyUniqueness::WithUniqueKeys => write!(f, "WITH UNIQUE KEYS"),
+            JsonKeyUniqueness::WithoutUniqueKeys => write!(f, "WITHOUT UNIQUE KEYS"),
+        }
+    }
 }
 
 impl fmt::Display for AnalyzeFormat {
@@ -8579,6 +8666,8 @@ pub enum ObjectType {
     User,
     /// A stream.
     Stream,
+    /// A warehouse.
+    Warehouse,
 }
 
 impl fmt::Display for ObjectType {
@@ -8597,6 +8686,7 @@ impl fmt::Display for ObjectType {
             ObjectType::Type => "TYPE",
             ObjectType::User => "USER",
             ObjectType::Stream => "STREAM",
+            ObjectType::Warehouse => "WAREHOUSE",
         })
     }
 }
@@ -11602,6 +11692,45 @@ impl fmt::Display for CreateUser {
     }
 }
 
+/// ```sql
+/// CREATE [ OR REPLACE ] WAREHOUSE [ IF NOT EXISTS ] <name>
+///   [ [ WITH ] <property> = <value> [ ... ] ]
+/// ```
+/// Snowflake-specific statement to create a virtual warehouse.
+///
+/// See <https://docs.snowflake.com/en/sql-reference/sql/create-warehouse>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateWarehouse {
+    /// `OR REPLACE` flag.
+    pub or_replace: bool,
+    /// `IF NOT EXISTS` flag.
+    pub if_not_exists: bool,
+    /// Warehouse name.
+    pub name: ObjectName,
+    /// Warehouse properties and parameters (e.g. `WAREHOUSE_SIZE = 'XSMALL'`).
+    pub options: KeyValueOptions,
+}
+
+impl fmt::Display for CreateWarehouse {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CREATE")?;
+        if self.or_replace {
+            write!(f, " OR REPLACE")?;
+        }
+        write!(f, " WAREHOUSE")?;
+        if self.if_not_exists {
+            write!(f, " IF NOT EXISTS")?;
+        }
+        write!(f, " {}", self.name)?;
+        if !self.options.options.is_empty() {
+            write!(f, " {}", self.options)?;
+        }
+        Ok(())
+    }
+}
+
 /// Modifies the properties of a user
 ///
 /// [Snowflake Syntax:](https://docs.snowflake.com/en/sql-reference/sql/alter-user)
@@ -12470,6 +12599,12 @@ impl From<ExportData> for Statement {
 impl From<CreateUser> for Statement {
     fn from(c: CreateUser) -> Self {
         Self::CreateUser(c)
+    }
+}
+
+impl From<CreateWarehouse> for Statement {
+    fn from(c: CreateWarehouse) -> Self {
+        Self::CreateWarehouse(c)
     }
 }
 

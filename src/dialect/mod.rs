@@ -726,6 +726,14 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Does the dialect support the Snowflake `-->`  flow/pipe operator for chaining
+    /// SQL statements? e.g. `SELECT * FROM t ->> SELECT * FROM $1`
+    ///
+    /// See <https://docs.snowflake.com/en/sql-reference/operators-flow>
+    fn supports_snowflake_pipe_operator(&self) -> bool {
+        false
+    }
+
     /// Does the dialect support MySQL-style `'user'@'host'` grantee syntax?
     fn supports_user_host_grantee(&self) -> bool {
         false

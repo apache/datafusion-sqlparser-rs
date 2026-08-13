@@ -4912,3 +4912,61 @@ fn test_select_dollar_column_from_stage() {
     // With table function args, without alias
     snowflake().verified_stmt("SELECT $1, $2 FROM @mystage1(file_format => 'myformat')");
 }
+
+#[test]
+fn test_snowflake_pipe_operator() {
+    // Basic pipe: two SELECT statements chained
+    snowflake().verified_stmt("SELECT * FROM tablename ->> SELECT * FROM $1");
+
+    // Three statements chained
+    snowflake().verified_stmt(
+        "SELECT * FROM dept WHERE dname = 'SALES' ->> SELECT * FROM emp WHERE deptno IN (SELECT deptno FROM $1) ->> SELECT ename, sal FROM $1 ORDER BY 2 DESC",
+    );
+
+    // Reference to a non-adjacent prior result using $2
+    snowflake().verified_stmt("SELECT a FROM t ->> SELECT b FROM t2 ->> SELECT $1 FROM $2");
+
+    // Non-SELECT statements in the chain (CREATE/INSERT)
+    snowflake()
+        .verified_stmt("CREATE TABLE t (id INT) ->> INSERT INTO t VALUES (1) ->> SELECT * FROM $1");
+
+    // Pipe operator is not parsed in non-Snowflake dialects
+    use sqlparser::dialect::GenericDialect;
+    use sqlparser::parser::Parser;
+    // In a generic dialect, ->> is a binary operator, not a pipe
+    let stmts = Parser::parse_sql(&GenericDialect {}, "SELECT 1").unwrap();
+    assert_eq!(stmts.len(), 1);
+}
+
+#[test]
+fn test_snowflake_pipe_result_scan() {
+    // $1 in FROM clause is parsed as PipeResultScan { index: 1 }
+    let stmt = snowflake().verified_stmt("SELECT * FROM $1");
+    match stmt {
+        Statement::Query(q) => {
+            if let SetExpr::Select(sel) = q.body.as_ref() {
+                if let TableFactor::PipeResultScan { index } = &sel.from[0].relation {
+                    assert_eq!(*index, 1);
+                } else {
+                    panic!("expected PipeResultScan");
+                }
+            }
+        }
+        _ => panic!("expected Query"),
+    }
+
+    // $3 is also valid
+    let stmt2 = snowflake().verified_stmt("SELECT * FROM $3");
+    match stmt2 {
+        Statement::Query(q) => {
+            if let SetExpr::Select(sel) = q.body.as_ref() {
+                if let TableFactor::PipeResultScan { index } = &sel.from[0].relation {
+                    assert_eq!(*index, 3);
+                } else {
+                    panic!("expected PipeResultScan");
+                }
+            }
+        }
+        _ => panic!("expected Query"),
+    }
+}

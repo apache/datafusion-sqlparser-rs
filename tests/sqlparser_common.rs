@@ -1720,7 +1720,11 @@ fn parse_json_ops_without_colon() {
             all_dialects_except(|d| d.supports_lambda_functions()),
         ),
         ("->", Arrow, pg_and_generic()),
-        ("->>", LongArrow, all_dialects()),
+        (
+            "->>",
+            LongArrow,
+            all_dialects_except(|d| d.supports_snowflake_pipe_operator()),
+        ),
         ("#>", HashArrow, pg_and_generic()),
         ("#>>", HashLongArrow, pg_and_generic()),
         ("@>", AtArrow, all_dialects()),

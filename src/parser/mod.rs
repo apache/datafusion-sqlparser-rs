@@ -3678,7 +3678,9 @@ impl<'a> Parser<'a> {
             })?
         };
         self.expect_token(&Token::RParen)?;
-        Ok(DataType::Object { fields: Some(fields) })
+        Ok(DataType::Object {
+            fields: Some(fields),
+        })
     }
 
     fn parse_union_type_def(&mut self) -> Result<Vec<UnionField>, ParserError> {

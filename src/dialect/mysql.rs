@@ -221,6 +221,10 @@ impl Dialect for MySqlDialect {
     fn supports_group_by_with_modifier(&self) -> bool {
         true
     }
+
+    fn supports_left_associative_joins_without_parens(&self) -> bool {
+        false
+    }
 }
 
 /// `LOCK TABLES`

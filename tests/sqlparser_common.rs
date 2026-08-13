@@ -352,6 +352,14 @@ fn parse_insert_select_from_returning() {
 }
 
 #[test]
+fn parse_insert_nested_parenthesized_subquery() {
+    // The source query may be wrapped in one or more layers of parentheses;
+    // the leading parens must not be mistaken for a column list.
+    verified_stmt("INSERT INTO t ((SELECT 1))");
+    verified_stmt("INSERT INTO t (((SELECT 1)))");
+}
+
+#[test]
 fn parse_returning_as_column_alias() {
     verified_stmt("SELECT 1 AS RETURNING");
 }
@@ -1118,7 +1126,7 @@ fn parse_select_into() {
             temporary: false,
             unlogged: false,
             table: false,
-            name: ObjectName::from(vec![Ident::new("table0")]),
+            targets: vec![Expr::Identifier(Ident::new("table0"))],
         },
         only(&select.into)
     );
@@ -1128,6 +1136,10 @@ fn parse_select_into() {
         sql,
         "SELECT * INTO TEMPORARY UNLOGGED TABLE table0 FROM table1",
     );
+
+    verified_only_select("SELECT a, b INTO foo.bar, bar.baz FROM t");
+    verified_stmt("SELECT a, b, c INTO p, q, r FROM t");
+    verified_stmt("SELECT a, b INTO :h1, :h2 FROM t");
 
     // Do not allow aliases here
     let sql = "SELECT * INTO table0 asdf FROM table1";
@@ -1719,7 +1731,7 @@ fn parse_json_ops_without_colon() {
     ];
 
     for (str_op, op, dialects) in binary_ops {
-        let select = dialects.verified_only_select(&format!("SELECT a {} b", &str_op));
+        let select = dialects.verified_only_select(&format!("SELECT a {} b", str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("a"))),
@@ -2371,13 +2383,27 @@ fn parse_in_unnest() {
 
 #[test]
 fn parse_in_error() {
-    // <expr> IN <expr> is no valid
+    // <expr> IN <expr> is no valid, except in dialects that accept an
+    // unparenthesized expression as the IN right-hand side (e.g. ClickHouse).
     let sql = "SELECT * FROM customers WHERE segment in segment";
-    let res = parse_sql_statements(sql);
+    let res =
+        all_dialects_except(|d| d.supports_in_unparenthesized_expr()).parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError("Expected: (, found: segment".to_string()),
         res.unwrap_err()
     );
+}
+
+#[test]
+fn parse_in_unparenthesized_expr() {
+    // Dialects supporting an unparenthesized IN right-hand side wrap a bare expression
+    // into a single-element list (e.g. `x IN 'a'` -> `x IN ('a')`).
+    let dialects = all_dialects_where(|d| d.supports_in_unparenthesized_expr());
+    dialects.expr_parses_to("x IN 'a'", "x IN ('a')");
+
+    // The branch must not fire when the next token is `(` (regressions).
+    dialects.verified_expr("x IN (1, 2, 3)");
+    dialects.verified_stmt("SELECT * FROM t WHERE x IN (SELECT y FROM u)");
 }
 
 #[test]
@@ -2415,7 +2441,7 @@ fn parse_bitwise_ops() {
     ];
 
     for (str_op, op, dialects) in bitwise_ops {
-        let select = dialects.verified_only_select(&format!("SELECT a {} b", &str_op));
+        let select = dialects.verified_only_select(&format!("SELECT a {} b", str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("a"))),
@@ -3146,7 +3172,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::BigInt(None),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3159,7 +3184,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::TinyInt(None),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3191,7 +3215,6 @@ fn parse_cast() {
                 length: 50,
                 unit: None,
             })),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3204,7 +3227,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Clob(None),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3217,7 +3239,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Clob(Some(50)),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3230,7 +3251,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Binary(Some(50)),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3243,7 +3263,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Varbinary(Some(BinaryLength::IntegerLength { length: 50 })),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3256,7 +3275,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Blob(None),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3269,7 +3287,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Blob(Some(50)),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3282,7 +3299,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("details"))),
             data_type: DataType::JSONB,
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3298,7 +3314,6 @@ fn parse_try_cast() {
             kind: CastKind::TryCast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::BigInt(None),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3940,6 +3955,7 @@ fn parse_create_table() {
                                     index_name: None,
                                     index_type: None,
                                     columns: vec![],
+                                    include: vec![],
                                     index_options: vec![],
                                     characteristics: None,
                                 }),
@@ -3956,6 +3972,7 @@ fn parse_create_table() {
                                     index_type_display: KeyOrIndexDisplay::None,
                                     index_type: None,
                                     columns: vec![],
+                                    include: vec![],
                                     index_options: vec![],
                                     characteristics: None,
                                     nulls_distinct: NullsDistinctOption::None,
@@ -4294,6 +4311,7 @@ fn parse_create_table_column_constraint_characteristics() {
                                 index_type_display: KeyOrIndexDisplay::None,
                                 index_type: None,
                                 columns: vec![],
+                                include: vec![],
                                 index_options: vec![],
                                 characteristics: expected_value,
                                 nulls_distinct: NullsDistinctOption::None,
@@ -4517,6 +4535,25 @@ fn parse_create_schema() {
     verified_stmt(r#"CREATE SCHEMA IF NOT EXISTS a WITH (key1 = 'value1')"#);
     verified_stmt(r#"CREATE SCHEMA IF NOT EXISTS a WITH ()"#);
     verified_stmt(r#"CREATE SCHEMA a CLONE b"#);
+}
+
+#[test]
+fn parse_create_or_replace_schema() {
+    match verified_stmt("CREATE OR REPLACE SCHEMA X") {
+        Statement::CreateSchema {
+            schema_name,
+            or_replace,
+            if_not_exists,
+            ..
+        } => {
+            assert_eq!(schema_name.to_string(), "X".to_owned());
+            assert!(or_replace);
+            assert!(!if_not_exists);
+        }
+        _ => unreachable!(),
+    }
+
+    verified_stmt("CREATE OR REPLACE SCHEMA IF NOT EXISTS X");
 }
 
 #[test]
@@ -6123,6 +6160,33 @@ fn parse_aggregate_with_group_by() {
 }
 
 #[test]
+fn parse_aggregate_with_where_filter() {
+    // The inline `WHERE` filter inside an aggregate call, e.g. `COUNT(* WHERE cond)` /
+    // `SUM(x WHERE cond)`, is the in-argument spelling of the standard
+    // `AGG(x) FILTER (WHERE cond)`. Popularized by GoogleSQL, it is accepted for all
+    // dialects (`verified_stmt` round-trips through every dialect).
+    verified_stmt("SELECT COUNT(* WHERE x > 1) FROM t");
+    verified_stmt("SELECT SUM(x WHERE y > 0) FROM t");
+    // Co-occurs with (and precedes) an in-argument ORDER BY.
+    verified_stmt("SELECT ARRAY_AGG(x WHERE x > 100 ORDER BY x DESC) FROM t");
+    // A compound predicate referencing multiple columns round-trips intact.
+    verified_stmt("SELECT ARRAY_AGG(a WHERE b > 0 AND c < 10) FROM t");
+
+    // The filter is captured as a FunctionArgumentClause::Where holding the predicate.
+    let select = verified_only_select("SELECT SUM(salary WHERE dept = 1) FROM emp");
+    let Expr::Function(func) = expr_from_projection(&select.projection[0]) else {
+        panic!("expected a function projection");
+    };
+    let FunctionArguments::List(list) = &func.args else {
+        panic!("expected a function argument list");
+    };
+    assert!(list
+        .clauses
+        .iter()
+        .any(|c| matches!(c, FunctionArgumentClause::Where(Expr::BinaryOp { .. }))));
+}
+
+#[test]
 fn parse_literal_integer() {
     let sql = "SELECT 1, -10, +20";
     let select = verified_only_select(sql);
@@ -6188,6 +6252,10 @@ fn parse_literal_string() {
 
     one_statement_parses_to("SELECT x'deadBEEF'", "SELECT X'deadBEEF'");
     one_statement_parses_to("SELECT n'national string'", "SELECT N'national string'");
+    one_statement_parses_to(
+        r#"SELECT n'Tu geres '';'' et ''"'' ?'"#,
+        r#"SELECT N'Tu geres '';'' et ''"'' ?'"#,
+    );
 }
 
 #[test]
@@ -6641,7 +6709,6 @@ fn interval_disallow_interval_expr_double_colon() {
                 fractional_seconds_precision: None,
             })),
             data_type: DataType::Text,
-            array: false,
             format: None,
         }
     )
@@ -6659,7 +6726,6 @@ fn parse_text_type_modifier_double_colon_cast() {
                 ObjectName::from(vec![Ident::new("TEXT")]),
                 vec!["16777216".to_string()]
             ),
-            array: false,
             format: None,
         }
     );
@@ -8832,6 +8898,19 @@ fn parse_drop_user() {
 }
 
 #[test]
+fn parse_create_warehouse() {
+    verified_stmt("CREATE WAREHOUSE my_wh");
+    verified_stmt("CREATE OR REPLACE WAREHOUSE IF NOT EXISTS my_wh");
+    verified_stmt("CREATE WAREHOUSE my_wh WAREHOUSE_SIZE='XSMALL' AUTO_SUSPEND=60");
+    one_statement_parses_to(
+        "CREATE WAREHOUSE my_wh WITH WAREHOUSE_SIZE = 'XSMALL' AUTO_SUSPEND = 60",
+        "CREATE WAREHOUSE my_wh WAREHOUSE_SIZE='XSMALL' AUTO_SUSPEND=60",
+    );
+    verified_stmt("DROP WAREHOUSE my_wh");
+    verified_stmt("DROP WAREHOUSE IF EXISTS my_wh");
+}
+
+#[test]
 fn parse_invalid_subquery_without_parens() {
     let res = parse_sql_statements("SELECT SELECT 1 FROM bar WHERE 1=1 FROM baz");
     assert_eq!(
@@ -9412,7 +9491,6 @@ fn parse_double_colon_cast_at_timezone() {
                         .with_empty_span()
                 )),
                 data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                array: false,
                 format: None
             }),
             time_zone: Box::new(Expr::Value(
@@ -10672,6 +10750,10 @@ fn one_statement_parses_to(sql: &str, canonical: &str) -> Statement {
     all_dialects().one_statement_parses_to(sql, canonical)
 }
 
+fn non_left_associative_dialects() -> TestedDialects {
+    all_dialects_where(|d| !d.supports_left_associative_joins_without_parens())
+}
+
 fn verified_stmt(query: &str) -> Statement {
     all_dialects().verified_stmt(query)
 }
@@ -10822,11 +10904,22 @@ fn parse_position() {
 
 #[test]
 fn parse_position_negative() {
+    // Dialects that accept an unparenthesized IN right-hand side (e.g. ClickHouse)
+    // report a different error here, so exclude them.
     let sql = "SELECT POSITION(foo IN) from bar";
-    let res = parse_sql_statements(sql);
+    let res =
+        all_dialects_except(|d| d.supports_in_unparenthesized_expr()).parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError("Expected: (, found: )".to_string()),
         res.unwrap_err()
+    );
+
+    let result_unparenthesized =
+        all_dialects_where(|d| d.supports_in_unparenthesized_expr()).parse_sql_statements(sql);
+
+    assert_eq!(
+        ParserError::ParserError("Expected: an expression, found: )".to_string()),
+        result_unparenthesized.unwrap_err()
     );
 }
 
@@ -10925,45 +11018,83 @@ fn parse_is_boolean() {
     verified_stmt("SELECT f FROM foo WHERE field IS UNKNOWN");
     verified_stmt("SELECT f FROM foo WHERE field IS NOT UNKNOWN");
 
-    let sql = "SELECT f from foo where field is 0";
-    let res = parse_sql_statements(sql);
+    for sql in [
+        "SELECT f from foo where field is 0",
+        "SELECT s, s IS XYZ NORMALIZED FROM foo",
+        "SELECT s, s IS NFKC FROM foo",
+        "SELECT s, s IS TRIM(' NFKC ') FROM foo",
+    ] {
+        assert!(
+            parse_sql_statements(sql).is_err(),
+            "expected a parse failure for `{sql}`"
+        );
+    }
+}
+
+#[test]
+fn parse_is_json_predicate() {
+    use self::Expr::*;
+
+    // Assert the full AST once for a case that exercises every field.
+    let sql = "a IS NOT JSON OBJECT WITHOUT UNIQUE KEYS";
     assert_eq!(
-        ParserError::ParserError(
-            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: 0"
-                .to_string()
-        ),
-        res.unwrap_err()
+        IsJson {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            kind: Some(JsonPredicateType::Object),
+            unique_keys: Some(JsonKeyUniqueness::WithoutUniqueKeys),
+            negated: true,
+        },
+        verified_expr(sql)
     );
 
-    let sql = "SELECT s, s IS XYZ NORMALIZED FROM foo";
-    let res = parse_sql_statements(sql);
-    assert_eq!(
-        ParserError::ParserError(
-            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: XYZ"
-                .to_string()
-        ),
-        res.unwrap_err()
-    );
+    // The remaining forms only need to round-trip.
+    verified_expr("a IS JSON");
+    verified_expr("a IS NOT JSON");
+    verified_expr("a IS JSON VALUE");
+    verified_expr("a IS JSON SCALAR");
+    verified_expr("a IS JSON ARRAY");
+    verified_expr("a IS JSON OBJECT");
+    verified_expr("a IS JSON WITH UNIQUE KEYS");
+    verified_expr("a IS JSON WITHOUT UNIQUE KEYS");
 
-    let sql = "SELECT s, s IS NFKC FROM foo";
-    let res = parse_sql_statements(sql);
-    assert_eq!(
-        ParserError::ParserError(
-            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: FROM"
-                .to_string()
-        ),
-        res.unwrap_err()
-    );
+    all_dialects().expr_parses_to("a IS JSON WITH UNIQUE", "a IS JSON WITH UNIQUE KEYS");
+    all_dialects().expr_parses_to("a IS JSON WITHOUT UNIQUE", "a IS JSON WITHOUT UNIQUE KEYS");
 
-    let sql = "SELECT s, s IS TRIM(' NFKC ') FROM foo";
-    let res = parse_sql_statements(sql);
-    assert_eq!(
-        ParserError::ParserError(
-            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: TRIM"
-                .to_string()
-        ),
-        res.unwrap_err()
+    assert_matches!(
+        verified_expr("NOT a IS JSON"),
+        Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            expr
+        } if matches!(&*expr, Expr::IsJson { .. })
     );
+}
+
+#[test]
+fn parse_is_json_predicate_invalid() {
+    let dialects = all_dialects();
+
+    let invalid = [
+        "SELECT * FROM t WHERE a IS JSON WITH FROM",
+        "SELECT * FROM t WHERE a IS JSON WITH KEYS",
+        "SELECT * FROM t WHERE a IS JSON WITHOUT FROM",
+        "SELECT * FROM t WHERE a IS JSON WITHOUT KEYS",
+        "SELECT * FROM t WHERE a IS NOT JSON WITH FROM",
+        "SELECT * FROM t WHERE a IS JSON VALUE ARRAY",
+        "SELECT * FROM t WHERE a IS JSON OBJECT VALUE",
+        "SELECT * FROM t WHERE a IS JSON WITH UNIQUE EXTRA",
+        "SELECT * FROM t WHERE a IS JSON WITH UNIQUE KEYS EXTRA",
+        "SELECT * FROM t WHERE a IS JSON WITHOUT UNIQUE EXTRA",
+        "SELECT * FROM t WHERE a IS JSON WITHOUT UNIQUE KEYS EXTRA",
+        "SELECT * FROM t WHERE a IS JSON WITH UNIQUE KEYS WITH UNIQUE KEYS",
+        "SELECT * FROM t WHERE a IS JSON WITHOUT UNIQUE KEYS WITHOUT UNIQUE KEYS",
+    ];
+
+    for sql in invalid {
+        assert!(
+            dialects.parse_sql_statements(sql).is_err(),
+            "expected a parse failure for `{sql}`"
+        );
+    }
 }
 
 #[test]
@@ -11279,6 +11410,20 @@ fn parse_deeply_nested_subquery_expr_hits_recursion_limits() {
 
     let where_clause = make_where_clause(100);
     let sql = format!("SELECT id, user_id where id IN (select id from t WHERE {where_clause})");
+
+    let res = Parser::new(&dialect)
+        .try_with_sql(&sql)
+        .expect("tokenize to work")
+        .parse_statements();
+
+    assert_eq!(res, Err(ParserError::RecursionLimitExceeded));
+}
+
+#[test]
+fn parse_deeply_nested_interval_hits_recursion_limits() {
+    let dialect = GenericDialect {};
+
+    let sql = format!("SELECT {}1", "INTERVAL ".repeat(1000));
 
     let res = Parser::new(&dialect)
         .try_with_sql(&sql)
@@ -13812,7 +13957,6 @@ fn test_dictionary_syntax() {
                         (Value::SingleQuotedString("2023-04-01".to_owned())).with_empty_span(),
                     )),
                     data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                    array: false,
                     format: None,
                 }),
             },
@@ -13824,7 +13968,6 @@ fn test_dictionary_syntax() {
                         (Value::SingleQuotedString("2023-04-05".to_owned())).with_empty_span(),
                     )),
                     data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                    array: false,
                     format: None,
                 }),
             },
@@ -14121,7 +14264,6 @@ fn test_extract_seconds_ok() {
                     fields: None,
                     precision: None
                 },
-                array: false,
                 format: None,
             }),
         }
@@ -14152,7 +14294,6 @@ fn test_extract_seconds_ok() {
                         fields: None,
                         precision: None,
                     },
-                    array: false,
                     format: None,
                 }),
             })],
@@ -14210,7 +14351,6 @@ fn test_extract_seconds_single_quote_ok() {
                     fields: None,
                     precision: None
                 },
-                array: false,
                 format: None,
             }),
         }
@@ -15564,8 +15704,10 @@ fn parse_create_table_select() {
 
 #[test]
 fn test_reserved_keywords_for_identifiers() {
+    // Dialects that reserve INTERVAL will not allow it as an unquoted
+    // identifier, and report the failure consistently at the token that fails
+    // to start an expression (`)`), independent of named-argument support.
     let dialects = all_dialects_where(|d| d.is_reserved_for_identifier(Keyword::INTERVAL));
-    // Dialects that reserve the word INTERVAL will not allow it as an unquoted identifier
     let sql = "SELECT MAX(interval) FROM tbl";
     assert_eq!(
         dialects.parse_sql_statements(sql),
@@ -17439,8 +17581,7 @@ fn column_check_enforced() {
 
 #[test]
 fn join_precedence() {
-    all_dialects_except(|d| !d.supports_left_associative_joins_without_parens())
-        .verified_query_with_canonical(
+    all_dialects().verified_query_with_canonical(
         "SELECT *
          FROM t1
          NATURAL JOIN t5
@@ -17449,14 +17590,345 @@ fn join_precedence() {
         // canonical string without parentheses
         "SELECT * FROM t1 NATURAL JOIN t5 INNER JOIN t0 ON (t0.v1 + t5.v0) > 0 WHERE t0.v1 = t1.v0",
     );
-    all_dialects_except(|d| d.supports_left_associative_joins_without_parens()).verified_query_with_canonical(
-        "SELECT *
-         FROM t1
-         NATURAL JOIN t5
-         INNER JOIN t0 ON (t0.v1 + t5.v0) > 0
-         WHERE t0.v1 = t1.v0",
-        // canonical string with parentheses
-        "SELECT * FROM t1 NATURAL JOIN (t5 INNER JOIN t0 ON (t0.v1 + t5.v0) > 0) WHERE t0.v1 = t1.v0",
+}
+
+#[test]
+fn test_nested_join_without_parentheses() {
+    let query = "SELECT DISTINCT p.product_id FROM orders AS o INNER JOIN customers AS c INNER JOIN products AS p ON p.customer_id = c.customer_id ON c.order_id = o.order_id";
+    assert_eq!(
+        only(
+            non_left_associative_dialects()
+                .verified_only_select_with_canonical(query, "SELECT DISTINCT p.product_id FROM orders AS o INNER JOIN (customers AS c INNER JOIN products AS p ON p.customer_id = c.customer_id) ON c.order_id = o.order_id")
+                .from
+        )
+        .joins,
+        vec![Join {
+            relation: TableFactor::NestedJoin {
+                table_with_joins: Box::new(TableWithJoins {
+                    relation: TableFactor::Table {
+                        name: ObjectName::from(vec![Ident::new("customers".to_string())]),
+                        alias: table_alias(true, "c"),
+                        args: None,
+                        with_hints: vec![],
+                        version: None,
+                        partitions: vec![],
+                        with_ordinality: false,
+                        json_path: None,
+                        sample: None,
+                        index_hints: vec![],
+                    },
+                    joins: vec![Join {
+                        relation: TableFactor::Table {
+                            name: ObjectName::from(vec![Ident::new("products".to_string())]),
+                            alias: table_alias(true, "p"),
+                            args: None,
+                            with_hints: vec![],
+                            version: None,
+                            partitions: vec![],
+                            with_ordinality: false,
+                            json_path: None,
+                            sample: None,
+                            index_hints: vec![],
+                        },
+                        global: false,
+                        join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
+                            left: Box::new(Expr::CompoundIdentifier(vec![
+                                Ident::new("p".to_string()),
+                                Ident::new("customer_id".to_string())
+                            ])),
+                            op: BinaryOperator::Eq,
+                            right: Box::new(Expr::CompoundIdentifier(vec![
+                                Ident::new("c".to_string()),
+                                Ident::new("customer_id".to_string())
+                            ])),
+                        })),
+                    }]
+                }),
+                alias: None
+            },
+            global: false,
+            join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
+                left: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("c".to_string()),
+                    Ident::new("order_id".to_string())
+                ])),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("o".to_string()),
+                    Ident::new("order_id".to_string())
+                ])),
+            }))
+        }],
+    );
+
+    let query = "SELECT DISTINCT p.product_id FROM orders AS o JOIN customers AS c JOIN products AS p ON p.customer_id = c.customer_id ON c.order_id = o.order_id";
+    assert_eq!(
+        only(
+            non_left_associative_dialects()
+                .verified_only_select_with_canonical(query, "SELECT DISTINCT p.product_id FROM orders AS o JOIN (customers AS c JOIN products AS p ON p.customer_id = c.customer_id) ON c.order_id = o.order_id")
+                .from
+        )
+        .joins,
+        vec![Join {
+            relation: TableFactor::NestedJoin {
+                table_with_joins: Box::new(TableWithJoins {
+                    relation: TableFactor::Table {
+                        name: ObjectName::from(vec![Ident::new("customers".to_string())]),
+                        alias: table_alias(true, "c"),
+                        args: None,
+                        with_hints: vec![],
+                        version: None,
+                        partitions: vec![],
+                        with_ordinality: false,
+                        json_path: None,
+                        sample: None,
+                        index_hints: vec![],
+                    },
+                    joins: vec![Join {
+                        relation: TableFactor::Table {
+                            name: ObjectName::from(vec![Ident::new("products".to_string())]),
+                            alias: table_alias(true, "p"),
+                            args: None,
+                            with_hints: vec![],
+                            version: None,
+                            partitions: vec![],
+                            with_ordinality: false,
+                            json_path: None,
+                            sample: None,
+                            index_hints: vec![],
+                        },
+                        global: false,
+                        join_operator: JoinOperator::Join(JoinConstraint::On(Expr::BinaryOp {
+                            left: Box::new(Expr::CompoundIdentifier(vec![
+                                Ident::new("p".to_string()),
+                                Ident::new("customer_id".to_string())
+                            ])),
+                            op: BinaryOperator::Eq,
+                            right: Box::new(Expr::CompoundIdentifier(vec![
+                                Ident::new("c".to_string()),
+                                Ident::new("customer_id".to_string())
+                            ])),
+                        })),
+                    }]
+                }),
+                alias: None
+            },
+            global: false,
+            join_operator: JoinOperator::Join(JoinConstraint::On(Expr::BinaryOp {
+                left: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("c".to_string()),
+                    Ident::new("order_id".to_string())
+                ])),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("o".to_string()),
+                    Ident::new("order_id".to_string())
+                ])),
+            }))
+        }],
+    );
+
+    let query = "SELECT DISTINCT p.product_id FROM orders AS o LEFT JOIN customers AS c LEFT JOIN products AS p ON p.customer_id = c.customer_id ON c.order_id = o.order_id";
+    assert_eq!(
+        only(
+            non_left_associative_dialects()
+                .verified_only_select_with_canonical(query, "SELECT DISTINCT p.product_id FROM orders AS o LEFT JOIN (customers AS c LEFT JOIN products AS p ON p.customer_id = c.customer_id) ON c.order_id = o.order_id")
+                .from
+        )
+        .joins,
+        vec![Join {
+            relation: TableFactor::NestedJoin {
+                table_with_joins: Box::new(TableWithJoins {
+                    relation: TableFactor::Table {
+                        name: ObjectName::from(vec![Ident::new("customers".to_string())]),
+                        alias: table_alias(true, "c"),
+                        args: None,
+                        with_hints: vec![],
+                        version: None,
+                        partitions: vec![],
+                        with_ordinality: false,
+                        json_path: None,
+                        sample: None,
+                        index_hints: vec![],
+                    },
+                    joins: vec![Join {
+                        relation: TableFactor::Table {
+                            name: ObjectName::from(vec![Ident::new("products".to_string())]),
+                            alias: table_alias(true, "p"),
+                            args: None,
+                            with_hints: vec![],
+                            version: None,
+                            partitions: vec![],
+                            with_ordinality: false,
+                            json_path: None,
+                            sample: None,
+                            index_hints: vec![],
+                        },
+                        global: false,
+                        join_operator: JoinOperator::Left(JoinConstraint::On(Expr::BinaryOp {
+                            left: Box::new(Expr::CompoundIdentifier(vec![
+                                Ident::new("p".to_string()),
+                                Ident::new("customer_id".to_string())
+                            ])),
+                            op: BinaryOperator::Eq,
+                            right: Box::new(Expr::CompoundIdentifier(vec![
+                                Ident::new("c".to_string()),
+                                Ident::new("customer_id".to_string())
+                            ])),
+                        })),
+                    }]
+                }),
+                alias: None
+            },
+            global: false,
+            join_operator: JoinOperator::Left(JoinConstraint::On(Expr::BinaryOp {
+                left: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("c".to_string()),
+                    Ident::new("order_id".to_string())
+                ])),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("o".to_string()),
+                    Ident::new("order_id".to_string())
+                ])),
+            }))
+        }],
+    );
+
+    let query = "SELECT DISTINCT p.product_id FROM orders AS o RIGHT JOIN customers AS c RIGHT JOIN products AS p ON p.customer_id = c.customer_id ON c.order_id = o.order_id";
+    assert_eq!(
+        only(
+            non_left_associative_dialects()
+                .verified_only_select_with_canonical(query, "SELECT DISTINCT p.product_id FROM orders AS o RIGHT JOIN (customers AS c RIGHT JOIN products AS p ON p.customer_id = c.customer_id) ON c.order_id = o.order_id")
+                .from
+        )
+        .joins,
+        vec![Join {
+            relation: TableFactor::NestedJoin {
+                table_with_joins: Box::new(TableWithJoins {
+                    relation: TableFactor::Table {
+                        name: ObjectName::from(vec![Ident::new("customers".to_string())]),
+                        alias: table_alias(true, "c"),
+                        args: None,
+                        with_hints: vec![],
+                        version: None,
+                        partitions: vec![],
+                        with_ordinality: false,
+                        json_path: None,
+                        sample: None,
+                        index_hints: vec![],
+                    },
+                    joins: vec![Join {
+                        relation: TableFactor::Table {
+                            name: ObjectName::from(vec![Ident::new("products".to_string())]),
+                            alias: table_alias(true, "p"),
+                            args: None,
+                            with_hints: vec![],
+                            version: None,
+                            partitions: vec![],
+                            with_ordinality: false,
+                            json_path: None,
+                            sample: None,
+                            index_hints: vec![],
+                        },
+                        global: false,
+                        join_operator: JoinOperator::Right(JoinConstraint::On(Expr::BinaryOp {
+                            left: Box::new(Expr::CompoundIdentifier(vec![
+                                Ident::new("p".to_string()),
+                                Ident::new("customer_id".to_string())
+                            ])),
+                            op: BinaryOperator::Eq,
+                            right: Box::new(Expr::CompoundIdentifier(vec![
+                                Ident::new("c".to_string()),
+                                Ident::new("customer_id".to_string())
+                            ])),
+                        })),
+                    }]
+                }),
+                alias: None
+            },
+            global: false,
+            join_operator: JoinOperator::Right(JoinConstraint::On(Expr::BinaryOp {
+                left: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("c".to_string()),
+                    Ident::new("order_id".to_string())
+                ])),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("o".to_string()),
+                    Ident::new("order_id".to_string())
+                ])),
+            }))
+        }],
+    );
+
+    let query = "SELECT DISTINCT p.product_id FROM orders AS o FULL JOIN customers AS c FULL JOIN products AS p ON p.customer_id = c.customer_id ON c.order_id = o.order_id";
+    assert_eq!(
+        only(
+            non_left_associative_dialects()
+                .verified_only_select_with_canonical(query, "SELECT DISTINCT p.product_id FROM orders AS o FULL JOIN (customers AS c FULL JOIN products AS p ON p.customer_id = c.customer_id) ON c.order_id = o.order_id")
+                .from
+        )
+        .joins,
+        vec![Join {
+            relation: TableFactor::NestedJoin {
+                table_with_joins: Box::new(TableWithJoins {
+                    relation: TableFactor::Table {
+                        name: ObjectName::from(vec![Ident::new("customers".to_string())]),
+                        alias: table_alias(true, "c"),
+                        args: None,
+                        with_hints: vec![],
+                        version: None,
+                        partitions: vec![],
+                        with_ordinality: false,
+                        json_path: None,
+                        sample: None,
+                        index_hints: vec![],
+                    },
+                    joins: vec![Join {
+                        relation: TableFactor::Table {
+                            name: ObjectName::from(vec![Ident::new("products".to_string())]),
+                            alias: table_alias(true, "p"),
+                            args: None,
+                            with_hints: vec![],
+                            version: None,
+                            partitions: vec![],
+                            with_ordinality: false,
+                            json_path: None,
+                            sample: None,
+                            index_hints: vec![],
+                        },
+                        global: false,
+                        join_operator: JoinOperator::FullOuter(JoinConstraint::On(
+                            Expr::BinaryOp {
+                                left: Box::new(Expr::CompoundIdentifier(vec![
+                                    Ident::new("p".to_string()),
+                                    Ident::new("customer_id".to_string())
+                                ])),
+                                op: BinaryOperator::Eq,
+                                right: Box::new(Expr::CompoundIdentifier(vec![
+                                    Ident::new("c".to_string()),
+                                    Ident::new("customer_id".to_string())
+                                ])),
+                            }
+                        )),
+                    }]
+                }),
+                alias: None
+            },
+            global: false,
+            join_operator: JoinOperator::FullOuter(JoinConstraint::On(Expr::BinaryOp {
+                left: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("c".to_string()),
+                    Ident::new("order_id".to_string())
+                ])),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("o".to_string()),
+                    Ident::new("order_id".to_string())
+                ])),
+            }))
+        }],
     );
 }
 
@@ -17925,6 +18397,32 @@ fn parse_create_user() {
             );
         }
         _ => unreachable!(),
+    }
+}
+
+#[test]
+fn key_value_option_statements_do_not_swallow_following_statement() {
+    // An unparenthesized key-value option list must not swallow the statement
+    // terminator, otherwise any following statement fails to parse. This covers
+    // every unparenthesized caller of `parse_key_value_options`: `CREATE USER`
+    // and both `ALTER USER ... SET` forms.
+
+    // `CREATE USER` parses identically across all dialects.
+    let statements = all_dialects()
+        .parse_sql_statements("CREATE USER user1; SELECT 1")
+        .unwrap();
+    assert_eq!(statements.len(), 2);
+
+    // `ALTER USER ... SET` routes through the same key-value option list, but
+    // PostgreSQL parses `ALTER USER` as a synonym for `ALTER ROLE` (a different
+    // code path), so scope these to dialects that keep the Snowflake grammar.
+    let dialects = all_dialects_except(|d| d.supports_alter_user_as_alter_role());
+    for sql in [
+        "ALTER USER user1 SET x = 'y'; SELECT 1",
+        "ALTER USER user1 SET TAG t = 'v'; SELECT 1",
+    ] {
+        let statements = dialects.parse_sql_statements(sql).unwrap();
+        assert_eq!(statements.len(), 2, "{sql}");
     }
 }
 
@@ -18465,9 +18963,10 @@ fn parse_create_index_different_using_positions() {
 
 #[test]
 fn test_parse_alter_user() {
-    verified_stmt("ALTER USER u1");
-    verified_stmt("ALTER USER IF EXISTS u1");
-    let stmt = verified_stmt("ALTER USER IF EXISTS u1 RENAME TO u2");
+    let dialects = all_dialects_except(|d| d.supports_alter_user_as_alter_role());
+    dialects.verified_stmt("ALTER USER u1");
+    dialects.verified_stmt("ALTER USER IF EXISTS u1");
+    let stmt = dialects.verified_stmt("ALTER USER IF EXISTS u1 RENAME TO u2");
     match stmt {
         Statement::AlterUser(alter) => {
             assert!(alter.if_exists);
@@ -18476,35 +18975,35 @@ fn test_parse_alter_user() {
         }
         _ => unreachable!(),
     }
-    verified_stmt("ALTER USER IF EXISTS u1 RESET PASSWORD");
-    verified_stmt("ALTER USER IF EXISTS u1 ABORT ALL QUERIES");
-    verified_stmt(
+    dialects.verified_stmt("ALTER USER IF EXISTS u1 RESET PASSWORD");
+    dialects.verified_stmt("ALTER USER IF EXISTS u1 ABORT ALL QUERIES");
+    dialects.verified_stmt(
         "ALTER USER IF EXISTS u1 ADD DELEGATED AUTHORIZATION OF ROLE r1 TO SECURITY INTEGRATION i1",
     );
-    verified_stmt("ALTER USER IF EXISTS u1 REMOVE DELEGATED AUTHORIZATION OF ROLE r1 FROM SECURITY INTEGRATION i1");
-    verified_stmt(
+    dialects.verified_stmt("ALTER USER IF EXISTS u1 REMOVE DELEGATED AUTHORIZATION OF ROLE r1 FROM SECURITY INTEGRATION i1");
+    dialects.verified_stmt(
         "ALTER USER IF EXISTS u1 REMOVE DELEGATED AUTHORIZATIONS FROM SECURITY INTEGRATION i1",
     );
-    verified_stmt("ALTER USER IF EXISTS u1 ENROLL MFA");
-    let stmt = verified_stmt("ALTER USER u1 SET DEFAULT_MFA_METHOD PASSKEY");
+    dialects.verified_stmt("ALTER USER IF EXISTS u1 ENROLL MFA");
+    let stmt = dialects.verified_stmt("ALTER USER u1 SET DEFAULT_MFA_METHOD PASSKEY");
     match stmt {
         Statement::AlterUser(alter) => {
             assert_eq!(alter.set_default_mfa_method, Some(MfaMethodKind::PassKey))
         }
         _ => unreachable!(),
     }
-    verified_stmt("ALTER USER u1 SET DEFAULT_MFA_METHOD TOTP");
-    verified_stmt("ALTER USER u1 SET DEFAULT_MFA_METHOD DUO");
-    let stmt = verified_stmt("ALTER USER u1 REMOVE MFA METHOD PASSKEY");
+    dialects.verified_stmt("ALTER USER u1 SET DEFAULT_MFA_METHOD TOTP");
+    dialects.verified_stmt("ALTER USER u1 SET DEFAULT_MFA_METHOD DUO");
+    let stmt = dialects.verified_stmt("ALTER USER u1 REMOVE MFA METHOD PASSKEY");
     match stmt {
         Statement::AlterUser(alter) => {
             assert_eq!(alter.remove_mfa_method, Some(MfaMethodKind::PassKey))
         }
         _ => unreachable!(),
     }
-    verified_stmt("ALTER USER u1 REMOVE MFA METHOD TOTP");
-    verified_stmt("ALTER USER u1 REMOVE MFA METHOD DUO");
-    let stmt = verified_stmt("ALTER USER u1 MODIFY MFA METHOD PASSKEY SET COMMENT 'abc'");
+    dialects.verified_stmt("ALTER USER u1 REMOVE MFA METHOD TOTP");
+    dialects.verified_stmt("ALTER USER u1 REMOVE MFA METHOD DUO");
+    let stmt = dialects.verified_stmt("ALTER USER u1 MODIFY MFA METHOD PASSKEY SET COMMENT 'abc'");
     match stmt {
         Statement::AlterUser(alter) => {
             assert_eq!(
@@ -18517,10 +19016,10 @@ fn test_parse_alter_user() {
         }
         _ => unreachable!(),
     }
-    verified_stmt("ALTER USER u1 ADD MFA METHOD OTP");
-    verified_stmt("ALTER USER u1 ADD MFA METHOD OTP COUNT = 8");
+    dialects.verified_stmt("ALTER USER u1 ADD MFA METHOD OTP");
+    dialects.verified_stmt("ALTER USER u1 ADD MFA METHOD OTP COUNT = 8");
 
-    let stmt = verified_stmt("ALTER USER u1 SET AUTHENTICATION POLICY p1");
+    let stmt = dialects.verified_stmt("ALTER USER u1 SET AUTHENTICATION POLICY p1");
     match stmt {
         Statement::AlterUser(alter) => {
             assert_eq!(
@@ -18533,19 +19032,19 @@ fn test_parse_alter_user() {
         }
         _ => unreachable!(),
     }
-    verified_stmt("ALTER USER u1 SET PASSWORD POLICY p1");
-    verified_stmt("ALTER USER u1 SET SESSION POLICY p1");
-    let stmt = verified_stmt("ALTER USER u1 UNSET AUTHENTICATION POLICY");
+    dialects.verified_stmt("ALTER USER u1 SET PASSWORD POLICY p1");
+    dialects.verified_stmt("ALTER USER u1 SET SESSION POLICY p1");
+    let stmt = dialects.verified_stmt("ALTER USER u1 UNSET AUTHENTICATION POLICY");
     match stmt {
         Statement::AlterUser(alter) => {
             assert_eq!(alter.unset_policy, Some(UserPolicyKind::Authentication));
         }
         _ => unreachable!(),
     }
-    verified_stmt("ALTER USER u1 UNSET PASSWORD POLICY");
-    verified_stmt("ALTER USER u1 UNSET SESSION POLICY");
+    dialects.verified_stmt("ALTER USER u1 UNSET PASSWORD POLICY");
+    dialects.verified_stmt("ALTER USER u1 UNSET SESSION POLICY");
 
-    let stmt = verified_stmt("ALTER USER u1 SET TAG k1='v1'");
+    let stmt = dialects.verified_stmt("ALTER USER u1 SET TAG k1='v1'");
     match stmt {
         Statement::AlterUser(alter) => {
             assert_eq!(
@@ -18560,23 +19059,25 @@ fn test_parse_alter_user() {
         }
         _ => unreachable!(),
     }
-    verified_stmt("ALTER USER u1 SET TAG k1='v1', k2='v2'");
-    let stmt = verified_stmt("ALTER USER u1 UNSET TAG k1");
+    dialects.verified_stmt("ALTER USER u1 SET TAG k1='v1', k2='v2'");
+    let stmt = dialects.verified_stmt("ALTER USER u1 UNSET TAG k1");
     match stmt {
         Statement::AlterUser(alter) => {
             assert_eq!(alter.unset_tag, vec!["k1".to_string()]);
         }
         _ => unreachable!(),
     }
-    verified_stmt("ALTER USER u1 UNSET TAG k1, k2, k3");
+    dialects.verified_stmt("ALTER USER u1 UNSET TAG k1, k2, k3");
 
-    let dialects = all_dialects_where(|d| d.supports_boolean_literals());
-    dialects.one_statement_parses_to(
+    let bool_dialects = all_dialects_where(|d| {
+        d.supports_boolean_literals() && !d.supports_alter_user_as_alter_role()
+    });
+    bool_dialects.one_statement_parses_to(
         "ALTER USER u1 SET PASSWORD='secret', MUST_CHANGE_PASSWORD=TRUE, MINS_TO_UNLOCK=10",
         "ALTER USER u1 SET PASSWORD='secret', MUST_CHANGE_PASSWORD=true, MINS_TO_UNLOCK=10",
     );
 
-    let stmt = dialects.verified_stmt(
+    let stmt = bool_dialects.verified_stmt(
         "ALTER USER u1 SET PASSWORD='secret', MUST_CHANGE_PASSWORD=true, MINS_TO_UNLOCK=10",
     );
     match stmt {
@@ -18611,16 +19112,16 @@ fn test_parse_alter_user() {
         _ => unreachable!(),
     }
 
-    let stmt = verified_stmt("ALTER USER u1 UNSET PASSWORD");
+    let stmt = dialects.verified_stmt("ALTER USER u1 UNSET PASSWORD");
     match stmt {
         Statement::AlterUser(alter) => {
             assert_eq!(alter.unset_props, vec!["PASSWORD".to_string()]);
         }
         _ => unreachable!(),
     }
-    verified_stmt("ALTER USER u1 UNSET PASSWORD, MUST_CHANGE_PASSWORD, MINS_TO_UNLOCK");
+    dialects.verified_stmt("ALTER USER u1 UNSET PASSWORD, MUST_CHANGE_PASSWORD, MINS_TO_UNLOCK");
 
-    let stmt = verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL')");
+    let stmt = dialects.verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL')");
     match stmt {
         Statement::AlterUser(alter) => {
             assert_eq!(
@@ -18636,11 +19137,11 @@ fn test_parse_alter_user() {
         }
         _ => unreachable!(),
     }
-    verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=()");
-    verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('R1', 'R2', 'R3')");
-    verified_stmt("ALTER USER u1 SET PASSWORD='secret', DEFAULT_SECONDARY_ROLES=('ALL')");
-    verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL'), PASSWORD='secret'");
-    let stmt = verified_stmt(
+    dialects.verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=()");
+    dialects.verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('R1', 'R2', 'R3')");
+    dialects.verified_stmt("ALTER USER u1 SET PASSWORD='secret', DEFAULT_SECONDARY_ROLES=('ALL')");
+    dialects.verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL'), PASSWORD='secret'");
+    let stmt = dialects.verified_stmt(
         "ALTER USER u1 SET WORKLOAD_IDENTITY=(TYPE=AWS, ARN='arn:aws:iam::123456789:r1/')",
     );
     match stmt {
@@ -18674,13 +19175,13 @@ fn test_parse_alter_user() {
         }
         _ => unreachable!(),
     }
-    verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL'), PASSWORD='secret', WORKLOAD_IDENTITY=(TYPE=AWS, ARN='arn:aws:iam::123456789:r1/')");
+    dialects.verified_stmt("ALTER USER u1 SET DEFAULT_SECONDARY_ROLES=('ALL'), PASSWORD='secret', WORKLOAD_IDENTITY=(TYPE=AWS, ARN='arn:aws:iam::123456789:r1/')");
 
-    verified_stmt("ALTER USER u1 PASSWORD 'AAA'");
-    verified_stmt("ALTER USER u1 ENCRYPTED PASSWORD 'AAA'");
-    verified_stmt("ALTER USER u1 PASSWORD NULL");
+    dialects.verified_stmt("ALTER USER u1 PASSWORD 'AAA'");
+    dialects.verified_stmt("ALTER USER u1 ENCRYPTED PASSWORD 'AAA'");
+    dialects.verified_stmt("ALTER USER u1 PASSWORD NULL");
 
-    one_statement_parses_to(
+    dialects.one_statement_parses_to(
         "ALTER USER u1 WITH PASSWORD 'AAA'",
         "ALTER USER u1 PASSWORD 'AAA'",
     );
@@ -18694,7 +19195,7 @@ fn parse_generic_unary_ops() {
         ("+", UnaryOperator::Plus),
     ];
     for (str_op, op) in unary_ops {
-        let select = verified_only_select(&format!("SELECT {}expr", &str_op));
+        let select = verified_only_select(&format!("SELECT {}expr", str_op));
         assert_eq!(
             UnnamedExpr(UnaryOp {
                 op: *op,
@@ -18986,6 +19487,20 @@ fn parse_non_pg_dialects_keep_xml_names_as_regular_identifiers() {
     dialects.verified_only_select("SELECT xml FROM t");
 }
 
+#[test]
+fn parse_aliased_function_args() {
+    let dialects = all_dialects_where(|d| d.supports_aliased_function_args());
+    dialects.verified_only_select("SELECT foo(a AS x, b)");
+    dialects.verified_only_select("SELECT foo('bar' AS x)");
+    dialects.verified_only_select("SELECT foo(1 + 2 AS x)");
+    dialects.verified_only_select("SELECT foo(lower(a) AS x, b AS y)");
+    dialects.verified_only_select(r#"SELECT foo(a AS "x y")"#);
+    dialects.verified_only_select("SELECT foo(bar(a AS x) AS y)");
+    assert!(all_dialects_except(|d| d.supports_aliased_function_args())
+        .parse_sql_statements("SELECT foo(a AS x)")
+        .is_err());
+}
+
 /// Regression test for the 2^N parse-time blowup in `parse_compound_expr` on
 /// inputs like `IF a0.a1...aN.#`. The parse is run on a worker thread and the
 /// main thread asserts that it reports back within a generous timeout. Post-fix
@@ -19006,6 +19521,158 @@ fn parse_compound_chain_no_exponential_blowup() {
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
         let _ = Parser::parse_sql(&GenericDialect {}, &sql);
+        let _ = tx.send(());
+    });
+
+    rx.recv_timeout(Duration::from_secs(5))
+        .expect("parser should reject this quickly, not loop exponentially");
+}
+
+/// Regression test for the 2^N parse-time blowup in `parse_compound_expr` on
+/// chains like `x.not-b.not-b...`. The `NOT` keyword in field position drives
+/// `parse_prefix` -> `parse_not` -> `parse_subexpr`, which re-walks the
+/// remaining chain at every segment and doubles the work. Post-fix the parser
+/// handles 25 segments in well under a millisecond, so the timeout is a hang
+/// guard, not a perf threshold.
+#[test]
+fn parse_compound_keyword_chain_no_exponential_blowup() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    let body: String = std::iter::repeat_n(".not-b", 25).collect();
+    let sql = format!("SELECT x{body}");
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = Parser::parse_sql(&GenericDialect {}, &sql);
+        let _ = tx.send(());
+    });
+
+    rx.recv_timeout(Duration::from_secs(5))
+        .expect("parser should handle this quickly, not loop exponentially");
+}
+
+/// Regression test for the 2^N parse-time blowup in `parse_prefix` on inputs
+/// like `IF(current_time(current_time(...x`. Each nested `current_time(` used
+/// to be explored twice at every level (once via the speculative reserved-word
+/// arm, once via the unreserved-word fallback), doubling work per level.
+/// Post-fix the failing parse short-circuits via the position-keyed cache.
+#[test]
+fn parse_prefix_keyword_call_chain_no_exponential_blowup() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    let sql = String::from("if(") + &"current_time(".repeat(30) + "x";
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = Parser::parse_sql(&PostgreSqlDialect {}, &sql);
+        let _ = tx.send(());
+    });
+
+    rx.recv_timeout(Duration::from_secs(5))
+        .expect("parser should reject this quickly, not loop exponentially");
+}
+
+/// Regression test for the 2^N parse-time blowup in `parse_prefix` on inputs
+/// like `case-case-case-...c`. Each `case` token triggers a speculative
+/// `parse_case_expr` that fails, but the unreserved-word fallback returns
+/// `Identifier(case)`, so the outer failure cache never fires. Post-fix the
+/// per-arm cache short-circuits the speculative descent.
+#[test]
+fn parse_prefix_case_chain_no_exponential_blowup() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    let sql = "case\t-".repeat(30) + "c";
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = Parser::parse_sql(&SQLiteDialect {}, &sql);
+        let _ = tx.send(());
+    });
+
+    rx.recv_timeout(Duration::from_secs(5))
+        .expect("parser should reject this quickly, not loop exponentially");
+}
+
+/// Regression test for the 2^N parse-time blowup in `parse_table_factor` on
+/// inputs like `SELECT 1 FROM ((((...`. The speculative derived-table arm
+/// and the nested-join fallback both recurse through the remaining paren
+/// chain, doubling work per level. Post-fix the per-position failure cache
+/// short-circuits the second descent.
+#[test]
+fn parse_table_factor_paren_chain_no_exponential_blowup() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    let mut sql = String::from("SELECT 1 ");
+    for _ in 0..5 {
+        sql.push_str("FROM ");
+        sql.push_str(&"(".repeat(30));
+        sql.push(' ');
+    }
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = Parser::new(&GenericDialect {})
+            .with_recursion_limit(256)
+            .try_with_sql(&sql)
+            .and_then(|mut p| p.parse_statements());
+        let _ = tx.send(());
+    });
+
+    rx.recv_timeout(Duration::from_secs(5))
+        .expect("parser should reject this quickly, not loop exponentially");
+}
+
+#[test]
+fn parse_unlogged_table_logging_controls_in_all_dialects() {
+    match all_dialects().verified_stmt("CREATE UNLOGGED TABLE t (a INT)") {
+        Statement::CreateTable(CreateTable { unlogged, .. }) => {
+            assert!(unlogged);
+        }
+        _ => unreachable!("Expected CREATE TABLE"),
+    }
+
+    match all_dialects().verified_stmt("ALTER TABLE t SET LOGGED") {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
+            assert_eq!(vec![AlterTableOperation::SetLogged], operations);
+        }
+        _ => unreachable!("Expected ALTER TABLE"),
+    }
+
+    match all_dialects().verified_stmt("ALTER TABLE t SET UNLOGGED") {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
+            assert_eq!(vec![AlterTableOperation::SetUnlogged], operations);
+        }
+        _ => unreachable!("Expected ALTER TABLE"),
+    }
+}
+
+/// Regression test for the 2^N parse-time blowup in `parse_function_args` on
+/// inputs like `CAST(CASE (CAST(CASE (...`. On dialects with expression-named
+/// function arguments (e.g. PostgreSQL), the named-arg arm parsed the whole
+/// argument expression and then re-parsed it on the unnamed path, doubling
+/// work per level. Post-fix the leading expression is parsed exactly once.
+#[test]
+fn parse_function_arg_call_chain_no_exponential_blowup() {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    let sql = String::from("SELECT ") + &"CAST(CASE (".repeat(30) + &")".repeat(30);
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = Parser::new(&PostgreSqlDialect {})
+            .with_recursion_limit(256)
+            .try_with_sql(&sql)
+            .and_then(|mut p| p.parse_statements());
         let _ = tx.send(());
     });
 

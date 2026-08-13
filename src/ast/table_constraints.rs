@@ -26,7 +26,7 @@ use crate::tokenizer::Span;
 use core::fmt;
 
 #[cfg(not(feature = "std"))]
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -117,6 +117,12 @@ pub enum TableConstraint {
     ///
     /// [1]: https://www.postgresql.org/docs/current/sql-altertable.html
     UniqueUsingIndex(ConstraintUsingIndex),
+    /// `EXCLUDE` constraint.
+    ///
+    /// `[ CONSTRAINT <name> ] EXCLUDE [ USING <index_method> ] ( <element> WITH <operator> [, ...] ) [ INCLUDE (<cols>) ] [ WHERE (<predicate>) ]`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE)
+    Exclude(ExcludeConstraint),
 }
 
 impl From<UniqueConstraint> for TableConstraint {
@@ -155,6 +161,12 @@ impl From<FullTextOrSpatialConstraint> for TableConstraint {
     }
 }
 
+impl From<ExcludeConstraint> for TableConstraint {
+    fn from(constraint: ExcludeConstraint) -> Self {
+        TableConstraint::Exclude(constraint)
+    }
+}
+
 impl fmt::Display for TableConstraint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -166,6 +178,7 @@ impl fmt::Display for TableConstraint {
             TableConstraint::FulltextOrSpatial(constraint) => constraint.fmt(f),
             TableConstraint::PrimaryKeyUsingIndex(c) => c.fmt_with_keyword(f, "PRIMARY KEY"),
             TableConstraint::UniqueUsingIndex(c) => c.fmt_with_keyword(f, "UNIQUE"),
+            TableConstraint::Exclude(constraint) => constraint.fmt(f),
         }
     }
 }
@@ -443,6 +456,8 @@ pub struct PrimaryKeyConstraint {
     pub index_type: Option<IndexType>,
     /// Identifiers of the columns that form the primary key.
     pub columns: Vec<IndexColumn>,
+    /// INCLUDE clause: <https://www.postgresql.org/docs/current/sql-createtable.html>
+    pub include: Vec<Ident>,
     /// Optional index options such as `USING`.
     pub index_options: Vec<IndexOption>,
     /// Optional characteristics like `DEFERRABLE`.
@@ -460,6 +475,10 @@ impl fmt::Display for PrimaryKeyConstraint {
             display_option(" USING ", "", &self.index_type),
             display_comma_separated(&self.columns),
         )?;
+
+        if !self.include.is_empty() {
+            write!(f, " INCLUDE ({})", display_comma_separated(&self.include))?;
+        }
 
         if !self.index_options.is_empty() {
             write!(f, " {}", display_separated(&self.index_options, " "))?;
@@ -482,6 +501,7 @@ impl crate::ast::Spanned for PrimaryKeyConstraint {
                 .map(|i| i.span)
                 .chain(self.index_name.iter().map(|i| i.span))
                 .chain(self.columns.iter().map(|i| i.span()))
+                .chain(self.include.iter().map(|i| i.span))
                 .chain(self.characteristics.iter().map(|i| i.span())),
         )
     }
@@ -506,6 +526,8 @@ pub struct UniqueConstraint {
     pub index_type: Option<IndexType>,
     /// Identifiers of the columns that are unique.
     pub columns: Vec<IndexColumn>,
+    /// INCLUDE clause: <https://www.postgresql.org/docs/current/sql-createtable.html>
+    pub include: Vec<Ident>,
     /// Optional index options such as `USING`.
     pub index_options: Vec<IndexOption>,
     /// Optional characteristics like `DEFERRABLE`.
@@ -528,6 +550,10 @@ impl fmt::Display for UniqueConstraint {
             display_comma_separated(&self.columns),
         )?;
 
+        if !self.include.is_empty() {
+            write!(f, " INCLUDE ({})", display_comma_separated(&self.include))?;
+        }
+
         if !self.index_options.is_empty() {
             write!(f, " {}", display_separated(&self.index_options, " "))?;
         }
@@ -549,6 +575,7 @@ impl crate::ast::Spanned for UniqueConstraint {
                 .map(|i| i.span)
                 .chain(self.index_name.iter().map(|i| i.span))
                 .chain(self.columns.iter().map(|i| i.span()))
+                .chain(self.include.iter().map(|i| i.span))
                 .chain(self.characteristics.iter().map(|i| i.span())),
         )
     }
@@ -601,5 +628,105 @@ impl crate::ast::Spanned for ConstraintUsingIndex {
             .map(|c| c.span())
             .unwrap_or(self.index_name.span);
         start.union(&end)
+    }
+}
+
+/// The operator that follows `WITH` in an `EXCLUDE` constraint element.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ExcludeConstraintOperator {
+    /// A single operator token, e.g. `=`, `&&`, `<->`.
+    Token(String),
+    /// Postgres schema-qualified form: `OPERATOR(schema.op)`.
+    PGOperator(Vec<String>),
+}
+
+impl fmt::Display for ExcludeConstraintOperator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ExcludeConstraintOperator::Token(token) => f.write_str(token),
+            ExcludeConstraintOperator::PGOperator(parts) => {
+                write!(f, "OPERATOR({})", display_separated(parts, "."))
+            }
+        }
+    }
+}
+
+/// One element in an `EXCLUDE` constraint's element list.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ExcludeConstraintElement {
+    /// The index column (`{ column_name | ( expression ) } [ opclass ] [ ASC | DESC ] [ NULLS { FIRST | LAST } ]`).
+    pub column: IndexColumn,
+    /// The exclusion operator.
+    pub operator: ExcludeConstraintOperator,
+}
+
+impl fmt::Display for ExcludeConstraintElement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} WITH {}", self.column, self.operator)
+    }
+}
+
+/// An `EXCLUDE` constraint.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-EXCLUDE)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ExcludeConstraint {
+    /// Optional constraint name.
+    pub name: Option<Ident>,
+    /// Optional index method (e.g. `gist`, `spgist`).
+    pub index_method: Option<Ident>,
+    /// The list of index expressions with their exclusion operators.
+    pub elements: Vec<ExcludeConstraintElement>,
+    /// Optional list of additional columns to include in the index.
+    pub include: Vec<Ident>,
+    /// Optional `WHERE` predicate to restrict the constraint to a subset of rows.
+    pub where_clause: Option<Box<Expr>>,
+    /// Optional constraint characteristics like `DEFERRABLE`.
+    pub characteristics: Option<ConstraintCharacteristics>,
+}
+
+impl fmt::Display for ExcludeConstraint {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use crate::ast::ddl::display_constraint_name;
+        write!(f, "{}EXCLUDE", display_constraint_name(&self.name))?;
+        if let Some(method) = &self.index_method {
+            write!(f, " USING {method}")?;
+        }
+        write!(f, " ({})", display_comma_separated(&self.elements))?;
+        if !self.include.is_empty() {
+            write!(f, " INCLUDE ({})", display_comma_separated(&self.include))?;
+        }
+        if let Some(predicate) = &self.where_clause {
+            write!(f, " WHERE ({predicate})")?;
+        }
+        if let Some(characteristics) = &self.characteristics {
+            write!(f, " {characteristics}")?;
+        }
+        Ok(())
+    }
+}
+
+impl crate::ast::Spanned for ExcludeConstraint {
+    fn span(&self) -> Span {
+        Span::union_iter(
+            self.name
+                .iter()
+                .map(|i| i.span)
+                .chain(self.index_method.iter().map(|i| i.span))
+                .chain(self.elements.iter().map(|e| e.span()))
+                .chain(self.include.iter().map(|i| i.span))
+                .chain(self.where_clause.iter().map(|e| e.span()))
+                .chain(self.characteristics.iter().map(|c| c.span())),
+        )
     }
 }

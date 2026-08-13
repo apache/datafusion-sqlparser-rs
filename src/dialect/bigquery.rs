@@ -67,6 +67,11 @@ impl Dialect for BigQueryDialect {
         ch == '`'
     }
 
+    /// See <https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_identifiers>
+    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+        Some('`')
+    }
+
     fn supports_projection_trailing_commas(&self) -> bool {
         true
     }

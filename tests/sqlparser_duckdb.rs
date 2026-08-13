@@ -388,7 +388,6 @@ fn test_duckdb_specific_int_types() {
                     Value::Number("123".parse().unwrap(), false).with_empty_span()
                 )),
                 data_type: data_type.clone(),
-                array: false,
                 format: None,
             },
             expr_from_projection(&select.projection[0])
@@ -703,6 +702,7 @@ fn test_duckdb_union_datatype() {
         Statement::CreateTable(CreateTable {
             or_replace: Default::default(),
             temporary: Default::default(),
+            unlogged: Default::default(),
             external: Default::default(),
             global: Default::default(),
             if_not_exists: Default::default(),

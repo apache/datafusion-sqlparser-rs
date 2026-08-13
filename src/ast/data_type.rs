@@ -468,7 +468,10 @@ pub enum DataType {
     /// Object type, see [Snowflake].
     ///
     /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/data-types-semistructured#object
-    Object(Vec<StructField>),
+    Object {
+        /// `None` for bare `OBJECT`, `Some` when parentheses are present (possibly empty).
+        fields: Option<Vec<StructField>>,
+    },
     /// Nullable - special marker NULL represents in ClickHouse as a data type.
     ///
     /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/nullable
@@ -780,9 +783,10 @@ impl fmt::Display for DataType {
             DataType::Union(fields) => {
                 write!(f, "UNION({})", display_comma_separated(fields))
             }
-            DataType::Object(fields) => {
-                write!(f, "OBJECT({})", display_comma_separated(fields))
-            }
+            DataType::Object { fields } => match fields {
+                None => write!(f, "OBJECT"),
+                Some(fields) => write!(f, "OBJECT({})", display_comma_separated(fields)),
+            },
             // ClickHouse
             DataType::Nullable(data_type) => {
                 write!(f, "Nullable({data_type})")

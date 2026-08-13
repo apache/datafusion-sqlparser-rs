@@ -5257,9 +5257,18 @@ fn test_select_dollar_column_from_stage() {
 
 #[test]
 fn parse_nested_object() {
-    let sql = r#"SELECT TRY_CAST(PARSE_JSON('{"obj_field":{"field":"value",}}') AS OBJECT(obj_field OBJECT(
-        field VARCHAR
-)));"#;
+    // nested OBJECT with a single field
+    snowflake().verified_stmt("SELECT TRY_CAST(PARSE_JSON('{\"obj_field\":{\"field\":\"value\",}}') AS OBJECT(obj_field OBJECT(field VARCHAR)))");
 
-    snowflake().parse_sql_statements(sql).unwrap();
+    // OBJECT with multiple fields
+    snowflake().verified_stmt("SELECT CAST(v AS OBJECT(a VARCHAR, b INT, c BOOLEAN))");
+
+    // nested OBJECT with multiple fields at both levels
+    snowflake().verified_stmt("SELECT CAST(v AS OBJECT(x OBJECT(a INT, b VARCHAR), y NUMBER))");
+
+    // OBJECT with zero fields (empty parentheses)
+    snowflake().verified_stmt("SELECT CAST(v AS OBJECT())");
+
+    // bare OBJECT without parentheses round-trips as OBJECT
+    snowflake().verified_stmt("SELECT CAST(v AS OBJECT)");
 }

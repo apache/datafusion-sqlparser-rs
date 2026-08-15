@@ -11419,6 +11419,274 @@ fn parse_deeply_nested_subquery_expr_hits_recursion_limits() {
     assert_eq!(res, Err(ParserError::RecursionLimitExceeded));
 }
 
+/// Parse `sql` on a thread with a bounded stack and a hard timeout.
+///
+/// These shapes are bounded by *remaining stack*, not by input size, so an
+/// unguarded recursion does not fail — it wedges. Running the parse on its own
+/// thread with a receive timeout means a regression in the depth guard fails the
+/// test loudly and in bounded time instead of hanging the test process.
+///
+/// A successful parse is `mem::forget`-ed rather than dropped: the derived `Drop`
+/// on the AST is itself recursive, so dropping a deep tree performs exactly the
+/// stack descent this test exists to prevent.
+///
+/// The stack is deliberately *generous* rather than tight. What is under test is
+/// the depth contract, and reaching `DEFAULT_REMAINING_DEPTH` at all costs real
+/// stack: the `parse_prefix -> parse_cast_expr -> parse_expr -> parse_subexpr`
+/// chain runs ~85 KB per level in an unoptimised build, so a full 50 levels needs
+/// roughly 5 MB before the guard can fire. A tighter stack would make this test
+/// fail on the debug frame budget instead of on the property it asserts. The
+/// loudness comes from the assertion and the timeout, not from starving the stack.
+fn parse_depth_bounded(name: &str, sql: String) -> Result<(), ParserError> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::Builder::new()
+        .stack_size(16 * 1024 * 1024)
+        .spawn(move || {
+            let dialect = GenericDialect {};
+            let result = Parser::new(&dialect)
+                .try_with_sql(&sql)
+                .expect("tokenize to work")
+                .parse_statements();
+            let _ = tx.send(match result {
+                Ok(ast) => {
+                    std::mem::forget(ast);
+                    Ok(())
+                }
+                Err(e) => Err(e),
+            });
+        })
+        .expect("spawn to work");
+
+    rx.recv_timeout(std::time::Duration::from_secs(20))
+        .unwrap_or_else(|_| {
+            panic!("{name}: parser did not return within 20s; the depth guard has regressed")
+        })
+}
+
+/// Every recursive-descent shape that reaches an uncounted cycle must deny with
+/// `RecursionLimitExceeded`, not run to stack exhaustion.
+///
+/// Regression test for the audit in zuru-federated-query#606. Each entry drives a
+/// distinct cycle; see the comments at the corresponding `try_decrease` sites.
+#[test]
+fn deeply_nested_recursive_shapes_hit_recursion_limits() {
+    // depth far past DEFAULT_REMAINING_DEPTH (50), but only a few KB of SQL
+    let n = 2000;
+    let cases: Vec<(&str, String)> = vec![
+        // --- recursive DataType constructors, via CAST ---
+        (
+            "Nullable",
+            format!(
+                "SELECT CAST(1 AS {}INT{})",
+                "Nullable(".repeat(n),
+                ")".repeat(n)
+            ),
+        ),
+        (
+            "LowCardinality",
+            format!(
+                "SELECT CAST(1 AS {}INT{})",
+                "LowCardinality(".repeat(n),
+                ")".repeat(n)
+            ),
+        ),
+        (
+            "Map",
+            format!(
+                "SELECT CAST(1 AS {}INT{})",
+                "Map(INT, ".repeat(n),
+                ")".repeat(n)
+            ),
+        ),
+        (
+            "Tuple",
+            format!(
+                "SELECT CAST(1 AS {}INT{})",
+                "Tuple(a ".repeat(n),
+                ")".repeat(n)
+            ),
+        ),
+        (
+            "Nested",
+            format!(
+                "SELECT CAST(1 AS {}INT{})",
+                "NESTED(a ".repeat(n),
+                ")".repeat(n)
+            ),
+        ),
+        // Angle-bracket forms recurse into `parse_data_type_helper` *directly*,
+        // bypassing `parse_data_type`. A guard placed on `parse_data_type` alone
+        // would not catch these two — which is why the guard is on the helper.
+        (
+            "ARRAY<>",
+            format!(
+                "SELECT CAST(1 AS {}INT{})",
+                "ARRAY<".repeat(n),
+                ">".repeat(n)
+            ),
+        ),
+        (
+            "STRUCT<>",
+            format!(
+                "SELECT CAST(1 AS {}INT{})",
+                "STRUCT<a ".repeat(n),
+                ">".repeat(n)
+            ),
+        ),
+        // --- the same DataType cycle reached from non-CAST positions ---
+        (
+            "TRY_CAST",
+            format!(
+                "SELECT TRY_CAST(1 AS {}INT{})",
+                "Nullable(".repeat(n),
+                ")".repeat(n)
+            ),
+        ),
+        (
+            "::cast",
+            format!("SELECT 1::{}INT{}", "Nullable(".repeat(n), ")".repeat(n)),
+        ),
+        (
+            "column def",
+            format!(
+                "CREATE TABLE t (c {}INT{})",
+                "Nullable(".repeat(n),
+                ")".repeat(n)
+            ),
+        ),
+        (
+            "RETURNS TABLE",
+            format!(
+                "CREATE FUNCTION f() RETURNS TABLE (c {}INT{}) AS 'x'",
+                "Nullable(".repeat(n),
+                ")".repeat(n)
+            ),
+        ),
+        // --- cycles outside the DataType family ---
+        (
+            "INTERVAL prefix chain",
+            format!("SELECT {}'1'", "INTERVAL ".repeat(n)),
+        ),
+        (
+            "MATCH_RECOGNIZE PATTERN",
+            format!(
+                "SELECT * FROM t MATCH_RECOGNIZE(PATTERN ({}a{}) DEFINE a AS true)",
+                "(".repeat(n),
+                ")".repeat(n)
+            ),
+        ),
+        (
+            "JSON_TABLE NESTED COLUMNS",
+            format!(
+                "SELECT * FROM JSON_TABLE('{{}}', '$' COLUMNS({}a INT PATH '$'{}))",
+                "NESTED PATH '$' COLUMNS(".repeat(n),
+                ")".repeat(n)
+            ),
+        ),
+        // --- shapes that reach a *counted* site, but whose recursion-limit error
+        // --- was previously discarded and retried in `parse_prefix`
+        (
+            "nested CAST",
+            format!("SELECT {}1{}", "CAST(".repeat(n), " AS INT)".repeat(n)),
+        ),
+        (
+            "nested CASE",
+            format!(
+                "SELECT {}1{}",
+                "CASE WHEN true THEN ".repeat(n),
+                " END".repeat(n)
+            ),
+        ),
+    ];
+
+    for (name, sql) in cases {
+        let res = parse_depth_bounded(name, sql);
+        assert_eq!(
+            Err(ParserError::RecursionLimitExceeded),
+            res,
+            "{name}: expected a clean recursion-limit denial"
+        );
+    }
+}
+
+/// The depth guard must not be so eager that it rejects ordinary SQL, and must
+/// not convert the *iterative* deep shapes into denials.
+#[test]
+fn depth_guard_does_not_deny_shapes_that_are_not_recursive() {
+    // `INT[][]..[]` is assembled by a loop in `parse_data_type_helper`, not by
+    // recursive descent, so it must still parse at a depth no recursion could reach.
+    let sql = format!("SELECT CAST(1 AS INT{})", "[]".repeat(5000));
+    assert_eq!(
+        Ok(()),
+        parse_depth_bounded("sq", sql),
+        "square-bracket array form"
+    );
+
+    // A long UNION chain is left-associative and parsed iteratively.
+    let sql = format!("SELECT 1{}", " UNION SELECT 1".repeat(5000));
+    assert_eq!(
+        Ok(()),
+        parse_depth_bounded("union", sql),
+        "set-operation chain"
+    );
+
+    // Ordinary nested types stay well inside the budget.
+    let sql = "SELECT CAST(1 AS ARRAY<STRUCT<a Nullable(INT)>>)".to_string();
+    assert_eq!(
+        Ok(()),
+        parse_depth_bounded("ordinary", sql),
+        "ordinary nested type"
+    );
+}
+
+/// The recursion limit must change *whether* a statement parses, never *how* it
+/// parses. Before the fix, `parse_prefix` discarded `RecursionLimitExceeded` and
+/// retried the same span under a different interpretation, so the same SQL
+/// produced structurally different ASTs at different limits — silently, as `Ok`.
+#[test]
+fn recursion_limit_does_not_change_the_parsed_ast() {
+    let dialect = GenericDialect {};
+    let sql = format!(
+        "SELECT {}1{}",
+        "CASE WHEN true THEN ".repeat(6),
+        " END".repeat(6)
+    );
+
+    let mut parsed = None;
+    for limit in [20usize, 40, 60, 100] {
+        let res = Parser::new(&dialect)
+            .with_recursion_limit(limit)
+            .try_with_sql(&sql)
+            .expect("tokenize to work")
+            .parse_statements();
+
+        match res {
+            // Denial is a legitimate outcome at a tight limit.
+            Err(ParserError::RecursionLimitExceeded) => {}
+            Err(e) => panic!("limit {limit}: unexpected error {e}"),
+            Ok(ast) => {
+                let rendered = ast[0].to_string();
+                if let Some(prev) = &parsed {
+                    assert_eq!(
+                        prev, &rendered,
+                        "limit {limit} produced a different AST for identical SQL"
+                    );
+                } else {
+                    parsed = Some(rendered);
+                }
+            }
+        }
+    }
+
+    // Sanity: at least one limit must have been generous enough to succeed, and
+    // the successful parse must round-trip to the input.
+    assert_eq!(
+        Some(sql),
+        parsed,
+        "no limit parsed the statement successfully"
+    );
+}
+
 #[test]
 fn parse_deeply_nested_interval_hits_recursion_limits() {
     let dialect = GenericDialect {};

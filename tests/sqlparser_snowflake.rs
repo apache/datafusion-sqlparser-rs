@@ -23,7 +23,7 @@ use sqlparser::ast::helpers::key_value_options::{KeyValueOption, KeyValueOptionK
 use sqlparser::ast::helpers::stmt_data_loading::{StageLoadSelectItem, StageLoadSelectItemKind};
 use sqlparser::ast::*;
 use sqlparser::dialect::{Dialect, GenericDialect, SnowflakeDialect};
-use sqlparser::parser::{ParserError, ParserOptions};
+use sqlparser::parser::{Parser, ParserError, ParserOptions};
 use sqlparser::tokenizer::*;
 use test_utils::*;
 
@@ -5041,4 +5041,29 @@ fn test_stage_name_delimiters() {
             .unwrap_err(),
         ParserError::ParserError("Expected: stage name identifier, found: .".to_string()),
     );
+}
+
+#[test]
+fn test_deeply_nested_key_value_options_hit_recursion_limits() {
+    let sql = format!(
+        "CREATE STAGE s COPY_OPTIONS=({}b=1{})",
+        "a=(".repeat(1000),
+        ")".repeat(1000)
+    );
+    let res = snowflake().parse_sql_statements(&sql);
+    assert_eq!(ParserError::RecursionLimitExceeded, res.unwrap_err());
+}
+
+#[test]
+fn test_parens_less_nested_joins_hit_recursion_limits() {
+    let sql = format!("SELECT * FROM t{}", " JOIN t".repeat(1000));
+    // A lower limit keeps the debug-build stack within a test thread's default.
+    let res = Parser::new(&SnowflakeDialect {})
+        .with_recursion_limit(10)
+        .try_with_sql(&sql)
+        .expect("tokenize to work")
+        .parse_statements();
+    assert_eq!(res, Err(ParserError::RecursionLimitExceeded));
+
+    snowflake().verified_stmt("SELECT * FROM t JOIN t2 ON true JOIN t3 ON true");
 }

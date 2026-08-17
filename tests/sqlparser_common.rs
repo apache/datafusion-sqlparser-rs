@@ -1985,6 +1985,109 @@ fn parse_is_not_distinct_from() {
 }
 
 #[test]
+fn parse_is_distinct_from_precedence() {
+    let ident = |name: &str| Box::new(Expr::Identifier(Ident::new(name)));
+
+    // IS DISTINCT FROM has higher precedence than AND, so the following parses as
+    // (a IS DISTINCT FROM b) AND c
+    let sql = "a IS DISTINCT FROM b AND c";
+    assert_eq!(
+        verified_expr(sql),
+        Expr::BinaryOp {
+            left: Box::new(Expr::IsDistinctFrom(ident("a"), ident("b"))),
+            op: BinaryOperator::And,
+            right: ident("c"),
+        },
+    );
+
+    // The negated form binds the same way, parsing as (a IS NOT DISTINCT FROM b) AND c
+    let sql = "a IS NOT DISTINCT FROM b AND c";
+    assert_eq!(
+        verified_expr(sql),
+        Expr::BinaryOp {
+            left: Box::new(Expr::IsNotDistinctFrom(ident("a"), ident("b"))),
+            op: BinaryOperator::And,
+            right: ident("c"),
+        },
+    );
+
+    // OR is lower still, so the following parses as (a IS DISTINCT FROM b) OR c
+    let sql = "a IS DISTINCT FROM b OR c";
+    assert_eq!(
+        verified_expr(sql),
+        Expr::BinaryOp {
+            left: Box::new(Expr::IsDistinctFrom(ident("a"), ident("b"))),
+            op: BinaryOperator::Or,
+            right: ident("c"),
+        },
+    );
+
+    // Arithmetic binds tighter, so it joins the right operand: a IS DISTINCT FROM (b + c)
+    let sql = "a IS DISTINCT FROM b + c";
+    assert_eq!(
+        verified_expr(sql),
+        Expr::IsDistinctFrom(
+            ident("a"),
+            Box::new(Expr::BinaryOp {
+                left: ident("b"),
+                op: BinaryOperator::Plus,
+                right: ident("c"),
+            }),
+        ),
+    );
+
+    // So do the comparison operators, giving a IS DISTINCT FROM (b = c)
+    let sql = "a IS DISTINCT FROM b = c";
+    assert_eq!(
+        verified_expr(sql),
+        Expr::IsDistinctFrom(
+            ident("a"),
+            Box::new(Expr::BinaryOp {
+                left: ident("b"),
+                op: BinaryOperator::Eq,
+                right: ident("c"),
+            }),
+        ),
+    );
+
+    // NOT is lower, so the following parses as NOT (a IS DISTINCT FROM b)
+    let sql = "NOT a IS DISTINCT FROM b";
+    assert_eq!(
+        verified_expr(sql),
+        Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            expr: Box::new(Expr::IsDistinctFrom(ident("a"), ident("b"))),
+        },
+    );
+
+    // Parentheses still put a conjunction in the right operand
+    let sql = "a IS DISTINCT FROM (b AND c)";
+    assert_eq!(
+        verified_expr(sql),
+        Expr::IsDistinctFrom(
+            ident("a"),
+            Box::new(Expr::Nested(Box::new(Expr::BinaryOp {
+                left: ident("b"),
+                op: BinaryOperator::And,
+                right: ident("c"),
+            }))),
+        ),
+    );
+
+    // Both operands of an AND can be a comparison of their own
+    let sql = "SELECT * FROM t WHERE a IS DISTINCT FROM b AND c IS NOT DISTINCT FROM d";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        select.selection,
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::IsDistinctFrom(ident("a"), ident("b"))),
+            op: BinaryOperator::And,
+            right: Box::new(Expr::IsNotDistinctFrom(ident("c"), ident("d"))),
+        }),
+    );
+}
+
+#[test]
 fn parse_not_precedence() {
     // NOT has higher precedence than OR/AND, so the following must parse as (NOT true) OR true
     let sql = "NOT 1 OR 1";

@@ -1653,6 +1653,21 @@ pub enum TableFactor {
         /// Optional alias for the resulting table.
         alias: Option<TableAlias>,
     },
+    /// Object unpivoting on a SUPER expression in the FROM clause.
+    ///
+    /// Syntax:
+    /// ```sql
+    /// UNPIVOT expression AS value_alias [AT attribute_alias]
+    /// ```
+    /// [Redshift](https://docs.aws.amazon.com/redshift/latest/dg/query-super.html#unpivoting)
+    UnpivotExpr {
+        /// SUPER expression to unpivot.
+        expression: Expr,
+        /// Alias for the generated unpivoted value.
+        value_alias: Ident,
+        /// Optional alias for the generated attribute key/index.
+        attribute_alias: Option<Ident>,
+    },
     /// A `MATCH_RECOGNIZE` operation on a table.
     ///
     /// See <https://docs.snowflake.com/en/sql-reference/constructs/match_recognize>.
@@ -2422,6 +2437,17 @@ impl fmt::Display for TableFactor {
                 }
                 Ok(())
             }
+            TableFactor::UnpivotExpr {
+                expression,
+                value_alias,
+                attribute_alias,
+            } => {
+                write!(f, "UNPIVOT {expression} AS {value_alias}")?;
+                if let Some(attribute_alias) = attribute_alias {
+                    write!(f, " AT {attribute_alias}")?;
+                }
+                Ok(())
+            }
             TableFactor::MatchRecognize {
                 table,
                 partition_by,
@@ -2888,6 +2914,7 @@ pub enum OrderByKind {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "visitor", visit(with = "visit_order_by"))]
 /// Represents an `ORDER BY` clause with its kind and optional `INTERPOLATE`.
 pub struct OrderBy {
     /// The kind of ordering (expressions or `ALL`).
@@ -2924,6 +2951,7 @@ impl fmt::Display for OrderBy {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "visitor", visit(with = "visit_order_by_expr"))]
 pub struct OrderByExpr {
     /// The expression to order by.
     pub expr: Expr,
@@ -3545,7 +3573,7 @@ pub struct LockClause {
 
 impl fmt::Display for LockClause {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "FOR {}", &self.lock_type)?;
+        write!(f, "FOR {}", self.lock_type)?;
         if let Some(ref of) = self.of {
             write!(f, " OF {of}")?;
         }
@@ -3776,6 +3804,7 @@ impl fmt::Display for GroupByWithModifier {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "visitor", visit(with = "visit_group_by"))]
 /// Represents the two syntactic forms that `GROUP BY` can take, including
 /// `GROUP BY ALL` with optional modifiers and ordinary `GROUP BY <exprs>`.
 pub enum GroupByExpr {

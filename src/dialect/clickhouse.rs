@@ -32,6 +32,13 @@ impl Dialect for ClickHouseDialect {
         self.is_identifier_start(ch) || ch.is_ascii_digit()
     }
 
+    /// ClickHouse accepts both backticks and double quotes, but its own
+    /// formatter emits backticks by default.
+    /// See <https://clickhouse.com/docs/en/sql-reference/syntax#identifiers>
+    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+        Some('`')
+    }
+
     fn supports_string_literal_backslash_escape(&self) -> bool {
         true
     }
@@ -77,6 +84,11 @@ impl Dialect for ClickHouseDialect {
     //
     // [ClickHouse formats](https://clickhouse.com/docs/en/interfaces/formats)
     fn supports_dictionary_syntax(&self) -> bool {
+        true
+    }
+
+    // See <https://clickhouse.com/docs/sql-reference/operators/in>
+    fn supports_in_unparenthesized_expr(&self) -> bool {
         true
     }
 

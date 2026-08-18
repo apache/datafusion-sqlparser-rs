@@ -9831,6 +9831,92 @@ fn parse_create_index_async() {
 }
 
 #[test]
+fn parse_create_vector_index() {
+    // `CREATE VECTOR INDEX` parses for every dialect as a `CreateIndex` flagged
+    // `vector`; the `OPTIONS(...)` trailer lands in `options`.
+    let sql =
+        "CREATE VECTOR INDEX emb ON t(embedding) OPTIONS(distance_type = 'COSINE', dimension = 4)";
+    match verified_stmt(sql) {
+        Statement::CreateIndex(CreateIndex {
+            name,
+            table_name,
+            using,
+            columns,
+            vector,
+            or_replace,
+            unique,
+            if_not_exists,
+            with,
+            options,
+            ..
+        }) => {
+            assert!(vector);
+            assert!(!or_replace);
+            assert!(!unique);
+            assert!(!if_not_exists);
+            assert_eq!(name.unwrap().to_string(), "emb");
+            assert_eq!(table_name.to_string(), "t");
+            assert_eq!(using, None);
+            assert!(with.is_empty());
+            assert_eq!(
+                columns.iter().map(|c| c.to_string()).collect::<Vec<_>>(),
+                vec!["embedding"]
+            );
+            assert_eq!(
+                options,
+                vec![
+                    SqlOption::KeyValue {
+                        key: Ident::new("distance_type"),
+                        value: Expr::Value(
+                            Value::SingleQuotedString("COSINE".to_string()).with_empty_span()
+                        ),
+                    },
+                    SqlOption::KeyValue {
+                        key: Ident::new("dimension"),
+                        value: Expr::value(number("4")),
+                    },
+                ]
+            );
+        }
+        other => panic!("expected CreateIndex, got {other:?}"),
+    }
+
+    // `OR REPLACE`.
+    match verified_stmt(
+        "CREATE OR REPLACE VECTOR INDEX emb ON t(embedding) OPTIONS(distance_type = 'COSINE')",
+    ) {
+        Statement::CreateIndex(CreateIndex {
+            vector, or_replace, ..
+        }) => {
+            assert!(vector);
+            assert!(or_replace);
+        }
+        other => panic!("expected CreateIndex, got {other:?}"),
+    }
+
+    // `IF NOT EXISTS` and schema-qualified names.
+    match verified_stmt(
+        "CREATE VECTOR INDEX IF NOT EXISTS s.emb ON s.t(embedding) OPTIONS(distance_type = 'EUCLIDEAN')",
+    ) {
+        Statement::CreateIndex(CreateIndex {
+            vector,
+            if_not_exists,
+            ..
+        }) => {
+            assert!(vector);
+            assert!(if_not_exists);
+        }
+        other => panic!("expected CreateIndex, got {other:?}"),
+    }
+
+    // The bare core, an `INCLUDE` covering-column trailer, and an expression
+    // target all round-trip.
+    verified_stmt("CREATE VECTOR INDEX emb ON t(embedding)");
+    verified_stmt("CREATE VECTOR INDEX emb ON t(embedding) INCLUDE (a, b)");
+    verified_stmt("CREATE VECTOR INDEX emb ON t(VEC_COSINE_DISTANCE(embedding))");
+}
+
+#[test]
 fn parse_drop_index() {
     let sql = "DROP INDEX idx_a";
     match verified_stmt(sql) {

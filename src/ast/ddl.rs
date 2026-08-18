@@ -2827,7 +2827,7 @@ pub struct CreateIndex {
     pub using: Option<IndexType>,
     /// columns included in the index
     pub columns: Vec<IndexColumn>,
-    /// whether this is a BigQuery `CREATE VECTOR INDEX`
+    /// whether this is a `CREATE VECTOR INDEX`
     pub vector: bool,
     /// whether the statement is `CREATE OR REPLACE`
     pub or_replace: bool,
@@ -2847,7 +2847,7 @@ pub struct CreateIndex {
     pub nulls_distinct: Option<bool>,
     /// WITH clause: <https://www.postgresql.org/docs/current/sql-createindex.html>
     pub with: Vec<Expr>,
-    /// BigQuery `OPTIONS(...)` clause, e.g. on `CREATE VECTOR INDEX`
+    /// `OPTIONS(...)` clause, e.g. on `CREATE VECTOR INDEX`
     pub options: Vec<SqlOption>,
     /// WHERE clause: <https://www.postgresql.org/docs/current/sql-createindex.html>
     pub predicate: Option<Expr>,
@@ -2890,9 +2890,6 @@ impl fmt::Display for CreateIndex {
             write!(f, " USING {value} ")?;
         }
         write!(f, "({})", display_comma_separated(&self.columns))?;
-        if !self.options.is_empty() {
-            write!(f, " OPTIONS({})", display_comma_separated(&self.options))?;
-        }
         if !self.include.is_empty() {
             write!(f, " INCLUDE ({})", display_comma_separated(&self.include))?;
         }
@@ -2905,6 +2902,9 @@ impl fmt::Display for CreateIndex {
         }
         if !self.with.is_empty() {
             write!(f, " WITH ({})", display_comma_separated(&self.with))?;
+        }
+        if !self.options.is_empty() {
+            write!(f, " OPTIONS({})", display_comma_separated(&self.options))?;
         }
         if let Some(predicate) = &self.predicate {
             write!(f, " WHERE {predicate}")?;

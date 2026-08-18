@@ -16741,14 +16741,8 @@ impl<'a> Parser<'a> {
             if self.dialect.supports_snowflake_pipe_operator() {
                 if let Token::Placeholder(ref s) = self.peek_token_ref().token.clone() {
                     if let Some(index_str) = s.strip_prefix('$') {
-                        if let Ok(index) = index_str.parse::<u64>() {
+                        if let Ok(index @ 1..) = index_str.parse::<u64>() {
                             self.next_token(); // consume the $n token
-                            if index == 0 {
-                                return Err(ParserError::ParserError(
-                                    "$0 is not a valid pipe result reference; indices start at $1"
-                                        .to_string(),
-                                ));
-                            }
                             return Ok(TableFactor::PipeResultScan { index });
                         }
                     }

@@ -4949,7 +4949,7 @@ fn test_snowflake_pipe_operator() {
     assert_eq!(
         snowflake().parse_sql_statements("SELECT * FROM $0"),
         Err(ParserError::ParserError(
-            "$0 is not a valid pipe result reference; indices start at $1".to_string()
+            "Expected: identifier, found: $0".to_string()
         ))
     );
 

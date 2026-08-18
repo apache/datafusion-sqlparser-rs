@@ -1210,6 +1210,11 @@ pub fn parse_create_database(
                 _ => return parser.expected("end of statement", next_token),
             },
             Token::SemiColon | Token::EOF => break,
+            Token::LongArrow => {
+                // Snowflake pipe operator terminates the statement
+                parser.prev_token();
+                break;
+            }
             _ => return parser.expected("end of statement", next_token),
         }
     }

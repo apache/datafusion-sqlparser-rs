@@ -4930,12 +4930,36 @@ fn test_snowflake_pipe_operator() {
     snowflake()
         .verified_stmt("CREATE TABLE t (id INT) ->> INSERT INTO t VALUES (1) ->> SELECT * FROM $1");
 
-    // Pipe operator is not parsed in non-Snowflake dialects
+    // Exact documented SHOW shape from Snowflake docs
+    snowflake()
+        .verified_stmt(r#"SHOW WAREHOUSES ->> SELECT "name", "state", "type", "size" FROM $1"#);
+
+    // CREATE DATABASE piped into SELECT
+    snowflake().verified_stmt("CREATE DATABASE d ->> SELECT 1");
+
+    // Error: trailing ->> with no following statement
+    assert_eq!(
+        snowflake().parse_sql_statements("SELECT 1 ->>"),
+        Err(ParserError::ParserError(
+            "Expected: an SQL statement, found: EOF".to_string()
+        ))
+    );
+
+    // Error: $0 is not a valid pipe result reference
+    assert_eq!(
+        snowflake().parse_sql_statements("SELECT * FROM $0"),
+        Err(ParserError::ParserError(
+            "$0 is not a valid pipe result reference; indices start at $1".to_string()
+        ))
+    );
+
+    // In GenericDialect, ->> remains a binary (JSON extract) operator, not a pipe
     use sqlparser::dialect::GenericDialect;
     use sqlparser::parser::Parser;
-    // In a generic dialect, ->> is a binary operator, not a pipe
-    let stmts = Parser::parse_sql(&GenericDialect {}, "SELECT 1").unwrap();
+    let stmts = Parser::parse_sql(&GenericDialect {}, "SELECT payload ->> 'name'").unwrap();
     assert_eq!(stmts.len(), 1);
+    // In GenericDialect, SELECT 1 ->> SELECT 2 is a parse error (SELECT 2 is not an expression)
+    assert!(Parser::parse_sql(&GenericDialect {}, "SELECT 1 ->> SELECT 2").is_err());
 }
 
 #[test]

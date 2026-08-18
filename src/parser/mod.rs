@@ -13753,6 +13753,7 @@ impl<'a> Parser<'a> {
                 Token::EOF | Token::Eq | Token::SemiColon | Token::VerticalBarRightAngleBracket => {
                     break
                 }
+                Token::LongArrow if self.dialect.supports_snowflake_pipe_operator() => break,
                 _ => {}
             }
             self.advance_token();
@@ -16742,6 +16743,12 @@ impl<'a> Parser<'a> {
                     if let Some(index_str) = s.strip_prefix('$') {
                         if let Ok(index) = index_str.parse::<u64>() {
                             self.next_token(); // consume the $n token
+                            if index == 0 {
+                                return Err(ParserError::ParserError(
+                                    "$0 is not a valid pipe result reference; indices start at $1"
+                                        .to_string(),
+                                ));
+                            }
                             return Ok(TableFactor::PipeResultScan { index });
                         }
                     }

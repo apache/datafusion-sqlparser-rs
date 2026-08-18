@@ -726,7 +726,7 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Does the dialect support the Snowflake `-->`  flow/pipe operator for chaining
+    /// Does the dialect support the Snowflake `->>`  flow/pipe operator for chaining
     /// SQL statements? e.g. `SELECT * FROM t ->> SELECT * FROM $1`
     ///
     /// See <https://docs.snowflake.com/en/sql-reference/operators-flow>

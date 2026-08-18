@@ -629,7 +629,7 @@ impl<'a> Parser<'a> {
 
         // Handle Snowflake pipe operator: chain multiple statements with ->>
         // See <https://docs.snowflake.com/en/sql-reference/operators-flow>
-        if self.dialect.supports_snowflake_pipe_operator()
+        if self.dialect.supports_long_arrow_pipe_operator()
             && self.peek_token_ref().token == Token::LongArrow
         {
             let mut statements = vec![stmt];
@@ -13753,7 +13753,7 @@ impl<'a> Parser<'a> {
                 Token::EOF | Token::Eq | Token::SemiColon | Token::VerticalBarRightAngleBracket => {
                     break
                 }
-                Token::LongArrow if self.dialect.supports_snowflake_pipe_operator() => break,
+                Token::LongArrow if self.dialect.supports_long_arrow_pipe_operator() => break,
                 _ => {}
             }
             self.advance_token();
@@ -16738,7 +16738,7 @@ impl<'a> Parser<'a> {
         } else {
             // Handle Snowflake pipe result references ($1, $2, ...) in FROM clause.
             // See <https://docs.snowflake.com/en/sql-reference/operators-flow>
-            if self.dialect.supports_snowflake_pipe_operator() {
+            if self.dialect.supports_long_arrow_pipe_operator() {
                 if let Token::Placeholder(ref s) = self.peek_token_ref().token.clone() {
                     if let Some(index_str) = s.strip_prefix('$') {
                         if let Ok(index @ 1..) = index_str.parse::<u64>() {

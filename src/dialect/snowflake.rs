@@ -694,7 +694,7 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
-    fn supports_snowflake_pipe_operator(&self) -> bool {
+    fn supports_long_arrow_pipe_operator(&self) -> bool {
         true
     }
 

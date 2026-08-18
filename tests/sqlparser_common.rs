@@ -1723,7 +1723,7 @@ fn parse_json_ops_without_colon() {
         (
             "->>",
             LongArrow,
-            all_dialects_except(|d| d.supports_snowflake_pipe_operator()),
+            all_dialects_except(|d| d.supports_long_arrow_pipe_operator()),
         ),
         ("#>", HashArrow, pg_and_generic()),
         ("#>>", HashLongArrow, pg_and_generic()),

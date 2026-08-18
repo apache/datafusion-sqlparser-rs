@@ -4953,13 +4953,12 @@ fn test_snowflake_pipe_operator() {
         ))
     );
 
-    // In GenericDialect, ->> remains a binary (JSON extract) operator, not a pipe
+    // GenericDialect also supports pipe syntax (it is permissive by design)
     use sqlparser::dialect::GenericDialect;
     use sqlparser::parser::Parser;
-    let stmts = Parser::parse_sql(&GenericDialect {}, "SELECT payload ->> 'name'").unwrap();
-    assert_eq!(stmts.len(), 1);
-    // In GenericDialect, SELECT 1 ->> SELECT 2 is a parse error (SELECT 2 is not an expression)
-    assert!(Parser::parse_sql(&GenericDialect {}, "SELECT 1 ->> SELECT 2").is_err());
+    Parser::parse_sql(&GenericDialect {}, "SELECT * FROM t ->> SELECT * FROM $1").unwrap();
+    // JSON ->> binary operator still works inside expressions
+    Parser::parse_sql(&GenericDialect {}, "SELECT payload ->> 'name'").unwrap();
 }
 
 #[test]

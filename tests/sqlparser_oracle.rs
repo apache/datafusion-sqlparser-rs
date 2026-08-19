@@ -545,3 +545,13 @@ fn parse_non_reserved_keyword_table_names() {
     oracle().verified_stmt("SELECT * FROM limit");
     oracle().verified_stmt("SELECT * FROM t JOIN limit ON TRUE");
 }
+
+#[test]
+fn parse_oracle_create_vector_index() {
+    // Oracle's specialized clauses (ORGANIZATION / DISTANCE / WITH TARGET
+    // ACCURACY / PARAMETERS) are not yet parsed; the forms it shares with the
+    // common grammar — an expression target and an `INCLUDE` list — round-trip.
+    oracle().verified_stmt("CREATE VECTOR INDEX g_idx ON galaxies(embedding)");
+    oracle().verified_stmt("CREATE VECTOR INDEX g_idx ON galaxies(VEC_DISTANCE(embedding))");
+    oracle().verified_stmt("CREATE VECTOR INDEX g_idx ON galaxies(embedding) INCLUDE (id)");
+}

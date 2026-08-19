@@ -3297,6 +3297,7 @@ fn parse_create_index() {
             vector: _,
             or_replace: _,
             options: _,
+            storing: _,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -3337,6 +3338,7 @@ fn parse_create_anonymous_index() {
             vector: _,
             or_replace: _,
             options: _,
+            storing: _,
         }) => {
             assert_eq!(None, name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -3460,6 +3462,7 @@ fn parse_create_indices_with_operator_classes() {
                     vector: _,
                     or_replace: _,
                     options: _,
+                    storing: _,
                 }) => {
                     assert_eq_vec(&["the_index_name"], &name);
                     assert_eq_vec(&["users"], &table_name);
@@ -3492,6 +3495,7 @@ fn parse_create_indices_with_operator_classes() {
                     vector: _,
                     or_replace: _,
                     options: _,
+                    storing: _,
                 }) => {
                     assert_eq_vec(&["the_index_name"], &name);
                     assert_eq_vec(&["users"], &table_name);
@@ -3579,6 +3583,7 @@ fn parse_create_bloom() {
             vector: _,
             or_replace: _,
             options: _,
+            storing: _,
         }) => {
             assert_eq_vec(&["bloomidx"], &name);
             assert_eq_vec(&["tbloom"], &table_name);
@@ -3639,6 +3644,7 @@ fn parse_create_brin() {
             vector: _,
             or_replace: _,
             options: _,
+            storing: _,
         }) => {
             assert_eq_vec(&["brin_sensor_data_recorded_at"], &name);
             assert_eq_vec(&["sensor_data"], &table_name);
@@ -3710,6 +3716,7 @@ fn parse_create_index_concurrently() {
             vector: _,
             or_replace: _,
             options: _,
+            storing: _,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -3750,6 +3757,7 @@ fn parse_create_index_with_predicate() {
             vector: _,
             or_replace: _,
             options: _,
+            storing: _,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -3790,6 +3798,7 @@ fn parse_create_index_with_include() {
             vector: _,
             or_replace: _,
             options: _,
+            storing: _,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -3830,6 +3839,7 @@ fn parse_create_index_with_nulls_distinct() {
             vector: _,
             or_replace: _,
             options: _,
+            storing: _,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -3868,6 +3878,7 @@ fn parse_create_index_with_nulls_distinct() {
             vector: _,
             or_replace: _,
             options: _,
+            storing: _,
         }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);

@@ -2967,3 +2967,12 @@ fn parse_quoted_statement_keyword_aliases() {
     ms().verified_stmt("SELECT * FROM t [PRINT]");
     ms().verified_stmt("SELECT * FROM t AS [PRINT]");
 }
+
+#[test]
+fn parse_mssql_create_vector_index() {
+    // SQL Server's form: bracket-quoted names and a `WITH (...)` options clause
+    // (`METRIC` / `TYPE` / `MAXDOP`).
+    ms().verified_stmt(
+        "CREATE VECTOR INDEX vec_idx ON [dbo].[articles]([title_vector]) WITH (METRIC = 'cosine', TYPE = 'DiskANN', MAXDOP = 8)",
+    );
+}

@@ -9747,6 +9747,7 @@ fn test_create_index_with_using_function() {
             vector: _,
             or_replace: _,
             options: _,
+            storing: _,
         }) => {
             assert_eq!("idx_name", name.to_string());
             assert_eq!("test", table_name.to_string());
@@ -9807,6 +9808,7 @@ fn test_create_index_with_with_clause() {
             vector: _,
             or_replace: _,
             options: _,
+            storing: _,
         }) => {
             pretty_assertions::assert_eq!("title_idx", name.to_string());
             pretty_assertions::assert_eq!("films", table_name.to_string());
@@ -9909,11 +9911,15 @@ fn parse_create_vector_index() {
         other => panic!("expected CreateIndex, got {other:?}"),
     }
 
-    // The bare core, an `INCLUDE` covering-column trailer, and an expression
-    // target all round-trip.
+    // The bare core plus the shared trailers all round-trip across dialects: an
+    // expression target, `INCLUDE` / `STORING` covering columns, a `WITH`
+    // options clause, and a trailing `USING <method>`.
     verified_stmt("CREATE VECTOR INDEX emb ON t(embedding)");
-    verified_stmt("CREATE VECTOR INDEX emb ON t(embedding) INCLUDE (a, b)");
     verified_stmt("CREATE VECTOR INDEX emb ON t(VEC_COSINE_DISTANCE(embedding))");
+    verified_stmt("CREATE VECTOR INDEX emb ON t(embedding) INCLUDE (a, b)");
+    verified_stmt("CREATE VECTOR INDEX emb ON t(embedding) STORING(a, b)");
+    verified_stmt("CREATE VECTOR INDEX emb ON t(embedding) WITH (metric = 'cosine')");
+    verified_stmt("CREATE VECTOR INDEX emb ON t(embedding) USING HNSW");
 }
 
 #[test]

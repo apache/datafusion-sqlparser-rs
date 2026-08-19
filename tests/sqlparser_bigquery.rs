@@ -2958,3 +2958,14 @@ fn parse_from_first_select() {
     bigquery().verified_stmt("FROM t |> WHERE a > 1 |> SELECT a");
 }
 
+#[test]
+fn parse_bigquery_create_vector_index() {
+    // BigQuery's form: an `OPTIONS(...)` clause with its index_type / distance_type
+    // / JSON tuning keys, and a `STORING(...)` covering-column list.
+    bigquery().verified_stmt(
+        "CREATE VECTOR INDEX my_index ON my_dataset.my_table(embedding) OPTIONS(index_type = 'IVF', distance_type = 'COSINE', ivf_options = '{\"num_lists\": 2500}')",
+    );
+    bigquery().verified_stmt(
+        "CREATE OR REPLACE VECTOR INDEX my_index ON my_dataset.my_table(embedding) STORING(type, creation_time) OPTIONS(index_type = 'TREE_AH', distance_type = 'EUCLIDEAN')",
+    );
+}

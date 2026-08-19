@@ -2843,6 +2843,8 @@ pub struct CreateIndex {
     pub if_not_exists: bool,
     /// INCLUDE clause: <https://www.postgresql.org/docs/current/sql-createindex.html>
     pub include: Vec<Ident>,
+    /// `STORING(...)` clause (covering columns on a `CREATE VECTOR INDEX`)
+    pub storing: Vec<Ident>,
     /// NULLS DISTINCT / NOT DISTINCT clause: <https://www.postgresql.org/docs/current/sql-createindex.html>
     pub nulls_distinct: Option<bool>,
     /// WITH clause: <https://www.postgresql.org/docs/current/sql-createindex.html>
@@ -2892,6 +2894,9 @@ impl fmt::Display for CreateIndex {
         write!(f, "({})", display_comma_separated(&self.columns))?;
         if !self.include.is_empty() {
             write!(f, " INCLUDE ({})", display_comma_separated(&self.include))?;
+        }
+        if !self.storing.is_empty() {
+            write!(f, " STORING({})", display_comma_separated(&self.storing))?;
         }
         if let Some(value) = self.nulls_distinct {
             if value {

@@ -4946,3 +4946,12 @@ fn parse_adjacent_string_literal_concatenation() {
 fn parse_group_by_with_rollup() {
     mysql().verified_stmt("SELECT * FROM tbl GROUP BY col1, col2 WITH ROLLUP");
 }
+
+#[test]
+fn parse_mysql_create_vector_index() {
+    // TiDB's form: the vector column is wrapped in a distance function and the
+    // algorithm is named with a trailing `USING`.
+    mysql().verified_stmt(
+        "CREATE VECTOR INDEX idx_cos ON tidb_vectors((VEC_COSINE_DISTANCE(embedding))) USING HNSW",
+    );
+}

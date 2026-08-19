@@ -8323,6 +8323,16 @@ impl<'a> Parser<'a> {
             vec![]
         };
 
+        // `STORING(...)` covering columns (e.g. `CREATE VECTOR INDEX`).
+        let storing = if self.parse_keyword(Keyword::STORING) {
+            self.expect_token(&Token::LParen)?;
+            let columns = self.parse_comma_separated(|p| p.parse_identifier())?;
+            self.expect_token(&Token::RParen)?;
+            columns
+        } else {
+            vec![]
+        };
+
         let nulls_distinct = if self.parse_keyword(Keyword::NULLS) {
             let not = self.parse_keyword(Keyword::NOT);
             self.expect_keyword_is(Keyword::DISTINCT)?;
@@ -8331,7 +8341,9 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let with = if self.dialect.supports_create_index_with_clause()
+        // A vector index accepts a `WITH (...)` options clause in every dialect
+        // (e.g. SQL Server `WITH (METRIC = ..., TYPE = ...)`).
+        let with = if (self.dialect.supports_create_index_with_clause() || vector)
             && self.parse_keyword(Keyword::WITH)
         {
             self.expect_token(&Token::LParen)?;
@@ -8379,6 +8391,7 @@ impl<'a> Parser<'a> {
             r#async,
             if_not_exists,
             include,
+            storing,
             nulls_distinct,
             with,
             options,

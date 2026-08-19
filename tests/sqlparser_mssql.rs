@@ -2941,3 +2941,12 @@ fn parse_bracket_quoted_function_argument_name() {
         }])
     );
 }
+
+#[test]
+fn parse_mssql_create_vector_index() {
+    // SQL Server's form: bracket-quoted names and a `WITH (...)` options clause
+    // (`METRIC` / `TYPE` / `MAXDOP`).
+    ms().verified_stmt(
+        "CREATE VECTOR INDEX vec_idx ON [dbo].[articles]([title_vector]) WITH (METRIC = 'cosine', TYPE = 'DiskANN', MAXDOP = 8)",
+    );
+}

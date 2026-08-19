@@ -2950,3 +2950,31 @@ fn test_create_snapshot_table() {
         "CREATE SNAPSHOT TABLE IF NOT EXISTS dataset_id.table1 CLONE dataset_id.table2 FOR SYSTEM_TIME AS OF TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 HOUR) OPTIONS(expiration_timestamp = TIMESTAMP '2025-01-01 00:00:00 UTC')",
     );
 }
+
+#[test]
+fn parse_from_first_select() {
+    // BigQuery allows a query to begin with `FROM`, both on its own and as the
+    // entry form for pipe syntax.
+    bigquery().verified_stmt("FROM t");
+    bigquery().verified_stmt("FROM t SELECT a, b");
+    bigquery().verified_stmt("FROM t |> WHERE a > 1 |> SELECT a");
+
+    // The bare form has no explicit SELECT and parses as `FromFirstNoSelect`;
+    // adding a SELECT switches it to `FromFirst`.
+    match bigquery().verified_stmt("FROM t") {
+        Statement::Query(query) => match *query.body {
+            SetExpr::Select(select) => {
+                assert_eq!(select.flavor, SelectFlavor::FromFirstNoSelect)
+            }
+            other => panic!("expected a select, got {other:?}"),
+        },
+        other => panic!("expected a query, got {other:?}"),
+    }
+    match bigquery().verified_stmt("FROM t SELECT a, b") {
+        Statement::Query(query) => match *query.body {
+            SetExpr::Select(select) => assert_eq!(select.flavor, SelectFlavor::FromFirst),
+            other => panic!("expected a select, got {other:?}"),
+        },
+        other => panic!("expected a query, got {other:?}"),
+    }
+}

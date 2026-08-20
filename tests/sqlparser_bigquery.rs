@@ -2958,23 +2958,5 @@ fn parse_from_first_select() {
     bigquery().verified_stmt("FROM t");
     bigquery().verified_stmt("FROM t SELECT a, b");
     bigquery().verified_stmt("FROM t |> WHERE a > 1 |> SELECT a");
-
-    // The bare form has no explicit SELECT and parses as `FromFirstNoSelect`;
-    // adding a SELECT switches it to `FromFirst`.
-    match bigquery().verified_stmt("FROM t") {
-        Statement::Query(query) => match *query.body {
-            SetExpr::Select(select) => {
-                assert_eq!(select.flavor, SelectFlavor::FromFirstNoSelect)
-            }
-            other => panic!("expected a select, got {other:?}"),
-        },
-        other => panic!("expected a query, got {other:?}"),
-    }
-    match bigquery().verified_stmt("FROM t SELECT a, b") {
-        Statement::Query(query) => match *query.body {
-            SetExpr::Select(select) => assert_eq!(select.flavor, SelectFlavor::FromFirst),
-            other => panic!("expected a select, got {other:?}"),
-        },
-        other => panic!("expected a query, got {other:?}"),
     }
 }

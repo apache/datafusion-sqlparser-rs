@@ -17643,7 +17643,6 @@ fn parse_left_join_chain_with_and_without_left_associativity() {
     assert_eq!(snowflake_from.joins.len(), 2);
 }
 
-
 #[test]
 fn parse_left_join_chain_with_and_without_left_associativity_cross_join() {
     let query = "SELECT 'ORIGINAL' AS src, o.order_id, c.customer_id, p.product_id FROM orders AS o CROSS JOIN customers AS c LEFT JOIN products AS p ON p.order_id = o.order_id ORDER BY o.order_id, c.customer_id, p.product_id";
@@ -19601,6 +19600,56 @@ fn parse_aliased_function_args() {
     dialects.verified_only_select("SELECT foo(bar(a AS x) AS y)");
     assert!(all_dialects_except(|d| d.supports_aliased_function_args())
         .parse_sql_statements("SELECT foo(a AS x)")
+        .is_err());
+}
+
+#[test]
+fn parse_xmlparse() {
+    let dialects = all_dialects_where(|d| d.supports_xml_expressions());
+
+    for (sql, mode) in [
+        ("SELECT xmlparse(content '<a/>')", "content"),
+        ("SELECT xmlparse(document '<a/>')", "document"),
+    ] {
+        let select = dialects.verified_only_select(sql);
+        match expr_from_projection(&select.projection[0]) {
+            Expr::Function(Function {
+                name,
+                args: FunctionArguments::List(list),
+                ..
+            }) => {
+                assert_eq!(name.to_string(), "xmlparse");
+                assert_eq!(
+                    list.args,
+                    vec![FunctionArg::Named {
+                        name: Ident::new(mode),
+                        arg: FunctionArgExpr::Expr(Expr::Value(
+                            Value::SingleQuotedString("<a/>".to_string()).into()
+                        )),
+                        operator: FunctionArgOperator::Space,
+                    }]
+                );
+            }
+            expr => panic!("expected an XMLPARSE function call, got {expr:?}"),
+        }
+    }
+
+    // XMLPARSE needs both a mode word and a value.
+    assert!(dialects
+        .parse_sql_statements("SELECT xmlparse('<a/>')")
+        .is_err());
+
+    // Going through the ordinary function-call path, XMLPARSE accepts the same
+    // trailing clauses as any other function.
+    dialects.verified_stmt("SELECT xmlparse(document x) FILTER (WHERE y > 1)");
+    dialects.verified_stmt("SELECT xmlparse(document x) OVER (PARTITION BY y)");
+
+    // On dialects without XML support, `xmlparse` stays a regular function
+    // and the special `CONTENT <expr>` syntax is rejected.
+    let others = all_dialects_except(|d| d.supports_xml_expressions());
+    others.verified_only_select("SELECT xmlparse(1)");
+    assert!(others
+        .parse_sql_statements("SELECT xmlparse(content '<a/>')")
         .is_err());
 }
 

@@ -2953,8 +2953,6 @@ fn test_create_snapshot_table() {
 
 #[test]
 fn parse_from_first_select() {
-    // BigQuery allows a query to begin with `FROM`, both on its own and as the
-    // entry form for pipe syntax.
     bigquery().verified_stmt("FROM t");
     bigquery().verified_stmt("FROM t SELECT a, b");
     bigquery().verified_stmt("FROM t |> WHERE a > 1 |> SELECT a");

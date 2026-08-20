@@ -2956,5 +2956,4 @@ fn parse_from_first_select() {
     bigquery().verified_stmt("FROM t");
     bigquery().verified_stmt("FROM t SELECT a, b");
     bigquery().verified_stmt("FROM t |> WHERE a > 1 |> SELECT a");
-    }
 }

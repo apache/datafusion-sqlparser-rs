@@ -2531,6 +2531,23 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse the argument list of `XMLPARSE({ DOCUMENT | CONTENT } value)`,
+    /// including the closing parenthesis. The mode word becomes the name of the
+    /// single argument, with no operator between it and the value.
+    fn parse_xmlparse_argument_list(&mut self) -> Result<FunctionArgumentList, ParserError> {
+        let arg = FunctionArg::Named {
+            name: self.parse_identifier()?,
+            arg: FunctionArgExpr::Expr(self.parse_expr()?),
+            operator: FunctionArgOperator::Space,
+        };
+        self.expect_token(&Token::RParen)?;
+        Ok(FunctionArgumentList {
+            duplicate_treatment: None,
+            args: vec![arg],
+            clauses: vec![],
+        })
+    }
+
     /// Parse a function call expression named by `name` and return it as an `Expr`.
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
         self.parse_function_call(name).map(Expr::Function)
@@ -2556,7 +2573,13 @@ impl<'a> Parser<'a> {
             });
         }
 
-        let mut args = self.parse_function_argument_list()?;
+        let mut args = if self.dialect.supports_xml_expressions()
+            && Self::is_simple_unquoted_object_name(&name, "xmlparse")
+        {
+            self.parse_xmlparse_argument_list()?
+        } else {
+            self.parse_function_argument_list()?
+        };
         let mut parameters = FunctionArguments::None;
         // ClickHouse aggregations support parametric functions like `HISTOGRAM(0.5, 0.6)(x, y)`
         // which (0.5, 0.6) is a parameter to the function.

@@ -4131,6 +4131,21 @@ fn parse_xmlforest_aliased_arguments() {
 }
 
 #[test]
+fn parse_xmlparse() {
+    // The parser only distinguishes the two modes, so the corpus covers those
+    // plus a non-literal argument.
+    let statements = [
+        "SELECT XMLPARSE(CONTENT '')",
+        "SELECT XMLPARSE(CONTENT '<abc>x</abc>')",
+        "SELECT XMLPARSE(DOCUMENT '<abc>x</abc>')",
+        "SELECT XMLPARSE(DOCUMENT col || '</abc>')",
+    ];
+    for sql in statements {
+        pg().verified_stmt(sql);
+    }
+}
+
+#[test]
 fn parse_xml_typed_string() {
     // xml '...' should parse as a TypedString on PostgreSQL and Generic
     let sql = "SELECT xml '<foo/>'";

@@ -9850,18 +9850,15 @@ impl<'a> Parser<'a> {
                 let expr: Expr = self.with_state(ParserState::Normal, |p| p.parse_expr())?;
                 self.expect_token(&Token::RParen)?;
                 let (gen_as, expr_mode) = if self.parse_keywords(&[Keyword::STORED]) {
-                    Ok((
+                    (
                         GeneratedAs::ExpStored,
                         Some(GeneratedExpressionMode::Stored),
-                    ))
-                } else if dialect_of!(self is PostgreSqlDialect) {
-                    // Postgres' AS IDENTITY branches are above, this one needs STORED
-                    self.expected_ref("STORED", self.peek_token_ref())
+                    )
                 } else if self.parse_keywords(&[Keyword::VIRTUAL]) {
-                    Ok((GeneratedAs::Always, Some(GeneratedExpressionMode::Virtual)))
+                    (GeneratedAs::Always, Some(GeneratedExpressionMode::Virtual))
                 } else {
-                    Ok((GeneratedAs::Always, None))
-                }?;
+                    (GeneratedAs::Always, None)
+                };
 
                 Ok(Some(ColumnOption::Generated {
                     generated_as: gen_as,

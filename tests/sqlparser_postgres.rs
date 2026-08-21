@@ -9678,3 +9678,26 @@ fn parse_right_deep_join_chain() {
     // NATURAL JOIN followed by a constrained join must stay left-associative.
     pg().verified_stmt("SELECT * FROM t0 NATURAL JOIN t1 INNER JOIN t2 ON true");
 }
+
+#[test]
+fn parse_create_table_generated_column_modes() {
+    // PostgreSQL 18 generated columns are virtual by default, so the mode keyword is
+    // optional and VIRTUAL may also be written explicitly. All three forms round-trip
+    // without gaining or losing a mode keyword.
+    pg().verified_stmt("CREATE TABLE t (a TEXT, b TEXT GENERATED ALWAYS AS (a))");
+    pg().verified_stmt("CREATE TABLE t (a TEXT, b TEXT GENERATED ALWAYS AS (a) VIRTUAL)");
+    pg().verified_stmt("CREATE TABLE t (a TEXT, b TEXT GENERATED ALWAYS AS (a) STORED)");
+
+    // PostgreSQL 18 pg_dump emits generated virtual columns with no mode keyword.
+    pg().one_statement_parses_to(
+        r#"CREATE TABLE users (
+    first_name text NOT NULL,
+    last_name text NOT NULL,
+    name character varying(255) GENERATED ALWAYS AS (((first_name || ' '::text) || last_name)) NOT NULL
+)"#,
+        "CREATE TABLE users (\
+        first_name TEXT NOT NULL, \
+        last_name TEXT NOT NULL, \
+        name CHARACTER VARYING(255) GENERATED ALWAYS AS (((first_name || ' '::TEXT) || last_name)) NOT NULL)",
+    );
+}

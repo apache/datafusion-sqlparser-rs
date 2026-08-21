@@ -19505,6 +19505,56 @@ fn parse_aliased_function_args() {
         .is_err());
 }
 
+#[test]
+fn parse_xmlparse() {
+    let dialects = all_dialects_where(|d| d.supports_xml_expressions());
+
+    for (sql, mode) in [
+        ("SELECT xmlparse(content '<a/>')", "content"),
+        ("SELECT xmlparse(document '<a/>')", "document"),
+    ] {
+        let select = dialects.verified_only_select(sql);
+        match expr_from_projection(&select.projection[0]) {
+            Expr::Function(Function {
+                name,
+                args: FunctionArguments::List(list),
+                ..
+            }) => {
+                assert_eq!(name.to_string(), "xmlparse");
+                assert_eq!(
+                    list.args,
+                    vec![FunctionArg::Named {
+                        name: Ident::new(mode),
+                        arg: FunctionArgExpr::Expr(Expr::Value(
+                            Value::SingleQuotedString("<a/>".to_string()).into()
+                        )),
+                        operator: FunctionArgOperator::Space,
+                    }]
+                );
+            }
+            expr => panic!("expected an XMLPARSE function call, got {expr:?}"),
+        }
+    }
+
+    // XMLPARSE needs both a mode word and a value.
+    assert!(dialects
+        .parse_sql_statements("SELECT xmlparse('<a/>')")
+        .is_err());
+
+    // Going through the ordinary function-call path, XMLPARSE accepts the same
+    // trailing clauses as any other function.
+    dialects.verified_stmt("SELECT xmlparse(document x) FILTER (WHERE y > 1)");
+    dialects.verified_stmt("SELECT xmlparse(document x) OVER (PARTITION BY y)");
+
+    // On dialects without XML support, `xmlparse` stays a regular function
+    // and the special `CONTENT <expr>` syntax is rejected.
+    let others = all_dialects_except(|d| d.supports_xml_expressions());
+    others.verified_only_select("SELECT xmlparse(1)");
+    assert!(others
+        .parse_sql_statements("SELECT xmlparse(content '<a/>')")
+        .is_err());
+}
+
 /// Regression test for the 2^N parse-time blowup in `parse_compound_expr` on
 /// inputs like `IF a0.a1...aN.#`. The parse is run on a worker thread and the
 /// main thread asserts that it reports back within a generous timeout. Post-fix

@@ -10654,55 +10654,7 @@ impl<'a> Parser<'a> {
     /// Parse a single `ALTER TABLE` operation and return an `AlterTableOperation`.
     pub fn parse_alter_table_operation(&mut self) -> Result<AlterTableOperation, ParserError> {
         let operation = if self.parse_keyword(Keyword::ADD) {
-            if let Some(constraint) = self.parse_optional_table_constraint()? {
-                let not_valid = self.parse_keywords(&[Keyword::NOT, Keyword::VALID]);
-                AlterTableOperation::AddConstraint {
-                    constraint,
-                    not_valid,
-                }
-            } else if dialect_of!(self is ClickHouseDialect|GenericDialect)
-                && self.parse_keyword(Keyword::PROJECTION)
-            {
-                return self.parse_alter_table_add_projection();
-            } else {
-                let if_not_exists =
-                    self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-                let mut new_partitions = vec![];
-                loop {
-                    if self.parse_keyword(Keyword::PARTITION) {
-                        new_partitions.push(self.parse_partition()?);
-                    } else {
-                        break;
-                    }
-                }
-                if !new_partitions.is_empty() {
-                    AlterTableOperation::AddPartitions {
-                        if_not_exists,
-                        new_partitions,
-                    }
-                } else {
-                    let column_keyword = self.parse_keyword(Keyword::COLUMN);
-
-                    let if_not_exists = if dialect_of!(self is PostgreSqlDialect | BigQueryDialect | DuckDbDialect | GenericDialect)
-                    {
-                        self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS])
-                            || if_not_exists
-                    } else {
-                        false
-                    };
-
-                    let column_def = self.parse_column_def()?;
-
-                    let column_position = self.parse_column_position()?;
-
-                    AlterTableOperation::AddColumn {
-                        column_keyword,
-                        if_not_exists,
-                        column_def,
-                        column_position,
-                    }
-                }
-            }
+            self.parse_alter_table_add_operation()?
         } else if self.parse_keyword(Keyword::RENAME) {
             if dialect_of!(self is PostgreSqlDialect) && self.parse_keyword(Keyword::CONSTRAINT) {
                 let old_name = self.parse_identifier()?;
@@ -11133,6 +11085,109 @@ impl<'a> Parser<'a> {
         Ok(operation)
     }
 
+    fn parse_alter_table_add_operation(&mut self) -> Result<AlterTableOperation, ParserError> {
+        if let Some(constraint) = self.parse_optional_table_constraint()? {
+            let not_valid = self.parse_keywords(&[Keyword::NOT, Keyword::VALID]);
+            return Ok(AlterTableOperation::AddConstraint {
+                constraint,
+                not_valid,
+            });
+        }
+
+        if dialect_of!(self is ClickHouseDialect | GenericDialect)
+            && self.parse_keyword(Keyword::PROJECTION)
+        {
+            return self.parse_alter_table_add_projection();
+        }
+
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let mut new_partitions = vec![];
+        while self.parse_keyword(Keyword::PARTITION) {
+            new_partitions.push(self.parse_partition()?);
+        }
+        if !new_partitions.is_empty() {
+            return Ok(AlterTableOperation::AddPartitions {
+                if_not_exists,
+                new_partitions,
+            });
+        }
+
+        self.parse_alter_table_add_column(if_not_exists)
+    }
+
+    fn parse_alter_table_add_column(
+        &mut self,
+        if_not_exists: bool,
+    ) -> Result<AlterTableOperation, ParserError> {
+        let column_keyword = self.parse_keyword(Keyword::COLUMN);
+        let if_not_exists = if dialect_of!(self is PostgreSqlDialect | BigQueryDialect | DuckDbDialect | GenericDialect)
+        {
+            self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]) || if_not_exists
+        } else {
+            false
+        };
+        let column_def = self.parse_column_def()?;
+        let column_position = self.parse_column_position()?;
+
+        Ok(AlterTableOperation::AddColumn {
+            column_keyword,
+            if_not_exists,
+            column_def,
+            column_position,
+        })
+    }
+
+    fn parse_alter_table_add_item(&mut self) -> Result<AlterTableOperation, ParserError> {
+        if let Some(constraint) = self.parse_optional_table_constraint()? {
+            let not_valid = self.parse_keywords(&[Keyword::NOT, Keyword::VALID]);
+            return Ok(AlterTableOperation::AddConstraint {
+                constraint,
+                not_valid,
+            });
+        }
+
+        self.parse_alter_table_add_column(false)
+    }
+
+    fn can_parse_implicit_alter_table_add_item(&self, operations: &[AlterTableOperation]) -> bool {
+        self.dialect.supports_alter_table_add_multiple_columns()
+            && matches!(
+                operations.last(),
+                Some(
+                    AlterTableOperation::AddColumn { .. }
+                        | AlterTableOperation::AddConstraint { .. }
+                )
+            )
+            && !self.is_alter_table_operation_starter()
+    }
+
+    fn is_alter_table_operation_starter(&self) -> bool {
+        if self
+            .peek_one_of_keywords(&[
+                Keyword::ADD,
+                Keyword::ALTER,
+                Keyword::DISABLE,
+                Keyword::DROP,
+                Keyword::ENABLE,
+                Keyword::PARTITION,
+                Keyword::RENAME,
+                Keyword::REPLICA,
+                Keyword::SET,
+                Keyword::SWAP,
+            ])
+            .is_some()
+        {
+            return true;
+        }
+
+        matches!(
+            &self.peek_token_ref().token,
+            Token::Word(word)
+                if word.quote_style.is_none()
+                    && matches!(word.value.to_ascii_uppercase().as_str(), "NOCHECK" | "SWITCH")
+        )
+    }
+
     fn parse_set_data_type(&mut self, had_set: bool) -> Result<AlterColumnOperation, ParserError> {
         let data_type = self.parse_data_type()?;
         let using = if self.dialect.supports_alter_column_type_using()
@@ -11467,7 +11522,18 @@ impl<'a> Parser<'a> {
         let only = self.parse_keyword(Keyword::ONLY); // [ ONLY ]
         let table_name = self.parse_object_name(false)?;
         let on_cluster = self.parse_optional_on_cluster()?;
-        let operations = self.parse_comma_separated(Parser::parse_alter_table_operation)?;
+        let mut operations = vec![];
+        loop {
+            let operation = if self.can_parse_implicit_alter_table_add_item(&operations) {
+                self.parse_alter_table_add_item()?
+            } else {
+                self.parse_alter_table_operation()?
+            };
+            operations.push(operation);
+            if self.is_parse_comma_separated_end() {
+                break;
+            }
+        }
 
         let mut location = None;
         if self.parse_keyword(Keyword::LOCATION) {

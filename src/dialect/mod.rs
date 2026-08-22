@@ -1494,6 +1494,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports multiple column definitions after
+    /// a single `ALTER TABLE ... ADD` clause.
+    fn supports_alter_table_add_multiple_columns(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect considers the specified ident as a function
     /// that returns an identifier. Typically used to generate identifiers
     /// programmatically.

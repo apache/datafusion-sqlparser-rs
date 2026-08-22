@@ -31,7 +31,7 @@ use sqlparser::ast::DataType::{Int, Text, Varbinary};
 use sqlparser::ast::DeclareAssignment::MsSqlAssignment;
 use sqlparser::ast::Value::SingleQuotedString;
 use sqlparser::ast::*;
-use sqlparser::dialect::{GenericDialect, MsSqlDialect};
+use sqlparser::dialect::{GenericDialect, MsSqlDialect, PostgreSqlDialect};
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
 
 #[test]
@@ -2924,4 +2924,31 @@ fn parse_mssql_money_constants() {
         &Expr::Value(Value::Placeholder("$0".to_string()).with_empty_span()),
         expr_from_projection(only(&select.projection)),
     );
+}
+
+#[test]
+fn parse_mssql_alter_table_add_multiple_columns() {
+    ms().one_statement_parses_to(
+        "ALTER TABLE dbo.demo ADD first_flag BIT NULL, second_flag BIT NULL",
+        "ALTER TABLE dbo.demo ADD first_flag BIT NULL, ADD second_flag BIT NULL",
+    );
+    ms().one_statement_parses_to(
+        "ALTER TABLE [dbo].[demo] ADD amount DECIMAL(10, 2) DEFAULT (0), [display_name] NVARCHAR(50) NULL",
+        "ALTER TABLE [dbo].[demo] ADD amount DECIMAL(10,2) DEFAULT (0), ADD [display_name] NVARCHAR(50) NULL",
+    );
+    ms().one_statement_parses_to(
+        "ALTER TABLE dbo.demo ADD enabled BIT NULL, CHECK (enabled IN (0, 1))",
+        "ALTER TABLE dbo.demo ADD enabled BIT NULL, ADD CHECK (enabled IN (0, 1))",
+    );
+    ms().verified_stmt("ALTER TABLE dbo.demo ADD first_flag BIT NULL, ADD second_flag BIT NULL");
+    assert!(Parser::parse_sql(
+        &MsSqlDialect {},
+        "ALTER TABLE dbo.demo ADD first_flag BIT NULL second_flag BIT NULL",
+    )
+    .is_err());
+    assert!(Parser::parse_sql(
+        &PostgreSqlDialect {},
+        "ALTER TABLE demo ADD first_flag BOOLEAN, second_flag BOOLEAN",
+    )
+    .is_err());
 }

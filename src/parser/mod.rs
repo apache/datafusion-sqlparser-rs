@@ -659,6 +659,10 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     self.parse_query().map(Into::into)
                 }
+                Keyword::SUMMARIZE if self.dialect.supports_summarize() => {
+                    self.prev_token();
+                    self.parse_query().map(Into::into)
+                }
                 Keyword::TRUNCATE => self.parse_truncate().map(Into::into),
                 Keyword::ATTACH => {
                     if dialect_of!(self is DuckDbDialect) {
@@ -15103,6 +15107,8 @@ impl<'a> Parser<'a> {
             SetExpr::Values(self.parse_values(is_mysql, true)?)
         } else if self.parse_keyword(Keyword::TABLE) {
             SetExpr::Table(Box::new(self.parse_as_table()?))
+        } else if self.dialect.supports_summarize() && self.parse_keyword(Keyword::SUMMARIZE) {
+            SetExpr::Summarize(self.parse_summarize_target()?)
         } else {
             return self.expected_ref(
                 "SELECT, VALUES, or a subquery in the query body",
@@ -15111,6 +15117,27 @@ impl<'a> Parser<'a> {
         };
 
         self.parse_remaining_set_exprs(expr, precedence)
+    }
+
+    fn parse_summarize_target(&mut self) -> Result<SummarizeTarget, ParserError> {
+        if self
+            .peek_one_of_keywords(&[
+                Keyword::SELECT,
+                Keyword::WITH,
+                Keyword::VALUES,
+                Keyword::VALUE,
+                Keyword::FROM,
+                Keyword::TABLE,
+            ])
+            .is_some()
+            || self.peek_token_ref().token == Token::LParen
+        {
+            Ok(SummarizeTarget::Query(self.parse_query()?))
+        } else {
+            Ok(SummarizeTarget::Table {
+                name: self.parse_object_name(false)?,
+            })
+        }
     }
 
     /// Parse any extra set expressions that may be present in a query body

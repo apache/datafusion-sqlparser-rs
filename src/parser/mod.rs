@@ -5334,7 +5334,9 @@ impl<'a> Parser<'a> {
             self.parse_create_collation().map(Into::into)
         } else if self.parse_keyword(Keyword::TYPE) {
             self.parse_create_type()
-        } else if self.parse_keyword(Keyword::PROCEDURE) {
+        } else if self.parse_keyword(Keyword::PROCEDURE)
+            || self.dialect.supports_create_proc_syntax() && self.parse_keyword(Keyword::PROC)
+        {
             self.parse_create_procedure(or_alter)
         } else if self.parse_keyword(Keyword::CONNECTOR) {
             self.parse_create_connector().map(Into::into)

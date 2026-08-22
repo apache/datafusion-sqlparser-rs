@@ -1251,6 +1251,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect supports `PROC` as an abbreviation for
+    /// `PROCEDURE` in a `CREATE` statement.
+    fn supports_create_proc_syntax(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect accepts a comma-separated list of table-level
     /// options placed between the table name and the column-list parenthesis, e.g.
     ///

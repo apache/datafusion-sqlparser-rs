@@ -3081,6 +3081,29 @@ pub enum DeclareType {
     Exception,
 }
 
+/// SQL Server cursor options that appear after the `CURSOR` keyword.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum MsSqlCursorOption {
+    /// `LOCAL` cursor scope.
+    Local,
+    /// `GLOBAL` cursor scope.
+    Global,
+    /// `FAST_FORWARD` forward-only, read-only cursor.
+    FastForward,
+}
+
+impl fmt::Display for MsSqlCursorOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MsSqlCursorOption::Local => f.write_str("LOCAL"),
+            MsSqlCursorOption::Global => f.write_str("GLOBAL"),
+            MsSqlCursorOption::FastForward => f.write_str("FAST_FORWARD"),
+        }
+    }
+}
+
 impl fmt::Display for DeclareType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -3123,6 +3146,8 @@ pub struct Declare {
     pub assignment: Option<DeclareAssignment>,
     /// Represents the type of the declared variable.
     pub declare_type: Option<DeclareType>,
+    /// SQL Server cursor options following the `CURSOR` keyword.
+    pub cursor_options: Vec<MsSqlCursorOption>,
     /// Causes the cursor to return data in binary rather than in text format.
     pub binary: Option<bool>,
     /// None = Not specified
@@ -3148,6 +3173,7 @@ impl fmt::Display for Declare {
             data_type,
             assignment,
             declare_type,
+            cursor_options,
             binary,
             sensitive,
             scroll,
@@ -3178,6 +3204,10 @@ impl fmt::Display for Declare {
 
         if let Some(declare_type) = declare_type {
             write!(f, " {declare_type}")?;
+        }
+
+        if !cursor_options.is_empty() {
+            write!(f, " {}", display_separated(cursor_options, " "))?;
         }
 
         if let Some(hold) = hold {

@@ -7885,6 +7885,7 @@ impl<'a> Parser<'a> {
                 data_type: None,
                 assignment: None,
                 declare_type,
+                cursor_options: vec![],
                 binary,
                 sensitive,
                 scroll,
@@ -7928,6 +7929,7 @@ impl<'a> Parser<'a> {
                 data_type,
                 assignment: expr.map(|expr| DeclareAssignment::Default(Box::new(expr))),
                 declare_type: None,
+                cursor_options: vec![],
                 binary: None,
                 sensitive: None,
                 scroll: None,
@@ -8022,6 +8024,7 @@ impl<'a> Parser<'a> {
                 data_type,
                 assignment: assigned_expr,
                 declare_type,
+                cursor_options: vec![],
                 binary: None,
                 sensitive: None,
                 scroll: None,
@@ -8097,10 +8100,12 @@ impl<'a> Parser<'a> {
             }
         }?;
 
+        let mut cursor_options = vec![];
         let (declare_type, data_type) = match &self.peek_token_ref().token {
             Token::Word(w) => match w.keyword {
                 Keyword::CURSOR => {
                     self.next_token();
+                    cursor_options = self.parse_mssql_cursor_options();
                     (Some(DeclareType::Cursor), None)
                 }
                 Keyword::AS => {
@@ -8126,12 +8131,28 @@ impl<'a> Parser<'a> {
             data_type,
             assignment,
             declare_type,
+            cursor_options,
             binary: None,
             sensitive: None,
             scroll: None,
             hold: None,
             for_query,
         })
+    }
+
+    fn parse_mssql_cursor_options(&mut self) -> Vec<MsSqlCursorOption> {
+        let mut options = vec![];
+
+        match self.parse_one_of_keywords(&[Keyword::LOCAL, Keyword::GLOBAL]) {
+            Some(Keyword::LOCAL) => options.push(MsSqlCursorOption::Local),
+            Some(Keyword::GLOBAL) => options.push(MsSqlCursorOption::Global),
+            _ => {}
+        }
+        if self.parse_keyword(Keyword::FAST_FORWARD) {
+            options.push(MsSqlCursorOption::FastForward);
+        }
+
+        options
     }
 
     /// Parses the assigned expression in a variable declaration.

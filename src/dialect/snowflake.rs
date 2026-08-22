@@ -1871,6 +1871,7 @@ fn parse_multi_table_insert(
         table: TableObject::TableName(ObjectName(vec![])), // Not used for multi-table insert
         table_alias: None,
         columns: vec![],
+        by_name: false,
         overwrite,
         source: Some(source),
         assignments: vec![],

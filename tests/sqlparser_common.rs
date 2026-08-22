@@ -19729,3 +19729,48 @@ fn parse_function_arg_call_chain_no_exponential_blowup() {
     rx.recv_timeout(Duration::from_secs(5))
         .expect("parser should reject this quickly, not loop exponentially");
 }
+
+#[test]
+fn parse_insert_by_name() {
+    verified_stmt("INSERT INTO target BY NAME SELECT 1 AS a");
+
+    match verified_stmt("INSERT INTO target (a) BY NAME SELECT 1 AS a") {
+        Statement::Insert(Insert {
+            by_name, columns, ..
+        }) => {
+            assert!(by_name);
+            assert_eq!(columns.len(), 1);
+        }
+        _ => unreachable!(),
+    }
+
+    let dialects = all_dialects_where(|d| !d.supports_insert_table_alias());
+    match dialects.verified_stmt("INSERT INTO TABLE target PARTITION (p = 1) BY NAME SELECT 1 AS a")
+    {
+        Statement::Insert(Insert {
+            by_name,
+            has_table_keyword,
+            partitioned,
+            ..
+        }) => {
+            assert!(by_name);
+            assert!(has_table_keyword);
+            assert_eq!(partitioned.unwrap().len(), 1);
+        }
+        _ => unreachable!(),
+    }
+
+    // `BY NAME` does not shadow a table alias in dialects supporting one.
+    let dialects = all_dialects_where(|d| d.supports_insert_table_alias());
+    match dialects.verified_stmt("INSERT INTO target AS t BY NAME SELECT 1 AS a") {
+        Statement::Insert(Insert {
+            by_name,
+            table_alias,
+            ..
+        }) => {
+            assert!(by_name);
+            assert_eq!(table_alias.unwrap().alias.value, "t");
+        }
+        _ => unreachable!(),
+    }
+}

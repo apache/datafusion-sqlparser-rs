@@ -6108,6 +6108,7 @@ fn test_simple_postgres_insert_with_alias() {
                     span: Span::empty(),
                 })
             ],
+            by_name: false,
             overwrite: false,
             source: Some(Box::new(Query {
                 with: None,
@@ -6188,6 +6189,7 @@ fn test_simple_postgres_insert_with_alias() {
                     span: Span::empty(),
                 })
             ],
+            by_name: false,
             overwrite: false,
             source: Some(Box::new(Query {
                 with: None,
@@ -6270,6 +6272,7 @@ fn test_simple_insert_with_quoted_alias() {
                     span: Span::empty(),
                 })
             ],
+            by_name: false,
             overwrite: false,
             source: Some(Box::new(Query {
                 with: None,
@@ -9677,4 +9680,23 @@ fn parse_right_deep_join_chain() {
     );
     // NATURAL JOIN followed by a constrained join must stay left-associative.
     pg().verified_stmt("SELECT * FROM t0 NATURAL JOIN t1 INNER JOIN t2 ON true");
+}
+
+#[test]
+fn parse_insert_by_name_keywords_as_table_and_alias() {
+    // Without a table name, `BY NAME` is not an INSERT BY NAME clause. PostgreSQL
+    // treats `BY` as the table name and `NAME` as its implicit table alias.
+    match pg().verified_stmt("INSERT INTO BY NAME SELECT 1 AS a") {
+        Statement::Insert(Insert {
+            table: TableObject::TableName(table),
+            table_alias: Some(table_alias),
+            by_name,
+            ..
+        }) => {
+            assert_eq!(table.to_string(), "BY");
+            assert_eq!(table_alias.alias.value, "NAME");
+            assert!(!by_name);
+        }
+        statement => panic!("Expected INSERT statement, got: {statement:?}"),
+    }
 }

@@ -18460,7 +18460,9 @@ impl<'a> Parser<'a> {
             let table = self.parse_keyword(Keyword::TABLE);
             let table_object = self.parse_table_object()?;
 
+            // `BY NAME` is an INSERT clause, not a table alias.
             let table_alias = if self.dialect.supports_insert_table_alias()
+                && !self.peek_keywords(&[Keyword::BY, Keyword::NAME])
                 && !self.peek_sub_query()
                 && self
                     .peek_one_of_keywords(&[Keyword::DEFAULT, Keyword::VALUES])
@@ -18484,6 +18486,7 @@ impl<'a> Parser<'a> {
 
             let is_mysql = dialect_of!(self is MySqlDialect);
 
+            let mut by_name = false;
             let (columns, partitioned, after_columns, output, source, assignments) = if self
                 .parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES])
             {
@@ -18494,6 +18497,7 @@ impl<'a> Parser<'a> {
                         self.parse_parenthesized_qualified_column_list(Optional, is_mysql)?;
 
                     let partitioned = self.parse_insert_partition()?;
+                    by_name = self.parse_keywords(&[Keyword::BY, Keyword::NAME]);
                     // Hive allows you to specify columns after partitions as well if you want.
                     let after_columns = if dialect_of!(self is HiveDialect) {
                         self.parse_parenthesized_column_list(Optional, false)?
@@ -18618,6 +18622,7 @@ impl<'a> Parser<'a> {
                 ignore,
                 into,
                 overwrite,
+                by_name,
                 partitioned,
                 columns,
                 after_columns,

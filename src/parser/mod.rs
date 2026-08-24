@@ -2531,6 +2531,23 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse the argument list of `XMLPARSE({ DOCUMENT | CONTENT } value)`,
+    /// including the closing parenthesis. The mode word becomes the name of the
+    /// single argument, with no operator between it and the value.
+    fn parse_xmlparse_argument_list(&mut self) -> Result<FunctionArgumentList, ParserError> {
+        let arg = FunctionArg::Named {
+            name: self.parse_identifier()?,
+            arg: FunctionArgExpr::Expr(self.parse_expr()?),
+            operator: FunctionArgOperator::Space,
+        };
+        self.expect_token(&Token::RParen)?;
+        Ok(FunctionArgumentList {
+            duplicate_treatment: None,
+            args: vec![arg],
+            clauses: vec![],
+        })
+    }
+
     /// Parse a function call expression named by `name` and return it as an `Expr`.
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
         self.parse_function_call(name).map(Expr::Function)
@@ -2556,7 +2573,13 @@ impl<'a> Parser<'a> {
             });
         }
 
-        let mut args = self.parse_function_argument_list()?;
+        let mut args = if self.dialect.supports_xml_expressions()
+            && Self::is_simple_unquoted_object_name(&name, "xmlparse")
+        {
+            self.parse_xmlparse_argument_list()?
+        } else {
+            self.parse_function_argument_list()?
+        };
         let mut parameters = FunctionArguments::None;
         // ClickHouse aggregations support parametric functions like `HISTOGRAM(0.5, 0.6)(x, y)`
         // which (0.5, 0.6) is a parameter to the function.
@@ -3368,7 +3391,10 @@ impl<'a> Parser<'a> {
     /// ```
     ///
     /// Note that we do not currently attempt to parse the quoted value.
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     pub fn parse_interval(&mut self) -> Result<Expr, ParserError> {
+        let _guard = self.recursion_counter.try_decrease()?;
+
         // The SQL standard allows an optional sign before the value string, but
         // it is not clear if any implementations support that syntax, so we
         // don't currently try to parse it. (The sign can instead be included
@@ -6242,14 +6268,14 @@ impl<'a> Parser<'a> {
         }
 
         if let Some(next_data_type) = self.maybe_parse(parse_data_type_no_default)? {
-            let token = self.token_at(data_type_idx);
+            let token = self.token_at(data_type_idx).clone();
 
             // We ensure that the token is a `Word` token, and not other special tokens.
-            if !matches!(token.token, Token::Word(_)) {
-                return self.expected("a name or type", token.clone());
+            match token.token {
+                Token::Word(word) => name = Some(word.into_ident(token.span)),
+                _ => return self.expected("a name or type", token),
             }
 
-            name = Some(Ident::new(token.to_string()));
             data_type = next_data_type;
         }
 
@@ -6306,12 +6332,12 @@ impl<'a> Parser<'a> {
         }
 
         if let Some(next_data_type) = self.maybe_parse(parse_data_type_for_aggregate_arg)? {
-            let token = self.token_at(data_type_idx);
-            if !matches!(token.token, Token::Word(_)) {
-                return self.expected("a name or type", token.clone());
+            let token = self.token_at(data_type_idx).clone();
+            match token.token {
+                Token::Word(word) => name = Some(word.into_ident(token.span)),
+                _ => return self.expected("a name or type", token),
             }
 
-            name = Some(Ident::new(token.to_string()));
             data_type = next_data_type;
         }
 
@@ -9581,6 +9607,7 @@ impl<'a> Parser<'a> {
                     index_name: None,
                     index_type: None,
                     columns: vec![],
+                    include: vec![],
                     index_options: vec![],
                     characteristics,
                 }
@@ -9601,6 +9628,7 @@ impl<'a> Parser<'a> {
                     index_type_display,
                     index_type: None,
                     columns: vec![],
+                    include: vec![],
                     index_options: vec![],
                     characteristics,
                     nulls_distinct: NullsDistinctOption::None,
@@ -9617,6 +9645,7 @@ impl<'a> Parser<'a> {
                     index_name: None,
                     index_type: None,
                     columns: vec![],
+                    include: vec![],
                     index_options: vec![],
                     characteristics,
                 }
@@ -10044,6 +10073,7 @@ impl<'a> Parser<'a> {
                 let index_type = self.parse_optional_using_then_index_type()?;
 
                 let columns = self.parse_parenthesized_index_column_list()?;
+                let include = self.parse_optional_include_columns()?;
                 let index_options = self.parse_index_options()?;
                 let characteristics = self.parse_constraint_characteristics()?;
                 Ok(Some(
@@ -10053,6 +10083,7 @@ impl<'a> Parser<'a> {
                         index_type_display,
                         index_type,
                         columns,
+                        include,
                         index_options,
                         characteristics,
                         nulls_distinct,
@@ -10077,6 +10108,7 @@ impl<'a> Parser<'a> {
                 let index_type = self.parse_optional_using_then_index_type()?;
 
                 let columns = self.parse_parenthesized_index_column_list()?;
+                let include = self.parse_optional_include_columns()?;
                 let index_options = self.parse_index_options()?;
                 let characteristics = self.parse_constraint_characteristics()?;
                 Ok(Some(
@@ -10085,6 +10117,7 @@ impl<'a> Parser<'a> {
                         index_name,
                         index_type,
                         columns,
+                        include,
                         index_options,
                         characteristics,
                     }
@@ -10466,6 +10499,18 @@ impl<'a> Parser<'a> {
                 Some(index_option) => options.push(index_option),
                 None => return Ok(options),
             }
+        }
+    }
+
+    /// Parse an optional `INCLUDE (col, ...)` clause on a table constraint.
+    pub fn parse_optional_include_columns(&mut self) -> Result<Vec<Ident>, ParserError> {
+        if self.parse_keyword(Keyword::INCLUDE) {
+            self.expect_token(&Token::LParen)?;
+            let columns = self.parse_comma_separated(|p| p.parse_identifier())?;
+            self.expect_token(&Token::RParen)?;
+            Ok(columns)
+        } else {
+            Ok(vec![])
         }
     }
 
@@ -16565,6 +16610,12 @@ impl<'a> Parser<'a> {
                             // `(mytable AS alias)`
                             alias.replace(outer_alias);
                         }
+                        TableFactor::UnpivotExpr { .. } => {
+                            return Err(ParserError::ParserError(
+                                "alias after parenthesized UNPIVOT expression is not supported"
+                                    .to_string(),
+                            ))
+                        }
                     };
                 }
                 // Do not store the extra set of parens in the AST
@@ -16646,6 +16697,8 @@ impl<'a> Parser<'a> {
                 with_offset_alias,
                 with_ordinality,
             })
+        } else if self.dialect.supports_unpivot_expr() && self.peek_keyword(Keyword::UNPIVOT) {
+            self.parse_unpivot_expr_table_factor()
         } else if self.parse_keyword_with_tokens(Keyword::JSON_TABLE, &[Token::LParen]) {
             let json_expr = self.parse_expr()?;
             self.expect_token(&Token::Comma)?;
@@ -17641,6 +17694,28 @@ impl<'a> Parser<'a> {
             name,
             columns,
             alias,
+        })
+    }
+
+    /// Parse an object UNPIVOT table factor in FROM clause.
+    ///
+    /// Syntax:
+    /// `UNPIVOT expression AS value_alias [AT attribute_alias]`
+    pub fn parse_unpivot_expr_table_factor(&mut self) -> Result<TableFactor, ParserError> {
+        self.expect_keyword_is(Keyword::UNPIVOT)?;
+        let expression = self.parse_expr()?;
+        self.expect_keyword_is(Keyword::AS)?;
+        let value_alias = self.parse_identifier()?;
+        let attribute_alias = if self.parse_keyword(Keyword::AT) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+
+        Ok(TableFactor::UnpivotExpr {
+            expression,
+            value_alias,
+            attribute_alias,
         })
     }
 

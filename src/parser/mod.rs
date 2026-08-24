@@ -6268,14 +6268,14 @@ impl<'a> Parser<'a> {
         }
 
         if let Some(next_data_type) = self.maybe_parse(parse_data_type_no_default)? {
-            let token = self.token_at(data_type_idx);
+            let token = self.token_at(data_type_idx).clone();
 
             // We ensure that the token is a `Word` token, and not other special tokens.
-            if !matches!(token.token, Token::Word(_)) {
-                return self.expected("a name or type", token.clone());
+            match token.token {
+                Token::Word(word) => name = Some(word.into_ident(token.span)),
+                _ => return self.expected("a name or type", token),
             }
 
-            name = Some(Ident::new(token.to_string()));
             data_type = next_data_type;
         }
 
@@ -6332,12 +6332,12 @@ impl<'a> Parser<'a> {
         }
 
         if let Some(next_data_type) = self.maybe_parse(parse_data_type_for_aggregate_arg)? {
-            let token = self.token_at(data_type_idx);
-            if !matches!(token.token, Token::Word(_)) {
-                return self.expected("a name or type", token.clone());
+            let token = self.token_at(data_type_idx).clone();
+            match token.token {
+                Token::Word(word) => name = Some(word.into_ident(token.span)),
+                _ => return self.expected("a name or type", token),
             }
 
-            name = Some(Ident::new(token.to_string()));
             data_type = next_data_type;
         }
 

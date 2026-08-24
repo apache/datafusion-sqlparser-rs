@@ -21213,6 +21213,12 @@ impl<'a> Parser<'a> {
             return Ok(ResetStatement { reset: Reset::ALL });
         }
 
+        if self.parse_keywords(&[Keyword::SESSION, Keyword::AUTHORIZATION]) {
+            return Ok(ResetStatement {
+                reset: Reset::SessionAuthorization,
+            });
+        }
+
         let obj = self.parse_object_name(false)?;
         Ok(ResetStatement {
             reset: Reset::ConfigurationParameter(obj),

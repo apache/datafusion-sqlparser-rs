@@ -74,6 +74,21 @@ fn parse_numeric_literal_underscore() {
         select.projection,
         vec![UnnamedExpr(Expr::Value(number("10_000").with_empty_span()))]
     );
+
+    for (sql, column) in [
+        ("SELECT 10__00", 10),
+        ("SELECT 10_00_", 13),
+        ("SELECT 1._000", 10),
+        ("SELECT 1_a", 9),
+        ("SELECT 1e_1", 10),
+        ("SELECT 1e1_", 11),
+    ] {
+        let err = dialects.parse_sql_statements(sql).unwrap_err();
+        assert_eq!(
+            format!("sql parser error: Unexpected character '_' at Line: 1, Column: {column}"),
+            err.to_string()
+        );
+    }
 }
 
 #[test]

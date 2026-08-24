@@ -74,6 +74,21 @@ fn parse_numeric_literal_underscore() {
         select.projection,
         vec![UnnamedExpr(Expr::Value(number("10_000").with_empty_span()))]
     );
+
+    for (sql, column) in [
+        ("SELECT 10__00", 10),
+        ("SELECT 10_00_", 13),
+        ("SELECT 1._000", 10),
+        ("SELECT 1_a", 9),
+        ("SELECT 1e_1", 10),
+        ("SELECT 1e1_", 11),
+    ] {
+        let err = dialects.parse_sql_statements(sql).unwrap_err();
+        assert_eq!(
+            format!("sql parser error: Unexpected character '_' at Line: 1, Column: {column}"),
+            err.to_string()
+        );
+    }
 }
 
 #[test]
@@ -3987,6 +4002,7 @@ fn parse_create_table() {
                                 option: ColumnOption::Check(CheckConstraint {
                                     name: None,
                                     expr: Box::new(verified_expr("constrained > 0")),
+                                    no_inherit: false,
                                     enforced: None,
                                 }),
                             },
@@ -10046,6 +10062,10 @@ fn parse_grant() {
     verified_stmt("GRANT OWNERSHIP ON ALL TABLES IN SCHEMA DEV_STAS_ROGOZHIN TO ROLE ANALYST");
     verified_stmt("GRANT OWNERSHIP ON ALL TABLES IN SCHEMA DEV_STAS_ROGOZHIN TO ROLE ANALYST COPY CURRENT GRANTS");
     verified_stmt("GRANT OWNERSHIP ON ALL TABLES IN SCHEMA DEV_STAS_ROGOZHIN TO ROLE ANALYST REVOKE CURRENT GRANTS");
+    // Printing these the other way round yields output the parser rejects.
+    verified_stmt(
+        "GRANT OWNERSHIP ON ALL TABLES IN SCHEMA s TO ROLE r WITH GRANT OPTION COPY CURRENT GRANTS",
+    );
     verified_stmt("GRANT USAGE ON DATABASE db1 TO ROLE role1");
     verified_stmt("GRANT USAGE ON WAREHOUSE wh1 TO ROLE role1");
     verified_stmt("GRANT OWNERSHIP ON INTEGRATION int1 TO ROLE role1");
@@ -17584,6 +17604,19 @@ fn column_check_enforced() {
 }
 
 #[test]
+fn table_check_no_inherit() {
+    all_dialects().verified_stmt("CREATE TABLE t (a INT, CONSTRAINT c CHECK (a > 0) NO INHERIT)");
+    all_dialects().verified_stmt("CREATE TABLE t (a INT, CHECK (a > 0) NO INHERIT)");
+    all_dialects().verified_stmt("CREATE TABLE t (a INT, CHECK (a > 0) NO INHERIT NOT ENFORCED)");
+}
+
+#[test]
+fn column_check_no_inherit() {
+    all_dialects().verified_stmt("CREATE TABLE t (x INT CHECK (x > 1) NO INHERIT)");
+    all_dialects().verified_stmt("CREATE TABLE t (x INT CHECK (x > 1) NO INHERIT NOT ENFORCED)");
+}
+
+#[test]
 fn join_precedence() {
     all_dialects().verified_query_with_canonical(
         "SELECT *
@@ -19229,6 +19262,12 @@ fn parse_reset_statement() {
     }
     match verified_stmt("RESET ALL") {
         Statement::Reset(ResetStatement { reset }) => assert_eq!(reset, Reset::ALL),
+        _ => unreachable!(),
+    }
+    match verified_stmt("RESET SESSION AUTHORIZATION") {
+        Statement::Reset(ResetStatement { reset }) => {
+            assert_eq!(reset, Reset::SessionAuthorization)
+        }
         _ => unreachable!(),
     }
 }

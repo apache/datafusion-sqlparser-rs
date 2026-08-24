@@ -463,11 +463,12 @@ impl fmt::Display for Grant {
             write!(f, " ON {objects}")?;
         }
         write!(f, " TO {}", display_comma_separated(&self.grantees))?;
-        if let Some(ref current_grants) = self.current_grants {
-            write!(f, " {current_grants}")?;
-        }
+        // Printed in the order the parser reads them, so the output re-parses.
         if self.with_grant_option {
             write!(f, " WITH GRANT OPTION")?;
+        }
+        if let Some(ref current_grants) = self.current_grants {
+            write!(f, " {current_grants}")?;
         }
         if let Some(ref as_grantor) = self.as_grantor {
             write!(f, " AS {as_grantor}")?;

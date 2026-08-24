@@ -25,8 +25,8 @@ mod test_utils;
 use helpers::attached_token::AttachedToken;
 use sqlparser::ast::*;
 use sqlparser::dialect::{Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect};
-use sqlparser::parser::ParserError;
-use sqlparser::tokenizer::Span;
+use sqlparser::parser::{Parser, ParserError};
+use sqlparser::tokenizer::{Location, Span};
 use test_utils::*;
 
 #[test]
@@ -6546,6 +6546,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            no_inherit: false,
             enforced: None,
         }
         .into()],
@@ -6566,6 +6567,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            no_inherit: false,
             enforced: None,
         }
         .into()],
@@ -6586,6 +6588,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            no_inherit: false,
             enforced: None,
         }
         .into()],
@@ -6606,6 +6609,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            no_inherit: false,
             enforced: None,
         }
         .into()],
@@ -6626,6 +6630,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            no_inherit: false,
             enforced: None,
         }
         .into()],
@@ -9677,4 +9682,173 @@ fn parse_right_deep_join_chain() {
     );
     // NATURAL JOIN followed by a constrained join must stay left-associative.
     pg().verified_stmt("SELECT * FROM t0 NATURAL JOIN t1 INNER JOIN t2 ON true");
+}
+
+#[test]
+fn parse_quoted_function_argument_name() {
+    let statement = pg_and_generic().verified_stmt(
+        r#"CREATE FUNCTION is_member("Role" TEXT) RETURNS BOOLEAN LANGUAGE SQL AS 'SELECT true'"#,
+    );
+    let Statement::CreateFunction(function) = statement else {
+        panic!("expected a CREATE FUNCTION statement");
+    };
+    assert_eq!(
+        function.args,
+        Some(vec![OperateFunctionArg {
+            mode: None,
+            name: Some(Ident::with_quote('"', "Role")),
+            data_type: DataType::Text,
+            default_expr: None,
+        }])
+    );
+
+    // An embedded quote is doubled in the input and belongs to the name once.
+    let statement = pg_and_generic().verified_stmt(
+        r#"CREATE FUNCTION f("we""ird" INT) RETURNS BOOLEAN LANGUAGE SQL RETURN true"#,
+    );
+    let Statement::CreateFunction(function) = statement else {
+        panic!("expected a CREATE FUNCTION statement");
+    };
+    assert_eq!(
+        function.args,
+        Some(vec![OperateFunctionArg {
+            mode: None,
+            name: Some(Ident::with_quote('"', r#"we"ird"#)),
+            data_type: DataType::Int(None),
+            default_expr: None,
+        }])
+    );
+
+    // A name outside ASCII is quoted for the same reason and survives the same way.
+    pg_and_generic().verified_stmt(
+        r#"CREATE FUNCTION f("Rôle" TEXT) RETURNS BOOLEAN LANGUAGE SQL RETURN true"#,
+    );
+}
+
+#[test]
+fn parse_quoted_function_argument_name_span() {
+    let sql =
+        r#"CREATE FUNCTION is_member("Role" TEXT) RETURNS BOOLEAN LANGUAGE SQL AS 'SELECT true'"#;
+    // Parsed directly rather than through the test helpers, which tokenize
+    // without locations.
+    let mut statements = Parser::parse_sql(&PostgreSqlDialect {}, sql).unwrap();
+    let Some(Statement::CreateFunction(function)) = statements.pop() else {
+        panic!("expected a CREATE FUNCTION statement");
+    };
+    let name = function.args.as_ref().unwrap()[0].name.as_ref().unwrap();
+    assert_eq!(
+        name.span,
+        Span::new(Location::new(1, 27), Location::new(1, 33)),
+        "the span covers the quoted name in the input"
+    );
+}
+
+#[test]
+fn parse_function_argument_modes_and_defaults_keep_quoted_names() {
+    let sql = r#"CREATE FUNCTION f(IN "A" INT = 1, OUT "B" TEXT, INOUT "C" BOOLEAN, VARIADIC "D" INT[]) RETURNS INT LANGUAGE SQL AS 'x'"#;
+    let Statement::CreateFunction(function) = pg_and_generic().verified_stmt(sql) else {
+        panic!("expected a CREATE FUNCTION statement");
+    };
+    assert_eq!(
+        function.args,
+        Some(vec![
+            OperateFunctionArg {
+                mode: Some(ArgMode::In),
+                name: Some(Ident::with_quote('"', "A")),
+                data_type: DataType::Int(None),
+                default_expr: Some(Expr::Value(
+                    Value::Number("1".parse().unwrap(), false).with_empty_span()
+                )),
+            },
+            OperateFunctionArg {
+                mode: Some(ArgMode::Out),
+                name: Some(Ident::with_quote('"', "B")),
+                data_type: DataType::Text,
+                default_expr: None,
+            },
+            OperateFunctionArg {
+                mode: Some(ArgMode::InOut),
+                name: Some(Ident::with_quote('"', "C")),
+                data_type: DataType::Boolean,
+                default_expr: None,
+            },
+            OperateFunctionArg {
+                mode: Some(ArgMode::Variadic),
+                name: Some(Ident::with_quote('"', "D")),
+                data_type: DataType::Array(ArrayElemTypeDef::SquareBracket(
+                    Box::new(DataType::Int(None)),
+                    None
+                )),
+                default_expr: None,
+            },
+        ])
+    );
+
+    // The `DEFAULT` spelling of the same argument list renders as `=`.
+    pg_and_generic().one_statement_parses_to(
+        r#"CREATE FUNCTION f("A" INT DEFAULT 1) RETURNS INT LANGUAGE SQL AS 'x'"#,
+        r#"CREATE FUNCTION f("A" INT = 1) RETURNS INT LANGUAGE SQL AS 'x'"#,
+    );
+}
+
+#[test]
+fn parse_quoted_argument_names_in_function_signatures() {
+    pg_and_generic().verified_stmt(r#"DROP FUNCTION f("Role" TEXT)"#);
+    pg_and_generic().verified_stmt(r#"DROP PROCEDURE p("Role" TEXT)"#);
+    pg_and_generic().verified_stmt(r#"ALTER FUNCTION f("Role" TEXT) RENAME TO g"#);
+    pg_and_generic().verified_stmt(r#"ALTER AGGREGATE my_agg("Role" TEXT) RENAME TO other_agg"#);
+
+    // An aggregate's `ORDER BY` arguments are parsed by the same reader as its
+    // direct ones.
+    let sql = r#"ALTER AGGREGATE my_agg("A" INT ORDER BY "B" INT) OWNER TO some_role"#;
+    let Statement::AlterFunction(alter) = pg_and_generic().verified_stmt(sql) else {
+        panic!("expected an ALTER AGGREGATE statement");
+    };
+    assert_eq!(
+        alter.function.args,
+        Some(vec![OperateFunctionArg {
+            mode: None,
+            name: Some(Ident::with_quote('"', "A")),
+            data_type: DataType::Int(None),
+            default_expr: None,
+        }])
+    );
+    assert_eq!(
+        alter.aggregate_order_by,
+        Some(vec![OperateFunctionArg {
+            mode: None,
+            name: Some(Ident::with_quote('"', "B")),
+            data_type: DataType::Int(None),
+            default_expr: None,
+        }])
+    );
+}
+
+#[test]
+fn parse_alter_table_constraint_check_no_inherit() {
+    match pg_and_generic()
+        .verified_stmt("ALTER TABLE docs ADD CONSTRAINT c CHECK (id > 0) NO INHERIT NOT VALID")
+    {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::AddConstraint {
+                    constraint: CheckConstraint {
+                        name: Some("c".into()),
+                        expr: Box::new(Expr::BinaryOp {
+                            left: Box::new(Expr::Identifier(Ident::new("id"))),
+                            op: BinaryOperator::Gt,
+                            right: Box::new(Expr::Value(test_utils::number("0").into())),
+                        }),
+                        no_inherit: true,
+                        enforced: None,
+                    }
+                    .into(),
+                    not_valid: true,
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+    pg_and_generic().verified_stmt("ALTER TABLE docs ADD CONSTRAINT c CHECK (id > 0) NO INHERIT");
 }

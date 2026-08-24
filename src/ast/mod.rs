@@ -12215,13 +12215,16 @@ pub enum Reset {
     /// Resets all session parameters to their default values.
     ALL,
 
+    /// Resets session authorization to the session user.
+    SessionAuthorization,
+
     /// Resets a specific session parameter to its default value.
     ConfigurationParameter(ObjectName),
 }
 
 /// Resets a session parameter to its default value.
 /// ```sql
-/// RESET { ALL | <configuration_parameter> }
+/// RESET { ALL | SESSION AUTHORIZATION | <configuration_parameter> }
 /// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -12297,6 +12300,7 @@ impl fmt::Display for ResetStatement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.reset {
             Reset::ALL => write!(f, "RESET ALL"),
+            Reset::SessionAuthorization => write!(f, "RESET SESSION AUTHORIZATION"),
             Reset::ConfigurationParameter(param) => write!(f, "RESET {}", param),
         }
     }

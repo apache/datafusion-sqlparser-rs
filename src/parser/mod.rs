@@ -6291,14 +6291,14 @@ impl<'a> Parser<'a> {
         }
 
         if let Some(next_data_type) = self.maybe_parse(parse_data_type_no_default)? {
-            let token = self.token_at(data_type_idx);
+            let token = self.token_at(data_type_idx).clone();
 
             // We ensure that the token is a `Word` token, and not other special tokens.
-            if !matches!(token.token, Token::Word(_)) {
-                return self.expected("a name or type", token.clone());
+            match token.token {
+                Token::Word(word) => name = Some(word.into_ident(token.span)),
+                _ => return self.expected("a name or type", token),
             }
 
-            name = Some(Ident::new(token.to_string()));
             data_type = next_data_type;
         }
 
@@ -6355,12 +6355,12 @@ impl<'a> Parser<'a> {
         }
 
         if let Some(next_data_type) = self.maybe_parse(parse_data_type_for_aggregate_arg)? {
-            let token = self.token_at(data_type_idx);
-            if !matches!(token.token, Token::Word(_)) {
-                return self.expected("a name or type", token.clone());
+            let token = self.token_at(data_type_idx).clone();
+            match token.token {
+                Token::Word(word) => name = Some(word.into_ident(token.span)),
+                _ => return self.expected("a name or type", token),
             }
 
-            name = Some(Ident::new(token.to_string()));
             data_type = next_data_type;
         }
 
@@ -9718,6 +9718,7 @@ impl<'a> Parser<'a> {
             // since `CHECK` requires parentheses, we can parse the inner expression in ParserState::Normal
             let expr: Expr = self.with_state(ParserState::Normal, |p| p.parse_expr())?;
             self.expect_token(&Token::RParen)?;
+            let no_inherit = self.parse_keywords(&[Keyword::NO, Keyword::INHERIT]);
 
             let enforced = if self.parse_keyword(Keyword::ENFORCED) {
                 Some(true)
@@ -9731,6 +9732,7 @@ impl<'a> Parser<'a> {
                 CheckConstraint {
                     name: None, // Column-level check constraints don't have names
                     expr: Box::new(expr),
+                    no_inherit,
                     enforced,
                 }
                 .into(),
@@ -10194,6 +10196,7 @@ impl<'a> Parser<'a> {
                 self.expect_token(&Token::LParen)?;
                 let expr = Box::new(self.parse_expr()?);
                 self.expect_token(&Token::RParen)?;
+                let no_inherit = self.parse_keywords(&[Keyword::NO, Keyword::INHERIT]);
 
                 let enforced = if self.parse_keyword(Keyword::ENFORCED) {
                     Some(true)
@@ -10207,6 +10210,7 @@ impl<'a> Parser<'a> {
                     CheckConstraint {
                         name,
                         expr,
+                        no_inherit,
                         enforced,
                     }
                     .into(),
@@ -21253,6 +21257,12 @@ impl<'a> Parser<'a> {
     fn parse_reset(&mut self) -> Result<ResetStatement, ParserError> {
         if self.parse_keyword(Keyword::ALL) {
             return Ok(ResetStatement { reset: Reset::ALL });
+        }
+
+        if self.parse_keywords(&[Keyword::SESSION, Keyword::AUTHORIZATION]) {
+            return Ok(ResetStatement {
+                reset: Reset::SessionAuthorization,
+            });
         }
 
         let obj = self.parse_object_name(false)?;

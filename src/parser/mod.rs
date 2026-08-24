@@ -9695,6 +9695,7 @@ impl<'a> Parser<'a> {
             // since `CHECK` requires parentheses, we can parse the inner expression in ParserState::Normal
             let expr: Expr = self.with_state(ParserState::Normal, |p| p.parse_expr())?;
             self.expect_token(&Token::RParen)?;
+            let no_inherit = self.parse_keywords(&[Keyword::NO, Keyword::INHERIT]);
 
             let enforced = if self.parse_keyword(Keyword::ENFORCED) {
                 Some(true)
@@ -9708,6 +9709,7 @@ impl<'a> Parser<'a> {
                 CheckConstraint {
                     name: None, // Column-level check constraints don't have names
                     expr: Box::new(expr),
+                    no_inherit,
                     enforced,
                 }
                 .into(),
@@ -10171,6 +10173,7 @@ impl<'a> Parser<'a> {
                 self.expect_token(&Token::LParen)?;
                 let expr = Box::new(self.parse_expr()?);
                 self.expect_token(&Token::RParen)?;
+                let no_inherit = self.parse_keywords(&[Keyword::NO, Keyword::INHERIT]);
 
                 let enforced = if self.parse_keyword(Keyword::ENFORCED) {
                     Some(true)
@@ -10184,6 +10187,7 @@ impl<'a> Parser<'a> {
                     CheckConstraint {
                         name,
                         expr,
+                        no_inherit,
                         enforced,
                     }
                     .into(),

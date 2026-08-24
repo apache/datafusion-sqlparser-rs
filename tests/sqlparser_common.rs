@@ -3998,6 +3998,7 @@ fn parse_create_table() {
                                 option: ColumnOption::Check(CheckConstraint {
                                     name: None,
                                     expr: Box::new(verified_expr("constrained > 0")),
+                                    no_inherit: false,
                                     enforced: None,
                                 }),
                             },
@@ -17592,6 +17593,19 @@ fn column_check_enforced() {
     all_dialects().verified_stmt(
         "CREATE TABLE t (a INT CHECK (a > 0) NOT ENFORCED, b INT CHECK (b > 0) ENFORCED, c INT CHECK (c > 0))",
     );
+}
+
+#[test]
+fn table_check_no_inherit() {
+    all_dialects().verified_stmt("CREATE TABLE t (a INT, CONSTRAINT c CHECK (a > 0) NO INHERIT)");
+    all_dialects().verified_stmt("CREATE TABLE t (a INT, CHECK (a > 0) NO INHERIT)");
+    all_dialects().verified_stmt("CREATE TABLE t (a INT, CHECK (a > 0) NO INHERIT NOT ENFORCED)");
+}
+
+#[test]
+fn column_check_no_inherit() {
+    all_dialects().verified_stmt("CREATE TABLE t (x INT CHECK (x > 1) NO INHERIT)");
+    all_dialects().verified_stmt("CREATE TABLE t (x INT CHECK (x > 1) NO INHERIT NOT ENFORCED)");
 }
 
 #[test]

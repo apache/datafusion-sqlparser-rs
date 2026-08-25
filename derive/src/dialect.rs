@@ -23,7 +23,7 @@ use std::collections::HashSet;
 use syn::{
     braced,
     parse::{Parse, ParseStream},
-    Error, File, FnArg, Ident, Item, LitBool, LitChar, Pat, ReturnType, Signature, Token,
+    Error, Expr, File, FnArg, Ident, Item, LitBool, LitChar, Pat, ReturnType, Signature, Token,
     TraitItem, Type,
 };
 
@@ -31,7 +31,7 @@ use syn::{
 pub(crate) enum Override {
     Bool(LitBool),
     Char(LitChar),
-    None,
+    Expr(Expr),
 }
 
 /// Parsed input for the `derive_dialect!` macro
@@ -80,20 +80,8 @@ impl Parse for DeriveDialectInput {
                                 Override::Bool(content.parse()?)
                             } else if content.peek(LitChar) {
                                 Override::Char(content.parse()?)
-                            } else if content.peek(Ident) {
-                                let ident: Ident = content.parse()?;
-                                if ident == "None" {
-                                    Override::None
-                                } else {
-                                    return Err(Error::new(
-                                        ident.span(),
-                                        format!("Expected `true`, `false`, a char, or `None`, found `{ident}`"),
-                                    ));
-                                }
                             } else {
-                                return Err(
-                                    content.error("Expected `true`, `false`, a char, or `None`")
-                                );
+                                Override::Expr(content.parse()?)
                             };
                             overrides.push((key, value));
                             if content.peek(Token![,]) {
@@ -136,6 +124,7 @@ fn derive_dialect_inner(input: DeriveDialectInput) -> syn::Result<TokenStream> {
     let methods = extract_dialect_methods(&file)?;
 
     // Validate overrides
+    let method_names: HashSet<_> = methods.iter().map(|m| m.name.to_string()).collect();
     let bool_names: HashSet<_> = methods
         .iter()
         .filter(|m| is_bool_method(&m.signature))
@@ -143,6 +132,12 @@ fn derive_dialect_inner(input: DeriveDialectInput) -> syn::Result<TokenStream> {
         .collect();
     for (key, value) in &input.overrides {
         let key_str = key.to_string();
+        if !method_names.contains(&key_str) {
+            return Err(Error::new(
+                key.span(),
+                format!("Unknown method `{key_str}`"),
+            ));
+        }
         match value {
             Override::Bool(_) if !bool_names.contains(&key_str) => {
                 return Err(Error::new(
@@ -150,10 +145,10 @@ fn derive_dialect_inner(input: DeriveDialectInput) -> syn::Result<TokenStream> {
                     format!("Unknown boolean method `{key_str}`"),
                 ));
             }
-            Override::Char(_) | Override::None if key_str != "identifier_quote_style" => {
+            Override::Char(_) if key_str != "identifier_quote_style" => {
                 return Err(Error::new(
                     key.span(),
-                    format!("Char/None only valid for `identifier_quote_style`, not `{key_str}`"),
+                    format!("Char only valid for `identifier_quote_style`, not `{key_str}`"),
                 ));
             }
             _ => {}
@@ -214,10 +209,9 @@ fn generate_derived_dialect(input: &DeriveDialectInput, methods: &[DialectMethod
                     fn identifier_quote_style(&self, _: &str) -> Option<char> { Some(#c) }
                 }
             }
-            Some(Override::None) => {
-                quote_spanned! { method_name.span() =>
-                    fn identifier_quote_style(&self, _: &str) -> Option<char> { None }
-                }
+            Some(Override::Expr(expr)) => {
+                let sig = &method.signature;
+                quote_spanned! { method_name.span() => #sig { #expr } }
             }
             None => delegate(method),
         }
@@ -230,7 +224,7 @@ fn generate_derived_dialect(input: &DeriveDialectInput, methods: &[DialectMethod
             use ::core::iter::Peekable;
             use ::core::str::Chars;
             use sqlparser::ast::{ColumnOption, Expr, GranteesType, Ident, ObjectNamePart, Statement};
-            use sqlparser::dialect::{Dialect, Precedence};
+            use sqlparser::dialect::{BindPlaceholderStyle, Dialect, Precedence};
             use sqlparser::keywords::Keyword;
             use sqlparser::parser::{Parser, ParserError};
 

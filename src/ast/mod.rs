@@ -8023,6 +8023,11 @@ pub enum FunctionArgOperator {
     Colon,
     /// function(arg1 VALUE value1)
     Value,
+    /// function(arg1 value1), with no operator between the name and the value,
+    /// as in PostgreSQL `XMLPARSE(DOCUMENT value)`
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/datatype-xml.html#DATATYPE-XML-CREATING)
+    Space,
 }
 
 impl fmt::Display for FunctionArgOperator {
@@ -8033,6 +8038,7 @@ impl fmt::Display for FunctionArgOperator {
             FunctionArgOperator::Assignment => f.write_str(":="),
             FunctionArgOperator::Colon => f.write_str(":"),
             FunctionArgOperator::Value => f.write_str("VALUE"),
+            FunctionArgOperator::Space => Ok(()),
         }
     }
 }
@@ -8075,14 +8081,28 @@ impl fmt::Display for FunctionArg {
                 name,
                 arg,
                 operator,
-            } => write!(f, "{name} {operator} {arg}"),
+            } => fmt_named_function_arg(f, name, operator, arg),
             FunctionArg::ExprNamed {
                 name,
                 arg,
                 operator,
-            } => write!(f, "{name} {operator} {arg}"),
+            } => fmt_named_function_arg(f, name, operator, arg),
             FunctionArg::Unnamed(unnamed_arg) => write!(f, "{unnamed_arg}"),
         }
+    }
+}
+
+/// `FunctionArgOperator::Space` has no token of its own, so the name and the
+/// value are separated by a single space instead.
+fn fmt_named_function_arg(
+    f: &mut fmt::Formatter,
+    name: &impl fmt::Display,
+    operator: &FunctionArgOperator,
+    arg: &FunctionArgExpr,
+) -> fmt::Result {
+    match operator {
+        FunctionArgOperator::Space => write!(f, "{name} {arg}"),
+        _ => write!(f, "{name} {operator} {arg}"),
     }
 }
 
@@ -12179,13 +12199,16 @@ pub enum Reset {
     /// Resets all session parameters to their default values.
     ALL,
 
+    /// Resets session authorization to the session user.
+    SessionAuthorization,
+
     /// Resets a specific session parameter to its default value.
     ConfigurationParameter(ObjectName),
 }
 
 /// Resets a session parameter to its default value.
 /// ```sql
-/// RESET { ALL | <configuration_parameter> }
+/// RESET { ALL | SESSION AUTHORIZATION | <configuration_parameter> }
 /// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -12261,6 +12284,7 @@ impl fmt::Display for ResetStatement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.reset {
             Reset::ALL => write!(f, "RESET ALL"),
+            Reset::SessionAuthorization => write!(f, "RESET SESSION AUTHORIZATION"),
             Reset::ConfigurationParameter(param) => write!(f, "RESET {}", param),
         }
     }

@@ -167,6 +167,17 @@ macro_rules! dialect_is {
     }
 }
 
+/// Placeholder spelling for ordered unnamed bind parameters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub enum BindPlaceholderStyle {
+    /// `?`
+    QuestionMark,
+    /// `$1`, `$2`, ...
+    DollarNumbered,
+}
+
 /// Encapsulates the differences between SQL implementations.
 ///
 /// # SQL Dialects
@@ -251,6 +262,15 @@ pub trait Dialect: Debug + Any {
 
     /// Return the character used to quote identifiers.
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+        None
+    }
+
+    /// Return the placeholder syntax this server accepts for ordered unnamed bind parameters.
+    ///
+    /// This describes the server contract rather than every placeholder the parser can tokenize.
+    /// `None` means this dialect does not specify an ordered bind syntax.
+    /// See [`Dialect::supports_dollar_placeholder`] for SQLite-style named `$name` placeholders.
+    fn ordered_bind_placeholder_style(&self) -> Option<BindPlaceholderStyle> {
         None
     }
 
@@ -1112,8 +1132,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if this dialect allows dollar placeholders
-    /// e.g. `SELECT $var` (SQLite)
+    /// Returns true if this dialect allows SQLite-style named dollar placeholders,
+    /// for example `SELECT $name`.
+    ///
+    /// This does not describe PostgreSQL-style ordered binds such as `SELECT $1`.
+    /// See [`Dialect::ordered_bind_placeholder_style`].
     fn supports_dollar_placeholder(&self) -> bool {
         false
     }
@@ -2001,6 +2024,7 @@ mod tests {
                 supports_order_by_all = true,
                 supports_nested_comments = true,
                 supports_triple_quoted_string = true,
+                ordered_bind_placeholder_style = Some(BindPlaceholderStyle::DollarNumbered),
             },
         );
         let dialect = EnhancedGenericDialect::new();
@@ -2008,6 +2032,10 @@ mod tests {
         assert!(dialect.supports_order_by_all());
         assert!(dialect.supports_nested_comments());
         assert!(dialect.supports_triple_quoted_string());
+        assert_eq!(
+            dialect.ordered_bind_placeholder_style(),
+            Some(BindPlaceholderStyle::DollarNumbered)
+        );
 
         let d: &dyn Dialect = &dialect;
         assert!(d.is::<GenericDialect>());
@@ -2038,6 +2066,23 @@ mod tests {
             let actual = dialect.identifier_quote_style(ident);
 
             assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
+    fn ordered_bind_placeholder_style() {
+        let tests: Vec<(&dyn Dialect, Option<BindPlaceholderStyle>)> = vec![
+            (&GenericDialect {}, None),
+            (&MySqlDialect {}, Some(BindPlaceholderStyle::QuestionMark)),
+            (
+                &PostgreSqlDialect {},
+                Some(BindPlaceholderStyle::DollarNumbered),
+            ),
+            (&SQLiteDialect {}, Some(BindPlaceholderStyle::QuestionMark)),
+        ];
+
+        for (dialect, expected) in tests {
+            assert_eq!(dialect.ordered_bind_placeholder_style(), expected);
         }
     }
 
@@ -2075,6 +2120,10 @@ mod tests {
 
             fn identifier_quote_style(&self, identifier: &str) -> Option<char> {
                 self.0.identifier_quote_style(identifier)
+            }
+
+            fn ordered_bind_placeholder_style(&self) -> Option<BindPlaceholderStyle> {
+                self.0.ordered_bind_placeholder_style()
             }
 
             fn supports_string_literal_backslash_escape(&self) -> bool {
@@ -2144,6 +2193,10 @@ mod tests {
         let statement = r#"SELECT 'Wayne\'s World'"#;
         let res1 = Parser::parse_sql(&MySqlDialect {}, statement);
         let res2 = Parser::parse_sql(&WrappedDialect(MySqlDialect {}), statement);
+        assert_eq!(
+            WrappedDialect(MySqlDialect {}).ordered_bind_placeholder_style(),
+            Some(BindPlaceholderStyle::QuestionMark)
+        );
         assert!(res1.is_ok());
         assert_eq!(res1, res2);
     }

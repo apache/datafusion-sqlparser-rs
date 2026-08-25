@@ -1647,7 +1647,7 @@ impl<'a> Parser<'a> {
                     })
                 })
             }
-            Keyword::LAMBDA if self.dialect.supports_lambda_functions() => {
+            Keyword::LAMBDA if self.dialect.supports_lambda_keyword_syntax() => {
                 Ok(Some(self.parse_lambda_expr()?))
             }
             _ if self.dialect.supports_geometric_types() => match w.keyword {

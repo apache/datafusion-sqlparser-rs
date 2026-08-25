@@ -4013,6 +4013,7 @@ fn parse_revoke() {
     let sql = "REVOKE ALL ON db1.* FROM 'jeffrey'@'%'";
     let stmt = mysql_and_generic().verified_stmt(sql);
     if let Statement::Revoke(Revoke {
+        grant_option_for: false,
         privileges,
         objects,
         grantees,

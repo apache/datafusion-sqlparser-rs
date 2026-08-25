@@ -18408,6 +18408,9 @@ impl<'a> Parser<'a> {
 
     /// Parse a REVOKE statement
     pub fn parse_revoke(&mut self) -> Result<Revoke, ParserError> {
+        let grant_option_for =
+            self.parse_keywords(&[Keyword::GRANT, Keyword::OPTION, Keyword::FOR]);
+
         let (privileges, objects) = self.parse_grant_deny_revoke_privileges_objects()?;
 
         self.expect_keyword_is(Keyword::FROM)?;
@@ -18422,6 +18425,7 @@ impl<'a> Parser<'a> {
         let cascade = self.parse_cascade_option();
 
         Ok(Revoke {
+            grant_option_for,
             privileges,
             objects,
             grantees,
@@ -21289,6 +21293,7 @@ impl Word {
     /// Use this method when you need to keep the original `Word` around.
     /// If you can consume the `Word`, prefer [`into_ident`](Self::into_ident) instead
     /// to avoid cloning.
+    #[inline]
     pub fn to_ident(&self, span: Span) -> Ident {
         Ident {
             value: self.value.clone(),

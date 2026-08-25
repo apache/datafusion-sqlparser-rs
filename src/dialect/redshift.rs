@@ -16,9 +16,11 @@
 // under the License.
 
 use crate::dialect::Dialect;
+use crate::keywords::Keyword;
 use core::iter::Peekable;
 use core::str::Chars;
 
+use super::keywords::RESERVED_FOR_IDENTIFIER;
 use super::PostgreSqlDialect;
 
 /// A [`Dialect`] for [RedShift](https://aws.amazon.com/redshift/)
@@ -174,5 +176,15 @@ impl Dialect for RedshiftSqlDialect {
 
     fn supports_window_function_null_treatment_arg(&self) -> bool {
         true
+    }
+
+    /// `INTERVAL` is listed as reserved in Redshift docs but the actual parser allows it as an
+    /// identifier, consistent with pgsql.
+    fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {
+        if matches!(kw, Keyword::INTERVAL) {
+            false
+        } else {
+            RESERVED_FOR_IDENTIFIER.contains(&kw)
+        }
     }
 }

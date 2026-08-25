@@ -16763,15 +16763,13 @@ impl<'a> Parser<'a> {
             // Stage reference: @mystage or @namespace.stage (e.g. Snowflake)
             self.parse_snowflake_stage_table_factor()
         } else {
-            // Handle Snowflake pipe result references ($1, $2, ...) in FROM clause.
+            // Handle pipe result references ($1, $2, ...) in FROM clause.
             // See <https://docs.snowflake.com/en/sql-reference/operators-flow>
             if self.dialect.supports_long_arrow_pipe_operator() {
                 if let Token::Placeholder(ref s) = self.peek_token_ref().token.clone() {
-                    if let Some(index_str) = s.strip_prefix('$') {
-                        if let Ok(index @ 1..) = index_str.parse::<u64>() {
-                            self.next_token(); // consume the $n token
-                            return Ok(TableFactor::PipeResultScan { index });
-                        }
+                    if let Some(Ok(index @ 1..)) = s.strip_prefix('$').map(str::parse::<u64>) {
+                        self.next_token(); // consume the $n token
+                        return Ok(TableFactor::PipeResultScan { index });
                     }
                 }
             }

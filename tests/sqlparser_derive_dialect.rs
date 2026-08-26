@@ -17,9 +17,11 @@
 
 //! Tests for the `derive_dialect!` macro.
 
+use sqlparser::ast::{BinaryOperator, Expr, Statement};
 use sqlparser::derive_dialect;
 use sqlparser::dialect::{Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect};
 use sqlparser::parser::Parser;
+use sqlparser::test_utils::{expr_from_projection, only};
 
 #[test]
 fn test_method_overrides() {
@@ -120,4 +122,46 @@ fn test_identifier_quote_style_overrides() {
         QuotelessPostgreSqlDialect::new().identifier_quote_style("x"),
         None
     );
+}
+
+#[test]
+fn test_lambda_keyword_syntax_on_postgres_derivative() {
+    // A PostgreSQL derivative can opt into the `LAMBDA` keyword spelling of
+    // lambda functions without giving up `->` as JSON member access.
+    derive_dialect!(
+        LambdaPostgreSqlDialect,
+        PostgreSqlDialect,
+        overrides = { supports_lambda_keyword_syntax = true }
+    );
+    let dialect = LambdaPostgreSqlDialect::new();
+
+    // Only the keyword spelling is enabled; the arrow spelling stays off.
+    assert!(dialect.supports_lambda_keyword_syntax());
+    assert!(!dialect.supports_lambda_functions());
+
+    // The `LAMBDA` spelling parses.
+    let sql = "SELECT transform(xs, lambda x : x + 1)";
+    let ast = Parser::parse_sql(&dialect, sql).unwrap();
+    assert_eq!(sql, ast[0].to_string());
+
+    // `->` and `->>` still parse as JSON member access rather than
+    // introducing a lambda parameter.
+    for (sql, expected_op) in [
+        ("SELECT a -> 'b'", BinaryOperator::Arrow),
+        ("SELECT a ->> 'b'", BinaryOperator::LongArrow),
+    ] {
+        let ast = Parser::parse_sql(&dialect, sql).unwrap();
+        assert_eq!(sql, ast[0].to_string());
+        match &ast[0] {
+            Statement::Query(query) => {
+                let Expr::BinaryOp { op, .. } =
+                    expr_from_projection(only(&query.body.as_select().unwrap().projection))
+                else {
+                    panic!("expected `{sql}` to parse as a binary operator");
+                };
+                assert_eq!(&expected_op, op);
+            }
+            stmt => panic!("unexpected statement {stmt}"),
+        }
+    }
 }

@@ -990,6 +990,11 @@ pub trait Dialect: Debug + Any {
             Precedence::Caret => 22,
             Precedence::Pipe => 21,
             Precedence::Colon => 21,
+            // "any other operator" -- `->`, `@>`, custom operators. PostgreSQL
+            // places this row above `BETWEEN` / `LIKE` and below `+` / `-`
+            // (`%left Op OPERATOR RIGHT_ARROW '|'` in gram.y), so it must bind
+            // more tightly than `IS`, whose right operand would otherwise stop
+            // short of it.
             Precedence::PgOther => 21,
             Precedence::Between => 20,
             Precedence::Eq => 20,

@@ -2023,19 +2023,35 @@ fn parse_is_distinct_from_precedence() {
     );
 
     // `AND` binds tighter than `OR` within the surrounding expression.
-    assert_matches!(
-        verified_expr("a IS DISTINCT FROM 1 AND b OR c"),
+    assert_eq!(
         BinaryOp {
+            left: Box::new(BinaryOp {
+                left: Box::new(IsDistinctFrom(
+                    Box::new(Identifier(Ident::new("a"))),
+                    Box::new(Expr::value(number("1"))),
+                )),
+                op: BinaryOperator::And,
+                right: Box::new(Identifier(Ident::new("b"))),
+            }),
             op: BinaryOperator::Or,
-            ..
-        }
+            right: Box::new(Identifier(Ident::new("c"))),
+        },
+        verified_expr("a IS DISTINCT FROM 1 AND b OR c")
     );
-    assert_matches!(
-        verified_expr("a IS DISTINCT FROM 1 OR b AND c"),
+    assert_eq!(
         BinaryOp {
+            left: Box::new(IsDistinctFrom(
+                Box::new(Identifier(Ident::new("a"))),
+                Box::new(Expr::value(number("1"))),
+            )),
             op: BinaryOperator::Or,
-            ..
-        }
+            right: Box::new(BinaryOp {
+                left: Box::new(Identifier(Ident::new("b"))),
+                op: BinaryOperator::And,
+                right: Box::new(Identifier(Ident::new("c"))),
+            }),
+        },
+        verified_expr("a IS DISTINCT FROM 1 OR b AND c")
     );
 
     // Explicit parentheses still push the boolean expression into the right operand.
@@ -2073,6 +2089,89 @@ fn parse_is_distinct_from_precedence() {
             }),
         ),
         verified_expr("a IS DISTINCT FROM b + 1")
+    );
+
+    assert_eq!(
+        IsDistinctFrom(
+            Box::new(Identifier(Ident::new("a"))),
+            Box::new(BinaryOp {
+                left: Box::new(Identifier(Ident::new("b"))),
+                op: BinaryOperator::Eq,
+                right: Box::new(Identifier(Ident::new("c"))),
+            }),
+        ),
+        verified_expr("a IS DISTINCT FROM b = c")
+    );
+
+    // `NOT` binds more loosely than `IS`, so it applies to the whole comparison.
+    assert_eq!(
+        UnaryOp {
+            op: UnaryOperator::Not,
+            expr: Box::new(IsDistinctFrom(
+                Box::new(Identifier(Ident::new("a"))),
+                Box::new(Identifier(Ident::new("b"))),
+            )),
+        },
+        verified_expr("NOT a IS DISTINCT FROM b")
+    );
+
+    assert_eq!(
+        BinaryOp {
+            left: Box::new(IsNotDistinctFrom(
+                Box::new(Identifier(Ident::new("a"))),
+                Box::new(Identifier(Ident::new("b"))),
+            )),
+            op: BinaryOperator::And,
+            right: Box::new(IsNotDistinctFrom(
+                Box::new(Identifier(Ident::new("c"))),
+                Box::new(Identifier(Ident::new("d"))),
+            )),
+        },
+        verified_expr("a IS NOT DISTINCT FROM b AND c IS NOT DISTINCT FROM d")
+    );
+}
+
+#[test]
+fn parse_pg_other_operator_precedence() {
+    let arrow_k = |left: Expr| Expr::BinaryOp {
+        left: Box::new(left),
+        op: BinaryOperator::Arrow,
+        right: Box::new(Expr::Value(
+            Value::SingleQuotedString("k".into()).with_empty_span(),
+        )),
+    };
+    let t_a = || Expr::CompoundIdentifier(vec![Ident::new("t"), Ident::new("a")]);
+
+    // `->` binds tighter than comparison operators, so the arrow expression is
+    // the left operand rather than the comparison being the arrow's key.
+    let expected_eq = |left: Expr| Expr::BinaryOp {
+        left: Box::new(arrow_k(left)),
+        op: BinaryOperator::Eq,
+        right: Box::new(Identifier(Ident::new("b"))),
+    };
+
+    // Dialects with lambda functions read a bare `a ->` as the start of a lambda.
+    assert_eq!(
+        expected_eq(Identifier(Ident::new("a"))),
+        all_dialects_where(|d| !d.supports_lambda_functions()).verified_expr("a -> 'k' = b")
+    );
+    assert_eq!(
+        expected_eq(t_a()),
+        all_dialects().verified_expr("t.a -> 'k' = b")
+    );
+
+    // `LIKE` sits below `=` in the precedence table, so cover that boundary too.
+    assert_eq!(
+        Expr::Like {
+            negated: false,
+            any: false,
+            expr: Box::new(arrow_k(t_a())),
+            pattern: Box::new(Expr::Value(
+                Value::SingleQuotedString("x".into()).with_empty_span(),
+            )),
+            escape_char: None,
+        },
+        all_dialects().verified_expr("t.a -> 'k' LIKE 'x'")
     );
 }
 

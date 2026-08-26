@@ -222,6 +222,15 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    /// See: <https://dev.mysql.com/doc/refman/8.0/en/table.html>
+    fn supports_table_command(&self) -> bool {
+        true
+    }
+
+    fn table_command_max_name_parts(&self) -> Option<usize> {
+        Some(2)
+    }
+
     fn supports_left_associative_joins_without_parens(&self) -> bool {
         false
     }

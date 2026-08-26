@@ -1985,6 +1985,202 @@ fn parse_is_not_distinct_from() {
 }
 
 #[test]
+fn parse_is_distinct_from_precedence() {
+    use self::Expr::*;
+
+    // The right operand of `IS [NOT] DISTINCT FROM` binds tighter than `AND`/`OR`,
+    // so the boolean operator must end up at the root of the tree.
+    assert_eq!(
+        BinaryOp {
+            left: Box::new(IsDistinctFrom(
+                Box::new(Identifier(Ident::new("a"))),
+                Box::new(Expr::value(number("1"))),
+            )),
+            op: BinaryOperator::And,
+            right: Box::new(BinaryOp {
+                left: Box::new(Identifier(Ident::new("b"))),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::value(number("2"))),
+            }),
+        },
+        verified_expr("a IS DISTINCT FROM 1 AND b = 2")
+    );
+
+    assert_eq!(
+        BinaryOp {
+            left: Box::new(IsNotDistinctFrom(
+                Box::new(Identifier(Ident::new("a"))),
+                Box::new(Expr::value(number("1"))),
+            )),
+            op: BinaryOperator::Or,
+            right: Box::new(BinaryOp {
+                left: Box::new(Identifier(Ident::new("b"))),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::value(number("2"))),
+            }),
+        },
+        verified_expr("a IS NOT DISTINCT FROM 1 OR b = 2")
+    );
+
+    // `AND` binds tighter than `OR` within the surrounding expression.
+    assert_eq!(
+        BinaryOp {
+            left: Box::new(BinaryOp {
+                left: Box::new(IsDistinctFrom(
+                    Box::new(Identifier(Ident::new("a"))),
+                    Box::new(Expr::value(number("1"))),
+                )),
+                op: BinaryOperator::And,
+                right: Box::new(Identifier(Ident::new("b"))),
+            }),
+            op: BinaryOperator::Or,
+            right: Box::new(Identifier(Ident::new("c"))),
+        },
+        verified_expr("a IS DISTINCT FROM 1 AND b OR c")
+    );
+    assert_eq!(
+        BinaryOp {
+            left: Box::new(IsDistinctFrom(
+                Box::new(Identifier(Ident::new("a"))),
+                Box::new(Expr::value(number("1"))),
+            )),
+            op: BinaryOperator::Or,
+            right: Box::new(BinaryOp {
+                left: Box::new(Identifier(Ident::new("b"))),
+                op: BinaryOperator::And,
+                right: Box::new(Identifier(Ident::new("c"))),
+            }),
+        },
+        verified_expr("a IS DISTINCT FROM 1 OR b AND c")
+    );
+
+    // Explicit parentheses still push the boolean expression into the right operand.
+    assert_eq!(
+        IsDistinctFrom(
+            Box::new(Identifier(Ident::new("a"))),
+            Box::new(Nested(Box::new(BinaryOp {
+                left: Box::new(Expr::value(number("1"))),
+                op: BinaryOperator::And,
+                right: Box::new(Identifier(Ident::new("b"))),
+            }))),
+        ),
+        verified_expr("a IS DISTINCT FROM (1 AND b)")
+    );
+
+    // sqlparser resolves the IS family left-associatively, consistent with how
+    // `a IS NULL IS NULL` already parses. Deliberately more permissive than
+    // PostgreSQL, which declares IS as %nonassoc and rejects the chain.
+    assert_eq!(
+        IsNull(Box::new(IsDistinctFrom(
+            Box::new(Identifier(Ident::new("a"))),
+            Box::new(Identifier(Ident::new("b"))),
+        ))),
+        verified_expr("a IS DISTINCT FROM b IS NULL")
+    );
+
+    // Operators that bind tighter than `IS` are still part of the right operand.
+    assert_eq!(
+        IsDistinctFrom(
+            Box::new(Identifier(Ident::new("a"))),
+            Box::new(BinaryOp {
+                left: Box::new(Identifier(Ident::new("b"))),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::value(number("1"))),
+            }),
+        ),
+        verified_expr("a IS DISTINCT FROM b + 1")
+    );
+
+    // Prefix `NOT` binds less tightly than `IS`, so it takes the whole predicate.
+    assert_eq!(
+        UnaryOp {
+            op: UnaryOperator::Not,
+            expr: Box::new(IsDistinctFrom(
+                Box::new(Identifier(Ident::new("a"))),
+                Box::new(Identifier(Ident::new("b"))),
+            )),
+        },
+        verified_expr("NOT a IS DISTINCT FROM b")
+    );
+
+    // Comparison binds tighter than `IS`, so it stays in the right operand.
+    assert_eq!(
+        IsDistinctFrom(
+            Box::new(Identifier(Ident::new("a"))),
+            Box::new(BinaryOp {
+                left: Box::new(Identifier(Ident::new("b"))),
+                op: BinaryOperator::Eq,
+                right: Box::new(Identifier(Ident::new("c"))),
+            }),
+        ),
+        verified_expr("a IS DISTINCT FROM b = c")
+    );
+
+    // The operator on both sides of `AND`, so each conjunct re-enters this
+    // parse path.
+    assert_eq!(
+        BinaryOp {
+            left: Box::new(IsNotDistinctFrom(
+                Box::new(Identifier(Ident::new("a"))),
+                Box::new(Identifier(Ident::new("b"))),
+            )),
+            op: BinaryOperator::And,
+            right: Box::new(IsNotDistinctFrom(
+                Box::new(Identifier(Ident::new("c"))),
+                Box::new(Identifier(Ident::new("d"))),
+            )),
+        },
+        verified_expr("a IS NOT DISTINCT FROM b AND c IS NOT DISTINCT FROM d")
+    );
+}
+
+#[test]
+fn parse_pg_other_operator_precedence() {
+    // The "any other operator" row -- `->`, `@>`, custom operators -- binds more
+    // tightly than comparison, `LIKE`, `BETWEEN` and the `IS` family, matching
+    // PostgreSQL's `%left Op OPERATOR RIGHT_ARROW` placement. Dialects that
+    // support lambda functions consume `->` in prefix position instead.
+    let dialects = all_dialects_where(|d| !d.supports_lambda_functions());
+    assert_eq!(
+        Expr::BinaryOp {
+            left: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                op: BinaryOperator::Arrow,
+                right: Box::new(Expr::value(Value::SingleQuotedString("k".to_string()))),
+            }),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::Identifier(Ident::new("b"))),
+        },
+        dialects.verified_expr("a -> 'k' = b")
+    );
+
+    // A lambda is only recognised when `->` directly follows the parameter list,
+    // so a qualified left operand reaches this precedence in every dialect --
+    // including those that support lambdas.
+    assert_eq!(
+        Expr::BinaryOp {
+            left: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("t"),
+                    Ident::new("a"),
+                ])),
+                op: BinaryOperator::Arrow,
+                right: Box::new(Expr::value(Value::SingleQuotedString("k".to_string()))),
+            }),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::Identifier(Ident::new("b"))),
+        },
+        all_dialects().verified_expr("t.a -> 'k' = b")
+    );
+
+    // `LIKE` sits below this row too.
+    assert_matches!(
+        dialects.verified_expr("a -> 'k' LIKE 'x'"),
+        Expr::Like { .. }
+    );
+}
+
+#[test]
 fn parse_not_precedence() {
     // NOT has higher precedence than OR/AND, so the following must parse as (NOT true) OR true
     let sql = "NOT 1 OR 1";

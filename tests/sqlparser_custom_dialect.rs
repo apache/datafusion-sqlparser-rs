@@ -196,7 +196,7 @@ fn custom_dialect_lambda_keyword_syntax_without_arrow() {
     let sql = "SELECT transform(xs, lambda x : x + 1)";
     assert_eq!(
         sql,
-        &format!("{}", &Parser::parse_sql(&dialect, sql).unwrap()[0])
+        &format!("{}", Parser::parse_sql(&dialect, sql).unwrap()[0])
     );
 
     // `->` keeps whatever meaning the dialect gives it, rather than
@@ -245,7 +245,7 @@ fn custom_dialect_lambda_keyword_defaults_to_arrow_support() {
     ] {
         assert_eq!(
             sql,
-            &format!("{}", &Parser::parse_sql(&dialect, sql).unwrap()[0])
+            &format!("{}", Parser::parse_sql(&dialect, sql).unwrap()[0])
         );
     }
 }

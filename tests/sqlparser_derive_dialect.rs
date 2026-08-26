@@ -17,7 +17,9 @@
 
 //! Tests for the `derive_dialect!` macro.
 
-use sqlparser::ast::{BinaryOperator, Expr, Statement};
+use sqlparser::ast::{
+    BinaryOperator, Expr, FunctionArg, FunctionArgExpr, FunctionArguments, LambdaSyntax, Statement,
+};
 use sqlparser::derive_dialect;
 use sqlparser::dialect::{Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect};
 use sqlparser::parser::Parser;
@@ -127,7 +129,8 @@ fn test_identifier_quote_style_overrides() {
 #[test]
 fn test_lambda_keyword_syntax_on_postgres_derivative() {
     // A PostgreSQL derivative can opt into the `LAMBDA` keyword spelling of
-    // lambda functions without giving up `->` as JSON member access.
+    // lambda functions without giving up `->` as JSON member access. The two
+    // meet in a single expression below: a lambda whose body is a JSON access.
     derive_dialect!(
         LambdaPostgreSqlDialect,
         PostgreSqlDialect,
@@ -139,29 +142,48 @@ fn test_lambda_keyword_syntax_on_postgres_derivative() {
     assert!(dialect.supports_lambda_keyword_syntax());
     assert!(!dialect.supports_lambda_functions());
 
-    // The `LAMBDA` spelling parses.
-    let sql = "SELECT transform(xs, lambda x : x + 1)";
+    let sql = "SELECT transform(xs, lambda x : (x -> 'a')::INT + 1)";
     let ast = Parser::parse_sql(&dialect, sql).unwrap();
     assert_eq!(sql, ast[0].to_string());
 
-    // `->` and `->>` still parse as JSON member access rather than
-    // introducing a lambda parameter.
-    for (sql, expected_op) in [
-        ("SELECT a -> 'b'", BinaryOperator::Arrow),
-        ("SELECT a ->> 'b'", BinaryOperator::LongArrow),
-    ] {
-        let ast = Parser::parse_sql(&dialect, sql).unwrap();
-        assert_eq!(sql, ast[0].to_string());
-        match &ast[0] {
-            Statement::Query(query) => {
-                let Expr::BinaryOp { op, .. } =
-                    expr_from_projection(only(&query.body.as_select().unwrap().projection))
-                else {
-                    panic!("expected `{sql}` to parse as a binary operator");
-                };
-                assert_eq!(&expected_op, op);
-            }
-            stmt => panic!("unexpected statement {stmt}"),
-        }
-    }
+    // Round-tripping alone would not distinguish a JSON access from a nested
+    // lambda, since both print as `x -> 'a'`, so check the parsed shape.
+    let Statement::Query(query) = &ast[0] else {
+        panic!("unexpected statement {}", ast[0]);
+    };
+    let Expr::Function(func) =
+        expr_from_projection(only(&query.body.as_select().unwrap().projection))
+    else {
+        panic!("expected a function call");
+    };
+    let FunctionArguments::List(args) = &func.args else {
+        panic!("expected an argument list");
+    };
+    let [_, FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Lambda(lambda)))] = &args.args[..]
+    else {
+        panic!("expected the second argument to be a lambda");
+    };
+
+    // The lambda came from the `LAMBDA` keyword, not from `->`.
+    assert_eq!(LambdaSyntax::LambdaKeyword, lambda.syntax);
+
+    // And the `->` in its body is still JSON member access.
+    let Expr::BinaryOp {
+        left,
+        op: BinaryOperator::Plus,
+        ..
+    } = lambda.body.as_ref()
+    else {
+        panic!("expected the lambda body to be an addition");
+    };
+    let Expr::Cast { expr, .. } = left.as_ref() else {
+        panic!("expected the left operand to be a cast");
+    };
+    let Expr::Nested(json_access) = expr.as_ref() else {
+        panic!("expected the cast operand to be parenthesized");
+    };
+    let Expr::BinaryOp { op, .. } = json_access.as_ref() else {
+        panic!("expected `->` to stay a binary operator");
+    };
+    assert_eq!(&BinaryOperator::Arrow, op);
 }

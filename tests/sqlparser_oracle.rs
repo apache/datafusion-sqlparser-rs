@@ -539,3 +539,13 @@ fn test_insert_without_alias() {
         if matches!(&*source, Query { body, .. } if matches!(&**body, SetExpr::Values(_)))
     ));
 }
+
+#[test]
+fn parse_oracle_create_vector_index() {
+    // Oracle's specialized clauses (ORGANIZATION / DISTANCE / WITH TARGET
+    // ACCURACY / PARAMETERS) are not yet parsed; the forms it shares with the
+    // common grammar — an expression target and an `INCLUDE` list — round-trip.
+    oracle().verified_stmt("CREATE VECTOR INDEX g_idx ON galaxies(embedding)");
+    oracle().verified_stmt("CREATE VECTOR INDEX g_idx ON galaxies(VEC_DISTANCE(embedding))");
+    oracle().verified_stmt("CREATE VECTOR INDEX g_idx ON galaxies(embedding) INCLUDE (id)");
+}

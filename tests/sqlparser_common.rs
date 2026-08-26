@@ -9744,6 +9744,10 @@ fn test_create_index_with_using_function() {
             predicate: None,
             index_options,
             alter_options,
+            vector: _,
+            or_replace: _,
+            options: _,
+            storing: _,
         }) => {
             assert_eq!("idx_name", name.to_string());
             assert_eq!("test", table_name.to_string());
@@ -9801,6 +9805,10 @@ fn test_create_index_with_with_clause() {
             predicate: None,
             index_options,
             alter_options,
+            vector: _,
+            or_replace: _,
+            options: _,
+            storing: _,
         }) => {
             pretty_assertions::assert_eq!("title_idx", name.to_string());
             pretty_assertions::assert_eq!("films", table_name.to_string());
@@ -9822,6 +9830,96 @@ fn test_create_index_with_with_clause() {
 fn parse_create_index_async() {
     verified_stmt("CREATE INDEX ASYNC my_index ON my_table(col1)");
     verified_stmt("CREATE UNIQUE INDEX ASYNC my_index ON my_table(col1)");
+}
+
+#[test]
+fn parse_create_vector_index() {
+    // `CREATE VECTOR INDEX` parses for every dialect as a `CreateIndex` flagged
+    // `vector`; the `OPTIONS(...)` trailer lands in `options`.
+    let sql =
+        "CREATE VECTOR INDEX emb ON t(embedding) OPTIONS(distance_type = 'COSINE', dimension = 4)";
+    match verified_stmt(sql) {
+        Statement::CreateIndex(CreateIndex {
+            name,
+            table_name,
+            using,
+            columns,
+            vector,
+            or_replace,
+            unique,
+            if_not_exists,
+            with,
+            options,
+            ..
+        }) => {
+            assert!(vector);
+            assert!(!or_replace);
+            assert!(!unique);
+            assert!(!if_not_exists);
+            assert_eq!(name.unwrap().to_string(), "emb");
+            assert_eq!(table_name.to_string(), "t");
+            assert_eq!(using, None);
+            assert!(with.is_empty());
+            assert_eq!(
+                columns.iter().map(|c| c.to_string()).collect::<Vec<_>>(),
+                vec!["embedding"]
+            );
+            assert_eq!(
+                options,
+                vec![
+                    SqlOption::KeyValue {
+                        key: Ident::new("distance_type"),
+                        value: Expr::Value(
+                            Value::SingleQuotedString("COSINE".to_string()).with_empty_span()
+                        ),
+                    },
+                    SqlOption::KeyValue {
+                        key: Ident::new("dimension"),
+                        value: Expr::value(number("4")),
+                    },
+                ]
+            );
+        }
+        other => panic!("expected CreateIndex, got {other:?}"),
+    }
+
+    // `OR REPLACE`.
+    match verified_stmt(
+        "CREATE OR REPLACE VECTOR INDEX emb ON t(embedding) OPTIONS(distance_type = 'COSINE')",
+    ) {
+        Statement::CreateIndex(CreateIndex {
+            vector, or_replace, ..
+        }) => {
+            assert!(vector);
+            assert!(or_replace);
+        }
+        other => panic!("expected CreateIndex, got {other:?}"),
+    }
+
+    // `IF NOT EXISTS` and schema-qualified names.
+    match verified_stmt(
+        "CREATE VECTOR INDEX IF NOT EXISTS s.emb ON s.t(embedding) OPTIONS(distance_type = 'EUCLIDEAN')",
+    ) {
+        Statement::CreateIndex(CreateIndex {
+            vector,
+            if_not_exists,
+            ..
+        }) => {
+            assert!(vector);
+            assert!(if_not_exists);
+        }
+        other => panic!("expected CreateIndex, got {other:?}"),
+    }
+
+    // The bare core plus the shared trailers all round-trip across dialects: an
+    // expression target, `INCLUDE` / `STORING` covering columns, a `WITH`
+    // options clause, and a trailing `USING <method>`.
+    verified_stmt("CREATE VECTOR INDEX emb ON t(embedding)");
+    verified_stmt("CREATE VECTOR INDEX emb ON t(VEC_COSINE_DISTANCE(embedding))");
+    verified_stmt("CREATE VECTOR INDEX emb ON t(embedding) INCLUDE (a, b)");
+    verified_stmt("CREATE VECTOR INDEX emb ON t(embedding) STORING(a, b)");
+    verified_stmt("CREATE VECTOR INDEX emb ON t(embedding) WITH (metric = 'cosine')");
+    verified_stmt("CREATE VECTOR INDEX emb ON t(embedding) USING HNSW");
 }
 
 #[test]

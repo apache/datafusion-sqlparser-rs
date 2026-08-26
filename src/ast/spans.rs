@@ -699,13 +699,17 @@ impl Spanned for CreateIndex {
             table_name,
             using: _,
             columns,
+            vector: _,        // bool
+            or_replace: _,    // bool
             unique: _,        // bool
             concurrently: _,  // bool
             r#async: _,       // bool
             if_not_exists: _, // bool
             include,
+            storing,
             nulls_distinct: _, // bool
             with,
+            options,
             predicate,
             index_options: _,
             alter_options,
@@ -717,7 +721,9 @@ impl Spanned for CreateIndex {
                 .chain(core::iter::once(table_name.span()))
                 .chain(columns.iter().map(|i| i.column.span()))
                 .chain(include.iter().map(|i| i.span))
+                .chain(storing.iter().map(|i| i.span))
                 .chain(with.iter().map(|i| i.span()))
+                .chain(options.iter().map(|i| i.span()))
                 .chain(predicate.iter().map(|i| i.span()))
                 .chain(alter_options.iter().map(|i| i.span())),
         )

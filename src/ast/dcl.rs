@@ -463,11 +463,12 @@ impl fmt::Display for Grant {
             write!(f, " ON {objects}")?;
         }
         write!(f, " TO {}", display_comma_separated(&self.grantees))?;
-        if let Some(ref current_grants) = self.current_grants {
-            write!(f, " {current_grants}")?;
-        }
+        // Printed in the order the parser reads them, so the output re-parses.
         if self.with_grant_option {
             write!(f, " WITH GRANT OPTION")?;
+        }
+        if let Some(ref current_grants) = self.current_grants {
+            write!(f, " {current_grants}")?;
         }
         if let Some(ref as_grantor) = self.as_grantor {
             write!(f, " AS {as_grantor}")?;
@@ -486,10 +487,14 @@ impl From<Grant> for crate::ast::Statement {
 }
 
 /// REVOKE privileges ON objects FROM grantees
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-revoke.html)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Revoke {
+    /// Whether `GRANT OPTION FOR` is present, withdrawing the right to grant
+    /// the privileges rather than the privileges themselves.
+    pub grant_option_for: bool,
     /// Privileges to revoke.
     pub privileges: Privileges,
     /// Optional objects from which to revoke.
@@ -506,7 +511,11 @@ pub struct Revoke {
 
 impl fmt::Display for Revoke {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "REVOKE {privileges}", privileges = self.privileges)?;
+        write!(f, "REVOKE ")?;
+        if self.grant_option_for {
+            write!(f, "GRANT OPTION FOR ")?;
+        }
+        write!(f, "{}", self.privileges)?;
         if let Some(ref objects) = self.objects {
             write!(f, " ON {objects}")?;
         }

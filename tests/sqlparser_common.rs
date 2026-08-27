@@ -74,6 +74,21 @@ fn parse_numeric_literal_underscore() {
         select.projection,
         vec![UnnamedExpr(Expr::Value(number("10_000").with_empty_span()))]
     );
+
+    for (sql, column) in [
+        ("SELECT 10__00", 10),
+        ("SELECT 10_00_", 13),
+        ("SELECT 1._000", 10),
+        ("SELECT 1_a", 9),
+        ("SELECT 1e_1", 10),
+        ("SELECT 1e1_", 11),
+    ] {
+        let err = dialects.parse_sql_statements(sql).unwrap_err();
+        assert_eq!(
+            format!("sql parser error: Unexpected character '_' at Line: 1, Column: {column}"),
+            err.to_string()
+        );
+    }
 }
 
 #[test]
@@ -3983,6 +3998,7 @@ fn parse_create_table() {
                                 option: ColumnOption::Check(CheckConstraint {
                                     name: None,
                                     expr: Box::new(verified_expr("constrained > 0")),
+                                    no_inherit: false,
                                     enforced: None,
                                 }),
                             },
@@ -10042,6 +10058,10 @@ fn parse_grant() {
     verified_stmt("GRANT OWNERSHIP ON ALL TABLES IN SCHEMA DEV_STAS_ROGOZHIN TO ROLE ANALYST");
     verified_stmt("GRANT OWNERSHIP ON ALL TABLES IN SCHEMA DEV_STAS_ROGOZHIN TO ROLE ANALYST COPY CURRENT GRANTS");
     verified_stmt("GRANT OWNERSHIP ON ALL TABLES IN SCHEMA DEV_STAS_ROGOZHIN TO ROLE ANALYST REVOKE CURRENT GRANTS");
+    // Printing these the other way round yields output the parser rejects.
+    verified_stmt(
+        "GRANT OWNERSHIP ON ALL TABLES IN SCHEMA s TO ROLE r WITH GRANT OPTION COPY CURRENT GRANTS",
+    );
     verified_stmt("GRANT USAGE ON DATABASE db1 TO ROLE role1");
     verified_stmt("GRANT USAGE ON WAREHOUSE wh1 TO ROLE role1");
     verified_stmt("GRANT OWNERSHIP ON INTEGRATION int1 TO ROLE role1");
@@ -10096,6 +10116,7 @@ fn test_revoke() {
     let sql = "REVOKE ALL PRIVILEGES ON users, auth FROM analyst";
     match verified_stmt(sql) {
         Statement::Revoke(Revoke {
+            grant_option_for: false,
             privileges,
             objects: Some(GrantObjects::Tables(tables)),
             grantees,
@@ -10120,8 +10141,9 @@ fn test_revoke() {
 #[test]
 fn test_revoke_with_cascade() {
     let sql = "REVOKE ALL PRIVILEGES ON users, auth FROM analyst CASCADE";
-    match all_dialects_except(|d| d.is::<MySqlDialect>()).verified_stmt(sql) {
+    match verified_stmt(sql) {
         Statement::Revoke(Revoke {
+            grant_option_for: false,
             privileges,
             objects: Some(GrantObjects::Tables(tables)),
             grantees,
@@ -10141,6 +10163,26 @@ fn test_revoke_with_cascade() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn test_revoke_grant_option_for() {
+    let Statement::Revoke(mut revoke) = verified_stmt("REVOKE GRANT OPTION FOR SELECT ON t FROM r")
+    else {
+        unreachable!()
+    };
+    assert!(revoke.grant_option_for);
+
+    // Clearing the flag must yield exactly the plain revoke.
+    revoke.grant_option_for = false;
+    assert_eq!(
+        Statement::Revoke(revoke),
+        verified_stmt("REVOKE SELECT ON t FROM r")
+    );
+
+    verified_stmt("REVOKE GRANT OPTION FOR ALL ON t FROM r");
+    verified_stmt("REVOKE GRANT OPTION FOR SELECT ON t FROM r CASCADE");
+    verified_stmt("REVOKE GRANT OPTION FOR SELECT ON t FROM r RESTRICT");
 }
 
 #[test]
@@ -11410,6 +11452,20 @@ fn parse_deeply_nested_subquery_expr_hits_recursion_limits() {
 
     let where_clause = make_where_clause(100);
     let sql = format!("SELECT id, user_id where id IN (select id from t WHERE {where_clause})");
+
+    let res = Parser::new(&dialect)
+        .try_with_sql(&sql)
+        .expect("tokenize to work")
+        .parse_statements();
+
+    assert_eq!(res, Err(ParserError::RecursionLimitExceeded));
+}
+
+#[test]
+fn parse_deeply_nested_interval_hits_recursion_limits() {
+    let dialect = GenericDialect {};
+
+    let sql = format!("SELECT {}1", "INTERVAL ".repeat(1000));
 
     let res = Parser::new(&dialect)
         .try_with_sql(&sql)
@@ -17566,6 +17622,19 @@ fn column_check_enforced() {
 }
 
 #[test]
+fn table_check_no_inherit() {
+    all_dialects().verified_stmt("CREATE TABLE t (a INT, CONSTRAINT c CHECK (a > 0) NO INHERIT)");
+    all_dialects().verified_stmt("CREATE TABLE t (a INT, CHECK (a > 0) NO INHERIT)");
+    all_dialects().verified_stmt("CREATE TABLE t (a INT, CHECK (a > 0) NO INHERIT NOT ENFORCED)");
+}
+
+#[test]
+fn column_check_no_inherit() {
+    all_dialects().verified_stmt("CREATE TABLE t (x INT CHECK (x > 1) NO INHERIT)");
+    all_dialects().verified_stmt("CREATE TABLE t (x INT CHECK (x > 1) NO INHERIT NOT ENFORCED)");
+}
+
+#[test]
 fn join_precedence() {
     all_dialects().verified_query_with_canonical(
         "SELECT *
@@ -19213,6 +19282,12 @@ fn parse_reset_statement() {
         Statement::Reset(ResetStatement { reset }) => assert_eq!(reset, Reset::ALL),
         _ => unreachable!(),
     }
+    match verified_stmt("RESET SESSION AUTHORIZATION") {
+        Statement::Reset(ResetStatement { reset }) => {
+            assert_eq!(reset, Reset::SessionAuthorization)
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]
@@ -19484,6 +19559,56 @@ fn parse_aliased_function_args() {
     dialects.verified_only_select("SELECT foo(bar(a AS x) AS y)");
     assert!(all_dialects_except(|d| d.supports_aliased_function_args())
         .parse_sql_statements("SELECT foo(a AS x)")
+        .is_err());
+}
+
+#[test]
+fn parse_xmlparse() {
+    let dialects = all_dialects_where(|d| d.supports_xml_expressions());
+
+    for (sql, mode) in [
+        ("SELECT xmlparse(content '<a/>')", "content"),
+        ("SELECT xmlparse(document '<a/>')", "document"),
+    ] {
+        let select = dialects.verified_only_select(sql);
+        match expr_from_projection(&select.projection[0]) {
+            Expr::Function(Function {
+                name,
+                args: FunctionArguments::List(list),
+                ..
+            }) => {
+                assert_eq!(name.to_string(), "xmlparse");
+                assert_eq!(
+                    list.args,
+                    vec![FunctionArg::Named {
+                        name: Ident::new(mode),
+                        arg: FunctionArgExpr::Expr(Expr::Value(
+                            Value::SingleQuotedString("<a/>".to_string()).into()
+                        )),
+                        operator: FunctionArgOperator::Space,
+                    }]
+                );
+            }
+            expr => panic!("expected an XMLPARSE function call, got {expr:?}"),
+        }
+    }
+
+    // XMLPARSE needs both a mode word and a value.
+    assert!(dialects
+        .parse_sql_statements("SELECT xmlparse('<a/>')")
+        .is_err());
+
+    // Going through the ordinary function-call path, XMLPARSE accepts the same
+    // trailing clauses as any other function.
+    dialects.verified_stmt("SELECT xmlparse(document x) FILTER (WHERE y > 1)");
+    dialects.verified_stmt("SELECT xmlparse(document x) OVER (PARTITION BY y)");
+
+    // On dialects without XML support, `xmlparse` stays a regular function
+    // and the special `CONTENT <expr>` syntax is rejected.
+    let others = all_dialects_except(|d| d.supports_xml_expressions());
+    others.verified_only_select("SELECT xmlparse(1)");
+    assert!(others
+        .parse_sql_statements("SELECT xmlparse(content '<a/>')")
         .is_err());
 }
 

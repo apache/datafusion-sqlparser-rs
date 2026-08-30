@@ -737,3 +737,62 @@ fn parse_cte_without_as() {
         .parse_sql_statements("WITH cte (SELECT 1) SELECT * FROM cte")
         .is_err());
 }
+
+#[test]
+fn parse_create_table_using() {
+    match databricks().verified_stmt("CREATE TABLE t (id BIGINT) USING DELTA") {
+        Statement::CreateTable(CreateTable { hive_formats, .. }) => {
+            assert_eq!(
+                hive_formats.unwrap().storage,
+                Some(HiveIOFormat::Using {
+                    format: Ident::new("DELTA")
+                })
+            );
+        }
+        s => panic!("Unexpected statement: {s:?}"),
+    }
+
+    databricks().verified_stmt("CREATE TABLE IF NOT EXISTS t (id BIGINT) USING PARQUET");
+}
+
+#[test]
+fn parse_create_table_map_type() {
+    match databricks().verified_stmt("CREATE TABLE t (m MAP<STRING, INT>)") {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(
+                columns[0].data_type,
+                DataType::Map(
+                    Box::new(DataType::String(None)),
+                    Box::new(DataType::Int(None)),
+                    MapBracketKind::AngleBrackets
+                )
+            );
+        }
+        s => panic!("Unexpected statement: {s:?}"),
+    }
+
+    databricks().verified_stmt("CREATE TABLE t (m MAP<STRING, ARRAY<INT>>)");
+}
+
+#[test]
+fn parse_long_type_as_bigint() {
+    match databricks()
+        .one_statement_parses_to("CREATE TABLE t (id LONG)", "CREATE TABLE t (id BIGINT)")
+    {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(columns[0].data_type, DataType::BigInt(None));
+        }
+        s => panic!("Unexpected statement: {s:?}"),
+    }
+}
+
+#[test]
+fn parse_div_operator() {
+    databricks().one_statement_parses_to("SELECT 10 div 3", "SELECT 10 DIV 3");
+    databricks().one_statement_parses_to("SELECT c1 div c2 FROM t", "SELECT c1 DIV c2 FROM t");
+}
+
+#[test]
+fn parse_pipe_operator() {
+    databricks().verified_stmt("SELECT * FROM t |> WHERE x > 1 |> SELECT x AS y |> ORDER BY y");
+}

@@ -15,7 +15,11 @@
 // specific language governing permissions and limitations
 // under the License.
 
+use crate::ast::Expr;
 use crate::dialect::Dialect;
+use crate::parser::{Parser, ParserError};
+
+use super::SparkSqlDialect;
 
 /// A [`Dialect`] for [Databricks SQL](https://www.databricks.com/)
 ///
@@ -112,5 +116,39 @@ impl Dialect for DatabricksDialect {
 
     fn supports_select_item_multi_column_alias(&self) -> bool {
         true
+    }
+
+    /// See <https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-ddl-create-table-using>
+    fn supports_create_table_using(&self) -> bool {
+        SparkSqlDialect {}.supports_create_table_using()
+    }
+
+    /// `LONG` is an alias for `BIGINT` in Databricks SQL.
+    ///
+    /// See <https://docs.databricks.com/aws/en/sql/language-manual/data-types/bigint-type>
+    fn supports_long_type_as_bigint(&self) -> bool {
+        SparkSqlDialect {}.supports_long_type_as_bigint()
+    }
+
+    /// See <https://docs.databricks.com/aws/en/sql/language-manual/data-types/map-type>
+    fn supports_map_literal_with_angle_brackets(&self) -> bool {
+        SparkSqlDialect {}.supports_map_literal_with_angle_brackets()
+    }
+
+    /// See <https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-pipeline>
+    fn supports_pipe_operator(&self) -> bool {
+        SparkSqlDialect {}.supports_pipe_operator()
+    }
+
+    /// Parse the `DIV` keyword as integer division.
+    ///
+    /// See <https://docs.databricks.com/aws/en/sql/language-manual/functions/div>
+    fn parse_infix(
+        &self,
+        parser: &mut Parser,
+        expr: &Expr,
+        precedence: u8,
+    ) -> Option<Result<Expr, ParserError>> {
+        SparkSqlDialect {}.parse_infix(parser, expr, precedence)
     }
 }

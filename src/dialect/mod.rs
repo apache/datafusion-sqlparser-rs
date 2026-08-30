@@ -547,7 +547,7 @@ pub trait Dialect: Debug + Any {
     /// lambda functions, for example:
     ///
     /// ```sql
-    /// SELECT transform(array(1, 2, 3), LAMBDA x : x + 1); -- returns [2,3,4]
+    /// SELECT list_transform([1, 2, 3], lambda x : x + 1); -- returns [2, 3, 4]
     /// ```
     ///
     /// This spelling does not claim the `->` token, so it can be enabled by
@@ -555,6 +555,8 @@ pub trait Dialect: Debug + Any {
     /// and its derivatives, where `->` is JSON member access. Defaults to
     /// [`Self::supports_lambda_functions`], so dialects supporting the `->`
     /// spelling accept the `LAMBDA` spelling too unless they say otherwise.
+    ///
+    /// See <https://duckdb.org/docs/stable/sql/functions/lambda>
     fn supports_lambda_keyword_syntax(&self) -> bool {
         self.supports_lambda_functions()
     }

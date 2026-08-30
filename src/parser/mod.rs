@@ -72,46 +72,25 @@ macro_rules! parser_err {
 mod alter;
 mod merge;
 
-#[cfg(feature = "std")]
-/// Implementation [`RecursionCounter`] if std is available
 mod recursion {
-    use std::cell::Cell;
-    use std::rc::Rc;
+    use alloc::rc::Rc;
+    use core::cell::Cell;
 
     use super::ParserError;
 
-    /// Tracks remaining recursion depth. This value is decremented on
-    /// each call to [`RecursionCounter::try_decrease()`], when it reaches 0 an error will
-    /// be returned.
-    ///
-    /// Note: Uses an [`std::rc::Rc`] and [`std::cell::Cell`] in order to satisfy the Rust
-    /// borrow checker so the automatic [`DepthGuard`] decrement a
-    /// reference to the counter.
-    ///
-    /// Note: when "recursive-protection" feature is enabled, this crate uses additional stack overflow protection
-    /// for some of its recursive methods. See [`recursive::recursive`] for more information.
     pub(crate) struct RecursionCounter {
         remaining_depth: Rc<Cell<usize>>,
     }
 
     impl RecursionCounter {
-        /// Creates a [`RecursionCounter`] with the specified maximum
-        /// depth
         pub fn new(remaining_depth: usize) -> Self {
             Self {
                 remaining_depth: Rc::new(remaining_depth.into()),
             }
         }
 
-        /// Decreases the remaining depth by 1.
-        ///
-        /// Returns [`Err`] if the remaining depth falls to 0.
-        ///
-        /// Returns a [`DepthGuard`] which will adds 1 to the
-        /// remaining depth upon drop;
         pub fn try_decrease(&self) -> Result<DepthGuard, ParserError> {
             let old_value = self.remaining_depth.get();
-            // ran out of space
             if old_value == 0 {
                 Err(ParserError::RecursionLimitExceeded)
             } else {
@@ -121,7 +100,6 @@ mod recursion {
         }
     }
 
-    /// Guard that increases the remaining depth by 1 on drop
     pub struct DepthGuard {
         remaining_depth: Rc<Cell<usize>>,
     }
@@ -131,33 +109,13 @@ mod recursion {
             Self { remaining_depth }
         }
     }
+
     impl Drop for DepthGuard {
         fn drop(&mut self) {
             let old_value = self.remaining_depth.get();
-            self.remaining_depth.set(old_value + 1);
+            self.remaining_depth.set(old_value.saturating_add(1));
         }
     }
-}
-
-#[cfg(not(feature = "std"))]
-mod recursion {
-    /// Implementation [`RecursionCounter`] if std is NOT available (and does not
-    /// guard against stack overflow).
-    ///
-    /// Has the same API as the std [`RecursionCounter`] implementation
-    /// but does not actually limit stack depth.
-    pub(crate) struct RecursionCounter {}
-
-    impl RecursionCounter {
-        pub fn new(_remaining_depth: usize) -> Self {
-            Self {}
-        }
-        pub fn try_decrease(&self) -> Result<DepthGuard, super::ParserError> {
-            Ok(DepthGuard {})
-        }
-    }
-
-    pub struct DepthGuard {}
 }
 
 #[derive(PartialEq, Eq)]

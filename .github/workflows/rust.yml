@@ -81,6 +81,7 @@ jobs:
         uses: ./.github/actions/setup-builder
         with:
           targets: 'thumbv6m-none-eabi'
+      - run: cargo test --release --no-default-features --test no_std_recursion
       - run: cargo check --no-default-features --target thumbv6m-none-eabi
       - run: cargo check --no-default-features --features visitor --target thumbv6m-none-eabi
 

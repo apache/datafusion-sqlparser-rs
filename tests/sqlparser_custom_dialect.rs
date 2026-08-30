@@ -249,3 +249,38 @@ fn custom_dialect_lambda_keyword_defaults_to_arrow_support() {
         );
     }
 }
+
+#[test]
+fn custom_dialect_lambda_arrow_syntax_without_keyword() {
+    // Arrow lambdas stay on while the `LAMBDA` keyword spelling is off,
+    // as in engines like Spark and Snowflake.
+    #[derive(Debug)]
+    struct MyDialect {}
+
+    impl Dialect for MyDialect {
+        fn is_identifier_start(&self, ch: char) -> bool {
+            is_identifier_start(ch)
+        }
+
+        fn is_identifier_part(&self, ch: char) -> bool {
+            is_identifier_part(ch)
+        }
+
+        fn supports_lambda_functions(&self) -> bool {
+            true
+        }
+
+        fn supports_lambda_keyword_syntax(&self) -> bool {
+            false
+        }
+    }
+
+    let dialect = MyDialect {};
+
+    let sql = "SELECT transform(xs, x -> x + 1)";
+    assert_eq!(
+        sql,
+        &format!("{}", Parser::parse_sql(&dialect, sql).unwrap()[0])
+    );
+    assert!(Parser::parse_sql(&dialect, "SELECT transform(xs, lambda x : x + 1)").is_err());
+}

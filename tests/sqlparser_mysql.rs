@@ -4947,3 +4947,36 @@ fn parse_adjacent_string_literal_concatenation() {
 fn parse_group_by_with_rollup() {
     mysql().verified_stmt("SELECT * FROM tbl GROUP BY col1, col2 WITH ROLLUP");
 }
+
+#[test]
+fn parse_is_distinct_from_json_arrow_precedence() {
+    // MySQL's `->` binds tighter than `IS [NOT] DISTINCT FROM`, so the JSON
+    // extraction must stay inside the right operand.
+    assert_eq!(
+        Expr::IsDistinctFrom(
+            Box::new(Expr::Identifier(Ident::new("a"))),
+            Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("b"))),
+                op: BinaryOperator::Arrow,
+                right: Box::new(Expr::Value(
+                    Value::SingleQuotedString("k".into()).with_empty_span()
+                )),
+            }),
+        ),
+        mysql_and_generic().verified_expr("a IS DISTINCT FROM b -> 'k'")
+    );
+
+    assert_eq!(
+        Expr::IsNotDistinctFrom(
+            Box::new(Expr::Identifier(Ident::new("a"))),
+            Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("b"))),
+                op: BinaryOperator::LongArrow,
+                right: Box::new(Expr::Value(
+                    Value::SingleQuotedString("k".into()).with_empty_span()
+                )),
+            }),
+        ),
+        mysql_and_generic().verified_expr("a IS NOT DISTINCT FROM b ->> 'k'")
+    );
+}

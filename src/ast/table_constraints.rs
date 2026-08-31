@@ -78,15 +78,11 @@ pub enum TableConstraint {
     ///   [ON UPDATE <referential_action>] [ON DELETE <referential_action>]
     /// }`).
     ForeignKey(ForeignKeyConstraint),
-<<<<<<< Updated upstream
     /// `[ CONSTRAINT <name> ] CHECK (<expr>) [NO INHERIT] [[NOT] ENFORCED]`
-=======
-    /// `[ CONSTRAINT <name> ] CHECK (<expr>) [[NOT] ENFORCED]`
     ///
     /// The parentheses are only optional to parse when
     /// [`supports_unparenthesized_check_constraint`](crate::dialect::Dialect::supports_unparenthesized_check_constraint)
     /// is true for the dialect (e.g. ClickHouse); the constraint always displays with parentheses.
->>>>>>> Stashed changes
     Check(CheckConstraint),
     /// ClickHouse [table constraint][1]: `[ CONSTRAINT <name> ] ASSUME (<expr>)`.
     ///

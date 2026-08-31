@@ -10180,14 +10180,10 @@ impl<'a> Parser<'a> {
                     true
                 };
                 let expr = Box::new(self.parse_expr()?);
-<<<<<<< Updated upstream
-                self.expect_token(&Token::RParen)?;
-                let no_inherit = self.parse_keywords(&[Keyword::NO, Keyword::INHERIT]);
-=======
                 if has_paren {
                     self.expect_token(&Token::RParen)?;
                 }
->>>>>>> Stashed changes
+                let no_inherit = self.parse_keywords(&[Keyword::NO, Keyword::INHERIT]);
 
                 let enforced = if self.parse_keyword(Keyword::ENFORCED) {
                     Some(true)

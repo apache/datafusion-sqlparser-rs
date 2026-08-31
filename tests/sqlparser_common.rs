@@ -11258,7 +11258,9 @@ fn parse_is_boolean() {
         "SELECT s, s IS TRIM(' NFKC ') FROM foo",
     ] {
         assert!(
-            parse_sql_statements(sql).is_err(),
+            all_dialects_except(|dialect| dialect.supports_is_operator())
+                .parse_sql_statements(sql)
+                .is_err(),
             "expected a parse failure for `{sql}`"
         );
     }

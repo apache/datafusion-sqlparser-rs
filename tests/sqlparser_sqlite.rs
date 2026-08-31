@@ -957,6 +957,53 @@ fn parse_pattern_operators_bind_at_like_precedence() {
     }
 }
 
+#[test]
+fn sqlite_is_operators() {
+    for (sql, op) in [
+        ("a IS b", BinaryOperator::Is),
+        ("a IS NOT b", BinaryOperator::IsNot),
+    ] {
+        assert_eq!(
+            sqlite().verified_expr(sql),
+            Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                op,
+                right: Box::new(Expr::Identifier(Ident::new("b"))),
+            }
+        );
+    }
+
+    assert_eq!(
+        sqlite().verified_expr("a IS b + c"),
+        Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("a"))),
+            op: BinaryOperator::Is,
+            right: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("b"))),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::Identifier(Ident::new("c"))),
+            }),
+        }
+    );
+
+    assert_eq!(
+        sqlite().verified_expr("a IS b AND c IS NOT d"),
+        Expr::BinaryOp {
+            left: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                op: BinaryOperator::Is,
+                right: Box::new(Expr::Identifier(Ident::new("b"))),
+            }),
+            op: BinaryOperator::And,
+            right: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("c"))),
+                op: BinaryOperator::IsNot,
+                right: Box::new(Expr::Identifier(Ident::new("d"))),
+            }),
+        }
+    );
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }

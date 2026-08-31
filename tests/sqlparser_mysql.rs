@@ -3760,6 +3760,62 @@ fn parse_div_infix_propagates_parse_error() {
 }
 
 #[test]
+fn parse_div_precedence() {
+    let div = |left: Expr, right: Expr| Expr::BinaryOp {
+        left: Box::new(left),
+        op: BinaryOperator::MyIntegerDivide,
+        right: Box::new(right),
+    };
+    let num = |n: &str| Expr::value(number(n));
+
+    // `DIV` shares the precedence of `*` and `/`, so `+` must end up at the root.
+    assert_eq!(
+        Expr::BinaryOp {
+            left: Box::new(div(num("7"), num("2"))),
+            op: BinaryOperator::Plus,
+            right: Box::new(num("1")),
+        },
+        mysql().verified_expr("7 DIV 2 + 1")
+    );
+
+    // Equal precedence resolves left-associatively, both against `*` and against itself.
+    assert_eq!(
+        Expr::BinaryOp {
+            left: Box::new(div(num("9"), num("3"))),
+            op: BinaryOperator::Multiply,
+            right: Box::new(num("3")),
+        },
+        mysql().verified_expr("9 DIV 3 * 3")
+    );
+    assert_eq!(
+        div(div(num("10"), num("5")), num("2")),
+        mysql().verified_expr("10 DIV 5 DIV 2")
+    );
+
+    assert_eq!(
+        Expr::BinaryOp {
+            left: Box::new(div(Expr::Identifier(Ident::new("a")), num("2"))),
+            op: BinaryOperator::Eq,
+            right: Box::new(num("1")),
+        },
+        mysql().verified_expr("a DIV 2 = 1")
+    );
+
+    // Explicit parentheses still push the whole expression into the right operand.
+    assert_eq!(
+        div(
+            num("7"),
+            Expr::Nested(Box::new(Expr::BinaryOp {
+                left: Box::new(num("2")),
+                op: BinaryOperator::Plus,
+                right: Box::new(num("1")),
+            }))
+        ),
+        mysql().verified_expr("7 DIV (2 + 1)")
+    );
+}
+
+#[test]
 fn parse_drop_temporary_table() {
     let sql = "DROP TEMPORARY TABLE foo";
     match mysql().verified_stmt(sql) {

@@ -30,8 +30,8 @@ use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::Value::Placeholder;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, SQLiteDialect};
-use sqlparser::parser::{ParserError, ParserOptions};
-use sqlparser::tokenizer::Token;
+use sqlparser::parser::{Parser, ParserError, ParserOptions};
+use sqlparser::tokenizer::{Span, Token};
 
 #[test]
 fn pragma_no_value() {
@@ -970,4 +970,62 @@ fn sqlite_and_generic() -> TestedDialects {
         Box::new(SQLiteDialect {}),
         Box::new(GenericDialect {}),
     ])
+}
+
+#[test]
+fn pragma_boolean_values() {
+    for (spelling, expected) in [
+        ("TRUE", true),
+        ("YES", true),
+        ("ON", true),
+        ("FALSE", false),
+        ("NO", false),
+        ("OFF", false),
+    ] {
+        let sql = format!("PRAGMA case_sensitive_like = {spelling}");
+        let canonical = format!("PRAGMA case_sensitive_like = {expected}");
+        let statement = sqlite_and_generic().one_statement_parses_to(&sql, &canonical);
+        assert!(matches!(
+            statement,
+            Statement::Pragma {
+                value: Some(ValueWithSpan {
+                    value: Value::Boolean(actual),
+                    ..
+                }),
+                is_eq: true,
+                ..
+            } if actual == expected
+        ));
+    }
+    let statements =
+        Parser::parse_sql(&SQLiteDialect {}, "PRAGMA case_sensitive_like = oN").unwrap();
+    let [Statement::Pragma {
+        value:
+            Some(ValueWithSpan {
+                value: Value::Boolean(true),
+                span,
+            }),
+        is_eq: true,
+        ..
+    }] = statements.as_slice()
+    else {
+        panic!("Expected equality-form PRAGMA")
+    };
+    assert_eq!(&Span::new((1, 30).into(), (1, 32).into()), span);
+
+    let statement = sqlite_and_generic().one_statement_parses_to(
+        "PRAGMA case_sensitive_like(ON)",
+        "PRAGMA case_sensitive_like(true)",
+    );
+    assert!(matches!(
+        statement,
+        Statement::Pragma {
+            value: Some(ValueWithSpan {
+                value: Value::Boolean(true),
+                ..
+            }),
+            is_eq: false,
+            ..
+        }
+    ));
 }

@@ -254,6 +254,21 @@ fn parse_table_constraints() {
 }
 
 #[test]
+fn parse_create_table_rejects_unnamed_assume_constraint() {
+    clickhouse()
+        .parse_sql_statements(
+            r#"CREATE TABLE "x" ("a" "int", ASSUME "a" > 0) ENGINE = MergeTree"#,
+        )
+        .expect_err("ASSUME constraints require CONSTRAINT and a name");
+}
+
+#[test]
+fn parse_alter_table_rejects_unnamed_assume_constraint() {
+    clickhouse()
+        .parse_sql_statements(r#"ALTER TABLE "x" ADD ASSUME "a" > 0"#)
+        .expect_err("ASSUME constraints require CONSTRAINT and a name");
+}
+#[test]
 fn parse_create_table_partition_by_after_order_by() {
     // ClickHouse DDL places PARTITION BY after ORDER BY.
     // MergeTree() is canonicalized to MergeTree and type names are uppercased.

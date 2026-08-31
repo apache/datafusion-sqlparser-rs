@@ -257,8 +257,16 @@ fn parse_table_constraints() {
 fn parse_create_table_rejects_unnamed_assume_constraint() {
     clickhouse()
         .parse_sql_statements(
-            r#"CREATE TABLE "x" ("a" "int", ASSUME "a" > 0) ENGINE = MergeTree"#,
+            r#"CREATE TABLE "x" ("a" "int", "y" ASSUME "a" > 0) ENGINE = MergeTree"#,
         )
+        .expect_err("ASSUME constraints require CONSTRAINT");
+    clickhouse()
+        .parse_sql_statements(
+            r#"CREATE TABLE "x" ("a" "int", CONSTRAINT ASSUME "a" > 0) ENGINE = MergeTree"#,
+        )
+        .expect_err("ASSUME constraints require name");
+    clickhouse()
+        .parse_sql_statements(r#"CREATE TABLE "x" ("a" "int", ASSUME "a" > 0) ENGINE = MergeTree"#)
         .expect_err("ASSUME constraints require CONSTRAINT and a name");
 }
 

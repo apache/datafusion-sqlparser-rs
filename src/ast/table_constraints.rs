@@ -84,7 +84,8 @@ pub enum TableConstraint {
     /// [`supports_unparenthesized_check_constraint`](crate::dialect::Dialect::supports_unparenthesized_check_constraint)
     /// is true for the dialect (e.g. ClickHouse); the constraint always displays with parentheses.
     Check(CheckConstraint),
-    /// ClickHouse [table constraint][1]: `[ CONSTRAINT <name> ] ASSUME (<expr>)`.
+    /// ClickHouse [table constraint][1]: `CONSTRAINT <name> ASSUME (<expr>)`.
+    /// Unlike the other constraints here, the name is mandatory.
     ///
     /// The parentheses are optional to parse; the constraint always displays with parentheses.
     ///
@@ -247,11 +248,11 @@ impl crate::ast::Spanned for CheckConstraint {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-/// An `ASSUME` constraint (`[ CONSTRAINT <name> ] ASSUME <expr>`).
+/// An `ASSUME` constraint (`CONSTRAINT <name> ASSUME <expr>`).
 pub struct AssumeConstraint {
     /// Optional constraint name.
-    pub name: Option<Ident>,
-    /// The boolean expression the ASSUME constraint enforces.
+    pub name: Ident,
+    /// The boolean expression the ASSUME constraint claims is true.
     pub expr: Box<Expr>,
 }
 
@@ -261,7 +262,7 @@ impl fmt::Display for AssumeConstraint {
         write!(
             f,
             "{}ASSUME ({})",
-            display_constraint_name(&self.name),
+            display_constraint_name(&Some(self.name.clone())),
             self.expr
         )?;
         Ok(())
@@ -270,9 +271,7 @@ impl fmt::Display for AssumeConstraint {
 
 impl crate::ast::Spanned for AssumeConstraint {
     fn span(&self) -> Span {
-        self.expr
-            .span()
-            .union_opt(&self.name.as_ref().map(|i| i.span))
+        self.expr.span().union_opt(&Some(self.name.span))
     }
 }
 

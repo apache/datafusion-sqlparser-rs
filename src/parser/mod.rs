@@ -10206,13 +10206,28 @@ impl<'a> Parser<'a> {
             Token::Word(w)
                 if w.keyword == Keyword::ASSUME && self.dialect.supports_assume_constraint() =>
             {
+                let Some(identifier) = name else {
+                    return self.expected(
+                        "CONSTRAINT <name> before ASSUME",
+                        TokenWithSpan {
+                            token: Token::make_keyword("ASSUME"),
+                            span: next_token.span,
+                        },
+                    );
+                };
                 let has_paren = self.consume_token(&Token::LParen);
                 let expr = Box::new(self.parse_expr()?);
                 if has_paren {
                     self.expect_token(&Token::RParen)?;
                 }
 
-                Ok(Some(AssumeConstraint { name, expr }.into()))
+                Ok(Some(
+                    AssumeConstraint {
+                        name: identifier,
+                        expr,
+                    }
+                    .into(),
+                ))
             }
             Token::Word(w)
                 if (w.keyword == Keyword::INDEX || w.keyword == Keyword::KEY)

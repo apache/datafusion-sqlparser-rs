@@ -10027,7 +10027,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse an optional table constraint (e.g. `PRIMARY KEY`, `UNIQUE`, `FOREIGN KEY`, `CHECK`).
+    /// Parse an optional table constraint (e.g. `PRIMARY KEY`, `UNIQUE`, `FOREIGN KEY`, `CHECK`, `ASSUME`).
     pub fn parse_optional_table_constraint(
         &mut self,
     ) -> Result<Option<TableConstraint>, ParserError> {
@@ -10173,10 +10173,21 @@ impl<'a> Parser<'a> {
                 ))
             }
             Token::Word(w) if w.keyword == Keyword::CHECK => {
-                self.expect_token(&Token::LParen)?;
+                let has_paren = if self.dialect.supports_unparenthesized_check_constraint() {
+                    self.consume_token(&Token::LParen)
+                } else {
+                    self.expect_token(&Token::LParen)?;
+                    true
+                };
                 let expr = Box::new(self.parse_expr()?);
+<<<<<<< Updated upstream
                 self.expect_token(&Token::RParen)?;
                 let no_inherit = self.parse_keywords(&[Keyword::NO, Keyword::INHERIT]);
+=======
+                if has_paren {
+                    self.expect_token(&Token::RParen)?;
+                }
+>>>>>>> Stashed changes
 
                 let enforced = if self.parse_keyword(Keyword::ENFORCED) {
                     Some(true)
@@ -10195,6 +10206,17 @@ impl<'a> Parser<'a> {
                     }
                     .into(),
                 ))
+            }
+            Token::Word(w)
+                if w.keyword == Keyword::ASSUME && self.dialect.supports_assume_constraint() =>
+            {
+                let has_paren = self.consume_token(&Token::LParen);
+                let expr = Box::new(self.parse_expr()?);
+                if has_paren {
+                    self.expect_token(&Token::RParen)?;
+                }
+
+                Ok(Some(AssumeConstraint { name, expr }.into()))
             }
             Token::Word(w)
                 if (w.keyword == Keyword::INDEX || w.keyword == Keyword::KEY)

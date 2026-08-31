@@ -59,6 +59,14 @@ impl Dialect for ClickHouseDialect {
         true
     }
 
+    fn supports_unparenthesized_check_constraint(&self) -> bool {
+        true
+    }
+
+    fn supports_assume_constraint(&self) -> bool {
+        true
+    }
+
     fn supports_insert_table_function(&self) -> bool {
         true
     }

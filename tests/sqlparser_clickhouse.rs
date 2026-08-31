@@ -234,6 +234,26 @@ fn parse_create_table() {
 }
 
 #[test]
+fn parse_table_constraints() {
+    // The parentheses around the expression are optional to parse, but the
+    // constraint always displays with parentheses.
+    clickhouse().one_statement_parses_to(
+        r#"CREATE TABLE "x" ("a" "int", CONSTRAINT "y" CHECK "a" > 0) ENGINE = MergeTree"#,
+        r#"CREATE TABLE "x" ("a" "int", CONSTRAINT "y" CHECK ("a" > 0)) ENGINE = MergeTree"#,
+    );
+    clickhouse().verified_stmt(
+        r#"CREATE TABLE "x" ("a" "int", CONSTRAINT "y" CHECK ("a" > 0)) ENGINE = MergeTree"#,
+    );
+    clickhouse().one_statement_parses_to(
+        r#"CREATE TABLE "x" ("a" "int", CONSTRAINT "y" ASSUME "a" > 0) ENGINE = MergeTree"#,
+        r#"CREATE TABLE "x" ("a" "int", CONSTRAINT "y" ASSUME ("a" > 0)) ENGINE = MergeTree"#,
+    );
+    clickhouse().verified_stmt(
+        r#"CREATE TABLE "x" ("a" "int", CONSTRAINT "y" ASSUME ("a" > 0)) ENGINE = MergeTree"#,
+    );
+}
+
+#[test]
 fn parse_create_table_partition_by_after_order_by() {
     // ClickHouse DDL places PARTITION BY after ORDER BY.
     // MergeTree() is canonicalized to MergeTree and type names are uppercased.

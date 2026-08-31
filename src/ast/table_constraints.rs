@@ -78,8 +78,22 @@ pub enum TableConstraint {
     ///   [ON UPDATE <referential_action>] [ON DELETE <referential_action>]
     /// }`).
     ForeignKey(ForeignKeyConstraint),
+<<<<<<< Updated upstream
     /// `[ CONSTRAINT <name> ] CHECK (<expr>) [NO INHERIT] [[NOT] ENFORCED]`
+=======
+    /// `[ CONSTRAINT <name> ] CHECK (<expr>) [[NOT] ENFORCED]`
+    ///
+    /// The parentheses are only optional to parse when
+    /// [`supports_unparenthesized_check_constraint`](crate::dialect::Dialect::supports_unparenthesized_check_constraint)
+    /// is true for the dialect (e.g. ClickHouse); the constraint always displays with parentheses.
+>>>>>>> Stashed changes
     Check(CheckConstraint),
+    /// ClickHouse [table constraint][1]: `[ CONSTRAINT <name> ] ASSUME (<expr>)`.
+    ///
+    /// The parentheses are optional to parse; the constraint always displays with parentheses.
+    ///
+    /// [1]: https://clickhouse.com/docs/reference/statements/create/table#constraints
+    Assume(AssumeConstraint),
     /// MySQLs [index definition][1] for index creation. Not present on ANSI so, for now, the usage
     /// is restricted to MySQL, as no other dialects that support this syntax were found.
     ///
@@ -149,6 +163,12 @@ impl From<CheckConstraint> for TableConstraint {
     }
 }
 
+impl From<AssumeConstraint> for TableConstraint {
+    fn from(constraint: AssumeConstraint) -> Self {
+        TableConstraint::Assume(constraint)
+    }
+}
+
 impl From<IndexConstraint> for TableConstraint {
     fn from(constraint: IndexConstraint) -> Self {
         TableConstraint::Index(constraint)
@@ -174,6 +194,7 @@ impl fmt::Display for TableConstraint {
             TableConstraint::PrimaryKey(constraint) => constraint.fmt(f),
             TableConstraint::ForeignKey(constraint) => constraint.fmt(f),
             TableConstraint::Check(constraint) => constraint.fmt(f),
+            TableConstraint::Assume(constraint) => constraint.fmt(f),
             TableConstraint::Index(constraint) => constraint.fmt(f),
             TableConstraint::FulltextOrSpatial(constraint) => constraint.fmt(f),
             TableConstraint::PrimaryKeyUsingIndex(c) => c.fmt_with_keyword(f, "PRIMARY KEY"),
@@ -220,6 +241,38 @@ impl fmt::Display for CheckConstraint {
 }
 
 impl crate::ast::Spanned for CheckConstraint {
+    fn span(&self) -> Span {
+        self.expr
+            .span()
+            .union_opt(&self.name.as_ref().map(|i| i.span))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// An `ASSUME` constraint (`[ CONSTRAINT <name> ] ASSUME <expr>`).
+pub struct AssumeConstraint {
+    /// Optional constraint name.
+    pub name: Option<Ident>,
+    /// The boolean expression the ASSUME constraint enforces.
+    pub expr: Box<Expr>,
+}
+
+impl fmt::Display for AssumeConstraint {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use crate::ast::ddl::display_constraint_name;
+        write!(
+            f,
+            "{}ASSUME ({})",
+            display_constraint_name(&self.name),
+            self.expr
+        )?;
+        Ok(())
+    }
+}
+
+impl crate::ast::Spanned for AssumeConstraint {
     fn span(&self) -> Span {
         self.expr
             .span()

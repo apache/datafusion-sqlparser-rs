@@ -142,9 +142,10 @@ mod dml;
 pub mod helpers;
 pub mod table_constraints;
 pub use table_constraints::{
-    CheckConstraint, ConstraintUsingIndex, ExcludeConstraint, ExcludeConstraintElement,
-    ExcludeConstraintOperator, ForeignKeyConstraint, FullTextOrSpatialConstraint, IndexConstraint,
-    PrimaryKeyConstraint, TableConstraint, UniqueConstraint,
+    AssumeConstraint, CheckConstraint, ConstraintUsingIndex, ExcludeConstraint,
+    ExcludeConstraintElement, ExcludeConstraintOperator, ForeignKeyConstraint,
+    FullTextOrSpatialConstraint, IndexConstraint, PrimaryKeyConstraint, TableConstraint,
+    UniqueConstraint,
 };
 mod operator;
 mod query;

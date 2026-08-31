@@ -4783,8 +4783,8 @@ pub enum Statement {
     Pragma {
         /// Pragma name (possibly qualified).
         name: ObjectName,
-        /// Optional pragma value.
-        value: Option<ValueWithSpan>,
+        /// Optional pragma value (`signed-number`, `name`, or `signed-literal`).
+        value: Option<Expr>,
         /// Whether the pragma used `=`.
         is_eq: bool,
     },

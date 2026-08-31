@@ -20166,44 +20166,37 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_pragma_value(&mut self) -> Result<ValueWithSpan, ParserError> {
-        let v = self.parse_value()?;
-        match &v.value {
-            Value::SingleQuotedString(_) => Ok(v),
-            Value::DoubleQuotedString(_) => Ok(v),
-            Value::Number(_, _) => Ok(v),
-            Value::Placeholder(_) => Ok(v),
-            _ => {
-                self.prev_token();
-                self.expected_ref("number or string or ? placeholder", self.peek_token_ref())
-            }
+    /// Parse a SQLite `pragma-value`: `signed-number | name | signed-literal`.
+    fn parse_pragma_value(&mut self) -> Result<Expr, ParserError> {
+        if matches!(self.peek_token_ref().token, Token::Plus | Token::Minus) {
+            let op = match self.next_token().token {
+                Token::Plus => UnaryOperator::Plus,
+                _ => UnaryOperator::Minus,
+            };
+            return Ok(Expr::UnaryOp {
+                op,
+                expr: Box::new(Expr::Value(self.parse_value()?)),
+            });
+        }
+        match self.maybe_parse(|parser| parser.parse_value())? {
+            Some(value) => Ok(Expr::Value(value)),
+            None => Ok(Expr::Identifier(self.parse_identifier()?)),
         }
     }
 
     /// PRAGMA [schema-name '.'] pragma-name [('=' pragma-value) | '(' pragma-value ')']
     pub fn parse_pragma(&mut self) -> Result<Statement, ParserError> {
         let name = self.parse_object_name(false)?;
-        if self.consume_token(&Token::LParen) {
+        let (value, is_eq) = if self.consume_token(&Token::LParen) {
             let value = self.parse_pragma_value()?;
             self.expect_token(&Token::RParen)?;
-            Ok(Statement::Pragma {
-                name,
-                value: Some(value),
-                is_eq: false,
-            })
+            (Some(value), false)
         } else if self.consume_token(&Token::Eq) {
-            Ok(Statement::Pragma {
-                name,
-                value: Some(self.parse_pragma_value()?),
-                is_eq: true,
-            })
+            (Some(self.parse_pragma_value()?), true)
         } else {
-            Ok(Statement::Pragma {
-                name,
-                value: None,
-                is_eq: false,
-            })
-        }
+            (None, false)
+        };
+        Ok(Statement::Pragma { name, value, is_eq })
     }
 
     /// `INSTALL [extension_name]`

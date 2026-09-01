@@ -4558,6 +4558,11 @@ pub enum Statement {
         comment: Option<String>,
     },
     /// ```sql
+    /// SHOW EXTERNAL VOLUMES [LIKE '<pattern>']
+    /// ```
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/show-external-volumes>
+    ShowExternalVolumes(ShowExternalVolumes),
+    /// ```sql
     /// CREATE [ OR REPLACE ] WAREHOUSE [ IF NOT EXISTS ] <name>
     ///   [ [ WITH ] <property> = <value> [ ... ] ]
     /// ```
@@ -6293,6 +6298,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::ShowExternalVolumes(s) => write!(f, "{s}"),
             Statement::CreateWarehouse(s) => write!(f, "{s}"),
             Statement::CopyIntoSnowflake {
                 kind,
@@ -11131,6 +11137,28 @@ pub struct ShowObjects {
     pub show_options: ShowStatementOptions,
 }
 
+/// ```sql
+/// SHOW EXTERNAL VOLUMES [LIKE '<pattern>']
+/// ```
+/// See <https://docs.snowflake.com/en/sql-reference/sql/show-external-volumes>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowExternalVolumes {
+    /// Optional filter (e.g. `LIKE`).
+    pub filter: Option<ShowStatementFilter>,
+}
+
+impl fmt::Display for ShowExternalVolumes {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "SHOW EXTERNAL VOLUMES")?;
+        if let Some(ref filter) = self.filter {
+            write!(f, " {filter}")?;
+        }
+        Ok(())
+    }
+}
+
 /// MSSQL's json null clause
 ///
 /// ```plaintext
@@ -12623,6 +12651,12 @@ impl From<ExportData> for Statement {
 impl From<CreateUser> for Statement {
     fn from(c: CreateUser) -> Self {
         Self::CreateUser(c)
+    }
+}
+
+impl From<ShowExternalVolumes> for Statement {
+    fn from(s: ShowExternalVolumes) -> Self {
+        Self::ShowExternalVolumes(s)
     }
 }
 

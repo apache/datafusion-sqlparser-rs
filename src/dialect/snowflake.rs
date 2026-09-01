@@ -33,8 +33,9 @@ use crate::ast::{
     IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, InitializeKind,
     Insert, MultiTableInsertIntoClause, MultiTableInsertType, MultiTableInsertValue,
     MultiTableInsertValues, MultiTableInsertWhenClause, ObjectName, ObjectNamePart,
-    RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement, StorageLifecyclePolicy,
-    StorageSerializationPolicy, TableObject, TagsColumnOption, Value, WrappedCollection,
+    RefreshModeKind, RowAccessPolicy, ShowExternalVolumes, ShowObjects, SqlOption, Statement,
+    StorageLifecyclePolicy, StorageSerializationPolicy, TableObject, TagsColumnOption, Value,
+    WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
@@ -368,6 +369,9 @@ impl Dialect for SnowflakeDialect {
         }
 
         if parser.parse_keyword(Keyword::SHOW) {
+            if parser.parse_keywords(&[Keyword::EXTERNAL, Keyword::VOLUMES]) {
+                return Some(parse_show_external_volumes(parser));
+            }
             let terse = parser.parse_keyword(Keyword::TERSE);
             if parser.parse_keyword(Keyword::OBJECTS) {
                 return Some(parse_show_objects(terse, parser));
@@ -1987,4 +1991,10 @@ fn parse_multi_table_insert_when_clauses(
     }
 
     Ok((when_clauses, else_clause))
+}
+
+/// Parse `SHOW EXTERNAL VOLUMES [LIKE '<pattern>']`
+fn parse_show_external_volumes(parser: &mut Parser) -> Result<Statement, ParserError> {
+    let filter = parser.parse_show_statement_filter()?;
+    Ok(ShowExternalVolumes { filter }.into())
 }

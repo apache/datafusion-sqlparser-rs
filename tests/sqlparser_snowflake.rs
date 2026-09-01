@@ -5071,3 +5071,25 @@ fn test_stage_name_delimiters() {
         ParserError::ParserError("Expected: stage name identifier, found: .".to_string()),
     );
 }
+
+#[test]
+fn test_show_external_volumes() {
+    match snowflake().verified_stmt("SHOW EXTERNAL VOLUMES") {
+        Statement::ShowExternalVolumes(ShowExternalVolumes { filter }) => {
+            assert!(filter.is_none());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_show_external_volumes_like() {
+    match snowflake().verified_stmt("SHOW EXTERNAL VOLUMES LIKE 'my_%'") {
+        Statement::ShowExternalVolumes(ShowExternalVolumes {
+            filter: Some(ShowStatementFilter::Like(pattern)),
+        }) => {
+            assert_eq!("my_%", pattern);
+        }
+        _ => unreachable!(),
+    }
+}

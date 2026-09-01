@@ -737,3 +737,15 @@ fn parse_cte_without_as() {
         .parse_sql_statements("WITH cte (SELECT 1) SELECT * FROM cte")
         .is_err());
 }
+
+#[test]
+fn parse_databricks_query_entry_points() {
+    databricks().verified_stmt("CREATE TABLE t (attrs MAP<STRING, ARRAY<INT>>)");
+    databricks().one_statement_parses_to(r#"SELECT 'it\'s'"#, "SELECT 'it''s'");
+    databricks().verified_stmt("SELECT * REPLACE (upper(name) AS name) FROM source");
+    databricks().verified_stmt(
+        "CREATE VIEW cross_product AS FROM main.raw.left_table, main.raw.right_table",
+    );
+    databricks()
+        .verified_stmt("CREATE VIEW filtered AS FROM main.raw.source |> WHERE id > 0 |> SELECT id");
+}

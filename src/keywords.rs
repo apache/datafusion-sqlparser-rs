@@ -1195,6 +1195,7 @@ define_keywords!(
     VIRTUAL,
     VOLATILE,
     VOLUME,
+    VOLUMES,
     WAITFOR,
     WAREHOUSE,
     WAREHOUSES,

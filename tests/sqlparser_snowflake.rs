@@ -5379,3 +5379,172 @@ fn test_drop_external_volume_if_exists() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn test_alter_external_volume_add_storage_location() {
+    let sql = "ALTER EXTERNAL VOLUME my_vol ADD STORAGE_LOCATION = \
+               (NAME='loc2' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket2/')";
+    let stmt = snowflake().verified_stmt(sql);
+    assert_eq!(Span::empty(), stmt.span());
+    match stmt {
+        Statement::AlterExternalVolume(AlterExternalVolume {
+            name,
+            if_exists,
+            operation,
+        }) => {
+            assert_eq!("my_vol", name.to_string());
+            assert!(!if_exists);
+            match operation {
+                AlterExternalVolumeOperation::AddStorageLocation(loc) => {
+                    assert_eq!(Some("loc2"), ext_vol_option(&loc.options, "NAME"));
+                    assert_eq!(Some("S3"), ext_vol_option(&loc.options, "STORAGE_PROVIDER"));
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_alter_external_volume_add_storage_location_full() {
+    // The ADD path reuses the same option parser, so exercise the optional
+    // fields (external id + encryption) through it too.
+    snowflake().verified_stmt(
+        "ALTER EXTERNAL VOLUME my_vol ADD STORAGE_LOCATION = \
+         (NAME='loc2' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket2/' \
+         STORAGE_AWS_ROLE_ARN='arn:aws:iam::role/r' \
+         STORAGE_AWS_EXTERNAL_ID='ext-id' \
+         ENCRYPTION=(TYPE='AWS_SSE_KMS' KMS_KEY_ID='key'))",
+    );
+}
+
+#[test]
+fn test_alter_external_volume_set_allow_writes() {
+    match snowflake().verified_stmt("ALTER EXTERNAL VOLUME my_vol SET ALLOW_WRITES = TRUE") {
+        Statement::AlterExternalVolume(AlterExternalVolume { operation, .. }) => {
+            assert_eq!(
+                AlterExternalVolumeOperation::SetAllowWrites(true),
+                operation
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match snowflake().verified_stmt("ALTER EXTERNAL VOLUME my_vol SET ALLOW_WRITES = FALSE") {
+        Statement::AlterExternalVolume(AlterExternalVolume { operation, .. }) => {
+            assert_eq!(
+                AlterExternalVolumeOperation::SetAllowWrites(false),
+                operation
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_alter_external_volume_if_exists() {
+    match snowflake()
+        .verified_stmt("ALTER EXTERNAL VOLUME IF EXISTS my_vol SET ALLOW_WRITES = TRUE")
+    {
+        Statement::AlterExternalVolume(AlterExternalVolume { if_exists, .. }) => {
+            assert!(if_exists);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_alter_external_volume_remove_storage_location() {
+    match snowflake().verified_stmt("ALTER EXTERNAL VOLUME my_vol REMOVE STORAGE_LOCATION 'loc1'") {
+        Statement::AlterExternalVolume(AlterExternalVolume { operation, .. }) => {
+            assert_eq!(
+                AlterExternalVolumeOperation::RemoveStorageLocation("loc1".to_string()),
+                operation
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_alter_external_volume_remove_storage_location_escaped_quote() {
+    snowflake().verified_stmt("ALTER EXTERNAL VOLUME my_vol REMOVE STORAGE_LOCATION 'it''s'");
+}
+
+#[test]
+fn test_alter_external_volume_errors() {
+    for (sql, expected) in [
+        ("ALTER EXTERNAL VOLUME", "Expected: identifier, found: EOF"),
+        (
+            "ALTER EXTERNAL VOLUME IF EXISTS",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "ALTER EXTERNAL VOLUME my_vol",
+            "Expected: ADD, SET, or REMOVE after ALTER EXTERNAL VOLUME <name>, found: EOF",
+        ),
+        (
+            "ALTER EXTERNAL VOLUME my_vol RENAME TO v2",
+            "Expected: ADD, SET, or REMOVE after ALTER EXTERNAL VOLUME <name>, found: RENAME",
+        ),
+        (
+            "ALTER EXTERNAL VOLUME my_vol ADD",
+            "Expected: STORAGE_LOCATION, found: EOF",
+        ),
+        (
+            "ALTER EXTERNAL VOLUME my_vol ADD STORAGE_LOCATIONS = ((NAME='loc1'))",
+            "Expected: STORAGE_LOCATION, found: STORAGE_LOCATIONS",
+        ),
+        (
+            "ALTER EXTERNAL VOLUME my_vol ADD STORAGE_LOCATION (NAME='loc1')",
+            "Expected: =, found: (",
+        ),
+        (
+            "ALTER EXTERNAL VOLUME my_vol ADD STORAGE_LOCATION = 'x'",
+            "Expected: (, found: 'x'",
+        ),
+        (
+            "ALTER EXTERNAL VOLUME my_vol ADD STORAGE_LOCATION = ()",
+            "Expected: storage location options, found: EOF",
+        ),
+        (
+            "ALTER EXTERNAL VOLUME my_vol SET",
+            "Expected: ALLOW_WRITES, found: EOF",
+        ),
+        (
+            "ALTER EXTERNAL VOLUME my_vol SET COMMENT = 'c'",
+            "Expected: ALLOW_WRITES, found: COMMENT",
+        ),
+        (
+            "ALTER EXTERNAL VOLUME my_vol SET ALLOW_WRITES TRUE",
+            "Expected: =, found: TRUE",
+        ),
+        (
+            "ALTER EXTERNAL VOLUME my_vol SET ALLOW_WRITES = 1",
+            "Expected: TRUE or FALSE, found: 1",
+        ),
+        (
+            "ALTER EXTERNAL VOLUME my_vol REMOVE",
+            "Expected: STORAGE_LOCATION, found: EOF",
+        ),
+        (
+            "ALTER EXTERNAL VOLUME my_vol REMOVE 'loc1'",
+            "Expected: STORAGE_LOCATION, found: 'loc1'",
+        ),
+        (
+            "ALTER EXTERNAL VOLUME my_vol REMOVE STORAGE_LOCATION",
+            "Expected: literal string, found: EOF",
+        ),
+        (
+            "ALTER EXTERNAL VOLUME my_vol REMOVE STORAGE_LOCATION 1",
+            "Expected: literal string, found: 1",
+        ),
+    ] {
+        assert_eq!(
+            snowflake().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}

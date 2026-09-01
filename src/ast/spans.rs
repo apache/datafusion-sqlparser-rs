@@ -533,6 +533,7 @@ impl Spanned for Statement {
             Statement::RefreshMaterializedView(refresh) => refresh.span(),
             Statement::CreateAggregate(create_aggregate) => create_aggregate.span(),
             Statement::CreateExternalVolume(..) => Span::empty(),
+            Statement::AlterExternalVolume(..) => Span::empty(),
         }
     }
 }

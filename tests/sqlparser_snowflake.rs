@@ -4912,3 +4912,25 @@ fn test_select_dollar_column_from_stage() {
     // With table function args, without alias
     snowflake().verified_stmt("SELECT $1, $2 FROM @mystage1(file_format => 'myformat')");
 }
+
+#[test]
+fn test_show_external_volumes() {
+    match snowflake().verified_stmt("SHOW EXTERNAL VOLUMES") {
+        Statement::ShowExternalVolumes(ShowExternalVolumes { filter }) => {
+            assert!(filter.is_none());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_show_external_volumes_like() {
+    match snowflake().verified_stmt("SHOW EXTERNAL VOLUMES LIKE 'my_%'") {
+        Statement::ShowExternalVolumes(ShowExternalVolumes {
+            filter: Some(ShowStatementFilter::Like(pattern)),
+        }) => {
+            assert_eq!("my_%", pattern);
+        }
+        _ => unreachable!(),
+    }
+}

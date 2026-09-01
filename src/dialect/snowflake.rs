@@ -27,15 +27,15 @@ use crate::ast::helpers::stmt_data_loading::{
     FileStagingCommand, StageLoadSelectItem, StageLoadSelectItemKind, StageParamsObject,
 };
 use crate::ast::{
-    AlterTable, AlterTableOperation, AlterTableType, CatalogSyncNamespaceMode, ColumnOption,
-    ColumnPolicy, ColumnPolicyProperty, ContactEntry, CopyIntoSnowflakeKind, CreateExternalVolume,
-    CreateTable, CreateTableLikeKind, DollarQuotedString, Ident, IdentityParameters,
-    IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
-    InitializeKind, Insert, MultiTableInsertIntoClause, MultiTableInsertType,
-    MultiTableInsertValue, MultiTableInsertValues, MultiTableInsertWhenClause, ObjectName,
-    ObjectNamePart, RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement,
-    StorageLifecyclePolicy, StorageSerializationPolicy, TableObject, TagsColumnOption, Value,
-    WrappedCollection,
+    AlterExternalVolume, AlterExternalVolumeOperation, AlterTable, AlterTableOperation,
+    AlterTableType, CatalogSyncNamespaceMode, ColumnOption, ColumnPolicy, ColumnPolicyProperty,
+    ContactEntry, CopyIntoSnowflakeKind, CreateExternalVolume, CreateTable, CreateTableLikeKind,
+    DollarQuotedString, Ident, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
+    IdentityPropertyKind, IdentityPropertyOrder, InitializeKind, Insert,
+    MultiTableInsertIntoClause, MultiTableInsertType, MultiTableInsertValue,
+    MultiTableInsertValues, MultiTableInsertWhenClause, ObjectName, ObjectNamePart,
+    RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement, StorageLifecyclePolicy,
+    StorageSerializationPolicy, TableObject, TagsColumnOption, Value, WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
@@ -270,6 +270,11 @@ impl Dialect for SnowflakeDialect {
         if parser.parse_keywords(&[Keyword::ALTER, Keyword::DYNAMIC, Keyword::TABLE]) {
             // ALTER DYNAMIC TABLE
             return Some(parse_alter_dynamic_table(parser));
+        }
+
+        if parser.parse_keywords(&[Keyword::ALTER, Keyword::EXTERNAL, Keyword::VOLUME]) {
+            // ALTER EXTERNAL VOLUME
+            return Some(parse_alter_external_volume(parser));
         }
 
         if parser.parse_keywords(&[Keyword::ALTER, Keyword::EXTERNAL, Keyword::TABLE]) {
@@ -2037,6 +2042,40 @@ fn parse_create_external_volume(
         storage_locations,
         allow_writes,
         comment,
+    }
+    .into())
+}
+
+/// Parse `ALTER EXTERNAL VOLUME [IF EXISTS] <name> ...`
+fn parse_alter_external_volume(parser: &mut Parser) -> Result<Statement, ParserError> {
+    let if_exists = parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+    let name = parser.parse_object_name(false)?;
+
+    let operation = if parser.parse_keyword(Keyword::ADD) {
+        parser.expect_keyword_is(Keyword::STORAGE_LOCATION)?;
+        parser.expect_token(&Token::Eq)?;
+        AlterExternalVolumeOperation::AddStorageLocation(parse_external_volume_storage_location(
+            parser,
+        )?)
+    } else if parser.parse_keyword(Keyword::SET) {
+        parser.expect_keyword_is(Keyword::ALLOW_WRITES)?;
+        parser.expect_token(&Token::Eq)?;
+        AlterExternalVolumeOperation::SetAllowWrites(parser.parse_boolean_string()?)
+    } else if parser.parse_keyword(Keyword::REMOVE) {
+        parser.expect_keyword_is(Keyword::STORAGE_LOCATION)?;
+        let loc_name = parser.parse_literal_string()?;
+        AlterExternalVolumeOperation::RemoveStorageLocation(loc_name)
+    } else {
+        return parser.expected(
+            "ADD, SET, or REMOVE after ALTER EXTERNAL VOLUME <name>",
+            parser.peek_token(),
+        );
+    };
+
+    Ok(AlterExternalVolume {
+        name,
+        if_exists,
+        operation,
     }
     .into())
 }

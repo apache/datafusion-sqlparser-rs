@@ -4563,6 +4563,11 @@ pub enum Statement {
     /// See <https://docs.snowflake.com/en/sql-reference/sql/create-external-volume>
     CreateExternalVolume(CreateExternalVolume),
     /// ```sql
+    /// ALTER EXTERNAL VOLUME [IF EXISTS] <name> ...
+    /// ```
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/alter-external-volume>
+    AlterExternalVolume(AlterExternalVolume),
+    /// ```sql
     /// CREATE [ OR REPLACE ] WAREHOUSE [ IF NOT EXISTS ] <name>
     ///   [ [ WITH ] <property> = <value> [ ... ] ]
     /// ```
@@ -6299,6 +6304,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::CreateExternalVolume(s) => write!(f, "{s}"),
+            Statement::AlterExternalVolume(s) => write!(f, "{s}"),
             Statement::CreateWarehouse(s) => write!(f, "{s}"),
             Statement::CopyIntoSnowflake {
                 kind,
@@ -11193,6 +11199,71 @@ impl fmt::Display for CreateExternalVolume {
     }
 }
 
+/// ```sql
+/// ALTER EXTERNAL VOLUME [IF EXISTS] <name> ...
+/// ```
+/// See <https://docs.snowflake.com/en/sql-reference/sql/alter-external-volume>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterExternalVolume {
+    /// External volume name.
+    pub name: ObjectName,
+    /// `IF EXISTS` flag.
+    pub if_exists: bool,
+    /// The alter operation.
+    pub operation: AlterExternalVolumeOperation,
+}
+
+impl fmt::Display for AlterExternalVolume {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "ALTER EXTERNAL VOLUME {if_exists}{name} {operation}",
+            if_exists = if self.if_exists { "IF EXISTS " } else { "" },
+            name = self.name,
+            operation = self.operation,
+        )
+    }
+}
+
+/// Operations for `ALTER EXTERNAL VOLUME`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterExternalVolumeOperation {
+    /// `ADD STORAGE_LOCATION = ( ... )`
+    AddStorageLocation(KeyValueOptions),
+    /// `SET ALLOW_WRITES = TRUE|FALSE`
+    SetAllowWrites(bool),
+    /// `REMOVE STORAGE_LOCATION '<name>'`
+    RemoveStorageLocation(String),
+}
+
+impl fmt::Display for AlterExternalVolumeOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterExternalVolumeOperation::AddStorageLocation(loc) => {
+                write!(f, "ADD STORAGE_LOCATION = ({loc})")
+            }
+            AlterExternalVolumeOperation::SetAllowWrites(val) => {
+                write!(
+                    f,
+                    "SET ALLOW_WRITES = {}",
+                    if *val { "TRUE" } else { "FALSE" }
+                )
+            }
+            AlterExternalVolumeOperation::RemoveStorageLocation(name) => {
+                write!(
+                    f,
+                    "REMOVE STORAGE_LOCATION '{}'",
+                    value::escape_single_quote_string(name)
+                )
+            }
+        }
+    }
+}
+
 /// MSSQL's json null clause
 ///
 /// ```plaintext
@@ -12691,6 +12762,12 @@ impl From<CreateUser> for Statement {
 impl From<CreateExternalVolume> for Statement {
     fn from(c: CreateExternalVolume) -> Self {
         Self::CreateExternalVolume(c)
+    }
+}
+
+impl From<AlterExternalVolume> for Statement {
+    fn from(a: AlterExternalVolume) -> Self {
+        Self::AlterExternalVolume(a)
     }
 }
 

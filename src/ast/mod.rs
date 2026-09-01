@@ -4558,6 +4558,11 @@ pub enum Statement {
         comment: Option<String>,
     },
     /// ```sql
+    /// DESC[RIBE] EXTERNAL VOLUME <name>
+    /// ```
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/desc-external-volume>
+    DescribeExternalVolume(DescribeExternalVolume),
+    /// ```sql
     /// CREATE [ OR REPLACE ] WAREHOUSE [ IF NOT EXISTS ] <name>
     ///   [ [ WITH ] <property> = <value> [ ... ] ]
     /// ```
@@ -6293,6 +6298,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::DescribeExternalVolume(s) => write!(f, "{s}"),
             Statement::CreateWarehouse(s) => write!(f, "{s}"),
             Statement::CopyIntoSnowflake {
                 kind,
@@ -11131,6 +11137,26 @@ pub struct ShowObjects {
     pub show_options: ShowStatementOptions,
 }
 
+/// ```sql
+/// DESC[RIBE] EXTERNAL VOLUME <name>
+/// ```
+/// See <https://docs.snowflake.com/en/sql-reference/sql/desc-external-volume>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DescribeExternalVolume {
+    /// The keyword used, `DESC` or `DESCRIBE`.
+    pub describe_alias: DescribeAlias,
+    /// External volume name.
+    pub name: ObjectName,
+}
+
+impl fmt::Display for DescribeExternalVolume {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} EXTERNAL VOLUME {}", self.describe_alias, self.name)
+    }
+}
+
 /// MSSQL's json null clause
 ///
 /// ```plaintext
@@ -12623,6 +12649,12 @@ impl From<ExportData> for Statement {
 impl From<CreateUser> for Statement {
     fn from(c: CreateUser) -> Self {
         Self::CreateUser(c)
+    }
+}
+
+impl From<DescribeExternalVolume> for Statement {
+    fn from(d: DescribeExternalVolume) -> Self {
+        Self::DescribeExternalVolume(d)
     }
 }
 

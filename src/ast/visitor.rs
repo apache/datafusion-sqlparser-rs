@@ -1242,6 +1242,32 @@ mod tests {
         do_visit("SELECT a, b FROM t", &mut visitor);
         assert_eq!(visitor.idents, vec!["a", "b", "t"]);
     }
+
+    #[test]
+    fn visits_function_clauses_in_source_order() {
+        #[derive(Default)]
+        struct ExprVisitor {
+            idents: Vec<String>,
+        }
+
+        impl Visitor for ExprVisitor {
+            type Break = ();
+
+            fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<Self::Break> {
+                if let Expr::Identifier(ident) = expr {
+                    self.idents.push(ident.value.clone());
+                }
+                ControlFlow::Continue(())
+            }
+        }
+
+        let mut visitor = ExprVisitor::default();
+        do_visit(
+            "SELECT LISTAGG(value) WITHIN GROUP (ORDER BY order_key) FILTER (WHERE filter_key)",
+            &mut visitor,
+        );
+        assert_eq!(visitor.idents, ["value", "order_key", "filter_key"]);
+    }
 }
 
 #[cfg(test)]

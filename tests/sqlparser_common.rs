@@ -15889,7 +15889,7 @@ fn parse_drop_rule_rejects_missing_names() {
     for (sql, expected) in [
         ("DROP RULE", "Expected: identifier, found: EOF"),
         ("DROP RULE r ON", "Expected: identifier, found: EOF"),
-        ("DROP 1", "Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: 1"),
+        ("DROP 1", "Expected: COLLATION, CONNECTOR, DATABASE, EXTENSION, EXTERNAL VOLUME, FOREIGN TABLE, FUNCTION, GROUP, INDEX, OPERATOR, POLICY, PROCEDURE, ROLE, RULE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, MATERIALIZED VIEW, USER or WAREHOUSE after DROP, found: 1"),
     ] {
         assert_eq!(
             all_dialects().parse_sql_statements(sql).unwrap_err(),

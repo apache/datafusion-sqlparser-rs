@@ -27,11 +27,12 @@ use crate::ast::helpers::stmt_data_loading::{
     FileStagingCommand, StageLoadSelectItem, StageLoadSelectItemKind, StageParamsObject,
 };
 use crate::ast::{
-    AlterTable, AlterTableOperation, AlterTableType, CatalogSyncNamespaceMode, ColumnOption,
-    ColumnPolicy, ColumnPolicyProperty, ContactEntry, CopyIntoSnowflakeKind, CreateTable,
-    CreateTableLikeKind, DollarQuotedString, Ident, IdentityParameters, IdentityProperty,
-    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, InitializeKind,
-    Insert, MultiTableInsertIntoClause, MultiTableInsertType, MultiTableInsertValue,
+    AlterExternalVolume, AlterExternalVolumeOperation, AlterTable, AlterTableOperation,
+    AlterTableType, CatalogSyncNamespaceMode, ColumnOption, ColumnPolicy, ColumnPolicyProperty,
+    ContactEntry, CopyIntoSnowflakeKind, CreateExternalVolume, CreateTable, CreateTableLikeKind,
+    DollarQuotedString, Ident, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
+    IdentityPropertyKind, IdentityPropertyOrder, InitializeKind, Insert,
+    MultiTableInsertIntoClause, MultiTableInsertType, MultiTableInsertValue,
     MultiTableInsertValues, MultiTableInsertWhenClause, ObjectName, ObjectNamePart,
     RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement, StorageLifecyclePolicy,
     StorageSerializationPolicy, TableObject, TagsColumnOption, Value, WrappedCollection,
@@ -271,6 +272,11 @@ impl Dialect for SnowflakeDialect {
             return Some(parse_alter_dynamic_table(parser));
         }
 
+        if parser.parse_keywords(&[Keyword::ALTER, Keyword::EXTERNAL, Keyword::VOLUME]) {
+            // ALTER EXTERNAL VOLUME
+            return Some(parse_alter_external_volume(parser));
+        }
+
         if parser.parse_keywords(&[Keyword::ALTER, Keyword::EXTERNAL, Keyword::TABLE]) {
             // ALTER EXTERNAL TABLE
             return Some(parse_alter_external_table(parser));
@@ -290,6 +296,12 @@ impl Dialect for SnowflakeDialect {
             // possibly CREATE STAGE
             //[ OR  REPLACE ]
             let or_replace = parser.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
+
+            // CREATE [OR REPLACE] EXTERNAL VOLUME
+            if parser.parse_keywords(&[Keyword::EXTERNAL, Keyword::VOLUME]) {
+                return Some(parse_create_external_volume(or_replace, parser));
+            }
+
             // LOCAL | GLOBAL
             let global = match parser.parse_one_of_keywords(&[Keyword::LOCAL, Keyword::GLOBAL]) {
                 Some(Keyword::LOCAL) => Some(false),
@@ -1987,4 +1999,98 @@ fn parse_multi_table_insert_when_clauses(
     }
 
     Ok((when_clauses, else_clause))
+}
+
+/// Parse `CREATE [OR REPLACE] EXTERNAL VOLUME [IF NOT EXISTS] <name> ...`
+///
+/// Each storage location is parsed by [`parse_external_volume_storage_location`];
+/// the trailing `ALLOW_WRITES` and `COMMENT` properties are accepted in any
+/// order.
+fn parse_create_external_volume(
+    or_replace: bool,
+    parser: &mut Parser,
+) -> Result<Statement, ParserError> {
+    let if_not_exists = parser.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+    let name = parser.parse_object_name(false)?;
+
+    parser.expect_keyword_is(Keyword::STORAGE_LOCATIONS)?;
+    parser.expect_token(&Token::Eq)?;
+    parser.expect_token(&Token::LParen)?;
+
+    let storage_locations = parser.parse_comma_separated(parse_external_volume_storage_location)?;
+    parser.expect_token(&Token::RParen)?;
+
+    let mut allow_writes = None;
+    let mut comment = None;
+
+    loop {
+        if parser.parse_keyword(Keyword::ALLOW_WRITES) {
+            parser.expect_token(&Token::Eq)?;
+            allow_writes = Some(parser.parse_boolean_string()?);
+        } else if parser.parse_keyword(Keyword::COMMENT) {
+            parser.expect_token(&Token::Eq)?;
+            comment = Some(parser.parse_comment_value()?);
+        } else {
+            break;
+        }
+    }
+
+    Ok(CreateExternalVolume {
+        or_replace,
+        if_not_exists,
+        name,
+        storage_locations,
+        allow_writes,
+        comment,
+    }
+    .into())
+}
+
+/// Parse `ALTER EXTERNAL VOLUME [IF EXISTS] <name> ...`
+fn parse_alter_external_volume(parser: &mut Parser) -> Result<Statement, ParserError> {
+    let if_exists = parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+    let name = parser.parse_object_name(false)?;
+
+    let operation = if parser.parse_keyword(Keyword::ADD) {
+        parser.expect_keyword_is(Keyword::STORAGE_LOCATION)?;
+        parser.expect_token(&Token::Eq)?;
+        AlterExternalVolumeOperation::AddStorageLocation(parse_external_volume_storage_location(
+            parser,
+        )?)
+    } else if parser.parse_keyword(Keyword::SET) {
+        parser.expect_keyword_is(Keyword::ALLOW_WRITES)?;
+        parser.expect_token(&Token::Eq)?;
+        AlterExternalVolumeOperation::SetAllowWrites(parser.parse_boolean_string()?)
+    } else if parser.parse_keyword(Keyword::REMOVE) {
+        parser.expect_keyword_is(Keyword::STORAGE_LOCATION)?;
+        let loc_name = parser.parse_literal_string()?;
+        AlterExternalVolumeOperation::RemoveStorageLocation(loc_name)
+    } else {
+        return parser.expected(
+            "ADD, SET, or REMOVE after ALTER EXTERNAL VOLUME <name>",
+            parser.peek_token(),
+        );
+    };
+
+    Ok(AlterExternalVolume {
+        name,
+        if_exists,
+        operation,
+    }
+    .into())
+}
+
+/// Parse one parenthesized storage-location option list, e.g.
+/// `(NAME='loc1' STORAGE_PROVIDER='S3' ...)`. The options (and the
+/// `ENCRYPTION = (...)` sub-list) are parsed generically via
+/// [`Parser::parse_key_value_options`]; only an empty list is rejected,
+/// field order and the exact option set are left to the consumer.
+fn parse_external_volume_storage_location(
+    parser: &mut Parser,
+) -> Result<KeyValueOptions, ParserError> {
+    let location = parser.parse_key_value_options(true, &[])?;
+    if location.options.is_empty() {
+        return parser.expected("storage location options", parser.peek_token());
+    }
+    Ok(location)
 }

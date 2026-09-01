@@ -4558,6 +4558,11 @@ pub enum Statement {
         comment: Option<String>,
     },
     /// ```sql
+    /// CREATE [OR REPLACE] EXTERNAL VOLUME [IF NOT EXISTS] <name>
+    /// ```
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/create-external-volume>
+    CreateExternalVolume(CreateExternalVolume),
+    /// ```sql
     /// CREATE [ OR REPLACE ] WAREHOUSE [ IF NOT EXISTS ] <name>
     ///   [ [ WITH ] <property> = <value> [ ... ] ]
     /// ```
@@ -6293,6 +6298,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::CreateExternalVolume(s) => write!(f, "{s}"),
             Statement::CreateWarehouse(s) => write!(f, "{s}"),
             Statement::CopyIntoSnowflake {
                 kind,
@@ -8686,6 +8692,8 @@ pub enum ObjectType {
     User,
     /// A stream.
     Stream,
+    /// A Snowflake external volume.
+    ExternalVolume,
     /// A warehouse.
     Warehouse,
 }
@@ -8706,6 +8714,7 @@ impl fmt::Display for ObjectType {
             ObjectType::Type => "TYPE",
             ObjectType::User => "USER",
             ObjectType::Stream => "STREAM",
+            ObjectType::ExternalVolume => "EXTERNAL VOLUME",
             ObjectType::Warehouse => "WAREHOUSE",
         })
     }
@@ -11131,6 +11140,59 @@ pub struct ShowObjects {
     pub show_options: ShowStatementOptions,
 }
 
+/// ```sql
+/// CREATE [OR REPLACE] EXTERNAL VOLUME [IF NOT EXISTS] <name>
+/// ```
+/// See <https://docs.snowflake.com/en/sql-reference/sql/create-external-volume>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateExternalVolume {
+    /// `OR REPLACE` flag.
+    pub or_replace: bool,
+    /// `IF NOT EXISTS` flag.
+    pub if_not_exists: bool,
+    /// External volume name.
+    pub name: ObjectName,
+    /// Storage locations, each a parenthesized list of key-value options
+    /// (e.g. `(NAME='loc1' STORAGE_PROVIDER='S3' STORAGE_BASE_URL='s3://bucket/')`).
+    pub storage_locations: Vec<KeyValueOptions>,
+    /// Optional `ALLOW_WRITES` setting.
+    pub allow_writes: Option<bool>,
+    /// Optional comment.
+    pub comment: Option<String>,
+}
+
+impl fmt::Display for CreateExternalVolume {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CREATE {or_replace}EXTERNAL VOLUME {if_not_exists}{name} STORAGE_LOCATIONS = (",
+            or_replace = if self.or_replace { "OR REPLACE " } else { "" },
+            if_not_exists = if self.if_not_exists {
+                "IF NOT EXISTS "
+            } else {
+                ""
+            },
+            name = self.name,
+        )?;
+        for (i, loc) in self.storage_locations.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "({loc})")?;
+        }
+        write!(f, ")")?;
+        if let Some(val) = self.allow_writes {
+            write!(f, " ALLOW_WRITES = {}", if val { "TRUE" } else { "FALSE" })?;
+        }
+        if let Some(ref c) = self.comment {
+            write!(f, " COMMENT = '{}'", value::escape_single_quote_string(c))?;
+        }
+        Ok(())
+    }
+}
+
 /// MSSQL's json null clause
 ///
 /// ```plaintext
@@ -12623,6 +12685,12 @@ impl From<ExportData> for Statement {
 impl From<CreateUser> for Statement {
     fn from(c: CreateUser) -> Self {
         Self::CreateUser(c)
+    }
+}
+
+impl From<CreateExternalVolume> for Statement {
+    fn from(c: CreateExternalVolume) -> Self {
+        Self::CreateExternalVolume(c)
     }
 }
 

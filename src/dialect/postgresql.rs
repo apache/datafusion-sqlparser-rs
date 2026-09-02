@@ -33,7 +33,21 @@ use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
 
-use super::keywords::RESERVED_FOR_IDENTIFIER;
+use super::keywords::{self, RESERVED_FOR_IDENTIFIER};
+
+/// Keywords in [`keywords::RESERVED_FOR_TABLE_ALIAS`] because of other dialects, yet are safe for aliasing in PostgreSQL.
+/// See <https://www.postgresql.org/docs/current/sql-keywords-appendix.html>.
+const RESERVED_EXCLUSIONS_FOR_TABLE_ALIAS: &[Keyword] = &[
+    Keyword::CLUSTER,
+    Keyword::DISTRIBUTE,
+    Keyword::EXPLAIN,
+    Keyword::MINUS,
+    Keyword::SAMPLE,
+    Keyword::SORT,
+    Keyword::START,
+    Keyword::TOP,
+    Keyword::VIEW,
+];
 
 /// A [`Dialect`] for [PostgreSQL](https://www.postgresql.org/)
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -89,6 +103,11 @@ impl Dialect for PostgreSqlDialect {
         } else {
             RESERVED_FOR_IDENTIFIER.contains(&kw)
         }
+    }
+
+    fn is_table_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+        !keywords::RESERVED_FOR_TABLE_ALIAS.contains(kw)
+            || RESERVED_EXCLUSIONS_FOR_TABLE_ALIAS.contains(kw)
     }
 
     /// See <https://www.postgresql.org/docs/current/sql-createoperator.html>

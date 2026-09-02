@@ -3644,7 +3644,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let (field_type, trailing_bracket) = self.parse_data_type_helper()?;
+        let (field_type, trailing_bracket) = self.parse_data_type_with_optional_collation()?;
 
         let options = self.maybe_parse_options(Keyword::OPTIONS)?;
         Ok((
@@ -5239,6 +5239,9 @@ impl<'a> Parser<'a> {
     /// Parse a SQL CREATE statement
     pub fn parse_create(&mut self) -> Result<Statement, ParserError> {
         let or_replace = self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
+        let or_refresh = !or_replace
+            && self.dialect.supports_create_or_refresh()
+            && self.parse_keywords(&[Keyword::OR, Keyword::REFRESH]);
         let or_alter = self.parse_keywords(&[Keyword::OR, Keyword::ALTER]);
         let multiset = self.maybe_parse_multiset();
         let local = self.parse_one_of_keywords(&[Keyword::LOCAL]).is_some();
@@ -5266,6 +5269,11 @@ impl<'a> Parser<'a> {
             self.parse_create_snapshot_table().map(Into::into)
         } else if self.peek_keywords(&[Keyword::TEXT, Keyword::SEARCH]) {
             self.parse_create_text_search().map(Into::into)
+        } else if or_refresh && self.peek_keyword(Keyword::TABLE) {
+            self.expected_ref(
+                "MATERIALIZED VIEW after CREATE OR REFRESH",
+                self.peek_token_ref(),
+            )
         } else if self.parse_keyword(Keyword::TABLE) {
             self.parse_create_table(
                 or_replace, temporary, unlogged, global, transient, volatile, multiset,
@@ -5276,8 +5284,14 @@ impl<'a> Parser<'a> {
             || self.peek_keywords(&[Keyword::SECURE, Keyword::MATERIALIZED, Keyword::VIEW])
             || self.peek_keywords(&[Keyword::SECURE, Keyword::VIEW])
         {
-            self.parse_create_view(or_alter, or_replace, temporary, create_view_params)
-                .map(Into::into)
+            self.parse_create_view(
+                or_alter,
+                or_replace,
+                or_refresh,
+                temporary,
+                create_view_params,
+            )
+            .map(Into::into)
         } else if self.parse_keyword(Keyword::POLICY) {
             self.parse_create_policy().map(Into::into)
         } else if self.parse_keyword(Keyword::EXTERNAL) {
@@ -6744,11 +6758,18 @@ impl<'a> Parser<'a> {
         &mut self,
         or_alter: bool,
         or_replace: bool,
+        or_refresh: bool,
         temporary: bool,
         create_view_params: Option<CreateViewParams>,
     ) -> Result<CreateView, ParserError> {
         let secure = self.parse_keyword(Keyword::SECURE);
         let materialized = self.parse_keyword(Keyword::MATERIALIZED);
+        if or_refresh && !materialized {
+            return self.expected_ref(
+                "MATERIALIZED VIEW after CREATE OR REFRESH",
+                self.peek_token_ref(),
+            );
+        }
         self.expect_keyword_is(Keyword::VIEW)?;
         let allow_unquoted_hyphen = dialect_of!(self is BigQueryDialect);
         // Tries to parse IF NOT EXISTS either before name or after name
@@ -6762,7 +6783,7 @@ impl<'a> Parser<'a> {
         let mut copy_grants = self.parse_keywords(&[Keyword::COPY, Keyword::GRANTS]);
         // Many dialects support `OR ALTER` right after `CREATE`, but we don't (yet).
         // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
-        let columns = self.parse_view_columns()?;
+        let columns = self.parse_view_columns(materialized)?;
         // Snowflake also documents `COPY GRANTS` *after* the column list; accept
         // either position, but not both.
         // <https://docs.snowflake.com/en/sql-reference/sql/create-view#syntax>
@@ -6770,7 +6791,11 @@ impl<'a> Parser<'a> {
             copy_grants = self.parse_keywords(&[Keyword::COPY, Keyword::GRANTS]);
         }
         let mut options = CreateTableOptions::None;
-        let with_options = self.parse_options(Keyword::WITH)?;
+        let with_options = if self.peek_keywords(&[Keyword::WITH, Keyword::SCHEMA]) {
+            Vec::new()
+        } else {
+            self.parse_options(Keyword::WITH)?
+        };
         if !with_options.is_empty() {
             options = CreateTableOptions::With(with_options);
         }
@@ -6801,8 +6826,42 @@ impl<'a> Parser<'a> {
         let comment = if self.dialect.supports_create_view_comment_syntax()
             && self.parse_keyword(Keyword::COMMENT)
         {
-            self.expect_token(&Token::Eq)?;
+            if !self.dialect.supports_create_view_comment_without_equals() {
+                self.expect_token(&Token::Eq)?;
+            } else {
+                let _ = self.consume_token(&Token::Eq);
+            }
             Some(self.parse_comment_value()?)
+        } else {
+            None
+        };
+
+        if self.dialect.supports_create_view_table_properties() {
+            let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
+            if !table_properties.is_empty() {
+                options = CreateTableOptions::TableProperties(table_properties);
+            }
+        }
+
+        let schema_mode = if self.dialect.supports_create_view_schema_mode()
+            && self.parse_keywords(&[Keyword::WITH, Keyword::SCHEMA])
+        {
+            Some(
+                match self.expect_one_of_keywords(&[
+                    Keyword::BINDING,
+                    Keyword::COMPENSATION,
+                    Keyword::EVOLUTION,
+                ])? {
+                    Keyword::BINDING => ViewSchemaMode::Binding,
+                    Keyword::COMPENSATION => ViewSchemaMode::Compensation,
+                    Keyword::EVOLUTION => ViewSchemaMode::Evolution,
+                    unexpected_keyword => {
+                        return Err(ParserError::ParserError(format!(
+                            "Internal parser error: expected a view schema mode, got {unexpected_keyword:?}"
+                        )))
+                    }
+                },
+            )
         } else {
             None
         };
@@ -6827,6 +6886,8 @@ impl<'a> Parser<'a> {
             materialized,
             secure,
             or_replace,
+            or_refresh,
+            schema_mode,
             options,
             cluster_by,
             comment,
@@ -13109,7 +13170,8 @@ impl<'a> Parser<'a> {
                         })?)
                     } else {
                         self.expect_token(&Token::Lt)?;
-                        let (inside_type, _trailing_bracket) = self.parse_data_type_helper()?;
+                        let (inside_type, _trailing_bracket) =
+                            self.parse_data_type_with_optional_collation()?;
                         trailing_bracket = self.expect_closing_angle_bracket(_trailing_bracket)?;
                         Ok(DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(
                             inside_type,
@@ -13144,9 +13206,17 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::MAP if self.dialect.supports_map_literal_with_angle_brackets() => {
                     self.expect_token(&Token::Lt)?;
-                    let key_data_type = self.parse_data_type()?;
+                    let (key_data_type, key_trailing_bracket) =
+                        self.parse_data_type_with_optional_collation()?;
+                    if key_trailing_bracket.0 {
+                        return parser_err!(
+                            format!("unmatched > after parsing data type {key_data_type}"),
+                            self.peek_token_ref()
+                        );
+                    }
                     self.expect_token(&Token::Comma)?;
-                    let (value_data_type, _trailing_bracket) = self.parse_data_type_helper()?;
+                    let (value_data_type, _trailing_bracket) =
+                        self.parse_data_type_with_optional_collation()?;
                     trailing_bracket = self.expect_closing_angle_bracket(_trailing_bracket)?;
                     Ok(DataType::Map(
                         Box::new(key_data_type),
@@ -13245,6 +13315,16 @@ impl<'a> Parser<'a> {
         }
 
         Ok((data, trailing_bracket))
+    }
+
+    fn parse_data_type_with_optional_collation(
+        &mut self,
+    ) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
+        let (mut data_type, trailing_bracket) = self.parse_data_type_helper()?;
+        if self.dialect.supports_data_type_collation() && self.parse_keyword(Keyword::COLLATE) {
+            data_type = DataType::Collate(Box::new(data_type), self.parse_object_name(false)?);
+        }
+        Ok((data_type, trailing_bracket))
     }
 
     fn parse_returns_table_column(&mut self) -> Result<ColumnDef, ParserError> {
@@ -13938,17 +14018,28 @@ impl<'a> Parser<'a> {
     }
 
     /// Parses a parenthesized, comma-separated list of column definitions within a view.
-    fn parse_view_columns(&mut self) -> Result<Vec<ViewColumnDef>, ParserError> {
+    fn parse_view_columns(
+        &mut self,
+        materialized: bool,
+    ) -> Result<Vec<ViewColumnDef>, ParserError> {
         if self.consume_token(&Token::LParen) {
             if self.peek_token_ref().token == Token::RParen {
                 self.next_token();
                 Ok(vec![])
             } else {
-                let cols = self.parse_comma_separated_with_trailing_commas(
-                    Parser::parse_view_column,
-                    self.dialect.supports_column_definition_trailing_commas(),
-                    Self::is_reserved_for_column_alias,
-                )?;
+                let cols = if materialized && self.dialect.supports_typed_view_columns() {
+                    self.parse_comma_separated_with_trailing_commas(
+                        Parser::parse_typed_view_column,
+                        self.dialect.supports_column_definition_trailing_commas(),
+                        Self::is_reserved_for_column_alias,
+                    )?
+                } else {
+                    self.parse_comma_separated_with_trailing_commas(
+                        Parser::parse_view_column,
+                        self.dialect.supports_column_definition_trailing_commas(),
+                        Self::is_reserved_for_column_alias,
+                    )?
+                };
                 self.expect_token(&Token::RParen)?;
                 Ok(cols)
             }
@@ -13966,6 +14057,17 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+        Ok(ViewColumnDef {
+            name,
+            data_type,
+            options,
+        })
+    }
+
+    fn parse_typed_view_column(&mut self) -> Result<ViewColumnDef, ParserError> {
+        let name = self.parse_identifier()?;
+        let data_type = Some(self.parse_data_type()?);
+        let options = self.parse_view_column_options()?;
         Ok(ViewColumnDef {
             name,
             data_type,
@@ -15606,6 +15708,29 @@ impl<'a> Parser<'a> {
 
     /// Parse `CREATE TABLE x AS TABLE y`
     pub fn parse_as_table(&mut self) -> Result<Table, ParserError> {
+        if self.dialect.supports_multipart_table_query_name() {
+            let mut parts = self.parse_object_name(false)?.0;
+            let table_name = parts
+                .pop()
+                .expect("object names always contain at least one part")
+                .to_string();
+            let schema_name = if parts.is_empty() {
+                None
+            } else {
+                Some(
+                    parts
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join("."),
+                )
+            };
+            return Ok(Table {
+                table_name: Some(table_name),
+                schema_name,
+            });
+        }
+
         let token1 = self.next_token();
         let token2 = self.next_token();
         let token3 = self.next_token();

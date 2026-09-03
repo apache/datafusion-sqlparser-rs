@@ -9854,6 +9854,17 @@ fn parse_alter_table_constraint_check_no_inherit() {
 }
 
 #[test]
+fn parse_compound_field_access_numeric_display() {
+    let sql = "SELECT * FROM t WHERE CASE WHEN a = 1 THEN b ELSE c END . 2";
+    let mut statements = pg().parse_sql_statements(sql).unwrap();
+    assert_eq!(statements.len(), 1);
+    let statement = statements.pop().unwrap();
+    let displayed = statement.to_string();
+    let reparsed = pg().parse_sql_statements(&displayed).unwrap();
+    assert_eq!(vec![statement], reparsed);
+}
+
+#[test]
 fn parse_non_reserved_keywords_as_table_alias() {
     // PostgreSQL allows these keywords as explicit table aliases.
     for kw in [

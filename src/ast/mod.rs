@@ -1487,6 +1487,9 @@ pub enum AccessExpr {
 impl fmt::Display for AccessExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            AccessExpr::Dot(Expr::Value(value)) if matches!(value.value, Value::Number(_, _)) => {
+                write!(f, " . {value}")
+            }
             AccessExpr::Dot(expr) => write!(f, ".{expr}"),
             AccessExpr::Subscript(subscript) => write!(f, "[{subscript}]"),
         }

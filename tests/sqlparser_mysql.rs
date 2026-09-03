@@ -5005,6 +5005,22 @@ fn parse_group_by_with_rollup() {
 }
 
 #[test]
+fn parse_table_partition_selection() {
+    mysql_and_generic().verified_stmt("SELECT * FROM employees PARTITION (p0, p2)");
+    mysql_and_generic().verified_stmt("SELECT * FROM employees PARTITION (p0) AS e");
+    mysql_and_generic().verified_stmt(
+        "SELECT * FROM employees PARTITION (p0) JOIN departments PARTITION (p1) ON employees.dept_id = departments.id",
+    );
+    mysql_and_generic().verified_stmt("UPDATE employees PARTITION (p0) SET salary = 1");
+    mysql_and_generic().verified_stmt("DELETE FROM employees PARTITION (p0) WHERE id = 1");
+
+    let err = mysql_and_generic()
+        .parse_sql_statements("SELECT * FROM employees PARTITION")
+        .expect_err("expected an error");
+    assert_matches!(err, ParserError::ParserError(_));
+}
+
+#[test]
 fn parse_is_distinct_from_json_arrow_precedence() {
     // MySQL's `->` binds tighter than `IS [NOT] DISTINCT FROM`, so the JSON
     // extraction must stay inside the right operand.

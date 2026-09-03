@@ -8206,6 +8206,14 @@ pub struct Function {
     /// The arguments to the function, including any options specified within the
     /// delimiting parentheses.
     pub args: FunctionArguments,
+    /// A clause used with certain aggregate functions to control the ordering
+    /// within grouped sets before the function is applied.
+    ///
+    /// Syntax:
+    /// ```plaintext
+    /// <aggregate_function>(expression) WITHIN GROUP (ORDER BY key [ASC | DESC], ...)
+    /// ```
+    pub within_group: Vec<OrderByExpr>,
     /// e.g. `x > 5` in `COUNT(x) FILTER (WHERE x > 5)`
     pub filter: Option<Box<Expr>>,
     /// Indicates how `NULL`s should be handled in the calculation.
@@ -8219,14 +8227,6 @@ pub struct Function {
     pub null_treatment: Option<NullTreatment>,
     /// The `OVER` clause, indicating a window function call.
     pub over: Option<WindowType>,
-    /// A clause used with certain aggregate functions to control the ordering
-    /// within grouped sets before the function is applied.
-    ///
-    /// Syntax:
-    /// ```plaintext
-    /// <aggregate_function>(expression) WITHIN GROUP (ORDER BY key [ASC | DESC], ...)
-    /// ```
-    pub within_group: Vec<OrderByExpr>,
 }
 
 impl fmt::Display for Function {

@@ -39,6 +39,6 @@ proc-macro = true
 unsafe_code = "forbid"
 
 [dependencies]
-syn = { version = "2.0", default-features = false, features = ["full", "printing", "parsing", "derive", "proc-macro", "clone-impls"] }
+syn = { version = "3.0", default-features = false, features = ["full", "printing", "parsing", "derive", "proc-macro", "clone-impls"] }
 proc-macro2 = "1.0"
 quote = "1.0"

@@ -4237,9 +4237,11 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse the `ESCAPE CHAR` portion of `LIKE`, `ILIKE`, and `SIMILAR TO`
-    pub fn parse_escape_char(&mut self) -> Result<Option<ValueWithSpan>, ParserError> {
+    pub fn parse_escape_char(&mut self) -> Result<Option<Box<Expr>>, ParserError> {
         if self.parse_keyword(Keyword::ESCAPE) {
-            Ok(Some(self.parse_value()?))
+            Ok(Some(Box::new(self.parse_subexpr(
+                self.dialect.prec_value(Precedence::Like),
+            )?)))
         } else {
             Ok(None)
         }

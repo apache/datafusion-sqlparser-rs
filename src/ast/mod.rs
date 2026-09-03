@@ -1027,7 +1027,7 @@ pub enum Expr {
         /// Pattern expression.
         pattern: Box<Expr>,
         /// Optional escape character.
-        escape_char: Option<ValueWithSpan>,
+        escape_char: Option<Box<Expr>>,
     },
     /// `ILIKE` (case-insensitive `LIKE`)
     ILike {
@@ -1041,7 +1041,7 @@ pub enum Expr {
         /// Pattern expression.
         pattern: Box<Expr>,
         /// Optional escape character.
-        escape_char: Option<ValueWithSpan>,
+        escape_char: Option<Box<Expr>>,
     },
     /// `SIMILAR TO` regex
     SimilarTo {
@@ -1052,7 +1052,7 @@ pub enum Expr {
         /// Pattern expression.
         pattern: Box<Expr>,
         /// Optional escape character.
-        escape_char: Option<ValueWithSpan>,
+        escape_char: Option<Box<Expr>>,
     },
     /// MySQL: `RLIKE` regex or `REGEXP` regex
     RLike {

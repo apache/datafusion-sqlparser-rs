@@ -23,6 +23,7 @@ use alloc::{
 };
 use core::{
     fmt::{self, Display},
+    mem::discriminant,
     str::FromStr,
 };
 #[cfg(feature = "std")]
@@ -9808,7 +9809,7 @@ impl<'a> Parser<'a> {
         if self.parse_keywords(&[Keyword::ALWAYS, Keyword::AS, Keyword::IDENTITY]) {
             let mut sequence_options = vec![];
             if self.expect_token(&Token::LParen).is_ok() {
-                sequence_options = self.parse_create_sequence_options()?;
+                sequence_options = self.parse_sequence_options(false)?;
                 self.expect_token(&Token::RParen)?;
             }
             Ok(Some(ColumnOption::Generated {
@@ -9826,7 +9827,7 @@ impl<'a> Parser<'a> {
         ]) {
             let mut sequence_options = vec![];
             if self.expect_token(&Token::LParen).is_ok() {
-                sequence_options = self.parse_create_sequence_options()?;
+                sequence_options = self.parse_sequence_options(false)?;
                 self.expect_token(&Token::RParen)?;
             }
             Ok(Some(ColumnOption::Generated {
@@ -10964,7 +10965,7 @@ impl<'a> Parser<'a> {
 
                 if self.peek_token_ref().token == Token::LParen {
                     self.expect_token(&Token::LParen)?;
-                    sequence_options = Some(self.parse_create_sequence_options()?);
+                    sequence_options = Some(self.parse_sequence_options(false)?);
                     self.expect_token(&Token::RParen)?;
                 }
 
@@ -20312,72 +20313,88 @@ impl<'a> Parser<'a> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         //name
         let name = self.parse_object_name(false)?;
-        //[ AS data_type ]
-        let mut data_type: Option<DataType> = None;
-        if self.parse_keywords(&[Keyword::AS]) {
-            data_type = Some(self.parse_data_type()?)
-        }
-        let sequence_options = self.parse_create_sequence_options()?;
-        // [ OWNED BY { table_name.column_name | NONE } ]
-        let owned_by = if self.parse_keywords(&[Keyword::OWNED, Keyword::BY]) {
-            if self.parse_keywords(&[Keyword::NONE]) {
-                Some(ObjectName::from(vec![Ident::new("NONE")]))
-            } else {
-                Some(self.parse_object_name(false)?)
-            }
-        } else {
-            None
-        };
+        let sequence_options = self.parse_sequence_options(true)?;
         Ok(Statement::CreateSequence {
             temporary,
             if_not_exists,
             name,
-            data_type,
             sequence_options,
-            owned_by,
         })
     }
 
-    fn parse_create_sequence_options(&mut self) -> Result<Vec<SequenceOptions>, ParserError> {
-        let mut sequence_options = vec![];
-        //[ INCREMENT [ BY ] increment ]
-        if self.parse_keywords(&[Keyword::INCREMENT]) {
-            if self.parse_keywords(&[Keyword::BY]) {
-                sequence_options.push(SequenceOptions::IncrementBy(self.parse_number()?, true));
+    /// Parse the sequence options shared by `CREATE SEQUENCE` and identity
+    /// columns. The options form an unordered list, each allowed at most once.
+    ///
+    /// `AS <data_type>` and `OWNED BY` are options of `CREATE SEQUENCE` only, so
+    /// `allow_type_and_owner` gates them off for an identity column.
+    fn parse_sequence_options(
+        &mut self,
+        allow_type_and_owner: bool,
+    ) -> Result<Vec<SequenceOptions>, ParserError> {
+        let mut sequence_options: Vec<SequenceOptions> = vec![];
+        loop {
+            let (option, name) = if self.parse_keyword(Keyword::INCREMENT) {
+                //[ INCREMENT [ BY ] increment ]
+                let by = self.parse_keyword(Keyword::BY);
+                (
+                    SequenceOptions::IncrementBy(self.parse_number()?, by),
+                    "INCREMENT",
+                )
+            } else if self.parse_keyword(Keyword::MINVALUE) {
+                //[ MINVALUE minvalue | NO MINVALUE ]
+                (
+                    SequenceOptions::MinValue(Some(self.parse_number()?)),
+                    "MINVALUE | NO MINVALUE",
+                )
+            } else if self.parse_keywords(&[Keyword::NO, Keyword::MINVALUE]) {
+                (SequenceOptions::MinValue(None), "MINVALUE | NO MINVALUE")
+            } else if self.parse_keyword(Keyword::MAXVALUE) {
+                //[ MAXVALUE maxvalue | NO MAXVALUE ]
+                (
+                    SequenceOptions::MaxValue(Some(self.parse_number()?)),
+                    "MAXVALUE | NO MAXVALUE",
+                )
+            } else if self.parse_keywords(&[Keyword::NO, Keyword::MAXVALUE]) {
+                (SequenceOptions::MaxValue(None), "MAXVALUE | NO MAXVALUE")
+            } else if self.parse_keyword(Keyword::START) {
+                //[ START [ WITH ] start ]
+                let with = self.parse_keyword(Keyword::WITH);
+                (
+                    SequenceOptions::StartWith(self.parse_number()?, with),
+                    "START",
+                )
+            } else if self.parse_keyword(Keyword::CACHE) {
+                //[ CACHE cache ]
+                (SequenceOptions::Cache(self.parse_number()?), "CACHE")
+            } else if self.parse_keywords(&[Keyword::NO, Keyword::CYCLE]) {
+                // [ [ NO ] CYCLE ]
+                (SequenceOptions::Cycle(true), "CYCLE | NO CYCLE")
+            } else if self.parse_keyword(Keyword::CYCLE) {
+                (SequenceOptions::Cycle(false), "CYCLE | NO CYCLE")
+            } else if allow_type_and_owner && self.parse_keyword(Keyword::AS) {
+                //[ AS data_type ]
+                (SequenceOptions::DataType(self.parse_data_type()?), "AS")
+            } else if allow_type_and_owner && self.parse_keywords(&[Keyword::OWNED, Keyword::BY]) {
+                // [ OWNED BY { table_name.column_name | NONE } ]
+                let owner = if self.parse_keyword(Keyword::NONE) {
+                    None
+                } else {
+                    Some(self.parse_object_name(false)?)
+                };
+                (SequenceOptions::OwnedBy(owner), "OWNED BY")
             } else {
-                sequence_options.push(SequenceOptions::IncrementBy(self.parse_number()?, false));
-            }
-        }
-        //[ MINVALUE minvalue | NO MINVALUE ]
-        if self.parse_keyword(Keyword::MINVALUE) {
-            sequence_options.push(SequenceOptions::MinValue(Some(self.parse_number()?)));
-        } else if self.parse_keywords(&[Keyword::NO, Keyword::MINVALUE]) {
-            sequence_options.push(SequenceOptions::MinValue(None));
-        }
-        //[ MAXVALUE maxvalue | NO MAXVALUE ]
-        if self.parse_keywords(&[Keyword::MAXVALUE]) {
-            sequence_options.push(SequenceOptions::MaxValue(Some(self.parse_number()?)));
-        } else if self.parse_keywords(&[Keyword::NO, Keyword::MAXVALUE]) {
-            sequence_options.push(SequenceOptions::MaxValue(None));
-        }
+                break;
+            };
 
-        //[ START [ WITH ] start ]
-        if self.parse_keywords(&[Keyword::START]) {
-            if self.parse_keywords(&[Keyword::WITH]) {
-                sequence_options.push(SequenceOptions::StartWith(self.parse_number()?, true));
-            } else {
-                sequence_options.push(SequenceOptions::StartWith(self.parse_number()?, false));
+            if sequence_options
+                .iter()
+                .any(|seen| discriminant(seen) == discriminant(&option))
+            {
+                return Err(ParserError::ParserError(format!(
+                    "{name} specified more than once"
+                )));
             }
-        }
-        //[ CACHE cache ]
-        if self.parse_keywords(&[Keyword::CACHE]) {
-            sequence_options.push(SequenceOptions::Cache(self.parse_number()?));
-        }
-        // [ [ NO ] CYCLE ]
-        if self.parse_keywords(&[Keyword::NO, Keyword::CYCLE]) {
-            sequence_options.push(SequenceOptions::Cycle(true));
-        } else if self.parse_keywords(&[Keyword::CYCLE]) {
-            sequence_options.push(SequenceOptions::Cycle(false));
+            sequence_options.push(option);
         }
 
         Ok(sequence_options)

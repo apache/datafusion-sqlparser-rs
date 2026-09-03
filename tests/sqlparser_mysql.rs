@@ -4013,6 +4013,7 @@ fn parse_revoke() {
     let sql = "REVOKE ALL ON db1.* FROM 'jeffrey'@'%'";
     let stmt = mysql_and_generic().verified_stmt(sql);
     if let Statement::Revoke(Revoke {
+        grant_option_for: false,
         privileges,
         objects,
         grantees,
@@ -4961,4 +4962,37 @@ fn parse_table_partition_selection() {
         .parse_sql_statements("SELECT * FROM employees PARTITION")
         .expect_err("expected an error");
     assert_matches!(err, ParserError::ParserError(_));
+}
+
+#[test]
+fn parse_is_distinct_from_json_arrow_precedence() {
+    // MySQL's `->` binds tighter than `IS [NOT] DISTINCT FROM`, so the JSON
+    // extraction must stay inside the right operand.
+    assert_eq!(
+        Expr::IsDistinctFrom(
+            Box::new(Expr::Identifier(Ident::new("a"))),
+            Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("b"))),
+                op: BinaryOperator::Arrow,
+                right: Box::new(Expr::Value(
+                    Value::SingleQuotedString("k".into()).with_empty_span()
+                )),
+            }),
+        ),
+        mysql_and_generic().verified_expr("a IS DISTINCT FROM b -> 'k'")
+    );
+
+    assert_eq!(
+        Expr::IsNotDistinctFrom(
+            Box::new(Expr::Identifier(Ident::new("a"))),
+            Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("b"))),
+                op: BinaryOperator::LongArrow,
+                right: Box::new(Expr::Value(
+                    Value::SingleQuotedString("k".into()).with_empty_span()
+                )),
+            }),
+        ),
+        mysql_and_generic().verified_expr("a IS NOT DISTINCT FROM b ->> 'k'")
+    );
 }

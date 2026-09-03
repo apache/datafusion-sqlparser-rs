@@ -136,6 +136,14 @@ impl Dialect for BigQueryDialect {
         true
     }
 
+    /// BigQuery allows a query to start with `FROM` (e.g. `FROM t`, and the
+    /// entry form for pipe syntax, `FROM t |> ...`).
+    ///
+    /// See <https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#from_queries>
+    fn supports_from_first_select(&self) -> bool {
+        true
+    }
+
     /// See <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#execute_immediate>
     fn supports_execute_immediate(&self) -> bool {
         true

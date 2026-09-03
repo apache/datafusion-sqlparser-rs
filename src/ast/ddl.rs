@@ -1913,8 +1913,8 @@ pub enum ColumnOption {
     /// `DEFAULT <restricted-expr>`
     Default(Expr),
 
-    /// `MATERIALIZE <expr>`
-    /// Syntax: `b INT MATERIALIZE (a + 1)`
+    /// `MATERIALIZED <expr>`
+    /// Syntax: `b INT MATERIALIZED (a + 1)`
     ///
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/create/table#default_values)
     Materialized(Expr),
@@ -1939,7 +1939,7 @@ pub enum ColumnOption {
     /// [<constraint_characteristics>]
     /// `).
     ForeignKey(ForeignKeyConstraint),
-    /// `CHECK (<expr>)`
+    /// `CHECK (<expr>) [NO INHERIT] [[NOT] ENFORCED]`
     Check(CheckConstraint),
     /// Dialect-specific options, such as:
     /// - MySQL's `AUTO_INCREMENT` or SQLite's `AUTOINCREMENT`

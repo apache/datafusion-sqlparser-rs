@@ -25,8 +25,8 @@ mod test_utils;
 use helpers::attached_token::AttachedToken;
 use sqlparser::ast::*;
 use sqlparser::dialect::{Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect};
-use sqlparser::parser::ParserError;
-use sqlparser::tokenizer::Span;
+use sqlparser::parser::{Parser, ParserError};
+use sqlparser::tokenizer::{Location, Span};
 use test_utils::*;
 
 #[test]
@@ -789,6 +789,50 @@ fn parse_alter_table_constraint_using_index() {
     pg_and_generic().verified_stmt(
         "ALTER TABLE tab ADD CONSTRAINT c PRIMARY KEY USING INDEX my_index DEFERRABLE INITIALLY DEFERRED",
     );
+}
+
+#[test]
+fn parse_constraint_include_columns() {
+    // INCLUDE covering columns on PRIMARY KEY / UNIQUE table constraints.
+    // https://www.postgresql.org/docs/current/sql-createtable.html
+    pg_and_generic().verified_stmt(
+        "CREATE TABLE t (id INT, payload TEXT, CONSTRAINT t_pk PRIMARY KEY (id) INCLUDE (payload))",
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE TABLE t (id INT, email TEXT, payload TEXT, CONSTRAINT t_uk UNIQUE (email) INCLUDE (payload))",
+    );
+    pg_and_generic().verified_stmt(
+        "CREATE TABLE t (a INT, b INT, c INT, d INT, CONSTRAINT t_pk PRIMARY KEY (a, b) INCLUDE (c, d))",
+    );
+    pg_and_generic()
+        .verified_stmt("ALTER TABLE t ADD CONSTRAINT t_pk PRIMARY KEY (id) INCLUDE (payload)");
+    pg_and_generic()
+        .verified_stmt("ALTER TABLE t ADD CONSTRAINT t_uk UNIQUE (email) INCLUDE (payload)");
+    pg_and_generic().verified_stmt(
+        "ALTER TABLE t ADD CONSTRAINT t_pk PRIMARY KEY (id) INCLUDE (payload) DEFERRABLE INITIALLY DEFERRED",
+    );
+
+    match pg_and_generic().verified_stmt(
+        "ALTER TABLE t ADD CONSTRAINT t_pk PRIMARY KEY (id) INCLUDE (payload, extra)",
+    ) {
+        Statement::AlterTable(alter_table) => match &alter_table.operations[0] {
+            AlterTableOperation::AddConstraint {
+                constraint: TableConstraint::PrimaryKey(pk),
+                ..
+            } => {
+                assert_eq!(pk.name.as_ref().unwrap().to_string(), "t_pk");
+                assert_eq!(
+                    pk.include
+                        .iter()
+                        .map(|i| i.value.clone())
+                        .collect::<Vec<_>>(),
+                    vec!["payload".to_string(), "extra".to_string()]
+                );
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
 }
 
 #[test]
@@ -2129,7 +2173,6 @@ fn parse_execute() {
                             (Value::Number("1337".parse().unwrap(), false)).with_empty_span()
                         )),
                         data_type: DataType::SmallInt(None),
-                        array: false,
                         format: None
                     },
                     alias: None
@@ -2141,7 +2184,6 @@ fn parse_execute() {
                             (Value::Number("7331".parse().unwrap(), false)).with_empty_span()
                         )),
                         data_type: DataType::SmallInt(None),
-                        array: false,
                         format: None
                     },
                     alias: None
@@ -2768,7 +2810,6 @@ fn parse_array_index_expr() {
                     ))),
                     None
                 )),
-                array: false,
                 format: None,
             }))),
             access_chain: vec![
@@ -2792,6 +2833,31 @@ fn parse_array_index_expr() {
         }),
         expr_from_projection(only(&select.projection)),
     );
+}
+
+#[test]
+fn parse_array_type_def_with_keyword() {
+    // SQL-standard `ARRAY` keyword with optional size, in column definitions and
+    // CAST targets. See https://www.postgresql.org/docs/current/arrays.html
+    pg().verified_stmt("CREATE TABLE sal_emp (pay_by_quarter INTEGER ARRAY)");
+    pg().verified_stmt("CREATE TABLE sal_emp (pay_by_quarter INTEGER ARRAY[4])");
+    pg().verified_stmt("CREATE TABLE genome (codons CHAR(3) ARRAY[1000])");
+    pg().verified_stmt("CREATE TABLE t (a VARCHAR(10) ARRAY[2])");
+    pg().verified_stmt("CREATE TABLE genome (codons CHAR(3) ARRAY[1000] NOT NULL)");
+    pg().verified_stmt(
+        "CREATE TEMPORARY TABLE arrtest2 (i INTEGER ARRAY[4], f FLOAT8[], n NUMERIC[], t TEXT[], d TIMESTAMP[])",
+    );
+    pg().verified_stmt("CREATE TABLE p (e MONEY ARRAY, f MONEY ARRAY[7])");
+    pg().verified_only_select("SELECT CAST(ARRAY[1, 2, 3] AS INTEGER ARRAY)");
+    pg().verified_only_select("SELECT CAST(ARRAY[1, 2, 3] AS INTEGER ARRAY[3])");
+    pg().verified_only_select("SELECT foo::INTEGER ARRAY[3]");
+    // Custom and schema-qualified types, ALTER TABLE, typmods, and the
+    // suffix-vs-constructor case.
+    pg_and_generic().verified_stmt("CREATE TABLE t (c currency ARRAY)");
+    pg_and_generic().verified_stmt("CREATE TABLE t (c public.currency ARRAY)");
+    pg_and_generic().verified_stmt("ALTER TABLE t ADD COLUMN c currency ARRAY");
+    pg_and_generic().verified_stmt("CREATE TABLE t (c NUMERIC(10,2) ARRAY)");
+    pg_and_generic().verified_stmt("CREATE TABLE t (c INT ARRAY DEFAULT ARRAY[]::INT[])");
 }
 
 #[test]
@@ -4062,6 +4128,21 @@ fn parse_xmlforest_aliased_arguments() {
             ]
         )
     );
+}
+
+#[test]
+fn parse_xmlparse() {
+    // The parser only distinguishes the two modes, so the corpus covers those
+    // plus a non-literal argument.
+    let statements = [
+        "SELECT XMLPARSE(CONTENT '')",
+        "SELECT XMLPARSE(CONTENT '<abc>x</abc>')",
+        "SELECT XMLPARSE(DOCUMENT '<abc>x</abc>')",
+        "SELECT XMLPARSE(DOCUMENT col || '</abc>')",
+    ];
+    for sql in statements {
+        pg().verified_stmt(sql);
+    }
 }
 
 #[test]
@@ -6281,7 +6362,6 @@ fn parse_at_time_zone() {
                     Value::SingleQuotedString("America/Los_Angeles".to_owned()).with_empty_span(),
                 )),
                 data_type: DataType::Text,
-                array: false,
                 format: None,
             }),
         }),
@@ -6466,6 +6546,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            no_inherit: false,
             enforced: None,
         }
         .into()],
@@ -6486,6 +6567,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            no_inherit: false,
             enforced: None,
         }
         .into()],
@@ -6506,6 +6588,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            no_inherit: false,
             enforced: None,
         }
         .into()],
@@ -6526,6 +6609,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            no_inherit: false,
             enforced: None,
         }
         .into()],
@@ -6546,6 +6630,7 @@ fn parse_create_domain() {
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
+            no_inherit: false,
             enforced: None,
         }
         .into()],
@@ -7143,7 +7228,6 @@ fn arrow_cast_precedence() {
                     (Value::SingleQuotedString("bar".to_string())).with_empty_span()
                 )),
                 data_type: DataType::Text,
-                array: false,
                 format: None,
             }),
         }
@@ -9581,4 +9665,213 @@ fn parse_limit_after_locking_clause() {
     );
     // The pre-existing ordering keeps round-tripping unchanged.
     pg().verified_stmt("SELECT * FROM t ORDER BY id LIMIT 5 FOR UPDATE SKIP LOCKED");
+}
+
+#[test]
+fn parse_right_deep_join_chain() {
+    // PostgreSQL supports right-deep join syntax where ON clauses follow all JOIN keywords:
+    //   t0 JOIN t1 JOIN t2 ON c1 ON c2
+    // which is equivalent to (and serialized as) t0 JOIN (t1 JOIN t2 ON c1) ON c2.
+    pg().one_statement_parses_to(
+        "SELECT * FROM t0 INNER JOIN t1 INNER JOIN t2 ON true ON true",
+        "SELECT * FROM t0 INNER JOIN (t1 INNER JOIN t2 ON true) ON true",
+    );
+    pg().one_statement_parses_to(
+        "SELECT * FROM t0 INNER JOIN t1 INNER JOIN t2 INNER JOIN t3 ON true ON true ON true",
+        "SELECT * FROM t0 INNER JOIN (t1 INNER JOIN (t2 INNER JOIN t3 ON true) ON true) ON true",
+    );
+    // NATURAL JOIN followed by a constrained join must stay left-associative.
+    pg().verified_stmt("SELECT * FROM t0 NATURAL JOIN t1 INNER JOIN t2 ON true");
+}
+
+#[test]
+fn parse_quoted_function_argument_name() {
+    let statement = pg_and_generic().verified_stmt(
+        r#"CREATE FUNCTION is_member("Role" TEXT) RETURNS BOOLEAN LANGUAGE SQL AS 'SELECT true'"#,
+    );
+    let Statement::CreateFunction(function) = statement else {
+        panic!("expected a CREATE FUNCTION statement");
+    };
+    assert_eq!(
+        function.args,
+        Some(vec![OperateFunctionArg {
+            mode: None,
+            name: Some(Ident::with_quote('"', "Role")),
+            data_type: DataType::Text,
+            default_expr: None,
+        }])
+    );
+
+    // An embedded quote is doubled in the input and belongs to the name once.
+    let statement = pg_and_generic().verified_stmt(
+        r#"CREATE FUNCTION f("we""ird" INT) RETURNS BOOLEAN LANGUAGE SQL RETURN true"#,
+    );
+    let Statement::CreateFunction(function) = statement else {
+        panic!("expected a CREATE FUNCTION statement");
+    };
+    assert_eq!(
+        function.args,
+        Some(vec![OperateFunctionArg {
+            mode: None,
+            name: Some(Ident::with_quote('"', r#"we"ird"#)),
+            data_type: DataType::Int(None),
+            default_expr: None,
+        }])
+    );
+
+    // A name outside ASCII is quoted for the same reason and survives the same way.
+    pg_and_generic().verified_stmt(
+        r#"CREATE FUNCTION f("Rôle" TEXT) RETURNS BOOLEAN LANGUAGE SQL RETURN true"#,
+    );
+}
+
+#[test]
+fn parse_quoted_function_argument_name_span() {
+    let sql =
+        r#"CREATE FUNCTION is_member("Role" TEXT) RETURNS BOOLEAN LANGUAGE SQL AS 'SELECT true'"#;
+    // Parsed directly rather than through the test helpers, which tokenize
+    // without locations.
+    let mut statements = Parser::parse_sql(&PostgreSqlDialect {}, sql).unwrap();
+    let Some(Statement::CreateFunction(function)) = statements.pop() else {
+        panic!("expected a CREATE FUNCTION statement");
+    };
+    let name = function.args.as_ref().unwrap()[0].name.as_ref().unwrap();
+    assert_eq!(
+        name.span,
+        Span::new(Location::new(1, 27), Location::new(1, 33)),
+        "the span covers the quoted name in the input"
+    );
+}
+
+#[test]
+fn parse_function_argument_modes_and_defaults_keep_quoted_names() {
+    let sql = r#"CREATE FUNCTION f(IN "A" INT = 1, OUT "B" TEXT, INOUT "C" BOOLEAN, VARIADIC "D" INT[]) RETURNS INT LANGUAGE SQL AS 'x'"#;
+    let Statement::CreateFunction(function) = pg_and_generic().verified_stmt(sql) else {
+        panic!("expected a CREATE FUNCTION statement");
+    };
+    assert_eq!(
+        function.args,
+        Some(vec![
+            OperateFunctionArg {
+                mode: Some(ArgMode::In),
+                name: Some(Ident::with_quote('"', "A")),
+                data_type: DataType::Int(None),
+                default_expr: Some(Expr::Value(
+                    Value::Number("1".parse().unwrap(), false).with_empty_span()
+                )),
+            },
+            OperateFunctionArg {
+                mode: Some(ArgMode::Out),
+                name: Some(Ident::with_quote('"', "B")),
+                data_type: DataType::Text,
+                default_expr: None,
+            },
+            OperateFunctionArg {
+                mode: Some(ArgMode::InOut),
+                name: Some(Ident::with_quote('"', "C")),
+                data_type: DataType::Boolean,
+                default_expr: None,
+            },
+            OperateFunctionArg {
+                mode: Some(ArgMode::Variadic),
+                name: Some(Ident::with_quote('"', "D")),
+                data_type: DataType::Array(ArrayElemTypeDef::SquareBracket(
+                    Box::new(DataType::Int(None)),
+                    None
+                )),
+                default_expr: None,
+            },
+        ])
+    );
+
+    // The `DEFAULT` spelling of the same argument list renders as `=`.
+    pg_and_generic().one_statement_parses_to(
+        r#"CREATE FUNCTION f("A" INT DEFAULT 1) RETURNS INT LANGUAGE SQL AS 'x'"#,
+        r#"CREATE FUNCTION f("A" INT = 1) RETURNS INT LANGUAGE SQL AS 'x'"#,
+    );
+}
+
+#[test]
+fn parse_quoted_argument_names_in_function_signatures() {
+    pg_and_generic().verified_stmt(r#"DROP FUNCTION f("Role" TEXT)"#);
+    pg_and_generic().verified_stmt(r#"DROP PROCEDURE p("Role" TEXT)"#);
+    pg_and_generic().verified_stmt(r#"ALTER FUNCTION f("Role" TEXT) RENAME TO g"#);
+    pg_and_generic().verified_stmt(r#"ALTER AGGREGATE my_agg("Role" TEXT) RENAME TO other_agg"#);
+
+    // An aggregate's `ORDER BY` arguments are parsed by the same reader as its
+    // direct ones.
+    let sql = r#"ALTER AGGREGATE my_agg("A" INT ORDER BY "B" INT) OWNER TO some_role"#;
+    let Statement::AlterFunction(alter) = pg_and_generic().verified_stmt(sql) else {
+        panic!("expected an ALTER AGGREGATE statement");
+    };
+    assert_eq!(
+        alter.function.args,
+        Some(vec![OperateFunctionArg {
+            mode: None,
+            name: Some(Ident::with_quote('"', "A")),
+            data_type: DataType::Int(None),
+            default_expr: None,
+        }])
+    );
+    assert_eq!(
+        alter.aggregate_order_by,
+        Some(vec![OperateFunctionArg {
+            mode: None,
+            name: Some(Ident::with_quote('"', "B")),
+            data_type: DataType::Int(None),
+            default_expr: None,
+        }])
+    );
+}
+
+#[test]
+fn parse_alter_table_constraint_check_no_inherit() {
+    match pg_and_generic()
+        .verified_stmt("ALTER TABLE docs ADD CONSTRAINT c CHECK (id > 0) NO INHERIT NOT VALID")
+    {
+        Statement::AlterTable(AlterTable { operations, .. }) => {
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::AddConstraint {
+                    constraint: CheckConstraint {
+                        name: Some("c".into()),
+                        expr: Box::new(Expr::BinaryOp {
+                            left: Box::new(Expr::Identifier(Ident::new("id"))),
+                            op: BinaryOperator::Gt,
+                            right: Box::new(Expr::Value(test_utils::number("0").into())),
+                        }),
+                        no_inherit: true,
+                        enforced: None,
+                    }
+                    .into(),
+                    not_valid: true,
+                }]
+            );
+        }
+        _ => unreachable!(),
+    }
+    pg_and_generic().verified_stmt("ALTER TABLE docs ADD CONSTRAINT c CHECK (id > 0) NO INHERIT");
+}
+
+#[test]
+fn parse_non_reserved_keywords_as_table_alias() {
+    // PostgreSQL allows these keywords as explicit table aliases.
+    for kw in [
+        "cluster",
+        "distribute",
+        "explain",
+        "minus",
+        "sample",
+        "sort",
+        "start",
+        "top",
+        "view",
+    ] {
+        pg().verified_stmt(&format!(
+            "SELECT * FROM tbl_name AS {kw} JOIN tbl_name_2 ON {kw}.id = tbl_name_2.id"
+        ));
+        pg().verified_stmt(&format!(
+            "SELECT * FROM tbl_name {kw} JOIN tbl_name_2 ON {kw}.id = tbl_name_2.id"
+        ));
+    }
 }

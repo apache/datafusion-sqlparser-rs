@@ -990,11 +990,16 @@ pub trait Dialect: Debug + Any {
             Precedence::Caret => 22,
             Precedence::Pipe => 21,
             Precedence::Colon => 21,
+            // "any other operator" -- `->`, `@>`, custom operators. PostgreSQL
+            // places this row above `BETWEEN` / `LIKE` and below `+` / `-`
+            // (`%left Op OPERATOR RIGHT_ARROW '|'` in gram.y), so it must bind
+            // more tightly than `IS`, whose right operand would otherwise stop
+            // short of it.
+            Precedence::PgOther => 21,
             Precedence::Between => 20,
             Precedence::Eq => 20,
             Precedence::Like => 19,
             Precedence::Is => 17,
-            Precedence::PgOther => 16,
             Precedence::UnaryNot => 15,
             Precedence::And => 10,
             Precedence::Or => 5,
@@ -1264,6 +1269,16 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports PartiQL for querying semi-structured data
     /// <https://partiql.org/index.html>
     fn supports_partiql(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports object-unpivot table factors in the FROM clause.
+    ///
+    /// Syntax:
+    /// ```sql
+    /// SELECT * FROM T UNPIVOT expression AS value_alias [AT attribute_alias]
+    /// ```
+    fn supports_unpivot_expr(&self) -> bool {
         false
     }
 
@@ -2001,9 +2016,22 @@ mod tests {
     #[test]
     fn identifier_quote_style() {
         let tests: Vec<(&dyn Dialect, &str, Option<char>)> = vec![
+            (&AnsiDialect {}, "id", Some('"')),
+            (&BigQueryDialect {}, "id", Some('`')),
+            (&ClickHouseDialect {}, "id", Some('`')),
+            (&DatabricksDialect {}, "id", Some('`')),
+            (&DuckDbDialect {}, "id", Some('"')),
             (&GenericDialect {}, "id", None),
-            (&SQLiteDialect {}, "id", Some('`')),
+            (&HiveDialect {}, "id", Some('`')),
+            (&MsSqlDialect {}, "id", Some('[')),
+            (&MySqlDialect {}, "id", Some('`')),
+            (&OracleDialect {}, "id", Some('"')),
             (&PostgreSqlDialect {}, "id", Some('"')),
+            (&RedshiftSqlDialect {}, "id", Some('"')),
+            (&SnowflakeDialect {}, "id", Some('"')),
+            (&SQLiteDialect {}, "id", Some('`')),
+            (&SparkSqlDialect {}, "id", Some('`')),
+            (&TeradataDialect {}, "id", Some('"')),
         ];
 
         for (dialect, ident, expected) in tests {

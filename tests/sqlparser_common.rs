@@ -74,6 +74,21 @@ fn parse_numeric_literal_underscore() {
         select.projection,
         vec![UnnamedExpr(Expr::Value(number("10_000").with_empty_span()))]
     );
+
+    for (sql, column) in [
+        ("SELECT 10__00", 10),
+        ("SELECT 10_00_", 13),
+        ("SELECT 1._000", 10),
+        ("SELECT 1_a", 9),
+        ("SELECT 1e_1", 10),
+        ("SELECT 1e1_", 11),
+    ] {
+        let err = dialects.parse_sql_statements(sql).unwrap_err();
+        assert_eq!(
+            format!("sql parser error: Unexpected character '_' at Line: 1, Column: {column}"),
+            err.to_string()
+        );
+    }
 }
 
 #[test]
@@ -1985,6 +2000,197 @@ fn parse_is_not_distinct_from() {
 }
 
 #[test]
+fn parse_is_distinct_from_precedence() {
+    use self::Expr::*;
+
+    // The right operand of `IS [NOT] DISTINCT FROM` binds tighter than `AND`/`OR`,
+    // so the boolean operator must end up at the root of the tree.
+    assert_eq!(
+        BinaryOp {
+            left: Box::new(IsDistinctFrom(
+                Box::new(Identifier(Ident::new("a"))),
+                Box::new(Expr::value(number("1"))),
+            )),
+            op: BinaryOperator::And,
+            right: Box::new(BinaryOp {
+                left: Box::new(Identifier(Ident::new("b"))),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::value(number("2"))),
+            }),
+        },
+        verified_expr("a IS DISTINCT FROM 1 AND b = 2")
+    );
+
+    assert_eq!(
+        BinaryOp {
+            left: Box::new(IsNotDistinctFrom(
+                Box::new(Identifier(Ident::new("a"))),
+                Box::new(Expr::value(number("1"))),
+            )),
+            op: BinaryOperator::Or,
+            right: Box::new(BinaryOp {
+                left: Box::new(Identifier(Ident::new("b"))),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::value(number("2"))),
+            }),
+        },
+        verified_expr("a IS NOT DISTINCT FROM 1 OR b = 2")
+    );
+
+    // `AND` binds tighter than `OR` within the surrounding expression.
+    assert_eq!(
+        BinaryOp {
+            left: Box::new(BinaryOp {
+                left: Box::new(IsDistinctFrom(
+                    Box::new(Identifier(Ident::new("a"))),
+                    Box::new(Expr::value(number("1"))),
+                )),
+                op: BinaryOperator::And,
+                right: Box::new(Identifier(Ident::new("b"))),
+            }),
+            op: BinaryOperator::Or,
+            right: Box::new(Identifier(Ident::new("c"))),
+        },
+        verified_expr("a IS DISTINCT FROM 1 AND b OR c")
+    );
+    assert_eq!(
+        BinaryOp {
+            left: Box::new(IsDistinctFrom(
+                Box::new(Identifier(Ident::new("a"))),
+                Box::new(Expr::value(number("1"))),
+            )),
+            op: BinaryOperator::Or,
+            right: Box::new(BinaryOp {
+                left: Box::new(Identifier(Ident::new("b"))),
+                op: BinaryOperator::And,
+                right: Box::new(Identifier(Ident::new("c"))),
+            }),
+        },
+        verified_expr("a IS DISTINCT FROM 1 OR b AND c")
+    );
+
+    // Explicit parentheses still push the boolean expression into the right operand.
+    assert_eq!(
+        IsDistinctFrom(
+            Box::new(Identifier(Ident::new("a"))),
+            Box::new(Nested(Box::new(BinaryOp {
+                left: Box::new(Expr::value(number("1"))),
+                op: BinaryOperator::And,
+                right: Box::new(Identifier(Ident::new("b"))),
+            }))),
+        ),
+        verified_expr("a IS DISTINCT FROM (1 AND b)")
+    );
+
+    // sqlparser resolves the IS family left-associatively, consistent with how
+    // `a IS NULL IS NULL` already parses. Deliberately more permissive than
+    // PostgreSQL, which declares IS as %nonassoc and rejects the chain.
+    assert_eq!(
+        IsNull(Box::new(IsDistinctFrom(
+            Box::new(Identifier(Ident::new("a"))),
+            Box::new(Identifier(Ident::new("b"))),
+        ))),
+        verified_expr("a IS DISTINCT FROM b IS NULL")
+    );
+
+    // Operators that bind tighter than `IS` are still part of the right operand.
+    assert_eq!(
+        IsDistinctFrom(
+            Box::new(Identifier(Ident::new("a"))),
+            Box::new(BinaryOp {
+                left: Box::new(Identifier(Ident::new("b"))),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::value(number("1"))),
+            }),
+        ),
+        verified_expr("a IS DISTINCT FROM b + 1")
+    );
+
+    assert_eq!(
+        IsDistinctFrom(
+            Box::new(Identifier(Ident::new("a"))),
+            Box::new(BinaryOp {
+                left: Box::new(Identifier(Ident::new("b"))),
+                op: BinaryOperator::Eq,
+                right: Box::new(Identifier(Ident::new("c"))),
+            }),
+        ),
+        verified_expr("a IS DISTINCT FROM b = c")
+    );
+
+    // `NOT` binds more loosely than `IS`, so it applies to the whole comparison.
+    assert_eq!(
+        UnaryOp {
+            op: UnaryOperator::Not,
+            expr: Box::new(IsDistinctFrom(
+                Box::new(Identifier(Ident::new("a"))),
+                Box::new(Identifier(Ident::new("b"))),
+            )),
+        },
+        verified_expr("NOT a IS DISTINCT FROM b")
+    );
+
+    assert_eq!(
+        BinaryOp {
+            left: Box::new(IsNotDistinctFrom(
+                Box::new(Identifier(Ident::new("a"))),
+                Box::new(Identifier(Ident::new("b"))),
+            )),
+            op: BinaryOperator::And,
+            right: Box::new(IsNotDistinctFrom(
+                Box::new(Identifier(Ident::new("c"))),
+                Box::new(Identifier(Ident::new("d"))),
+            )),
+        },
+        verified_expr("a IS NOT DISTINCT FROM b AND c IS NOT DISTINCT FROM d")
+    );
+}
+
+#[test]
+fn parse_pg_other_operator_precedence() {
+    let arrow_k = |left: Expr| Expr::BinaryOp {
+        left: Box::new(left),
+        op: BinaryOperator::Arrow,
+        right: Box::new(Expr::Value(
+            Value::SingleQuotedString("k".into()).with_empty_span(),
+        )),
+    };
+    let t_a = || Expr::CompoundIdentifier(vec![Ident::new("t"), Ident::new("a")]);
+
+    // `->` binds tighter than comparison operators, so the arrow expression is
+    // the left operand rather than the comparison being the arrow's key.
+    let expected_eq = |left: Expr| Expr::BinaryOp {
+        left: Box::new(arrow_k(left)),
+        op: BinaryOperator::Eq,
+        right: Box::new(Identifier(Ident::new("b"))),
+    };
+
+    // Dialects with lambda functions read a bare `a ->` as the start of a lambda.
+    assert_eq!(
+        expected_eq(Identifier(Ident::new("a"))),
+        all_dialects_where(|d| !d.supports_lambda_functions()).verified_expr("a -> 'k' = b")
+    );
+    assert_eq!(
+        expected_eq(t_a()),
+        all_dialects().verified_expr("t.a -> 'k' = b")
+    );
+
+    // `LIKE` sits below `=` in the precedence table, so cover that boundary too.
+    assert_eq!(
+        Expr::Like {
+            negated: false,
+            any: false,
+            expr: Box::new(arrow_k(t_a())),
+            pattern: Box::new(Expr::Value(
+                Value::SingleQuotedString("x".into()).with_empty_span(),
+            )),
+            escape_char: None,
+        },
+        all_dialects().verified_expr("t.a -> 'k' LIKE 'x'")
+    );
+}
+
+#[test]
 fn parse_not_precedence() {
     // NOT has higher precedence than OR/AND, so the following must parse as (NOT true) OR true
     let sql = "NOT 1 OR 1";
@@ -3172,7 +3378,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::BigInt(None),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3185,7 +3390,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::TinyInt(None),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3217,7 +3421,6 @@ fn parse_cast() {
                 length: 50,
                 unit: None,
             })),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3230,7 +3433,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Clob(None),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3243,7 +3445,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Clob(Some(50)),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3256,7 +3457,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Binary(Some(50)),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3269,7 +3469,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Varbinary(Some(BinaryLength::IntegerLength { length: 50 })),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3282,7 +3481,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Blob(None),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3295,7 +3493,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Blob(Some(50)),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3308,7 +3505,6 @@ fn parse_cast() {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("details"))),
             data_type: DataType::JSONB,
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3324,7 +3520,6 @@ fn parse_try_cast() {
             kind: CastKind::TryCast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::BigInt(None),
-            array: false,
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -3966,6 +4161,7 @@ fn parse_create_table() {
                                     index_name: None,
                                     index_type: None,
                                     columns: vec![],
+                                    include: vec![],
                                     index_options: vec![],
                                     characteristics: None,
                                 }),
@@ -3982,6 +4178,7 @@ fn parse_create_table() {
                                     index_type_display: KeyOrIndexDisplay::None,
                                     index_type: None,
                                     columns: vec![],
+                                    include: vec![],
                                     index_options: vec![],
                                     characteristics: None,
                                     nulls_distinct: NullsDistinctOption::None,
@@ -3992,6 +4189,7 @@ fn parse_create_table() {
                                 option: ColumnOption::Check(CheckConstraint {
                                     name: None,
                                     expr: Box::new(verified_expr("constrained > 0")),
+                                    no_inherit: false,
                                     enforced: None,
                                 }),
                             },
@@ -4320,6 +4518,7 @@ fn parse_create_table_column_constraint_characteristics() {
                                 index_type_display: KeyOrIndexDisplay::None,
                                 index_type: None,
                                 columns: vec![],
+                                include: vec![],
                                 index_options: vec![],
                                 characteristics: expected_value,
                                 nulls_distinct: NullsDistinctOption::None,
@@ -4543,6 +4742,25 @@ fn parse_create_schema() {
     verified_stmt(r#"CREATE SCHEMA IF NOT EXISTS a WITH (key1 = 'value1')"#);
     verified_stmt(r#"CREATE SCHEMA IF NOT EXISTS a WITH ()"#);
     verified_stmt(r#"CREATE SCHEMA a CLONE b"#);
+}
+
+#[test]
+fn parse_create_or_replace_schema() {
+    match verified_stmt("CREATE OR REPLACE SCHEMA X") {
+        Statement::CreateSchema {
+            schema_name,
+            or_replace,
+            if_not_exists,
+            ..
+        } => {
+            assert_eq!(schema_name.to_string(), "X".to_owned());
+            assert!(or_replace);
+            assert!(!if_not_exists);
+        }
+        _ => unreachable!(),
+    }
+
+    verified_stmt("CREATE OR REPLACE SCHEMA IF NOT EXISTS X");
 }
 
 #[test]
@@ -6149,6 +6367,33 @@ fn parse_aggregate_with_group_by() {
 }
 
 #[test]
+fn parse_aggregate_with_where_filter() {
+    // The inline `WHERE` filter inside an aggregate call, e.g. `COUNT(* WHERE cond)` /
+    // `SUM(x WHERE cond)`, is the in-argument spelling of the standard
+    // `AGG(x) FILTER (WHERE cond)`. Popularized by GoogleSQL, it is accepted for all
+    // dialects (`verified_stmt` round-trips through every dialect).
+    verified_stmt("SELECT COUNT(* WHERE x > 1) FROM t");
+    verified_stmt("SELECT SUM(x WHERE y > 0) FROM t");
+    // Co-occurs with (and precedes) an in-argument ORDER BY.
+    verified_stmt("SELECT ARRAY_AGG(x WHERE x > 100 ORDER BY x DESC) FROM t");
+    // A compound predicate referencing multiple columns round-trips intact.
+    verified_stmt("SELECT ARRAY_AGG(a WHERE b > 0 AND c < 10) FROM t");
+
+    // The filter is captured as a FunctionArgumentClause::Where holding the predicate.
+    let select = verified_only_select("SELECT SUM(salary WHERE dept = 1) FROM emp");
+    let Expr::Function(func) = expr_from_projection(&select.projection[0]) else {
+        panic!("expected a function projection");
+    };
+    let FunctionArguments::List(list) = &func.args else {
+        panic!("expected a function argument list");
+    };
+    assert!(list
+        .clauses
+        .iter()
+        .any(|c| matches!(c, FunctionArgumentClause::Where(Expr::BinaryOp { .. }))));
+}
+
+#[test]
 fn parse_literal_integer() {
     let sql = "SELECT 1, -10, +20";
     let select = verified_only_select(sql);
@@ -6671,7 +6916,6 @@ fn interval_disallow_interval_expr_double_colon() {
                 fractional_seconds_precision: None,
             })),
             data_type: DataType::Text,
-            array: false,
             format: None,
         }
     )
@@ -6689,7 +6933,6 @@ fn parse_text_type_modifier_double_colon_cast() {
                 ObjectName::from(vec![Ident::new("TEXT")]),
                 vec!["16777216".to_string()]
             ),
-            array: false,
             format: None,
         }
     );
@@ -8862,6 +9105,19 @@ fn parse_drop_user() {
 }
 
 #[test]
+fn parse_create_warehouse() {
+    verified_stmt("CREATE WAREHOUSE my_wh");
+    verified_stmt("CREATE OR REPLACE WAREHOUSE IF NOT EXISTS my_wh");
+    verified_stmt("CREATE WAREHOUSE my_wh WAREHOUSE_SIZE='XSMALL' AUTO_SUSPEND=60");
+    one_statement_parses_to(
+        "CREATE WAREHOUSE my_wh WITH WAREHOUSE_SIZE = 'XSMALL' AUTO_SUSPEND = 60",
+        "CREATE WAREHOUSE my_wh WAREHOUSE_SIZE='XSMALL' AUTO_SUSPEND=60",
+    );
+    verified_stmt("DROP WAREHOUSE my_wh");
+    verified_stmt("DROP WAREHOUSE IF EXISTS my_wh");
+}
+
+#[test]
 fn parse_invalid_subquery_without_parens() {
     let res = parse_sql_statements("SELECT SELECT 1 FROM bar WHERE 1=1 FROM baz");
     assert_eq!(
@@ -9442,7 +9698,6 @@ fn parse_double_colon_cast_at_timezone() {
                         .with_empty_span()
                 )),
                 data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                array: false,
                 format: None
             }),
             time_zone: Box::new(Expr::Value(
@@ -9994,6 +10249,10 @@ fn parse_grant() {
     verified_stmt("GRANT OWNERSHIP ON ALL TABLES IN SCHEMA DEV_STAS_ROGOZHIN TO ROLE ANALYST");
     verified_stmt("GRANT OWNERSHIP ON ALL TABLES IN SCHEMA DEV_STAS_ROGOZHIN TO ROLE ANALYST COPY CURRENT GRANTS");
     verified_stmt("GRANT OWNERSHIP ON ALL TABLES IN SCHEMA DEV_STAS_ROGOZHIN TO ROLE ANALYST REVOKE CURRENT GRANTS");
+    // Printing these the other way round yields output the parser rejects.
+    verified_stmt(
+        "GRANT OWNERSHIP ON ALL TABLES IN SCHEMA s TO ROLE r WITH GRANT OPTION COPY CURRENT GRANTS",
+    );
     verified_stmt("GRANT USAGE ON DATABASE db1 TO ROLE role1");
     verified_stmt("GRANT USAGE ON WAREHOUSE wh1 TO ROLE role1");
     verified_stmt("GRANT OWNERSHIP ON INTEGRATION int1 TO ROLE role1");
@@ -10013,6 +10272,9 @@ fn parse_grant() {
     verified_stmt("GRANT ROLE role1 TO ROLE role2");
     verified_stmt("GRANT ROLE role1 TO USER user");
     verified_stmt("GRANT CREATE SCHEMA ON DATABASE db1 TO ROLE role1");
+    // PUBLIC takes no name, so it must not trail a space. MsSql reserves it as
+    // an ordinary grantee name.
+    all_dialects_except(|d| d.is::<MsSqlDialect>()).verified_stmt("GRANT SELECT ON t TO PUBLIC");
 }
 
 #[test]
@@ -10048,6 +10310,7 @@ fn test_revoke() {
     let sql = "REVOKE ALL PRIVILEGES ON users, auth FROM analyst";
     match verified_stmt(sql) {
         Statement::Revoke(Revoke {
+            grant_option_for: false,
             privileges,
             objects: Some(GrantObjects::Tables(tables)),
             grantees,
@@ -10072,8 +10335,9 @@ fn test_revoke() {
 #[test]
 fn test_revoke_with_cascade() {
     let sql = "REVOKE ALL PRIVILEGES ON users, auth FROM analyst CASCADE";
-    match all_dialects_except(|d| d.is::<MySqlDialect>()).verified_stmt(sql) {
+    match verified_stmt(sql) {
         Statement::Revoke(Revoke {
+            grant_option_for: false,
             privileges,
             objects: Some(GrantObjects::Tables(tables)),
             grantees,
@@ -10093,6 +10357,26 @@ fn test_revoke_with_cascade() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn test_revoke_grant_option_for() {
+    let Statement::Revoke(mut revoke) = verified_stmt("REVOKE GRANT OPTION FOR SELECT ON t FROM r")
+    else {
+        unreachable!()
+    };
+    assert!(revoke.grant_option_for);
+
+    // Clearing the flag must yield exactly the plain revoke.
+    revoke.grant_option_for = false;
+    assert_eq!(
+        Statement::Revoke(revoke),
+        verified_stmt("REVOKE SELECT ON t FROM r")
+    );
+
+    verified_stmt("REVOKE GRANT OPTION FOR ALL ON t FROM r");
+    verified_stmt("REVOKE GRANT OPTION FOR SELECT ON t FROM r CASCADE");
+    verified_stmt("REVOKE GRANT OPTION FOR SELECT ON t FROM r RESTRICT");
 }
 
 #[test]
@@ -10970,45 +11254,83 @@ fn parse_is_boolean() {
     verified_stmt("SELECT f FROM foo WHERE field IS UNKNOWN");
     verified_stmt("SELECT f FROM foo WHERE field IS NOT UNKNOWN");
 
-    let sql = "SELECT f from foo where field is 0";
-    let res = parse_sql_statements(sql);
+    for sql in [
+        "SELECT f from foo where field is 0",
+        "SELECT s, s IS XYZ NORMALIZED FROM foo",
+        "SELECT s, s IS NFKC FROM foo",
+        "SELECT s, s IS TRIM(' NFKC ') FROM foo",
+    ] {
+        assert!(
+            parse_sql_statements(sql).is_err(),
+            "expected a parse failure for `{sql}`"
+        );
+    }
+}
+
+#[test]
+fn parse_is_json_predicate() {
+    use self::Expr::*;
+
+    // Assert the full AST once for a case that exercises every field.
+    let sql = "a IS NOT JSON OBJECT WITHOUT UNIQUE KEYS";
     assert_eq!(
-        ParserError::ParserError(
-            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: 0"
-                .to_string()
-        ),
-        res.unwrap_err()
+        IsJson {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            kind: Some(JsonPredicateType::Object),
+            unique_keys: Some(JsonKeyUniqueness::WithoutUniqueKeys),
+            negated: true,
+        },
+        verified_expr(sql)
     );
 
-    let sql = "SELECT s, s IS XYZ NORMALIZED FROM foo";
-    let res = parse_sql_statements(sql);
-    assert_eq!(
-        ParserError::ParserError(
-            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: XYZ"
-                .to_string()
-        ),
-        res.unwrap_err()
-    );
+    // The remaining forms only need to round-trip.
+    verified_expr("a IS JSON");
+    verified_expr("a IS NOT JSON");
+    verified_expr("a IS JSON VALUE");
+    verified_expr("a IS JSON SCALAR");
+    verified_expr("a IS JSON ARRAY");
+    verified_expr("a IS JSON OBJECT");
+    verified_expr("a IS JSON WITH UNIQUE KEYS");
+    verified_expr("a IS JSON WITHOUT UNIQUE KEYS");
 
-    let sql = "SELECT s, s IS NFKC FROM foo";
-    let res = parse_sql_statements(sql);
-    assert_eq!(
-        ParserError::ParserError(
-            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: FROM"
-                .to_string()
-        ),
-        res.unwrap_err()
-    );
+    all_dialects().expr_parses_to("a IS JSON WITH UNIQUE", "a IS JSON WITH UNIQUE KEYS");
+    all_dialects().expr_parses_to("a IS JSON WITHOUT UNIQUE", "a IS JSON WITHOUT UNIQUE KEYS");
 
-    let sql = "SELECT s, s IS TRIM(' NFKC ') FROM foo";
-    let res = parse_sql_statements(sql);
-    assert_eq!(
-        ParserError::ParserError(
-            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: TRIM"
-                .to_string()
-        ),
-        res.unwrap_err()
+    assert_matches!(
+        verified_expr("NOT a IS JSON"),
+        Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            expr
+        } if matches!(&*expr, Expr::IsJson { .. })
     );
+}
+
+#[test]
+fn parse_is_json_predicate_invalid() {
+    let dialects = all_dialects();
+
+    let invalid = [
+        "SELECT * FROM t WHERE a IS JSON WITH FROM",
+        "SELECT * FROM t WHERE a IS JSON WITH KEYS",
+        "SELECT * FROM t WHERE a IS JSON WITHOUT FROM",
+        "SELECT * FROM t WHERE a IS JSON WITHOUT KEYS",
+        "SELECT * FROM t WHERE a IS NOT JSON WITH FROM",
+        "SELECT * FROM t WHERE a IS JSON VALUE ARRAY",
+        "SELECT * FROM t WHERE a IS JSON OBJECT VALUE",
+        "SELECT * FROM t WHERE a IS JSON WITH UNIQUE EXTRA",
+        "SELECT * FROM t WHERE a IS JSON WITH UNIQUE KEYS EXTRA",
+        "SELECT * FROM t WHERE a IS JSON WITHOUT UNIQUE EXTRA",
+        "SELECT * FROM t WHERE a IS JSON WITHOUT UNIQUE KEYS EXTRA",
+        "SELECT * FROM t WHERE a IS JSON WITH UNIQUE KEYS WITH UNIQUE KEYS",
+        "SELECT * FROM t WHERE a IS JSON WITHOUT UNIQUE KEYS WITHOUT UNIQUE KEYS",
+    ];
+
+    for sql in invalid {
+        assert!(
+            dialects.parse_sql_statements(sql).is_err(),
+            "expected a parse failure for `{sql}`"
+        );
+    }
 }
 
 #[test]
@@ -11324,6 +11646,20 @@ fn parse_deeply_nested_subquery_expr_hits_recursion_limits() {
 
     let where_clause = make_where_clause(100);
     let sql = format!("SELECT id, user_id where id IN (select id from t WHERE {where_clause})");
+
+    let res = Parser::new(&dialect)
+        .try_with_sql(&sql)
+        .expect("tokenize to work")
+        .parse_statements();
+
+    assert_eq!(res, Err(ParserError::RecursionLimitExceeded));
+}
+
+#[test]
+fn parse_deeply_nested_interval_hits_recursion_limits() {
+    let dialect = GenericDialect {};
+
+    let sql = format!("SELECT {}1", "INTERVAL ".repeat(1000));
 
     let res = Parser::new(&dialect)
         .try_with_sql(&sql)
@@ -13857,7 +14193,6 @@ fn test_dictionary_syntax() {
                         (Value::SingleQuotedString("2023-04-01".to_owned())).with_empty_span(),
                     )),
                     data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                    array: false,
                     format: None,
                 }),
             },
@@ -13869,7 +14204,6 @@ fn test_dictionary_syntax() {
                         (Value::SingleQuotedString("2023-04-05".to_owned())).with_empty_span(),
                     )),
                     data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                    array: false,
                     format: None,
                 }),
             },
@@ -14166,7 +14500,6 @@ fn test_extract_seconds_ok() {
                     fields: None,
                     precision: None
                 },
-                array: false,
                 format: None,
             }),
         }
@@ -14197,7 +14530,6 @@ fn test_extract_seconds_ok() {
                         fields: None,
                         precision: None,
                     },
-                    array: false,
                     format: None,
                 }),
             })],
@@ -14255,7 +14587,6 @@ fn test_extract_seconds_single_quote_ok() {
                     fields: None,
                     precision: None
                 },
-                array: false,
                 format: None,
             }),
         }
@@ -17485,6 +17816,19 @@ fn column_check_enforced() {
 }
 
 #[test]
+fn table_check_no_inherit() {
+    all_dialects().verified_stmt("CREATE TABLE t (a INT, CONSTRAINT c CHECK (a > 0) NO INHERIT)");
+    all_dialects().verified_stmt("CREATE TABLE t (a INT, CHECK (a > 0) NO INHERIT)");
+    all_dialects().verified_stmt("CREATE TABLE t (a INT, CHECK (a > 0) NO INHERIT NOT ENFORCED)");
+}
+
+#[test]
+fn column_check_no_inherit() {
+    all_dialects().verified_stmt("CREATE TABLE t (x INT CHECK (x > 1) NO INHERIT)");
+    all_dialects().verified_stmt("CREATE TABLE t (x INT CHECK (x > 1) NO INHERIT NOT ENFORCED)");
+}
+
+#[test]
 fn join_precedence() {
     all_dialects().verified_query_with_canonical(
         "SELECT *
@@ -19132,6 +19476,12 @@ fn parse_reset_statement() {
         Statement::Reset(ResetStatement { reset }) => assert_eq!(reset, Reset::ALL),
         _ => unreachable!(),
     }
+    match verified_stmt("RESET SESSION AUTHORIZATION") {
+        Statement::Reset(ResetStatement { reset }) => {
+            assert_eq!(reset, Reset::SessionAuthorization)
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]
@@ -19403,6 +19753,56 @@ fn parse_aliased_function_args() {
     dialects.verified_only_select("SELECT foo(bar(a AS x) AS y)");
     assert!(all_dialects_except(|d| d.supports_aliased_function_args())
         .parse_sql_statements("SELECT foo(a AS x)")
+        .is_err());
+}
+
+#[test]
+fn parse_xmlparse() {
+    let dialects = all_dialects_where(|d| d.supports_xml_expressions());
+
+    for (sql, mode) in [
+        ("SELECT xmlparse(content '<a/>')", "content"),
+        ("SELECT xmlparse(document '<a/>')", "document"),
+    ] {
+        let select = dialects.verified_only_select(sql);
+        match expr_from_projection(&select.projection[0]) {
+            Expr::Function(Function {
+                name,
+                args: FunctionArguments::List(list),
+                ..
+            }) => {
+                assert_eq!(name.to_string(), "xmlparse");
+                assert_eq!(
+                    list.args,
+                    vec![FunctionArg::Named {
+                        name: Ident::new(mode),
+                        arg: FunctionArgExpr::Expr(Expr::Value(
+                            Value::SingleQuotedString("<a/>".to_string()).into()
+                        )),
+                        operator: FunctionArgOperator::Space,
+                    }]
+                );
+            }
+            expr => panic!("expected an XMLPARSE function call, got {expr:?}"),
+        }
+    }
+
+    // XMLPARSE needs both a mode word and a value.
+    assert!(dialects
+        .parse_sql_statements("SELECT xmlparse('<a/>')")
+        .is_err());
+
+    // Going through the ordinary function-call path, XMLPARSE accepts the same
+    // trailing clauses as any other function.
+    dialects.verified_stmt("SELECT xmlparse(document x) FILTER (WHERE y > 1)");
+    dialects.verified_stmt("SELECT xmlparse(document x) OVER (PARTITION BY y)");
+
+    // On dialects without XML support, `xmlparse` stays a regular function
+    // and the special `CONTENT <expr>` syntax is rejected.
+    let others = all_dialects_except(|d| d.supports_xml_expressions());
+    others.verified_only_select("SELECT xmlparse(1)");
+    assert!(others
+        .parse_sql_statements("SELECT xmlparse(content '<a/>')")
         .is_err());
 }
 

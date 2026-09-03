@@ -9883,4 +9883,35 @@ fn parse_merge_do_nothing() {
             "Expected: NOTHING, found: UPDATE".into()
         ))
     );
+fn parse_compound_field_access_numeric_display() {
+    let sql = "SELECT * FROM t WHERE CASE WHEN a = 1 THEN b ELSE c END . 2";
+    let mut statements = pg().parse_sql_statements(sql).unwrap();
+    assert_eq!(statements.len(), 1);
+    let statement = statements.pop().unwrap();
+    let displayed = statement.to_string();
+    let reparsed = pg().parse_sql_statements(&displayed).unwrap();
+    assert_eq!(vec![statement], reparsed);
+}
+
+#[test]
+fn parse_non_reserved_keywords_as_table_alias() {
+    // PostgreSQL allows these keywords as explicit table aliases.
+    for kw in [
+        "cluster",
+        "distribute",
+        "explain",
+        "minus",
+        "sample",
+        "sort",
+        "start",
+        "top",
+        "view",
+    ] {
+        pg().verified_stmt(&format!(
+            "SELECT * FROM tbl_name AS {kw} JOIN tbl_name_2 ON {kw}.id = tbl_name_2.id"
+        ));
+        pg().verified_stmt(&format!(
+            "SELECT * FROM tbl_name {kw} JOIN tbl_name_2 ON {kw}.id = tbl_name_2.id"
+        ));
+    }
 }

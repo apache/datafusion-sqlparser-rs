@@ -98,12 +98,12 @@ impl Dialect for MySqlDialect {
         &self,
         parser: &mut crate::parser::Parser,
         expr: &crate::ast::Expr,
-        _precedence: u8,
+        precedence: u8,
     ) -> Option<Result<crate::ast::Expr, ParserError>> {
         // Parse DIV as an operator
         if parser.parse_keyword(Keyword::DIV) {
             let left = Box::new(expr.clone());
-            let right = Box::new(match parser.parse_expr() {
+            let right = Box::new(match parser.parse_subexpr(precedence) {
                 Ok(expr) => expr,
                 Err(e) => return Some(Err(e)),
             });

@@ -20002,3 +20002,71 @@ fn parse_function_arg_call_chain_no_exponential_blowup() {
     rx.recv_timeout(Duration::from_secs(5))
         .expect("parser should reject this quickly, not loop exponentially");
 }
+
+#[test]
+fn parse_create_rule() {
+    let sql = "CREATE RULE r AS ON DELETE TO docs DO INSTEAD NOTHING";
+    match all_dialects().verified_stmt(sql) {
+        Statement::CreateRule(CreateRule {
+            or_replace,
+            name,
+            event,
+            table_name,
+            condition,
+            do_kind,
+            action,
+        }) => {
+            assert!(!or_replace);
+            assert_eq!(name.to_string(), "r");
+            assert_eq!(event, CreateRuleEvent::Delete);
+            assert_eq!(table_name.to_string(), "docs");
+            assert!(condition.is_none());
+            assert_eq!(do_kind, Some(CreateRuleDoKind::Instead));
+            assert_eq!(action, CreateRuleAction::Nothing);
+        }
+        _ => unreachable!("Expected CREATE RULE"),
+    }
+
+    all_dialects().verified_stmt("CREATE OR REPLACE RULE r AS ON SELECT TO t DO ALSO NOTHING");
+    all_dialects().verified_stmt("CREATE RULE r AS ON INSERT TO s1.t DO NOTHING");
+    all_dialects().verified_stmt(
+        "CREATE RULE r AS ON UPDATE TO t WHERE quantity > 100 DO ALSO INSERT INTO audit (id) VALUES (1)",
+    );
+    all_dialects().verified_stmt(
+        "CREATE RULE r AS ON DELETE TO t DO INSTEAD (UPDATE t2 SET deleted = 1 WHERE id = 1; DELETE FROM t3)",
+    );
+
+    // A trailing semicolon inside a parenthesized action list is accepted and
+    // normalized away.
+    all_dialects().one_statement_parses_to(
+        "CREATE RULE r AS ON DELETE TO t DO INSTEAD (DELETE FROM t2;)",
+        "CREATE RULE r AS ON DELETE TO t DO INSTEAD (DELETE FROM t2)",
+    );
+
+    // invalid event
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("CREATE RULE r AS ON TRUNCATE TO t DO NOTHING")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: one of SELECT or INSERT or UPDATE or DELETE, found: TRUNCATE"
+    );
+
+    // missing DO clause
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("CREATE RULE r AS ON DELETE TO t")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: DO, found: EOF"
+    );
+
+    // missing table name
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("CREATE RULE r AS ON DELETE DO NOTHING")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: TO, found: DO"
+    );
+}

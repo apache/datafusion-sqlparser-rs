@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-//! AST types specific to CREATE/ALTER variants of [`Statement`](crate::ast::Statement)
+//! AST types specific to CREATE/ALTER variants of [`Statement`]
 //! (commonly referred to as Data Definition Language, or DDL)
 
 #[cfg(not(feature = "std"))]
@@ -48,9 +48,9 @@ use crate::ast::{
     HiveFormat, HiveIOFormat, HiveRowFormat, HiveSetLocation, Ident, InitializeKind,
     MySQLColumnPosition, ObjectName, OnCommit, OneOrManyWithParens, OperateFunctionArg,
     OrderByExpr, ProjectionSelect, Query, RefreshModeKind, ResetConfig, RowAccessPolicy,
-    SequenceOptions, Spanned, SqlOption, StorageLifecyclePolicy, StorageSerializationPolicy,
-    TableVersion, Tag, TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod,
-    TriggerReferencing, Value, ValueWithSpan, WrappedCollection,
+    SequenceOptions, Spanned, SqlOption, Statement, StorageLifecyclePolicy,
+    StorageSerializationPolicy, TableVersion, Tag, TriggerEvent, TriggerExecBody, TriggerObject,
+    TriggerPeriod, TriggerReferencing, Value, ValueWithSpan, WrappedCollection,
 };
 use crate::display_utils::{DisplayCommaSeparated, Indent, NewLine, SpaceOrNewline};
 use crate::keywords::Keyword;
@@ -5993,5 +5993,145 @@ impl fmt::Display for AlterPolicy {
 impl From<AlterPolicy> for crate::ast::Statement {
     fn from(v: AlterPolicy) -> Self {
         crate::ast::Statement::AlterPolicy(v)
+    }
+}
+
+/// CREATE RULE statement.
+///
+/// ```sql
+/// CREATE [ OR REPLACE ] RULE name AS ON event
+///     TO table_name [ WHERE condition ]
+///     DO [ ALSO | INSTEAD ] { NOTHING | command | ( command ; command ... ) }
+/// ```
+///
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createrule.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateRule {
+    /// `true` when `OR REPLACE` was present.
+    pub or_replace: bool,
+    /// Name of the rule.
+    pub name: Ident,
+    /// Event the rule fires on (`SELECT`, `INSERT`, `UPDATE` or `DELETE`).
+    pub event: CreateRuleEvent,
+    /// Table the rule is defined on.
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub table_name: ObjectName,
+    /// Optional expression for the `WHERE` clause.
+    pub condition: Option<Expr>,
+    /// Optional `ALSO` or `INSTEAD` keyword following `DO`.
+    pub do_kind: Option<CreateRuleDoKind>,
+    /// Action the rule performs.
+    pub action: CreateRuleAction,
+}
+
+impl fmt::Display for CreateRule {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CREATE {or_replace}RULE {name} AS ON {event} TO {table_name}",
+            or_replace = if self.or_replace { "OR REPLACE " } else { "" },
+            name = self.name,
+            event = self.event,
+            table_name = self.table_name,
+        )?;
+        if let Some(condition) = &self.condition {
+            write!(f, " WHERE {condition}")?;
+        }
+        write!(f, " DO")?;
+        if let Some(do_kind) = &self.do_kind {
+            write!(f, " {do_kind}")?;
+        }
+        write!(f, " {}", self.action)
+    }
+}
+
+/// Event that fires a rule (`ON` clause).
+/// ```sql
+/// AS ON [SELECT | INSERT | UPDATE | DELETE]
+/// ```
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createrule.html)
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreateRuleEvent {
+    /// Fires on SELECT.
+    Select,
+    /// Fires on INSERT.
+    Insert,
+    /// Fires on UPDATE.
+    Update,
+    /// Fires on DELETE.
+    Delete,
+}
+
+impl fmt::Display for CreateRuleEvent {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CreateRuleEvent::Select => write!(f, "SELECT"),
+            CreateRuleEvent::Insert => write!(f, "INSERT"),
+            CreateRuleEvent::Update => write!(f, "UPDATE"),
+            CreateRuleEvent::Delete => write!(f, "DELETE"),
+        }
+    }
+}
+
+/// Keyword following `DO` in a `CREATE RULE` statement.
+/// ```sql
+/// DO [ ALSO | INSTEAD ]
+/// ```
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createrule.html)
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreateRuleDoKind {
+    /// The action runs in addition to the original statement.
+    Also,
+    /// The action runs instead of the original statement.
+    Instead,
+}
+
+impl fmt::Display for CreateRuleDoKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CreateRuleDoKind::Also => write!(f, "ALSO"),
+            CreateRuleDoKind::Instead => write!(f, "INSTEAD"),
+        }
+    }
+}
+
+/// Action of a `CREATE RULE` statement.
+/// ```sql
+/// { NOTHING | command | ( command ; command ... ) }
+/// ```
+/// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createrule.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreateRuleAction {
+    /// `NOTHING`
+    Nothing,
+    /// A single command, e.g. `DO INSTEAD SELECT * FROM t`.
+    Statement(Box<Statement>),
+    /// A parenthesized, semicolon-separated list of commands.
+    Statements(Vec<Statement>),
+}
+
+impl fmt::Display for CreateRuleAction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CreateRuleAction::Nothing => write!(f, "NOTHING"),
+            CreateRuleAction::Statement(statement) => write!(f, "{statement}"),
+            CreateRuleAction::Statements(statements) => {
+                write!(f, "({})", display_separated(statements, "; "))
+            }
+        }
+    }
+}
+
+impl From<CreateRule> for crate::ast::Statement {
+    fn from(v: CreateRule) -> Self {
+        crate::ast::Statement::CreateRule(v)
     }
 }

@@ -5278,6 +5278,8 @@ impl<'a> Parser<'a> {
                 .map(Into::into)
         } else if self.parse_keyword(Keyword::POLICY) {
             self.parse_create_policy().map(Into::into)
+        } else if self.parse_keyword(Keyword::RULE) {
+            self.parse_create_rule(or_replace).map(Into::into)
         } else if self.parse_keyword(Keyword::EXTERNAL) {
             self.parse_create_external_table(or_replace).map(Into::into)
         } else if self.parse_keyword(Keyword::FUNCTION) {
@@ -7253,6 +7255,82 @@ impl<'a> Parser<'a> {
             to,
             using,
             with_check,
+        })
+    }
+
+    /// ```sql
+    /// CREATE [ OR REPLACE ] RULE name AS ON event
+    ///     TO table_name [ WHERE condition ]
+    ///     DO [ ALSO | INSTEAD ] { NOTHING | command | ( command ; command ... ) }
+    /// ```
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createrule.html)
+    pub fn parse_create_rule(&mut self, or_replace: bool) -> Result<CreateRule, ParserError> {
+        let name = self.parse_identifier()?;
+        self.expect_keyword_is(Keyword::AS)?;
+        self.expect_keyword_is(Keyword::ON)?;
+        let event = match self.expect_one_of_keywords(&[
+            Keyword::SELECT,
+            Keyword::INSERT,
+            Keyword::UPDATE,
+            Keyword::DELETE,
+        ])? {
+            Keyword::SELECT => CreateRuleEvent::Select,
+            Keyword::INSERT => CreateRuleEvent::Insert,
+            Keyword::UPDATE => CreateRuleEvent::Update,
+            Keyword::DELETE => CreateRuleEvent::Delete,
+            unexpected_keyword => {
+                return Err(ParserError::ParserError(format!(
+                "Internal parser error: unexpected keyword `{unexpected_keyword}` in rule event"
+            )))
+            }
+        };
+        self.expect_keyword_is(Keyword::TO)?;
+        let table_name = self.parse_object_name(false)?;
+
+        let condition = if self.parse_keyword(Keyword::WHERE) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
+        self.expect_keyword_is(Keyword::DO)?;
+        let do_kind = if self.parse_keyword(Keyword::ALSO) {
+            Some(CreateRuleDoKind::Also)
+        } else if self.parse_keyword(Keyword::INSTEAD) {
+            Some(CreateRuleDoKind::Instead)
+        } else {
+            None
+        };
+
+        let action = if self.parse_keyword(Keyword::NOTHING) {
+            CreateRuleAction::Nothing
+        } else if self.consume_token(&Token::LParen) {
+            let mut statements = Vec::new();
+            loop {
+                while self.consume_token(&Token::SemiColon) {}
+                if self.consume_token(&Token::RParen) {
+                    break;
+                }
+                statements.push(self.parse_statement()?);
+                if !self.consume_token(&Token::SemiColon) {
+                    self.expect_token(&Token::RParen)?;
+                    break;
+                }
+            }
+            CreateRuleAction::Statements(statements)
+        } else {
+            CreateRuleAction::Statement(Box::new(self.parse_statement()?))
+        };
+
+        Ok(CreateRule {
+            or_replace,
+            name,
+            event,
+            table_name,
+            condition,
+            do_kind,
+            action,
         })
     }
 

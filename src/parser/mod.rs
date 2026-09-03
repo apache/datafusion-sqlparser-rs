@@ -16430,14 +16430,42 @@ impl<'a> Parser<'a> {
                 if !self
                     .dialect
                     .supports_left_associative_joins_without_parens()
-                    && !natural
                     && self.peek_parens_less_nested_join()
                 {
-                    let joins = self.parse_joins()?;
-                    relation = TableFactor::NestedJoin {
-                        table_with_joins: Box::new(TableWithJoins { relation, joins }),
-                        alias: None,
-                    };
+                    let mut inner_joins = self.parse_joins()?;
+                    let has_deferred_constraint = matches!(
+                        self.peek_token_ref().token,
+                        Token::Word(Word {
+                            keyword: Keyword::ON | Keyword::USING,
+                            ..
+                        })
+                    );
+
+                    if has_deferred_constraint {
+                        relation = TableFactor::NestedJoin {
+                            table_with_joins: Box::new(TableWithJoins {
+                                relation,
+                                joins: inner_joins,
+                            }),
+                            alias: None,
+                        };
+                    } else {
+                        let last = inner_joins.pop().expect("inner_joins is non-empty");
+                        let outer_constraint = if natural {
+                            JoinConstraint::Natural
+                        } else {
+                            JoinConstraint::None
+                        };
+
+                        joins.push(Join {
+                            relation,
+                            global,
+                            join_operator: join_operator_type(outer_constraint),
+                        });
+                        joins.extend(inner_joins);
+                        joins.push(last);
+                        continue;
+                    }
                 }
 
                 let join_constraint = self.parse_join_constraint(natural)?;

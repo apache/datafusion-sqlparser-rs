@@ -58,8 +58,8 @@ pub use self::data_type::{
     ExactNumberInfo, IntervalFields, MapBracketKind, StructBracketKind, TimezoneInfo,
 };
 pub use self::dcl::{
-    AlterRoleOperation, CreateRole, Grant, ResetConfig, Revoke, RoleOption, SecondaryRoles,
-    SetConfigValue, Use,
+    AlterRoleOperation, CreateRole, Grant, ResetConfig, Revoke, RoleKeyword, RoleOption,
+    SecondaryRoles, SetConfigValue, Use,
 };
 pub use self::ddl::{
     Alignment, AlterCollation, AlterCollationOperation, AlterColumnOperation, AlterConnectorOwner,
@@ -8667,6 +8667,8 @@ pub enum ObjectType {
     Database,
     /// A role.
     Role,
+    /// A user group.
+    Group,
     /// A sequence.
     Sequence,
     /// A stage.
@@ -8692,6 +8694,7 @@ impl fmt::Display for ObjectType {
             ObjectType::Schema => "SCHEMA",
             ObjectType::Database => "DATABASE",
             ObjectType::Role => "ROLE",
+            ObjectType::Group => "GROUP",
             ObjectType::Sequence => "SEQUENCE",
             ObjectType::Stage => "STAGE",
             ObjectType::Type => "TYPE",

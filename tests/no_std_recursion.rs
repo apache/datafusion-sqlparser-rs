@@ -52,6 +52,9 @@ fn deeply_nested_not_returns_error_without_default_features() {
 
     let result = Parser::parse_sql(&dialect, &sql);
 
+    // Note: Error is generic "expected end of statement" error rather than
+    // `RecursionLimitExceeded`. Either way, the important property is that deep
+    // nesting errors instead of overflowing the stack.
     assert!(result.is_err());
 }
 

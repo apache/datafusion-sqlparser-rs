@@ -11170,6 +11170,7 @@ impl<'a> Parser<'a> {
             Keyword::AGGREGATE,
             Keyword::ROLE,
             Keyword::POLICY,
+            Keyword::TRIGGER,
             Keyword::CONNECTOR,
             Keyword::ICEBERG,
             Keyword::SCHEMA,
@@ -11221,6 +11222,7 @@ impl<'a> Parser<'a> {
             }
             Keyword::ROLE => self.parse_alter_role(),
             Keyword::POLICY => self.parse_alter_policy().map(Into::into),
+            Keyword::TRIGGER => self.parse_alter_trigger().map(Into::into),
             Keyword::CONNECTOR => self.parse_alter_connector(),
             Keyword::USER if self.dialect.supports_alter_user_as_alter_role() => {
                 self.parse_alter_role()
@@ -11228,7 +11230,7 @@ impl<'a> Parser<'a> {
             Keyword::USER => self.parse_alter_user().map(Into::into),
             // unreachable because expect_one_of_keywords used above
             unexpected_keyword => Err(ParserError::ParserError(
-                format!("Internal parser error: expected any of {{TEXT SEARCH, VIEW, TYPE, COLLATION, TABLE, INDEX, FUNCTION, AGGREGATE, ROLE, POLICY, CONNECTOR, ICEBERG, SCHEMA, USER, OPERATOR}}, got {unexpected_keyword:?}"),
+                format!("Internal parser error: expected any of {{TEXT SEARCH, VIEW, TYPE, COLLATION, TABLE, INDEX, FUNCTION, AGGREGATE, ROLE, POLICY, TRIGGER, CONNECTOR, ICEBERG, SCHEMA, USER, OPERATOR}}, got {unexpected_keyword:?}"),
             )),
         }
     }

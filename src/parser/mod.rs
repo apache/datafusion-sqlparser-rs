@@ -20153,15 +20153,34 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_pragma_value(&mut self) -> Result<ValueWithSpan, ParserError> {
-        let v = self.parse_value()?;
+        let span = self.peek_token_ref().span;
+        let v = match self.parse_one_of_keywords(&[
+            Keyword::TRUE,
+            Keyword::FALSE,
+            Keyword::ON,
+            Keyword::OFF,
+            Keyword::YES,
+            Keyword::NO,
+        ]) {
+            Some(keyword) => Value::Boolean(matches!(
+                keyword,
+                Keyword::TRUE | Keyword::YES | Keyword::ON
+            ))
+            .with_span(span),
+            None => self.parse_value()?,
+        };
         match &v.value {
             Value::SingleQuotedString(_) => Ok(v),
             Value::DoubleQuotedString(_) => Ok(v),
             Value::Number(_, _) => Ok(v),
+            Value::Boolean(_) => Ok(v),
             Value::Placeholder(_) => Ok(v),
             _ => {
                 self.prev_token();
-                self.expected_ref("number or string or ? placeholder", self.peek_token_ref())
+                self.expected_ref(
+                    "boolean, number, string, or ? placeholder",
+                    self.peek_token_ref(),
+                )
             }
         }
     }

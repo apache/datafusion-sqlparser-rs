@@ -1518,6 +1518,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports binary `IS` and `IS NOT` operators.
+    fn supports_is_operator(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect allows an optional `SIGNED` suffix after integer data types.
     ///
     /// Example:

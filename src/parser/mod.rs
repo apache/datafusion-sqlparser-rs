@@ -4093,6 +4093,27 @@ impl<'a> Parser<'a> {
                         self.parse_is_json_predicate(expr, false)
                     } else if self.parse_keywords(&[Keyword::NOT, Keyword::JSON]) {
                         self.parse_is_json_predicate(expr, true)
+                    } else if self.dialect.supports_is_operator() {
+                        if let Some((form, negated)) =
+                            self.maybe_parse(|parser| parser.parse_unicode_is_normalized_suffix())?
+                        {
+                            Ok(Expr::IsNormalized {
+                                expr: Box::new(expr),
+                                form,
+                                negated,
+                            })
+                        } else {
+                            let op = if self.parse_keyword(Keyword::NOT) {
+                                BinaryOperator::IsNot
+                            } else {
+                                BinaryOperator::Is
+                            };
+                            Ok(Expr::BinaryOp {
+                                left: Box::new(expr),
+                                op,
+                                right: Box::new(self.parse_subexpr(precedence)?),
+                            })
+                        }
                     } else if let Ok(is_normalized) = self.parse_unicode_is_normalized(expr) {
                         Ok(is_normalized)
                     } else {
@@ -12723,8 +12744,19 @@ impl<'a> Parser<'a> {
 
     /// Parse a literal unicode normalization clause
     pub fn parse_unicode_is_normalized(&mut self, expr: Expr) -> Result<Expr, ParserError> {
-        let neg = self.parse_keyword(Keyword::NOT);
-        let normalized_form = self.maybe_parse(|parser| {
+        let (form, negated) = self.parse_unicode_is_normalized_suffix()?;
+        Ok(Expr::IsNormalized {
+            expr: Box::new(expr),
+            form,
+            negated,
+        })
+    }
+
+    fn parse_unicode_is_normalized_suffix(
+        &mut self,
+    ) -> Result<(Option<NormalizationForm>, bool), ParserError> {
+        let negated = self.parse_keyword(Keyword::NOT);
+        let form = self.maybe_parse(|parser| {
             match parser.parse_one_of_keywords(&[
                 Keyword::NFC,
                 Keyword::NFD,
@@ -12739,13 +12771,10 @@ impl<'a> Parser<'a> {
             }
         })?;
         if self.parse_keyword(Keyword::NORMALIZED) {
-            return Ok(Expr::IsNormalized {
-                expr: Box::new(expr),
-                form: normalized_form,
-                negated: neg,
-            });
+            Ok((form, negated))
+        } else {
+            self.expected_ref("unicode normalization form", self.peek_token_ref())
         }
-        self.expected_ref("unicode normalization form", self.peek_token_ref())
     }
 
     /// Parse parenthesized enum members, used with `ENUM(...)` type definitions.

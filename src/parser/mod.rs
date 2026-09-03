@@ -18830,8 +18830,100 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a single function argument, handling named and unnamed variants.
+    /// Parse a single function argument, handling the `VARIADIC` marker as well
+    /// as named and unnamed variants.
+    ///
+    /// Dialects that reserve `VARIADIC`, such as PostgreSQL, always mean the
+    /// marker. Where the keyword is unreserved, `f(variadic)` passes a column
+    /// of that name instead, so the ordinary reading is parsed first and kept
+    /// whenever it stands as an argument on its own; `f(VARIADIC a)` is left as
+    /// the only reading that takes the marker.
     pub fn parse_function_args(&mut self) -> Result<FunctionArg, ParserError> {
+        if self.dialect.supports_variadic_function_argument()
+            && self.peek_keyword(Keyword::VARIADIC)
+        {
+            if !self.dialect.is_reserved_for_identifier(Keyword::VARIADIC) {
+                let plain = self.maybe_parse(|p| {
+                    let arg = p.parse_plain_function_args()?;
+                    if p.peek_ends_function_arg() {
+                        Ok(arg)
+                    } else {
+                        p.expected_ref("end of the function argument", p.peek_token_ref())
+                    }
+                })?;
+                if let Some(arg) = plain {
+                    return Ok(arg);
+                }
+            }
+
+            let loc = self.peek_token_ref().span.start;
+            self.expect_keyword(Keyword::VARIADIC)?;
+            let arg = self.parse_plain_function_args()?;
+            // PostgreSQL's VARIADIC productions require expression operands,
+            // so no wildcard argument form is valid.
+            let carries_wildcard = match &arg {
+                FunctionArg::Unnamed(arg)
+                | FunctionArg::Named { arg, .. }
+                | FunctionArg::ExprNamed { arg, .. } => !matches!(arg, FunctionArgExpr::Expr(_)),
+                FunctionArg::Variadic(_) => false,
+            };
+            if carries_wildcard {
+                return parser_err!("A VARIADIC argument cannot be a wildcard", loc);
+            }
+            return Ok(FunctionArg::Variadic(Box::new(arg)));
+        }
+        self.parse_plain_function_args()
+    }
+
+    /// Returns true when the next token can follow a complete function
+    /// argument: the argument separator, the end of the list, or a complete
+    /// clause that [`Parser::parse_function_argument_list`] accepts after the
+    /// arguments. A clause keyword whose own syntax does not follow is an
+    /// operand instead, as in `f(VARIADIC separator)`.
+    fn peek_ends_function_arg(&self) -> bool {
+        let word = match &self.peek_token_ref().token {
+            Token::Comma | Token::RParen => return true,
+            Token::Word(word) => word,
+            _ => return false,
+        };
+        let next = &self.peek_nth_token_ref(1).token;
+        let next_is = |keyword| matches!(next, Token::Word(next) if next.keyword == keyword);
+        match word.keyword {
+            Keyword::ORDER => next_is(Keyword::BY),
+            Keyword::IGNORE | Keyword::RESPECT => next_is(Keyword::NULLS),
+            // `ON OVERFLOW`, and the `ABSENT ON NULL` / `NULL ON NULL` clauses.
+            Keyword::ON => next_is(Keyword::OVERFLOW),
+            Keyword::ABSENT | Keyword::NULL => next_is(Keyword::ON),
+            Keyword::HAVING => next_is(Keyword::MIN) || next_is(Keyword::MAX),
+            // These take an expression, a value or a type of their own.
+            Keyword::LIMIT | Keyword::RETURNING | Keyword::SEPARATOR | Keyword::WHERE => {
+                !matches!(next, Token::Comma | Token::RParen)
+            }
+            _ => false,
+        }
+    }
+
+    /// Rejects a `VARIADIC` marker on any but the final argument, as
+    /// PostgreSQL's grammar carries it on the last one only.
+    fn verify_variadic_argument_is_last(args: &[FunctionArg]) -> Result<(), ParserError> {
+        let Some((_, preceding)) = args.split_last() else {
+            return Ok(());
+        };
+        match preceding
+            .iter()
+            .find(|arg| matches!(arg, FunctionArg::Variadic(_)))
+        {
+            Some(arg) => parser_err!(
+                "A VARIADIC argument must be the last function argument",
+                arg.span().start
+            ),
+            None => Ok(()),
+        }
+    }
+
+    /// Parse a single function argument carrying no `VARIADIC` marker,
+    /// handling named and unnamed variants.
+    fn parse_plain_function_args(&mut self) -> Result<FunctionArg, ParserError> {
         // Parse the argument expression once, then check for a named-arg
         // operator. Parsing it speculatively and re-parsing on the unnamed
         // path is O(2^depth) on nested calls like `CAST(CASE (CAST(CASE (…`.
@@ -18956,6 +19048,7 @@ impl<'a> Parser<'a> {
             Ok(vec![])
         } else {
             let args = self.parse_comma_separated(Parser::parse_function_args)?;
+            Self::verify_variadic_argument_is_last(&args)?;
             self.expect_token(&Token::RParen)?;
             Ok(args)
         }
@@ -18978,6 +19071,7 @@ impl<'a> Parser<'a> {
                 break None;
             }
         };
+        Self::verify_variadic_argument_is_last(&args)?;
         self.expect_token(&Token::RParen)?;
         Ok(TableFunctionArgs { args, settings })
     }
@@ -19013,8 +19107,18 @@ impl<'a> Parser<'a> {
             });
         }
 
+        let loc = self.peek_token_ref().span.start;
         let duplicate_treatment = self.parse_duplicate_treatment()?;
         let args = self.parse_comma_separated(Parser::parse_function_args)?;
+        Self::verify_variadic_argument_is_last(&args)?;
+
+        // PostgreSQL pairs the marker with neither `DISTINCT` nor `ALL`.
+        if duplicate_treatment.is_some() && matches!(args.last(), Some(FunctionArg::Variadic(_))) {
+            return parser_err!(
+                "A VARIADIC argument cannot be combined with DISTINCT or ALL",
+                loc
+            );
+        }
 
         if self.parse_keyword(Keyword::WHERE) {
             clauses.push(FunctionArgumentClause::Where(self.parse_expr()?));

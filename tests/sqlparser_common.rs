@@ -1585,13 +1585,21 @@ fn parse_escaped_single_quote_string_predicate_with_no_escape() {
     let sql = "SELECT id, fname, lname FROM customer \
                WHERE salary <> 'Jim''s salary'";
 
-    let ast = TestedDialects::new_with_options(
+    let statements = TestedDialects::new_with_options(
         vec![Box::new(MySqlDialect {})],
         ParserOptions::new()
             .with_trailing_commas(true)
             .with_unescape(false),
     )
-    .verified_only_select(sql);
+    .parse_sql_statements(sql)
+    .unwrap();
+    let Statement::Query(query) = only(statements) else {
+        unreachable!()
+    };
+    let SetExpr::Select(ast) = *query.body else {
+        unreachable!()
+    };
+    let ast = *ast;
 
     assert_eq!(
         Some(Expr::BinaryOp {
@@ -1603,6 +1611,15 @@ fn parse_escaped_single_quote_string_predicate_with_no_escape() {
         }),
         ast.selection,
     );
+}
+
+#[test]
+fn parse_adjacent_single_quotes_round_trip() {
+    TestedDialects::new(vec![
+        Box::new(PostgreSqlDialect {}),
+        Box::new(MySqlDialect {}),
+    ])
+    .verified_stmt("SELECT * FROM t WHERE ''''''");
 }
 
 #[test]

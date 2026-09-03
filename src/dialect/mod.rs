@@ -1815,6 +1815,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports the `VARIADIC` marker on the final
+    /// argument of a function call, e.g. `concat(VARIADIC ARRAY['a', 'b'])`.
+    ///
+    /// When this returns false, `VARIADIC` is treated as a regular identifier.
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/xfunc-sql.html#XFUNC-SQL-VARIADIC-FUNCTIONS)
+    fn supports_variadic_function_argument(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `USING <format>` in `CREATE TABLE`.
     ///
     /// Example:

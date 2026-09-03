@@ -1218,6 +1218,20 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect allows the parentheses around the expression
+    /// in a table-level `CHECK` constraint to be omitted, e.g. `CONSTRAINT y CHECK a > 0`
+    /// in addition to `CONSTRAINT y CHECK (a > 0)`.
+    fn supports_unparenthesized_check_constraint(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports ClickHouse's `ASSUME` table constraint,
+    /// e.g. `CONSTRAINT y ASSUME a > 0`.
+    /// See <https://clickhouse.com/docs/reference/statements/create/table#constraints>.
+    fn supports_assume_constraint(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports the `LOAD DATA` statement
     fn supports_load_data(&self) -> bool {
         false

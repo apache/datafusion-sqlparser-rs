@@ -12779,9 +12779,12 @@ impl<'a> Parser<'a> {
         Ok(ty)
     }
 
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     fn parse_data_type_helper(
         &mut self,
     ) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
+        let _guard = self.recursion_counter.try_decrease()?;
+
         let dialect = self.dialect;
         self.advance_token();
         let next_token = self.get_current_token();

@@ -3440,6 +3440,79 @@ fn test_parentheses_overflow() {
     assert_eq!(parsed.err(), Some(ParserError::RecursionLimitExceeded));
 }
 
+/// Nested parenthesised option lists recurse through
+/// `parse_key_value_options` <-> `parse_key_value_option`, a cycle that reaches
+/// no depth guard before this was counted. Regression test for the audit in
+/// zuru-federated-query#606.
+///
+/// Runs on its own thread with a timeout so a regression fails loudly and in
+/// bounded time rather than wedging the test process — an uncounted recursion
+/// here does not error, it exhausts the stack.
+#[test]
+fn test_nested_key_value_options_hit_recursion_limits() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::Builder::new()
+        .stack_size(16 * 1024 * 1024)
+        .spawn(move || {
+            let n = 2000;
+            let sql = format!(
+                "CREATE STAGE s COPY_OPTIONS=({}b=1{})",
+                "a=(".repeat(n),
+                ")".repeat(n)
+            );
+            let parsed = snowflake().parse_sql_statements(&sql);
+            let _ = tx.send(match parsed {
+                Ok(ast) => {
+                    // #602: the derived Drop is recursive; do not descend it here.
+                    std::mem::forget(ast);
+                    None
+                }
+                Err(e) => Some(e),
+            });
+        })
+        .expect("spawn to work");
+
+    let err = rx
+        .recv_timeout(std::time::Duration::from_secs(20))
+        .expect("parser did not return within 20s; the depth guard has regressed");
+
+    assert_eq!(Some(ParserError::RecursionLimitExceeded), err);
+}
+
+/// Snowflake sets `supports_left_associative_joins_without_parens` to false, so
+/// `t JOIN t JOIN t ..` takes the parens-less nested-join branch, where
+/// `parse_joins` calls itself once per JOIN. `parse_table_factor`'s guard does
+/// not cover this: it has already returned, and `DepthGuard` releases on drop.
+///
+/// Regression test for the audit in zuru-federated-query#606.
+#[test]
+fn test_parens_less_nested_joins_hit_recursion_limits() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::Builder::new()
+        .stack_size(16 * 1024 * 1024)
+        .spawn(move || {
+            let sql = format!("SELECT * FROM t{}", " JOIN t".repeat(2000));
+            let parsed = snowflake().parse_sql_statements(&sql);
+            let _ = tx.send(match parsed {
+                Ok(ast) => {
+                    std::mem::forget(ast);
+                    None
+                }
+                Err(e) => Some(e),
+            });
+        })
+        .expect("spawn to work");
+
+    let err = rx
+        .recv_timeout(std::time::Duration::from_secs(20))
+        .expect("parser did not return within 20s; the depth guard has regressed");
+
+    assert_eq!(Some(ParserError::RecursionLimitExceeded), err);
+
+    // An ordinary join chain must still parse.
+    snowflake().verified_stmt("SELECT * FROM t JOIN t2 ON true JOIN t3 ON true");
+}
+
 #[test]
 fn test_show_databases() {
     snowflake().verified_stmt("SHOW DATABASES");

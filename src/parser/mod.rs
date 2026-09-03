@@ -442,6 +442,24 @@ impl<'a> Parser<'a> {
     /// # }
     /// ```
     ///
+    /// The limit is only meaningful where it is actually charged. Every cycle in
+    /// the parser's call graph must pass through a `try_decrease` site, or input
+    /// driving that cycle recurses with no accounting and the limit is inert for
+    /// it. The counted set is deliberately the minimum that cuts every cycle:
+    /// [`Self::parse_statement`], [`Self::parse_subexpr`], [`Self::parse_query`],
+    /// [`Self::parse_table_factor`], `parse_data_type_helper`, [`Self::parse_interval`],
+    /// `parse_pattern`, [`Self::parse_json_table_column_def`],
+    /// `parse_key_value_options` and `parse_joins`. One further cycle is
+    /// intentionally uncounted because it cannot recur on input — see the comment
+    /// on `parse_remaining_set_exprs`. Adding a recursive path that reaches none
+    /// of these reintroduces the gap.
+    ///
+    /// Note also that reaching the limit itself costs stack: the deepest chain
+    /// (`parse_prefix` -> `parse_cast_expr` -> `parse_expr` -> `parse_subexpr`) runs
+    /// tens of KB per level in an unoptimised build, so the default of 50 wants a
+    /// few MB of headroom to deny cleanly. Callers running on small stacks should
+    /// lower the limit rather than rely on the default.
+    ///
     /// Note: when "recursive-protection" feature is enabled, this crate uses additional stack overflow protection
     //  for some of its recursive methods. See [`recursive::recursive`] for more information.
     pub fn with_recursion_limit(mut self, recursion_limit: usize) -> Self {
@@ -1895,6 +1913,18 @@ impl<'a> Parser<'a> {
                     Err(e) => {
                         self.failed_reserved_word_prefix_positions
                             .insert(next_token_index, (&e).into());
+                        // A recursion-limit error is not "this word meant
+                        // something else" -- it is "we ran out of depth". Retrying
+                        // the same span under a second interpretation re-descends
+                        // the same input, once per level, which turns a bounded
+                        // denial into exponential backtracking. It also silently
+                        // changes the AST when the retry happens to succeed, so the
+                        // same SQL parses differently at different recursion limits.
+                        // `maybe_parse` re-raises this error precisely so callers
+                        // can propagate it; do not discard it here.
+                        if matches!(e, ParserError::RecursionLimitExceeded) {
+                            return Err(e);
+                        }
                         if !self.dialect.is_reserved_for_identifier(w.keyword) {
                             if let Ok(Some(expr)) = self.maybe_parse(|parser| {
                                 parser.parse_expr_prefix_by_unreserved_word(&w, span)
@@ -12796,6 +12826,12 @@ impl<'a> Parser<'a> {
     fn parse_data_type_helper(
         &mut self,
     ) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
+        // The guard belongs HERE and not on the public `parse_data_type`: the
+        // recursive type constructors are not all routed through it. `ARRAY<..>`
+        // and `STRUCT<..>` recurse into `parse_data_type_helper` directly (to
+        // thread `MatchedTrailingBracket` through), so a guard on
+        // `parse_data_type` alone would leave the angle-bracket forms uncounted.
+        let _guard = self.recursion_counter.try_decrease()?;
         let dialect = self.dialect;
         self.advance_token();
         let next_token = self.get_current_token();
@@ -15123,6 +15159,15 @@ impl<'a> Parser<'a> {
     /// Parse any extra set expressions that may be present in a query body
     ///
     /// (this is its own function to reduce required stack size in debug builds)
+    ///
+    /// Not counted, deliberately. This forms a cycle with [`Self::parse_query_body`],
+    /// but it cannot recur without bound on attacker-shaped input: the left side is
+    /// consumed by the `loop` below (so `A UNION B UNION C ..` is iterative, at any
+    /// length), and the right side only recurses when the next operator binds more
+    /// tightly. There are exactly two set-operation precedences (10 for
+    /// UNION/EXCEPT/MINUS, 20 for INTERSECT) and the recursive call passes the
+    /// higher one, so `precedence >= next_precedence` breaks immediately at the
+    /// next level. Depth is bounded by the precedence ladder at 2, not by input.
     fn parse_remaining_set_exprs(
         &mut self,
         mut expr: SetExpr,
@@ -16256,6 +16301,16 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_joins(&mut self) -> Result<Vec<Join>, ParserError> {
+        // Self-recursive through the parens-less nested-join branch below, on
+        // dialects where `supports_left_associative_joins_without_parens` is
+        // false (Snowflake). `SELECT * FROM t JOIN t JOIN t ..` drives it.
+        //
+        // It is tempting to argue this is already charged because reaching the
+        // recursive call requires a `parse_table_factor`, which takes a guard.
+        // That is wrong: `DepthGuard` releases on drop, and `parse_table_factor`
+        // has already returned by the time we recurse, so its guard is not live
+        // and nothing accumulates. Count it here.
+        let _guard = self.recursion_counter.try_decrease()?;
         let mut joins = vec![];
         loop {
             let global = self.parse_keyword(Keyword::GLOBAL);
@@ -17378,6 +17433,11 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_pattern(&mut self) -> Result<MatchRecognizePattern, ParserError> {
+        // MATCH_RECOGNIZE patterns are their own recursive-descent grammar
+        // (pattern -> concat -> repetition -> base -> pattern) reached from
+        // `parse_match_recognize`. Nothing on that cycle is counted, and nested
+        // parentheses inside PATTERN(..) drive it.
+        let _guard = self.recursion_counter.try_decrease()?;
         let pattern = self.parse_concat_pattern()?;
         if self.consume_token(&Token::Pipe) {
             match self.parse_pattern()? {
@@ -17444,6 +17504,9 @@ impl<'a> Parser<'a> {
     /// Parses MySQL's JSON_TABLE column definition.
     /// For example: `id INT EXISTS PATH '$' DEFAULT '0' ON EMPTY ERROR ON ERROR`
     pub fn parse_json_table_column_def(&mut self) -> Result<JsonTableColumn, ParserError> {
+        // `NESTED PATH '$' COLUMNS(..)` nests column definitions inside column
+        // definitions, so this function is directly self-recursive on input.
+        let _guard = self.recursion_counter.try_decrease()?;
         if self.parse_keyword(Keyword::NESTED) {
             let _has_path_keyword = self.parse_keyword(Keyword::PATH);
             let path = self.parse_value()?;
@@ -21117,6 +21180,10 @@ impl<'a> Parser<'a> {
         parenthesized: bool,
         end_words: &[Keyword],
     ) -> Result<KeyValueOptions, ParserError> {
+        // Option values may themselves be parenthesised option lists
+        // (`parse_key_value_option` calls back into this function), so nesting
+        // in e.g. Snowflake's `COPY_OPTIONS=(a=(b=(..)))` recurses on input.
+        let _guard = self.recursion_counter.try_decrease()?;
         let mut options: Vec<KeyValueOption> = Vec::new();
         let mut delimiter = KeyValueOptionsDelimiter::Space;
         if parenthesized {

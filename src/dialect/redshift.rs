@@ -15,8 +15,14 @@
 // specific language governing permissions and limitations
 // under the License.
 
+#[cfg(not(feature = "std"))]
+use alloc::boxed::Box;
+
+use crate::ast::Expr;
 use crate::dialect::Dialect;
 use crate::keywords::Keyword;
+use crate::parser::{Parser, ParserError};
+use crate::tokenizer::Token;
 use core::iter::Peekable;
 use core::str::Chars;
 
@@ -35,6 +41,28 @@ pub struct RedshiftSqlDialect {}
 // in the Postgres dialect, the query will be parsed as an array, while in the Redshift dialect it will
 // be a json path
 impl Dialect for RedshiftSqlDialect {
+    fn parse_prefix(&self, parser: &mut Parser) -> Option<Result<Expr, ParserError>> {
+        if matches!(&parser.peek_token_ref().token, Token::Word(word) if word.value.eq_ignore_ascii_case("approximate"))
+            && matches!(&parser.peek_nth_token_ref(1).token, Token::Word(word) if word.value.eq_ignore_ascii_case("percentile_disc"))
+        {
+            parser.next_token();
+            let function_name = match parser.parse_object_name(false) {
+                Ok(name) => name,
+                Err(error) => return Some(Err(error)),
+            };
+            return Some(
+                parser
+                    .parse_function(function_name)
+                    .map(|function| Expr::Prefixed {
+                        prefix: "APPROXIMATE".into(),
+                        value: Box::new(function),
+                    }),
+            );
+        }
+
+        None
+    }
+
     /// Determine if a character starts a potential nested quoted identifier.
     /// Example: RedShift supports the following quote styles to all mean the same thing:
     /// ```sql

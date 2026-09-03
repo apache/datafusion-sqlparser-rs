@@ -611,11 +611,34 @@ impl<'a> Parser<'a> {
     pub fn parse_statement(&mut self) -> Result<Statement, ParserError> {
         let _guard = self.recursion_counter.try_decrease()?;
 
+        let stmt = self.parse_single_statement_no_pipe()?;
+
+        // Handle Snowflake pipe operator: chain multiple statements with ->>
+        // See <https://docs.snowflake.com/en/sql-reference/operators-flow>
+        if self.dialect.supports_long_arrow_pipe_operator()
+            && self.peek_token_ref().token == Token::LongArrow
+        {
+            let mut statements = vec![stmt];
+            while self.consume_token(&Token::LongArrow) {
+                statements.push(self.parse_single_statement_no_pipe()?);
+            }
+            return Ok(Statement::Pipe { statements });
+        }
+
+        Ok(stmt)
+    }
+
+    /// Parse a single statement without pipe-chain handling.
+    /// Invokes the dialect override first, then falls back to the standard body.
+    fn parse_single_statement_no_pipe(&mut self) -> Result<Statement, ParserError> {
         // allow the dialect to override statement parsing
         if let Some(statement) = self.dialect.parse_statement(self) {
             return statement;
         }
+        self.parse_statement_body()
+    }
 
+    fn parse_statement_body(&mut self) -> Result<Statement, ParserError> {
         let next_token = self.next_token();
         match &next_token.token {
             Token::Word(w) => match w.keyword {
@@ -13749,6 +13772,7 @@ impl<'a> Parser<'a> {
                 Token::EOF | Token::Eq | Token::SemiColon | Token::VerticalBarRightAngleBracket => {
                     break
                 }
+                Token::LongArrow if self.dialect.supports_long_arrow_pipe_operator() => break,
                 _ => {}
             }
             self.advance_token();
@@ -16612,6 +16636,12 @@ impl<'a> Parser<'a> {
                                     .to_string(),
                             ))
                         }
+                        TableFactor::PipeResultScan { .. } => {
+                            return Err(ParserError::ParserError(
+                                "alias after parenthesized pipe result scan is not supported"
+                                    .to_string(),
+                            ))
+                        }
                     };
                 }
                 // Do not store the extra set of parens in the AST
@@ -16725,6 +16755,16 @@ impl<'a> Parser<'a> {
             // Stage reference: @mystage or @namespace.stage (e.g. Snowflake)
             self.parse_snowflake_stage_table_factor()
         } else {
+            // Handle pipe result references ($1, $2, ...) in FROM clause.
+            // See <https://docs.snowflake.com/en/sql-reference/operators-flow>
+            if self.dialect.supports_long_arrow_pipe_operator() {
+                if let Token::Placeholder(ref s) = self.peek_token_ref().token.clone() {
+                    if let Some(Ok(index @ 1..)) = s.strip_prefix('$').map(str::parse::<u64>) {
+                        self.next_token(); // consume the $n token
+                        return Ok(TableFactor::PipeResultScan { index });
+                    }
+                }
+            }
             let name = self.parse_object_name(true)?;
 
             let json_path = match &self.peek_token_ref().token {

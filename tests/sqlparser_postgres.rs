@@ -9875,10 +9875,6 @@ fn parse_merge_do_nothing() {
             }
         ]
     ));
-}
-
-#[test]
-fn reject_merge_do_without_nothing() {
     assert_eq!(
         pg_and_generic().parse_sql_statements(
             "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN DO UPDATE"

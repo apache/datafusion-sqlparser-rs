@@ -9883,6 +9883,9 @@ fn parse_merge_do_nothing() {
             "Expected: NOTHING, found: UPDATE".into()
         ))
     );
+}
+
+#[test]
 fn parse_compound_field_access_numeric_display() {
     let sql = "SELECT * FROM t WHERE CASE WHEN a = 1 THEN b ELSE c END . 2";
     let mut statements = pg().parse_sql_statements(sql).unwrap();

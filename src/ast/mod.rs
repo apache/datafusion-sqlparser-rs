@@ -7547,34 +7547,22 @@ pub struct Grantee {
 
 impl fmt::Display for Grantee {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.grantee_type {
-            GranteesType::Role => {
-                write!(f, "ROLE ")?;
+        let keyword = match self.grantee_type {
+            GranteesType::Role => "ROLE",
+            GranteesType::Share => "SHARE",
+            GranteesType::User => "USER",
+            GranteesType::Group => "GROUP",
+            GranteesType::Public => "PUBLIC",
+            GranteesType::DatabaseRole => "DATABASE ROLE",
+            GranteesType::Application => "APPLICATION",
+            GranteesType::ApplicationRole => "APPLICATION ROLE",
+            GranteesType::None => "",
+        };
+        f.write_str(keyword)?;
+        if let Some(name) = &self.name {
+            if !keyword.is_empty() {
+                f.write_str(" ")?;
             }
-            GranteesType::Share => {
-                write!(f, "SHARE ")?;
-            }
-            GranteesType::User => {
-                write!(f, "USER ")?;
-            }
-            GranteesType::Group => {
-                write!(f, "GROUP ")?;
-            }
-            GranteesType::Public => {
-                write!(f, "PUBLIC ")?;
-            }
-            GranteesType::DatabaseRole => {
-                write!(f, "DATABASE ROLE ")?;
-            }
-            GranteesType::Application => {
-                write!(f, "APPLICATION ")?;
-            }
-            GranteesType::ApplicationRole => {
-                write!(f, "APPLICATION ROLE ")?;
-            }
-            GranteesType::None => (),
-        }
-        if let Some(ref name) = self.name {
             name.fmt(f)?;
         }
         Ok(())

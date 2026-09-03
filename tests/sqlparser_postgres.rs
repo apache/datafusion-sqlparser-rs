@@ -9863,3 +9863,26 @@ fn parse_compound_field_access_numeric_display() {
     let reparsed = pg().parse_sql_statements(&displayed).unwrap();
     assert_eq!(vec![statement], reparsed);
 }
+
+#[test]
+fn parse_non_reserved_keywords_as_table_alias() {
+    // PostgreSQL allows these keywords as explicit table aliases.
+    for kw in [
+        "cluster",
+        "distribute",
+        "explain",
+        "minus",
+        "sample",
+        "sort",
+        "start",
+        "top",
+        "view",
+    ] {
+        pg().verified_stmt(&format!(
+            "SELECT * FROM tbl_name AS {kw} JOIN tbl_name_2 ON {kw}.id = tbl_name_2.id"
+        ));
+        pg().verified_stmt(&format!(
+            "SELECT * FROM tbl_name {kw} JOIN tbl_name_2 ON {kw}.id = tbl_name_2.id"
+        ));
+    }
+}

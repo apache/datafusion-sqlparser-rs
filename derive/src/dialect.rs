@@ -23,7 +23,8 @@ use std::collections::HashSet;
 use syn::{
     braced,
     parse::{Parse, ParseStream},
-    Error, File, FnArg, Ident, Item, LitBool, LitChar, Pat, ReturnType, Signature, Token,
+    Error, File, FnArg, Ident, Item, LitBool, LitChar, Pat, ReceiverKind, ReturnType, Signature,
+    Token,
     TraitItem, Type,
 };
 
@@ -343,7 +344,7 @@ fn is_bool_method(sig: &Signature) -> bool {
     sig.inputs.len() == 1
         && matches!(
             sig.inputs.first(),
-            Some(FnArg::Receiver(r)) if r.reference.is_some() && r.mutability.is_none()
+            Some(FnArg::Receiver(r)) if matches!(&r.kind, ReceiverKind::Reference(_, _, None))
         )
         && matches!(
             &sig.output,

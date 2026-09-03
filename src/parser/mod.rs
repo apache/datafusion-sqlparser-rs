@@ -12016,12 +12016,12 @@ impl<'a> Parser<'a> {
         while let Some(opt) = self.maybe_parse(|parser| parser.parse_copy_legacy_option())? {
             legacy_options.push(opt);
         }
-        let values =
+        let payload =
             if matches!(target, CopyTarget::Stdin) && self.peek_token_ref().token != Token::EOF {
                 self.expect_token(&Token::SemiColon)?;
-                self.parse_tsv()
+                self.parse_copy_payload()
             } else {
-                vec![]
+                None
             };
         Ok(Statement::Copy {
             source,
@@ -12029,7 +12029,7 @@ impl<'a> Parser<'a> {
             target,
             options,
             legacy_options,
-            values,
+            payload,
         })
     }
 
@@ -12370,40 +12370,50 @@ impl<'a> Parser<'a> {
         Ok(s.chars().next().unwrap())
     }
 
-    /// Parse a tab separated values in
-    /// COPY payload
-    pub fn parse_tsv(&mut self) -> Vec<Option<String>> {
-        self.parse_tab_value()
-    }
+    /// Parse the inline payload of `COPY ... FROM STDIN` as written.
+    ///
+    /// The payload is data rather than SQL, so it is captured without being
+    /// interpreted: the data starts on the line following the command and runs
+    /// up to the `\.` terminator, which is consumed but not returned. Field
+    /// separators, escapes and the `\N` null marker are left to the caller.
+    ///
+    /// Returns `None` when nothing but the statement delimiter follows, so a
+    /// bare `COPY t FROM STDIN;` is not given a payload it never carried.
+    fn parse_copy_payload(&mut self) -> Option<String> {
+        use core::fmt::Write;
 
-    /// Parse a single tab-separated value row used by `COPY` payload parsing.
-    pub fn parse_tab_value(&mut self) -> Vec<Option<String>> {
-        let mut values = vec![];
-        let mut content = String::new();
-        while let Some(t) = self.next_token_no_skip().map(|t| &t.token) {
-            match t {
-                Token::Whitespace(Whitespace::Tab) => {
-                    values.push(Some(core::mem::take(&mut content)));
-                }
-                Token::Whitespace(Whitespace::Newline) => {
-                    values.push(Some(core::mem::take(&mut content)));
-                }
+        let mut payload = String::new();
+        // The newline ending the command line is a delimiter, not data.
+        if self.peek_nth_token_no_skip_ref(0).token == Token::Whitespace(Whitespace::Newline) {
+            let _ = self.next_token_no_skip();
+        }
+        while let Some(token) = self.next_token_no_skip().map(|t| &t.token) {
+            match token {
                 Token::Backslash => {
-                    if self.consume_token(&Token::Period) {
-                        return values;
+                    // `\.` terminates the payload, every other backslash is data.
+                    if self.peek_nth_token_no_skip_ref(0).token == Token::Period {
+                        let _ = self.next_token_no_skip();
+                        return Some(payload);
                     }
-                    if let Token::Word(w) = self.next_token().token {
-                        if w.value == "N" {
-                            values.push(None);
-                        }
-                    }
+                    payload.push('\\');
                 }
-                _ => {
-                    content.push_str(&t.to_string());
+                // `Display` for a single line comment appends a newline that the
+                // tokenizer left in the stream as a separate token, so render it
+                // here instead to avoid duplicating it.
+                Token::Whitespace(Whitespace::SingleLineComment { prefix, comment }) => {
+                    payload.push_str(prefix);
+                    payload.push_str(comment);
+                }
+                // Rendering into the buffer avoids a temporary `String` per
+                // token, and a payload can hold an entire table.
+                token => {
+                    let _ = write!(payload, "{token}");
                 }
             }
         }
-        values
+        // An unterminated payload keeps whatever data it holds, but an empty one
+        // means the statement had no inline data at all.
+        (!payload.is_empty()).then_some(payload)
     }
 
     /// Parse a literal value (numbers, strings, date/time, booleans)

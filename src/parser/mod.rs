@@ -13849,7 +13849,7 @@ impl<'a> Parser<'a> {
                 token => {
                     Err(ParserError::ParserError(format!(
                         "Unexpected token in identifier: {token}"
-                    )))?;
+                    )));
                 }
             }
         }
@@ -17149,7 +17149,7 @@ impl<'a> Parser<'a> {
                         tok.token
                     ),
                     tok.span.start
-                )?;
+                );
             }
         }
 

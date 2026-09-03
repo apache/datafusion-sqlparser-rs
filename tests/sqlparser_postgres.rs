@@ -9854,6 +9854,38 @@ fn parse_alter_table_constraint_check_no_inherit() {
 }
 
 #[test]
+fn parse_merge_do_nothing() {
+    let Statement::Merge(merge) = pg_and_generic().verified_stmt(
+        "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN DO NOTHING WHEN NOT MATCHED THEN DO NOTHING",
+    ) else {
+        panic!("expected MERGE statement");
+    };
+    assert!(matches!(
+        merge.clauses.as_slice(),
+        [
+            MergeClause {
+                clause_kind: MergeClauseKind::Matched,
+                action: MergeAction::DoNothing { .. },
+                ..
+            },
+            MergeClause {
+                clause_kind: MergeClauseKind::NotMatched,
+                action: MergeAction::DoNothing { .. },
+                ..
+            }
+        ]
+    ));
+    assert_eq!(
+        pg_and_generic().parse_sql_statements(
+            "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN DO UPDATE"
+        ),
+        Err(ParserError::ParserError(
+            "Expected: NOTHING, found: UPDATE".into()
+        ))
+    );
+}
+
+#[test]
 fn parse_compound_field_access_numeric_display() {
     let sql = "SELECT * FROM t WHERE CASE WHEN a = 1 THEN b ELSE c END . 2";
     let mut statements = pg().parse_sql_statements(sql).unwrap();

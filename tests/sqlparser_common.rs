@@ -17572,7 +17572,7 @@ fn parse_pipeline_operator_negative_tests() {
 
     // Test that CALL with invalid function syntax fails
     assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> CALL 123invalid")
+        .parse_sql_statements("SELECT * FROM users |> CALL 123 invalid")
         .is_err());
 
     // Test that CALL with malformed arguments fails

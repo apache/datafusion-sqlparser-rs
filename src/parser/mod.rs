@@ -1635,7 +1635,7 @@ impl<'a> Parser<'a> {
             Keyword::MAP if *self.peek_token_ref() == Token::LBrace && self.dialect.support_map_literal_syntax() => {
                 Ok(Some(self.parse_duckdb_map_literal()?))
             }
-            Keyword::LAMBDA if self.dialect.supports_lambda_functions() => {
+            Keyword::LAMBDA if self.dialect.supports_lambda_keyword_syntax() => {
                 Ok(Some(self.parse_lambda_expr()?))
             }
             _ if self.dialect.supports_geometric_types() => match w.keyword {

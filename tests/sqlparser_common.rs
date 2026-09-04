@@ -10272,6 +10272,9 @@ fn parse_grant() {
     verified_stmt("GRANT ROLE role1 TO ROLE role2");
     verified_stmt("GRANT ROLE role1 TO USER user");
     verified_stmt("GRANT CREATE SCHEMA ON DATABASE db1 TO ROLE role1");
+    // PUBLIC takes no name, so it must not trail a space. MsSql reserves it as
+    // an ordinary grantee name.
+    all_dialects_except(|d| d.is::<MsSqlDialect>()).verified_stmt("GRANT SELECT ON t TO PUBLIC");
 }
 
 #[test]
@@ -11657,6 +11660,24 @@ fn parse_deeply_nested_interval_hits_recursion_limits() {
     let dialect = GenericDialect {};
 
     let sql = format!("SELECT {}1", "INTERVAL ".repeat(1000));
+
+    let res = Parser::new(&dialect)
+        .try_with_sql(&sql)
+        .expect("tokenize to work")
+        .parse_statements();
+
+    assert_eq!(res, Err(ParserError::RecursionLimitExceeded));
+}
+
+#[test]
+fn parse_deeply_nested_data_type_hits_recursion_limits() {
+    let dialect = GenericDialect {};
+
+    let sql = format!(
+        "SELECT CAST(x AS {}INT64{})",
+        "ARRAY<".repeat(1000),
+        ">".repeat(1000)
+    );
 
     let res = Parser::new(&dialect)
         .try_with_sql(&sql)

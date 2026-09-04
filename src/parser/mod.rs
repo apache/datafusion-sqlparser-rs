@@ -72,11 +72,13 @@ macro_rules! parser_err {
 mod alter;
 mod merge;
 
-#[cfg(feature = "std")]
-/// Implementation [`RecursionCounter`] if std is available
+/// Implementation of [`RecursionCounter`].
+///
+/// Explicitly requires only `alloc` and `core`, so recursion is limited even
+/// when the "std" feature is disabled.
 mod recursion {
-    use std::cell::Cell;
-    use std::rc::Rc;
+    use alloc::rc::Rc;
+    use core::cell::Cell;
 
     use super::ParserError;
 
@@ -84,7 +86,7 @@ mod recursion {
     /// each call to [`RecursionCounter::try_decrease()`], when it reaches 0 an error will
     /// be returned.
     ///
-    /// Note: Uses an [`std::rc::Rc`] and [`std::cell::Cell`] in order to satisfy the Rust
+    /// Note: Uses an [`alloc::rc::Rc`] and [`core::cell::Cell`] in order to satisfy the Rust
     /// borrow checker so the automatic [`DepthGuard`] decrement a
     /// reference to the counter.
     ///
@@ -131,33 +133,13 @@ mod recursion {
             Self { remaining_depth }
         }
     }
+
     impl Drop for DepthGuard {
         fn drop(&mut self) {
             let old_value = self.remaining_depth.get();
-            self.remaining_depth.set(old_value + 1);
+            self.remaining_depth.set(old_value.saturating_add(1));
         }
     }
-}
-
-#[cfg(not(feature = "std"))]
-mod recursion {
-    /// Implementation [`RecursionCounter`] if std is NOT available (and does not
-    /// guard against stack overflow).
-    ///
-    /// Has the same API as the std [`RecursionCounter`] implementation
-    /// but does not actually limit stack depth.
-    pub(crate) struct RecursionCounter {}
-
-    impl RecursionCounter {
-        pub fn new(_remaining_depth: usize) -> Self {
-            Self {}
-        }
-        pub fn try_decrease(&self) -> Result<DepthGuard, super::ParserError> {
-            Ok(DepthGuard {})
-        }
-    }
-
-    pub struct DepthGuard {}
 }
 
 #[derive(PartialEq, Eq)]
@@ -442,8 +424,12 @@ impl<'a> Parser<'a> {
     /// # }
     /// ```
     ///
-    /// Note: when "recursive-protection" feature is enabled, this crate uses additional stack overflow protection
-    //  for some of its recursive methods. See [`recursive::recursive`] for more information.
+    /// Note: Versions prior to `0.63.0` did not enforce any limit in builds
+    /// without the "std" feature.
+    ///
+    /// Note: when "recursive-protection" feature is enabled, this crate uses
+    /// additional stack overflow protection for some of its recursive methods.
+    /// See [`recursive::recursive`] for more information.
     pub fn with_recursion_limit(mut self, recursion_limit: usize) -> Self {
         self.recursion_counter = RecursionCounter::new(recursion_limit);
         self
@@ -12793,9 +12779,12 @@ impl<'a> Parser<'a> {
         Ok(ty)
     }
 
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     fn parse_data_type_helper(
         &mut self,
     ) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
+        let _guard = self.recursion_counter.try_decrease()?;
+
         let dialect = self.dialect;
         self.advance_token();
         let next_token = self.get_current_token();

@@ -1809,6 +1809,18 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports a leading `WITH XMLNAMESPACES (...)`
+    /// clause in queries.
+    ///
+    /// Example:
+    /// ```sql
+    /// WITH XMLNAMESPACES ('urn:example' AS ns)
+    /// SELECT 1
+    /// ```
+    fn supports_with_xmlnamespaces_clause(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports aliased function arguments,
     /// e.g. `XMLFOREST(a AS x)` in PostgreSQL.
     fn supports_aliased_function_args(&self) -> bool {

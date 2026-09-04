@@ -248,6 +248,11 @@ impl Dialect for MsSqlDialect {
             _ => None,
         }
     }
+
+    // see: https://learn.microsoft.com/en-us/sql/t-sql/xml/with-xmlnamespaces
+    fn supports_with_xmlnamespaces_clause(&self) -> bool {
+        true
+    }
 }
 
 impl MsSqlDialect {

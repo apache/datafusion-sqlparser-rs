@@ -388,23 +388,21 @@ impl fmt::Display for Ident {
             Some('[') => {
                 let v = &self.value;
                 if v.len() >= 2 && v.starts_with('"') && v.ends_with('"') {
-                    // A nested double-quoted identifier (e.g. Redshift `["a]b"]`)
-                    // keeps its inner quotes in the value and its `]` is already
-                    // literal, so emit it unchanged.
+                    // Redshift's nested quoted identifier form (`["a b"]`) keeps
+                    // the inner quotes in the value, where `]` is literal.
                     write!(f, "[{v}]")
                 } else {
-                    // Double a lone `]` so the identifier round-trips, but leave
-                    // an already-doubled `]]` intact: in the tokenizer's no-escape
-                    // mode the value still holds the raw `]]`, and re-doubling it
-                    // would corrupt the identifier.
-                    write!(f, "[")?;
-                    let mut rest = v.as_str();
-                    while let Some(pos) = rest.find(']') {
-                        write!(f, "{}]]", &rest[..pos])?;
-                        let after = &rest[pos + 1..];
-                        rest = after.strip_prefix(']').unwrap_or(after);
+                    // Each `]` is doubled. `escape_quoted_string` can't be reused:
+                    // it skips a quote that is already doubled, which corrupts a
+                    // value containing `]]`.
+                    f.write_str("[")?;
+                    for (i, part) in v.split(']').enumerate() {
+                        if i > 0 {
+                            f.write_str("]]")?;
+                        }
+                        f.write_str(part)?;
                     }
-                    write!(f, "{rest}]")
+                    f.write_str("]")
                 }
             }
             None => f.write_str(&self.value),

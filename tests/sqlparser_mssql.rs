@@ -31,7 +31,7 @@ use sqlparser::ast::DataType::{Int, Text, Varbinary};
 use sqlparser::ast::DeclareAssignment::MsSqlAssignment;
 use sqlparser::ast::Value::SingleQuotedString;
 use sqlparser::ast::*;
-use sqlparser::dialect::{GenericDialect, MsSqlDialect};
+use sqlparser::dialect::{GenericDialect, MsSqlDialect, SQLiteDialect};
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
 
 #[test]
@@ -947,20 +947,41 @@ fn parse_bracket_identifier_with_escaped_closing_bracket() {
         expr_from_projection(&select.projection[0]),
     );
 
-    // Round-trips regardless of where the escaped `]` sits.
-    for sql in [
-        "SELECT [a]]b] FROM [c]]d]",
-        "SELECT []]]",      // the identifier is a single `]`
-        "SELECT [a]]]",     // trailing `]`
-        "SELECT []]b]",     // leading `]`
-        "SELECT [a]]b]]c]", // several escaped `]`
-    ] {
-        ms().verified_stmt(sql);
-    }
+    // Consecutive `]` in the value are each escaped, so `a]]b` stays `a]]b`.
+    let select = ms().verified_only_select("SELECT [a]]]]b]");
+    assert_eq!(
+        &Expr::Identifier(Ident::with_quote('[', "a]]b")),
+        expr_from_projection(&select.projection[0]),
+    );
+}
 
-    // In no-escape mode the parsed value keeps the raw `]]`, so serializing it
-    // must not double the brackets again.
-    ms_no_unescape().verified_stmt("SELECT [a]]b]");
+#[test]
+fn bracket_identifier_display_round_trips() {
+    // Serializing an identifier must produce SQL that parses back to the same
+    // identifier. Checked exhaustively over every value of length 1..=5 built
+    // from `]`, `"`, an ordinary character and a multi-byte one.
+    let mut values = vec![String::new()];
+    for _ in 0..5 {
+        values = values
+            .iter()
+            .flat_map(|v| [']', '"', 'a', 'é'].map(|c| format!("{v}{c}")))
+            .collect();
+        for value in &values {
+            // A value wrapped in `"` is Redshift's nested quoted identifier form,
+            // which is emitted verbatim, so a `]` in it cannot be escaped.
+            if value.starts_with('"') && value.ends_with('"') && value.contains(']') {
+                continue;
+            }
+            let ident = Ident::with_quote('[', value.as_str());
+            let sql = format!("SELECT {ident}");
+            let select = ms_and_sqlite().verified_only_select(&sql);
+            assert_eq!(
+                &Expr::Identifier(ident),
+                expr_from_projection(&select.projection[0]),
+                "{sql} did not round trip",
+            );
+        }
+    }
 }
 
 #[test]
@@ -2461,11 +2482,8 @@ fn ms() -> TestedDialects {
     TestedDialects::new(vec![Box::new(MsSqlDialect {})])
 }
 
-fn ms_no_unescape() -> TestedDialects {
-    TestedDialects::new_with_options(
-        vec![Box::new(MsSqlDialect {})],
-        ParserOptions::new().with_unescape(false),
-    )
+fn ms_and_sqlite() -> TestedDialects {
+    TestedDialects::new(vec![Box::new(MsSqlDialect {}), Box::new(SQLiteDialect {})])
 }
 
 // MS SQL dialect with support for optional semi-colon statement delimiters

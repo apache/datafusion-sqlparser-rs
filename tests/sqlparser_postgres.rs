@@ -9685,6 +9685,40 @@ fn parse_right_deep_join_chain() {
 }
 
 #[test]
+fn parse_nested_pg_unary_ops() {
+    let select = pg().verified_only_select("SELECT @ @1");
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::UnaryOp {
+            op: UnaryOperator::PGAbs,
+            expr: Box::new(Expr::UnaryOp {
+                op: UnaryOperator::PGAbs,
+                expr: Box::new(Expr::value(number("1"))),
+            }),
+        }),
+        select.projection[0]
+    );
+
+    let select = pg().verified_only_select("SELECT @@ 1");
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::UnaryOp {
+            op: UnaryOperator::DoubleAt,
+            expr: Box::new(Expr::value(number("1"))),
+        }),
+        select.projection[0]
+    );
+
+    pg().verified_stmt("SELECT |/ |/1");
+}
+
+#[test]
+fn parse_adjacent_pg_unary_ops_that_do_not_combine() {
+    pg().verified_stmt("SELECT +@a");
+    pg().verified_stmt("SELECT !!~a");
+    pg().verified_stmt("SELECT @~a");
+    pg().verified_stmt("SELECT !!|/a");
+}
+
+#[test]
 fn parse_quoted_function_argument_name() {
     let statement = pg_and_generic().verified_stmt(
         r#"CREATE FUNCTION is_member("Role" TEXT) RETURNS BOOLEAN LANGUAGE SQL AS 'SELECT true'"#,

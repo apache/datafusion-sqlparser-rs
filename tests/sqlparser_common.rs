@@ -20002,3 +20002,19 @@ fn parse_function_arg_call_chain_no_exponential_blowup() {
     rx.recv_timeout(Duration::from_secs(5))
         .expect("parser should reject this quickly, not loop exponentially");
 }
+
+#[test]
+fn parse_nested_unary_ops() {
+    all_dialects().verified_stmt("SELECT - -1");
+    all_dialects().verified_stmt("SELECT ~ ~1");
+    all_dialects().verified_stmt("SELECT NOT NOT a");
+    all_dialects().one_statement_parses_to("SELECT ~ ~ 1", "SELECT ~ ~1");
+}
+
+#[test]
+fn parse_adjacent_unary_ops_that_do_not_combine() {
+    all_dialects().verified_stmt("SELECT ++a");
+    all_dialects().verified_stmt("SELECT +~a");
+    all_dialects().verified_stmt("SELECT -NOT a");
+    all_dialects().verified_stmt("SELECT ~NOT a");
+}

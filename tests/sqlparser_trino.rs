@@ -19,8 +19,8 @@
 //! Test SQL syntax specific to Trino.
 
 use sqlparser::ast::*;
-use sqlparser::dialect::TrinoDialect;
-use sqlparser::parser::ParserError;
+use sqlparser::dialect::{DatabricksDialect, TrinoDialect};
+use sqlparser::parser::{Parser, ParserError};
 use test_utils::*;
 
 #[macro_use]
@@ -226,13 +226,45 @@ fn comment_on() {
 }
 
 // --------------------------------
+// Time travel
+// --------------------------------
+
+#[test]
+fn for_timestamp_and_version_as_of() {
+    // Trino spells time travel with a leading FOR (Iceberg, Delta).
+    let select = trino().verified_only_select(
+        "SELECT 1 FROM t1 FOR TIMESTAMP AS OF TIMESTAMP '2026-01-01 00:00:00 UTC'",
+    );
+    match &select.from[0].relation {
+        TableFactor::Table { version, .. } => {
+            assert!(matches!(version, Some(TableVersion::ForTimestampAsOf(_))))
+        }
+        other => panic!("expected a table, got {other:?}"),
+    }
+    trino().verified_only_select("SELECT 1 FROM t1 FOR VERSION AS OF 8954597067493422955");
+    let select = trino().verified_only_select("SELECT 1 FROM t1 FOR VERSION AS OF 'my-branch'");
+    match &select.from[0].relation {
+        TableFactor::Table { version, .. } => {
+            assert!(matches!(version, Some(TableVersion::ForVersionAsOf(_))))
+        }
+        other => panic!("expected a table, got {other:?}"),
+    }
+    // A dialect that versions tables without FOR keeps rejecting it.
+    assert!(Parser::parse_sql(
+        &DatabricksDialect {},
+        "SELECT 1 FROM t1 FOR VERSION AS OF 1"
+    )
+    .is_err());
+}
+
+// --------------------------------
 // Agreement with Trino
 // --------------------------------
 //
 // Every statement below was given to Trino 483 as `EXPLAIN (TYPE VALIDATE) …`
-// on 2026-10-07. A `SYNTAX_ERROR` answer is a reject; any other answer (a
-// plan, or a semantic error such as a missing table) means Trino parsed it.
-// The dialect must agree on each.
+// on 2026-10-07 (the `FOR … AS OF` forms on 2026-11-22). A `SYNTAX_ERROR`
+// answer is a reject; any other answer (a plan, or a semantic error such as
+// a missing table) means Trino parsed it. The dialect must agree on each.
 
 const TRINO_PARSES: &[&str] = &[
     r#"SELECT * FROM orders MATCH_RECOGNIZE(PATTERN (A) DEFINE A AS true) AS m"#,
@@ -307,6 +339,10 @@ const TRINO_PARSES: &[&str] = &[
     r#"SELECT 1 TOP FROM orders"#,
     r#"SELECT 1 VIEW FROM orders"#,
     r#"SELECT 1 RETURNING FROM orders"#,
+    r#"SELECT * FROM orders FOR TIMESTAMP AS OF TIMESTAMP '2026-01-01 00:00:00 UTC'"#,
+    r#"SELECT * FROM orders FOR VERSION AS OF 8954597067493422955"#,
+    r#"SELECT * FROM orders FOR VERSION AS OF 'my-branch'"#,
+    r#"SELECT * FROM orders FOR TIMESTAMP AS OF TIMESTAMP '2026-01-01 00:00:00 UTC' AS o"#,
 ];
 
 const TRINO_REJECTS: &[&str] = &[
@@ -323,6 +359,10 @@ const TRINO_REJECTS: &[&str] = &[
     r#"SELECT * FROM orders MATCH_RECOGNIZE(PARTITION BY customer_id ORDER BY order_date MEASURES A.id AS a_id) AS m"#,
     r#"SELECT * FROM orders FOR SYSTEM_TIME AS OF TIMESTAMP '2026-01-01 00:00:00'"#,
     r#"SELECT * FROM orders AS o FOR VERSION AS OF 123"#,
+    r#"SELECT * FROM orders AS o FOR TIMESTAMP AS OF TIMESTAMP '2026-01-01 00:00:00 UTC'"#,
+    r#"SELECT * FROM orders FOR TIMESTAMP OF TIMESTAMP '2026-01-01 00:00:00 UTC'"#,
+    r#"SELECT * FROM orders FOR VERSION AS 1"#,
+    r#"SELECT * FROM orders FOR VERSION AS OF"#,
     r#"SELECT * FROM orders TIMESTAMP AS OF '2026-01-01'"#,
     r#"SELECT * FROM orders VERSION AS OF 123"#,
     r#"SHOW TABLES LIKE 'ord%' IN demo"#,

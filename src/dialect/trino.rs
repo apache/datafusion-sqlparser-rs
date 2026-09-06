@@ -116,6 +116,10 @@ impl Dialect for TrinoDialect {
         true
     }
 
+    fn supports_for_table_version(&self) -> bool {
+        true
+    }
+
     fn supports_explain_with_utility_options(&self) -> bool {
         true
     }

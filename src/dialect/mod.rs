@@ -1503,6 +1503,18 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect spells table versions with a leading
+    /// `FOR`: `FOR TIMESTAMP AS OF <expr>` and `FOR VERSION AS OF <expr>`,
+    /// as Trino does for Iceberg and Delta time travel.
+    ///
+    /// Independent of [`Self::supports_table_versioning`]: Trino accepts these
+    /// two forms and none of the others.
+    ///
+    /// See <https://trino.io/docs/current/connector/iceberg.html#time-travel-queries>
+    fn supports_for_table_version(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports the E'...' syntax for string literals
     ///
     /// Postgres: <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-ESCAPE>

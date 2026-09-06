@@ -80,6 +80,11 @@ impl Dialect for TrinoDialect {
         true
     }
 
+    /// See <https://trino.io/docs/current/connector/iceberg.html#time-travel-queries>
+    fn supports_for_table_version(&self) -> bool {
+        true
+    }
+
     /// `EXPLAIN (TYPE IO, FORMAT JSON) ...` and friends.
     ///
     /// See <https://trino.io/docs/current/sql/explain.html>

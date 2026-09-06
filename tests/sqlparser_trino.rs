@@ -19,8 +19,8 @@
 //! Test SQL syntax specific to Trino.
 
 use sqlparser::ast::*;
-use sqlparser::dialect::TrinoDialect;
-use sqlparser::parser::ParserError;
+use sqlparser::dialect::{DatabricksDialect, TrinoDialect};
+use sqlparser::parser::{Parser, ParserError};
 use test_utils::*;
 
 #[macro_use]
@@ -225,4 +225,36 @@ fn show_and_describe() {
 fn comment_on() {
     trino().verified_stmt("COMMENT ON TABLE demo.orders IS 'orders'");
     trino().verified_stmt("COMMENT ON COLUMN demo.orders.status IS 'lifecycle'");
+}
+
+// --------------------------------
+// Time travel
+// --------------------------------
+
+#[test]
+fn for_timestamp_and_version_as_of() {
+    // Trino spells time travel with a leading FOR (Iceberg, Delta).
+    let select = trino().verified_only_select(
+        "SELECT 1 FROM t1 FOR TIMESTAMP AS OF TIMESTAMP '2026-01-01 00:00:00 UTC'",
+    );
+    match &select.from[0].relation {
+        TableFactor::Table { version, .. } => {
+            assert!(matches!(version, Some(TableVersion::ForTimestampAsOf(_))))
+        }
+        other => panic!("expected a table, got {other:?}"),
+    }
+    trino().verified_only_select("SELECT 1 FROM t1 FOR VERSION AS OF 8954597067493422955");
+    let select = trino().verified_only_select("SELECT 1 FROM t1 FOR VERSION AS OF 'my-branch'");
+    match &select.from[0].relation {
+        TableFactor::Table { version, .. } => {
+            assert!(matches!(version, Some(TableVersion::ForVersionAsOf(_))))
+        }
+        other => panic!("expected a table, got {other:?}"),
+    }
+    // A dialect that versions tables without FOR keeps rejecting it.
+    assert!(Parser::parse_sql(
+        &DatabricksDialect {},
+        "SELECT 1 FROM t1 FOR VERSION AS OF 1"
+    )
+    .is_err());
 }

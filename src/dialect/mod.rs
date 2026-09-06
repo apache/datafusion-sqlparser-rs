@@ -551,10 +551,15 @@ pub trait Dialect: Debug + Any {
     /// ```
     ///
     /// This spelling does not claim the `->` token, so it can be enabled by
-    /// dialects that already give `->` a different meaning, such as PostgreSQL
-    /// and its derivatives, where `->` is JSON member access. Defaults to
-    /// [`Self::supports_lambda_functions`], so dialects supporting the `->`
-    /// spelling accept the `LAMBDA` spelling too unless they say otherwise.
+    /// dialects that already give `->` a different meaning — for example JSON
+    /// member access. DuckDB uses `->` for both, resolving the ambiguity from
+    /// the function signature at bind time rather than while parsing, and
+    /// deprecated the arrow lambda form in v1.3 in favour of this one; v2.0
+    /// disables the arrow form by default.
+    ///
+    /// Defaults to [`Self::supports_lambda_functions`], so dialects supporting
+    /// the `->` spelling accept the `LAMBDA` spelling too unless they say
+    /// otherwise.
     ///
     /// See <https://duckdb.org/docs/stable/sql/functions/lambda>
     fn supports_lambda_keyword_syntax(&self) -> bool {

@@ -127,10 +127,13 @@ fn test_identifier_quote_style_overrides() {
 }
 
 #[test]
-fn test_lambda_keyword_syntax_on_postgres_derivative() {
-    // A PostgreSQL derivative can opt into the `LAMBDA` keyword spelling of
-    // lambda functions without giving up `->` as JSON member access. The two
-    // meet in a single expression below: a lambda whose body is a JSON access.
+fn test_lambda_keyword_syntax_with_json_arrow_operator() {
+    // A custom dialect can opt into the `LAMBDA` keyword spelling of lambda
+    // functions without giving up `->` as JSON member access. The two meet in
+    // a single expression below: a lambda whose body is a JSON access.
+    //
+    // PostgreSqlDialect is used only as a convenient base that already gives
+    // `->` its JSON meaning; nothing here is specific to PostgreSQL.
     derive_dialect!(
         LambdaPostgreSqlDialect,
         PostgreSqlDialect,

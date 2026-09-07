@@ -1268,6 +1268,27 @@ mod tests {
         );
         assert_eq!(visitor.idents, ["value", "order_key", "filter_key"]);
     }
+
+    #[derive(Default)]
+    struct RelationVisitor {
+        relations: Vec<String>,
+    }
+
+    impl Visitor for RelationVisitor {
+        type Break = ();
+
+        fn pre_visit_relation(&mut self, relation: &ObjectName) -> ControlFlow<Self::Break> {
+            self.relations.push(relation.to_string());
+            ControlFlow::Continue(())
+        }
+    }
+
+    #[test]
+    fn test_visit_create_view_name_as_relation() {
+        let mut visitor = RelationVisitor::default();
+        do_visit("CREATE VIEW db1.v AS SELECT * FROM t", &mut visitor);
+        assert_eq!(visitor.relations, vec!["db1.v", "t"]);
+    }
 }
 
 #[cfg(test)]

@@ -9852,3 +9852,69 @@ fn parse_alter_table_constraint_check_no_inherit() {
     }
     pg_and_generic().verified_stmt("ALTER TABLE docs ADD CONSTRAINT c CHECK (id > 0) NO INHERIT");
 }
+
+#[test]
+fn parse_merge_do_nothing() {
+    let Statement::Merge(merge) = pg_and_generic().verified_stmt(
+        "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN DO NOTHING WHEN NOT MATCHED THEN DO NOTHING",
+    ) else {
+        panic!("expected MERGE statement");
+    };
+    assert!(matches!(
+        merge.clauses.as_slice(),
+        [
+            MergeClause {
+                clause_kind: MergeClauseKind::Matched,
+                action: MergeAction::DoNothing { .. },
+                ..
+            },
+            MergeClause {
+                clause_kind: MergeClauseKind::NotMatched,
+                action: MergeAction::DoNothing { .. },
+                ..
+            }
+        ]
+    ));
+    assert_eq!(
+        pg_and_generic().parse_sql_statements(
+            "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN DO UPDATE"
+        ),
+        Err(ParserError::ParserError(
+            "Expected: NOTHING, found: UPDATE".into()
+        ))
+    );
+}
+
+#[test]
+fn parse_compound_field_access_numeric_display() {
+    let sql = "SELECT * FROM t WHERE CASE WHEN a = 1 THEN b ELSE c END . 2";
+    let mut statements = pg().parse_sql_statements(sql).unwrap();
+    assert_eq!(statements.len(), 1);
+    let statement = statements.pop().unwrap();
+    let displayed = statement.to_string();
+    let reparsed = pg().parse_sql_statements(&displayed).unwrap();
+    assert_eq!(vec![statement], reparsed);
+}
+
+#[test]
+fn parse_non_reserved_keywords_as_table_alias() {
+    // PostgreSQL allows these keywords as explicit table aliases.
+    for kw in [
+        "cluster",
+        "distribute",
+        "explain",
+        "minus",
+        "sample",
+        "sort",
+        "start",
+        "top",
+        "view",
+    ] {
+        pg().verified_stmt(&format!(
+            "SELECT * FROM tbl_name AS {kw} JOIN tbl_name_2 ON {kw}.id = tbl_name_2.id"
+        ));
+        pg().verified_stmt(&format!(
+            "SELECT * FROM tbl_name {kw} JOIN tbl_name_2 ON {kw}.id = tbl_name_2.id"
+        ));
+    }
+}

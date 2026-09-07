@@ -4386,6 +4386,7 @@ pub struct CreateView {
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-view#syntax>
     pub secure: bool,
     /// View name
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     pub name: ObjectName,
     /// If `if_not_exists` is true, this flag is set to true if the view name comes before the `IF NOT EXISTS` clause.
     /// Example:

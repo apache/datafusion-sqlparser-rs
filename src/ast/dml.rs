@@ -608,6 +608,13 @@ pub enum MergeAction {
         /// The `DELETE` token that starts the sub-expression.
         delete_token: AttachedToken,
     },
+    /// A `DO NOTHING` clause.
+    DoNothing {
+        /// The `DO` token that starts the sub-expression.
+        do_token: AttachedToken,
+        /// The `NOTHING` token that ends the sub-expression.
+        nothing_token: AttachedToken,
+    },
 }
 
 impl Display for MergeAction {
@@ -621,6 +628,9 @@ impl Display for MergeAction {
             }
             MergeAction::Delete { .. } => {
                 write!(f, "DELETE")
+            }
+            MergeAction::DoNothing { .. } => {
+                write!(f, "DO NOTHING")
             }
         }
     }

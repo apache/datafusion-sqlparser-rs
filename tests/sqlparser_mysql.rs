@@ -3760,6 +3760,62 @@ fn parse_div_infix_propagates_parse_error() {
 }
 
 #[test]
+fn parse_div_precedence() {
+    let div = |left: Expr, right: Expr| Expr::BinaryOp {
+        left: Box::new(left),
+        op: BinaryOperator::MyIntegerDivide,
+        right: Box::new(right),
+    };
+    let num = |n: &str| Expr::value(number(n));
+
+    // `DIV` shares the precedence of `*` and `/`, so `+` must end up at the root.
+    assert_eq!(
+        Expr::BinaryOp {
+            left: Box::new(div(num("7"), num("2"))),
+            op: BinaryOperator::Plus,
+            right: Box::new(num("1")),
+        },
+        mysql().verified_expr("7 DIV 2 + 1")
+    );
+
+    // Equal precedence resolves left-associatively, both against `*` and against itself.
+    assert_eq!(
+        Expr::BinaryOp {
+            left: Box::new(div(num("9"), num("3"))),
+            op: BinaryOperator::Multiply,
+            right: Box::new(num("3")),
+        },
+        mysql().verified_expr("9 DIV 3 * 3")
+    );
+    assert_eq!(
+        div(div(num("10"), num("5")), num("2")),
+        mysql().verified_expr("10 DIV 5 DIV 2")
+    );
+
+    assert_eq!(
+        Expr::BinaryOp {
+            left: Box::new(div(Expr::Identifier(Ident::new("a")), num("2"))),
+            op: BinaryOperator::Eq,
+            right: Box::new(num("1")),
+        },
+        mysql().verified_expr("a DIV 2 = 1")
+    );
+
+    // Explicit parentheses still push the whole expression into the right operand.
+    assert_eq!(
+        div(
+            num("7"),
+            Expr::Nested(Box::new(Expr::BinaryOp {
+                left: Box::new(num("2")),
+                op: BinaryOperator::Plus,
+                right: Box::new(num("1")),
+            }))
+        ),
+        mysql().verified_expr("7 DIV (2 + 1)")
+    );
+}
+
+#[test]
 fn parse_drop_temporary_table() {
     let sql = "DROP TEMPORARY TABLE foo";
     match mysql().verified_stmt(sql) {
@@ -4013,6 +4069,7 @@ fn parse_revoke() {
     let sql = "REVOKE ALL ON db1.* FROM 'jeffrey'@'%'";
     let stmt = mysql_and_generic().verified_stmt(sql);
     if let Statement::Revoke(Revoke {
+        grant_option_for: false,
         privileges,
         objects,
         grantees,
@@ -4945,4 +5002,53 @@ fn parse_adjacent_string_literal_concatenation() {
 #[test]
 fn parse_group_by_with_rollup() {
     mysql().verified_stmt("SELECT * FROM tbl GROUP BY col1, col2 WITH ROLLUP");
+}
+
+#[test]
+fn parse_table_partition_selection() {
+    mysql_and_generic().verified_stmt("SELECT * FROM employees PARTITION (p0, p2)");
+    mysql_and_generic().verified_stmt("SELECT * FROM employees PARTITION (p0) AS e");
+    mysql_and_generic().verified_stmt(
+        "SELECT * FROM employees PARTITION (p0) JOIN departments PARTITION (p1) ON employees.dept_id = departments.id",
+    );
+    mysql_and_generic().verified_stmt("UPDATE employees PARTITION (p0) SET salary = 1");
+    mysql_and_generic().verified_stmt("DELETE FROM employees PARTITION (p0) WHERE id = 1");
+
+    let err = mysql_and_generic()
+        .parse_sql_statements("SELECT * FROM employees PARTITION")
+        .expect_err("expected an error");
+    assert_matches!(err, ParserError::ParserError(_));
+}
+
+#[test]
+fn parse_is_distinct_from_json_arrow_precedence() {
+    // MySQL's `->` binds tighter than `IS [NOT] DISTINCT FROM`, so the JSON
+    // extraction must stay inside the right operand.
+    assert_eq!(
+        Expr::IsDistinctFrom(
+            Box::new(Expr::Identifier(Ident::new("a"))),
+            Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("b"))),
+                op: BinaryOperator::Arrow,
+                right: Box::new(Expr::Value(
+                    Value::SingleQuotedString("k".into()).with_empty_span()
+                )),
+            }),
+        ),
+        mysql_and_generic().verified_expr("a IS DISTINCT FROM b -> 'k'")
+    );
+
+    assert_eq!(
+        Expr::IsNotDistinctFrom(
+            Box::new(Expr::Identifier(Ident::new("a"))),
+            Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("b"))),
+                op: BinaryOperator::LongArrow,
+                right: Box::new(Expr::Value(
+                    Value::SingleQuotedString("k".into()).with_empty_span()
+                )),
+            }),
+        ),
+        mysql_and_generic().verified_expr("a IS NOT DISTINCT FROM b ->> 'k'")
+    );
 }

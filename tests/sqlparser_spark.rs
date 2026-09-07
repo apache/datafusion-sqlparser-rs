@@ -171,6 +171,36 @@ fn test_div_literal() {
     spark().one_statement_parses_to("SELECT 10 div 3", "SELECT 10 DIV 3");
 }
 
+#[test]
+fn test_div_precedence() {
+    let div = |left: Expr, right: Expr| Expr::BinaryOp {
+        left: Box::new(left),
+        op: BinaryOperator::MyIntegerDivide,
+        right: Box::new(right),
+    };
+    let num = |n: &str| Expr::value(number(n));
+
+    // `DIV` shares the precedence of `*` and `/`, so `+` must end up at the root.
+    assert_eq!(
+        Expr::BinaryOp {
+            left: Box::new(div(num("7"), num("2"))),
+            op: BinaryOperator::Plus,
+            right: Box::new(num("1")),
+        },
+        spark().verified_expr("7 DIV 2 + 1")
+    );
+
+    // Equal precedence resolves left-associatively.
+    assert_eq!(
+        Expr::BinaryOp {
+            left: Box::new(div(num("9"), num("3"))),
+            op: BinaryOperator::Multiply,
+            right: Box::new(num("3")),
+        },
+        spark().verified_expr("9 DIV 3 * 3")
+    );
+}
+
 // --------------------------------
 // Struct support
 // --------------------------------

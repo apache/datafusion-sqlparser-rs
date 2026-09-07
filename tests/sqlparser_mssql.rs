@@ -2925,3 +2925,19 @@ fn parse_mssql_money_constants() {
         expr_from_projection(only(&select.projection)),
     );
 }
+
+#[test]
+fn parse_bracket_quoted_function_argument_name() {
+    let Statement::DropFunction(drop) = ms().verified_stmt("DROP FUNCTION f([Role] INT)") else {
+        panic!("expected a DROP FUNCTION statement");
+    };
+    assert_eq!(
+        drop.func_desc[0].args,
+        Some(vec![OperateFunctionArg {
+            mode: None,
+            name: Some(Ident::with_quote('[', "Role")),
+            data_type: Int(None),
+            default_expr: None,
+        }])
+    );
+}

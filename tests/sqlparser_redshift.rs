@@ -552,3 +552,8 @@ fn parse_unpivot_expression() {
     );
     dialects.verified_stmt("SELECT t.id, k, v FROM test_colors AS t, UNPIVOT t AS v AT k");
 }
+
+#[test]
+fn test_interval_as_column_name() {
+    redshift().verified_stmt("SELECT * FROM table_name WHERE interval = 78");
+}

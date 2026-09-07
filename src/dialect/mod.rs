@@ -598,6 +598,11 @@ pub trait Dialect: Debug + Any {
         None
     }
 
+    /// Does the dialect support the `APPROXIMATE PERCENTILE_DISC` function syntax?
+    fn supports_approximate_percentile_disc(&self) -> bool {
+        false
+    }
+
     /// Does the dialect support trailing commas around the query?
     fn supports_trailing_commas(&self) -> bool {
         false

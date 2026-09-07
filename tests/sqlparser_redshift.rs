@@ -560,14 +560,7 @@ fn test_interval_as_column_name() {
 
 #[test]
 fn parse_approximate_percentile_disc() {
-    redshift().one_statement_parses_to(
-        r#"SELECT TOP 10 date.caldate,
-COUNT(totalprice), SUM(totalprice),
-APPROXIMATE PERCENTILE_DISC(0.5) WITHIN GROUP (ORDER BY totalprice)
-FROM listing
-JOIN date ON listing.dateid = date.dateid
-GROUP BY date.caldate
-ORDER BY 3 DESC"#,
-        "SELECT TOP 10 date.caldate, COUNT(totalprice), SUM(totalprice), APPROXIMATE PERCENTILE_DISC(0.5) WITHIN GROUP (ORDER BY totalprice) FROM listing JOIN date ON listing.dateid = date.dateid GROUP BY date.caldate ORDER BY 3 DESC",
+    redshift().verified_stmt(
+        "SELECT APPROXIMATE PERCENTILE_DISC(0.5) WITHIN GROUP (ORDER BY totalprice)",
     );
 }

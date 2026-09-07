@@ -1836,6 +1836,20 @@ impl<'a> Parser<'a> {
 
         let dialect = self.dialect;
 
+        if dialect.supports_approximate_percentile_disc()
+            && matches!(&self.peek_token_ref().token, Token::Word(word) if word.value.eq_ignore_ascii_case("approximate"))
+            && matches!(&self.peek_nth_token_ref(1).token, Token::Word(word) if word.value.eq_ignore_ascii_case("percentile_disc"))
+        {
+            self.next_token();
+            let function_name = self.parse_object_name(false)?;
+            return self
+                .parse_function(function_name)
+                .map(|function| Expr::Prefixed {
+                    prefix: "APPROXIMATE".into(),
+                    value: Box::new(function),
+                });
+        }
+
         self.advance_token();
         let next_token_index = self.get_current_index();
         let next_token = self.get_current_token();

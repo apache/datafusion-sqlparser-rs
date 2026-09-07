@@ -2345,7 +2345,9 @@ fn parse_ilike() {
                 pattern: Box::new(Expr::Value(
                     (Value::SingleQuotedString("%a".to_string())).with_empty_span()
                 )),
-                escape_char: Some(Value::SingleQuotedString('^'.to_string()).with_empty_span()),
+                escape_char: Some(Box::new(Expr::value(
+                    Value::SingleQuotedString('^'.to_string()).with_empty_span(),
+                ))),
                 any: false,
             },
             select.selection.unwrap()
@@ -2409,7 +2411,9 @@ fn parse_like() {
                 pattern: Box::new(Expr::Value(
                     (Value::SingleQuotedString("%a".to_string())).with_empty_span()
                 )),
-                escape_char: Some(Value::SingleQuotedString('^'.to_string()).with_empty_span()),
+                escape_char: Some(Box::new(Expr::value(
+                    Value::SingleQuotedString('^'.to_string()).with_empty_span(),
+                ))),
                 any: false,
             },
             select.selection.unwrap()
@@ -2437,6 +2441,11 @@ fn parse_like() {
     }
     chk(false);
     chk(true);
+}
+
+#[test]
+fn parse_like_escape_expression() {
+    verified_expr("'a%' LIKE 'a#%' ESCAPE ('' || '#')");
 }
 
 #[test]
@@ -2472,7 +2481,9 @@ fn parse_similar_to() {
                 pattern: Box::new(Expr::Value(
                     (Value::SingleQuotedString("%a".to_string())).with_empty_span()
                 )),
-                escape_char: Some(Value::SingleQuotedString('^'.to_string()).with_empty_span()),
+                escape_char: Some(Box::new(Expr::value(
+                    Value::SingleQuotedString('^'.to_string()).with_empty_span(),
+                ))),
             },
             select.selection.unwrap()
         );
@@ -2489,7 +2500,7 @@ fn parse_similar_to() {
                 pattern: Box::new(Expr::Value(
                     (Value::SingleQuotedString("%a".to_string())).with_empty_span()
                 )),
-                escape_char: Some(Value::Null.with_empty_span()),
+                escape_char: Some(Box::new(Expr::value(Value::Null.with_empty_span()))),
             },
             select.selection.unwrap()
         );
@@ -2507,7 +2518,9 @@ fn parse_similar_to() {
                 pattern: Box::new(Expr::Value(
                     (Value::SingleQuotedString("%a".to_string())).with_empty_span()
                 )),
-                escape_char: Some(Value::SingleQuotedString('^'.to_string()).with_empty_span()),
+                escape_char: Some(Box::new(Expr::value(
+                    Value::SingleQuotedString('^'.to_string()).with_empty_span(),
+                ))),
             })),
             select.selection.unwrap()
         );
@@ -17576,7 +17589,7 @@ fn parse_pipeline_operator_negative_tests() {
 
     // Test that CALL with invalid function syntax fails
     assert!(dialects
-        .parse_sql_statements("SELECT * FROM users |> CALL 123invalid")
+        .parse_sql_statements("SELECT * FROM users |> CALL 123 invalid")
         .is_err());
 
     // Test that CALL with malformed arguments fails

@@ -24,8 +24,7 @@ use syn::{
     braced,
     parse::{Parse, ParseStream},
     Error, File, FnArg, Ident, Item, LitBool, LitChar, Pat, ReceiverKind, ReturnType, Signature,
-    Token,
-    TraitItem, Type,
+    Token, TraitItem, Type,
 };
 
 /// Override value types supported by the macro

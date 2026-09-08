@@ -4912,3 +4912,15 @@ fn test_select_dollar_column_from_stage() {
     // With table function args, without alias
     snowflake().verified_stmt("SELECT $1, $2 FROM @mystage1(file_format => 'myformat')");
 }
+
+#[test]
+fn test_structured_array_type() {
+    snowflake().one_statement_parses_to(
+        "CREATE TABLE t (a ARRAY(VARCHAR))",
+        "CREATE TABLE t (a Array(VARCHAR))",
+    );
+    snowflake().one_statement_parses_to(
+        "SELECT CAST(a AS ARRAY(NUMBER(10, 2))) FROM t",
+        "SELECT CAST(a AS Array(NUMBER(10, 2))) FROM t",
+    );
+}

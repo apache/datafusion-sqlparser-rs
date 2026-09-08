@@ -4914,6 +4914,18 @@ fn test_select_dollar_column_from_stage() {
 }
 
 #[test]
+fn test_structured_array_type() {
+    snowflake().one_statement_parses_to(
+        "CREATE TABLE t (a ARRAY(VARCHAR))",
+        "CREATE TABLE t (a Array(VARCHAR))",
+    );
+    snowflake().one_statement_parses_to(
+        "SELECT CAST(a AS ARRAY(NUMBER(10, 2))) FROM t",
+        "SELECT CAST(a AS Array(NUMBER(10, 2))) FROM t",
+    );
+}
+
+#[test]
 fn test_snowflake_stage_name_with_escaped_quotes() {
     snowflake().verified_stmt("REMOVE @````");
     snowflake().one_statement_parses_to("RM @````", "REMOVE @````");

@@ -744,4 +744,13 @@ fn test_databricks_insert_by_name() {
     databricks_and_generic().verified_stmt(
         "INSERT INTO TABLE lakehouse.dwd.dwd_event_quality_sla_metric_di BY NAME WITH day AS (SELECT 1 AS event_data_id) SELECT event_data_id FROM day",
     );
+fn parse_databricks_query_entry_points() {
+    databricks().verified_stmt("CREATE TABLE t (attrs MAP<STRING, ARRAY<INT>>)");
+    databricks().one_statement_parses_to(r#"SELECT 'it\'s'"#, "SELECT 'it''s'");
+    databricks().verified_stmt("SELECT * REPLACE (upper(name) AS name) FROM source");
+    databricks().verified_stmt(
+        "CREATE VIEW cross_product AS FROM main.raw.left_table, main.raw.right_table",
+    );
+    databricks()
+        .verified_stmt("CREATE VIEW filtered AS FROM main.raw.source |> WHERE id > 0 |> SELECT id");
 }

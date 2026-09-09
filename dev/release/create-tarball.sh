@@ -107,7 +107,7 @@ Here is my vote:
 
 [1]: https://github.com/apache/datafusion-sqlparser-rs/tree/${release_hash}
 [2]: ${url}
-[3]: https://github.com/apache/datafusion-sqlparser-rs/blob/${release_hash}/CHANGELOG.md
+[3]: https://github.com/apache/datafusion-sqlparser-rs/blob/${release_hash}/changelog/${version}.md
 MAIL
 echo "---------------------------------------------------------"
 

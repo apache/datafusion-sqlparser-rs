@@ -1635,6 +1635,18 @@ impl<'a> Parser<'a> {
             Keyword::MAP if *self.peek_token_ref() == Token::LBrace && self.dialect.support_map_literal_syntax() => {
                 Ok(Some(self.parse_duckdb_map_literal()?))
             }
+            Keyword::APPROXIMATE
+                if self.dialect.supports_approximate_percentile_disc()
+                    && self.peek_keyword(Keyword::PERCENTILE_DISC) =>
+            {
+                self.maybe_parse(|parser| {
+                    let function_name = parser.parse_object_name(false)?;
+                    parser.parse_function(function_name).map(|function| Expr::Prefixed {
+                        prefix: w.to_ident(w_span),
+                        value: Box::new(function),
+                    })
+                })
+            }
             Keyword::LAMBDA if self.dialect.supports_lambda_functions() => {
                 Ok(Some(self.parse_lambda_expr()?))
             }
@@ -1835,20 +1847,6 @@ impl<'a> Parser<'a> {
         // next_token reference.
 
         let dialect = self.dialect;
-
-        if dialect.supports_approximate_percentile_disc()
-            && matches!(&self.peek_token_ref().token, Token::Word(word) if word.value.eq_ignore_ascii_case("approximate"))
-            && matches!(&self.peek_nth_token_ref(1).token, Token::Word(word) if word.value.eq_ignore_ascii_case("percentile_disc"))
-        {
-            self.next_token();
-            let function_name = self.parse_object_name(false)?;
-            return self
-                .parse_function(function_name)
-                .map(|function| Expr::Prefixed {
-                    prefix: "APPROXIMATE".into(),
-                    value: Box::new(function),
-                });
-        }
 
         self.advance_token();
         let next_token_index = self.get_current_index();

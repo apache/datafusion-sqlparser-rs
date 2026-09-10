@@ -24,7 +24,9 @@ mod test_utils;
 
 use helpers::attached_token::AttachedToken;
 use sqlparser::ast::*;
-use sqlparser::dialect::{Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect};
+use sqlparser::dialect::{
+    Dialect, GenericDialect, MsSqlDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect,
+};
 use sqlparser::parser::{Parser, ParserError};
 use sqlparser::tokenizer::{Location, Span};
 use test_utils::*;
@@ -9916,5 +9918,78 @@ fn parse_non_reserved_keywords_as_table_alias() {
         pg().verified_stmt(&format!(
             "SELECT * FROM tbl_name {kw} JOIN tbl_name_2 ON {kw}.id = tbl_name_2.id"
         ));
+    }
+}
+
+#[test]
+fn parse_create_group() {
+    // `GROUP` names the same object as `ROLE` in PostgreSQL, but the keyword is preserved.
+    pg().verified_stmt("CREATE GROUP g");
+    pg().verified_stmt("CREATE GROUP staff SUPERUSER LOGIN CONNECTION LIMIT 5 USER karl, john");
+    pg().one_statement_parses_to(
+        "CREATE GROUP staff WITH SUPERUSER",
+        "CREATE GROUP staff SUPERUSER",
+    );
+
+    match pg().verified_stmt("CREATE GROUP staff") {
+        Statement::CreateRole(create_role) => {
+            assert_eq!(create_role.keyword, RoleKeyword::Group);
+            assert_eq_vec(&["staff"], &create_role.names);
+        }
+        other => panic!("expected CREATE ROLE statement, got {other:?}"),
+    }
+
+    // The `ROLE` spelling is unaffected.
+    match pg().verified_stmt("CREATE ROLE staff") {
+        Statement::CreateRole(create_role) => {
+            assert_eq!(create_role.keyword, RoleKeyword::Role)
+        }
+        other => panic!("expected CREATE ROLE statement, got {other:?}"),
+    }
+}
+
+#[test]
+fn parse_drop_group() {
+    pg().verified_stmt("DROP GROUP IF EXISTS staff, workers");
+
+    assert_eq!(
+        pg().verified_stmt("DROP GROUP staff"),
+        Statement::Drop {
+            object_type: ObjectType::Group,
+            if_exists: false,
+            names: vec![ObjectName::from(vec![Ident::new("staff")])],
+            cascade: false,
+            restrict: false,
+            purge: false,
+            temporary: false,
+            table: None,
+        }
+    );
+
+    // PostgreSQL rejects a drop behavior after `DROP GROUP`, exactly as after `DROP ROLE`.
+    assert_eq!(
+        pg().parse_sql_statements("DROP GROUP staff CASCADE")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Cannot specify CASCADE, RESTRICT, or PURGE in DROP GROUP"
+    );
+
+    pg().verified_stmt("DROP ROLE staff");
+}
+
+#[test]
+fn parse_user_group_statements_is_dialect_gated() {
+    // Only PostgreSQL opts in. Redshift documents the same statements and can turn the hook
+    // on, but its narrower `CREATE GROUP` option list is a separate question.
+    let others = TestedDialects::new(vec![
+        Box::new(GenericDialect {}),
+        Box::new(MySqlDialect {}),
+        Box::new(MsSqlDialect {}),
+    ]);
+    for sql in ["CREATE GROUP staff", "DROP GROUP staff"] {
+        assert!(
+            others.parse_sql_statements(sql).is_err(),
+            "{sql} should not parse in a dialect without GROUP statements"
+        );
     }
 }

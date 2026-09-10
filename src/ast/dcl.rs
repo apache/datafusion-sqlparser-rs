@@ -35,6 +35,32 @@ use crate::ast::{
 };
 use crate::tokenizer::Span;
 
+/// The keyword naming the object in a `CREATE`, `ALTER` or `DROP` role statement.
+///
+/// PostgreSQL accepts `GROUP` as an obsolete spelling of `ROLE`, and Amazon Redshift has user
+/// groups as objects distinct from roles. The keyword is preserved either way.
+///
+/// <https://www.postgresql.org/docs/current/sql-creategroup.html>
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum RoleKeyword {
+    /// `ROLE`, the general role object in both PostgreSQL and Redshift.
+    Role,
+    /// `GROUP`, an obsolete spelling of `ROLE` in PostgreSQL, and a user group
+    /// distinct from a role in Redshift.
+    Group,
+}
+
+impl fmt::Display for RoleKeyword {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            RoleKeyword::Role => "ROLE",
+            RoleKeyword::Group => "GROUP",
+        })
+    }
+}
+
 /// An option in `ROLE` statement.
 ///
 /// <https://www.postgresql.org/docs/current/sql-createrole.html>
@@ -309,6 +335,8 @@ impl fmt::Display for SecondaryRoles {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct CreateRole {
+    /// Whether the statement was spelled `CREATE ROLE` or `CREATE GROUP`.
+    pub keyword: RoleKeyword,
     /// Role names to create.
     pub names: Vec<ObjectName>,
     /// Whether `IF NOT EXISTS` was specified.
@@ -353,7 +381,8 @@ impl fmt::Display for CreateRole {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "CREATE ROLE {if_not_exists}{names}{superuser}{create_db}{create_role}{inherit}{login}{replication}{bypassrls}",
+            "CREATE {keyword} {if_not_exists}{names}{superuser}{create_db}{create_role}{inherit}{login}{replication}{bypassrls}",
+            keyword = self.keyword,
             if_not_exists = if self.if_not_exists { "IF NOT EXISTS " } else { "" },
             names = display_separated(&self.names, ", "),
             superuser = match self.superuser {

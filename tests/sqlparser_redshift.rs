@@ -560,18 +560,15 @@ fn test_interval_as_column_name() {
 
 #[test]
 fn parse_approximate_percentile_disc() {
-    let dialects = all_dialects_where(|d| d.supports_approximate_percentile_disc());
-    dialects.verified_stmt(
+    let supporting = all_dialects_where(|d| d.supports_approximate_percentile_disc());
+    supporting.verified_stmt(
         "SELECT APPROXIMATE PERCENTILE_DISC(0.5) WITHIN GROUP (ORDER BY totalprice)",
     );
-}
 
-#[test]
-fn parse_approximate_percentile_disc_as_column_alias() {
     // Without dialect support, `APPROXIMATE` is just a column name and
     // `PERCENTILE_DISC` its implicit alias.
-    let dialects = all_dialects_where(|d| !d.supports_approximate_percentile_disc());
-    dialects.one_statement_parses_to(
+    let non_supporting = all_dialects_where(|d| !d.supports_approximate_percentile_disc());
+    non_supporting.one_statement_parses_to(
         "SELECT APPROXIMATE PERCENTILE_DISC FROM t",
         "SELECT APPROXIMATE AS PERCENTILE_DISC FROM t",
     );

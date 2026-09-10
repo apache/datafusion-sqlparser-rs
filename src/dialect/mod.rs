@@ -599,6 +599,7 @@ pub trait Dialect: Debug + Any {
     }
 
     /// Does the dialect support the `APPROXIMATE PERCENTILE_DISC` function syntax?
+    /// See <https://docs.aws.amazon.com/redshift/latest/dg/r_APPROXIMATE_PERCENTILE_DISC.html>
     fn supports_approximate_percentile_disc(&self) -> bool {
         false
     }

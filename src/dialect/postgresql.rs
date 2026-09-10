@@ -29,11 +29,11 @@
 use log::debug;
 
 use crate::dialect::{Dialect, Precedence};
-use crate::keywords::Keyword;
+use crate::keywords::{self, Keyword};
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
 
-use super::keywords::{self, RESERVED_FOR_IDENTIFIER};
+use super::keywords::RESERVED_FOR_IDENTIFIER;
 
 /// Keywords in [`keywords::RESERVED_FOR_TABLE_ALIAS`] because of other dialects, yet are safe for aliasing in PostgreSQL.
 /// See <https://www.postgresql.org/docs/current/sql-keywords-appendix.html>.
@@ -53,6 +53,13 @@ const RESERVED_EXCLUSIONS_FOR_TABLE_ALIAS: &[Keyword] = &[
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PostgreSqlDialect {}
+
+/// Keywords that PostgreSQL additionally allows (on top of
+/// [keywords::RESERVED_FOR_COLUMN_ALIAS]) to be used as a bare (`AS`-less)
+/// column alias.
+/// See <https://www.postgresql.org/docs/current/sql-keywords-appendix.html>
+const ADDITIONALLY_ALLOWED_BARE_COLUMN_ALIASES: &[Keyword] =
+    &[Keyword::SELECT, Keyword::ANALYZE, Keyword::LATERAL];
 
 const PERIOD_PREC: u8 = 200;
 const DOUBLE_COLON_PREC: u8 = 140;
@@ -367,5 +374,13 @@ impl Dialect for PostgreSqlDialect {
     /// See <https://github.com/ossc-db/pg_hint_plan>
     fn supports_comment_optimizer_hint(&self) -> bool {
         true
+    }
+
+    /// Even reserved keywords can be used as a bare (`AS`-less) column alias in
+    /// PostgreSQL, unless they are in a small set of keywords that require `AS`.
+    /// See <https://www.postgresql.org/docs/current/sql-keywords-appendix.html>
+    fn is_column_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+        ADDITIONALLY_ALLOWED_BARE_COLUMN_ALIASES.contains(kw)
+            || !keywords::RESERVED_FOR_COLUMN_ALIAS.contains(kw)
     }
 }

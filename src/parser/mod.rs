@@ -1422,11 +1422,19 @@ impl<'a> Parser<'a> {
         // Parse an optional collation cast operator following `expr`.
         //
         // For example (MSSQL): t1.a COLLATE Latin1_General_CI_AS
-        if !self.in_column_definition_state() && self.parse_keyword(Keyword::COLLATE) {
-            expr = Expr::Collate {
-                expr: Box::new(expr),
-                collation: self.parse_object_name(false)?,
-            };
+        //
+        // `COLLATE` with no collation name following it is not a cast operator; it's a bare
+        // (`AS`-less) column alias, e.g. Postgres' `SELECT 1 collate`.
+        if !self.in_column_definition_state() && self.peek_keyword(Keyword::COLLATE) {
+            if let Some(collation) = self.maybe_parse(|parser| {
+                parser.expect_keyword(Keyword::COLLATE)?;
+                parser.parse_object_name(false)
+            })? {
+                expr = Expr::Collate {
+                    expr: Box::new(expr),
+                    collation,
+                };
+            }
         }
 
         debug!("prefix: {expr:?}");
@@ -1442,6 +1450,22 @@ impl<'a> Parser<'a> {
             // compound field access parsing.
             if Token::Period == self.peek_token_ref().token {
                 break;
+            }
+
+            // `AND`/`OR`/`COLLATE` with no right-hand expression following it is not a
+            // binary operator or collation cast; it's a bare (`AS`-less) column alias,
+            // e.g. Postgres' `SELECT 1 and` or `SELECT 1 collate`.
+            if let Token::Word(w) = &self.peek_token_ref().token {
+                let kw = w.keyword;
+                if matches!(kw, Keyword::AND | Keyword::OR | Keyword::COLLATE)
+                    && matches!(
+                        self.peek_nth_token_ref(1).token,
+                        Token::EOF | Token::Comma | Token::RParen | Token::SemiColon
+                    )
+                    && self.dialect.is_column_alias(&kw, self)
+                {
+                    break;
+                }
             }
 
             expr = self.parse_infix(expr, next_precedence)?;

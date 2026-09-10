@@ -76,7 +76,7 @@ pub use self::ddl::{
     CreateOperatorClass, CreateOperatorFamily, CreatePolicy, CreatePolicyCommand, CreatePolicyType,
     CreateTable, CreateTextSearch, CreateTrigger, CreateView, Deduplicate, DeferrableInitial,
     DistStyle, DropBehavior, DropExtension, DropFunction, DropOperator, DropOperatorClass,
-    DropOperatorFamily, DropOperatorSignature, DropPolicy, DropTrigger, ForValues,
+    DropOperatorFamily, DropOperatorSignature, DropPolicy, DropRule, DropTrigger, ForValues,
     FunctionReturnType, GeneratedAs, GeneratedExpressionMode, IdentityParameters, IdentityProperty,
     IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, IndexColumn,
     IndexOption, IndexType, KeyOrIndexDisplay, Msck, NullsDistinctOption, OperatorArgTypes,
@@ -4021,6 +4021,11 @@ pub enum Statement {
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-droppolicy.html)
     DropPolicy(DropPolicy),
     /// ```sql
+    /// DROP RULE
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-droprule.html)
+    DropRule(DropRule),
+    /// ```sql
     /// DROP CONNECTOR
     /// ```
     /// See [Hive](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362034#LanguageManualDDL-DropConnector)
@@ -5800,6 +5805,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::DropPolicy(policy) => write!(f, "{policy}"),
+            Statement::DropRule(rule) => write!(f, "{rule}"),
             Statement::DropConnector { if_exists, name } => {
                 write!(
                     f,

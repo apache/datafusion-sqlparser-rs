@@ -13113,12 +13113,14 @@ impl<'a> Parser<'a> {
                 Keyword::ENUM16 => Ok(DataType::Enum(self.parse_enum_values()?, Some(16))),
                 Keyword::SET => Ok(DataType::Set(self.parse_string_values()?)),
                 Keyword::ARRAY => {
-                    if self.dialect.supports_array_typedef_without_element_type() {
-                        Ok(DataType::Array(ArrayElemTypeDef::None))
-                    } else if dialect_of!(self is ClickHouseDialect) {
+                    if self.dialect.supports_array_typedef_with_parentheses()
+                        && self.peek_token_ref().token == Token::LParen
+                    {
                         Ok(self.parse_sub_type(|internal_type| {
                             DataType::Array(ArrayElemTypeDef::Parenthesis(internal_type))
                         })?)
+                    } else if self.dialect.supports_array_typedef_without_element_type() {
+                        Ok(DataType::Array(ArrayElemTypeDef::None))
                     } else {
                         self.expect_token(&Token::Lt)?;
                         let (inside_type, _trailing_bracket) = self.parse_data_type_helper()?;

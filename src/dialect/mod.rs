@@ -1089,6 +1089,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect supports the `ARRAY(element_type)` syntax.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE TABLE t (a ARRAY(VARCHAR));
+    /// ```
+    fn supports_array_typedef_with_parentheses(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports extra parentheses around
     /// lone table names or derived tables in the `FROM` clause.
     ///

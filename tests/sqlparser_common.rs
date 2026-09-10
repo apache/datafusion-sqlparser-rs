@@ -8528,12 +8528,23 @@ fn parse_trim() {
         expr_from_projection(only(&select.projection))
     );
 
+    dialects.one_statement_parses_to(
+        "SELECT TRIM(BOTH FROM 'yxTomxx', 'xyz')",
+        "SELECT TRIM(BOTH 'yxTomxx', 'xyz')",
+    );
+
     // dialects without comma-style TRIM syntax should fail
     let unsupported_dialects = all_dialects_where(|d| !d.supports_comma_separated_trim());
     assert_eq!(
         ParserError::ParserError("Expected: ), found: ,".to_owned()),
         unsupported_dialects
             .parse_sql_statements("SELECT TRIM('xyz', 'a')")
+            .unwrap_err()
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected: ), found: 'xyz'".to_owned()),
+        unsupported_dialects
+            .parse_sql_statements("SELECT TRIM(FROM 'xyz')")
             .unwrap_err()
     );
 }

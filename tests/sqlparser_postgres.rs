@@ -9918,3 +9918,8 @@ fn parse_non_reserved_keywords_as_table_alias() {
         ));
     }
 }
+
+#[test]
+fn parse_trim_from_without_characters() {
+    pg().one_statement_parses_to("SELECT TRIM(FROM ' x ')", "SELECT TRIM(' x ')");
+}

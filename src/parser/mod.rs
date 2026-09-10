@@ -17738,7 +17738,14 @@ impl<'a> Parser<'a> {
             Ok(JoinConstraint::On(constraint))
         } else if self.parse_keyword(Keyword::USING) {
             let columns = self.parse_parenthesized_qualified_column_list(Mandatory, false)?;
-            Ok(JoinConstraint::Using(columns))
+            if self.parse_keyword(Keyword::AS) {
+                Ok(JoinConstraint::UsingAlias(
+                    columns,
+                    self.parse_identifier()?,
+                ))
+            } else {
+                Ok(JoinConstraint::Using(columns))
+            }
         } else {
             Ok(JoinConstraint::None)
             //self.expected_ref("ON, or USING after JOIN", self.peek_token_ref())

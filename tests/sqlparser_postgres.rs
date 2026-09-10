@@ -9918,3 +9918,11 @@ fn parse_non_reserved_keywords_as_table_alias() {
         ));
     }
 }
+
+#[test]
+fn parse_join_using_alias() {
+    pg().one_statement_parses_to(
+        "SELECT * FROM t1 JOIN t2 USING (id) AS joined_cols",
+        "SELECT * FROM t1 JOIN t2 USING(id) AS joined_cols",
+    );
+}

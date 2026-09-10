@@ -347,7 +347,7 @@ impl Spanned for Statement {
                 target: _,
                 options: _,
                 legacy_options: _,
-                values: _,
+                payload: _,
             } => source.span(),
             Statement::CopyIntoSnowflake {
                 into: _,

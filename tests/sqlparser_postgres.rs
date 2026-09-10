@@ -10042,3 +10042,11 @@ fn parse_bitstring_literal_escaping() {
     pg_and_generic().verified_stmt("SELECT B''''");
     pg_and_generic().verified_stmt("SELECT B'it''s'");
 }
+
+#[test]
+fn parse_join_using_alias() {
+    pg().one_statement_parses_to(
+        "SELECT * FROM t1 JOIN t2 USING (id) AS joined_cols",
+        "SELECT * FROM t1 JOIN t2 USING(id) AS joined_cols",
+    );
+}

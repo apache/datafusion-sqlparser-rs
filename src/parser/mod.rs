@@ -10027,7 +10027,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse an optional table constraint (e.g. `PRIMARY KEY`, `UNIQUE`, `FOREIGN KEY`, `CHECK`).
+    /// Parse an optional table constraint (e.g. `PRIMARY KEY`, `UNIQUE`, `FOREIGN KEY`, `CHECK`, `ASSUME`).
     pub fn parse_optional_table_constraint(
         &mut self,
     ) -> Result<Option<TableConstraint>, ParserError> {
@@ -10173,9 +10173,16 @@ impl<'a> Parser<'a> {
                 ))
             }
             Token::Word(w) if w.keyword == Keyword::CHECK => {
-                self.expect_token(&Token::LParen)?;
+                let has_paren = if self.dialect.supports_unparenthesized_check_constraint() {
+                    self.consume_token(&Token::LParen)
+                } else {
+                    self.expect_token(&Token::LParen)?;
+                    true
+                };
                 let expr = Box::new(self.parse_expr()?);
-                self.expect_token(&Token::RParen)?;
+                if has_paren {
+                    self.expect_token(&Token::RParen)?;
+                }
                 let no_inherit = self.parse_keywords(&[Keyword::NO, Keyword::INHERIT]);
 
                 let enforced = if self.parse_keyword(Keyword::ENFORCED) {
@@ -10192,6 +10199,32 @@ impl<'a> Parser<'a> {
                         expr,
                         no_inherit,
                         enforced,
+                    }
+                    .into(),
+                ))
+            }
+            Token::Word(w)
+                if w.keyword == Keyword::ASSUME && self.dialect.supports_assume_constraint() =>
+            {
+                let Some(identifier) = name else {
+                    return self.expected(
+                        "CONSTRAINT <name> before ASSUME",
+                        TokenWithSpan {
+                            token: Token::make_keyword("ASSUME"),
+                            span: next_token.span,
+                        },
+                    );
+                };
+                let has_paren = self.consume_token(&Token::LParen);
+                let expr = Box::new(self.parse_expr()?);
+                if has_paren {
+                    self.expect_token(&Token::RParen)?;
+                }
+
+                Ok(Some(
+                    AssumeConstraint {
+                        name: identifier,
+                        expr,
                     }
                     .into(),
                 ))

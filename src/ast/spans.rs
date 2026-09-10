@@ -656,6 +656,7 @@ impl Spanned for TableConstraint {
             TableConstraint::PrimaryKey(constraint) => constraint.span(),
             TableConstraint::ForeignKey(constraint) => constraint.span(),
             TableConstraint::Check(constraint) => constraint.span(),
+            TableConstraint::Assume(constraint) => constraint.span(),
             TableConstraint::Index(constraint) => constraint.span(),
             TableConstraint::FulltextOrSpatial(constraint) => constraint.span(),
             TableConstraint::PrimaryKeyUsingIndex(constraint)

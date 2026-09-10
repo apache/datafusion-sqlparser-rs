@@ -535,3 +535,149 @@ impl From<Revoke> for crate::ast::Statement {
         crate::ast::Statement::Revoke(v)
     }
 }
+
+/// `ALTER DEFAULT PRIVILEGES`, which applies to objects created later rather
+/// than to existing ones.
+///
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterdefaultprivileges.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterDefaultPrivileges {
+    /// `FOR ROLE <role> [, ...]`, empty when the clause is absent.
+    pub for_roles: Vec<Ident>,
+    /// `IN SCHEMA <schema> [, ...]`, empty when the clause is absent.
+    pub in_schemas: Vec<ObjectName>,
+    /// The abbreviated `GRANT` or `REVOKE` that follows.
+    pub operation: AlterDefaultPrivilegesOperation,
+}
+
+impl fmt::Display for AlterDefaultPrivileges {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("ALTER DEFAULT PRIVILEGES")?;
+        if !self.for_roles.is_empty() {
+            write!(f, " FOR ROLE {}", display_comma_separated(&self.for_roles))?;
+        }
+        if !self.in_schemas.is_empty() {
+            write!(
+                f,
+                " IN SCHEMA {}",
+                display_comma_separated(&self.in_schemas)
+            )?;
+        }
+        write!(f, " {}", self.operation)
+    }
+}
+
+impl From<AlterDefaultPrivileges> for crate::ast::Statement {
+    fn from(v: AlterDefaultPrivileges) -> Self {
+        crate::ast::Statement::AlterDefaultPrivileges(v)
+    }
+}
+
+/// The abbreviated `GRANT` or `REVOKE` of an [`AlterDefaultPrivileges`], naming
+/// an object type rather than named objects and so unable to reuse [`Grant`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterDefaultPrivilegesOperation {
+    /// `GRANT <privileges> ON <object_type> TO <grantees> [WITH GRANT OPTION]`
+    Grant {
+        /// The privileges being granted.
+        privileges: Privileges,
+        /// The kind of future object the privileges apply to.
+        object_type: DefaultPrivilegesObjectType,
+        /// The roles receiving the privileges.
+        grantees: Vec<Grantee>,
+        /// Whether `WITH GRANT OPTION` is present.
+        with_grant_option: bool,
+    },
+    /// `REVOKE [GRANT OPTION FOR] <privileges> ON <object_type> FROM <grantees> [CASCADE | RESTRICT]`
+    Revoke {
+        /// Whether `GRANT OPTION FOR` is present.
+        grant_option_for: bool,
+        /// The privileges being revoked.
+        privileges: Privileges,
+        /// The kind of future object the privileges apply to.
+        object_type: DefaultPrivilegesObjectType,
+        /// The roles losing the privileges.
+        grantees: Vec<Grantee>,
+        /// Optional `CASCADE`/`RESTRICT` behaviour.
+        cascade: Option<CascadeOption>,
+    },
+}
+
+impl fmt::Display for AlterDefaultPrivilegesOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterDefaultPrivilegesOperation::Grant {
+                privileges,
+                object_type,
+                grantees,
+                with_grant_option,
+            } => {
+                write!(
+                    f,
+                    "GRANT {privileges} ON {object_type} TO {}",
+                    display_comma_separated(grantees)
+                )?;
+                if *with_grant_option {
+                    f.write_str(" WITH GRANT OPTION")?;
+                }
+            }
+            AlterDefaultPrivilegesOperation::Revoke {
+                grant_option_for,
+                privileges,
+                object_type,
+                grantees,
+                cascade,
+            } => {
+                f.write_str("REVOKE ")?;
+                if *grant_option_for {
+                    f.write_str("GRANT OPTION FOR ")?;
+                }
+                write!(
+                    f,
+                    "{privileges} ON {object_type} FROM {}",
+                    display_comma_separated(grantees)
+                )?;
+                if let Some(cascade) = cascade {
+                    write!(f, " {cascade}")?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+/// The kind of future object an [`AlterDefaultPrivileges`] applies to.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DefaultPrivilegesObjectType {
+    /// `TABLES`, which also covers views and foreign tables.
+    Tables,
+    /// `SEQUENCES`
+    Sequences,
+    /// `FUNCTIONS`
+    Functions,
+    /// `ROUTINES`, a synonym of `FUNCTIONS`.
+    Routines,
+    /// `TYPES`
+    Types,
+    /// `SCHEMAS`
+    Schemas,
+}
+
+impl fmt::Display for DefaultPrivilegesObjectType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            DefaultPrivilegesObjectType::Tables => "TABLES",
+            DefaultPrivilegesObjectType::Sequences => "SEQUENCES",
+            DefaultPrivilegesObjectType::Functions => "FUNCTIONS",
+            DefaultPrivilegesObjectType::Routines => "ROUTINES",
+            DefaultPrivilegesObjectType::Types => "TYPES",
+            DefaultPrivilegesObjectType::Schemas => "SCHEMAS",
+        })
+    }
+}

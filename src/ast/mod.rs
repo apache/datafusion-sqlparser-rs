@@ -58,7 +58,8 @@ pub use self::data_type::{
     ExactNumberInfo, IntervalFields, MapBracketKind, StructBracketKind, TimezoneInfo,
 };
 pub use self::dcl::{
-    AlterRoleOperation, CreateRole, Grant, ResetConfig, Revoke, RoleOption, SecondaryRoles,
+    AlterDefaultPrivileges, AlterDefaultPrivilegesOperation, AlterRoleOperation, CreateRole,
+    DefaultPrivilegesObjectType, Grant, ResetConfig, Revoke, RoleOption, SecondaryRoles,
     SetConfigValue, Use,
 };
 pub use self::ddl::{
@@ -4590,6 +4591,10 @@ pub enum Statement {
     /// ```
     Revoke(Revoke),
     /// ```sql
+    /// ALTER DEFAULT PRIVILEGES
+    /// ```
+    AlterDefaultPrivileges(AlterDefaultPrivileges),
+    /// ```sql
     /// DEALLOCATE [ PREPARE ] { name | ALL }
     /// ```
     ///
@@ -6093,6 +6098,7 @@ impl fmt::Display for Statement {
             Statement::Grant(grant) => write!(f, "{grant}"),
             Statement::Deny(s) => write!(f, "{s}"),
             Statement::Revoke(revoke) => write!(f, "{revoke}"),
+            Statement::AlterDefaultPrivileges(stmt) => write!(f, "{stmt}"),
             Statement::Deallocate { name, prepare } => write!(
                 f,
                 "DEALLOCATE {prepare}{name}",

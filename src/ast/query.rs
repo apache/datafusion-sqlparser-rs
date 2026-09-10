@@ -2231,7 +2231,7 @@ impl fmt::Display for TableFactor {
                     json_path.fmt(f)?;
                 }
                 if !partitions.is_empty() {
-                    write!(f, "PARTITION ({})", display_comma_separated(partitions))?;
+                    write!(f, " PARTITION ({})", display_comma_separated(partitions))?;
                 }
                 if let Some(args) = args {
                     write!(f, "(")?;

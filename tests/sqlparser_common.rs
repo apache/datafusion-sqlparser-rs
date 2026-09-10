@@ -8354,38 +8354,52 @@ fn parse_values() {
 
 #[test]
 fn parse_multiple_statements() {
-    fn test_with(sql1: &str, sql2_kw: &str, sql2_rest: &str) {
+    fn test_with(dialects: &TestedDialects, sql1: &str, sql2_kw: &str, sql2_rest: &str) {
         // Check that a string consisting of two statements delimited by a semicolon
         // parses the same as both statements individually:
-        let res = parse_sql_statements(&(sql1.to_owned() + ";" + sql2_kw + sql2_rest));
+        let res = dialects.parse_sql_statements(&(sql1.to_owned() + ";" + sql2_kw + sql2_rest));
         assert_eq!(
             vec![
-                one_statement_parses_to(sql1, ""),
-                one_statement_parses_to(&(sql2_kw.to_owned() + sql2_rest), ""),
+                dialects.one_statement_parses_to(sql1, ""),
+                dialects.one_statement_parses_to(&(sql2_kw.to_owned() + sql2_rest), ""),
             ],
             res.unwrap()
         );
         // Check that extra semicolon at the end is stripped by normalization:
-        one_statement_parses_to(&(sql1.to_owned() + ";"), sql1);
+        dialects.one_statement_parses_to(&(sql1.to_owned() + ";"), sql1);
         // Check that forgetting the semicolon results in an error:
-        let res = parse_sql_statements(&(sql1.to_owned() + " " + sql2_kw + sql2_rest));
+        let res = dialects.parse_sql_statements(&(sql1.to_owned() + " " + sql2_kw + sql2_rest));
         assert_eq!(
             ParserError::ParserError("Expected: end of statement, found: ".to_string() + sql2_kw),
             res.unwrap_err()
         );
     }
-    test_with("SELECT foo", "SELECT", " bar");
+    // PostgreSQL allows a bare `SELECT` to be used as a column alias, so unlike
+    // the other dialects, omitting the semicolon here does not result in an
+    // error there.
+    test_with(&all_dialects_but_pg(), "SELECT foo", "SELECT", " bar");
     // ensure that SELECT/WITH is not parsed as a table or column alias if ';'
     // separating the statements is omitted:
-    test_with("SELECT foo FROM baz", "SELECT", " bar");
-    test_with("SELECT foo", "WITH", " cte AS (SELECT 1 AS s) SELECT bar");
+    test_with(&all_dialects(), "SELECT foo FROM baz", "SELECT", " bar");
     test_with(
+        &all_dialects(),
+        "SELECT foo",
+        "WITH",
+        " cte AS (SELECT 1 AS s) SELECT bar",
+    );
+    test_with(
+        &all_dialects(),
         "SELECT foo FROM baz",
         "WITH",
         " cte AS (SELECT 1 AS s) SELECT bar",
     );
-    test_with("DELETE FROM foo", "SELECT", " bar");
-    test_with("INSERT INTO foo VALUES (1)", "SELECT", " bar");
+    test_with(&all_dialects(), "DELETE FROM foo", "SELECT", " bar");
+    test_with(
+        &all_dialects(),
+        "INSERT INTO foo VALUES (1)",
+        "SELECT",
+        " bar",
+    );
     // Since MySQL supports the `CREATE TABLE SELECT` syntax, this needs to be handled separately
     let res = parse_sql_statements("CREATE TABLE foo (baz INT); SELECT bar");
     assert_eq!(

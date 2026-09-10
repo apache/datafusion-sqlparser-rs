@@ -128,6 +128,11 @@ impl Dialect for RedshiftSqlDialect {
         true
     }
 
+    /// See <https://docs.aws.amazon.com/redshift/latest/dg/r_APPROXIMATE_PERCENTILE_DISC.html>
+    fn supports_approximate_percentile_disc(&self) -> bool {
+        true
+    }
+
     fn supports_geometric_types(&self) -> bool {
         true
     }

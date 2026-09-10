@@ -240,7 +240,7 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
-    /// See [doc](https://docs.snowflake.com/en/sql-reference/data-types-structured#structured-object-types)
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/data-types-structured#specifying-a-structured-object-type)
     fn supports_structured_object_type(&self) -> bool {
         true
     }

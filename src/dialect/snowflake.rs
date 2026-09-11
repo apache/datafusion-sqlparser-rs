@@ -29,12 +29,13 @@ use crate::ast::helpers::stmt_data_loading::{
 use crate::ast::{
     AlterTable, AlterTableOperation, AlterTableType, CatalogSyncNamespaceMode, ColumnOption,
     ColumnPolicy, ColumnPolicyProperty, ContactEntry, CopyIntoSnowflakeKind, CreateTable,
-    CreateTableLikeKind, DollarQuotedString, Ident, IdentityParameters, IdentityProperty,
-    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, InitializeKind,
-    Insert, MultiTableInsertIntoClause, MultiTableInsertType, MultiTableInsertValue,
-    MultiTableInsertValues, MultiTableInsertWhenClause, ObjectName, ObjectNamePart,
-    RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement, StorageLifecyclePolicy,
-    StorageSerializationPolicy, TableObject, TagsColumnOption, Value, WrappedCollection,
+    CreateTableLikeKind, DescribeAlias, DescribeExternalVolume, DollarQuotedString, Ident,
+    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
+    IdentityPropertyOrder, InitializeKind, Insert, MultiTableInsertIntoClause,
+    MultiTableInsertType, MultiTableInsertValue, MultiTableInsertValues,
+    MultiTableInsertWhenClause, ObjectName, ObjectNamePart, RefreshModeKind, RowAccessPolicy,
+    ShowObjects, SqlOption, Statement, StorageLifecyclePolicy, StorageSerializationPolicy,
+    TableObject, TagsColumnOption, Value, WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
@@ -284,6 +285,20 @@ impl Dialect for SnowflakeDialect {
                 _ => return Some(parser.expected_ref("SET or UNSET", parser.peek_token_ref())),
             };
             return Some(parse_alter_session(parser, set));
+        }
+
+        if let Some(kw) = parser.parse_one_of_keywords(&[Keyword::DESC, Keyword::DESCRIBE]) {
+            if parser.parse_keywords(&[Keyword::EXTERNAL, Keyword::VOLUME]) {
+                // DESC[RIBE] EXTERNAL VOLUME
+                let describe_alias = if kw == Keyword::DESC {
+                    DescribeAlias::Desc
+                } else {
+                    DescribeAlias::Describe
+                };
+                return Some(parse_describe_external_volume(describe_alias, parser));
+            }
+            // not EXTERNAL VOLUME — put back DESC/DESCRIBE
+            parser.prev_token();
         }
 
         if parser.parse_keyword(Keyword::CREATE) {
@@ -1987,4 +2002,17 @@ fn parse_multi_table_insert_when_clauses(
     }
 
     Ok((when_clauses, else_clause))
+}
+
+/// Parse `DESC[RIBE] EXTERNAL VOLUME <name>`
+fn parse_describe_external_volume(
+    describe_alias: DescribeAlias,
+    parser: &mut Parser,
+) -> Result<Statement, ParserError> {
+    let name = parser.parse_object_name(false)?;
+    Ok(DescribeExternalVolume {
+        describe_alias,
+        name,
+    }
+    .into())
 }

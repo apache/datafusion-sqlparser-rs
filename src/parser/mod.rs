@@ -3031,6 +3031,9 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse `SUBSTRING`/`SUBSTR` expressions: `SUBSTRING(expr FROM start FOR length)` or `SUBSTR(expr, start, length)`.
+    /// Also supports the Postgres `SUBSTRING(expr SIMILAR pattern ESCAPE escape)` syntax and the
+    /// reversed `SUBSTRING(expr FOR length FROM start)` argument order.
+    /// See <https://www.postgresql.org/docs/current/functions-string.html>.
     pub fn parse_substring(&mut self) -> Result<Expr, ParserError> {
         let shorthand = match self.expect_one_of_keywords(&[Keyword::SUBSTR, Keyword::SUBSTRING])? {
             Keyword::SUBSTR => true,
@@ -3041,7 +3044,25 @@ impl<'a> Parser<'a> {
             }
         };
         self.expect_token(&Token::LParen)?;
-        let expr = self.parse_expr()?;
+        // Parse at `LIKE` precedence so a bare `SIMILAR` isn't swallowed as the start of a
+        // `SIMILAR TO` operator, allowing it to be recognized as the substring syntax below.
+        let expr = self.parse_subexpr(self.dialect.prec_value(Precedence::Like))?;
+
+        if self.parse_keyword(Keyword::SIMILAR) {
+            let from_expr = self.parse_expr()?;
+            self.expect_keyword_is(Keyword::ESCAPE)?;
+            let to_expr = self.parse_expr()?;
+            self.expect_token(&Token::RParen)?;
+            return Ok(Expr::Substring {
+                expr: Box::new(expr),
+                substring_from: Some(Box::new(from_expr)),
+                substring_for: Some(Box::new(to_expr)),
+                special: false,
+                shorthand,
+                similar: true,
+            });
+        }
+
         let mut from_expr = None;
         let special = self.consume_token(&Token::Comma);
         if special || self.parse_keyword(Keyword::FROM) {
@@ -3051,6 +3072,10 @@ impl<'a> Parser<'a> {
         let mut to_expr = None;
         if self.parse_keyword(Keyword::FOR) || self.consume_token(&Token::Comma) {
             to_expr = Some(self.parse_expr()?);
+            // Postgres also allows `FOR <count> FROM <start>`, i.e. the reverse order.
+            if from_expr.is_none() && !special && self.parse_keyword(Keyword::FROM) {
+                from_expr = Some(self.parse_expr()?);
+            }
         }
         self.expect_token(&Token::RParen)?;
 
@@ -3060,6 +3085,7 @@ impl<'a> Parser<'a> {
             substring_for: to_expr.map(Box::new),
             special,
             shorthand,
+            similar: false,
         })
     }
 

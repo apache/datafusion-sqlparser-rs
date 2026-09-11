@@ -45,9 +45,9 @@ use super::{
     PartitionBoundValue, PivotValueSource, ProjectionSelect, Query, RaiseStatement,
     RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
     ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
-    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
-    TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Values, ViewColumnDef,
-    WhileStatement, WildcardAdditionalOptions, With, WithFill,
+    SummarizeTarget, SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint,
+    TableFactor, TableObject, TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind,
+    Use, Values, ViewColumnDef, WhileStatement, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -233,6 +233,8 @@ impl Spanned for SetExpr {
             SetExpr::Update(statement) => statement.span(),
             SetExpr::Delete(statement) => statement.span(),
             SetExpr::Merge(statement) => statement.span(),
+            SetExpr::Summarize(SummarizeTarget::Table { name }) => name.span(),
+            SetExpr::Summarize(SummarizeTarget::Query(query)) => query.span(),
         }
     }
 }

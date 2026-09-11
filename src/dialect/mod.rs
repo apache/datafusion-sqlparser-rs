@@ -703,6 +703,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Return true if the dialect supports DuckDB-style `SUMMARIZE` queries.
+    fn supports_summarize(&self) -> bool {
+        false
+    }
+
     /// Return true if the dialect supports "FROM-first" inserts.
     ///
     /// Example:

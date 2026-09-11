@@ -2304,6 +2304,12 @@ impl Spanned for JoinConstraint {
         match self {
             JoinConstraint::On(expr) => expr.span(),
             JoinConstraint::Using(vec) => union_spans(vec.iter().map(|i| i.span())),
+            JoinConstraint::UsingAlias(columns, alias) => union_spans(
+                columns
+                    .iter()
+                    .map(|i| i.span())
+                    .chain(iter::once(alias.span)),
+            ),
             JoinConstraint::Natural => Span::empty(),
             JoinConstraint::None => Span::empty(),
         }

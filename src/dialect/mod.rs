@@ -31,6 +31,7 @@ mod snowflake;
 mod spark;
 mod sqlite;
 mod teradata;
+mod trino;
 
 use core::any::{Any, TypeId};
 use core::fmt::Debug;
@@ -56,6 +57,7 @@ pub use self::snowflake::SnowflakeDialect;
 pub use self::spark::SparkSqlDialect;
 pub use self::sqlite::SQLiteDialect;
 pub use self::teradata::TeradataDialect;
+pub use self::trino::TrinoDialect;
 
 /// Macro for streamlining the creation of derived `Dialect` objects.
 /// The generated struct includes `new()` and `default()` constructors.
@@ -1418,6 +1420,17 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect spells table versions with a leading
+    /// `FOR`: `FOR TIMESTAMP AS OF <expr>` and `FOR VERSION AS OF <expr>`,
+    /// as Trino does for Iceberg and Delta time travel.
+    ///
+    /// Only consulted when [`Self::supports_table_versioning`] is true.
+    ///
+    /// See <https://trino.io/docs/current/connector/iceberg.html#time-travel-queries>
+    fn supports_for_table_version(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports the E'...' syntax for string literals
     ///
     /// Postgres: <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-ESCAPE>
@@ -1933,6 +1946,7 @@ pub fn dialect_from_str(dialect_name: impl AsRef<str>) -> Option<Box<dyn Dialect
         "spark" | "sparksql" => Some(Box::new(SparkSqlDialect {})),
         "oracle" => Some(Box::new(OracleDialect {})),
         "teradata" => Some(Box::new(TeradataDialect {})),
+        "trino" => Some(Box::new(TrinoDialect {})),
         _ => None,
     }
 }
@@ -1987,6 +2001,7 @@ mod tests {
         assert!(parse_dialect("DataBricks").is::<DatabricksDialect>());
         assert!(parse_dialect("databricks").is::<DatabricksDialect>());
         assert!(parse_dialect("teradata").is::<TeradataDialect>());
+        assert!(parse_dialect("trino").is::<TrinoDialect>());
         assert!(parse_dialect("Teradata").is::<TeradataDialect>());
 
         // error cases

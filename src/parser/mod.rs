@@ -1965,8 +1965,7 @@ impl<'a> Parser<'a> {
                     ),
                 })
             }
-            Token::EscapedStringLiteral(_) if dialect_is!(dialect is PostgreSqlDialect | GenericDialect) =>
-            {
+            Token::EscapedStringLiteral(_) if self.dialect.supports_string_escape_constant() => {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
             }
@@ -12669,7 +12668,7 @@ impl<'a> Parser<'a> {
             }) => Ok(value),
             Token::SingleQuotedString(s) => Ok(s),
             Token::DoubleQuotedString(s) => Ok(s),
-            Token::EscapedStringLiteral(s) if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
+            Token::EscapedStringLiteral(s) if self.dialect.supports_string_escape_constant() => {
                 Ok(s)
             }
             Token::UnicodeStringLiteral(s) => Ok(s),

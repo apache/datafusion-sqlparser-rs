@@ -1,0 +1,51 @@
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+#![warn(clippy::all)]
+//! Test SQL syntax specific to Apache Doris.
+
+#[macro_use]
+mod test_utils;
+
+use sqlparser::dialect::DorisDialect;
+use test_utils::*;
+
+fn doris() -> TestedDialects {
+    TestedDialects::new(vec![Box::new(DorisDialect {})])
+}
+
+#[test]
+fn parse_doris_strings_and_identifiers() {
+    doris().verified_only_select(
+        r#"SELECT "double quoted string", 'single quoted string', `select` FROM `db`.`table`"#,
+    );
+}
+
+#[test]
+fn parse_doris_limit_comma() {
+    doris().verified_only_select("SELECT * FROM t LIMIT 5, 10");
+}
+
+#[test]
+fn parse_doris_div_infix() {
+    doris().verified_only_select("SELECT 5 DIV 2");
+}
+
+#[test]
+fn parse_doris_group_by_with_rollup() {
+    doris().verified_only_select("SELECT * FROM t GROUP BY col1, col2 WITH ROLLUP");
+}

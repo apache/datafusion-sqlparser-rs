@@ -488,6 +488,7 @@ impl Spanned for Statement {
             Statement::CreatePolicy { .. } => Span::empty(),
             Statement::AlterPolicy { .. } => Span::empty(),
             Statement::AlterConnector { .. } => Span::empty(),
+            Statement::Pipe { statements } => union_spans(statements.iter().map(|s| s.span())),
             Statement::DropPolicy { .. } => Span::empty(),
             Statement::DropConnector { .. } => Span::empty(),
             Statement::ShowCatalogs { .. } => Span::empty(),
@@ -2108,6 +2109,7 @@ impl Spanned for TableFactor {
                     .chain(where_clause.as_ref().map(|e| e.span()))
                     .chain(alias.as_ref().map(|a| a.span())),
             ),
+            TableFactor::PipeResultScan { .. } => Span::empty(),
             TableFactor::OpenJsonTable { .. } => Span::empty(),
         }
     }

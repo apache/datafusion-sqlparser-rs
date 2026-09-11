@@ -445,6 +445,8 @@ impl Dialect for SnowflakeDialect {
         // Snowflake supports the `:` cast operator unlike other dialects
         match &token.token {
             Token::Colon => Some(Ok(self.prec_value(Precedence::DoubleColon))),
+            // ->> is the Snowflake pipe operator (statement-level), not a binary expression operator
+            Token::LongArrow => Some(Ok(self.prec_unknown())),
             _ => None,
         }
     }
@@ -689,6 +691,10 @@ impl Dialect for SnowflakeDialect {
 
     /// See <https://docs.snowflake.com/en/user-guide/querying-semistructured#label-higher-order-functions>
     fn supports_lambda_functions(&self) -> bool {
+        true
+    }
+
+    fn supports_long_arrow_pipe_operator(&self) -> bool {
         true
     }
 
@@ -1074,6 +1080,11 @@ pub fn parse_create_table(
                 parser.prev_token();
                 break;
             }
+            Token::LongArrow => {
+                // Snowflake pipe operator terminates the statement
+                parser.prev_token();
+                break;
+            }
             _ => {
                 return parser.expected("end of statement", next_token);
             }
@@ -1199,6 +1210,11 @@ pub fn parse_create_database(
                 _ => return parser.expected("end of statement", next_token),
             },
             Token::SemiColon | Token::EOF => break,
+            Token::LongArrow => {
+                // Snowflake pipe operator terminates the statement
+                parser.prev_token();
+                break;
+            }
             _ => return parser.expected("end of statement", next_token),
         }
     }

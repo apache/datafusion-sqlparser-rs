@@ -1722,6 +1722,14 @@ pub enum TableFactor {
         /// The alias for the table.
         alias: Option<TableAlias>,
     },
+    /// Snowflake pipe result reference: `$1`, `$2`, etc.
+    ///
+    /// Used in FROM clauses of pipe-chained statements to reference previous results.
+    /// See <https://docs.snowflake.com/en/sql-reference/operators-flow>
+    PipeResultScan {
+        /// 1-based index of the previous statement whose result is referenced.
+        index: u64,
+    },
     /// Snowflake's SEMANTIC_VIEW function for semantic models.
     ///
     /// <https://docs.snowflake.com/en/sql-reference/constructs/semantic_view>
@@ -2506,6 +2514,9 @@ impl fmt::Display for TableFactor {
                     write!(f, " {alias}")?;
                 }
                 Ok(())
+            }
+            TableFactor::PipeResultScan { index } => {
+                write!(f, "${index}")
             }
             TableFactor::SemanticView {
                 name,

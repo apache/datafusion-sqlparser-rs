@@ -29,6 +29,7 @@ include = [
     "src/**/*.rs",
     "Cargo.toml",
     "LICENSE.TXT",
+    "NOTICE.TXT",
 ]
 edition = "2021"
 

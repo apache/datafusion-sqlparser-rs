@@ -4914,7 +4914,7 @@ fn test_select_dollar_column_from_stage() {
 }
 #[test]
 fn test_structured_object_type() {
-    snowflake().verified_stmt(
+    snowflake_and_generic().verified_stmt(
         "SELECT payload::OBJECT(address OBJECT(city VARCHAR NOT NULL), zip NUMBER) FROM t",
     );
 
@@ -4934,11 +4934,8 @@ fn test_structured_object_type() {
     assert_eq!(fields[1].options.len(), 1);
     assert_eq!(fields[1].options[0].option, ColumnOption::NotNull);
 
-    snowflake().verified_stmt("CREATE TABLE t (o OBJECT)");
-}
+    snowflake_and_generic().verified_stmt("CREATE TABLE t (o OBJECT)");
 
-#[test]
-fn test_structured_object_type_errors() {
     for sql in [
         "CREATE TABLE t (o OBJECT(VARCHAR))",
         "CREATE TABLE t (o OBJECT(city VARCHAR NULL))",

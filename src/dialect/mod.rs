@@ -1083,16 +1083,6 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if this dialect supports structured `OBJECT` types.
-    ///
-    /// Example:
-    /// ```sql
-    /// CREATE TABLE t (o OBJECT(city VARCHAR, zip NUMBER NOT NULL));
-    /// ```
-    fn supports_structured_object_type(&self) -> bool {
-        false
-    }
-
     /// Returns true if this dialect supports extra parentheses around
     /// lone table names or derived tables in the `FROM` clause.
     ///

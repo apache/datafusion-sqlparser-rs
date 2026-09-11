@@ -13116,10 +13116,7 @@ impl<'a> Parser<'a> {
                         ))))
                     }
                 }
-                Keyword::OBJECT
-                    if self.dialect.supports_structured_object_type()
-                        && self.peek_token_ref().token == Token::LParen =>
-                {
+                Keyword::OBJECT if self.peek_token_ref().token == Token::LParen => {
                     Ok(DataType::Object(self.parse_structured_object_type_def()?))
                 }
                 Keyword::STRUCT if dialect_is!(dialect is DuckDbDialect) => {

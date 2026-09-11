@@ -196,6 +196,36 @@ where
     DisplaySeparated { slice, sep: ", " }
 }
 
+/// Returns true when the prefix operator `op` written directly before `operand`
+/// would be tokenized as a single operator rather than as two.
+fn lexes_as_one_operator(op: &UnaryOperator, operand: &Expr) -> bool {
+    let Expr::UnaryOp { op: leading, .. } = operand else {
+        return false;
+    };
+    match op {
+        UnaryOperator::Minus
+        | UnaryOperator::BitwiseNot
+        | UnaryOperator::PGSquareRoot
+        | UnaryOperator::PGCubeRoot => !matches!(
+            leading,
+            UnaryOperator::Not | UnaryOperator::PGPostfixFactorial
+        ),
+        UnaryOperator::BangNot => {
+            matches!(leading, UnaryOperator::BangNot | UnaryOperator::BitwiseNot)
+        }
+        UnaryOperator::PGAbs => matches!(
+            leading,
+            UnaryOperator::AtDashAt
+                | UnaryOperator::DoubleAt
+                | UnaryOperator::Minus
+                | UnaryOperator::PGAbs
+                | UnaryOperator::QuestionDash
+                | UnaryOperator::QuestionPipe
+        ),
+        _ => false,
+    }
+}
+
 /// Writes the given statements to the formatter, each ending with
 /// a semicolon and space separated.
 fn format_statement_list(f: &mut fmt::Formatter, statements: &[Statement]) -> fmt::Result {
@@ -1966,7 +1996,8 @@ impl fmt::Display for Expr {
                         | UnaryOperator::DoubleAt
                         | UnaryOperator::QuestionDash
                         | UnaryOperator::QuestionPipe
-                ) {
+                ) || lexes_as_one_operator(op, expr)
+                {
                     write!(f, "{op} {expr}")
                 } else {
                     write!(f, "{op}{expr}")

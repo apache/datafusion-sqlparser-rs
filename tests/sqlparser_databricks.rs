@@ -749,3 +749,45 @@ fn parse_databricks_query_entry_points() {
     databricks()
         .verified_stmt("CREATE VIEW filtered AS FROM main.raw.source |> WHERE id > 0 |> SELECT id");
 }
+
+#[test]
+fn parse_materialized_view_typed_columns() {
+    databricks().one_statement_parses_to(
+        "CREATE MATERIALIZED VIEW v (id BIGINT COMMENT 'identifier', payload MAP<STRING COLLATE UTF8_BINARY, STRING COLLATE UTF8_BINARY>) COMMENT 'view comment' TBLPROPERTIES ('delta.feature.variantType-preview' = 'supported') AS SELECT 1, map()",
+        "CREATE MATERIALIZED VIEW v (id BIGINT COMMENT 'identifier', payload MAP<STRING COLLATE UTF8_BINARY, STRING COLLATE UTF8_BINARY>) COMMENT = 'view comment' TBLPROPERTIES ('delta.feature.variantType-preview' = 'supported') AS SELECT 1, map()",
+    );
+    databricks().one_statement_parses_to(
+        r#"CREATE MATERIALIZED VIEW v (id STRING COMMENT 'value is \'1\'') AS SELECT '1'"#,
+        "CREATE MATERIALIZED VIEW v (id STRING COMMENT 'value is ''1''') AS SELECT '1'",
+    );
+
+    databricks().verified_stmt(
+        "CREATE MATERIALIZED VIEW v (id STRING COLLATE UTF8_LCASE, values ARRAY<STRING COLLATE UTF8_BINARY>) AS SELECT 'id', array()",
+    );
+    databricks().verified_stmt("CREATE TABLE t (name STRING COLLATE UTF8_BINARY)");
+}
+
+#[test]
+fn parse_databricks_refreshable_views() {
+    databricks().verified_stmt(
+        "CREATE OR REFRESH MATERIALIZED VIEW main.models.rollup AS SELECT id FROM main.raw.source",
+    );
+    databricks().verified_stmt("CREATE VIEW copy AS TABLE main.raw.source");
+
+    for sql in [
+        "CREATE VIEW t WITH SCHEMA BINDING AS SELECT id FROM source",
+        "CREATE VIEW t WITH SCHEMA COMPENSATION AS SELECT id FROM source",
+        "CREATE VIEW t WITH SCHEMA EVOLUTION AS SELECT id FROM source",
+    ] {
+        databricks().verified_stmt(sql);
+    }
+
+    databricks().one_statement_parses_to(
+        "CREATE VIEW t COMMENT 'view' TBLPROPERTIES ('quality' = 'gold') WITH SCHEMA BINDING AS SELECT id FROM source",
+        "CREATE VIEW t COMMENT = 'view' TBLPROPERTIES ('quality' = 'gold') WITH SCHEMA BINDING AS SELECT id FROM source",
+    );
+
+    assert!(databricks()
+        .parse_sql_statements("CREATE OR REFRESH VIEW t AS SELECT 1")
+        .is_err());
+}

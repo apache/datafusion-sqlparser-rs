@@ -114,11 +114,43 @@ impl Dialect for DatabricksDialect {
         true
     }
 
+    fn supports_typed_view_columns(&self) -> bool {
+        true
+    }
+
+    fn supports_create_view_comment_without_equals(&self) -> bool {
+        true
+    }
+
+    fn supports_create_view_comment_syntax(&self) -> bool {
+        true
+    }
+
+    fn supports_data_type_collation(&self) -> bool {
+        true
+    }
+
     fn supports_map_literal_with_angle_brackets(&self) -> bool {
         true
     }
 
     fn supports_string_literal_backslash_escape(&self) -> bool {
+        true
+    }
+
+    fn supports_create_view_table_properties(&self) -> bool {
+        true
+    }
+
+    fn supports_create_or_refresh(&self) -> bool {
+        true
+    }
+
+    fn supports_multipart_table_query_name(&self) -> bool {
+        true
+    }
+
+    fn supports_create_view_schema_mode(&self) -> bool {
         true
     }
 

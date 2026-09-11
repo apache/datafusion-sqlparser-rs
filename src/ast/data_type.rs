@@ -413,6 +413,8 @@ pub enum DataType {
     LongText,
     /// String with optional length.
     String(Option<u64>),
+    /// A data type with an explicit collation, as supported by Databricks.
+    Collate(Box<DataType>, ObjectName),
     /// A fixed-length string e.g [ClickHouse][1].
     ///
     /// [1]: https://clickhouse.com/docs/en/sql-reference/data-types/fixedstring
@@ -708,6 +710,9 @@ impl fmt::Display for DataType {
             DataType::MediumText => write!(f, "MEDIUMTEXT"),
             DataType::LongText => write!(f, "LONGTEXT"),
             DataType::String(size) => format_type_with_optional_length(f, "STRING", size, false),
+            DataType::Collate(data_type, collation) => {
+                write!(f, "{data_type} COLLATE {collation}")
+            }
             DataType::Bytea => write!(f, "BYTEA"),
             DataType::Bit(size) => format_type_with_optional_length(f, "BIT", size, false),
             DataType::BitVarying(size) => {

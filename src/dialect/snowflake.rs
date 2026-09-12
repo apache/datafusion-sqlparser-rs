@@ -153,6 +153,11 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    /// See <https://docs.snowflake.com/en/sql-reference/constructs/order-by#syntax>
+    fn supports_order_by_all(&self) -> bool {
+        true
+    }
+
     // Snowflake supports double-dot notation when the schema name is not specified
     // In this case the default PUBLIC schema is used
     //

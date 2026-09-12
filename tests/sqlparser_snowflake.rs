@@ -45,6 +45,19 @@ fn test_snowflake_create_table() {
 }
 
 #[test]
+fn parse_order_by_all() {
+    let query = snowflake()
+        .verified_query("SELECT value + 1 AS computed FROM source ORDER BY ALL DESC NULLS FIRST");
+    assert_eq!(
+        query.order_by.expect("ORDER BY expected").kind,
+        OrderByKind::All(OrderByOptions {
+            sort: Some(OrderBySort::Desc),
+            nulls_first: Some(true),
+        })
+    );
+}
+
+#[test]
 fn parse_sf_create_secure_view_and_materialized_view() {
     for sql in [
         "CREATE SECURE VIEW v AS SELECT 1",

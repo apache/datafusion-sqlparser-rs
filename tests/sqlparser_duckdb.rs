@@ -19,12 +19,12 @@
 mod test_utils;
 
 use helpers::attached_token::AttachedToken;
-use sqlparser::tokenizer::Span;
+use sqlparser::tokenizer::{Location, Span};
 use test_utils::*;
 
 use sqlparser::ast::*;
 use sqlparser::dialect::{DuckDbDialect, GenericDialect};
-use sqlparser::parser::ParserError;
+use sqlparser::parser::{Parser, ParserError};
 
 fn duckdb() -> TestedDialects {
     TestedDialects::new(vec![Box::new(DuckDbDialect {})])
@@ -909,4 +909,334 @@ fn test_duckdb_lambda_function() {
     // Test lambda in list_transform
     let sql_transform = "SELECT list_transform([1, 2, 3], lambda x : x * 2)";
     duckdb().verified_stmt(sql_transform);
+}
+
+#[test]
+fn test_limit_percent_round_trip_and_ast() {
+    duckdb().one_statement_parses_to(
+        "SELECT n FROM (VALUES (1), (2), (3), (4)) AS t(n) ORDER BY n LIMIT 50%",
+        "SELECT n FROM (VALUES (1), (2), (3), (4)) AS t (n) ORDER BY n LIMIT 50%",
+    );
+
+    let query = duckdb().verified_query("SELECT 1 LIMIT 25% OFFSET 1");
+    assert_eq!(
+        query.limit_clause,
+        Some(LimitClause::Percent {
+            limit: Expr::value(number("25")),
+            offset: Some(Offset {
+                value: Expr::value(number("1")),
+                rows: OffsetRows::None,
+            }),
+        })
+    );
+
+    duckdb().one_statement_parses_to("SELECT 1 OFFSET 1 LIMIT 25%", "SELECT 1 LIMIT 25% OFFSET 1");
+    duckdb().verified_stmt("SELECT * FROM (SELECT 1 LIMIT 25%) AS t");
+    duckdb().statements_parse_to(
+        "SELECT 1 LIMIT 25%; SELECT 2",
+        "SELECT 1 LIMIT 25%; SELECT 2",
+    );
+}
+
+#[test]
+fn test_limit_percent_walkthrough_examples() {
+    for (sql, canonical, limit, offset) in [
+        (
+            "SELECT 1 LIMIT 10 * 5% OFFSET 2",
+            "SELECT 1 LIMIT 10 * 5% OFFSET 2",
+            Expr::BinaryOp {
+                left: Box::new(Expr::value(number("10"))),
+                op: BinaryOperator::Multiply,
+                right: Box::new(Expr::value(number("5"))),
+            },
+            Some(Offset {
+                value: Expr::value(number("2")),
+                rows: OffsetRows::None,
+            }),
+        ),
+        (
+            "SELECT 1 LIMIT 25% OFFSET 2",
+            "SELECT 1 LIMIT 25% OFFSET 2",
+            Expr::value(number("25")),
+            Some(Offset {
+                value: Expr::value(number("2")),
+                rows: OffsetRows::None,
+            }),
+        ),
+        (
+            "SELECT 1 OFFSET 2 LIMIT 25%",
+            "SELECT 1 LIMIT 25% OFFSET 2",
+            Expr::value(number("25")),
+            Some(Offset {
+                value: Expr::value(number("2")),
+                rows: OffsetRows::None,
+            }),
+        ),
+        (
+            "SELECT 1 OFFSET 5 LIMIT 10%",
+            "SELECT 1 LIMIT 10% OFFSET 5",
+            Expr::value(number("10")),
+            Some(Offset {
+                value: Expr::value(number("5")),
+                rows: OffsetRows::None,
+            }),
+        ),
+    ] {
+        let query = duckdb().verified_query_with_canonical(sql, canonical);
+        assert_eq!(
+            query.limit_clause,
+            Some(LimitClause::Percent { limit, offset }),
+            "{sql}",
+        );
+    }
+}
+
+#[test]
+fn test_limit_percent_expression_quantities() {
+    for sql in [
+        "SELECT 1 LIMIT ?%",
+        "SELECT 1 LIMIT $1%",
+        "SELECT 1 LIMIT -25%",
+        "SELECT 1 LIMIT +25%",
+        "SELECT 1 LIMIT (25)%",
+        "SELECT 1 LIMIT (10 + 15)%",
+        "SELECT 1 LIMIT (10 % 3)%",
+        "SELECT 1 LIMIT 10 * 5%",
+        "SELECT 1 LIMIT 10 % 3%",
+        "SELECT 1 LIMIT abs(10 % 3)%",
+        "SELECT 1 LIMIT CAST(25 AS INTEGER)%",
+    ] {
+        duckdb().verified_stmt(sql);
+    }
+}
+
+#[test]
+fn test_limit_percent_preserves_modulo() {
+    duckdb_and_generic().verified_stmt("SELECT 5 % 2");
+
+    let query = duckdb_and_generic().verified_query("SELECT 1 LIMIT 5 % 2");
+    assert_eq!(
+        query.limit_clause,
+        Some(LimitClause::LimitOffset {
+            limit: Some(Expr::BinaryOp {
+                left: Box::new(Expr::value(number("5"))),
+                op: BinaryOperator::Modulo,
+                right: Box::new(Expr::value(number("2"))),
+            }),
+            offset: None,
+            limit_by: vec![],
+        })
+    );
+
+    duckdb_and_generic().verified_stmt("SELECT 1 LIMIT (5 % 2)");
+
+    for sql in [
+        "SELECT 1 LIMIT ? % 2",
+        "SELECT 1 LIMIT $1 % 2",
+        "SELECT 1 LIMIT -25 % 2",
+        "SELECT 1 LIMIT (25) % 2",
+        "SELECT 1 LIMIT 10 + 15 % 2",
+        "SELECT 1 LIMIT CAST(25 AS INTEGER) % 2",
+    ] {
+        duckdb_and_generic().verified_stmt(sql);
+    }
+}
+
+#[test]
+fn test_limit_percent_rejects_malformed_syntax() {
+    for (sql, expected) in [
+        (
+            "SELECT 1 LIMIT %",
+            ParserError::ParserError("Expected: an expression, found: %".to_string()),
+        ),
+        (
+            "SELECT 1 LIMIT ALL%",
+            ParserError::ParserError("Expected: end of statement, found: %".to_string()),
+        ),
+        (
+            "SELECT 1 LIMIT 25%%",
+            ParserError::ParserError("Expected: an expression, found: %".to_string()),
+        ),
+        (
+            "SELECT 1 LIMIT 25L%",
+            ParserError::ParserError("Expected: an expression, found: EOF".to_string()),
+        ),
+        (
+            "SELECT 1 LIMIT 25 PERCENT",
+            ParserError::ParserError("Expected: end of statement, found: PERCENT".to_string()),
+        ),
+        (
+            "SELECT 1 LIMIT 5%, 10",
+            ParserError::ParserError("Expected: an expression, found: ,".to_string()),
+        ),
+        (
+            "SELECT 1 LIMIT 5%, 10%",
+            ParserError::ParserError("Expected: an expression, found: ,".to_string()),
+        ),
+    ] {
+        assert_eq!(duckdb().parse_sql_statements(sql).unwrap_err(), expected);
+    }
+}
+
+#[test]
+fn test_limit_percent_is_duckdb_only() {
+    assert_eq!(
+        TestedDialects::new(vec![Box::new(GenericDialect {})])
+            .parse_sql_statements("SELECT 1 LIMIT ALL%")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: %".to_string())
+    );
+
+    assert_eq!(
+        TestedDialects::new(vec![Box::new(GenericDialect {})])
+            .parse_sql_statements("SELECT 1 LIMIT 25%")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: an expression, found: EOF".to_string())
+    );
+}
+
+#[test]
+fn test_limit_percent_rejects_unparenthesized_addition() {
+    for sql in [
+        "SELECT 1 LIMIT 10 + 15%",
+        "SELECT 1 LIMIT 10 - 5%",
+        "SELECT 1 LIMIT 10 + 5 * 2%",
+    ] {
+        assert_eq!(
+            duckdb().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("Expected: an expression, found: EOF".to_string()),
+            "{sql}",
+        );
+    }
+}
+
+#[test]
+fn test_limit_percent_boundary_is_local_to_quantity() {
+    for sql in [
+        "SELECT 1 LIMIT (25%)%",
+        "SELECT 1 LIMIT abs(25%)%",
+        "SELECT 1 LIMIT (SELECT 25%)%",
+    ] {
+        assert_eq!(
+            duckdb().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("Expected: an expression, found: )".to_string()),
+            "{sql}",
+        );
+    }
+
+    duckdb().verified_stmt("SELECT 1 LIMIT (SELECT 25 LIMIT 5%)%");
+    duckdb().verified_stmt("SELECT 1 LIMIT (SELECT 25 % 2 LIMIT 5%)% OFFSET 3 % 2");
+    duckdb().statements_parse_to(
+        "SELECT 1 LIMIT 25%; SELECT 5 % 2",
+        "SELECT 1 LIMIT 25%; SELECT 5 % 2",
+    );
+
+    let mut parser = Parser::new(&DuckDbDialect {})
+        .try_with_sql("SELECT 1 LIMIT abs(25%)%")
+        .unwrap();
+    assert!(parser.parse_statements().is_err());
+    let statements = parser
+        .try_with_sql("SELECT 5 % 2")
+        .unwrap()
+        .parse_statements()
+        .unwrap();
+    assert_eq!(statements[0], duckdb().verified_stmt("SELECT 5 % 2"));
+}
+
+#[test]
+fn test_limit_percent_operator_ast() {
+    for (quantity, op, right) in [
+        ("10 * 5", BinaryOperator::Multiply, "5"),
+        ("10 % 3", BinaryOperator::Modulo, "3"),
+    ] {
+        let query = duckdb().verified_query(&format!("SELECT 1 LIMIT {quantity}%"));
+        assert_eq!(
+            query.limit_clause,
+            Some(LimitClause::Percent {
+                limit: Expr::BinaryOp {
+                    left: Box::new(Expr::value(number("10"))),
+                    op,
+                    right: Box::new(Expr::value(number(right))),
+                },
+                offset: None,
+            }),
+        );
+    }
+}
+
+#[test]
+fn test_limit_percent_respects_recursion_limit() {
+    for quantity in [
+        format!("{}1{}", "(".repeat(64), ")".repeat(64)),
+        format!("{}1", "+".repeat(64)),
+    ] {
+        for suffix in ["", "%"] {
+            assert_eq!(
+                duckdb()
+                    .with_recursion_limit(20)
+                    .parse_sql_statements(&format!("SELECT 1 LIMIT {quantity}{suffix}"))
+                    .unwrap_err(),
+                ParserError::RecursionLimitExceeded,
+            );
+        }
+    }
+    duckdb()
+        .with_recursion_limit(20)
+        .verified_stmt("SELECT 1 LIMIT (10 + 15)%");
+}
+
+#[test]
+fn test_limit_percent_insert_returning() {
+    duckdb().verified_stmt("INSERT INTO t SELECT 1 LIMIT 100 RETURNING *");
+    duckdb().verified_stmt("INSERT INTO t SELECT 1 LIMIT 100% RETURNING *");
+}
+
+#[test]
+fn test_limit_percent_insert_on_conflict() {
+    duckdb().verified_stmt("INSERT INTO t SELECT 1 LIMIT 25 ON CONFLICT DO NOTHING");
+    duckdb().verified_stmt("INSERT INTO t SELECT 1 LIMIT 25% ON CONFLICT DO NOTHING");
+}
+
+#[test]
+fn test_limit_percent_ctas_with_data() {
+    for with_data in ["WITH DATA", "WITH NO DATA"] {
+        duckdb().verified_stmt(&format!("CREATE TABLE t AS SELECT 1 LIMIT 25 {with_data}"));
+        duckdb().verified_stmt(&format!("CREATE TABLE t AS SELECT 1 LIMIT 25% {with_data}"));
+    }
+}
+
+#[test]
+fn test_limit_percent_continuation_keywords_remain_modulo_operands() {
+    for keyword in ["returning", "on", "with"] {
+        let query = duckdb().verified_query(&format!(r#"SELECT 1 LIMIT 5 % "{keyword}""#));
+        assert_eq!(
+            query.limit_clause,
+            Some(LimitClause::LimitOffset {
+                limit: Some(Expr::BinaryOp {
+                    left: Box::new(Expr::value(number("5"))),
+                    op: BinaryOperator::Modulo,
+                    right: Box::new(Expr::Identifier(Ident::with_quote('"', keyword))),
+                }),
+                offset: None,
+                limit_by: vec![],
+            }),
+        );
+    }
+}
+
+#[test]
+fn test_limit_percent_spans() {
+    for (sql, end_column) in [
+        ("SELECT 1 LIMIT 25%", 18),
+        ("SELECT 1 LIMIT 25% OFFSET 3", 28),
+    ] {
+        let statements = Parser::parse_sql(&DuckDbDialect {}, sql).unwrap();
+        let Statement::Query(query) = &statements[0] else {
+            panic!("expected query");
+        };
+        assert_eq!(
+            query.limit_clause.as_ref().unwrap().span(),
+            Span::new(Location::new(1, 16), Location::new(1, end_column)),
+        );
+    }
 }

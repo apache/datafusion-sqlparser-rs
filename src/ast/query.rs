@@ -44,7 +44,7 @@ pub struct Query {
     pub body: Box<SetExpr>,
     /// ORDER BY
     pub order_by: Option<OrderBy>,
-    /// `LIMIT ... OFFSET ... | LIMIT <offset>, <limit>`
+    /// `LIMIT ... OFFSET ... | LIMIT <offset>, <limit> | LIMIT <limit>% [OFFSET ...]`
     pub limit_clause: Option<LimitClause>,
     /// `FETCH { FIRST | NEXT } <N> [ PERCENT ] { ROW | ROWS } | { ONLY | WITH TIES }`
     pub fetch: Option<Fetch>,
@@ -3124,6 +3124,13 @@ pub enum LimitClause {
         /// The limit expression.
         limit: Expr,
     },
+    /// Percentage limit syntax: `LIMIT <limit>% [OFFSET <offset>]`.
+    Percent {
+        /// Percentage quantity.
+        limit: Expr,
+        /// Optional `OFFSET` expression.
+        offset: Option<Offset>,
+    },
 }
 
 impl fmt::Display for LimitClause {
@@ -3148,6 +3155,13 @@ impl fmt::Display for LimitClause {
             }
             LimitClause::OffsetCommaLimit { offset, limit } => {
                 write!(f, " LIMIT {offset}, {limit}")
+            }
+            LimitClause::Percent { limit, offset } => {
+                write!(f, " LIMIT {limit}%")?;
+                if let Some(offset) = offset {
+                    write!(f, " {offset}")?;
+                }
+                Ok(())
             }
         }
     }

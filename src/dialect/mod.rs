@@ -549,6 +549,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `SET VARIABLE name = expression`.
+    fn supports_set_variable_statement(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports multiple `SET` statements
     /// in a single statement.
     ///

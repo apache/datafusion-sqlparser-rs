@@ -2693,11 +2693,54 @@ impl<'a> Parser<'a> {
         } else {
             (self.parse_window_frame_bound()?, None)
         };
+        let exclusion = if self.dialect.supports_window_frame_exclusion()
+            && self.parse_keyword(Keyword::EXCLUDE)
+        {
+            Some(self.parse_window_frame_exclusion()?)
+        } else {
+            None
+        };
         Ok(WindowFrame {
             units,
             start_bound,
             end_bound,
+            exclusion,
         })
+    }
+
+    /// Parse the exclusion that follows `EXCLUDE` in a window frame.
+    pub fn parse_window_frame_exclusion(&mut self) -> Result<WindowFrameExclusion, ParserError> {
+        match self.parse_one_of_keywords(&[
+            Keyword::CURRENT,
+            Keyword::GROUP,
+            Keyword::TIES,
+            Keyword::NO,
+        ]) {
+            Some(Keyword::CURRENT) => {
+                self.expect_keyword_is(Keyword::ROW)?;
+                Ok(WindowFrameExclusion::CurrentRow)
+            }
+            Some(Keyword::GROUP) => Ok(WindowFrameExclusion::Group),
+            Some(Keyword::TIES) => Ok(WindowFrameExclusion::Ties),
+            Some(Keyword::NO) => {
+                let is_others = matches!(
+                    &self.peek_token_ref().token,
+                    Token::Word(word)
+                        if word.quote_style.is_none()
+                            && word.value.eq_ignore_ascii_case("OTHERS")
+                );
+                if is_others {
+                    self.advance_token();
+                    Ok(WindowFrameExclusion::NoOthers)
+                } else {
+                    self.expected_ref("OTHERS", self.peek_token_ref())
+                }
+            }
+            _ => self.expected_ref(
+                "CURRENT ROW, GROUP, TIES, or NO OTHERS",
+                self.peek_token_ref(),
+            ),
+        }
     }
 
     /// Parse a window frame bound: `CURRENT ROW` or `<n> PRECEDING|FOLLOWING`.

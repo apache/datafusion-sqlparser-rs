@@ -45,6 +45,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_window_frame_exclusion(&self) -> bool {
+        true
+    }
+
     fn supports_partition_by_after_order_by(&self) -> bool {
         true
     }

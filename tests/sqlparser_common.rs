@@ -20015,3 +20015,334 @@ fn parse_function_arg_call_chain_no_exponential_blowup() {
     rx.recv_timeout(Duration::from_secs(5))
         .expect("parser should reject this quickly, not loop exponentially");
 }
+
+fn window_spec_from_projection(projection: &SelectItem) -> &WindowSpec {
+    let Expr::Function(Function {
+        over: Some(WindowType::WindowSpec(window)),
+        ..
+    }) = expr_from_projection(projection)
+    else {
+        panic!("Expected an inline window function");
+    };
+    window
+}
+
+#[test]
+fn parse_window_frame_exclusion_in_explicit_dialects() {
+    let dialects = TestedDialects::new(vec![
+        Box::new(DuckDbDialect {}),
+        Box::new(PostgreSqlDialect {}),
+        Box::new(SQLiteDialect {}),
+        Box::new(GenericDialect {}),
+    ]);
+    for dialect in &dialects.dialects {
+        assert!(dialect.supports_window_frame_exclusion(), "{dialect:?}");
+    }
+    dialects.verified_stmt("SELECT sum(n) OVER (ROWS UNBOUNDED PRECEDING EXCLUDE TIES) FROM t");
+}
+
+#[test]
+fn parse_window_frame_exclusion_matrix() {
+    assert_eq!(None, WindowFrame::default().exclusion);
+    let dialects = all_dialects_where(|d| d.supports_window_frame_exclusion());
+    for (units_sql, units) in [
+        ("ROWS", WindowFrameUnits::Rows),
+        ("RANGE", WindowFrameUnits::Range),
+        ("GROUPS", WindowFrameUnits::Groups),
+    ] {
+        for (bounds_sql, start_bound, end_bound) in [
+            (
+                "UNBOUNDED PRECEDING",
+                WindowFrameBound::Preceding(None),
+                None,
+            ),
+            (
+                "BETWEEN 1 PRECEDING AND 1 FOLLOWING",
+                WindowFrameBound::Preceding(Some(Box::new(Expr::value(number("1"))))),
+                Some(WindowFrameBound::Following(Some(Box::new(Expr::value(
+                    number("1"),
+                ))))),
+            ),
+            (
+                "BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW",
+                WindowFrameBound::Preceding(None),
+                Some(WindowFrameBound::CurrentRow),
+            ),
+        ] {
+            for (exclusion_sql, exclusion) in [
+                ("", None),
+                (
+                    " EXCLUDE CURRENT ROW",
+                    Some(WindowFrameExclusion::CurrentRow),
+                ),
+                (" EXCLUDE GROUP", Some(WindowFrameExclusion::Group)),
+                (" EXCLUDE TIES", Some(WindowFrameExclusion::Ties)),
+                (" EXCLUDE NO OTHERS", Some(WindowFrameExclusion::NoOthers)),
+            ] {
+                let expected = WindowFrame {
+                    units,
+                    start_bound: start_bound.clone(),
+                    end_bound: end_bound.clone(),
+                    exclusion,
+                };
+                let frame_sql = format!("{units_sql} {bounds_sql}{exclusion_sql}");
+                assert_eq!(expected.to_string(), frame_sql);
+                assert_eq!(format!("{expected:#}"), frame_sql);
+                for (prefix, pretty_prefix) in [("", ""), ("ORDER BY n ", "ORDER BY n\n")] {
+                    let spec_sql = format!("{prefix}{frame_sql}");
+                    let sql = format!("SELECT sum(n) OVER ({spec_sql}) FROM t");
+                    let select = dialects.verified_only_select(&sql);
+                    let window = window_spec_from_projection(only(&select.projection));
+                    assert_eq!(Some(&expected), window.window_frame.as_ref(), "{sql}");
+                    assert_eq!(window.to_string(), spec_sql);
+                    assert_eq!(format!("{window:#}"), format!("{pretty_prefix}{frame_sql}"));
+                }
+
+                let sql =
+                    format!("SELECT sum(n) OVER w FROM t WINDOW w AS (ORDER BY n {frame_sql})");
+                let select = dialects.verified_only_select(&sql);
+                let NamedWindowDefinition(name, NamedWindowExpr::WindowSpec(window)) =
+                    only(&select.named_window)
+                else {
+                    panic!("Expected a named window specification");
+                };
+                assert_eq!(&Ident::new("w"), name);
+                assert_eq!(Some(&expected), window.window_frame.as_ref(), "{sql}");
+                let Expr::Function(function) = expr_from_projection(only(&select.projection))
+                else {
+                    panic!("Expected a window function");
+                };
+                assert_eq!(
+                    Some(WindowType::NamedWindow(Ident::new("w"))),
+                    function.over
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn parse_window_frame_exclusion_scenarios() {
+    let dialects = all_dialects_where(|d| d.supports_window_frame_exclusion());
+    dialects.one_statement_parses_to(
+        "SELECT sum(n) OVER (rows unbounded preceding exclude no oThErS) FROM t",
+        "SELECT sum(n) OVER (ROWS UNBOUNDED PRECEDING EXCLUDE NO OTHERS) FROM t",
+    );
+    for sql in [
+        "SELECT sum(n) OVER (ORDER BY n ROWS BETWEEN (1 + 2) PRECEDING AND (2 * 3) FOLLOWING EXCLUDE GROUP) FROM t",
+        "SELECT sum(n) OVER (ORDER BY n ROWS UNBOUNDED PRECEDING EXCLUDE TIES), avg(n) OVER (ORDER BY n RANGE CURRENT ROW), (SELECT max(m) OVER (ORDER BY m GROUPS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING EXCLUDE GROUP) FROM u) FROM t",
+    ] {
+        dialects.verified_stmt(sql);
+    }
+    for function in ["first_value(n)", "last_value(n)", "nth_value(n, 2)"] {
+        dialects.verified_stmt(&format!("SELECT {function} OVER (ORDER BY n ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE CURRENT ROW) FROM t"));
+    }
+}
+
+#[test]
+fn reject_malformed_window_frame_exclusions() {
+    let dialects = all_dialects_where(|d| d.supports_window_frame_exclusion());
+    for (spec, expected) in [
+        (
+            "ROWS UNBOUNDED PRECEDING EXCLUDE",
+            "Expected: CURRENT ROW, GROUP, TIES, or NO OTHERS, found: )",
+        ),
+        (
+            "ROWS UNBOUNDED PRECEDING EXCLUDE CURRENT",
+            "Expected: ROW, found: )",
+        ),
+        (
+            "ROWS UNBOUNDED PRECEDING EXCLUDE NO",
+            "Expected: OTHERS, found: )",
+        ),
+        (
+            "ROWS UNBOUNDED PRECEDING EXCLUDE OTHER",
+            "Expected: CURRENT ROW, GROUP, TIES, or NO OTHERS, found: OTHER",
+        ),
+        (
+            "ROWS UNBOUNDED PRECEDING EXCLUDE NO OTHER",
+            "Expected: OTHERS, found: OTHER",
+        ),
+        (
+            "ROWS UNBOUNDED PRECEDING EXCLUDE \"CURRENT\" ROW",
+            "Expected: CURRENT ROW, GROUP, TIES, or NO OTHERS, found: \"CURRENT\"",
+        ),
+        (
+            "ROWS UNBOUNDED PRECEDING EXCLUDE CURRENT \"ROW\"",
+            "Expected: ROW, found: \"ROW\"",
+        ),
+        (
+            "ROWS UNBOUNDED PRECEDING EXCLUDE \"GROUP\"",
+            "Expected: CURRENT ROW, GROUP, TIES, or NO OTHERS, found: \"GROUP\"",
+        ),
+        (
+            "ROWS UNBOUNDED PRECEDING EXCLUDE \"TIES\"",
+            "Expected: CURRENT ROW, GROUP, TIES, or NO OTHERS, found: \"TIES\"",
+        ),
+        (
+            "ROWS UNBOUNDED PRECEDING EXCLUDE \"NO\" OTHERS",
+            "Expected: CURRENT ROW, GROUP, TIES, or NO OTHERS, found: \"NO\"",
+        ),
+        (
+            "ROWS UNBOUNDED PRECEDING EXCLUDE NO \"OTHERS\"",
+            "Expected: OTHERS, found: \"OTHERS\"",
+        ),
+        (
+            "ROWS UNBOUNDED PRECEDING EXCLUDE NO 'OTHERS'",
+            "Expected: OTHERS, found: 'OTHERS'",
+        ),
+        (
+            "ROWS UNBOUNDED PRECEDING EXCLUDE TIES EXCLUDE GROUP",
+            "Expected: ), found: EXCLUDE",
+        ),
+        (
+            "ORDER BY n EXCLUDE TIES",
+            "Expected: ROWS, RANGE, GROUPS, found: EXCLUDE",
+        ),
+        (
+            "EXCLUDE CURRENT ROW",
+            "Expected: ROWS, RANGE, GROUPS, found: EXCLUDE",
+        ),
+        (
+            "ROWS UNBOUNDED PRECEDING EXCLUDE /* comment */ CURRENT /* comment */ TIES",
+            "Expected: ROW, found: TIES",
+        ),
+        (
+            r#"ROWS UNBOUNDED PRECEDING EXCLUDE -- comment
+NO /* comment */ "OTHERS""#,
+            "Expected: OTHERS, found: \"OTHERS\"",
+        ),
+        (
+            "ROWS UNBOUNDED PRECEDING EXCLUDE /* comment */ \"GROUP\"",
+            "Expected: CURRENT ROW, GROUP, TIES, or NO OTHERS, found: \"GROUP\"",
+        ),
+        (
+            r#"ROWS UNBOUNDED PRECEDING EXCLUDE -- comment
+TIES /* comment */ EXCLUDE GROUP"#,
+            "Expected: ), found: EXCLUDE",
+        ),
+    ] {
+        for sql in [
+            format!("SELECT sum(n) OVER ({spec}) FROM t"),
+            format!("SELECT sum(n) OVER w FROM t WINDOW w AS ({spec})"),
+        ] {
+            assert_eq!(
+                ParserError::ParserError(expected.to_owned()),
+                dialects.parse_sql_statements(&sql).unwrap_err(),
+                "{sql}"
+            );
+        }
+    }
+}
+
+#[test]
+fn reject_window_frame_exclusions_in_unsupported_dialects() {
+    let dialects = all_dialects_where(|d| !d.supports_window_frame_exclusion());
+    for exclusion in ["CURRENT ROW", "GROUP", "TIES", "NO OTHERS"] {
+        let sql =
+            format!("SELECT sum(n) OVER (ROWS UNBOUNDED PRECEDING EXCLUDE {exclusion}) FROM t");
+        assert_eq!(
+            ParserError::ParserError("Expected: ), found: EXCLUDE".to_owned()),
+            dialects.parse_sql_statements(&sql).unwrap_err(),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_named_window_called_others() {
+    let dialects = all_dialects_except(|d| d.is_table_alias(&Keyword::WINDOW, &mut Parser::new(d)));
+    dialects.one_statement_parses_to(
+        "SELECT sum(n) OVER (others) FROM (VALUES (1), (2)) t(n) WINDOW others AS (ORDER BY n)",
+        "SELECT sum(n) OVER (others) FROM (VALUES (1), (2)) t (n) WINDOW others AS (ORDER BY n)",
+    );
+}
+
+#[test]
+fn parse_window_frame_exclusion_comments() {
+    let dialects = all_dialects_where(|d| d.supports_window_frame_exclusion());
+    let unsupported = all_dialects_where(|d| !d.supports_window_frame_exclusion());
+    for (exclusion_sql, exclusion) in [
+        ("CURRENT ROW", WindowFrameExclusion::CurrentRow),
+        ("GROUP", WindowFrameExclusion::Group),
+        ("TIES", WindowFrameExclusion::Ties),
+        ("NO OTHERS", WindowFrameExclusion::NoOthers),
+    ] {
+        let expected = WindowFrame {
+            units: WindowFrameUnits::Rows,
+            end_bound: None,
+            exclusion: Some(exclusion),
+            ..WindowFrame::default()
+        };
+        for separator in [
+            "/* comment */",
+            r#"-- comment
+"#,
+        ] {
+            let commented = format!(
+                "EXCLUDE{separator}{}",
+                exclusion_sql.replace(' ', separator)
+            );
+            for (prefix, suffix) in [
+                ("SELECT sum(n) OVER (ROWS UNBOUNDED PRECEDING", ") FROM t"),
+                (
+                    "SELECT sum(n) OVER w FROM t WINDOW w AS (ROWS UNBOUNDED PRECEDING",
+                    ")",
+                ),
+            ] {
+                let sql = format!("{prefix}{separator}{commented}{separator}{suffix}");
+                let canonical = format!("{prefix} EXCLUDE {exclusion_sql}{suffix}");
+                let select = dialects.verified_only_select_with_canonical(&sql, &canonical);
+                let frame = match select.named_window.as_slice() {
+                    [] => window_spec_from_projection(only(&select.projection))
+                        .window_frame
+                        .as_ref()
+                        .expect("Expected a frame"),
+                    [NamedWindowDefinition(_, NamedWindowExpr::WindowSpec(window))] => {
+                        window.window_frame.as_ref().expect("Expected a frame")
+                    }
+                    _ => panic!("Expected one named window specification"),
+                };
+                assert_eq!(&expected, frame, "{sql}");
+                if select.named_window.is_empty() {
+                    assert_eq!(
+                        ParserError::ParserError("Expected: ), found: EXCLUDE".to_owned()),
+                        unsupported.parse_sql_statements(&sql).unwrap_err(),
+                        "{sql}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn reject_window_frame_exclusion_at_eof() {
+    let dialects = all_dialects_where(|d| d.supports_window_frame_exclusion());
+    for (exclusion, expected) in [
+        (
+            "EXCLUDE",
+            "Expected: CURRENT ROW, GROUP, TIES, or NO OTHERS, found: EOF",
+        ),
+        ("EXCLUDE CURRENT", "Expected: ROW, found: EOF"),
+        ("EXCLUDE NO", "Expected: OTHERS, found: EOF"),
+        ("EXCLUDE CURRENT ROW", "Expected: ), found: EOF"),
+        ("EXCLUDE GROUP", "Expected: ), found: EOF"),
+        ("EXCLUDE TIES", "Expected: ), found: EOF"),
+        ("EXCLUDE NO OTHERS", "Expected: ), found: EOF"),
+    ] {
+        for ending in ["", " /* trailing comment */", " -- trailing comment"] {
+            for prefix in [
+                "SELECT sum(n) OVER (ROWS UNBOUNDED PRECEDING",
+                "SELECT sum(n) OVER w FROM t WINDOW w AS (ROWS UNBOUNDED PRECEDING",
+            ] {
+                let sql = format!("{prefix} {exclusion}{ending}");
+                assert_eq!(
+                    ParserError::ParserError(expected.to_owned()),
+                    dialects.parse_sql_statements(&sql).unwrap_err(),
+                    "{sql}"
+                );
+            }
+        }
+    }
+}

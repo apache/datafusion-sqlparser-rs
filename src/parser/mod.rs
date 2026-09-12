@@ -15730,6 +15730,37 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_set(&mut self) -> Result<Statement, ParserError> {
+        let variable_is_ordinary_assignment = self.peek_keyword(Keyword::VARIABLE)
+            && (matches!(self.peek_nth_token_ref(1).token, Token::Eq | Token::Period)
+                || matches!(
+                    &self.peek_nth_token_ref(1).token,
+                    Token::Word(word) if word.keyword == Keyword::TO
+                ));
+        if self.dialect.supports_set_variable_statement()
+            && !variable_is_ordinary_assignment
+            && self.parse_keyword(Keyword::VARIABLE)
+        {
+            let mut parts = vec![];
+            loop {
+                let token = self.next_token();
+                match token.token {
+                    Token::Word(word) if matches!(word.quote_style, None | Some('"')) => {
+                        parts.push(word.into_ident(token.span));
+                    }
+                    _ => return self.expected("identifier", token),
+                }
+                if !self.consume_token(&Token::Period) {
+                    break;
+                }
+            }
+            let variable = ObjectName::from(parts);
+            if !(self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO)) {
+                return self.expected_ref("equals sign or TO", self.peek_token_ref());
+            }
+            let value = self.parse_expr()?;
+            return Ok(Set::SetVariable { variable, value }.into());
+        }
+
         let hivevar = self.parse_keyword(Keyword::HIVEVAR);
 
         // Modifier is either HIVEVAR: or a ContextModifier (LOCAL, SESSION, etc), not both

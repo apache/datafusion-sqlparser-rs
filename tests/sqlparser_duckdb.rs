@@ -19,12 +19,12 @@
 mod test_utils;
 
 use helpers::attached_token::AttachedToken;
-use sqlparser::tokenizer::Span;
+use sqlparser::tokenizer::{Location, Span};
 use test_utils::*;
 
 use sqlparser::ast::*;
-use sqlparser::dialect::{DuckDbDialect, GenericDialect};
-use sqlparser::parser::ParserError;
+use sqlparser::dialect::{Dialect, DuckDbDialect, GenericDialect};
+use sqlparser::parser::{Parser, ParserError};
 
 fn duckdb() -> TestedDialects {
     TestedDialects::new(vec![Box::new(DuckDbDialect {})])
@@ -909,4 +909,315 @@ fn test_duckdb_lambda_function() {
     // Test lambda in list_transform
     let sql_transform = "SELECT list_transform([1, 2, 3], lambda x : x * 2)";
     duckdb().verified_stmt(sql_transform);
+}
+
+#[test]
+fn parse_duckdb_set_variable() {
+    assert!(DuckDbDialect {}.supports_set_variable_statement());
+    for (name, parts) in [
+        ("threshold", vec![Ident::new("threshold")]),
+        (
+            "config.threshold",
+            vec!["config".into(), "threshold".into()],
+        ),
+        (
+            r#""config"."threshold""#,
+            vec![
+                Ident::with_quote('"', "config"),
+                Ident::with_quote('"', "threshold"),
+            ],
+        ),
+        (
+            r#"config."threshold".value"#,
+            vec![
+                "config".into(),
+                Ident::with_quote('"', "threshold"),
+                "value".into(),
+            ],
+        ),
+        (
+            r#""my variable""#,
+            vec![Ident::with_quote('"', "my variable")],
+        ),
+        ("VARIABLE", vec!["VARIABLE".into()]),
+        (r#""TO""#, vec![Ident::with_quote('"', "TO")]),
+    ] {
+        let expected = Statement::Set(Set::SetVariable {
+            variable: ObjectName::from(parts),
+            value: Expr::value(number("42")),
+        });
+        for separator in ["=", "TO"] {
+            assert_eq!(
+                duckdb().one_statement_parses_to(
+                    &format!("SET VARIABLE {name} {separator} 42"),
+                    &format!("SET VARIABLE {name} = 42"),
+                ),
+                expected
+            );
+        }
+    }
+    let statements =
+        Parser::parse_sql(&DuckDbDialect {}, r#"SET VARIABLE config."threshold" = 42"#).unwrap();
+    let Statement::Set(Set::SetVariable { variable, .. }) = &statements[0] else {
+        panic!("Expected SET VARIABLE");
+    };
+    assert_eq!(
+        variable
+            .0
+            .iter()
+            .map(|part| part.as_ident().unwrap().span)
+            .collect::<Vec<_>>(),
+        vec![
+            Span::new(Location::new(1, 14), Location::new(1, 20)),
+            Span::new(Location::new(1, 21), Location::new(1, 32)),
+        ]
+    );
+}
+
+#[test]
+fn parse_duckdb_set_variable_values() {
+    for value in [
+        "1 + 2 * 3",
+        "'hello'",
+        "true",
+        "NULL",
+        "DEFAULT",
+        "DATE '2024-06-10'",
+        "TIMESTAMP '2024-06-10 12:34:56'",
+        "[1, 2, 3]",
+        "MAP {'a': 1, 'b': 2}",
+        "{'answer': 42}",
+        "(SELECT max(n) FROM (VALUES (1), (2)) AS t (n))",
+    ] {
+        let expected = Statement::Set(Set::SetVariable {
+            variable: ObjectName::from(vec!["threshold".into()]),
+            value: duckdb().verified_expr(value),
+        });
+        for separator in ["=", "TO"] {
+            assert_eq!(
+                duckdb().one_statement_parses_to(
+                    &format!("SET VARIABLE threshold {separator} {value}"),
+                    &format!("SET VARIABLE threshold = {value}"),
+                ),
+                expected
+            );
+        }
+    }
+    assert_eq!(
+        duckdb().verified_stmt("SET VARIABLE threshold = 1 + 2 * 3"),
+        Statement::Set(Set::SetVariable {
+            variable: ObjectName::from(vec!["threshold".into()]),
+            value: Expr::BinaryOp {
+                left: Box::new(Expr::value(number("1"))),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::BinaryOp {
+                    left: Box::new(Expr::value(number("2"))),
+                    op: BinaryOperator::Multiply,
+                    right: Box::new(Expr::value(number("3"))),
+                }),
+            },
+        })
+    );
+}
+
+#[test]
+fn parse_duckdb_set_variable_comments_and_script() {
+    for sql in [
+        "set /* a */ variable /* b */ config /* c */ . /* d */ threshold /* e */ to /* f */ 42; -- end",
+        r#"SET -- a
+VARIABLE -- b
+config -- c
+. -- d
+threshold -- e
+= -- f
+42 -- end"#,
+    ] {
+        assert_eq!(
+            duckdb().one_statement_parses_to(sql, "SET VARIABLE config.threshold = 42"),
+            Statement::Set(Set::SetVariable {
+                variable: ObjectName::from(vec!["config".into(), "threshold".into()]),
+                value: Expr::value(number("42")),
+            })
+        );
+    }
+    let statements = duckdb().statements_parse_to(
+        r#"SET VARIABLE org_id = 42;
+SELECT getvariable('org_id') AS org_id;"#,
+        "SET VARIABLE org_id = 42; SELECT getvariable('org_id') AS org_id",
+    );
+    assert_eq!(statements.len(), 2);
+    assert_eq!(
+        statements[0],
+        Statement::Set(Set::SetVariable {
+            variable: ObjectName::from(vec!["org_id".into()]),
+            value: Expr::value(number("42")),
+        })
+    );
+    assert_eq!(
+        statements[1],
+        duckdb().verified_stmt("SELECT getvariable('org_id') AS org_id")
+    );
+}
+
+#[test]
+fn parse_duckdb_set_variable_as_ordinary_set_name() {
+    for (name, parts) in [
+        ("VARIABLE", vec![Ident::new("VARIABLE")]),
+        ("VARIABLE.foo", vec!["VARIABLE".into(), "foo".into()]),
+        (
+            r#"VARIABLE."foo""#,
+            vec!["VARIABLE".into(), Ident::with_quote('"', "foo")],
+        ),
+        (
+            "VARIABLE.foo.bar",
+            vec!["VARIABLE".into(), "foo".into(), "bar".into()],
+        ),
+    ] {
+        for separator in ["=", "TO"] {
+            assert_eq!(
+                duckdb().one_statement_parses_to(
+                    &format!("SET {name} {separator} 42"),
+                    &format!("SET {name} = 42"),
+                ),
+                Statement::Set(Set::SingleAssignment {
+                    scope: None,
+                    hivevar: false,
+                    variable: ObjectName::from(parts.clone()),
+                    values: vec![Expr::value(number("42"))],
+                })
+            );
+        }
+    }
+    for sql in [
+        r#"SET VARIABLE /* a */ . /* b */ "foo" TO 42"#,
+        r#"SET VARIABLE -- a
+. -- b
+"foo" = 42"#,
+    ] {
+        assert_eq!(
+            duckdb().one_statement_parses_to(sql, r#"SET VARIABLE."foo" = 42"#),
+            Statement::Set(Set::SingleAssignment {
+                scope: None,
+                hivevar: false,
+                variable: ObjectName::from(vec!["VARIABLE".into(), Ident::with_quote('"', "foo")]),
+                values: vec![Expr::value(number("42"))],
+            })
+        );
+    }
+}
+
+#[test]
+fn parse_duckdb_set_variable_rejects_string_names() {
+    for name in [
+        "'threshold'",
+        "'threshold'.value",
+        "config.'threshold'",
+        "config.'threshold'.value",
+        "config /* a */ . /* b */ 'threshold'",
+    ] {
+        for separator in ["=", "TO"] {
+            let sql = format!("SET VARIABLE {name} {separator} 42");
+            assert_eq!(
+                duckdb().parse_sql_statements(&sql).unwrap_err(),
+                ParserError::ParserError("Expected: identifier, found: 'threshold'".to_string()),
+                "{sql}"
+            );
+        }
+    }
+}
+
+#[test]
+fn parse_duckdb_set_variable_rejects_malformed_syntax() {
+    for (sql, expected) in [
+        ("SET VARIABLE", "Expected: identifier, found: EOF"),
+        ("SET VARIABLE 1 = 42", "Expected: identifier, found: 1"),
+        (
+            "SET VARIABLE threshold",
+            "Expected: equals sign or TO, found: EOF",
+        ),
+        (
+            "SET VARIABLE threshold 42",
+            "Expected: equals sign or TO, found: 42",
+        ),
+        (
+            "SET VARIABLE threshold =",
+            "Expected: an expression, found: EOF",
+        ),
+        (
+            "SET VARIABLE threshold TO",
+            "Expected: an expression, found: EOF",
+        ),
+        (
+            "SET VARIABLE threshold = ;",
+            "Expected: an expression, found: ;",
+        ),
+        (
+            "SET VARIABLE threshold = 1 +",
+            "Expected: an expression, found: EOF",
+        ),
+        (
+            "SET VARIABLE threshold. = 42",
+            "Expected: identifier, found: =",
+        ),
+        (
+            "SET VARIABLE threshold..value = 42",
+            "Expected: identifier, found: .",
+        ),
+        (
+            "SET VARIABLE threshold.",
+            "Expected: identifier, found: EOF",
+        ),
+        (
+            "SET VARIABLE threshold = 1, 2",
+            "Expected: end of statement, found: ,",
+        ),
+        (
+            "SET VARIABLE threshold = 1, other = 2",
+            "Expected: end of statement, found: ,",
+        ),
+        (
+            "SET VARIABLE threshold = 42 extra",
+            "Expected: end of statement, found: extra",
+        ),
+    ] {
+        assert_eq!(
+            duckdb().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn parse_duckdb_set_variable_is_dialect_specific() {
+    let unsupported = all_dialects_where(|d| !d.supports_set_variable_statement());
+    for dialect in unsupported.dialects {
+        let dialect_name = format!("{dialect:?}");
+        let supports_session_params = dialect.supports_set_stmt_without_operator();
+        let tested = TestedDialects::new(vec![dialect]);
+        for sql in [
+            "SET VARIABLE threshold = 42",
+            "SET VARIABLE /* name */ threshold = 42",
+        ] {
+            if supports_session_params {
+                assert_eq!(
+                    tested.one_statement_parses_to(sql, "SET VARIABLE threshold = 42"),
+                    Statement::Set(Set::SetSessionParam(SetSessionParamKind::Generic(
+                        SetSessionParamGeneric {
+                            names: vec!["VARIABLE".to_string()],
+                            value: "threshold = 42".to_string(),
+                        },
+                    )))
+                );
+            } else {
+                assert_eq!(
+                    tested.parse_sql_statements(sql).unwrap_err(),
+                    ParserError::ParserError(
+                        "Expected: equals sign or TO, found: threshold".to_string()
+                    ),
+                    "{dialect_name}: {sql}"
+                );
+            }
+        }
+    }
 }

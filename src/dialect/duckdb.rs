@@ -45,6 +45,10 @@ impl Dialect for DuckDbDialect {
         true
     }
 
+    fn supports_window_frame_exclusion(&self) -> bool {
+        true
+    }
+
     fn supports_group_by_expr(&self) -> bool {
         true
     }

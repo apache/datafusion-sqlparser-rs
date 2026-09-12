@@ -910,3 +910,73 @@ fn test_duckdb_lambda_function() {
     let sql_transform = "SELECT list_transform([1, 2, 3], lambda x : x * 2)";
     duckdb().verified_stmt(sql_transform);
 }
+
+#[test]
+fn parse_duckdb_window_frame_exclusion_inventory_examples() {
+    for (sql, canonical) in [
+        (
+            r#"SELECT n,
+  sum(n) OVER (
+    ORDER BY n
+    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    EXCLUDE TIES
+  ) AS running_sum
+FROM (VALUES (1), (1), (2)) AS t(n)
+ORDER BY n;"#,
+            "SELECT n, sum(n) OVER (ORDER BY n ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE TIES) AS running_sum FROM (VALUES (1), (1), (2)) AS t (n) ORDER BY n",
+        ),
+        (
+            r#"SELECT n,
+  sum(n) OVER (
+    ORDER BY n
+    ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+    EXCLUDE CURRENT ROW
+  ) AS other_sum
+FROM (VALUES (1), (2), (3)) AS t(n)
+ORDER BY n;"#,
+            "SELECT n, sum(n) OVER (ORDER BY n ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE CURRENT ROW) AS other_sum FROM (VALUES (1), (2), (3)) AS t (n) ORDER BY n",
+        ),
+    ] {
+        duckdb().one_statement_parses_to(sql, canonical);
+    }
+}
+
+#[test]
+fn parse_duckdb_window_frame_exclusion_documentation_example() {
+    let select = duckdb().verified_only_select_with_canonical(
+        r#"SELECT
+    event,
+    date,
+    athlete,
+    avg(time) OVER w AS recent,
+FROM results
+WINDOW w AS (
+    PARTITION BY event
+    ORDER BY date
+    RANGE BETWEEN INTERVAL 10 DAYS PRECEDING AND INTERVAL 10 DAYS FOLLOWING
+        EXCLUDE CURRENT ROW
+)
+ORDER BY event, date, athlete;"#,
+        "SELECT event, date, athlete, avg(time) OVER w AS recent FROM results WINDOW w AS (PARTITION BY event ORDER BY date RANGE BETWEEN INTERVAL 10 DAYS PRECEDING AND INTERVAL 10 DAYS FOLLOWING EXCLUDE CURRENT ROW) ORDER BY event, date, athlete",
+    );
+    let interval = Box::new(Expr::Interval(Interval {
+        value: Box::new(Expr::value(number("10"))),
+        leading_field: Some(DateTimeField::Days),
+        leading_precision: None,
+        last_field: None,
+        fractional_seconds_precision: None,
+    }));
+    let NamedWindowDefinition(_, NamedWindowExpr::WindowSpec(window)) = only(&select.named_window)
+    else {
+        panic!("Expected a named window specification");
+    };
+    assert_eq!(
+        Some(WindowFrame {
+            units: WindowFrameUnits::Range,
+            start_bound: WindowFrameBound::Preceding(Some(interval.clone())),
+            end_bound: Some(WindowFrameBound::Following(Some(interval))),
+            exclusion: Some(WindowFrameExclusion::CurrentRow),
+        }),
+        window.window_frame
+    );
+}

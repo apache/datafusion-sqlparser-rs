@@ -357,6 +357,11 @@ pub struct Parser<'a> {
     failed_derived_table_factor_positions: BTreeSet<usize>,
 }
 
+enum ParsedLimit {
+    Rows(Option<Expr>),
+    Percent(Expr),
+}
+
 /// Copy marker for a [`ParserError`] cached by the `parse_prefix` failure
 /// memoization, so the caches hold no strings.
 #[derive(Debug, Clone, Copy)]
@@ -1390,6 +1395,10 @@ impl<'a> Parser<'a> {
         self.parse_subexpr(self.dialect.prec_unknown())
     }
 
+    fn parse_expr_until(&mut self, terminator: fn(&Self) -> bool) -> Result<Expr, ParserError> {
+        self.parse_subexpr_inner(self.dialect.prec_unknown(), terminator)
+    }
+
     /// Parse expression with optional alias and order by.
     pub fn parse_expr_with_alias_and_order_by(
         &mut self,
@@ -1411,8 +1420,16 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse tokens until the precedence changes.
-    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     pub fn parse_subexpr(&mut self, precedence: u8) -> Result<Expr, ParserError> {
+        self.parse_subexpr_inner(precedence, |_| false)
+    }
+
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
+    fn parse_subexpr_inner(
+        &mut self,
+        precedence: u8,
+        terminator: fn(&Self) -> bool,
+    ) -> Result<Expr, ParserError> {
         let _guard = self.recursion_counter.try_decrease()?;
         debug!("parsing expr");
         let mut expr = self.parse_prefix()?;
@@ -1431,6 +1448,11 @@ impl<'a> Parser<'a> {
 
         debug!("prefix: {expr:?}");
         loop {
+            // Recursive operands and nested expressions keep their own boundaries.
+            if terminator(self) {
+                break;
+            }
+
             let next_precedence = self.get_next_precedence()?;
             debug!("next precedence: {next_precedence:?}");
 
@@ -13592,7 +13614,15 @@ impl<'a> Parser<'a> {
         };
 
         let (limit, limit_by) = if self.parse_keyword(Keyword::LIMIT) {
-            let expr = self.parse_limit()?;
+            let expr = match self.parse_limit_quantity()? {
+                ParsedLimit::Rows(expr) => expr,
+                ParsedLimit::Percent(limit) => {
+                    if offset.is_none() && self.parse_keyword(Keyword::OFFSET) {
+                        offset = Some(self.parse_offset()?);
+                    }
+                    return Ok(Some(LimitClause::Percent { limit, offset }));
+                }
+            };
 
             if self.dialect.supports_limit_comma()
                 && offset.is_none()
@@ -13633,6 +13663,57 @@ impl<'a> Parser<'a> {
             }))
         } else {
             Ok(None)
+        }
+    }
+
+    fn parse_limit_quantity(&mut self) -> Result<ParsedLimit, ParserError> {
+        if !self.dialect.supports_limit_percent() {
+            return self.parse_limit().map(ParsedLimit::Rows);
+        }
+
+        if self.parse_keyword(Keyword::ALL) {
+            return Ok(ParsedLimit::Rows(None));
+        }
+
+        let limit = self.parse_expr_until(Parser::at_limit_percent_suffix)?;
+        if !self.consume_token(&Token::Mod) {
+            return Ok(ParsedLimit::Rows(Some(limit)));
+        }
+
+        if matches!(
+            &limit,
+            Expr::Value(value) if matches!(&value.value, Value::Number(_, true))
+        ) {
+            return self.expected_ref("an expression", self.peek_token_ref());
+        }
+
+        Ok(ParsedLimit::Percent(limit))
+    }
+
+    fn at_limit_percent_suffix(&self) -> bool {
+        if self.peek_token_ref().token != Token::Mod {
+            return false;
+        }
+
+        match &self.peek_nth_token_ref(1).token {
+            Token::EOF | Token::SemiColon | Token::RParen => true,
+            Token::Word(word) => match word.keyword {
+                Keyword::OFFSET | Keyword::RETURNING => true,
+                Keyword::ON => matches!(
+                    &self.peek_nth_token_ref(2).token,
+                    Token::Word(next) if next.keyword == Keyword::CONFLICT
+                ),
+                Keyword::WITH => match &self.peek_nth_token_ref(2).token {
+                    Token::Word(next) if next.keyword == Keyword::DATA => true,
+                    Token::Word(next) if next.keyword == Keyword::NO => matches!(
+                        &self.peek_nth_token_ref(3).token,
+                        Token::Word(data) if data.keyword == Keyword::DATA
+                    ),
+                    _ => false,
+                },
+                _ => false,
+            },
+            _ => false,
         }
     }
 

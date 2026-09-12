@@ -2347,15 +2347,7 @@ impl fmt::Display for WindowSpec {
             if !is_first {
                 SpaceOrNewline.fmt(f)?;
             }
-            if let Some(end_bound) = &window_frame.end_bound {
-                write!(
-                    f,
-                    "{} BETWEEN {} AND {}",
-                    window_frame.units, window_frame.start_bound, end_bound
-                )?;
-            } else {
-                write!(f, "{} {}", window_frame.units, window_frame.start_bound)?;
-            }
+            window_frame.fmt(f)?;
         }
         Ok(())
     }
@@ -2378,7 +2370,26 @@ pub struct WindowFrame {
     /// indicates the shorthand form (e.g. `ROWS 1 PRECEDING`), which must
     /// behave the same as `end_bound = WindowFrameBound::CurrentRow`.
     pub end_bound: Option<WindowFrameBound>,
-    // TBD: EXCLUDE
+    /// Rows excluded from the window frame.
+    pub exclusion: Option<WindowFrameExclusion>,
+}
+
+impl fmt::Display for WindowFrame {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(end_bound) = &self.end_bound {
+            write!(
+                f,
+                "{} BETWEEN {} AND {}",
+                self.units, self.start_bound, end_bound
+            )?;
+        } else {
+            write!(f, "{} {}", self.units, self.start_bound)?;
+        }
+        if let Some(exclusion) = &self.exclusion {
+            write!(f, " EXCLUDE {exclusion}")?;
+        }
+        Ok(())
+    }
 }
 
 impl Default for WindowFrame {
@@ -2390,6 +2401,7 @@ impl Default for WindowFrame {
             units: WindowFrameUnits::Range,
             start_bound: WindowFrameBound::Preceding(None),
             end_bound: None,
+            exclusion: None,
         }
     }
 }
@@ -2413,6 +2425,32 @@ impl fmt::Display for WindowFrameUnits {
             WindowFrameUnits::Rows => "ROWS",
             WindowFrameUnits::Range => "RANGE",
             WindowFrameUnits::Groups => "GROUPS",
+        })
+    }
+}
+
+/// Rows excluded from a window frame.
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum WindowFrameExclusion {
+    /// `CURRENT ROW`.
+    CurrentRow,
+    /// `GROUP`.
+    Group,
+    /// `TIES`.
+    Ties,
+    /// `NO OTHERS`.
+    NoOthers,
+}
+
+impl fmt::Display for WindowFrameExclusion {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            WindowFrameExclusion::CurrentRow => "CURRENT ROW",
+            WindowFrameExclusion::Group => "GROUP",
+            WindowFrameExclusion::Ties => "TIES",
+            WindowFrameExclusion::NoOthers => "NO OTHERS",
         })
     }
 }

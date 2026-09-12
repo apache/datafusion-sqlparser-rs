@@ -341,6 +341,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `EXCLUDE` in window frames.
+    fn supports_window_frame_exclusion(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports `ARRAY_AGG() [WITHIN GROUP (ORDER BY)]` expressions.
     /// Otherwise, the dialect should expect an `ORDER BY` without the `WITHIN GROUP` clause, e.g. [`ANSI`]
     ///

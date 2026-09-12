@@ -58,6 +58,10 @@ impl Dialect for SQLiteDialect {
         true
     }
 
+    fn supports_window_frame_exclusion(&self) -> bool {
+        true
+    }
+
     fn supports_start_transaction_modifier(&self) -> bool {
         true
     }

@@ -7031,6 +7031,7 @@ fn parse_trigger_related_functions() {
             partition_by: None,
             cluster_by: None,
             clustered_by: None,
+            sorted_by: None,
             inherits: None,
             partition_of: None,
             for_values: None,

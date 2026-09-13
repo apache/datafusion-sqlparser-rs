@@ -19,12 +19,12 @@
 mod test_utils;
 
 use helpers::attached_token::AttachedToken;
-use sqlparser::tokenizer::Span;
+use sqlparser::tokenizer::{Location, Span};
 use test_utils::*;
 
 use sqlparser::ast::*;
 use sqlparser::dialect::{DuckDbDialect, GenericDialect};
-use sqlparser::parser::ParserError;
+use sqlparser::parser::{Parser, ParserError};
 
 fn duckdb() -> TestedDialects {
     TestedDialects::new(vec![Box::new(DuckDbDialect {})])
@@ -764,6 +764,7 @@ fn test_duckdb_union_datatype() {
             partition_by: Default::default(),
             cluster_by: Default::default(),
             clustered_by: Default::default(),
+            sorted_by: Default::default(),
             inherits: Default::default(),
             partition_of: Default::default(),
             for_values: Default::default(),
@@ -909,4 +910,160 @@ fn test_duckdb_lambda_function() {
     // Test lambda in list_transform
     let sql_transform = "SELECT list_transform([1, 2, 3], lambda x : x * 2)";
     duckdb().verified_stmt(sql_transform);
+}
+
+#[test]
+fn create_table_sorted_by_round_trip() {
+    for sql in [
+        "CREATE TABLE events (id INTEGER, category VARCHAR) SORTED BY (id, lower(category), id + 1)",
+        "CREATE TABLE events (id INTEGER) SORTED BY (id) WITH (format = 'parquet')",
+        "CREATE TABLE events SORTED BY (id) WITH (format = 'parquet') AS SELECT 1 AS id",
+        "CREATE TABLE events PARTITIONED BY (id) SORTED BY (abs(id)) AS SELECT 1 AS id",
+    ] {
+        let statement = duckdb().verified_stmt(sql);
+        assert_eq!(statement, duckdb().verified_stmt(&statement.to_string()));
+    }
+    for (sql, canonical) in [
+        (
+            "CREATE TABLE events (id INTEGER) SORTED BY (id) PARTITIONED BY (id)",
+            "CREATE TABLE events (id INTEGER) PARTITIONED BY (id) SORTED BY (id)",
+        ),
+        (
+            "CREATE TABLE events (id INTEGER,) SORTED /* sort */ BY (id + 1,); -- end",
+            "CREATE TABLE events (id INTEGER) SORTED BY (id + 1)",
+        ),
+    ] {
+        duckdb().one_statement_parses_to(sql, canonical);
+    }
+}
+
+#[test]
+fn create_table_sorted_by_ast_and_builder() {
+    let sql = "CREATE TABLE events (id INTEGER) SORTED BY (id, id + 1)";
+    let Statement::CreateTable(table) = duckdb().verified_stmt(sql) else {
+        panic!("expected CREATE TABLE")
+    };
+    let expressions = vec![
+        Expr::Identifier(Ident::new("id")),
+        Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("id"))),
+            op: BinaryOperator::Plus,
+            right: Box::new(Expr::Value(number("1").into())),
+        },
+    ];
+    assert_eq!(table.sorted_by, Some(expressions.clone()));
+    assert!(table.clustered_by.is_none());
+    assert!(table.order_by.is_none());
+    assert!(table.sortkey.is_none());
+    let rebuilt = helpers::stmt_create_table::CreateTableBuilder::from(table.clone()).build();
+    assert_eq!(table, rebuilt);
+    assert_eq!(rebuilt.to_string(), sql);
+    let built = helpers::stmt_create_table::CreateTableBuilder::new(table.name)
+        .columns(table.columns)
+        .sorted_by(Some(expressions))
+        .build();
+    assert_eq!(built.sorted_by, rebuilt.sorted_by);
+    assert_eq!(built.to_string(), sql);
+}
+
+#[test]
+fn create_table_sorted_by_span() {
+    let sql = "CREATE TABLE events (id INTEGER) SORTED BY (id + 1)";
+    let Statement::CreateTable(table) =
+        Parser::parse_sql(&DuckDbDialect {}, sql).unwrap().remove(0)
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        table.sorted_by.as_ref().unwrap()[0].span(),
+        Span::new(Location::new(1, 45), Location::new(1, 51))
+    );
+    assert_eq!(
+        table.span(),
+        Span::new(Location::new(1, 14), Location::new(1, 51))
+    );
+}
+
+#[test]
+fn create_table_sorted_by_errors() {
+    for (tail, expected) in [
+        ("SORTED BY ()", "Expected: an expression, found: )"),
+        ("SORTED BY id", "Expected: (, found: id"),
+        ("SORTED BY (id", "Expected: ), found: EOF"),
+        ("SORTED BY (id ASC)", "Expected: ), found: ASC"),
+        ("SORTED BY (id DESC)", "Expected: ), found: DESC"),
+        ("SORTED BY (id NULLS FIRST)", "Expected: ), found: NULLS"),
+        ("SORTED BY (id AS alias)", "Expected: ), found: AS"),
+        ("SORTED BY (id alias)", "Expected: ), found: alias"),
+        (
+            "SORTED BY (id) SORTED BY (id)",
+            "Expected: end of statement, found: SORTED",
+        ),
+        (
+            "SORTED BY (id) PARTITIONED BY (id) SORTED BY (id)",
+            "Expected: end of statement, found: SORTED",
+        ),
+        (
+            "PARTITIONED BY (id) SORTED BY (id) PARTITIONED BY (id)",
+            "Expected: end of statement, found: PARTITIONED",
+        ),
+        (
+            "WITH (format = 'parquet') SORTED BY (id)",
+            "Expected: end of statement, found: SORTED",
+        ),
+    ] {
+        assert_eq!(
+            duckdb()
+                .parse_sql_statements(&format!("CREATE TABLE events (id INTEGER) {tail}"))
+                .unwrap_err(),
+            ParserError::ParserError(expected.to_owned()),
+        );
+    }
+    assert_eq!(
+        duckdb()
+            .parse_sql_statements("CREATE TABLE events SORTED BY (id)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: AS query or a table schema, found: EOF".to_owned()),
+    );
+}
+
+#[test]
+#[cfg(feature = "json_example")]
+fn create_table_sorted_by_serialization() {
+    let statement = duckdb().verified_stmt("CREATE TABLE events (id INTEGER) SORTED BY (abs(id))");
+    let json = serde_json::to_string(&statement).unwrap();
+    assert_eq!(statement, serde_json::from_str::<Statement>(&json).unwrap());
+    let mut table = serde_json::to_value(
+        helpers::stmt_create_table::CreateTableBuilder::new(Ident::new("events").into()).build(),
+    )
+    .unwrap();
+    table.as_object_mut().unwrap().remove("sorted_by");
+    assert!(serde_json::from_value::<CreateTable>(table)
+        .unwrap()
+        .sorted_by
+        .is_none());
+}
+
+#[test]
+#[cfg(feature = "visitor")]
+fn create_table_sorted_by_visitors() {
+    use core::ops::ControlFlow;
+    let mut statement =
+        duckdb().verified_stmt("CREATE TABLE events (id INTEGER) SORTED BY (id + 1)");
+    let mut expressions = vec![];
+    let _ = visit_expressions(&statement, |expression| {
+        expressions.push(expression.to_string());
+        ControlFlow::<()>::Continue(())
+    });
+    assert_eq!(expressions, ["id + 1", "id", "1"]);
+    let _ = visit_expressions_mut(&mut statement, |expression| {
+        if let Expr::Identifier(ident) = expression {
+            ident.value = "value".to_owned();
+        }
+        ControlFlow::<()>::Continue(())
+    });
+    assert_eq!(
+        statement.to_string(),
+        "CREATE TABLE events (id INTEGER) SORTED BY (value + 1)"
+    );
 }

@@ -580,7 +580,8 @@ impl Spanned for CreateTable {
             partition_by: _, // todo, BigQuery specific
             cluster_by: _,   // todo, BigQuery specific
             clustered_by: _, // todo, Hive specific
-            inherits: _,     // todo, PostgreSQL specific
+            sorted_by,
+            inherits: _, // todo, PostgreSQL specific
             partition_of,
             for_values,
             strict: _,                          // bool
@@ -624,7 +625,8 @@ impl Spanned for CreateTable {
                 .chain(query.iter().map(|i| i.span()))
                 .chain(clone.iter().map(|i| i.span()))
                 .chain(partition_of.iter().map(|i| i.span()))
-                .chain(for_values.iter().map(|i| i.span())),
+                .chain(for_values.iter().map(|i| i.span()))
+                .chain(sorted_by.iter().flatten().map(|i| i.span())),
         )
     }
 }

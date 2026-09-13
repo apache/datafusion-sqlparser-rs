@@ -763,6 +763,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports standalone `SORTED BY` expressions in `CREATE TABLE`.
+    fn supports_create_table_sorted_by(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports MySQL-specific SELECT modifiers
     /// like `HIGH_PRIORITY`, `STRAIGHT_JOIN`, `SQL_SMALL_RESULT`, etc.
     ///

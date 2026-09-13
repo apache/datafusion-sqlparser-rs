@@ -801,6 +801,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Uses expressions rather than column declarations in `PARTITIONED BY`.
+    fn supports_create_table_partitioned_by_expressions(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports MySQL-specific SELECT modifiers
     /// like `HIGH_PRIORITY`, `STRAIGHT_JOIN`, `SQL_SMALL_RESULT`, etc.
     ///

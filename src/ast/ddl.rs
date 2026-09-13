@@ -3002,6 +3002,8 @@ pub struct CreateTable {
     /// Hive: Table clustering column list.
     /// <https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable>
     pub clustered_by: Option<ClusteredBy>,
+    /// DuckDB partition expressions, distinct from Hive partition columns.
+    pub partitioned_by: Option<Vec<Expr>>,
     /// Postgres `INHERITs` clause, which contains the list of tables from which
     /// the new table inherits.
     /// <https://www.postgresql.org/docs/current/ddl-inherit.html>
@@ -3224,6 +3226,14 @@ impl fmt::Display for CreateTable {
                 }
             }
             _ => (),
+        }
+
+        if let Some(partitioned_by) = &self.partitioned_by {
+            write!(
+                f,
+                " PARTITIONED BY ({})",
+                display_comma_separated(partitioned_by)
+            )?;
         }
 
         if let Some(clustered_by) = &self.clustered_by {

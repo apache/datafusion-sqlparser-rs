@@ -20143,3 +20143,86 @@ fn parse_stage_table_factor() {
         ParserError::ParserError("Expected: identifier, found: @".to_string()),
     );
 }
+
+#[test]
+fn parse_transaction_deferrable_mode() {
+    // The third transaction mode of the SQL standard, spelled the same in
+    // PostgreSQL: <https://www.postgresql.org/docs/current/sql-set-transaction.html>
+    let dialects = all_dialects_except(|d|
+        // BigQuery and Snowflake do not support this syntax
+        d.is::<BigQueryDialect>() || d.is::<SnowflakeDialect>());
+
+    let Statement::StartTransaction { modes, .. } =
+        dialects.verified_stmt("START TRANSACTION DEFERRABLE")
+    else {
+        unreachable!()
+    };
+    assert_eq!(modes, vec![TransactionMode::Deferrable(true)]);
+
+    dialects.verified_stmt("BEGIN TRANSACTION NOT DEFERRABLE");
+
+    // PostgreSQL's `BEGIN` needs no transaction keyword. MsSql is excluded because
+    // it reads a bare `BEGIN` followed by anything else as a `BEGIN ... END` block.
+    all_dialects_except(|d| {
+        d.is::<BigQueryDialect>() || d.is::<SnowflakeDialect>() || d.is::<MsSqlDialect>()
+    })
+    .verified_stmt("BEGIN DEFERRABLE");
+
+    let Statement::StartTransaction { modes, .. } = dialects
+        .verified_stmt("START TRANSACTION ISOLATION LEVEL SERIALIZABLE, READ ONLY, DEFERRABLE")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        modes,
+        vec![
+            TransactionMode::IsolationLevel(TransactionIsolationLevel::Serializable),
+            TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
+            TransactionMode::Deferrable(true),
+        ]
+    );
+
+    // As with the other modes, PostgreSQL allows the commas to be omitted.
+    let Statement::StartTransaction { modes, .. } = dialects.one_statement_parses_to(
+        "START TRANSACTION NOT DEFERRABLE READ WRITE",
+        "START TRANSACTION NOT DEFERRABLE, READ WRITE",
+    ) else {
+        unreachable!()
+    };
+    assert_eq!(
+        modes,
+        vec![
+            TransactionMode::Deferrable(false),
+            TransactionMode::AccessMode(TransactionAccessMode::ReadWrite),
+        ]
+    );
+
+    let Statement::Set(Set::SetTransaction { modes, .. }) =
+        verified_stmt("SET TRANSACTION DEFERRABLE")
+    else {
+        unreachable!()
+    };
+    assert_eq!(modes, vec![TransactionMode::Deferrable(true)]);
+
+    let Statement::Set(Set::SetTransaction { modes, session, .. }) =
+        verified_stmt("SET SESSION CHARACTERISTICS AS TRANSACTION NOT DEFERRABLE")
+    else {
+        unreachable!()
+    };
+    assert_eq!(modes, vec![TransactionMode::Deferrable(false)]);
+    assert!(session);
+
+    assert_eq!(
+        ParserError::ParserError("Expected: DEFERRABLE, found: SERIALIZABLE".to_string()),
+        dialects
+            .parse_sql_statements("START TRANSACTION NOT SERIALIZABLE")
+            .unwrap_err()
+    );
+
+    assert_eq!(
+        ParserError::ParserError("Expected: transaction mode, found: EOF".to_string()),
+        dialects
+            .parse_sql_statements("START TRANSACTION DEFERRABLE,")
+            .unwrap_err()
+    );
+}

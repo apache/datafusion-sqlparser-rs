@@ -9276,12 +9276,14 @@ impl fmt::Display for AttachDuckDBDatabaseOption {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-/// Mode for transactions: access mode or isolation level.
+/// Mode for transactions: access mode, isolation level or deferrability.
 pub enum TransactionMode {
     /// Access mode for a transaction (e.g. `READ ONLY` / `READ WRITE`).
     AccessMode(TransactionAccessMode),
     /// Isolation level for a transaction (e.g. `SERIALIZABLE`).
     IsolationLevel(TransactionIsolationLevel),
+    /// `DEFERRABLE` when true, `NOT DEFERRABLE` when false.
+    Deferrable(bool),
 }
 
 impl fmt::Display for TransactionMode {
@@ -9290,6 +9292,11 @@ impl fmt::Display for TransactionMode {
         match self {
             AccessMode(access_mode) => write!(f, "{access_mode}"),
             IsolationLevel(iso_level) => write!(f, "ISOLATION LEVEL {iso_level}"),
+            Deferrable(deferrable) => f.write_str(if *deferrable {
+                "DEFERRABLE"
+            } else {
+                "NOT DEFERRABLE"
+            }),
         }
     }
 }

@@ -20015,3 +20015,23 @@ fn parse_function_arg_call_chain_no_exponential_blowup() {
     rx.recv_timeout(Duration::from_secs(5))
         .expect("parser should reject this quickly, not loop exponentially");
 }
+
+#[test]
+fn create_table_sorted_by_dialect_isolation() {
+    all_dialects_where(|dialect| !dialect.supports_create_table_sorted_by())
+        .one_of_identical_results(|dialect| {
+            assert!(
+                Parser::parse_sql(dialect, "CREATE TABLE t (id INTEGER) SORTED BY (id)").is_err()
+            )
+        });
+    let hive = TestedDialects::new(vec![Box::new(HiveDialect {})]);
+    let Statement::CreateTable(table) = hive.verified_stmt(
+        "CREATE TABLE t (id INT) PARTITIONED BY (category STRING) CLUSTERED BY (id) SORTED BY (id DESC) INTO 4 BUCKETS",
+    ) else { unreachable!() };
+    assert!(matches!(
+        table.hive_distribution,
+        HiveDistributionStyle::PARTITIONED { .. }
+    ));
+    assert!(table.sorted_by.is_none());
+    assert!(table.clustered_by.unwrap().sorted_by.is_some());
+}

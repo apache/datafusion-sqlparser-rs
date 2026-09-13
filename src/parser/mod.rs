@@ -8775,6 +8775,7 @@ impl<'a> Parser<'a> {
         };
 
         // parse optional column list (schema)
+        let has_columns = self.peek_token_ref().token == Token::LParen;
         let (columns, constraints) = self.parse_columns()?;
         let comment_after_column_def =
             if dialect_of!(self is HiveDialect) && self.parse_keyword(Keyword::COMMENT) {
@@ -8804,7 +8805,11 @@ impl<'a> Parser<'a> {
         // SQLite supports `WITHOUT ROWID` at the end of `CREATE TABLE`
         let without_rowid = self.parse_keywords(&[Keyword::WITHOUT, Keyword::ROWID]);
 
+        let mut sorted_by = self.parse_optional_create_table_sorted_by()?;
         let hive_distribution = self.parse_hive_distribution()?;
+        if sorted_by.is_none() {
+            sorted_by = self.parse_optional_create_table_sorted_by()?;
+        }
         let clustered_by = self.parse_optional_clustered_by()?;
         let hive_formats = self.parse_hive_formats()?;
 
@@ -8898,6 +8903,10 @@ impl<'a> Parser<'a> {
             None
         };
 
+        if query.is_none() && !has_columns && sorted_by.is_some() {
+            return self.expected_ref("AS query or a table schema", self.peek_token_ref());
+        }
+
         // `WITH DATA` clause only applies if there is a query body.
         let with_data = if query.is_some() {
             self.maybe_parse_with_data()?
@@ -8928,6 +8937,7 @@ impl<'a> Parser<'a> {
             .on_commit(on_commit)
             .on_cluster(on_cluster)
             .clustered_by(clustered_by)
+            .sorted_by(sorted_by)
             .partition_by(partition_by)
             .cluster_by(create_table_config.cluster_by)
             .inherits(create_table_config.inherits)
@@ -8942,6 +8952,19 @@ impl<'a> Parser<'a> {
             .distkey(distkey)
             .sortkey(sortkey)
             .build())
+    }
+
+    fn parse_optional_create_table_sorted_by(&mut self) -> Result<Option<Vec<Expr>>, ParserError> {
+        if self.dialect.supports_create_table_sorted_by()
+            && self.parse_keywords(&[Keyword::SORTED, Keyword::BY])
+        {
+            self.expect_token(&Token::LParen)?;
+            let expressions = self.parse_comma_separated(Parser::parse_expr)?;
+            self.expect_token(&Token::RParen)?;
+            Ok(Some(expressions))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Parse `MULTISET` table-kind prefix on `CREATE TABLE`.

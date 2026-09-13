@@ -2991,6 +2991,9 @@ pub struct CreateTable {
     /// Hive: Table clustering column list.
     /// <https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable>
     pub clustered_by: Option<ClusteredBy>,
+    /// DuckDB: Table sorting expressions.
+    /// <https://github.com/duckdb/duckdb/pull/20431>
+    pub sorted_by: Option<Vec<Expr>>,
     /// Postgres `INHERITs` clause, which contains the list of tables from which
     /// the new table inherits.
     /// <https://www.postgresql.org/docs/current/ddl-inherit.html>
@@ -3213,6 +3216,10 @@ impl fmt::Display for CreateTable {
                 }
             }
             _ => (),
+        }
+
+        if let Some(sorted_by) = &self.sorted_by {
+            write!(f, " SORTED BY ({})", display_comma_separated(sorted_by))?;
         }
 
         if let Some(clustered_by) = &self.clustered_by {

@@ -24,6 +24,10 @@ pub struct DuckDbDialect;
 
 // In most cases the redshift dialect is identical to [`PostgresSqlDialect`].
 impl Dialect for DuckDbDialect {
+    fn supports_create_table_partitioned_by_expressions(&self) -> bool {
+        true
+    }
+
     fn supports_trailing_commas(&self) -> bool {
         true
     }

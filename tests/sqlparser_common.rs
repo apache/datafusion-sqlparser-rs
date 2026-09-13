@@ -20060,3 +20060,25 @@ fn parse_insert_by_name() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn create_table_partitioned_by_dialect_isolation() {
+    let sql = "CREATE TABLE t (id INTEGER) PARTITIONED BY (id + 1)";
+    all_dialects_where(|dialect| dialect.supports_create_table_partitioned_by_expressions())
+        .verified_stmt(sql);
+    all_dialects_where(|dialect| !dialect.supports_create_table_partitioned_by_expressions())
+        .one_of_identical_results(|dialect| assert!(Parser::parse_sql(dialect, sql).is_err()));
+    let hive = TestedDialects::new(vec![Box::new(HiveDialect {}), Box::new(GenericDialect {})]);
+    let Statement::CreateTable(table) = hive.verified_stmt(
+        "CREATE TABLE t (id INT) PARTITIONED BY (category STRING) CLUSTERED BY (id) SORTED BY (id DESC) INTO 4 BUCKETS",
+    ) else {
+        unreachable!()
+    };
+    let HiveDistributionStyle::PARTITIONED { columns } = table.hive_distribution else {
+        unreachable!()
+    };
+    assert_eq!(columns[0].name, Ident::new("category"));
+    assert_eq!(columns[0].data_type, DataType::String(None));
+    assert!(table.partitioned_by.is_none());
+    assert!(table.clustered_by.unwrap().sorted_by.is_some());
+}

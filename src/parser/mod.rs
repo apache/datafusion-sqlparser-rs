@@ -17322,58 +17322,61 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_repetition_pattern(&mut self) -> Result<MatchRecognizePattern, ParserError> {
-        let mut pattern = self.parse_base_pattern()?;
-        loop {
-            let token = self.next_token();
-            let quantifier = match token.token {
-                Token::Mul => RepetitionQuantifier::ZeroOrMore,
-                Token::Plus => RepetitionQuantifier::OneOrMore,
-                Token::Placeholder(s) if s == "?" => RepetitionQuantifier::AtMostOne,
-                Token::LBrace => {
-                    // quantifier is a range like {n} or {n,} or {,m} or {n,m}
-                    let token = self.next_token();
-                    match token.token {
-                        Token::Comma => {
-                            let next_token = self.next_token();
-                            let Token::Number(n, _) = next_token.token else {
-                                return self.expected("literal number", next_token);
-                            };
-                            self.expect_token(&Token::RBrace)?;
-                            RepetitionQuantifier::AtMost(Self::parse(n, token.span.start)?)
-                        }
-                        Token::Number(n, _) if self.consume_token(&Token::Comma) => {
-                            let next_token = self.next_token();
-                            match next_token.token {
-                                Token::Number(m, _) => {
-                                    self.expect_token(&Token::RBrace)?;
-                                    RepetitionQuantifier::Range(
-                                        Self::parse(n, token.span.start)?,
-                                        Self::parse(m, token.span.start)?,
-                                    )
-                                }
-                                Token::RBrace => {
-                                    RepetitionQuantifier::AtLeast(Self::parse(n, token.span.start)?)
-                                }
-                                _ => {
-                                    return self.expected("} or upper bound", next_token);
-                                }
-                            }
-                        }
-                        Token::Number(n, _) => {
-                            self.expect_token(&Token::RBrace)?;
-                            RepetitionQuantifier::Exactly(Self::parse(n, token.span.start)?)
-                        }
-                        _ => return self.expected("quantifier range", token),
+        let pattern = self.parse_base_pattern()?;
+        let token = self.next_token();
+        let quantifier = match token.token {
+            Token::Mul => RepetitionQuantifier::ZeroOrMore,
+            Token::Plus => RepetitionQuantifier::OneOrMore,
+            Token::Placeholder(s) if s == "?" => RepetitionQuantifier::AtMostOne,
+            Token::LBrace => {
+                // quantifier is a range like {n} or {n,} or {,m} or {n,m}
+                let token = self.next_token();
+                match token.token {
+                    Token::Comma => {
+                        let next_token = self.next_token();
+                        let Token::Number(n, _) = next_token.token else {
+                            return self.expected("literal number", next_token);
+                        };
+                        self.expect_token(&Token::RBrace)?;
+                        RepetitionQuantifier::AtMost(Self::parse(n, token.span.start)?)
                     }
+                    Token::Number(n, _) if self.consume_token(&Token::Comma) => {
+                        let next_token = self.next_token();
+                        match next_token.token {
+                            Token::Number(m, _) => {
+                                self.expect_token(&Token::RBrace)?;
+                                RepetitionQuantifier::Range(
+                                    Self::parse(n, token.span.start)?,
+                                    Self::parse(m, token.span.start)?,
+                                )
+                            }
+                            Token::RBrace => {
+                                RepetitionQuantifier::AtLeast(Self::parse(n, token.span.start)?)
+                            }
+                            _ => return self.expected("} or upper bound", next_token),
+                        }
+                    }
+                    Token::Number(n, _) => {
+                        self.expect_token(&Token::RBrace)?;
+                        RepetitionQuantifier::Exactly(Self::parse(n, token.span.start)?)
+                    }
+                    _ => return self.expected("quantifier range", token),
                 }
-                _ => {
-                    self.prev_token();
-                    break;
-                }
-            };
-            pattern = MatchRecognizePattern::Repetition(Box::new(pattern), quantifier);
-        }
-        Ok(pattern)
+            }
+            _ => {
+                self.prev_token();
+                return Ok(pattern);
+            }
+        };
+        let quantifier = if self.consume_token(&Token::Placeholder("?".into())) {
+            RepetitionQuantifier::Reluctant(Box::new(quantifier))
+        } else {
+            quantifier
+        };
+        Ok(MatchRecognizePattern::Repetition(
+            Box::new(pattern),
+            quantifier,
+        ))
     }
 
     fn parse_concat_pattern(&mut self) -> Result<MatchRecognizePattern, ParserError> {

@@ -13948,17 +13948,44 @@ fn test_match_recognize_patterns() {
         ]),
     );
 
-    // double repetition
+    // reluctant repetition
     check(
         "S2*?",
         Repetition(
-            Box::new(Repetition(
-                Box::new(Symbol(Named(Ident::new("S2")))),
-                ZeroOrMore,
-            )),
-            AtMostOne,
+            Box::new(Symbol(Named(Ident::new("S2")))),
+            Reluctant(Box::new(ZeroOrMore)),
         ),
     );
+
+    check(
+        "S1+? S2?? S3{2,4}?",
+        Concat(vec![
+            Repetition(
+                Box::new(Symbol(Named(Ident::new("S1")))),
+                Reluctant(Box::new(OneOrMore)),
+            ),
+            Repetition(
+                Box::new(Symbol(Named(Ident::new("S2")))),
+                Reluctant(Box::new(AtMostOne)),
+            ),
+            Repetition(
+                Box::new(Symbol(Named(Ident::new("S3")))),
+                Reluctant(Box::new(Range(2, 4))),
+            ),
+        ]),
+    );
+
+    for pattern in ["S1**", "S1+++", "S1???", "S1{2,4}+"] {
+        let sql = format!(
+            "SELECT * FROM my_table MATCH_RECOGNIZE(PATTERN ({pattern}) DEFINE DUMMY AS 1 = 1)"
+        );
+        assert!(
+            all_dialects_where(|d| d.supports_match_recognize())
+                .parse_sql_statements(&sql)
+                .is_err(),
+            "stacked quantifier should fail: {pattern}"
+        );
+    }
 
     // range quantifiers in an alternation
     check(
@@ -14000,11 +14027,8 @@ fn test_match_recognize_patterns() {
                 Symbol(Start),
                 Symbol(Named(Ident::new("S1"))),
                 Repetition(
-                    Box::new(Repetition(
-                        Box::new(Symbol(Named(Ident::new("S2")))),
-                        ZeroOrMore,
-                    )),
-                    AtMostOne,
+                    Box::new(Symbol(Named(Ident::new("S2")))),
+                    Reluctant(Box::new(ZeroOrMore)),
                 ),
                 Repetition(
                     Box::new(Group(Box::new(Concat(vec![
